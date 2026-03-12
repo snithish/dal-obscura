@@ -1,0 +1,53 @@
+[project]
+name = "dal-obscura"
+version = "0.1.0"
+description = "Data access layer with masking, row filters, and Arrow Flight"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "dal-obscura" }]
+
+dependencies = [
+  "pyarrow>=15.0.0",
+  "duckdb>=1.0.0",
+  "pyiceberg[sql-sqlite]>=0.6.0",
+  "pyyaml>=6.0",
+  "pyjwt>=2.8.0",
+]
+
+[project.optional-dependencies]
+server = ["grpcio>=1.62.0"]
+
+test = [
+  "pytest>=8.0.0",
+  "pytest-cov>=4.1.0",
+]
+
+[project.scripts]
+dal-obscura = "dal_obscura.cli:main"
+
+[build-system]
+requires = ["setuptools>=68.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+addopts = "-q"
+
+[tool.uv]
+dev-dependencies = [
+  "pytest>=8.0.0",
+  "pytest-cov>=4.1.0",
+  "ruff>=0.4.8",
+  "ty>=0.0.22",
+  "sqlalchemy>=2.0.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+extend-select = ["I"]
+
+[tool.ruff.format]
+line-ending = "lf"
