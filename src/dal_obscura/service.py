@@ -9,19 +9,21 @@ import duckdb
 import pyarrow as pa
 import pyarrow.flight as flight
 
-from dal_obscura.auth import AuthConfig, authenticate
+from dal_obscura.auth.base import Authenticator
+from dal_obscura.authorization import Authorizer
 from dal_obscura.backend.base import Backend, ScanTask
-from dal_obscura.masking import build_select_list
-from dal_obscura.policy import MaskRule, Principal, load_policy, resolve_access
+from dal_obscura.masking import MaskApplier
+from dal_obscura.policy import MaskRule, Principal
 from dal_obscura.tickets import TicketSigner, new_ticket_payload
 
 
 @dataclass(frozen=True)
 class ServerConfig:
-    policy_path: str
     ticket_secret: str
     ticket_ttl_seconds: int
-    auth: AuthConfig
+    authenticator: Authenticator
+    authorizer: Authorizer
+    mask_applier: MaskApplier
 
 
 class DataAccessFlightService(flight.FlightServerBase):
@@ -39,15 +41,13 @@ class DataAccessFlightService(flight.FlightServerBase):
         request = _parse_descriptor(descriptor)
         if not headers and request.auth_token:
             headers = {"authorization": request.auth_token}
-        auth_result = authenticate(headers, self._config.auth)
+        auth_result = self._config.authenticator.authenticate(headers)
         principal = Principal(
             id=auth_result.principal_id,
             groups=auth_result.groups,
             attributes=auth_result.attributes,
         )
-        policy = load_policy(self._config.policy_path)
-        allowed_columns, masks, row_filter = resolve_access(
-            policy=policy,
+        decision = self._config.authorizer.authorize(
             principal=principal,
             table_identifier=request.table,
             requested_columns=request.columns,
@@ -57,25 +57,25 @@ class DataAccessFlightService(flight.FlightServerBase):
             extra={
                 "table": request.table,
                 "principal": principal.id,
-                "columns": allowed_columns,
-                "policy_version": policy.version,
+                "columns": decision.allowed_columns,
+                "policy_version": decision.policy_version,
             },
         )
-        plan = self._backend.plan(request.table, allowed_columns)
+        plan = self._backend.plan(request.table, decision.allowed_columns)
 
         tickets: List[flight.Ticket] = []
         for task in plan.tasks:
             scan = {
                 "task": task.descriptor,
-                "row_filter": row_filter,
-                "masks": {k: v.__dict__ for k, v in masks.items()},
+                "row_filter": decision.row_filter,
+                "masks": {k: v.__dict__ for k, v in decision.masks.items()},
             }
             payload = new_ticket_payload(
                 table=request.table,
                 snapshot=plan.snapshot,
-                columns=allowed_columns,
+                columns=decision.allowed_columns,
                 scan=scan,
-                policy_version=policy.version,
+                policy_version=decision.policy_version,
                 principal_id=principal.id,
                 ttl_seconds=self._config.ticket_ttl_seconds,
             )
@@ -89,9 +89,9 @@ class DataAccessFlightService(flight.FlightServerBase):
     def do_get(
         self, context: flight.ServerCallContext, ticket: flight.Ticket
     ) -> flight.RecordBatchStream:
-        policy = load_policy(self._config.policy_path)
         payload = self._signer.verify(ticket.ticket.decode("utf-8"))
-        if payload.policy_version != policy.version:
+        current_version = self._config.authorizer.current_policy_version()
+        if current_version is not None and payload.policy_version != current_version:
             raise flight.FlightUnauthorizedError("Policy version changed")
 
         scan_info = payload.scan
@@ -103,7 +103,9 @@ class DataAccessFlightService(flight.FlightServerBase):
         table = self._backend.read(
             payload.table, payload.snapshot, task=ScanTask(descriptor=task_descriptor)
         )
-        result = _apply_filters_and_masks(table, payload.columns, row_filter, masks)
+        result = _apply_filters_and_masks(
+            table, payload.columns, row_filter, masks, self._config.mask_applier
+        )
         self._logger.info(
             "do_get",
             extra={
@@ -133,8 +135,9 @@ def _apply_filters_and_masks(
     columns: Iterable[str],
     row_filter: str | None,
     masks: Dict[str, MaskRule],
+    mask_applier: MaskApplier,
 ) -> pa.Table:
-    selection = build_select_list(columns, masks)
+    selection = mask_applier.apply(columns, masks)
     select_sql = ", ".join(selection.select_list)
     query = f"SELECT {select_sql} FROM input"
     if row_filter:

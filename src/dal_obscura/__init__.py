@@ -3,6 +3,7 @@
 __all__ = [
     "auth",
     "policy",
+    "authorization",
     "tickets",
     "masking",
     "filters",

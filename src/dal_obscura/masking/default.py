@@ -1,15 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, Iterable, List
+from typing import Iterable, List, Mapping
 
-from dal_obscura.policy import MaskRule
+from dal_obscura.policy.models import MaskRule
 
-
-@dataclass(frozen=True)
-class MaskedSelection:
-    select_list: List[str]
-    masked_columns: List[str]
+from .base import MaskApplier, MaskedSelection
 
 
 def _mask_expression(column: str, mask: MaskRule) -> str:
@@ -32,8 +27,6 @@ def _apply_nested_mask(path: str, expr: str) -> str:
     parts = path.split(".")
     if len(parts) == 1:
         return expr
-    # Build nested struct_update calls from deepest to top.
-    # struct_update(parent, 'field', new_value)
     updated = expr
     for depth in range(len(parts) - 1, 0, -1):
         parent = ".".join(parts[:depth])
@@ -42,10 +35,7 @@ def _apply_nested_mask(path: str, expr: str) -> str:
     return updated
 
 
-def build_select_list(
-    columns: Iterable[str],
-    masks: Dict[str, MaskRule],
-) -> MaskedSelection:
+def build_select_list(columns: Iterable[str], masks: Mapping[str, MaskRule]) -> MaskedSelection:
     select_list: List[str] = []
     masked_columns: List[str] = []
 
@@ -59,3 +49,8 @@ def build_select_list(
             select_list.append(f'{column} AS "{column}"')
 
     return MaskedSelection(select_list=select_list, masked_columns=masked_columns)
+
+
+class DefaultMaskApplier(MaskApplier):
+    def apply(self, columns: Iterable[str], masks: Mapping[str, MaskRule]) -> MaskedSelection:
+        return build_select_list(columns, masks)

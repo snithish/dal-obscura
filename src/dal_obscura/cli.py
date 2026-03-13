@@ -4,9 +4,11 @@ import argparse
 import json
 import logging
 
-from dal_obscura.auth import AuthConfig
+from dal_obscura.auth import AuthConfig, DefaultAuthenticator
+from dal_obscura.authorization import PolicyAuthorizer
 from dal_obscura.backend.iceberg import IcebergBackend, IcebergConfig
 from dal_obscura.logging_config import LoggingConfig, setup_logging
+from dal_obscura.masking import DefaultMaskApplier
 from dal_obscura.service import DataAccessFlightService, ServerConfig
 
 LOGGER = logging.getLogger(__name__)
@@ -51,10 +53,11 @@ def main() -> None:
         location=args.location,
         backend=backend,
         config=ServerConfig(
-            policy_path=args.policy,
             ticket_secret=args.ticket_secret,
             ticket_ttl_seconds=args.ticket_ttl,
-            auth=auth_config,
+            authenticator=DefaultAuthenticator(auth_config),
+            authorizer=PolicyAuthorizer(args.policy),
+            mask_applier=DefaultMaskApplier(),
         ),
     )
     server.serve()

@@ -3,9 +3,11 @@ from __future__ import annotations
 import base64
 import time
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, Mapping, Optional
 
 import jwt
+
+from .base import Authenticator, AuthResult
 
 
 @dataclass(frozen=True)
@@ -16,11 +18,29 @@ class AuthConfig:
     jwt_audience: Optional[str] = None
 
 
-@dataclass(frozen=True)
-class AuthResult:
-    principal_id: str
-    groups: list[str]
-    attributes: dict[str, str]
+class DefaultAuthenticator(Authenticator):
+    def __init__(self, config: AuthConfig) -> None:
+        self._config = config
+
+    def authenticate(self, headers: Mapping[str, str]) -> AuthResult:
+        token = _parse_bearer(headers.get("authorization")) or headers.get("x-api-key")
+        if not token:
+            raise PermissionError("Missing token")
+
+        jwt_result = _decode_jwt(token, self._config)
+        if jwt_result:
+            return jwt_result
+
+        api_key_result = _decode_api_key(token, self._config)
+        if api_key_result:
+            return api_key_result
+
+        raise PermissionError("Invalid token")
+
+
+def issue_api_key(principal_id: str) -> str:
+    raw = f"{principal_id}:{int(time.time())}"
+    return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("utf-8")
 
 
 def _parse_bearer(header: Optional[str]) -> Optional[str]:
@@ -64,24 +84,3 @@ def _decode_api_key(token: str, config: AuthConfig) -> Optional[AuthResult]:
     if not principal_id:
         return None
     return AuthResult(principal_id=principal_id, groups=[], attributes={})
-
-
-def authenticate(headers: Dict[str, str], config: AuthConfig) -> AuthResult:
-    token = _parse_bearer(headers.get("authorization")) or headers.get("x-api-key")
-    if not token:
-        raise PermissionError("Missing token")
-
-    jwt_result = _decode_jwt(token, config)
-    if jwt_result:
-        return jwt_result
-
-    api_key_result = _decode_api_key(token, config)
-    if api_key_result:
-        return api_key_result
-
-    raise PermissionError("Invalid token")
-
-
-def issue_api_key(principal_id: str) -> str:
-    raw = f"{principal_id}:{int(time.time())}"
-    return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("utf-8")

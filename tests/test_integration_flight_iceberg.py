@@ -6,8 +6,10 @@ import pyarrow as pa
 import pyarrow.flight as flight
 import pytest
 
-from dal_obscura.auth import AuthConfig
+from dal_obscura.auth import AuthConfig, DefaultAuthenticator
+from dal_obscura.authorization import PolicyAuthorizer
 from dal_obscura.backend.iceberg import IcebergBackend, IcebergConfig
+from dal_obscura.masking import DefaultMaskApplier
 from dal_obscura.service import DataAccessFlightService, ServerConfig
 
 
@@ -108,10 +110,11 @@ datasets:
         location="grpc+tcp://0.0.0.0:0",
         backend=backend,
         config=ServerConfig(
-            policy_path=str(policy_path),
             ticket_secret="secret",
             ticket_ttl_seconds=300,
-            auth=AuthConfig(api_keys={"apikey123": "user1"}),
+            authenticator=DefaultAuthenticator(AuthConfig(api_keys={"apikey123": "user1"})),
+            authorizer=PolicyAuthorizer(policy_path),
+            mask_applier=DefaultMaskApplier(),
         ),
     )
     thread = _start_server(server)
