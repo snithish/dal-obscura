@@ -13,7 +13,6 @@ from typing import Any, Dict
 @dataclass(frozen=True)
 class TicketPayload:
     table: str
-    snapshot: str
     columns: list[str]
     scan: dict[str, Any]
     policy_version: int
@@ -24,7 +23,6 @@ class TicketPayload:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "table": self.table,
-            "snapshot": self.snapshot,
             "columns": self.columns,
             "scan": self.scan,
             "policy_version": self.policy_version,
@@ -69,7 +67,6 @@ class TicketSigner:
             raise PermissionError("Ticket expired")
         return TicketPayload(
             table=str(payload["table"]),
-            snapshot=str(payload.get("snapshot", "")),
             columns=list(payload.get("columns", [])),
             scan=dict(payload.get("scan", {})),
             policy_version=int(payload.get("policy_version", 0)),
@@ -81,7 +78,6 @@ class TicketSigner:
 
 def new_ticket_payload(
     table: str,
-    snapshot: str,
     columns: list[str],
     scan: dict[str, Any],
     policy_version: int,
@@ -90,7 +86,6 @@ def new_ticket_payload(
 ) -> TicketPayload:
     return TicketPayload(
         table=table,
-        snapshot=snapshot,
         columns=columns,
         scan=scan,
         policy_version=policy_version,

@@ -112,6 +112,7 @@ datasets:
         config=ServerConfig(
             ticket_secret="secret",
             ticket_ttl_seconds=300,
+            max_tickets=4,
             authenticator=DefaultAuthenticator(AuthConfig(api_keys={"apikey123": "user1"})),
             authorizer=PolicyAuthorizer(policy_path),
             mask_applier=DefaultMaskApplier(),

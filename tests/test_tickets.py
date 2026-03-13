@@ -5,7 +5,6 @@ def test_ticket_sign_and_verify():
     signer = TicketSigner("secret")
     payload = new_ticket_payload(
         table="catalog.db.table",
-        snapshot="1",
         columns=["id"],
         scan={"task": {"file": "a"}},
         policy_version=1,
@@ -22,7 +21,6 @@ def test_ticket_expiry():
     signer = TicketSigner("secret")
     payload = new_ticket_payload(
         table="t",
-        snapshot="1",
         columns=[],
         scan={},
         policy_version=1,

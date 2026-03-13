@@ -41,6 +41,7 @@ datasets:
 uv run dal-obscura \
   --policy policy.yaml \
   --ticket-secret supersecret \
+  --max-tickets 64 \
   --catalog my_catalog \
   --catalog-options '{"uri": "http://catalog:8181"}' \
   --api-keys '{"apikey123": "user1"}'

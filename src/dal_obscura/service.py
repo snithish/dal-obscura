@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import logging
 from dataclasses import dataclass
@@ -11,7 +12,7 @@ import pyarrow.flight as flight
 
 from dal_obscura.auth.base import Authenticator
 from dal_obscura.authorization import Authorizer
-from dal_obscura.backend.base import Backend, ScanTask
+from dal_obscura.backend.base import Backend
 from dal_obscura.masking import MaskApplier
 from dal_obscura.policy import MaskRule, Principal
 from dal_obscura.tickets import TicketSigner, new_ticket_payload
@@ -21,6 +22,7 @@ from dal_obscura.tickets import TicketSigner, new_ticket_payload
 class ServerConfig:
     ticket_secret: str
     ticket_ttl_seconds: int
+    max_tickets: int
     authenticator: Authenticator
     authorizer: Authorizer
     mask_applier: MaskApplier
@@ -61,18 +63,17 @@ class DataAccessFlightService(flight.FlightServerBase):
                 "policy_version": decision.policy_version,
             },
         )
-        plan = self._backend.plan(request.table, decision.allowed_columns)
+        plan = self._backend.plan(request.table, decision.allowed_columns, self._config.max_tickets)
 
         tickets: List[flight.Ticket] = []
-        for task in plan.tasks:
+        for read_payload in plan.tasks:
             scan = {
-                "task": task.descriptor,
+                "read_payload": base64.b64encode(read_payload.payload).decode("utf-8"),
                 "row_filter": decision.row_filter,
                 "masks": {k: v.__dict__ for k, v in decision.masks.items()},
             }
             payload = new_ticket_payload(
                 table=request.table,
-                snapshot=plan.snapshot,
                 columns=decision.allowed_columns,
                 scan=scan,
                 policy_version=decision.policy_version,
@@ -95,14 +96,14 @@ class DataAccessFlightService(flight.FlightServerBase):
             raise flight.FlightUnauthorizedError("Policy version changed")
 
         scan_info = payload.scan
-        task_descriptor = scan_info.get("task", {})
+        read_payload = scan_info.get("read_payload")
         row_filter = scan_info.get("row_filter")
         masks_raw = scan_info.get("masks", {})
         masks = {k: MaskRule(**v) for k, v in masks_raw.items()}
 
-        table = self._backend.read(
-            payload.table, payload.snapshot, task=ScanTask(descriptor=task_descriptor)
-        )
+        if not read_payload:
+            raise flight.FlightInternalError("Missing read payload in ticket")
+        table = self._backend.read(base64.b64decode(read_payload.encode("utf-8")))
         result = _apply_filters_and_masks(
             table, payload.columns, row_filter, masks, self._config.mask_applier
         )

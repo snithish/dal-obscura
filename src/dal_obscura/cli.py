@@ -20,6 +20,7 @@ def main() -> None:
     parser.add_argument("--policy", required=True)
     parser.add_argument("--ticket-secret", required=True)
     parser.add_argument("--ticket-ttl", type=int, default=900)
+    parser.add_argument("--max-tickets", type=int, default=64)
     parser.add_argument("--catalog", required=True)
     parser.add_argument("--catalog-options", default="{}")
     parser.add_argument("--api-keys", default="{}")
@@ -55,6 +56,7 @@ def main() -> None:
         config=ServerConfig(
             ticket_secret=args.ticket_secret,
             ticket_ttl_seconds=args.ticket_ttl,
+            max_tickets=args.max_tickets,
             authenticator=DefaultAuthenticator(auth_config),
             authorizer=PolicyAuthorizer(args.policy),
             mask_applier=DefaultMaskApplier(),

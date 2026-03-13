@@ -38,6 +38,7 @@ uv run ty
 - Add a new backend: implement `Backend` in `src/dal_obscura/backend/base.py` and wire into CLI.
 - Extend policy: update `Policy` parsing + `resolve_access` and add tests.
 - Add a new mask type: update `masking._mask_expression` + tests.
+- Tune parallelism: change `--max-tickets` to control ticket fanout.
 
 ## Style
 - Prefer small, composable functions.

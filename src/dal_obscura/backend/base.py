@@ -7,17 +7,16 @@ import pyarrow as pa
 
 
 @dataclass(frozen=True)
-class ScanTask:
-    descriptor: dict
+class ReadPayload:
+    payload: bytes
 
 
 @dataclass(frozen=True)
 class Plan:
-    snapshot: str
-    tasks: list[ScanTask]
+    tasks: list[ReadPayload]
 
 
 class Backend(Protocol):
-    def plan(self, table: str, columns: Iterable[str]) -> Plan: ...
+    def plan(self, table: str, columns: Iterable[str], max_tickets: int) -> Plan: ...
 
-    def read(self, table: str, snapshot: str, task: ScanTask) -> pa.Table: ...
+    def read(self, read_payload: bytes) -> pa.Table: ...
