@@ -1,0 +1,26 @@
+repos:
+-   repo: local
+    hooks:
+    - id: ruff-format
+      name: Ruff format
+      entry: uv run ruff format
+      language: system
+      types: [python]
+      args: ["--"]
+    - id: ruff-check
+      name: Ruff lint
+      entry: uv run ruff check
+      language: system
+      types: [python]
+      args: ["--"]
+    - id: ty
+      name: Ty type check
+      entry: uv run ty check
+      language: system
+      pass_filenames: false
+    - id: pytest
+      name: Pytest subset
+      entry: uv run pytest
+      language: system
+      pass_filenames: false
+      args: ["--maxfail=1", "--disable-warnings"]

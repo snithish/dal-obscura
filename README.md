@@ -56,6 +56,10 @@ uv run ruff format .
 uv run ty
 ```
 
+## Pre-commit hooks
+
+After `uv sync --dev`, install the hooks with `uv run pre-commit install`. The configured hooks run `uv run ruff format` and `uv run ruff check` (each passed the staged python files), plus `uv run ty` and `uv run pytest --maxfail=1 --disable-warnings` on every commit to guard formatting, linting, typing, and a quick smoke test. Re-run them manually with `uv run pre-commit run --all-files` if needed.
+
 ## Notes
 - Mask expressions are executed in DuckDB SQL.
 - Nested field masks use DuckDB `struct_update` to update nested structs.

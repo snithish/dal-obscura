@@ -1,4 +1,3 @@
-
 from dal_obscura.tickets import TicketSigner, new_ticket_payload
 
 
