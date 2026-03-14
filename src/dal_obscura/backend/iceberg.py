@@ -18,6 +18,13 @@ class IcebergConfig:
     catalog_options: dict
 
 
+@dataclass(frozen=True)
+class IcebergReadSpec:
+    table: str
+    columns: list[str]
+    tasks: list[bytes]
+
+
 class IcebergBackend(Backend):
     def __init__(self, config: IcebergConfig) -> None:
         self._config = config
@@ -30,33 +37,27 @@ class IcebergBackend(Backend):
             raise ValueError(f"Unsupported Iceberg format version: {format_version}")
 
         column_tuple = tuple(columns)
+        base_schema = tbl.schema().as_arrow()
         try:
             scan = tbl.scan(selected_fields=column_tuple)
         except TypeError:
             scan = tbl.scan().select(*column_tuple)
 
+        file_tasks = list(scan.plan_files())
+        max_tickets = max(1, max_tickets)
         tasks: list[ReadPayload] = []
-        try:
-            file_tasks = list(scan.plan_files())
-            max_tickets = max(1, max_tickets)
-            for group in _chunk_by_max_tickets(file_tasks, max_tickets):
-                spec = IcebergReadSpec(
-                    table=table,
-                    columns=list(column_tuple),
-                    mode="files",
-                    tasks=group,
-                )
-                tasks.append(ReadPayload(payload=pickle.dumps(spec)))
-        except Exception:
+        groups = _chunk_by_max_tickets(file_tasks, max_tickets)
+        if not groups:
+            groups = [[]]
+        for group in groups:
             spec = IcebergReadSpec(
                 table=table,
                 columns=list(column_tuple),
-                mode="full",
-                tasks=[],
+                tasks=[pickle.dumps(task) for task in group],
             )
             tasks.append(ReadPayload(payload=pickle.dumps(spec)))
 
-        return Plan(tasks=tasks)
+        return Plan(schema=base_schema, tasks=tasks)
 
     def read(self, read_payload: bytes) -> pa.Table:
         spec = pickle.loads(read_payload)
@@ -64,18 +65,14 @@ class IcebergBackend(Backend):
             raise ValueError("Invalid read payload for Iceberg backend")
         tbl = self._catalog.load_table(spec.table)
         column_tuple = tuple(spec.columns)
-        if spec.mode == "full":
-            try:
-                scan = tbl.scan(selected_fields=column_tuple)
-            except TypeError:
-                scan = tbl.scan().select(*column_tuple)
-            return scan.to_arrow()
-
-        file_tasks = spec.tasks
+        file_tasks = [pickle.loads(task) for task in spec.tasks]
 
         projected_schema = tbl.schema()
         if column_tuple:
             projected_schema = projected_schema.select(*column_tuple)
+
+        if not file_tasks:
+            return pa.Table.from_batches([], schema=projected_schema.as_arrow())
 
         arrow_scan = ArrowScan(
             table_metadata=tbl.metadata,
@@ -86,17 +83,12 @@ class IcebergBackend(Backend):
         return arrow_scan.to_table(file_tasks)
 
 
-@dataclass(frozen=True)
-class IcebergReadSpec:
-    table: str
-    columns: list[str]
-    mode: str
-    tasks: list
-
-
 def _chunk_by_max_tickets(tasks: list, max_tickets: int) -> list[list]:
     if not tasks:
         return []
     max_tickets = max(1, max_tickets)
-    chunk_size = max(1, (len(tasks) + max_tickets - 1) // max_tickets)
-    return [tasks[i : i + chunk_size] for i in range(0, len(tasks), chunk_size)]
+    group_count = min(max_tickets, len(tasks))
+    groups: list[list] = [[] for _ in range(group_count)]
+    for index, task in enumerate(tasks):
+        groups[index % group_count].append(task)
+    return groups

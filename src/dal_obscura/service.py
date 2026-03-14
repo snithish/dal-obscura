@@ -83,9 +83,11 @@ class DataAccessFlightService(flight.FlightServerBase):
             ticket = self._signer.sign_payload(payload)
             tickets.append(flight.Ticket(ticket.encode().encode("utf-8")))
 
-        schema = pa.schema([])
+        output_schema = self._config.mask_applier.masked_schema(
+            plan.schema, decision.allowed_columns, decision.masks
+        )
         endpoints = [flight.FlightEndpoint(ticket, []) for ticket in tickets]
-        return flight.FlightInfo(schema, descriptor, endpoints, -1, -1)
+        return flight.FlightInfo(output_schema, descriptor, endpoints, -1, -1)
 
     def do_get(
         self, context: flight.ServerCallContext, ticket: flight.Ticket

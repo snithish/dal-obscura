@@ -13,6 +13,7 @@ class ReadPayload:
 
 @dataclass(frozen=True)
 class Plan:
+    schema: pa.Schema
     tasks: list[ReadPayload]
 
 
