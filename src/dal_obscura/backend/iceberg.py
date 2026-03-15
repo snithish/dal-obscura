@@ -9,7 +9,7 @@ from pyiceberg.catalog import load_catalog
 from pyiceberg.io.pyarrow import ArrowScan
 from pyiceberg.table import ALWAYS_TRUE
 
-from dal_obscura.backend.base import Backend, Plan, ReadPayload
+from dal_obscura.backend.base import Backend, Plan, ReadPayload, ReadSpec
 
 
 @dataclass(frozen=True)
@@ -30,11 +30,12 @@ class IcebergBackend(Backend):
         self._config = config
         self._catalog = load_catalog(config.catalog_name, **config.catalog_options)
 
+    def get_schema(self, table: str) -> pa.Schema:
+        tbl = self._load_table(table)
+        return tbl.schema().as_arrow()
+
     def plan(self, table: str, columns: Iterable[str], max_tickets: int) -> Plan:
-        tbl = self._catalog.load_table(table)
-        format_version = int(getattr(tbl.metadata, "format_version", 1))
-        if format_version not in {2, 3}:
-            raise ValueError(f"Unsupported Iceberg format version: {format_version}")
+        tbl = self._load_table(table)
 
         column_tuple = tuple(columns)
         base_schema = tbl.schema().as_arrow()
@@ -59,11 +60,13 @@ class IcebergBackend(Backend):
 
         return Plan(schema=base_schema, tasks=tasks)
 
-    def read(self, read_payload: bytes) -> pa.Table:
-        spec = pickle.loads(read_payload)
-        if not isinstance(spec, IcebergReadSpec):
-            raise ValueError("Invalid read payload for Iceberg backend")
-        tbl = self._catalog.load_table(spec.table)
+    def read_spec(self, read_payload: bytes) -> ReadSpec:
+        spec = self._decode_spec(read_payload)
+        return ReadSpec(table=spec.table, columns=list(spec.columns))
+
+    def read_stream(self, read_payload: bytes) -> Iterable[pa.RecordBatch]:
+        spec = self._decode_spec(read_payload)
+        tbl = self._load_table(spec.table)
         column_tuple = tuple(spec.columns)
         file_tasks = [pickle.loads(task) for task in spec.tasks]
 
@@ -72,7 +75,7 @@ class IcebergBackend(Backend):
             projected_schema = projected_schema.select(*column_tuple)
 
         if not file_tasks:
-            return pa.Table.from_batches([], schema=projected_schema.as_arrow())
+            return iter(())
 
         arrow_scan = ArrowScan(
             table_metadata=tbl.metadata,
@@ -80,7 +83,20 @@ class IcebergBackend(Backend):
             projected_schema=projected_schema,
             row_filter=ALWAYS_TRUE,
         )
-        return arrow_scan.to_table(file_tasks)
+        return arrow_scan.to_record_batches(file_tasks)
+
+    def _decode_spec(self, read_payload: bytes) -> IcebergReadSpec:
+        spec = pickle.loads(read_payload)
+        if not isinstance(spec, IcebergReadSpec):
+            raise ValueError("Invalid read payload for Iceberg backend")
+        return spec
+
+    def _load_table(self, table: str):
+        tbl = self._catalog.load_table(table)
+        format_version = int(getattr(tbl.metadata, "format_version", 1))
+        if format_version not in {2, 3}:
+            raise ValueError(f"Unsupported Iceberg format version: {format_version}")
+        return tbl
 
 
 def _chunk_by_max_tickets(tasks: list, max_tickets: int) -> list[list]:

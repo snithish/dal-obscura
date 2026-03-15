@@ -8,7 +8,7 @@ from typing import Dict, List, Optional
 @dataclass(frozen=True)
 class MaskRule:
     type: str
-    value: Optional[str] = None
+    value: object | None = None
 
 
 @dataclass(frozen=True)

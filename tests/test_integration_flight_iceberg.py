@@ -156,7 +156,7 @@ datasets:
             }
         ).encode("utf-8")
     )
-    options = flight.FlightCallOptions(headers=[(b"authorization", b"ApiKey apikey123")])
+    options = flight.FlightCallOptions(headers=[(b"x-api-key", b"apikey123")])
     info = client.get_flight_info(descriptor, options=options)
     assert info.endpoints, "Expected at least one endpoint"
     assert info.schema.field("id").type == pa.string()

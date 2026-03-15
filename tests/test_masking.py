@@ -17,3 +17,11 @@ def test_nested_mask_expression():
         {"user.address.zip": MaskRule(type="hash")},
     )
     assert "struct_update" in selection.select_list[0]
+
+
+def test_default_mask_renders_literal():
+    selection = build_select_list(
+        ["status"],
+        {"status": MaskRule(type="default", value="unknown")},
+    )
+    assert "'unknown'" in selection.select_list[0]

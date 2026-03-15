@@ -12,12 +12,22 @@ class ReadPayload:
 
 
 @dataclass(frozen=True)
+class ReadSpec:
+    table: str
+    columns: list[str]
+
+
+@dataclass(frozen=True)
 class Plan:
     schema: pa.Schema
     tasks: list[ReadPayload]
 
 
 class Backend(Protocol):
+    def get_schema(self, table: str) -> pa.Schema: ...
+
     def plan(self, table: str, columns: Iterable[str], max_tickets: int) -> Plan: ...
 
-    def read(self, read_payload: bytes) -> pa.Table: ...
+    def read_spec(self, read_payload: bytes) -> ReadSpec: ...
+
+    def read_stream(self, read_payload: bytes) -> Iterable[pa.RecordBatch]: ...

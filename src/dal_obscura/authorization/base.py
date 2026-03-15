@@ -17,5 +17,5 @@ class Authorizer(ABC):
         requested_columns: Iterable[str],
     ) -> AccessDecision: ...
 
-    def current_policy_version(self) -> Optional[int]:
+    def current_policy_version(self, table_identifier: str) -> Optional[int]:
         return None

@@ -15,13 +15,13 @@ def _mask_expression(column: str, mask: MaskRule) -> str:
         return "NULL"
     if mask_type == "redact":
         value = mask.value or "***"
-        return f"'{value}'"
+        return _sql_literal(str(value))
     if mask_type == "hash":
         return f"sha256(CAST({column} AS VARCHAR))"
     if mask_type == "default":
         if mask.value is None:
             raise ValueError("default mask requires a value")
-        return f"{mask.value}"
+        return _sql_literal(mask.value)
     raise ValueError(f"Unsupported mask type: {mask.type}")
 
 
@@ -29,12 +29,7 @@ def _apply_nested_mask(path: str, expr: str) -> str:
     parts = path.split(".")
     if len(parts) == 1:
         return expr
-    updated = expr
-    for depth in range(len(parts) - 1, 0, -1):
-        parent = ".".join(parts[:depth])
-        field = parts[depth]
-        updated = f'struct_update({parent}, "{field}" := {updated})'
-    return updated
+    return _apply_nested_mask_on_root(parts[0], path, expr)
 
 
 def build_select_list(columns: Iterable[str], masks: Mapping[str, MaskRule]) -> MaskedSelection:
@@ -101,8 +96,28 @@ def _masked_field(field: pa.Field, mask: MaskRule | None) -> pa.Field:
 
 
 def _apply_nested_mask_on_root(root_expr: str, path: str, expr: str) -> str:
-    updated = _apply_nested_mask(path, expr)
-    root = path.split(".")[0]
-    if root_expr != root:
-        updated = updated.replace(root, f"({root_expr})")
+    parts = path.split(".")
+    if len(parts) == 1:
+        return expr
+    updated = expr
+    for depth in range(len(parts) - 1, 0, -1):
+        field = parts[depth]
+        if depth == 1:
+            base = f"({root_expr})"
+        else:
+            base = f"({root_expr}).{'.'.join(parts[1:depth])}"
+        updated = f'struct_update({base}, "{field}" := {updated})'
     return updated
+
+
+def _sql_literal(value: object) -> str:
+    if value is None:
+        return "NULL"
+    if isinstance(value, bool):
+        return "TRUE" if value else "FALSE"
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, str):
+        escaped = value.replace("'", "''")
+        return f"'{escaped}'"
+    raise ValueError("default mask requires a scalar literal")

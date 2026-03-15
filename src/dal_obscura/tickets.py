@@ -19,9 +19,11 @@ class TicketPayload:
     principal_id: str
     expires_at: int
     nonce: str
+    auth_header: str | None = None
+    auth_value: str | None = None
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        payload = {
             "table": self.table,
             "columns": self.columns,
             "scan": self.scan,
@@ -30,6 +32,11 @@ class TicketPayload:
             "expires_at": self.expires_at,
             "nonce": self.nonce,
         }
+        if self.auth_header is not None:
+            payload["auth_header"] = self.auth_header
+        if self.auth_value is not None:
+            payload["auth_value"] = self.auth_value
+        return payload
 
 
 @dataclass(frozen=True)
@@ -73,6 +80,8 @@ class TicketSigner:
             principal_id=str(payload.get("principal_id", "")),
             expires_at=int(payload.get("expires_at", 0)),
             nonce=str(payload.get("nonce", "")),
+            auth_header=payload.get("auth_header"),
+            auth_value=payload.get("auth_value"),
         )
 
 
@@ -83,6 +92,8 @@ def new_ticket_payload(
     policy_version: int,
     principal_id: str,
     ttl_seconds: int,
+    auth_header: str | None = None,
+    auth_value: str | None = None,
 ) -> TicketPayload:
     return TicketPayload(
         table=table,
@@ -92,4 +103,6 @@ def new_ticket_payload(
         principal_id=principal_id,
         expires_at=int(time.time()) + ttl_seconds,
         nonce=base64.urlsafe_b64encode(os.urandom(12)).decode("utf-8"),
+        auth_header=auth_header,
+        auth_value=auth_value,
     )
