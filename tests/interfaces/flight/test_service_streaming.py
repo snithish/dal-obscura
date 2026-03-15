@@ -93,7 +93,11 @@ def _start_server(server: DataAccessFlightService) -> threading.Thread:
     raise RuntimeError("Flight server failed to start")
 
 
-def test_streaming_contract_emits_multiple_batches(tmp_path):
+def test_streaming_contract_emits_multiple_batches(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "dal_obscura.infrastructure.adapters.duckdb_transform._DUCKDB_ARROW_OUTPUT_BATCH_SIZE",
+        2,
+    )
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     batch1 = pa.record_batch([pa.array([1, 2]), pa.array(["us", "eu"])], schema=schema)
     batch2 = pa.record_batch([pa.array([3, 4]), pa.array(["us", "us"])], schema=schema)
@@ -135,6 +139,49 @@ datasets:
 
     server.shutdown()
     thread.join(timeout=2)
+
+
+def test_flight_logs_include_resident_memory(tmp_path, caplog, monkeypatch):
+    schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
+    batch = pa.record_batch([pa.array([1, 2]), pa.array(["us", "eu"])], schema=schema)
+    backend = StubBackend(schema, [batch])
+
+    policy_path = tmp_path / "policy.yaml"
+    policy_path.write_text(
+        """
+version: 1
+datasets:
+  - table: "test.table"
+    rules:
+      - principals: ["user1"]
+        columns: ["id", "region"]
+"""
+    )
+    monkeypatch.setattr(
+        "dal_obscura.interfaces.flight.server.get_resident_memory_bytes",
+        lambda: 4_242,
+    )
+    server = _build_server(
+        backend=backend, policy_path=policy_path, api_keys={"apikey123": "user1"}
+    )
+    descriptor = flight.FlightDescriptor.for_command(
+        json.dumps(
+            {
+                "table": "test.table",
+                "columns": ["id", "region"],
+                "auth_token": "ApiKey apikey123",
+            }
+        ).encode("utf-8")
+    )
+    context = DummyContext(headers=[(b"authorization", b"ApiKey apikey123")])
+
+    with caplog.at_level("INFO"):
+        info = server.get_flight_info(context, descriptor)
+        server.do_get(context, info.endpoints[0].ticket)
+
+    records = [record for record in caplog.records if record.message in {"plan_request", "do_get"}]
+    assert [record.message for record in records] == ["plan_request", "do_get"]
+    assert all(record.resident_memory_bytes == 4_242 for record in records)
 
 
 def test_do_get_rejects_principal_mismatch(tmp_path):

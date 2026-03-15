@@ -6,6 +6,8 @@ import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+_STANDARD_LOG_RECORD_FIELDS = frozenset(logging.makeLogRecord({}).__dict__) | {"message", "asctime"}
+
 
 @dataclass(frozen=True)
 class LoggingConfig:
@@ -21,9 +23,16 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
+        payload.update(
+            {
+                key: value
+                for key, value in record.__dict__.items()
+                if key not in _STANDARD_LOG_RECORD_FIELDS and not key.startswith("_")
+            }
+        )
         if record.exc_info:
             payload["exc_info"] = self.formatException(record.exc_info)
-        return json.dumps(payload, separators=(",", ":"))
+        return json.dumps(payload, separators=(",", ":"), default=str)
 
 
 def resolve_logging_config() -> LoggingConfig:

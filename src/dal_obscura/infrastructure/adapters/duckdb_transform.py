@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from typing import Iterable, Mapping
+from itertools import chain
+from typing import Iterable, Iterator, Mapping
 
 import duckdb
 import pyarrow as pa
 
 from dal_obscura.application.ports import MaskedSelection
 from dal_obscura.domain.access_control import MaskRule
+
+_DUCKDB_ARROW_OUTPUT_BATCH_SIZE = 8_192
 
 
 class DefaultMaskingAdapter:
@@ -49,17 +52,36 @@ class DuckDBRowTransformAdapter:
         masks: Mapping[str, MaskRule],
     ) -> Iterable[pa.RecordBatch]:
         query = _build_query(columns, row_filter, masks, self._masking)
-        con = duckdb.connect()
+
+        batch_iter = iter(batches)
         try:
-            for batch in batches:
-                con.register("input", batch)
-                try:
-                    reader = con.execute(query).to_arrow_reader()
-                    yield from reader
-                finally:
-                    con.unregister("input")
-        finally:
-            con.close()
+            first_batch = next(batch_iter)
+        except StopIteration:
+            return iter(())
+
+        reader = pa.RecordBatchReader.from_batches(
+            first_batch.schema,
+            chain((first_batch,), batch_iter),
+        )
+        return _stream_query_results(reader, query)
+
+
+def _stream_query_results(
+    reader: pa.RecordBatchReader,
+    query: str,
+) -> Iterator[pa.RecordBatch]:
+    # DuckDB 1.5.0 removes the Python-side per-batch loop here, but the input side
+    # does not appear observably lazy enough to assert callback-order streaming.
+    con = duckdb.connect()
+    try:
+        result_reader = (
+            con.from_arrow(reader)
+            .query("input", query)
+            .to_arrow_reader(batch_size=_DUCKDB_ARROW_OUTPUT_BATCH_SIZE)
+        )
+        yield from result_reader
+    finally:
+        con.close()
 
 
 def _build_query(
