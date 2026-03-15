@@ -24,7 +24,7 @@ test = [
 ]
 
 [project.scripts]
-dal-obscura = "dal_obscura.cli:main"
+dal-obscura = "dal_obscura.interfaces.cli:main"
 
 [build-system]
 requires = ["setuptools>=68.0.0", "wheel"]
