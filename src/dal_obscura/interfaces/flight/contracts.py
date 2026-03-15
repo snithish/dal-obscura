@@ -28,13 +28,11 @@ def parse_descriptor(descriptor: flight.FlightDescriptor) -> PlanRequest:
         data = json.loads(raw)
         auth_token = data.get("auth_token") or data.get("authorization") or data.get("api_key")
         return PlanRequest(
-            table=str(data["table"]),
+            catalog=str(data["catalog"]) if data.get("catalog") else None,
+            target=str(data["target"]),
             columns=list(data["columns"]),
             auth_token=str(auth_token) if auth_token else None,
         )
-    if descriptor.path:
-        table = ".".join(descriptor.path)
-        return PlanRequest(table=table, columns=["*"])
     raise ValueError("Invalid Flight descriptor")
 
 

@@ -4,17 +4,19 @@ import hashlib
 import json
 from typing import Iterable
 
+from dal_obscura.domain.query_planning import DatasetSelector
+
 from .models import DatasetPolicy, MaskRule, Policy, Principal
 
 
 def resolve_access(
     policy: Policy,
     principal: Principal,
-    table_identifier: str,
+    dataset: DatasetSelector,
     requested_columns: Iterable[str],
 ) -> tuple[list[str], dict[str, MaskRule], str | None]:
-    dataset = policy.match_dataset(table_identifier)
-    if not dataset:
+    matched_dataset = policy.match_dataset(dataset)
+    if not matched_dataset:
         raise PermissionError("No policy for requested table")
 
     principal_tokens = set(principal.tokens())
@@ -23,7 +25,7 @@ def resolve_access(
     row_filters: list[str] = []
 
     requested = list(requested_columns)
-    for rule in dataset.rules:
+    for rule in matched_dataset.rules:
         if not principal_tokens.intersection(rule.principals):
             continue
 
@@ -47,7 +49,8 @@ def resolve_access(
 
 def dataset_version(dataset: DatasetPolicy) -> int:
     payload = {
-        "table": dataset.table,
+        "catalog": dataset.catalog,
+        "target": dataset.target,
         "rules": [
             {
                 "principals": rule.principals,

@@ -1,5 +1,5 @@
 from .authorization import AuthorizationPort
-from .backend import PlanningBackendPort, ReadBackendPort
+from .backend import QueryBackendPort
 from .identity import IdentityPort
 from .masking import MaskedSelection, MaskingPort
 from .row_transform import RowTransformPort
@@ -10,8 +10,7 @@ __all__ = [
     "IdentityPort",
     "MaskedSelection",
     "MaskingPort",
-    "PlanningBackendPort",
-    "ReadBackendPort",
+    "QueryBackendPort",
     "RowTransformPort",
     "TicketCodecPort",
 ]

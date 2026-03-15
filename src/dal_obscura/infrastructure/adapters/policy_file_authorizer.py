@@ -16,6 +16,7 @@ from dal_obscura.domain.access_control import (
     dataset_version,
     resolve_access,
 )
+from dal_obscura.domain.query_planning import DatasetSelector
 
 
 class PolicyFileAuthorizer:
@@ -25,32 +26,32 @@ class PolicyFileAuthorizer:
     def authorize(
         self,
         principal: Principal,
-        table_identifier: str,
+        dataset: DatasetSelector,
         requested_columns: Iterable[str],
     ) -> AccessDecision:
         policy = load_policy_file(self._policy_path)
         allowed_columns, masks, row_filter = resolve_access(
             policy,
             principal,
-            table_identifier,
+            dataset,
             requested_columns,
         )
-        dataset = policy.match_dataset(table_identifier)
-        if not dataset:
+        matched_dataset = policy.match_dataset(dataset)
+        if not matched_dataset:
             raise PermissionError("No policy for requested table")
         return AccessDecision(
             allowed_columns=allowed_columns,
             masks=masks,
             row_filter=row_filter,
-            policy_version=dataset_version(dataset),
+            policy_version=dataset_version(matched_dataset),
         )
 
-    def current_policy_version(self, table_identifier: str) -> int | None:
+    def current_policy_version(self, dataset: DatasetSelector) -> int | None:
         policy = load_policy_file(self._policy_path)
-        dataset = policy.match_dataset(table_identifier)
-        if not dataset:
+        matched_dataset = policy.match_dataset(dataset)
+        if not matched_dataset:
             return None
-        return dataset_version(dataset)
+        return dataset_version(matched_dataset)
 
 
 def load_policy_file(path: str | Path) -> Policy:
@@ -69,16 +70,60 @@ def load_policy_file(path: str | Path) -> Policy:
     if not isinstance(raw, dict):
         raise ValueError("Policy file must contain a JSON/YAML object")
     version = int(raw.get("version", 1))
-    datasets = [_parse_dataset(item) for item in raw.get("datasets", [])]
+    datasets = _merge_datasets(
+        [
+            *_parse_catalog_datasets(raw.get("catalogs", {}) or {}),
+            *_parse_path_datasets(raw.get("paths", []) or []),
+        ]
+    )
     return Policy(version=version, datasets=datasets)
 
 
-def _parse_dataset(raw: dict[str, Any]) -> DatasetPolicy:
-    table = raw.get("table")
-    if not table:
-        raise ValueError("Dataset missing 'table'")
-    rules = [_parse_rule(item) for item in raw.get("rules", [])]
-    return DatasetPolicy(table=str(table), rules=rules)
+def _parse_catalog_datasets(raw: dict[str, Any]) -> list[DatasetPolicy]:
+    datasets: list[DatasetPolicy] = []
+    for catalog_name, catalog_data in dict(raw).items():
+        if not isinstance(catalog_data, dict):
+            raise ValueError(f"Catalog policy {catalog_name!r} must be an object")
+        targets = dict(catalog_data.get("targets", {}) or {})
+        for target_name, target_data in targets.items():
+            if not isinstance(target_data, dict):
+                raise ValueError(f"Target policy {target_name!r} must be an object")
+            rules = [_parse_rule(item) for item in target_data.get("rules", [])]
+            datasets.append(
+                DatasetPolicy(target=str(target_name), catalog=str(catalog_name), rules=rules)
+            )
+    return datasets
+
+
+def _parse_path_datasets(raw: list[Any]) -> list[DatasetPolicy]:
+    datasets: list[DatasetPolicy] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            raise ValueError("Path policy entries must be objects")
+        target = item.get("target")
+        if not target:
+            raise ValueError("Path policy missing 'target'")
+        rules = [_parse_rule(rule) for rule in item.get("rules", [])]
+        datasets.append(DatasetPolicy(target=str(target), catalog=None, rules=rules))
+    return datasets
+
+
+def _merge_datasets(datasets: list[DatasetPolicy]) -> list[DatasetPolicy]:
+    merged: dict[tuple[str | None, str], DatasetPolicy] = {}
+    ordered_keys: list[tuple[str | None, str]] = []
+    for dataset in datasets:
+        key = (dataset.catalog, dataset.target)
+        existing = merged.get(key)
+        if existing is None:
+            merged[key] = dataset
+            ordered_keys.append(key)
+            continue
+        merged[key] = DatasetPolicy(
+            target=dataset.target,
+            catalog=dataset.catalog,
+            rules=[*existing.rules, *dataset.rules],
+        )
+    return [merged[key] for key in ordered_keys]
 
 
 def _parse_rule(raw: dict[str, Any]) -> AccessRule:

@@ -1,6 +1,7 @@
 import textwrap
 
 from dal_obscura.domain.access_control import Principal, resolve_access
+from dal_obscura.domain.query_planning import DatasetSelector
 from dal_obscura.infrastructure.adapters.policy_file_authorizer import load_policy_file
 
 
@@ -8,14 +9,16 @@ def test_resolve_access_allows_columns(tmp_path):
     policy_text = textwrap.dedent(
         """
         version: 1
-        datasets:
-          - table: "catalog.db.table"
-            rules:
-              - principals: ["user1", "group:analyst"]
-                columns: ["id", "name"]
-                masks:
-                  name: {type: "redact", value: "***"}
-                row_filter: "region = 'us'"
+        catalogs:
+          analytics:
+            targets:
+              "catalog.db.table":
+                rules:
+                  - principals: ["user1", "group:analyst"]
+                    columns: ["id", "name"]
+                    masks:
+                      name: {type: "redact", value: "***"}
+                    row_filter: "region = 'us'"
         """
     )
     policy_path = tmp_path / "policy.yaml"
@@ -26,7 +29,7 @@ def test_resolve_access_allows_columns(tmp_path):
     allowed, masks, row_filter = resolve_access(
         policy,
         principal,
-        "catalog.db.table",
+        DatasetSelector(catalog="analytics", target="catalog.db.table"),
         ["id", "name", "region"],
     )
 
@@ -39,12 +42,14 @@ def test_resolve_access_unions_columns_and_filters(tmp_path):
     policy_text = textwrap.dedent(
         """
         version: 1
-        datasets:
-          - table: "catalog.db.table"
+        paths:
+          - target: "/landing/*.parquet"
             rules:
               - principals: ["user1"]
                 columns: ["id"]
                 row_filter: "region = 'us'"
+          - target: "/landing/*.parquet"
+            rules:
               - principals: ["user1"]
                 columns: ["name"]
                 masks:
@@ -60,7 +65,7 @@ def test_resolve_access_unions_columns_and_filters(tmp_path):
     allowed, masks, row_filter = resolve_access(
         policy,
         principal,
-        "catalog.db.table",
+        DatasetSelector(target="/landing/data.parquet"),
         ["id", "name", "region"],
     )
 

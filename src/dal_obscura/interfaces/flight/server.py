@@ -31,13 +31,18 @@ class DataAccessFlightService(flight.FlightServerBase):
         try:
             result = self._plan_access_use_case.execute(request, headers)
         except PermissionError as exc:
-            self._logger.warning("auth_or_authz_failed", extra=self._log_extra(table=request.table))
+            self._logger.warning(
+                "auth_or_authz_failed", extra=self._log_extra(target=request.target)
+            )
             raise flight.FlightUnauthorizedError("Unauthorized") from exc
+        except ValueError as exc:
+            raise flight.FlightInternalError(str(exc)) from exc
 
         self._logger.info(
             "plan_request",
             extra=self._log_extra(
-                table=result.table,
+                target=result.target,
+                catalog=result.catalog,
                 principal=result.principal_id,
                 columns=result.columns,
                 policy_version=result.policy_version,
@@ -66,7 +71,8 @@ class DataAccessFlightService(flight.FlightServerBase):
         self._logger.info(
             "do_get",
             extra=self._log_extra(
-                table=result.table,
+                target=result.target,
+                catalog=result.catalog,
                 principal=result.principal_id,
                 columns=result.columns,
             ),

@@ -10,10 +10,10 @@ from dal_obscura.infrastructure.adapters import (
     DefaultIdentityAdapter,
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
+    DynamicRegistryRuntime,
     HmacTicketCodecAdapter,
-    IcebergBackend,
-    IcebergConfig,
     PolicyFileAuthorizer,
+    load_service_config,
 )
 from dal_obscura.interfaces.flight import DataAccessFlightService
 from dal_obscura.logging_config import LoggingConfig, setup_logging
@@ -28,8 +28,7 @@ def main() -> None:
     parser.add_argument("--ticket-secret", required=True)
     parser.add_argument("--ticket-ttl", type=int, default=900)
     parser.add_argument("--max-tickets", type=int, default=64)
-    parser.add_argument("--catalog", required=True)
-    parser.add_argument("--catalog-options", default="{}")
+    parser.add_argument("--service-config", required=True)
     parser.add_argument("--api-keys", default="{}")
     parser.add_argument("--jwt-secret")
     parser.add_argument("--jwt-issuer")
@@ -57,9 +56,8 @@ def main() -> None:
         )
     )
     authorizer = PolicyFileAuthorizer(args.policy)
-    backend = IcebergBackend(
-        IcebergConfig(catalog_name=args.catalog, catalog_options=json.loads(args.catalog_options))
-    )
+    service_config = load_service_config(args.service_config)
+    runtime = DynamicRegistryRuntime(service_config)
     masking = DefaultMaskingAdapter()
     row_transform = DuckDBRowTransformAdapter(masking)
     ticket_codec = HmacTicketCodecAdapter(args.ticket_secret)
@@ -67,7 +65,7 @@ def main() -> None:
     plan_access = PlanAccessUseCase(
         identity=identity,
         authorizer=authorizer,
-        planning_backend=backend,
+        backend=runtime,
         masking=masking,
         ticket_codec=ticket_codec,
         ticket_ttl_seconds=args.ticket_ttl,
@@ -76,8 +74,7 @@ def main() -> None:
     fetch_stream = FetchStreamUseCase(
         identity=identity,
         authorizer=authorizer,
-        planning_backend=backend,
-        read_backend=backend,
+        backend=runtime,
         masking=masking,
         row_transform=row_transform,
         ticket_codec=ticket_codec,

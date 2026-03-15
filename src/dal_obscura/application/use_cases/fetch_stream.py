@@ -8,21 +8,22 @@ from dal_obscura.application.ports import (
     AuthorizationPort,
     IdentityPort,
     MaskingPort,
-    PlanningBackendPort,
-    ReadBackendPort,
+    QueryBackendPort,
     RowTransformPort,
     TicketCodecPort,
 )
 from dal_obscura.domain.access_control import MaskRule, Principal
+from dal_obscura.domain.query_planning import BackendReference, DatasetSelector
 
 
 @dataclass(frozen=True)
 class FetchStreamResult:
     output_schema: Any
     result_batches: Iterable[Any]
-    table: str
+    target: str
     principal_id: str
     columns: list[str]
+    catalog: str | None = None
 
 
 @dataclass(frozen=True)
@@ -37,16 +38,14 @@ class FetchStreamUseCase:
         self,
         identity: IdentityPort,
         authorizer: AuthorizationPort,
-        planning_backend: PlanningBackendPort,
-        read_backend: ReadBackendPort,
+        backend: QueryBackendPort,
         masking: MaskingPort,
         row_transform: RowTransformPort,
         ticket_codec: TicketCodecPort,
     ) -> None:
         self._identity = identity
         self._authorizer = authorizer
-        self._planning_backend = planning_backend
-        self._read_backend = read_backend
+        self._backend = backend
         self._masking = masking
         self._row_transform = row_transform
         self._ticket_codec = ticket_codec
@@ -61,28 +60,32 @@ class FetchStreamUseCase:
         if principal.id != payload.principal_id:
             raise PermissionError("Unauthorized")
 
-        current_version = self._authorizer.current_policy_version(payload.table)
+        selector = DatasetSelector(target=payload.target, catalog=payload.catalog)
+        current_version = self._authorizer.current_policy_version(selector)
         if current_version is not None and payload.policy_version != current_version:
             raise PermissionError("Unauthorized")
 
+        backend = BackendReference(
+            backend_id=payload.backend_id,
+            generation=payload.backend_generation,
+        )
         scan = _decode_scan(payload.scan)
-        spec = self._read_backend.read_spec(scan.read_payload)
-        if spec.table != payload.table or spec.columns != payload.columns:
+        spec = self._backend.read_spec(backend, scan.read_payload)
+        if spec.dataset != selector or spec.columns != payload.columns:
             raise ValueError("Ticket payload mismatch")
 
-        batches = self._read_backend.read_stream(scan.read_payload)
+        batches = self._backend.read_stream(backend, scan.read_payload)
         result_batches = self._row_transform.apply_filters_and_masks_stream(
             batches, payload.columns, scan.row_filter, scan.masks
         )
-        output_schema = self._masking.masked_schema(
-            self._planning_backend.get_schema(payload.table), payload.columns, scan.masks
-        )
+        output_schema = self._masking.masked_schema(spec.schema, payload.columns, scan.masks)
         return FetchStreamResult(
             output_schema=output_schema,
             result_batches=result_batches,
-            table=payload.table,
+            target=payload.target,
             principal_id=payload.principal_id,
             columns=payload.columns,
+            catalog=payload.catalog,
         )
 
 

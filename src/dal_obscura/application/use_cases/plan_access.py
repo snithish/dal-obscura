@@ -10,10 +10,10 @@ from dal_obscura.application.ports import (
     AuthorizationPort,
     IdentityPort,
     MaskingPort,
-    PlanningBackendPort,
+    QueryBackendPort,
     TicketCodecPort,
 )
-from dal_obscura.domain.query_planning import PlanRequest
+from dal_obscura.domain.query_planning import PlanRequest, ResolvedBackendTarget
 from dal_obscura.domain.ticket_delivery import TicketPayload
 
 
@@ -21,10 +21,11 @@ from dal_obscura.domain.ticket_delivery import TicketPayload
 class PlanAccessResult:
     output_schema: Any
     ticket_tokens: list[str]
-    table: str
+    target: str
     columns: list[str]
     principal_id: str
     policy_version: int
+    catalog: str | None = None
 
 
 class PlanAccessUseCase:
@@ -32,7 +33,7 @@ class PlanAccessUseCase:
         self,
         identity: IdentityPort,
         authorizer: AuthorizationPort,
-        planning_backend: PlanningBackendPort,
+        backend: QueryBackendPort,
         masking: MaskingPort,
         ticket_codec: TicketCodecPort,
         ticket_ttl_seconds: int,
@@ -42,7 +43,7 @@ class PlanAccessUseCase:
     ) -> None:
         self._identity = identity
         self._authorizer = authorizer
-        self._planning_backend = planning_backend
+        self._backend = backend
         self._masking = masking
         self._ticket_codec = ticket_codec
         self._ticket_ttl_seconds = ticket_ttl_seconds
@@ -56,23 +57,23 @@ class PlanAccessUseCase:
             normalized_headers = {"authorization": request.auth_token}
 
         principal = self._identity.authenticate(normalized_headers)
+        resolved_target = self._backend.resolve(request.catalog, request.target)
         requested_columns = _expand_requested_columns(
-            self._planning_backend, request.table, request.columns
+            self._backend, resolved_target, request.columns
         )
         decision = self._authorizer.authorize(
             principal=principal,
-            table_identifier=request.table,
+            dataset=resolved_target.dataset_identity,
             requested_columns=requested_columns,
         )
-        plan = self._planning_backend.plan(
-            request.table, decision.allowed_columns, self._max_tickets
-        )
+        plan = self._backend.plan(resolved_target, decision.allowed_columns, self._max_tickets)
         auth_header, auth_value = _auth_binding(normalized_headers, request.auth_token)
 
         ticket_tokens: list[str] = []
         for task in plan.tasks:
             payload = TicketPayload(
-                table=request.table,
+                catalog=resolved_target.dataset_identity.catalog,
+                target=resolved_target.dataset_identity.target,
                 columns=decision.allowed_columns,
                 scan={
                     "read_payload": base64.b64encode(task.payload).decode("utf-8"),
@@ -86,6 +87,8 @@ class PlanAccessUseCase:
                 principal_id=principal.id,
                 expires_at=self._now() + self._ticket_ttl_seconds,
                 nonce=self._nonce_factory(),
+                backend_id=resolved_target.backend.backend_id,
+                backend_generation=resolved_target.backend.generation,
                 auth_header=auth_header,
                 auth_value=auth_value,
             )
@@ -97,10 +100,11 @@ class PlanAccessUseCase:
         return PlanAccessResult(
             output_schema=output_schema,
             ticket_tokens=ticket_tokens,
-            table=request.table,
+            target=resolved_target.dataset_identity.target,
             columns=decision.allowed_columns,
             principal_id=principal.id,
             policy_version=decision.policy_version,
+            catalog=resolved_target.dataset_identity.catalog,
         )
 
 
@@ -117,13 +121,21 @@ def _auth_binding(
 
 
 def _expand_requested_columns(
-    backend: PlanningBackendPort, table: str, columns: list[str]
+    backend: QueryBackendPort, target: ResolvedBackendTarget, columns: list[str]
 ) -> list[str]:
     requested = list(columns)
     if "*" not in requested:
+        _validate_requested_columns(backend.get_schema(target), requested)
         return requested
-    schema = backend.get_schema(table)
+    schema = backend.get_schema(target)
     return [field.name for field in schema]
+
+
+def _validate_requested_columns(schema: Any, requested: list[str]) -> None:
+    schema_names = {field.name for field in schema}
+    missing = [column for column in requested if column not in schema_names]
+    if missing:
+        raise ValueError(f"Unknown columns requested: {', '.join(missing)}")
 
 
 def _epoch_seconds() -> int:

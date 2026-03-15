@@ -7,7 +7,14 @@ import pyarrow.flight as flight
 import pytest
 
 from dal_obscura.application.use_cases import FetchStreamUseCase, PlanAccessUseCase
-from dal_obscura.domain.query_planning import Plan, ReadPayload, ReadSpec
+from dal_obscura.domain.query_planning import (
+    BackendReference,
+    DatasetSelector,
+    Plan,
+    ReadPayload,
+    ReadSpec,
+    ResolvedBackendTarget,
+)
 from dal_obscura.infrastructure.adapters import (
     AuthConfig,
     DefaultIdentityAdapter,
@@ -17,6 +24,7 @@ from dal_obscura.infrastructure.adapters import (
     PolicyFileAuthorizer,
 )
 from dal_obscura.interfaces.flight import DataAccessFlightService
+from dal_obscura.interfaces.flight.contracts import parse_descriptor
 
 
 class StubBackend:
@@ -24,18 +32,36 @@ class StubBackend:
         self._schema = schema
         self._batches = batches
 
-    def get_schema(self, table: str) -> pa.Schema:
+    def resolve(self, catalog: str | None, target: str) -> ResolvedBackendTarget:
+        selector = DatasetSelector(catalog=catalog, target=target)
+        return ResolvedBackendTarget(
+            dataset_identity=selector,
+            backend=BackendReference(backend_id="duckdb_file", generation=1),
+            handle={"format": "csv", "paths": ["stub.csv"], "options": {}},
+        )
+
+    def get_schema(self, target: ResolvedBackendTarget) -> pa.Schema:
         return self._schema
 
-    def plan(self, table: str, columns, max_tickets: int) -> Plan:
-        payload = json.dumps({"table": table, "columns": list(columns)}).encode("utf-8")
+    def plan(self, target: ResolvedBackendTarget, columns, max_tickets: int) -> Plan:
+        payload = json.dumps(
+            {
+                "catalog": target.dataset_identity.catalog,
+                "target": target.dataset_identity.target,
+                "columns": list(columns),
+            }
+        ).encode("utf-8")
         return Plan(schema=self._schema, tasks=[ReadPayload(payload=payload)])
 
-    def read_spec(self, read_payload: bytes) -> ReadSpec:
+    def read_spec(self, backend: BackendReference, read_payload: bytes) -> ReadSpec:
         raw = json.loads(read_payload.decode("utf-8"))
-        return ReadSpec(table=str(raw["table"]), columns=list(raw["columns"]))
+        return ReadSpec(
+            dataset=DatasetSelector(catalog=raw.get("catalog"), target=str(raw["target"])),
+            columns=list(raw["columns"]),
+            schema=self._schema,
+        )
 
-    def read_stream(self, read_payload: bytes):
+    def read_stream(self, backend: BackendReference, read_payload: bytes):
         return iter(self._batches)
 
 
@@ -60,7 +86,7 @@ def _build_server(
     plan_access = PlanAccessUseCase(
         identity=identity,
         authorizer=authorizer,
-        planning_backend=backend,
+        backend=backend,
         masking=masking,
         ticket_codec=ticket_codec,
         ticket_ttl_seconds=ticket_ttl_seconds,
@@ -69,8 +95,7 @@ def _build_server(
     fetch_stream = FetchStreamUseCase(
         identity=identity,
         authorizer=authorizer,
-        planning_backend=backend,
-        read_backend=backend,
+        backend=backend,
         masking=masking,
         row_transform=row_transform,
         ticket_codec=ticket_codec,
@@ -93,6 +118,22 @@ def _start_server(server: DataAccessFlightService) -> threading.Thread:
     raise RuntimeError("Flight server failed to start")
 
 
+def _catalog_policy(targets: str) -> str:
+    return f"""
+version: 1
+catalogs:
+  analytics:
+    targets:
+{targets}
+"""
+
+
+def test_parse_descriptor_rejects_path_descriptor():
+    descriptor = flight.FlightDescriptor.for_path("analytics", "users")
+    with pytest.raises(ValueError):
+        parse_descriptor(descriptor)
+
+
 def test_streaming_contract_emits_multiple_batches(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "dal_obscura.infrastructure.adapters.duckdb_transform._DUCKDB_ARROW_OUTPUT_BATCH_SIZE",
@@ -105,14 +146,14 @@ def test_streaming_contract_emits_multiple_batches(tmp_path, monkeypatch):
 
     policy_path = tmp_path / "policy.yaml"
     policy_path.write_text(
-        """
-version: 1
-datasets:
-  - table: "test.table"
-    rules:
-      - principals: ["user1"]
-        columns: ["id", "region"]
+        _catalog_policy(
+            """
+      "test.table":
+        rules:
+          - principals: ["user1"]
+            columns: ["id", "region"]
 """
+        )
     )
     server = _build_server(
         backend=backend, policy_path=policy_path, api_keys={"apikey123": "user1"}
@@ -123,7 +164,8 @@ datasets:
     descriptor = flight.FlightDescriptor.for_command(
         json.dumps(
             {
-                "table": "test.table",
+                "catalog": "analytics",
+                "target": "test.table",
                 "columns": ["id", "region"],
                 "auth_token": "ApiKey apikey123",
             }
@@ -148,14 +190,14 @@ def test_flight_logs_include_resident_memory(tmp_path, caplog, monkeypatch):
 
     policy_path = tmp_path / "policy.yaml"
     policy_path.write_text(
-        """
-version: 1
-datasets:
-  - table: "test.table"
-    rules:
-      - principals: ["user1"]
-        columns: ["id", "region"]
+        _catalog_policy(
+            """
+      "test.table":
+        rules:
+          - principals: ["user1"]
+            columns: ["id", "region"]
 """
+        )
     )
     monkeypatch.setattr(
         "dal_obscura.interfaces.flight.server.get_resident_memory_bytes",
@@ -167,7 +209,8 @@ datasets:
     descriptor = flight.FlightDescriptor.for_command(
         json.dumps(
             {
-                "table": "test.table",
+                "catalog": "analytics",
+                "target": "test.table",
                 "columns": ["id", "region"],
                 "auth_token": "ApiKey apikey123",
             }
@@ -191,14 +234,14 @@ def test_do_get_rejects_principal_mismatch(tmp_path):
 
     policy_path = tmp_path / "policy.yaml"
     policy_path.write_text(
-        """
-version: 1
-datasets:
-  - table: "test.table"
-    rules:
-      - principals: ["user1"]
-        columns: ["id", "region"]
+        _catalog_policy(
+            """
+      "test.table":
+        rules:
+          - principals: ["user1"]
+            columns: ["id", "region"]
 """
+        )
     )
     server = _build_server(
         backend=backend,
@@ -208,7 +251,8 @@ datasets:
     descriptor = flight.FlightDescriptor.for_command(
         json.dumps(
             {
-                "table": "test.table",
+                "catalog": "analytics",
+                "target": "test.table",
                 "columns": ["id", "region"],
                 "auth_token": "ApiKey apikey123",
             }
@@ -229,18 +273,18 @@ def test_policy_version_is_per_dataset(tmp_path):
 
     policy_path = tmp_path / "policy.yaml"
     policy_path.write_text(
-        """
-version: 1
-datasets:
-  - table: "table_a"
-    rules:
-      - principals: ["user1"]
-        columns: ["id", "region"]
-  - table: "table_b"
-    rules:
-      - principals: ["user1"]
-        columns: ["id"]
+        _catalog_policy(
+            """
+      "table_a":
+        rules:
+          - principals: ["user1"]
+            columns: ["id", "region"]
+      "table_b":
+        rules:
+          - principals: ["user1"]
+            columns: ["id"]
 """
+        )
     )
     server = _build_server(
         backend=backend, policy_path=policy_path, api_keys={"apikey123": "user1"}
@@ -248,7 +292,8 @@ datasets:
     descriptor = flight.FlightDescriptor.for_command(
         json.dumps(
             {
-                "table": "table_a",
+                "catalog": "analytics",
+                "target": "table_a",
                 "columns": ["id", "region"],
                 "auth_token": "ApiKey apikey123",
             }
@@ -259,37 +304,37 @@ datasets:
     ticket = info.endpoints[0].ticket
 
     policy_path.write_text(
-        """
-version: 1
-datasets:
-  - table: "table_a"
-    rules:
-      - principals: ["user1"]
-        columns: ["id", "region"]
-  - table: "table_b"
-    rules:
-      - principals: ["user1"]
-        columns: ["id", "region"]
-        row_filter: "region = 'us'"
+        _catalog_policy(
+            """
+      "table_a":
+        rules:
+          - principals: ["user1"]
+            columns: ["id", "region"]
+      "table_b":
+        rules:
+          - principals: ["user1"]
+            columns: ["id", "region"]
+            row_filter: "region = 'us'"
 """
+        )
     )
     do_get_context = DummyContext(headers=[(b"authorization", b"ApiKey apikey123")])
     server.do_get(do_get_context, ticket)
 
     policy_path.write_text(
-        """
-version: 1
-datasets:
-  - table: "table_a"
-    rules:
-      - principals: ["user1"]
-        columns: ["id", "region"]
-        row_filter: "region = 'us'"
-  - table: "table_b"
-    rules:
-      - principals: ["user1"]
-        columns: ["id", "region"]
+        _catalog_policy(
+            """
+      "table_a":
+        rules:
+          - principals: ["user1"]
+            columns: ["id", "region"]
+            row_filter: "region = 'us'"
+      "table_b":
+        rules:
+          - principals: ["user1"]
+            columns: ["id", "region"]
 """
+        )
     )
     with pytest.raises(flight.FlightUnauthorizedError):
         server.do_get(do_get_context, ticket)

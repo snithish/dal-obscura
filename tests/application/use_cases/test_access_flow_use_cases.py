@@ -5,7 +5,15 @@ import pytest
 
 from dal_obscura.application.use_cases import FetchStreamUseCase, PlanAccessUseCase
 from dal_obscura.domain.access_control import AccessDecision, MaskRule, Principal
-from dal_obscura.domain.query_planning import Plan, PlanRequest, ReadPayload, ReadSpec
+from dal_obscura.domain.query_planning import (
+    BackendReference,
+    DatasetSelector,
+    Plan,
+    PlanRequest,
+    ReadPayload,
+    ReadSpec,
+    ResolvedBackendTarget,
+)
 from dal_obscura.domain.ticket_delivery import TicketPayload
 
 
@@ -25,32 +33,42 @@ class FakeAuthorizer:
         self._current_version = current_version
         self.last_requested_columns: list[str] | None = None
 
-    def authorize(self, principal, table_identifier, requested_columns):
+    def authorize(self, principal, dataset, requested_columns):
         self.last_requested_columns = list(requested_columns)
         if self._decision is None:
             raise PermissionError("Unauthorized")
         return self._decision
 
-    def current_policy_version(self, table_identifier):
+    def current_policy_version(self, dataset):
         return self._current_version
 
 
 class FakeBackend:
-    def __init__(self, schema: pa.Schema, plan: Plan, read_spec: ReadSpec) -> None:
+    def __init__(
+        self,
+        schema: pa.Schema,
+        plan: Plan,
+        read_spec: ReadSpec,
+        target: ResolvedBackendTarget,
+    ) -> None:
         self._schema = schema
         self._plan = plan
         self._read_spec = read_spec
+        self._target = target
 
-    def get_schema(self, table: str):
+    def resolve(self, catalog: str | None, target: str) -> ResolvedBackendTarget:
+        return self._target
+
+    def get_schema(self, target: ResolvedBackendTarget):
         return self._schema
 
-    def plan(self, table: str, columns, max_tickets: int) -> Plan:
+    def plan(self, target: ResolvedBackendTarget, columns, max_tickets: int) -> Plan:
         return self._plan
 
-    def read_spec(self, read_payload: bytes) -> ReadSpec:
+    def read_spec(self, backend: BackendReference, read_payload: bytes) -> ReadSpec:
         return self._read_spec
 
-    def read_stream(self, read_payload: bytes):
+    def read_stream(self, backend: BackendReference, read_payload: bytes):
         return iter(
             [
                 pa.record_batch(
@@ -89,37 +107,46 @@ class FakeRowTransform:
 
 def _build_use_case_dependencies():
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
-    read_payload = b'{"table":"users","columns":["id","region"]}'
+    selector = DatasetSelector(target="users", catalog="catalog1")
+    read_payload = b"payload"
     plan = Plan(schema=schema, tasks=[ReadPayload(payload=read_payload)])
-    read_spec = ReadSpec(table="users", columns=["id", "region"])
+    read_spec = ReadSpec(dataset=selector, columns=["id", "region"], schema=schema)
     decision = AccessDecision(
         allowed_columns=["id", "region"],
         masks={"region": MaskRule(type="redact", value="***")},
         row_filter="region = 'us'",
         policy_version=100,
     )
-    return schema, plan, read_spec, decision
+    target = ResolvedBackendTarget(
+        dataset_identity=selector,
+        backend=BackendReference(backend_id="duckdb_file", generation=1),
+        handle={"format": "csv", "paths": ["users.csv"], "options": {}},
+    )
+    return schema, plan, read_spec, decision, target
 
 
 def test_plan_access_auth_failure():
-    schema, plan, read_spec, decision = _build_use_case_dependencies()
-    backend = FakeBackend(schema=schema, plan=plan, read_spec=read_spec)
+    schema, plan, read_spec, decision, target = _build_use_case_dependencies()
+    backend = FakeBackend(schema=schema, plan=plan, read_spec=read_spec, target=target)
     authorizer = FakeAuthorizer(decision=decision)
     ticket_codec = FakeTicketCodec(
         TicketPayload(
-            table="users",
+            catalog="catalog1",
+            target="users",
             columns=["id", "region"],
             scan={},
             policy_version=100,
             principal_id="user1",
             expires_at=9999999999,
             nonce="abc",
+            backend_id="duckdb_file",
+            backend_generation=1,
         )
     )
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=None),
         authorizer=authorizer,
-        planning_backend=backend,
+        backend=backend,
         masking=FakeMasking(),
         ticket_codec=ticket_codec,
         ticket_ttl_seconds=300,
@@ -127,27 +154,30 @@ def test_plan_access_auth_failure():
     )
 
     with pytest.raises(PermissionError):
-        use_case.execute(PlanRequest(table="users", columns=["id"]), {})
+        use_case.execute(PlanRequest(catalog="catalog1", target="users", columns=["id"]), {})
 
 
 def test_plan_access_authz_failure():
-    schema, plan, read_spec, _ = _build_use_case_dependencies()
-    backend = FakeBackend(schema=schema, plan=plan, read_spec=read_spec)
+    schema, plan, read_spec, _, target = _build_use_case_dependencies()
+    backend = FakeBackend(schema=schema, plan=plan, read_spec=read_spec, target=target)
     ticket_codec = FakeTicketCodec(
         TicketPayload(
-            table="users",
+            catalog="catalog1",
+            target="users",
             columns=["id", "region"],
             scan={},
             policy_version=100,
             principal_id="user1",
             expires_at=9999999999,
             nonce="abc",
+            backend_id="duckdb_file",
+            backend_generation=1,
         )
     )
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         authorizer=FakeAuthorizer(decision=None),
-        planning_backend=backend,
+        backend=backend,
         masking=FakeMasking(),
         ticket_codec=ticket_codec,
         ticket_ttl_seconds=300,
@@ -156,36 +186,40 @@ def test_plan_access_authz_failure():
 
     with pytest.raises(PermissionError):
         use_case.execute(
-            PlanRequest(table="users", columns=["id"]), {"authorization": "ApiKey key"}
+            PlanRequest(catalog="catalog1", target="users", columns=["id"]),
+            {"authorization": "ApiKey key"},
         )
 
 
 def test_plan_access_expands_wildcard_columns():
-    schema, plan, read_spec, decision = _build_use_case_dependencies()
-    backend = FakeBackend(schema=schema, plan=plan, read_spec=read_spec)
+    schema, plan, read_spec, decision, target = _build_use_case_dependencies()
+    backend = FakeBackend(schema=schema, plan=plan, read_spec=read_spec, target=target)
     authorizer = FakeAuthorizer(decision=decision)
     ticket_codec = FakeTicketCodec(
         TicketPayload(
-            table="users",
+            catalog="catalog1",
+            target="users",
             columns=["id", "region"],
             scan={},
             policy_version=100,
             principal_id="user1",
             expires_at=9999999999,
             nonce="abc",
+            backend_id="duckdb_file",
+            backend_generation=1,
         )
     )
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         authorizer=authorizer,
-        planning_backend=backend,
+        backend=backend,
         masking=FakeMasking(),
         ticket_codec=ticket_codec,
         ticket_ttl_seconds=300,
         max_tickets=1,
     )
     use_case.execute(
-        PlanRequest(table="users", columns=["*"]),
+        PlanRequest(catalog="catalog1", target="users", columns=["*"]),
         {"authorization": "ApiKey key"},
     )
 
@@ -193,15 +227,14 @@ def test_plan_access_expands_wildcard_columns():
 
 
 def test_fetch_stream_policy_version_mismatch():
-    schema, plan, read_spec, decision = _build_use_case_dependencies()
-    backend = FakeBackend(schema=schema, plan=plan, read_spec=read_spec)
+    schema, plan, read_spec, decision, target = _build_use_case_dependencies()
+    backend = FakeBackend(schema=schema, plan=plan, read_spec=read_spec, target=target)
     payload = TicketPayload(
-        table="users",
+        catalog="catalog1",
+        target="users",
         columns=["id", "region"],
         scan={
-            "read_payload": base64.b64encode(b'{"table":"users","columns":["id","region"]}').decode(
-                "utf-8"
-            ),
+            "read_payload": base64.b64encode(b"payload").decode("utf-8"),
             "row_filter": None,
             "masks": {},
         },
@@ -209,12 +242,13 @@ def test_fetch_stream_policy_version_mismatch():
         principal_id="user1",
         expires_at=9999999999,
         nonce="abc",
+        backend_id="duckdb_file",
+        backend_generation=1,
     )
     use_case = FetchStreamUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         authorizer=FakeAuthorizer(decision=decision, current_version=101),
-        planning_backend=backend,
-        read_backend=backend,
+        backend=backend,
         masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
@@ -225,15 +259,14 @@ def test_fetch_stream_policy_version_mismatch():
 
 
 def test_fetch_stream_principal_mismatch():
-    schema, plan, read_spec, decision = _build_use_case_dependencies()
-    backend = FakeBackend(schema=schema, plan=plan, read_spec=read_spec)
+    schema, plan, read_spec, decision, target = _build_use_case_dependencies()
+    backend = FakeBackend(schema=schema, plan=plan, read_spec=read_spec, target=target)
     payload = TicketPayload(
-        table="users",
+        catalog="catalog1",
+        target="users",
         columns=["id", "region"],
         scan={
-            "read_payload": base64.b64encode(b'{"table":"users","columns":["id","region"]}').decode(
-                "utf-8"
-            ),
+            "read_payload": base64.b64encode(b"payload").decode("utf-8"),
             "row_filter": None,
             "masks": {},
         },
@@ -241,12 +274,13 @@ def test_fetch_stream_principal_mismatch():
         principal_id="user1",
         expires_at=9999999999,
         nonce="abc",
+        backend_id="duckdb_file",
+        backend_generation=1,
     )
     use_case = FetchStreamUseCase(
         identity=FakeIdentity(principal=Principal(id="user2", groups=[], attributes={})),
         authorizer=FakeAuthorizer(decision=decision, current_version=100),
-        planning_backend=backend,
-        read_backend=backend,
+        backend=backend,
         masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
@@ -257,19 +291,23 @@ def test_fetch_stream_principal_mismatch():
 
 
 def test_fetch_stream_read_spec_mismatch():
-    schema, plan, _, decision = _build_use_case_dependencies()
+    schema, plan, _, decision, target = _build_use_case_dependencies()
     mismatched_backend = FakeBackend(
         schema=schema,
         plan=plan,
-        read_spec=ReadSpec(table="different_table", columns=["id", "region"]),
+        read_spec=ReadSpec(
+            dataset=DatasetSelector(target="different_table", catalog="catalog1"),
+            columns=["id", "region"],
+            schema=schema,
+        ),
+        target=target,
     )
     payload = TicketPayload(
-        table="users",
+        catalog="catalog1",
+        target="users",
         columns=["id", "region"],
         scan={
-            "read_payload": base64.b64encode(
-                b'{"table":"different_table","columns":["id","region"]}'
-            ).decode("utf-8"),
+            "read_payload": base64.b64encode(b"payload").decode("utf-8"),
             "row_filter": None,
             "masks": {},
         },
@@ -277,12 +315,13 @@ def test_fetch_stream_read_spec_mismatch():
         principal_id="user1",
         expires_at=9999999999,
         nonce="abc",
+        backend_id="duckdb_file",
+        backend_generation=1,
     )
     use_case = FetchStreamUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         authorizer=FakeAuthorizer(decision=decision, current_version=100),
-        planning_backend=mismatched_backend,
-        read_backend=mismatched_backend,
+        backend=mismatched_backend,
         masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),

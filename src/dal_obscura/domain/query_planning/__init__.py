@@ -1,3 +1,19 @@
-from .models import Plan, PlanRequest, ReadPayload, ReadSpec
+from .models import (
+    BackendReference,
+    DatasetSelector,
+    Plan,
+    PlanRequest,
+    ReadPayload,
+    ReadSpec,
+    ResolvedBackendTarget,
+)
 
-__all__ = ["Plan", "PlanRequest", "ReadPayload", "ReadSpec"]
+__all__ = [
+    "BackendReference",
+    "DatasetSelector",
+    "Plan",
+    "PlanRequest",
+    "ReadPayload",
+    "ReadSpec",
+    "ResolvedBackendTarget",
+]
