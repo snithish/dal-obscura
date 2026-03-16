@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import json
 import pickle
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Iterable, Mapping
 
 from pyiceberg.catalog import Catalog, load_catalog
 from pyiceberg.io.pyarrow import ArrowScan
 from pyiceberg.table import ALWAYS_TRUE
 
-from dal_obscura.domain.query_planning import (
+from dal_obscura.domain.query_planning.models import (
     DatasetSelector,
     Plan,
     ReadPayload,

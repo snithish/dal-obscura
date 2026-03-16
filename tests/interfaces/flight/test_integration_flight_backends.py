@@ -2,26 +2,33 @@ import csv
 import json
 import threading
 import time
+from contextlib import suppress
 from pathlib import Path
 
+import jwt
 import pyarrow as pa
 import pyarrow.flight as flight
 import pyarrow.parquet as pq
 import pytest
 import yaml
 
-from dal_obscura.application.use_cases import FetchStreamUseCase, PlanAccessUseCase
-from dal_obscura.infrastructure.adapters import (
-    AuthConfig,
-    DefaultIdentityAdapter,
+from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
+from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
+from dal_obscura.infrastructure.adapters.catalog_resolver import DynamicRegistryRuntime
+from dal_obscura.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
-    DynamicRegistryRuntime,
-    HmacTicketCodecAdapter,
-    PolicyFileAuthorizer,
-    load_service_config,
 )
-from dal_obscura.interfaces.flight import DataAccessFlightService
+from dal_obscura.infrastructure.adapters.identity_default import (
+    AuthConfig,
+    DefaultIdentityAdapter,
+)
+from dal_obscura.infrastructure.adapters.policy_file_authorizer import PolicyFileAuthorizer
+from dal_obscura.infrastructure.adapters.service_config import load_service_config
+from dal_obscura.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
+from dal_obscura.interfaces.flight.server import DataAccessFlightService
+
+JWT_SECRET = "test-jwt-secret-32-characters-long"
 
 
 def _start_server(server: DataAccessFlightService) -> threading.Thread:
@@ -36,7 +43,7 @@ def _start_server(server: DataAccessFlightService) -> threading.Thread:
 
 
 def _build_server(runtime: DynamicRegistryRuntime, policy_path: Path, max_tickets: int = 4):
-    identity = DefaultIdentityAdapter(AuthConfig(api_keys={"apikey123": "user1"}))
+    identity = DefaultIdentityAdapter(AuthConfig(jwt_secret=JWT_SECRET))
     authorizer = PolicyFileAuthorizer(policy_path)
     masking = DefaultMaskingAdapter()
     row_transform = DuckDBRowTransformAdapter(masking)
@@ -65,10 +72,14 @@ def _build_server(runtime: DynamicRegistryRuntime, policy_path: Path, max_ticket
     )
 
 
+def _flight_options(principal_id: str = "user1") -> flight.FlightCallOptions:
+    token = jwt.encode({"sub": principal_id}, JWT_SECRET, algorithm="HS256")
+    return flight.FlightCallOptions(headers=[(b"authorization", f"Bearer {token}".encode())])
+
+
 def _flight_info(client: flight.FlightClient, payload: dict[str, object]):
-    command = {"auth_token": "ApiKey apikey123", **payload}
-    descriptor = flight.FlightDescriptor.for_command(json.dumps(command).encode("utf-8"))
-    options = flight.FlightCallOptions(headers=[(b"x-api-key", b"apikey123")])
+    descriptor = flight.FlightDescriptor.for_command(json.dumps(payload).encode("utf-8"))
+    options = _flight_options()
     info = client.get_flight_info(descriptor, options=options)
     return info, options
 
@@ -165,10 +176,8 @@ def _create_iceberg_table(
         NestedField(field_id=2, name="email", field_type=StringType(), required=False),
         NestedField(field_id=3, name="region", field_type=StringType(), required=False),
     )
-    try:
+    with suppress(Exception):
         catalog.create_namespace("default")
-    except Exception:
-        pass
     table = catalog.create_table(
         identifier=identifier,
         schema=schema,
@@ -373,7 +382,7 @@ def test_flight_plan_and_get_with_iceberg_multi_catalog(tmp_path):
         client,
         {"catalog": "ice_one", "target": table_id_one, "columns": ["id", "email", "region"]},
     )
-    info_two, table_two = _flight_request(
+    _info_two, table_two = _flight_request(
         client,
         {"catalog": "ice_two", "target": table_id_two, "columns": ["id", "email", "region"]},
     )

@@ -3,7 +3,7 @@ from __future__ import annotations
 import fnmatch
 from dataclasses import dataclass
 
-from dal_obscura.domain.query_planning import DatasetSelector
+from dal_obscura.domain.query_planning.models import DatasetSelector
 
 
 @dataclass(frozen=True)

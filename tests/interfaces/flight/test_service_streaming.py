@@ -2,12 +2,14 @@ import json
 import threading
 import time
 
+import jwt
 import pyarrow as pa
 import pyarrow.flight as flight
 import pytest
 
-from dal_obscura.application.use_cases import FetchStreamUseCase, PlanAccessUseCase
-from dal_obscura.domain.query_planning import (
+from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
+from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
+from dal_obscura.domain.query_planning.models import (
     BackendReference,
     DatasetSelector,
     Plan,
@@ -15,16 +17,20 @@ from dal_obscura.domain.query_planning import (
     ReadSpec,
     ResolvedBackendTarget,
 )
-from dal_obscura.infrastructure.adapters import (
-    AuthConfig,
-    DefaultIdentityAdapter,
+from dal_obscura.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
-    HmacTicketCodecAdapter,
-    PolicyFileAuthorizer,
 )
-from dal_obscura.interfaces.flight import DataAccessFlightService
+from dal_obscura.infrastructure.adapters.identity_default import (
+    AuthConfig,
+    DefaultIdentityAdapter,
+)
+from dal_obscura.infrastructure.adapters.policy_file_authorizer import PolicyFileAuthorizer
+from dal_obscura.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
 from dal_obscura.interfaces.flight.contracts import parse_descriptor
+from dal_obscura.interfaces.flight.server import DataAccessFlightService
+
+JWT_SECRET = "test-jwt-secret-32-characters-long"
 
 
 class StubBackend:
@@ -70,15 +76,24 @@ class DummyContext:
         self.headers = headers
 
 
+def _make_jwt(principal_id: str) -> str:
+    return jwt.encode({"sub": principal_id}, JWT_SECRET, algorithm="HS256")
+
+
+def _authorization_header(principal_id: str) -> tuple[bytes, bytes]:
+    value = f"Bearer {_make_jwt(principal_id)}".encode()
+    return b"authorization", value
+
+
 def _build_server(
     backend: StubBackend,
     policy_path,
-    api_keys: dict[str, str],
+    jwt_secret: str = JWT_SECRET,
     ticket_secret: str = "secret",
     ticket_ttl_seconds: int = 300,
     max_tickets: int = 1,
 ) -> DataAccessFlightService:
-    identity = DefaultIdentityAdapter(AuthConfig(api_keys=api_keys))
+    identity = DefaultIdentityAdapter(AuthConfig(jwt_secret=jwt_secret))
     authorizer = PolicyFileAuthorizer(policy_path)
     masking = DefaultMaskingAdapter()
     row_transform = DuckDBRowTransformAdapter(masking)
@@ -155,9 +170,7 @@ def test_streaming_contract_emits_multiple_batches(tmp_path, monkeypatch):
 """
         )
     )
-    server = _build_server(
-        backend=backend, policy_path=policy_path, api_keys={"apikey123": "user1"}
-    )
+    server = _build_server(backend=backend, policy_path=policy_path)
     thread = _start_server(server)
 
     client = flight.FlightClient(f"grpc+tcp://localhost:{server.port}")
@@ -167,11 +180,10 @@ def test_streaming_contract_emits_multiple_batches(tmp_path, monkeypatch):
                 "catalog": "analytics",
                 "target": "test.table",
                 "columns": ["id", "region"],
-                "auth_token": "ApiKey apikey123",
             }
         ).encode("utf-8")
     )
-    options = flight.FlightCallOptions(headers=[(b"x-api-key", b"apikey123")])
+    options = flight.FlightCallOptions(headers=[_authorization_header("user1")])
     info = client.get_flight_info(descriptor, options=options)
     reader = client.do_get(info.endpoints[0].ticket, options=options)
     result = reader.read_all()
@@ -203,20 +215,17 @@ def test_flight_logs_include_resident_memory(tmp_path, caplog, monkeypatch):
         "dal_obscura.interfaces.flight.server.get_resident_memory_bytes",
         lambda: 4_242,
     )
-    server = _build_server(
-        backend=backend, policy_path=policy_path, api_keys={"apikey123": "user1"}
-    )
+    server = _build_server(backend=backend, policy_path=policy_path)
     descriptor = flight.FlightDescriptor.for_command(
         json.dumps(
             {
                 "catalog": "analytics",
                 "target": "test.table",
                 "columns": ["id", "region"],
-                "auth_token": "ApiKey apikey123",
             }
         ).encode("utf-8")
     )
-    context = DummyContext(headers=[(b"authorization", b"ApiKey apikey123")])
+    context = DummyContext(headers=[_authorization_header("user1")])
 
     with caplog.at_level("INFO"):
         info = server.get_flight_info(context, descriptor)
@@ -243,27 +252,54 @@ def test_do_get_rejects_principal_mismatch(tmp_path):
 """
         )
     )
-    server = _build_server(
-        backend=backend,
-        policy_path=policy_path,
-        api_keys={"apikey123": "user1", "apikey999": "user2"},
-    )
+    server = _build_server(backend=backend, policy_path=policy_path)
     descriptor = flight.FlightDescriptor.for_command(
         json.dumps(
             {
                 "catalog": "analytics",
                 "target": "test.table",
                 "columns": ["id", "region"],
-                "auth_token": "ApiKey apikey123",
             }
         ).encode("utf-8")
     )
-    plan_context = DummyContext(headers=[(b"authorization", b"ApiKey apikey123")])
+    plan_context = DummyContext(headers=[_authorization_header("user1")])
     info = server.get_flight_info(plan_context, descriptor)
 
-    do_get_context = DummyContext(headers=[(b"authorization", b"ApiKey apikey999")])
+    do_get_context = DummyContext(headers=[_authorization_header("user2")])
     with pytest.raises(flight.FlightUnauthorizedError):
         server.do_get(do_get_context, info.endpoints[0].ticket)
+
+
+def test_descriptor_authorization_field_is_not_accepted(tmp_path):
+    schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
+    batch = pa.record_batch([pa.array([1]), pa.array(["us"])], schema=schema)
+    backend = StubBackend(schema, [batch])
+
+    policy_path = tmp_path / "policy.yaml"
+    policy_path.write_text(
+        _catalog_policy(
+            """
+      "test.table":
+        rules:
+          - principals: ["user1"]
+            columns: ["id", "region"]
+"""
+        )
+    )
+    server = _build_server(backend=backend, policy_path=policy_path)
+    descriptor = flight.FlightDescriptor.for_command(
+        json.dumps(
+            {
+                "catalog": "analytics",
+                "target": "test.table",
+                "columns": ["id", "region"],
+                "authorization": f"Bearer {_make_jwt('user1')}",
+            }
+        ).encode("utf-8")
+    )
+
+    with pytest.raises(flight.FlightUnauthorizedError):
+        server.get_flight_info(DummyContext(headers=[]), descriptor)
 
 
 def test_policy_version_is_per_dataset(tmp_path):
@@ -286,20 +322,17 @@ def test_policy_version_is_per_dataset(tmp_path):
 """
         )
     )
-    server = _build_server(
-        backend=backend, policy_path=policy_path, api_keys={"apikey123": "user1"}
-    )
+    server = _build_server(backend=backend, policy_path=policy_path)
     descriptor = flight.FlightDescriptor.for_command(
         json.dumps(
             {
                 "catalog": "analytics",
                 "target": "table_a",
                 "columns": ["id", "region"],
-                "auth_token": "ApiKey apikey123",
             }
         ).encode("utf-8")
     )
-    plan_context = DummyContext(headers=[(b"authorization", b"ApiKey apikey123")])
+    plan_context = DummyContext(headers=[_authorization_header("user1")])
     info = server.get_flight_info(plan_context, descriptor)
     ticket = info.endpoints[0].ticket
 
@@ -318,7 +351,7 @@ def test_policy_version_is_per_dataset(tmp_path):
 """
         )
     )
-    do_get_context = DummyContext(headers=[(b"authorization", b"ApiKey apikey123")])
+    do_get_context = DummyContext(headers=[_authorization_header("user1")])
     server.do_get(do_get_context, ticket)
 
     policy_path.write_text(
@@ -338,3 +371,36 @@ def test_policy_version_is_per_dataset(tmp_path):
     )
     with pytest.raises(flight.FlightUnauthorizedError):
         server.do_get(do_get_context, ticket)
+
+
+def test_do_get_requires_authorization_header(tmp_path):
+    schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
+    batch = pa.record_batch([pa.array([1]), pa.array(["us"])], schema=schema)
+    backend = StubBackend(schema, [batch])
+
+    policy_path = tmp_path / "policy.yaml"
+    policy_path.write_text(
+        _catalog_policy(
+            """
+      "test.table":
+        rules:
+          - principals: ["user1"]
+            columns: ["id", "region"]
+"""
+        )
+    )
+    server = _build_server(backend=backend, policy_path=policy_path)
+    descriptor = flight.FlightDescriptor.for_command(
+        json.dumps(
+            {
+                "catalog": "analytics",
+                "target": "test.table",
+                "columns": ["id", "region"],
+            }
+        ).encode("utf-8")
+    )
+    plan_context = DummyContext(headers=[_authorization_header("user1")])
+    info = server.get_flight_info(plan_context, descriptor)
+
+    with pytest.raises(flight.FlightUnauthorizedError):
+        server.do_get(DummyContext(headers=[]), info.endpoints[0].ticket)

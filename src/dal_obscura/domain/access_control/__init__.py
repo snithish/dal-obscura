@@ -1,5 +1,12 @@
-from .models import AccessDecision, AccessRule, DatasetPolicy, MaskRule, Policy, Principal
-from .policy_resolution import dataset_version, resolve_access
+from dal_obscura.domain.access_control.models import (
+    AccessDecision,
+    AccessRule,
+    DatasetPolicy,
+    MaskRule,
+    Policy,
+    Principal,
+)
+from dal_obscura.domain.access_control.policy_resolution import dataset_version, resolve_access
 
 __all__ = [
     "AccessDecision",

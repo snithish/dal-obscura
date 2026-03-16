@@ -18,8 +18,6 @@ class TicketPayload:
     backend_id: str
     backend_generation: int
     catalog: str | None = None
-    auth_header: str | None = None
-    auth_value: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Produces a JSON-friendly representation used by the ticket codec."""
@@ -36,14 +34,10 @@ class TicketPayload:
         }
         if self.catalog is not None:
             payload["catalog"] = self.catalog
-        if self.auth_header is not None:
-            payload["auth_header"] = self.auth_header
-        if self.auth_value is not None:
-            payload["auth_value"] = self.auth_value
         return payload
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any]) -> "TicketPayload":
+    def from_dict(cls, payload: dict[str, Any]) -> TicketPayload:
         """Restores a payload after signature verification and JSON parsing."""
         return cls(
             target=str(payload["target"]),
@@ -56,6 +50,4 @@ class TicketPayload:
             backend_id=str(payload.get("backend_id", "")),
             backend_generation=int(payload.get("backend_generation", 0)),
             catalog=payload.get("catalog"),
-            auth_header=payload.get("auth_header"),
-            auth_value=payload.get("auth_value"),
         )

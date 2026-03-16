@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, Iterable, Protocol
+from collections.abc import Iterable
+from typing import Any, Protocol
 
-from dal_obscura.domain.query_planning import (
+from dal_obscura.domain.query_planning.models import (
     BackendReference,
     Plan,
     ReadSpec,

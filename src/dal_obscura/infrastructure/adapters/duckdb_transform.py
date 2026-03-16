@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator, Mapping
 from itertools import chain
-from typing import Iterable, Iterator, Mapping
 
 import duckdb
 import pyarrow as pa
 
-from dal_obscura.application.ports import MaskedSelection
-from dal_obscura.domain.access_control import MaskRule
+from dal_obscura.application.ports.masking import MaskedSelection
+from dal_obscura.domain.access_control.models import MaskRule
 
 _DUCKDB_ARROW_OUTPUT_BATCH_SIZE = 8_192
 
@@ -167,10 +167,7 @@ def _apply_nested_mask_on_root(root_expr: str, path: str, expr: str) -> str:
     updated = expr
     for depth in range(len(parts) - 1, 0, -1):
         field = parts[depth]
-        if depth == 1:
-            base = f"({root_expr})"
-        else:
-            base = f"({root_expr}).{'.'.join(parts[1:depth])}"
+        base = f"({root_expr})" if depth == 1 else f"({root_expr}).{'.'.join(parts[1:depth])}"
         updated = f'struct_update({base}, "{field}" := {updated})'
     return updated
 

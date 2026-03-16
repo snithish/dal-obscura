@@ -1,9 +1,9 @@
-from .authorization import AuthorizationPort
-from .backend import QueryBackendPort
-from .identity import IdentityPort
-from .masking import MaskedSelection, MaskingPort
-from .row_transform import RowTransformPort
-from .ticket_codec import TicketCodecPort
+from dal_obscura.application.ports.authorization import AuthorizationPort
+from dal_obscura.application.ports.backend import QueryBackendPort
+from dal_obscura.application.ports.identity import IdentityPort
+from dal_obscura.application.ports.masking import MaskedSelection, MaskingPort
+from dal_obscura.application.ports.row_transform import RowTransformPort
+from dal_obscura.application.ports.ticket_codec import TicketCodecPort
 
 __all__ = [
     "AuthorizationPort",

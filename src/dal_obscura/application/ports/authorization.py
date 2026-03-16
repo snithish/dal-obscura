@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import Iterable, Protocol
+from collections.abc import Iterable
+from typing import Protocol
 
-from dal_obscura.domain.access_control import AccessDecision, Principal
-from dal_obscura.domain.query_planning import DatasetSelector
+from dal_obscura.domain.access_control.models import AccessDecision, Principal
+from dal_obscura.domain.query_planning.models import DatasetSelector
 
 
 class AuthorizationPort(Protocol):

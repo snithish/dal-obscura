@@ -4,11 +4,16 @@ import logging
 
 import pyarrow.flight as flight
 
-from dal_obscura.application.use_cases import FetchStreamUseCase, PlanAccessUseCase
+from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
+from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
+from dal_obscura.interfaces.flight.contracts import (
+    REQUEST_HEADERS_MIDDLEWARE_KEY,
+    RequestHeadersMiddlewareFactory,
+    headers_from_context,
+    parse_descriptor,
+)
+from dal_obscura.interfaces.flight.streaming import make_stream
 from dal_obscura.observability import get_resident_memory_bytes
-
-from .contracts import headers_from_context, parse_descriptor
-from .streaming import make_stream
 
 
 class DataAccessFlightService(flight.FlightServerBase):
@@ -20,7 +25,10 @@ class DataAccessFlightService(flight.FlightServerBase):
         plan_access_use_case: PlanAccessUseCase,
         fetch_stream_use_case: FetchStreamUseCase,
     ) -> None:
-        super().__init__(location)
+        super().__init__(
+            location,
+            middleware={REQUEST_HEADERS_MIDDLEWARE_KEY: RequestHeadersMiddlewareFactory()},
+        )
         self._plan_access_use_case = plan_access_use_case
         self._fetch_stream_use_case = fetch_stream_use_case
         self._logger = logging.getLogger(self.__class__.__name__)

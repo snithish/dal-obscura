@@ -1,19 +1,18 @@
 from __future__ import annotations
 
 import base64
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping, cast
+from typing import Any, cast
 
-from dal_obscura.application.ports import (
-    AuthorizationPort,
-    IdentityPort,
-    MaskingPort,
-    QueryBackendPort,
-    RowTransformPort,
-    TicketCodecPort,
-)
-from dal_obscura.domain.access_control import MaskRule, Principal
-from dal_obscura.domain.query_planning import BackendReference, DatasetSelector
+from dal_obscura.application.ports.authorization import AuthorizationPort
+from dal_obscura.application.ports.backend import QueryBackendPort
+from dal_obscura.application.ports.identity import IdentityPort
+from dal_obscura.application.ports.masking import MaskingPort
+from dal_obscura.application.ports.row_transform import RowTransformPort
+from dal_obscura.application.ports.ticket_codec import TicketCodecPort
+from dal_obscura.domain.access_control.models import MaskRule
+from dal_obscura.domain.query_planning.models import BackendReference, DatasetSelector
 
 
 @dataclass(frozen=True)
@@ -59,11 +58,7 @@ class FetchStreamUseCase:
     def execute(self, ticket: str, headers: Mapping[str, str]) -> FetchStreamResult:
         """Executes the second half of the Flight flow for a previously planned ticket."""
         payload = self._ticket_codec.verify(ticket)
-        principal = _authenticate_request(
-            self._identity, headers, payload.auth_header, payload.auth_value
-        )
-        if principal is None:
-            raise PermissionError("Unauthorized")
+        principal = self._identity.authenticate(headers)
         if principal.id != payload.principal_id:
             raise PermissionError("Unauthorized")
 
@@ -96,26 +91,6 @@ class FetchStreamUseCase:
             columns=payload.columns,
             catalog=payload.catalog,
         )
-
-
-def _authenticate_request(
-    identity: IdentityPort,
-    headers: Mapping[str, str],
-    ticket_auth_header: str | None,
-    ticket_auth_value: str | None,
-) -> Principal | None:
-    """Authenticates the request, falling back to the credential bound into the ticket."""
-    if headers:
-        try:
-            return identity.authenticate(headers)
-        except PermissionError:
-            return None
-    if ticket_auth_header and ticket_auth_value:
-        try:
-            return identity.authenticate({ticket_auth_header: ticket_auth_value})
-        except PermissionError:
-            return None
-    return None
 
 
 def _decode_scan(scan_info: Mapping[str, object]) -> DecodedScan:

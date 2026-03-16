@@ -1,7 +1,8 @@
 import textwrap
 
-from dal_obscura.domain.access_control import Principal, resolve_access
-from dal_obscura.domain.query_planning import DatasetSelector
+from dal_obscura.domain.access_control.models import Principal
+from dal_obscura.domain.access_control.policy_resolution import resolve_access
+from dal_obscura.domain.query_planning.models import DatasetSelector
 from dal_obscura.infrastructure.adapters.policy_file_authorizer import load_policy_file
 
 

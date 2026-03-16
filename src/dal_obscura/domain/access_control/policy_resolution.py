@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Iterable
+from collections.abc import Iterable
 
-from dal_obscura.domain.query_planning import DatasetSelector
-
-from .models import DatasetPolicy, MaskRule, Policy, Principal
+from dal_obscura.domain.access_control.models import (
+    DatasetPolicy,
+    MaskRule,
+    Policy,
+    Principal,
+)
+from dal_obscura.domain.query_planning.models import DatasetSelector
 
 
 def resolve_access(

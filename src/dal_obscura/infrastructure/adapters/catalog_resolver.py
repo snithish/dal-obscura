@@ -3,20 +3,20 @@ from __future__ import annotations
 import fnmatch
 import glob
 import threading
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from importlib import metadata
 from pathlib import Path
-from typing import Callable, Mapping, Protocol, cast
+from typing import Protocol, cast
 
-from dal_obscura.domain.query_planning import (
+from dal_obscura.domain.query_planning.models import (
     BackendReference,
     DatasetSelector,
     ResolvedBackendTarget,
 )
-
-from .file_backend import DuckDBFileBackend
-from .iceberg_backend import IcebergBackend
-from .service_config import (
+from dal_obscura.infrastructure.adapters.file_backend import DuckDBFileBackend
+from dal_obscura.infrastructure.adapters.iceberg_backend import IcebergBackend
+from dal_obscura.infrastructure.adapters.service_config import (
     DEFAULT_SAMPLE_FILES,
     DEFAULT_SAMPLE_ROWS,
     CatalogConfig,
@@ -351,11 +351,7 @@ def _path_format(path: str) -> str | None:
             break
     if lower_path.endswith(".csv"):
         return "csv"
-    if (
-        lower_path.endswith(".json")
-        or lower_path.endswith(".jsonl")
-        or lower_path.endswith(".ndjson")
-    ):
+    if lower_path.endswith((".json", ".jsonl", ".ndjson")):
         return "json"
     if lower_path.endswith(".parquet"):
         return "parquet"
@@ -401,4 +397,4 @@ def _entry_points_for_group(group: str):
     discovered = metadata.entry_points()
     if hasattr(discovered, "select"):
         return list(discovered.select(group=group))
-    return [entrypoint for entrypoint in discovered.get(group, [])]
+    return list(discovered.get(group, []))

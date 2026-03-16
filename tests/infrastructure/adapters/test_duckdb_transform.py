@@ -2,12 +2,13 @@ import json
 import subprocess
 import sys
 import textwrap
-from typing import Generator, cast
+from collections.abc import Generator
+from typing import cast
 
 import pyarrow as pa
 
-from dal_obscura.domain.access_control import MaskRule
-from dal_obscura.infrastructure.adapters import duckdb_transform
+import dal_obscura.infrastructure.adapters.duckdb_transform as duckdb_transform
+from dal_obscura.domain.access_control.models import MaskRule
 from dal_obscura.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,

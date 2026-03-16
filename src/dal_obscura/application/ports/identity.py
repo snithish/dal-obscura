@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Mapping, Protocol
+from collections.abc import Mapping
+from typing import Protocol
 
-from dal_obscura.domain.access_control import Principal
+from dal_obscura.domain.access_control.models import Principal
 
 
 class IdentityPort(Protocol):

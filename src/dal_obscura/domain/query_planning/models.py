@@ -27,7 +27,6 @@ class PlanRequest:
     target: str
     columns: list[str]
     catalog: str | None = None
-    auth_token: str | None = None
 
 
 @dataclass(frozen=True)

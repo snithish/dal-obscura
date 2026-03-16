@@ -1,21 +1,23 @@
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 
-from dal_obscura.application.use_cases import FetchStreamUseCase, PlanAccessUseCase
-from dal_obscura.infrastructure.adapters import (
-    AuthConfig,
-    DefaultIdentityAdapter,
+from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
+from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
+from dal_obscura.infrastructure.adapters.catalog_resolver import DynamicRegistryRuntime
+from dal_obscura.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
-    DynamicRegistryRuntime,
-    HmacTicketCodecAdapter,
-    PolicyFileAuthorizer,
-    load_service_config,
 )
-from dal_obscura.interfaces.flight import DataAccessFlightService
+from dal_obscura.infrastructure.adapters.identity_default import (
+    AuthConfig,
+    DefaultIdentityAdapter,
+)
+from dal_obscura.infrastructure.adapters.policy_file_authorizer import PolicyFileAuthorizer
+from dal_obscura.infrastructure.adapters.service_config import load_service_config
+from dal_obscura.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
+from dal_obscura.interfaces.flight.server import DataAccessFlightService
 from dal_obscura.logging_config import LoggingConfig, setup_logging
 
 LOGGER = logging.getLogger(__name__)
@@ -30,8 +32,7 @@ def main() -> None:
     parser.add_argument("--ticket-ttl", type=int, default=900)
     parser.add_argument("--max-tickets", type=int, default=64)
     parser.add_argument("--service-config", required=True)
-    parser.add_argument("--api-keys", default="{}")
-    parser.add_argument("--jwt-secret")
+    parser.add_argument("--jwt-secret", required=True)
     parser.add_argument("--jwt-issuer")
     parser.add_argument("--jwt-audience")
     parser.add_argument("--log-level", default=None)
@@ -52,7 +53,6 @@ def main() -> None:
     # below is pure wiring so the use cases can stay free of transport details.
     identity = DefaultIdentityAdapter(
         AuthConfig(
-            api_keys=json.loads(args.api_keys),
             jwt_secret=args.jwt_secret,
             jwt_issuer=args.jwt_issuer,
             jwt_audience=args.jwt_audience,

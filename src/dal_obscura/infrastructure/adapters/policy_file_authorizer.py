@@ -1,22 +1,22 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import yaml
 
-from dal_obscura.domain.access_control import (
+from dal_obscura.domain.access_control.models import (
     AccessDecision,
     AccessRule,
     DatasetPolicy,
     MaskRule,
     Policy,
     Principal,
-    dataset_version,
-    resolve_access,
 )
-from dal_obscura.domain.query_planning import DatasetSelector
+from dal_obscura.domain.access_control.policy_resolution import dataset_version, resolve_access
+from dal_obscura.domain.query_planning.models import DatasetSelector
 
 
 class PolicyFileAuthorizer:

@@ -3,18 +3,17 @@ from __future__ import annotations
 import base64
 import os
 import time
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Callable, Mapping
+from typing import Any
 
-from dal_obscura.application.ports import (
-    AuthorizationPort,
-    IdentityPort,
-    MaskingPort,
-    QueryBackendPort,
-    TicketCodecPort,
-)
-from dal_obscura.domain.query_planning import PlanRequest, ResolvedBackendTarget
-from dal_obscura.domain.ticket_delivery import TicketPayload
+from dal_obscura.application.ports.authorization import AuthorizationPort
+from dal_obscura.application.ports.backend import QueryBackendPort
+from dal_obscura.application.ports.identity import IdentityPort
+from dal_obscura.application.ports.masking import MaskingPort
+from dal_obscura.application.ports.ticket_codec import TicketCodecPort
+from dal_obscura.domain.query_planning.models import PlanRequest, ResolvedBackendTarget
+from dal_obscura.domain.ticket_delivery.models import TicketPayload
 
 
 @dataclass(frozen=True)
@@ -58,9 +57,6 @@ class PlanAccessUseCase:
     def execute(self, request: PlanRequest, headers: Mapping[str, str]) -> PlanAccessResult:
         """Builds a plan for the requested dataset and returns one signed ticket per task."""
         normalized_headers = dict(headers)
-        if not normalized_headers and request.auth_token:
-            normalized_headers = {"authorization": request.auth_token}
-
         principal = self._identity.authenticate(normalized_headers)
         resolved_target = self._backend.resolve(request.catalog, request.target)
         requested_columns = _expand_requested_columns(
@@ -72,7 +68,6 @@ class PlanAccessUseCase:
             requested_columns=requested_columns,
         )
         plan = self._backend.plan(resolved_target, decision.allowed_columns, self._max_tickets)
-        auth_header, auth_value = _auth_binding(normalized_headers, request.auth_token)
 
         ticket_tokens: list[str] = []
         for task in plan.tasks:
@@ -96,8 +91,6 @@ class PlanAccessUseCase:
                 nonce=self._nonce_factory(),
                 backend_id=resolved_target.backend.backend_id,
                 backend_generation=resolved_target.backend.generation,
-                auth_header=auth_header,
-                auth_value=auth_value,
             )
             ticket_tokens.append(self._ticket_codec.sign_payload(payload))
 
@@ -113,19 +106,6 @@ class PlanAccessUseCase:
             policy_version=decision.policy_version,
             catalog=resolved_target.dataset_identity.catalog,
         )
-
-
-def _auth_binding(
-    headers: Mapping[str, str], fallback_token: str | None
-) -> tuple[str | None, str | None]:
-    """Captures the credential form used during planning for replay during fetch."""
-    if "authorization" in headers:
-        return "authorization", headers["authorization"]
-    if "x-api-key" in headers:
-        return "x-api-key", headers["x-api-key"]
-    if fallback_token:
-        return "authorization", fallback_token
-    return None, None
 
 
 def _expand_requested_columns(

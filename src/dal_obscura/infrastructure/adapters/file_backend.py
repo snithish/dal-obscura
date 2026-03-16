@@ -1,21 +1,23 @@
 from __future__ import annotations
 
 import pickle
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 import duckdb
 import pyarrow as pa
 
-from dal_obscura.domain.query_planning import (
+from dal_obscura.domain.query_planning.models import (
     DatasetSelector,
     Plan,
     ReadPayload,
     ReadSpec,
     ResolvedBackendTarget,
 )
-
-from .service_config import DEFAULT_SAMPLE_FILES, DEFAULT_SAMPLE_ROWS
+from dal_obscura.infrastructure.adapters.service_config import (
+    DEFAULT_SAMPLE_FILES,
+    DEFAULT_SAMPLE_ROWS,
+)
 
 _FILE_ARROW_BATCH_SIZE = 8_192
 
@@ -82,8 +84,7 @@ class DuckDBFileBackend:
                 _select_sql(spec.format, spec.paths, spec.options, columns=spec.columns)
             )
             reader = relation.to_arrow_reader(batch_size=_FILE_ARROW_BATCH_SIZE)
-            for batch in reader:
-                yield batch
+            yield from reader
         finally:
             con.close()
 

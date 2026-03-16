@@ -55,11 +55,13 @@ datasets:
 uv run dal-obscura \
   --policy policy.yaml \
   --ticket-secret supersecret \
+  --jwt-secret jwtsecret \
   --max-tickets 64 \
   --catalog my_catalog \
-  --catalog-options '{"uri": "http://catalog:8181"}' \
-  --api-keys '{"apikey123": "user1"}'
+  --catalog-options '{"uri": "http://catalog:8181"}'
 ```
+
+Clients must send JWTs as `Authorization: Bearer <token>` headers on both `get_flight_info` and `do_get`.
 
 ## Development
 

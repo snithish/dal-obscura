@@ -1,4 +1,4 @@
-from .models import (
+from dal_obscura.domain.query_planning.models import (
     BackendReference,
     DatasetSelector,
     Plan,

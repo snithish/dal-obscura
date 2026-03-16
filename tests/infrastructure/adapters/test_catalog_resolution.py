@@ -2,11 +2,9 @@ import textwrap
 
 import pytest
 
-from dal_obscura.domain.query_planning import BackendReference
-from dal_obscura.infrastructure.adapters import (
-    DynamicRegistryRuntime,
-    load_service_config,
-)
+from dal_obscura.domain.query_planning.models import BackendReference
+from dal_obscura.infrastructure.adapters.catalog_resolver import DynamicRegistryRuntime
+from dal_obscura.infrastructure.adapters.service_config import load_service_config
 
 
 def test_load_service_config_parses_catalog_types_and_targets(tmp_path):
@@ -149,7 +147,7 @@ def test_catalog_resolver_rejects_mixed_raw_path_formats(tmp_path):
 def test_runtime_supports_dynamic_catalog_and_backend_registration(tmp_path):
     class CustomCatalog:
         def resolve(self, generation, catalog_name, catalog_config, target):
-            from dal_obscura.domain.query_planning import (
+            from dal_obscura.domain.query_planning.models import (
                 BackendReference,
                 DatasetSelector,
                 ResolvedBackendTarget,

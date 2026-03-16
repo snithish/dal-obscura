@@ -6,7 +6,7 @@ import json
 import time
 from hashlib import sha256
 
-from dal_obscura.domain.ticket_delivery import TicketPayload
+from dal_obscura.domain.ticket_delivery.models import TicketPayload
 
 
 class HmacTicketCodecAdapter:

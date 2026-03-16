@@ -3,9 +3,10 @@ import base64
 import pyarrow as pa
 import pytest
 
-from dal_obscura.application.use_cases import FetchStreamUseCase, PlanAccessUseCase
-from dal_obscura.domain.access_control import AccessDecision, MaskRule, Principal
-from dal_obscura.domain.query_planning import (
+from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
+from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
+from dal_obscura.domain.access_control.models import AccessDecision, MaskRule, Principal
+from dal_obscura.domain.query_planning.models import (
     BackendReference,
     DatasetSelector,
     Plan,
@@ -14,7 +15,9 @@ from dal_obscura.domain.query_planning import (
     ReadSpec,
     ResolvedBackendTarget,
 )
-from dal_obscura.domain.ticket_delivery import TicketPayload
+from dal_obscura.domain.ticket_delivery.models import TicketPayload
+
+AUTHORIZATION_HEADER = {"authorization": "Bearer jwt-token"}
 
 
 class FakeIdentity:
@@ -187,7 +190,7 @@ def test_plan_access_authz_failure():
     with pytest.raises(PermissionError):
         use_case.execute(
             PlanRequest(catalog="catalog1", target="users", columns=["id"]),
-            {"authorization": "ApiKey key"},
+            AUTHORIZATION_HEADER,
         )
 
 
@@ -220,7 +223,7 @@ def test_plan_access_expands_wildcard_columns():
     )
     use_case.execute(
         PlanRequest(catalog="catalog1", target="users", columns=["*"]),
-        {"authorization": "ApiKey key"},
+        AUTHORIZATION_HEADER,
     )
 
     assert authorizer.last_requested_columns == ["id", "region"]
@@ -255,7 +258,7 @@ def test_fetch_stream_policy_version_mismatch():
     )
 
     with pytest.raises(PermissionError):
-        use_case.execute("token", {"authorization": "ApiKey key"})
+        use_case.execute("token", AUTHORIZATION_HEADER)
 
 
 def test_fetch_stream_principal_mismatch():
@@ -287,7 +290,7 @@ def test_fetch_stream_principal_mismatch():
     )
 
     with pytest.raises(PermissionError):
-        use_case.execute("token", {"authorization": "ApiKey key"})
+        use_case.execute("token", AUTHORIZATION_HEADER)
 
 
 def test_fetch_stream_read_spec_mismatch():
@@ -328,4 +331,4 @@ def test_fetch_stream_read_spec_mismatch():
     )
 
     with pytest.raises(ValueError):
-        use_case.execute("token", {"authorization": "ApiKey key"})
+        use_case.execute("token", AUTHORIZATION_HEADER)

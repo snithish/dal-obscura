@@ -2,7 +2,7 @@ import pickle
 
 import pyarrow as pa
 
-from dal_obscura.domain.query_planning import (
+from dal_obscura.domain.query_planning.models import (
     BackendReference,
     DatasetSelector,
     ResolvedBackendTarget,
