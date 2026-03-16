@@ -9,6 +9,7 @@ from dal_obscura.domain.query_planning import PlanRequest
 
 
 def headers_from_context(context: flight.ServerCallContext) -> dict[str, str]:
+    """Reads transport headers from Flight and normalizes them for adapters."""
     try:
         return normalize_headers(context.headers)
     except Exception:
@@ -16,6 +17,7 @@ def headers_from_context(context: flight.ServerCallContext) -> dict[str, str]:
 
 
 def normalize_headers(headers: Mapping[object, object]) -> dict[str, str]:
+    """Lower-cases header names and decodes byte values from Arrow Flight."""
     normalized: dict[str, str] = {}
     for key, value in dict(headers).items():
         normalized[_decode_header_value(key).lower()] = _decode_header_value(value)
@@ -23,6 +25,7 @@ def normalize_headers(headers: Mapping[object, object]) -> dict[str, str]:
 
 
 def parse_descriptor(descriptor: flight.FlightDescriptor) -> PlanRequest:
+    """Parses the JSON command payload used by `get_flight_info` requests."""
     if descriptor.command:
         raw = descriptor.command.decode("utf-8")
         data = json.loads(raw)
@@ -37,6 +40,7 @@ def parse_descriptor(descriptor: flight.FlightDescriptor) -> PlanRequest:
 
 
 def _decode_header_value(value: object) -> str:
+    """Converts Flight header keys and values into plain strings."""
     if isinstance(value, (bytes, bytearray)):
         return value.decode("utf-8")
     return str(value)

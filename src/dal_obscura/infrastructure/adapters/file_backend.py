@@ -22,6 +22,8 @@ _FILE_ARROW_BATCH_SIZE = 8_192
 
 @dataclass(frozen=True)
 class FileReadSpec:
+    """Serialized file-scan instructions embedded inside a signed ticket."""
+
     dataset: DatasetSelector
     format: str
     paths: tuple[str, ...]
@@ -31,7 +33,10 @@ class FileReadSpec:
 
 
 class DuckDBFileBackend:
+    """Backend that reads CSV, JSON, and Parquet files through DuckDB."""
+
     def get_schema(self, target: ResolvedBackendTarget) -> pa.Schema:
+        """Infers the output schema without reading the full dataset."""
         file_format, paths, options = _file_config(target)
         con = duckdb.connect()
         try:
@@ -41,6 +46,7 @@ class DuckDBFileBackend:
             con.close()
 
     def plan(self, target: ResolvedBackendTarget, columns: Iterable[str], max_tickets: int) -> Plan:
+        """Splits the resolved file set into balanced ticket payloads."""
         file_format, paths, options = _file_config(target)
         column_list = list(columns)
         schema = self.get_schema(target)
@@ -63,10 +69,12 @@ class DuckDBFileBackend:
         return Plan(schema=schema, tasks=tasks)
 
     def read_spec(self, read_payload: bytes) -> ReadSpec:
+        """Reads metadata from a file ticket without opening the files."""
         spec = _decode_spec(read_payload)
         return ReadSpec(dataset=spec.dataset, columns=list(spec.columns), schema=spec.schema)
 
     def read_stream(self, read_payload: bytes):
+        """Streams the ticket's subset of files as Arrow record batches."""
         spec = _decode_spec(read_payload)
         con = duckdb.connect()
         try:
@@ -81,6 +89,7 @@ class DuckDBFileBackend:
 
 
 def _decode_spec(read_payload: bytes) -> FileReadSpec:
+    """Deserializes and validates the file read specification."""
     spec = pickle.loads(read_payload)
     if not isinstance(spec, FileReadSpec):
         raise ValueError("Invalid read payload for file backend")
@@ -88,6 +97,7 @@ def _decode_spec(read_payload: bytes) -> FileReadSpec:
 
 
 def _file_config(target: ResolvedBackendTarget) -> tuple[str, tuple[str, ...], dict[str, object]]:
+    """Normalizes the backend handle into concrete file scan parameters."""
     file_format = str(target.handle.get("format", "")).strip().lower()
     if file_format not in {"csv", "json", "parquet"}:
         raise ValueError("File backend requires format to be csv, json, or parquet")
@@ -107,6 +117,7 @@ def _select_sql(
     options: dict[str, object],
     columns: list[str] | None,
 ) -> str:
+    """Builds the final projection query on top of the DuckDB scan function."""
     scan_sql = _scan_sql(file_format, paths, options)
     if columns:
         select_list = ", ".join(f'"{column.replace(chr(34), chr(34) * 2)}"' for column in columns)
@@ -116,6 +127,7 @@ def _select_sql(
 
 
 def _scan_sql(file_format: str, paths: tuple[str, ...], options: dict[str, object]) -> str:
+    """Returns the DuckDB table function for the file format being read."""
     paths_sql = "[" + ", ".join(_sql_literal(path) for path in paths) + "]"
     if file_format == "csv":
         return (
@@ -139,10 +151,12 @@ def _scan_sql(file_format: str, paths: tuple[str, ...], options: dict[str, objec
 
 
 def _sql_literal(value: str) -> str:
+    """Escapes a filesystem path for interpolation into DuckDB SQL."""
     return "'" + value.replace("'", "''") + "'"
 
 
 def _int_option(options: dict[str, object], key: str, default: int) -> int:
+    """Accepts numeric options even when config values arrive as strings or floats."""
     value = options.get(key, default)
     if isinstance(value, bool):
         return int(value)
@@ -156,6 +170,7 @@ def _int_option(options: dict[str, object], key: str, default: int) -> int:
 
 
 def _chunk_by_max_tickets(paths: list[str], max_tickets: int) -> list[list[str]]:
+    """Balances file paths across tickets using simple round-robin assignment."""
     if not paths:
         return [[]]
     max_tickets = max(1, max_tickets)

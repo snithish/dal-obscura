@@ -6,6 +6,8 @@ from typing import Any
 
 @dataclass(frozen=True)
 class TicketPayload:
+    """Serialized contents of a signed Flight ticket."""
+
     target: str
     columns: list[str]
     scan: dict[str, Any]
@@ -20,6 +22,7 @@ class TicketPayload:
     auth_value: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
+        """Produces a JSON-friendly representation used by the ticket codec."""
         payload: dict[str, Any] = {
             "target": self.target,
             "columns": self.columns,
@@ -41,6 +44,7 @@ class TicketPayload:
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "TicketPayload":
+        """Restores a payload after signature verification and JSON parsing."""
         return cls(
             target=str(payload["target"]),
             columns=list(payload.get("columns", [])),

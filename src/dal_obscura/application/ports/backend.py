@@ -11,6 +11,8 @@ from dal_obscura.domain.query_planning import (
 
 
 class QueryBackendPort(Protocol):
+    """Abstraction over dataset resolution, planning, and record retrieval."""
+
     def resolve(self, catalog: str | None, target: str) -> ResolvedBackendTarget: ...
 
     def get_schema(self, target: ResolvedBackendTarget) -> Any: ...

@@ -18,6 +18,8 @@ from dal_obscura.domain.query_planning import BackendReference, DatasetSelector
 
 @dataclass(frozen=True)
 class FetchStreamResult:
+    """Information needed to construct the Flight `do_get` response stream."""
+
     output_schema: Any
     result_batches: Iterable[Any]
     target: str
@@ -28,12 +30,16 @@ class FetchStreamResult:
 
 @dataclass(frozen=True)
 class DecodedScan:
+    """Scan instructions restored from a ticket's serialized payload."""
+
     read_payload: bytes
     row_filter: str | None
     masks: dict[str, MaskRule]
 
 
 class FetchStreamUseCase:
+    """Verifies a ticket, re-checks authn/authz freshness, and streams masked rows."""
+
     def __init__(
         self,
         identity: IdentityPort,
@@ -51,6 +57,7 @@ class FetchStreamUseCase:
         self._ticket_codec = ticket_codec
 
     def execute(self, ticket: str, headers: Mapping[str, str]) -> FetchStreamResult:
+        """Executes the second half of the Flight flow for a previously planned ticket."""
         payload = self._ticket_codec.verify(ticket)
         principal = _authenticate_request(
             self._identity, headers, payload.auth_header, payload.auth_value
@@ -74,6 +81,8 @@ class FetchStreamUseCase:
         if spec.dataset != selector or spec.columns != payload.columns:
             raise ValueError("Ticket payload mismatch")
 
+        # Data is fetched first, then row filters and masks are enforced over the
+        # backend output so the fetch path remains backend-agnostic.
         batches = self._backend.read_stream(backend, scan.read_payload)
         result_batches = self._row_transform.apply_filters_and_masks_stream(
             batches, payload.columns, scan.row_filter, scan.masks
@@ -95,6 +104,7 @@ def _authenticate_request(
     ticket_auth_header: str | None,
     ticket_auth_value: str | None,
 ) -> Principal | None:
+    """Authenticates the request, falling back to the credential bound into the ticket."""
     if headers:
         try:
             return identity.authenticate(headers)
@@ -109,6 +119,7 @@ def _authenticate_request(
 
 
 def _decode_scan(scan_info: Mapping[str, object]) -> DecodedScan:
+    """Parses the backend scan payload and mask metadata embedded in a ticket."""
     read_payload = scan_info.get("read_payload")
     if not read_payload:
         raise ValueError("Missing read payload in ticket")
@@ -137,6 +148,7 @@ def _decode_scan(scan_info: Mapping[str, object]) -> DecodedScan:
 
 
 def _optional_string(value: object) -> str | None:
+    """Normalizes optional scalar values from JSON-like ticket payloads."""
     if value is None:
         return None
     return str(value)

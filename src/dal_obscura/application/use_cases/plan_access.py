@@ -19,6 +19,8 @@ from dal_obscura.domain.ticket_delivery import TicketPayload
 
 @dataclass(frozen=True)
 class PlanAccessResult:
+    """Material returned to Flight `get_flight_info` after authorization succeeds."""
+
     output_schema: Any
     ticket_tokens: list[str]
     target: str
@@ -29,6 +31,8 @@ class PlanAccessResult:
 
 
 class PlanAccessUseCase:
+    """Authenticates the caller, authorizes columns, and mints signed read tickets."""
+
     def __init__(
         self,
         identity: IdentityPort,
@@ -52,6 +56,7 @@ class PlanAccessUseCase:
         self._nonce_factory = nonce_factory or _nonce
 
     def execute(self, request: PlanRequest, headers: Mapping[str, str]) -> PlanAccessResult:
+        """Builds a plan for the requested dataset and returns one signed ticket per task."""
         normalized_headers = dict(headers)
         if not normalized_headers and request.auth_token:
             normalized_headers = {"authorization": request.auth_token}
@@ -71,6 +76,8 @@ class PlanAccessUseCase:
 
         ticket_tokens: list[str] = []
         for task in plan.tasks:
+            # Each ticket carries enough context to re-validate authz later without
+            # trusting the client to resubmit the original plan request faithfully.
             payload = TicketPayload(
                 catalog=resolved_target.dataset_identity.catalog,
                 target=resolved_target.dataset_identity.target,
@@ -111,6 +118,7 @@ class PlanAccessUseCase:
 def _auth_binding(
     headers: Mapping[str, str], fallback_token: str | None
 ) -> tuple[str | None, str | None]:
+    """Captures the credential form used during planning for replay during fetch."""
     if "authorization" in headers:
         return "authorization", headers["authorization"]
     if "x-api-key" in headers:
@@ -123,6 +131,7 @@ def _auth_binding(
 def _expand_requested_columns(
     backend: QueryBackendPort, target: ResolvedBackendTarget, columns: list[str]
 ) -> list[str]:
+    """Expands `*` into concrete column names so downstream authz remains explicit."""
     requested = list(columns)
     if "*" not in requested:
         _validate_requested_columns(backend.get_schema(target), requested)
@@ -132,6 +141,7 @@ def _expand_requested_columns(
 
 
 def _validate_requested_columns(schema: Any, requested: list[str]) -> None:
+    """Fails fast when the client projects columns that are not in the dataset schema."""
     schema_names = {field.name for field in schema}
     missing = [column for column in requested if column not in schema_names]
     if missing:

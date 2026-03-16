@@ -15,6 +15,7 @@ def resolve_access(
     dataset: DatasetSelector,
     requested_columns: Iterable[str],
 ) -> tuple[list[str], dict[str, MaskRule], str | None]:
+    """Combines all matching rules into a single access decision for the dataset."""
     matched_dataset = policy.match_dataset(dataset)
     if not matched_dataset:
         raise PermissionError("No policy for requested table")
@@ -29,6 +30,8 @@ def resolve_access(
         if not principal_tokens.intersection(rule.principals):
             continue
 
+        # Rule matches are unioned so multiple roles can widen the projection while
+        # still allowing the stricter mask precedence rules below to win.
         allowed_columns = (
             requested if "*" in rule.columns else [c for c in requested if c in rule.columns]
         )
@@ -48,6 +51,7 @@ def resolve_access(
 
 
 def dataset_version(dataset: DatasetPolicy) -> int:
+    """Hashes the effective dataset policy so tickets can detect stale policy state."""
     payload = {
         "catalog": dataset.catalog,
         "target": dataset.target,
@@ -70,6 +74,7 @@ def dataset_version(dataset: DatasetPolicy) -> int:
 
 
 def _choose_mask(existing: MaskRule | None, candidate: MaskRule) -> MaskRule:
+    """Keeps the stricter mask whenever multiple matching rules touch a column."""
     if existing is None:
         return candidate
     if _mask_precedence(candidate) > _mask_precedence(existing):

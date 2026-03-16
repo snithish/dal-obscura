@@ -7,6 +7,8 @@ from dal_obscura.domain.query_planning import DatasetSelector
 
 
 class AuthorizationPort(Protocol):
+    """Resolves which columns, masks, and row filters a principal may use."""
+
     def authorize(
         self,
         principal: Principal,

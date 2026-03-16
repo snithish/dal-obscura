@@ -20,6 +20,8 @@ from dal_obscura.domain.query_planning import (
 
 @dataclass(frozen=True)
 class IcebergReadSpec:
+    """Serialized Iceberg scan plan stored inside a signed ticket."""
+
     dataset: DatasetSelector
     catalog_name: str
     catalog_type: str
@@ -31,10 +33,13 @@ class IcebergReadSpec:
 
 
 class IcebergBackend:
+    """Backend that plans and reads Iceberg tables via PyIceberg."""
+
     def __init__(self) -> None:
         self._catalog_cache: dict[str, Catalog] = {}
 
     def get_schema(self, target: ResolvedBackendTarget):
+        """Loads the Iceberg table schema used by planning and validation."""
         catalog_name, catalog_type, catalog_options, table_identifier = _iceberg_config(
             target.handle
         )
@@ -42,6 +47,7 @@ class IcebergBackend:
         return table.schema().as_arrow()
 
     def plan(self, target: ResolvedBackendTarget, columns: Iterable[str], max_tickets: int) -> Plan:
+        """Plans file tasks and distributes them across the available tickets."""
         catalog_name, catalog_type, catalog_options, table_identifier = _iceberg_config(
             target.handle
         )
@@ -78,10 +84,12 @@ class IcebergBackend:
         return Plan(schema=base_schema, tasks=tasks)
 
     def read_spec(self, read_payload: bytes) -> ReadSpec:
+        """Reads metadata from an Iceberg ticket without fetching table data."""
         spec = _decode_spec(read_payload)
         return ReadSpec(dataset=spec.dataset, columns=list(spec.columns), schema=spec.schema)
 
     def read_stream(self, read_payload: bytes):
+        """Executes the pre-planned Iceberg file tasks stored in the ticket."""
         spec = _decode_spec(read_payload)
         table = self._load_table(
             spec.catalog_name,
@@ -98,6 +106,8 @@ class IcebergBackend:
         if not file_tasks:
             return iter(())
 
+        # The plan step already chose the file tasks. Fetch just rehydrates them
+        # and hands them to ArrowScan so the execution path stays deterministic.
         arrow_scan = ArrowScan(
             table_metadata=table.metadata,
             io=table.io,
@@ -113,6 +123,7 @@ class IcebergBackend:
         catalog_options: dict,
         table_identifier: str,
     ):
+        """Loads the table and enforces the supported Iceberg format versions."""
         catalog = self._load_catalog(catalog_name, catalog_type, catalog_options)
         table = catalog.load_table(table_identifier)
         format_version = int(getattr(table.metadata, "format_version", 1))
@@ -121,6 +132,7 @@ class IcebergBackend:
         return table
 
     def _load_catalog(self, catalog_name: str, catalog_type: str, catalog_options: dict) -> Catalog:
+        """Caches catalog instances because they are reused across many requests."""
         cache_key = json.dumps(
             {
                 "catalog_name": catalog_name,
@@ -138,6 +150,7 @@ class IcebergBackend:
 
 
 def _decode_spec(read_payload: bytes) -> IcebergReadSpec:
+    """Deserializes and validates the Iceberg read specification."""
     spec = pickle.loads(read_payload)
     if not isinstance(spec, IcebergReadSpec):
         raise ValueError("Invalid read payload for Iceberg backend")
@@ -145,6 +158,7 @@ def _decode_spec(read_payload: bytes) -> IcebergReadSpec:
 
 
 def _iceberg_config(handle: dict[str, object]) -> tuple[str, str, dict, str]:
+    """Normalizes the backend handle into catalog load arguments."""
     catalog_name = str(handle.get("catalog_name", "")).strip()
     catalog_type = str(handle.get("catalog_type", "")).strip()
     catalog_options = _catalog_options(handle.get("catalog_options"))
@@ -157,6 +171,7 @@ def _iceberg_config(handle: dict[str, object]) -> tuple[str, str, dict, str]:
 
 
 def _catalog_options(value: object) -> dict:
+    """Validates catalog options before forwarding them to PyIceberg."""
     if value is None:
         return {}
     if isinstance(value, Mapping):
@@ -165,6 +180,7 @@ def _catalog_options(value: object) -> dict:
 
 
 def _chunk_by_max_tickets(tasks: list, max_tickets: int) -> list[list]:
+    """Balances planned Iceberg file tasks across the available tickets."""
     if not tasks:
         return []
     max_tickets = max(1, max_tickets)

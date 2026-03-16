@@ -13,12 +13,16 @@ _DUCKDB_ARROW_OUTPUT_BATCH_SIZE = 8_192
 
 
 class DefaultMaskingAdapter:
+    """Builds DuckDB projection expressions and the schema they imply."""
+
     def apply(self, columns: Iterable[str], masks: Mapping[str, MaskRule]) -> MaskedSelection:
+        """Returns the DuckDB SELECT list for the requested columns and masks."""
         return _build_select_list(columns, masks)
 
     def masked_schema(
         self, base_schema: pa.Schema, columns: Iterable[str], masks: Mapping[str, MaskRule]
     ) -> pa.Schema:
+        """Projects the schema visible to clients after masking is applied."""
         selected_fields: list[pa.Field] = []
         seen: set[str] = set()
 
@@ -41,6 +45,8 @@ class DefaultMaskingAdapter:
 
 
 class DuckDBRowTransformAdapter:
+    """Applies row filters and masks to streamed Arrow batches via DuckDB SQL."""
+
     def __init__(self, masking: DefaultMaskingAdapter) -> None:
         self._masking = masking
 
@@ -51,6 +57,7 @@ class DuckDBRowTransformAdapter:
         row_filter: str | None,
         masks: Mapping[str, MaskRule],
     ) -> Iterable[pa.RecordBatch]:
+        """Builds a transient DuckDB query and streams transformed record batches."""
         query = _build_query(columns, row_filter, masks, self._masking)
 
         batch_iter = iter(batches)
@@ -70,6 +77,7 @@ def _stream_query_results(
     reader: pa.RecordBatchReader,
     query: str,
 ) -> Iterator[pa.RecordBatch]:
+    """Executes the generated SQL over the incoming Arrow reader."""
     # DuckDB 1.5.0 removes the Python-side per-batch loop here, but the input side
     # does not appear observably lazy enough to assert callback-order streaming.
     con = duckdb.connect()
@@ -90,6 +98,7 @@ def _build_query(
     masks: Mapping[str, MaskRule],
     masking: DefaultMaskingAdapter,
 ) -> str:
+    """Builds the SQL statement used to apply projection, masks, and filters."""
     selection = masking.apply(columns, masks)
     query = f"SELECT {', '.join(selection.select_list)} FROM input"
     if row_filter:
@@ -98,6 +107,7 @@ def _build_query(
 
 
 def _build_select_list(columns: Iterable[str], masks: Mapping[str, MaskRule]) -> MaskedSelection:
+    """Builds projection expressions for both top-level and nested masked fields."""
     select_list: list[str] = []
     masked_columns: list[str] = []
 
@@ -114,6 +124,8 @@ def _build_select_list(columns: Iterable[str], masks: Mapping[str, MaskRule]) ->
             expr = column
             for path, mask in nested_masks.items():
                 masked_expr = _mask_expression(path, mask)
+                # Nested masks are applied from the leaf upward so each struct update
+                # wraps the previous expression in the correct order.
                 expr = _apply_nested_mask_on_root(expr, path, masked_expr)
                 masked_columns.append(path)
             select_list.append(f'{expr} AS "{column}"')
@@ -124,6 +136,7 @@ def _build_select_list(columns: Iterable[str], masks: Mapping[str, MaskRule]) ->
 
 
 def _mask_expression(column: str, mask: MaskRule) -> str:
+    """Returns the DuckDB SQL fragment for a single mask rule."""
     mask_type = mask.type.lower()
     if mask_type == "null":
         return "NULL"
@@ -139,6 +152,7 @@ def _mask_expression(column: str, mask: MaskRule) -> str:
 
 
 def _apply_nested_mask(path: str, expr: str) -> str:
+    """Reattaches a nested field expression to its top-level struct column."""
     parts = path.split(".")
     if len(parts) == 1:
         return expr
@@ -146,6 +160,7 @@ def _apply_nested_mask(path: str, expr: str) -> str:
 
 
 def _apply_nested_mask_on_root(root_expr: str, path: str, expr: str) -> str:
+    """Applies a nested field replacement on top of a root struct expression."""
     parts = path.split(".")
     if len(parts) == 1:
         return expr
@@ -161,6 +176,7 @@ def _apply_nested_mask_on_root(root_expr: str, path: str, expr: str) -> str:
 
 
 def _masked_field(field: pa.Field, mask: MaskRule | None) -> pa.Field:
+    """Adjusts the visible field type when masking changes the value representation."""
     if not mask:
         return field
     mask_type = mask.type.lower()
@@ -170,6 +186,7 @@ def _masked_field(field: pa.Field, mask: MaskRule | None) -> pa.Field:
 
 
 def _sql_literal(value: object) -> str:
+    """Serializes a Python scalar into a DuckDB SQL literal."""
     if value is None:
         return "NULL"
     if isinstance(value, bool):

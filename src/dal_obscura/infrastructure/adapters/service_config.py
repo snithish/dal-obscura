@@ -13,10 +13,13 @@ DEFAULT_SAMPLE_FILES = 4
 
 @dataclass(frozen=True)
 class SchemaInferenceOptions:
+    """Sampling knobs passed to file readers during schema inference."""
+
     sample_rows: int = DEFAULT_SAMPLE_ROWS
     sample_files: int = DEFAULT_SAMPLE_FILES
 
     def to_dict(self) -> dict[str, int]:
+        """Serializes the options into the plain dict shape stored in handles."""
         return {
             "sample_rows": self.sample_rows,
             "sample_files": self.sample_files,
@@ -25,6 +28,8 @@ class SchemaInferenceOptions:
 
 @dataclass(frozen=True)
 class CatalogTargetConfig:
+    """Per-target override inside a catalog definition."""
+
     backend: str | None = None
     table: str | None = None
     format: str | None = None
@@ -34,6 +39,8 @@ class CatalogTargetConfig:
 
 @dataclass(frozen=True)
 class CatalogConfig:
+    """One named catalog plus any target-specific overrides."""
+
     name: str
     type: str
     options: dict[str, Any]
@@ -42,17 +49,22 @@ class CatalogConfig:
 
 @dataclass(frozen=True)
 class PathConfig:
+    """Schema inference options matched by raw path glob."""
+
     glob: str
     options: SchemaInferenceOptions
 
 
 @dataclass(frozen=True)
 class ServiceConfig:
+    """Top-level runtime configuration loaded by the CLI."""
+
     catalogs: dict[str, CatalogConfig]
     paths: tuple[PathConfig, ...]
 
 
 def load_service_config(path: str | Path) -> ServiceConfig:
+    """Loads and validates the YAML/JSON service configuration file."""
     config_path = Path(path)
     if not config_path.exists():
         raise FileNotFoundError(config_path)
@@ -77,6 +89,7 @@ def load_service_config(path: str | Path) -> ServiceConfig:
 
 
 def _parse_catalog(name: str, raw: Any) -> CatalogConfig:
+    """Parses a single catalog entry from the service config."""
     if not isinstance(raw, dict):
         raise ValueError(f"Catalog {name!r} must be an object")
     catalog_type = str(raw.get("type", "")).strip().lower()
@@ -92,6 +105,7 @@ def _parse_catalog(name: str, raw: Any) -> CatalogConfig:
 
 
 def _parse_catalog_target(name: str, raw: Any) -> CatalogTargetConfig:
+    """Parses a target override and infers the backend when possible."""
     if not isinstance(raw, dict):
         raise ValueError(f"Target {name!r} must be an object")
 
@@ -127,6 +141,7 @@ def _parse_catalog_target(name: str, raw: Any) -> CatalogTargetConfig:
 
 
 def _parse_path_config(raw: Any) -> PathConfig:
+    """Parses one raw-path matching rule used for ad-hoc file targets."""
     if not isinstance(raw, dict):
         raise ValueError("Path config entries must be objects")
     target_glob = str(raw.get("glob", "")).strip()
@@ -136,6 +151,7 @@ def _parse_path_config(raw: Any) -> PathConfig:
 
 
 def _parse_target_options(raw: Any) -> dict[str, Any]:
+    """Adds default sampling options to file-backed targets."""
     if raw is None:
         return {}
     if not isinstance(raw, dict):
@@ -149,6 +165,7 @@ def _parse_target_options(raw: Any) -> dict[str, Any]:
 
 
 def _parse_schema_options(raw: Any) -> SchemaInferenceOptions:
+    """Normalizes schema inference options into strongly typed values."""
     if raw is None:
         raw = {}
     if not isinstance(raw, dict):

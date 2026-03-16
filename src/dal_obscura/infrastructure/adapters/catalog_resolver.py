@@ -31,6 +31,8 @@ _BACKEND_PLUGIN_GROUP = "dal_obscura.backend_implementations"
 
 
 class CatalogImplementation(Protocol):
+    """Pluggable resolver that maps a logical target to a backend handle."""
+
     def resolve(
         self,
         generation: int,
@@ -42,11 +44,15 @@ class CatalogImplementation(Protocol):
 
 @dataclass(frozen=True)
 class _RuntimeSnapshot:
+    """Immutable backend registry for a single configuration generation."""
+
     generation: int
     backends: Mapping[str, object]
 
 
 class DynamicRegistryRuntime:
+    """Routes requests to backend implementations using generation-bound handles."""
+
     def __init__(self, config: ServiceConfig) -> None:
         self._lock = threading.RLock()
         self._catalog_implementations: dict[str, CatalogImplementation] = {}
@@ -62,29 +68,36 @@ class DynamicRegistryRuntime:
 
     @property
     def current_generation(self) -> int:
+        """Generation attached to newly resolved backend references."""
         with self._lock:
             return self._current_generation
 
     @property
     def current_config(self) -> ServiceConfig:
+        """Latest service config currently installed in the runtime."""
         with self._lock:
             return self._current_config
 
     def register_catalog_type(self, type_name: str, implementation: object) -> None:
+        """Registers a catalog implementation under a service-config type name."""
         with self._lock:
             self._catalog_implementations[type_name.lower()] = _coerce_catalog_implementation(
                 implementation
             )
 
     def register_backend(self, backend_id: str, implementation: object) -> None:
+        """Registers a backend factory under the ID stored in backend references."""
         with self._lock:
             self._backend_factories[backend_id] = implementation
 
     def reload(self, config: ServiceConfig) -> int:
+        """Publishes a new backend snapshot and increments the active generation."""
         with self._lock:
             self._current_config = config
             self._current_generation += 1
             generation = self._current_generation
+            # Tickets include the backend generation so fetch requests can keep
+            # using the exact backend snapshot they were planned against.
             self._snapshots[generation] = _RuntimeSnapshot(
                 generation=generation,
                 backends={
@@ -95,12 +108,14 @@ class DynamicRegistryRuntime:
             return generation
 
     def unload_generation(self, generation: int) -> None:
+        """Drops an old generation once tickets for it can no longer be used."""
         with self._lock:
             if generation == self._current_generation:
                 raise ValueError("Cannot unload the current backend generation")
             self._snapshots.pop(generation, None)
 
     def resolve_catalog(self, catalog_name: str, target: str) -> ResolvedBackendTarget:
+        """Resolves a target within a named catalog."""
         with self._lock:
             catalog_config = self._current_config.catalogs.get(catalog_name)
             generation = self._current_generation
@@ -114,27 +129,33 @@ class DynamicRegistryRuntime:
         return resolved
 
     def resolve(self, catalog: str | None, target: str) -> ResolvedBackendTarget:
+        """Resolves either a catalog-based target or a raw filesystem target."""
         if catalog is not None:
             return self.resolve_catalog(catalog, target)
         return _resolve_raw_target(self.current_generation, self.current_config, target)
 
     def get_schema(self, target: ResolvedBackendTarget):
+        """Delegates schema lookup to the resolved backend implementation."""
         backend = self._backend_for_reference(target.backend)
         return backend.get_schema(target)
 
     def plan(self, target: ResolvedBackendTarget, columns, max_tickets: int):
+        """Delegates plan creation to the resolved backend implementation."""
         backend = self._backend_for_reference(target.backend)
         return backend.plan(target, columns, max_tickets)
 
     def read_spec(self, backend: BackendReference, read_payload: bytes):
+        """Reads ticket metadata using the generation-bound backend implementation."""
         implementation = self._backend_for_reference(backend)
         return implementation.read_spec(read_payload)
 
     def read_stream(self, backend: BackendReference, read_payload: bytes):
+        """Executes a read stream using the generation-bound backend implementation."""
         implementation = self._backend_for_reference(backend)
         return implementation.read_stream(read_payload)
 
     def _backend_for_reference(self, reference: BackendReference):
+        """Looks up the backend instance referenced by a ticket or plan result."""
         with self._lock:
             snapshot = self._snapshots.get(reference.generation)
             if snapshot is None:
@@ -148,6 +169,7 @@ class DynamicRegistryRuntime:
             return backend
 
     def _register_builtin_catalogs(self) -> None:
+        """Registers the built-in catalog types shipped with the service."""
         default_iceberg_catalog = MappedCatalogImplementation(default_backend_id="iceberg")
         for type_name in ("sql", "glue", "hive", "unity", "polaris"):
             self._catalog_implementations[type_name] = default_iceberg_catalog
@@ -156,10 +178,12 @@ class DynamicRegistryRuntime:
         )
 
     def _register_builtin_backends(self) -> None:
+        """Registers the built-in backends available without plugins."""
         self._backend_factories["iceberg"] = IcebergBackend
         self._backend_factories["duckdb_file"] = DuckDBFileBackend
 
     def _register_entrypoints(self) -> None:
+        """Loads optional catalog and backend plugins from Python entry points."""
         for entrypoint in _entry_points_for_group(_CATALOG_PLUGIN_GROUP):
             self.register_catalog_type(entrypoint.name, entrypoint.load())
         for entrypoint in _entry_points_for_group(_BACKEND_PLUGIN_GROUP):
@@ -167,6 +191,8 @@ class DynamicRegistryRuntime:
 
 
 class MappedCatalogImplementation:
+    """Catalog resolver that uses static target matching rules from config."""
+
     def __init__(self, default_backend_id: str | None) -> None:
         self._default_backend_id = default_backend_id
 
@@ -177,6 +203,7 @@ class MappedCatalogImplementation:
         catalog_config: CatalogConfig,
         target: str,
     ) -> ResolvedBackendTarget:
+        """Returns the backend handle for the most specific matching target rule."""
         selector = DatasetSelector(catalog=catalog_name, target=target)
         target_config = _match_catalog_target(catalog_config.targets, target)
         if target_config is None:
@@ -208,6 +235,7 @@ class MappedCatalogImplementation:
 def _resolve_raw_target(
     generation: int, service_config: ServiceConfig, target: str
 ) -> ResolvedBackendTarget:
+    """Treats the target as a filesystem glob and resolves it to the file backend."""
     selector = DatasetSelector(target=target)
     paths = _expand_paths((target,))
     path_config = _select_path_config(service_config.paths, target)
@@ -225,6 +253,7 @@ def _resolve_raw_target(
 
 
 def _default_file_options() -> dict[str, int]:
+    """Default schema inference settings for ad-hoc file targets."""
     return {
         "sample_rows": DEFAULT_SAMPLE_ROWS,
         "sample_files": DEFAULT_SAMPLE_FILES,
@@ -237,6 +266,7 @@ def _target_handle(
     requested_target: str,
     target_config: CatalogTargetConfig,
 ) -> dict[str, object]:
+    """Builds the backend-specific handle stored in `ResolvedBackendTarget`."""
     backend_id = target_config.backend or "iceberg"
     if backend_id == "duckdb_file":
         return {
@@ -272,6 +302,7 @@ def _target_handle(
 def _match_catalog_target(
     targets: Mapping[str, CatalogTargetConfig], target: str
 ) -> CatalogTargetConfig | None:
+    """Returns the most specific target pattern that matches the request."""
     matches = [
         (pattern, config) for pattern, config in targets.items() if fnmatch.fnmatch(target, pattern)
     ]
@@ -281,6 +312,7 @@ def _match_catalog_target(
 
 
 def _expand_paths(patterns: tuple[str, ...]) -> tuple[str, ...]:
+    """Expands globs into a stable, de-duplicated list of files."""
     expanded: list[str] = []
     for pattern in patterns:
         matches = sorted(glob.glob(pattern, recursive=True))
@@ -292,6 +324,7 @@ def _expand_paths(patterns: tuple[str, ...]) -> tuple[str, ...]:
 
 
 def _select_path_config(path_configs: tuple[PathConfig, ...], target: str) -> PathConfig | None:
+    """Returns the most specific raw-path config that matches the target."""
     matches = [config for config in path_configs if fnmatch.fnmatch(target, config.glob)]
     if not matches:
         return None
@@ -299,6 +332,7 @@ def _select_path_config(path_configs: tuple[PathConfig, ...], target: str) -> Pa
 
 
 def _infer_file_format(paths: tuple[str, ...]) -> str:
+    """Ensures every resolved file shares the same supported format."""
     formats = {_path_format(path) for path in paths}
     if len(formats) != 1:
         raise ValueError("Target resolved to mixed or unsupported file formats")
@@ -309,6 +343,7 @@ def _infer_file_format(paths: tuple[str, ...]) -> str:
 
 
 def _path_format(path: str) -> str | None:
+    """Infers the data format from the file suffix, ignoring compression suffixes."""
     lower_path = path.lower()
     for suffix in _COMPRESSION_SUFFIXES:
         if lower_path.endswith(suffix):
@@ -328,6 +363,7 @@ def _path_format(path: str) -> str | None:
 
 
 def _coerce_catalog_implementation(candidate: object) -> CatalogImplementation:
+    """Instantiates or validates a catalog implementation registered by the runtime."""
     if isinstance(candidate, type):
         candidate = candidate()
     if hasattr(candidate, "resolve"):
@@ -340,6 +376,7 @@ def _coerce_catalog_implementation(candidate: object) -> CatalogImplementation:
 
 
 def _coerce_backend_implementation(candidate: object) -> object:
+    """Instantiates or validates a backend implementation registered by the runtime."""
     if isinstance(candidate, type):
         candidate = candidate()
     if (
@@ -360,6 +397,7 @@ def _coerce_backend_implementation(candidate: object) -> object:
 
 
 def _entry_points_for_group(group: str):
+    """Handles `importlib.metadata.entry_points()` API differences across Python versions."""
     discovered = metadata.entry_points()
     if hasattr(discovered, "select"):
         return list(discovered.select(group=group))

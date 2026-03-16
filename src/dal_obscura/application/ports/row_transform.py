@@ -6,6 +6,8 @@ from dal_obscura.domain.access_control import MaskRule
 
 
 class RowTransformPort(Protocol):
+    """Applies row-level filtering and masking to streamed backend batches."""
+
     def apply_filters_and_masks_stream(
         self,
         batches: Iterable[Any],

@@ -12,6 +12,8 @@ from .streaming import make_stream
 
 
 class DataAccessFlightService(flight.FlightServerBase):
+    """Arrow Flight transport adapter for the plan-then-fetch data access flow."""
+
     def __init__(
         self,
         location: str,
@@ -26,6 +28,7 @@ class DataAccessFlightService(flight.FlightServerBase):
     def get_flight_info(
         self, context: flight.ServerCallContext, descriptor: flight.FlightDescriptor
     ) -> flight.FlightInfo:
+        """Plans a dataset read and returns one endpoint per signed ticket."""
         headers = headers_from_context(context)
         request = parse_descriptor(descriptor)
         try:
@@ -57,6 +60,7 @@ class DataAccessFlightService(flight.FlightServerBase):
     def do_get(
         self, context: flight.ServerCallContext, ticket: flight.Ticket
     ) -> flight.RecordBatchStream:
+        """Executes a previously planned read and streams the masked result batches."""
         headers = headers_from_context(context)
         token = ticket.ticket.decode("utf-8")
         try:
@@ -80,4 +84,5 @@ class DataAccessFlightService(flight.FlightServerBase):
         return make_stream(result.output_schema, result.result_batches)
 
     def _log_extra(self, **extra: object) -> dict[str, object]:
+        """Adds process-level telemetry to every structured log line."""
         return {"resident_memory_bytes": get_resident_memory_bytes(), **extra}

@@ -20,6 +20,8 @@ from dal_obscura.domain.query_planning import DatasetSelector
 
 
 class PolicyFileAuthorizer:
+    """Authorization adapter backed by a YAML or JSON policy document on disk."""
+
     def __init__(self, policy_path: str | Path) -> None:
         self._policy_path = Path(policy_path)
 
@@ -29,6 +31,7 @@ class PolicyFileAuthorizer:
         dataset: DatasetSelector,
         requested_columns: Iterable[str],
     ) -> AccessDecision:
+        """Reloads the policy file and resolves the effective access decision."""
         policy = load_policy_file(self._policy_path)
         allowed_columns, masks, row_filter = resolve_access(
             policy,
@@ -47,6 +50,7 @@ class PolicyFileAuthorizer:
         )
 
     def current_policy_version(self, dataset: DatasetSelector) -> int | None:
+        """Returns the current dataset version hash used to invalidate old tickets."""
         policy = load_policy_file(self._policy_path)
         matched_dataset = policy.match_dataset(dataset)
         if not matched_dataset:
@@ -55,6 +59,7 @@ class PolicyFileAuthorizer:
 
 
 def load_policy_file(path: str | Path) -> Policy:
+    """Loads the policy file and normalizes both catalog and raw-path rules."""
     policy_path = Path(path)
     if not policy_path.exists():
         raise FileNotFoundError(policy_path)
@@ -80,6 +85,7 @@ def load_policy_file(path: str | Path) -> Policy:
 
 
 def _parse_catalog_datasets(raw: dict[str, Any]) -> list[DatasetPolicy]:
+    """Extracts dataset policies scoped under named catalogs."""
     datasets: list[DatasetPolicy] = []
     for catalog_name, catalog_data in dict(raw).items():
         if not isinstance(catalog_data, dict):
@@ -96,6 +102,7 @@ def _parse_catalog_datasets(raw: dict[str, Any]) -> list[DatasetPolicy]:
 
 
 def _parse_path_datasets(raw: list[Any]) -> list[DatasetPolicy]:
+    """Extracts dataset policies that apply to direct file path targets."""
     datasets: list[DatasetPolicy] = []
     for item in raw:
         if not isinstance(item, dict):
@@ -109,6 +116,7 @@ def _parse_path_datasets(raw: list[Any]) -> list[DatasetPolicy]:
 
 
 def _merge_datasets(datasets: list[DatasetPolicy]) -> list[DatasetPolicy]:
+    """Merges duplicate dataset entries so later files can append more rules."""
     merged: dict[tuple[str | None, str], DatasetPolicy] = {}
     ordered_keys: list[tuple[str | None, str]] = []
     for dataset in datasets:
@@ -127,6 +135,7 @@ def _merge_datasets(datasets: list[DatasetPolicy]) -> list[DatasetPolicy]:
 
 
 def _parse_rule(raw: dict[str, Any]) -> AccessRule:
+    """Normalizes one raw access rule from the policy document."""
     principals = [str(item) for item in raw.get("principals", [])]
     columns = [str(item) for item in raw.get("columns", [])]
     masks_raw = raw.get("masks", {}) or {}
@@ -141,6 +150,7 @@ def _parse_rule(raw: dict[str, Any]) -> AccessRule:
 
 
 def _parse_mask(value: Any) -> MaskRule:
+    """Supports shorthand string masks as well as object-shaped mask rules."""
     if isinstance(value, str):
         return MaskRule(type=value)
     if not isinstance(value, dict):

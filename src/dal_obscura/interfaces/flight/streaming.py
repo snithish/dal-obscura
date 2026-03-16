@@ -8,6 +8,7 @@ import pyarrow.flight as flight
 
 
 def make_stream(schema: pa.Schema, batches: Iterable[pa.RecordBatch]) -> flight.RecordBatchStream:
+    """Builds a Flight stream while keeping batch field types aligned with the schema."""
     coerced_batches = coerce_batches_to_schema(schema, batches)
     if hasattr(flight, "GeneratorStream"):
         return flight.GeneratorStream(schema, coerced_batches)
@@ -19,6 +20,7 @@ def make_stream(schema: pa.Schema, batches: Iterable[pa.RecordBatch]) -> flight.
 def coerce_batches_to_schema(
     schema: pa.Schema, batches: Iterable[pa.RecordBatch]
 ) -> Iterator[pa.RecordBatch]:
+    """Casts each batch to the advertised schema before it reaches Flight clients."""
     for batch in batches:
         arrays = []
         for field in schema:

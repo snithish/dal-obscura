@@ -22,6 +22,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def main() -> None:
+    """CLI entry point that wires adapters together and starts the Flight server."""
     parser = argparse.ArgumentParser(description="dal-obscura Flight service")
     parser.add_argument("--location", default="grpc://0.0.0.0:8815")
     parser.add_argument("--policy", required=True)
@@ -47,6 +48,8 @@ def main() -> None:
     )
     LOGGER.info("Starting dal-obscura service")
 
+    # The CLI is the composition root for the hexagonal application. Everything
+    # below is pure wiring so the use cases can stay free of transport details.
     identity = DefaultIdentityAdapter(
         AuthConfig(
             api_keys=json.loads(args.api_keys),
