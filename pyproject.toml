@@ -50,10 +50,14 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = [
+  "C90",  # mccabe complexity
   "B",  # flake8-bugbear
   "C4",  # flake8-comprehensions
+  "E",  # pycodestyle errors
+  "F",  # Pyflakes
   "I",  # isort
   "PIE",  # flake8-pie
+  "PGH",  # pygrep-hooks
   "RET",  # flake8-return
   "RSE",  # flake8-raise
   "RUF",  # Ruff-specific rules
@@ -61,6 +65,9 @@ select = [
   "TID252",  # flake8-tidy-imports: ban relative imports
   "UP",  # pyupgrade
 ]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 12
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"

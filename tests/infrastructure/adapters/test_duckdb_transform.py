@@ -176,7 +176,10 @@ def test_duckdb_transform_memory_is_bounded_in_subprocess():
         import psutil
         import pyarrow as pa
 
-        from dal_obscura.infrastructure.adapters.duckdb_transform import DuckDBRowTransformAdapter, DefaultMaskingAdapter
+        from dal_obscura.infrastructure.adapters.duckdb_transform import (
+            DefaultMaskingAdapter,
+            DuckDBRowTransformAdapter,
+        )
 
         total_batches = int(sys.argv[1])
         rows_per_batch = int(sys.argv[2])
@@ -197,7 +200,12 @@ def test_duckdb_transform_memory_is_bounded_in_subprocess():
         baseline_rss = process.memory_info().rss
         peak_rss = baseline_rss
         row_count = 0
-        for batch in adapter.apply_filters_and_masks_stream(source(), ["id", "value"], "id >= 0", {}):
+        for batch in adapter.apply_filters_and_masks_stream(
+            source(),
+            ["id", "value"],
+            "id >= 0",
+            {},
+        ):
             row_count += batch.num_rows
             peak_rss = max(peak_rss, process.memory_info().rss)
 

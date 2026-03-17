@@ -92,8 +92,8 @@ def test_file_backend_uses_bounded_schema_inference_queries(monkeypatch):
         in queries[0]
     )
     assert (
-        "read_json_auto(['events.ndjson'], union_by_name=true, sample_size=222, maximum_sample_files=4)"
-        in queries[1]
+        "read_json_auto(['events.ndjson'], union_by_name=true, sample_size=222, "
+        "maximum_sample_files=4)" in queries[1]
     )
     assert "read_parquet(['facts.parquet'], union_by_name=true)" in queries[2]
 
