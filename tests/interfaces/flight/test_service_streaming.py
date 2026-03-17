@@ -13,7 +13,6 @@ import pytest
 from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
 from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
 from dal_obscura.domain.query_planning.models import (
-    BackendBinding,
     BackendDescriptor,
     BackendReference,
     BoundBackendTarget,
