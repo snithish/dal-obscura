@@ -6,13 +6,13 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 from dal_obscura.application.ports.authorization import AuthorizationPort
-from dal_obscura.application.ports.backend import QueryBackendPort
 from dal_obscura.application.ports.identity import IdentityPort
 from dal_obscura.application.ports.masking import MaskingPort
 from dal_obscura.application.ports.row_transform import RowTransformPort
 from dal_obscura.application.ports.ticket_codec import TicketCodecPort
 from dal_obscura.domain.access_control.models import MaskRule
 from dal_obscura.domain.query_planning.models import BackendReference, DatasetSelector
+from dal_obscura.infrastructure.adapters.backend_registry import DynamicBackendRegistry
 
 
 @dataclass(frozen=True)
@@ -43,14 +43,14 @@ class FetchStreamUseCase:
         self,
         identity: IdentityPort,
         authorizer: AuthorizationPort,
-        backend: QueryBackendPort,
+        backend_registry: DynamicBackendRegistry,
         masking: MaskingPort,
         row_transform: RowTransformPort,
         ticket_codec: TicketCodecPort,
     ) -> None:
         self._identity = identity
         self._authorizer = authorizer
-        self._backend = backend
+        self._backend_registry = backend_registry
         self._masking = masking
         self._row_transform = row_transform
         self._ticket_codec = ticket_codec
@@ -67,18 +67,18 @@ class FetchStreamUseCase:
         if current_version is not None and payload.policy_version != current_version:
             raise PermissionError("Unauthorized")
 
-        backend = BackendReference(
+        backend_reference = BackendReference(
             backend_id=payload.backend_id,
             generation=payload.backend_generation,
         )
         scan = _decode_scan(payload.scan)
-        spec = self._backend.read_spec(backend, scan.read_payload)
+        spec = self._backend_registry.read_spec_for(backend_reference, scan.read_payload)
         if spec.dataset != selector or spec.columns != payload.columns:
             raise ValueError("Ticket payload mismatch")
 
         # Data is fetched first, then row filters and masks are enforced over the
         # backend output so the fetch path remains backend-agnostic.
-        batches = self._backend.read_stream(backend, scan.read_payload)
+        batches = self._backend_registry.read_stream_for(backend_reference, scan.read_payload)
         result_batches = self._row_transform.apply_filters_and_masks_stream(
             batches, payload.columns, scan.row_filter, scan.masks
         )

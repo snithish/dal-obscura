@@ -18,8 +18,8 @@ class SchemaInferenceOptions:
     sample_rows: int = DEFAULT_SAMPLE_ROWS
     sample_files: int = DEFAULT_SAMPLE_FILES
 
-    def to_dict(self) -> dict[str, int]:
-        """Serializes the options into the plain dict shape stored in handles."""
+    def to_dict(self) -> dict[str, object]:
+        """Serializes the options into the plain dict shape stored in descriptors."""
         return {
             "sample_rows": self.sample_rows,
             "sample_files": self.sample_files,

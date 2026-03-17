@@ -1,6 +1,9 @@
 import json
 import threading
 import time
+from collections.abc import Iterable
+from dataclasses import dataclass, field
+from typing import Any, cast
 
 import jwt
 import pyarrow as pa
@@ -10,12 +13,14 @@ import pytest
 from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
 from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
 from dal_obscura.domain.query_planning.models import (
+    BackendBinding,
+    BackendDescriptor,
     BackendReference,
+    BoundBackendTarget,
     DatasetSelector,
     Plan,
     ReadPayload,
     ReadSpec,
-    ResolvedBackendTarget,
 )
 from dal_obscura.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
@@ -33,33 +38,42 @@ from dal_obscura.interfaces.flight.server import DataAccessFlightService
 JWT_SECRET = "test-jwt-secret-32-characters-long"
 
 
+class StubCatalogRegistry:
+    def describe(self, catalog: str | None, target: str) -> BackendDescriptor:
+        selector = DatasetSelector(catalog=catalog, target=target)
+        return StubDescriptor(
+            dataset_identity=selector,
+        )
+
+
 class StubBackend:
     def __init__(self, schema: pa.Schema, batches: list[pa.RecordBatch]) -> None:
         self._schema = schema
         self._batches = batches
 
-    def resolve(self, catalog: str | None, target: str) -> ResolvedBackendTarget:
-        selector = DatasetSelector(catalog=catalog, target=target)
-        return ResolvedBackendTarget(
-            dataset_identity=selector,
-            backend=BackendReference(backend_id="duckdb_file", generation=1),
-            handle={"format": "csv", "paths": ["stub.csv"], "options": {}},
+    def bind_descriptor(self, descriptor: BackendDescriptor) -> BoundBackendTarget:
+        return BoundBackendTarget(
+            dataset_identity=descriptor.dataset_identity,
+            backend=BackendReference(backend_id=descriptor.backend_id, generation=1),
+            binding=StubBinding(),
         )
 
-    def get_schema(self, target: ResolvedBackendTarget) -> pa.Schema:
+    def schema_for(self, bound_target: BoundBackendTarget) -> pa.Schema:
         return self._schema
 
-    def plan(self, target: ResolvedBackendTarget, columns, max_tickets: int) -> Plan:
+    def plan_for(
+        self, bound_target: BoundBackendTarget, columns: Iterable[str], max_tickets: int
+    ) -> Plan:
         payload = json.dumps(
             {
-                "catalog": target.dataset_identity.catalog,
-                "target": target.dataset_identity.target,
+                "catalog": bound_target.dataset_identity.catalog,
+                "target": bound_target.dataset_identity.target,
                 "columns": list(columns),
             }
         ).encode("utf-8")
         return Plan(schema=self._schema, tasks=[ReadPayload(payload=payload)])
 
-    def read_spec(self, backend: BackendReference, read_payload: bytes) -> ReadSpec:
+    def read_spec_for(self, backend: BackendReference, read_payload: bytes) -> ReadSpec:
         raw = json.loads(read_payload.decode("utf-8"))
         return ReadSpec(
             dataset=DatasetSelector(catalog=raw.get("catalog"), target=str(raw["target"])),
@@ -67,8 +81,19 @@ class StubBackend:
             schema=self._schema,
         )
 
-    def read_stream(self, backend: BackendReference, read_payload: bytes):
+    def read_stream_for(self, backend: BackendReference, read_payload: bytes) -> Iterable[Any]:
         return iter(self._batches)
+
+
+@dataclass(frozen=True)
+class StubDescriptor:
+    dataset_identity: DatasetSelector
+    backend_id: str = field(init=False, default="duckdb_file")
+
+
+@dataclass(frozen=True)
+class StubBinding:
+    backend_id: str = field(init=False, default="duckdb_file")
 
 
 class DummyContext:
@@ -86,7 +111,7 @@ def _authorization_header(principal_id: str) -> tuple[bytes, bytes]:
 
 
 def _build_server(
-    backend: StubBackend,
+    backend_registry: StubBackend,
     policy_path,
     jwt_secret: str = JWT_SECRET,
     ticket_secret: str = "secret",
@@ -95,13 +120,15 @@ def _build_server(
 ) -> DataAccessFlightService:
     identity = DefaultIdentityAdapter(AuthConfig(jwt_secret=jwt_secret))
     authorizer = PolicyFileAuthorizer(policy_path)
+    catalog_registry = StubCatalogRegistry()
     masking = DefaultMaskingAdapter()
     row_transform = DuckDBRowTransformAdapter(masking)
     ticket_codec = HmacTicketCodecAdapter(ticket_secret)
     plan_access = PlanAccessUseCase(
         identity=identity,
         authorizer=authorizer,
-        backend=backend,
+        catalog_registry=cast(Any, catalog_registry),
+        backend_registry=cast(Any, backend_registry),
         masking=masking,
         ticket_codec=ticket_codec,
         ticket_ttl_seconds=ticket_ttl_seconds,
@@ -110,7 +137,7 @@ def _build_server(
     fetch_stream = FetchStreamUseCase(
         identity=identity,
         authorizer=authorizer,
-        backend=backend,
+        backend_registry=cast(Any, backend_registry),
         masking=masking,
         row_transform=row_transform,
         ticket_codec=ticket_codec,
@@ -170,7 +197,7 @@ def test_streaming_contract_emits_multiple_batches(tmp_path, monkeypatch):
 """
         )
     )
-    server = _build_server(backend=backend, policy_path=policy_path)
+    server = _build_server(backend_registry=backend, policy_path=policy_path)
     thread = _start_server(server)
 
     client = flight.FlightClient(f"grpc+tcp://localhost:{server.port}")
@@ -215,7 +242,7 @@ def test_flight_logs_include_resident_memory(tmp_path, caplog, monkeypatch):
         "dal_obscura.interfaces.flight.server.get_resident_memory_bytes",
         lambda: 4_242,
     )
-    server = _build_server(backend=backend, policy_path=policy_path)
+    server = _build_server(backend_registry=backend, policy_path=policy_path)
     descriptor = flight.FlightDescriptor.for_command(
         json.dumps(
             {
@@ -252,7 +279,7 @@ def test_do_get_rejects_principal_mismatch(tmp_path):
 """
         )
     )
-    server = _build_server(backend=backend, policy_path=policy_path)
+    server = _build_server(backend_registry=backend, policy_path=policy_path)
     descriptor = flight.FlightDescriptor.for_command(
         json.dumps(
             {
@@ -286,7 +313,7 @@ def test_descriptor_authorization_field_is_not_accepted(tmp_path):
 """
         )
     )
-    server = _build_server(backend=backend, policy_path=policy_path)
+    server = _build_server(backend_registry=backend, policy_path=policy_path)
     descriptor = flight.FlightDescriptor.for_command(
         json.dumps(
             {
@@ -322,7 +349,7 @@ def test_policy_version_is_per_dataset(tmp_path):
 """
         )
     )
-    server = _build_server(backend=backend, policy_path=policy_path)
+    server = _build_server(backend_registry=backend, policy_path=policy_path)
     descriptor = flight.FlightDescriptor.for_command(
         json.dumps(
             {
@@ -389,7 +416,7 @@ def test_do_get_requires_authorization_header(tmp_path):
 """
         )
     )
-    server = _build_server(backend=backend, policy_path=policy_path)
+    server = _build_server(backend_registry=backend, policy_path=policy_path)
     descriptor = flight.FlightDescriptor.for_command(
         json.dumps(
             {

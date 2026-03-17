@@ -3,19 +3,46 @@ from __future__ import annotations
 import json
 import pickle
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 from pyiceberg.catalog import Catalog, load_catalog
 from pyiceberg.io.pyarrow import ArrowScan
 from pyiceberg.table import ALWAYS_TRUE
 
 from dal_obscura.domain.query_planning.models import (
+    BackendBinding,
+    BackendDescriptor,
+    BoundBackendTarget,
     DatasetSelector,
     Plan,
     ReadPayload,
     ReadSpec,
-    ResolvedBackendTarget,
 )
+from dal_obscura.infrastructure.adapters.implementation_base import BackendImplementation
+
+
+@dataclass(frozen=True)
+class IcebergTableDescriptor:
+    """Resolved descriptor for datasets read through the Iceberg backend."""
+
+    dataset_identity: DatasetSelector
+    catalog_name: str
+    catalog_type: str
+    catalog_options: dict
+    table_identifier: str
+    backend_id: str = field(init=False, default="iceberg")
+
+
+@dataclass(frozen=True)
+class IcebergBinding:
+    """Iceberg-specific binding materialized from a resolved descriptor."""
+
+    catalog_name: str
+    catalog_type: str
+    catalog_options: dict
+    table_identifier: str
+    backend_id: str = field(init=False, default="iceberg")
 
 
 @dataclass(frozen=True)
@@ -32,24 +59,37 @@ class IcebergReadSpec:
     schema: object
 
 
-class IcebergBackend:
+class IcebergBackend(BackendImplementation):
     """Backend that plans and reads Iceberg tables via PyIceberg."""
 
     def __init__(self) -> None:
         self._catalog_cache: dict[str, Catalog] = {}
 
-    def get_schema(self, target: ResolvedBackendTarget):
+    def bind(self, descriptor: BackendDescriptor) -> BackendBinding:
+        """Validates a resolved descriptor and materializes the Iceberg binding."""
+        if not isinstance(descriptor, IcebergTableDescriptor):
+            raise ValueError("Iceberg backend requires an IcebergTableDescriptor")
+        return IcebergBinding(
+            catalog_name=descriptor.catalog_name,
+            catalog_type=descriptor.catalog_type,
+            catalog_options=dict(descriptor.catalog_options),
+            table_identifier=descriptor.table_identifier,
+        )
+
+    def get_schema(self, bound_target: BoundBackendTarget) -> Any:
         """Loads the Iceberg table schema used by planning and validation."""
         catalog_name, catalog_type, catalog_options, table_identifier = _iceberg_config(
-            target.handle
+            _iceberg_binding(bound_target.binding)
         )
         table = self._load_table(catalog_name, catalog_type, catalog_options, table_identifier)
         return table.schema().as_arrow()
 
-    def plan(self, target: ResolvedBackendTarget, columns: Iterable[str], max_tickets: int) -> Plan:
+    def plan(
+        self, bound_target: BoundBackendTarget, columns: Iterable[str], max_tickets: int
+    ) -> Plan:
         """Plans file tasks and distributes them across the available tickets."""
         catalog_name, catalog_type, catalog_options, table_identifier = _iceberg_config(
-            target.handle
+            _iceberg_binding(bound_target.binding)
         )
         table = self._load_table(catalog_name, catalog_type, catalog_options, table_identifier)
         column_tuple = tuple(columns)
@@ -68,7 +108,7 @@ class IcebergBackend:
             ReadPayload(
                 payload=pickle.dumps(
                     IcebergReadSpec(
-                        dataset=target.dataset_identity,
+                        dataset=bound_target.dataset_identity,
                         catalog_name=catalog_name,
                         catalog_type=catalog_type,
                         catalog_options=catalog_options,
@@ -88,7 +128,7 @@ class IcebergBackend:
         spec = _decode_spec(read_payload)
         return ReadSpec(dataset=spec.dataset, columns=list(spec.columns), schema=spec.schema)
 
-    def read_stream(self, read_payload: bytes):
+    def read_stream(self, read_payload: bytes) -> Iterable[Any]:
         """Executes the pre-planned Iceberg file tasks stored in the ticket."""
         spec = _decode_spec(read_payload)
         table = self._load_table(
@@ -157,12 +197,19 @@ def _decode_spec(read_payload: bytes) -> IcebergReadSpec:
     return spec
 
 
-def _iceberg_config(handle: dict[str, object]) -> tuple[str, str, dict, str]:
-    """Normalizes the backend handle into catalog load arguments."""
-    catalog_name = str(handle.get("catalog_name", "")).strip()
-    catalog_type = str(handle.get("catalog_type", "")).strip()
-    catalog_options = _catalog_options(handle.get("catalog_options"))
-    table_identifier = str(handle.get("table_identifier", "")).strip()
+def _iceberg_binding(binding: object) -> IcebergBinding:
+    """Downcasts the backend binding to the Iceberg-specific shape."""
+    if not isinstance(binding, IcebergBinding):
+        raise ValueError("Iceberg backend received a non-Iceberg binding")
+    return binding
+
+
+def _iceberg_config(binding: IcebergBinding) -> tuple[str, str, dict, str]:
+    """Normalizes the backend binding into catalog load arguments."""
+    catalog_name = str(binding.catalog_name).strip()
+    catalog_type = str(binding.catalog_type).strip()
+    catalog_options = _catalog_options(binding.catalog_options)
+    table_identifier = str(binding.table_identifier).strip()
     if not catalog_name or not catalog_type or not table_identifier:
         raise ValueError(
             "Iceberg backend requires catalog_name, catalog_type, and table_identifier"

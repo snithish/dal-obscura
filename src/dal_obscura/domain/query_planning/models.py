@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 
 @dataclass(frozen=True)
@@ -20,6 +20,23 @@ class BackendReference:
     generation: int
 
 
+class BackendDescriptor(Protocol):
+    """Catalog-resolved metadata that identifies which backend should bind the dataset."""
+
+    @property
+    def dataset_identity(self) -> DatasetSelector: ...
+
+    @property
+    def backend_id(self) -> str: ...
+
+
+class BackendBinding(Protocol):
+    """Backend-owned typed binding produced from a resolved descriptor."""
+
+    @property
+    def backend_id(self) -> str: ...
+
+
 @dataclass(frozen=True)
 class PlanRequest:
     """Client request for a dataset plus the projected columns to expose."""
@@ -30,12 +47,21 @@ class PlanRequest:
 
 
 @dataclass(frozen=True)
-class ResolvedBackendTarget:
-    """Dataset selector plus backend-specific handle information."""
+class BoundBackendTarget:
+    """Dataset identity plus the generation-bound backend reference and binding."""
 
     dataset_identity: DatasetSelector
     backend: BackendReference
-    handle: dict[str, Any]
+    binding: BackendBinding
+
+
+@dataclass(frozen=True)
+class GenericBackendDescriptor:
+    """Escape hatch for custom backends that need catalog-provided opaque data."""
+
+    dataset_identity: DatasetSelector
+    backend_id: str
+    data: dict[str, Any]
 
 
 @dataclass(frozen=True)

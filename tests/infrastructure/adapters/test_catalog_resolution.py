@@ -1,10 +1,34 @@
 import textwrap
+from collections.abc import Iterable
+from dataclasses import dataclass, field
+from typing import Any, cast
 
 import pytest
 
-from dal_obscura.domain.query_planning.models import BackendReference
-from dal_obscura.infrastructure.adapters.catalog_resolver import DynamicRegistryRuntime
+from dal_obscura.domain.query_planning.models import (
+    BackendDescriptor,
+    BackendReference,
+    BoundBackendTarget,
+    DatasetSelector,
+    Plan,
+    ReadPayload,
+    ReadSpec,
+)
+from dal_obscura.infrastructure.adapters.backend_registry import DynamicBackendRegistry
+from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
+from dal_obscura.infrastructure.adapters.file_backend import FileTableDescriptor
+from dal_obscura.infrastructure.adapters.iceberg_backend import IcebergTableDescriptor
+from dal_obscura.infrastructure.adapters.implementation_base import (
+    BackendImplementation,
+    CatalogImplementation,
+)
 from dal_obscura.infrastructure.adapters.service_config import load_service_config
+
+
+def _build_registries(config_path):
+    catalog_registry = DynamicCatalogRegistry(load_service_config(config_path))
+    backend_registry = DynamicBackendRegistry()
+    return catalog_registry, backend_registry
 
 
 def test_load_service_config_parses_catalog_types_and_targets(tmp_path):
@@ -60,15 +84,18 @@ def test_builtin_catalog_types_resolve_through_registry(tmp_path):
         )
     )
 
-    runtime = DynamicRegistryRuntime(load_service_config(config_path))
+    catalog_registry, backend_registry = _build_registries(config_path)
     for catalog_name in ("sql_cat", "glue_cat", "hive_cat", "unity_cat", "polaris_cat"):
-        target = runtime.resolve(catalog_name, "db.users")
+        descriptor = catalog_registry.describe(catalog_name, "db.users")
+        assert isinstance(descriptor, IcebergTableDescriptor)
+        assert descriptor.backend_id == "iceberg"
+        assert descriptor.table_identifier == "db.users"
+        target = backend_registry.bind_descriptor(descriptor)
         assert target.backend.backend_id == "iceberg"
-        assert target.backend.generation == runtime.current_generation
-        assert target.handle["table_identifier"] == "db.users"
+        assert target.backend.generation == backend_registry.current_generation
 
 
-def test_catalog_resolver_can_mix_backend_families_within_one_catalog(tmp_path):
+def test_catalog_registry_can_mix_backend_families_within_one_catalog(tmp_path):
     csv_path = tmp_path / "users.csv"
     csv_path.write_text("id,name\n1,a\n")
     config_path = tmp_path / "service.yaml"
@@ -89,16 +116,18 @@ def test_catalog_resolver_can_mix_backend_families_within_one_catalog(tmp_path):
         )
     )
 
-    runtime = DynamicRegistryRuntime(load_service_config(config_path))
-    iceberg_target = runtime.resolve("mixed", "db.users")
-    file_target = runtime.resolve("mixed", "users_csv")
+    catalog_registry, backend_registry = _build_registries(config_path)
+    iceberg_target = catalog_registry.describe("mixed", "db.users")
+    file_target = catalog_registry.describe("mixed", "users_csv")
 
-    assert iceberg_target.backend.backend_id == "iceberg"
-    assert file_target.backend.backend_id == "duckdb_file"
-    assert file_target.handle["paths"] == [str(csv_path)]
+    assert isinstance(iceberg_target, IcebergTableDescriptor)
+    assert isinstance(file_target, FileTableDescriptor)
+    assert backend_registry.bind_descriptor(iceberg_target).backend.backend_id == "iceberg"
+    assert backend_registry.bind_descriptor(file_target).backend.backend_id == "duckdb_file"
+    assert file_target.paths == (str(csv_path),)
 
 
-def test_catalog_resolver_infers_raw_path_format_and_prefers_most_specific_overlay(tmp_path):
+def test_catalog_registry_infers_raw_path_format_and_prefers_most_specific_overlay(tmp_path):
     raw_dir = tmp_path / "landing" / "special"
     raw_dir.mkdir(parents=True)
     csv_path = raw_dir / "users.csv"
@@ -121,17 +150,18 @@ def test_catalog_resolver_infers_raw_path_format_and_prefers_most_specific_overl
         )
     )
 
-    runtime = DynamicRegistryRuntime(load_service_config(config_path))
-    resolved = runtime.resolve(None, target)
+    catalog_registry, backend_registry = _build_registries(config_path)
+    resolved = catalog_registry.describe(None, target)
 
-    assert resolved.backend.backend_id == "duckdb_file"
+    assert isinstance(resolved, FileTableDescriptor)
+    assert backend_registry.bind_descriptor(resolved).backend.backend_id == "duckdb_file"
     assert resolved.dataset_identity.catalog is None
-    assert resolved.handle["format"] == "csv"
-    assert resolved.handle["paths"] == [str(csv_path)]
-    assert resolved.handle["options"] == {"sample_rows": 500, "sample_files": 3}
+    assert resolved.format == "csv"
+    assert resolved.paths == (str(csv_path),)
+    assert resolved.options == {"sample_rows": 500, "sample_files": 3}
 
 
-def test_catalog_resolver_rejects_mixed_raw_path_formats(tmp_path):
+def test_catalog_registry_rejects_mixed_raw_path_formats(tmp_path):
     data_dir = tmp_path / "landing"
     data_dir.mkdir()
     (data_dir / "users.csv").write_text("id,name\n1,a\n")
@@ -139,38 +169,46 @@ def test_catalog_resolver_rejects_mixed_raw_path_formats(tmp_path):
     config_path = tmp_path / "empty.yaml"
     config_path.write_text("{}")
 
-    runtime = DynamicRegistryRuntime(load_service_config(config_path))
+    catalog_registry, _ = _build_registries(config_path)
     with pytest.raises(ValueError):
-        runtime.resolve(None, str(data_dir / "users.*"))
+        catalog_registry.describe(None, str(data_dir / "users.*"))
 
 
 def test_runtime_supports_dynamic_catalog_and_backend_registration(tmp_path):
-    class CustomCatalog:
-        def resolve(self, generation, catalog_name, catalog_config, target):
-            from dal_obscura.domain.query_planning.models import (
-                BackendReference,
-                DatasetSelector,
-                ResolvedBackendTarget,
-            )
+    @dataclass(frozen=True)
+    class CustomDescriptor:
+        dataset_identity: DatasetSelector
+        backend_id: str = field(init=False, default="custom_backend")
 
+    @dataclass(frozen=True)
+    class CustomBinding:
+        backend_id: str = field(init=False, default="custom_backend")
+
+    class CustomCatalog(CatalogImplementation):
+        def resolve(self, catalog_name: str, catalog_config: Any, target: str) -> BackendDescriptor:
             selector = DatasetSelector(catalog=catalog_name, target=target)
-            return ResolvedBackendTarget(
-                dataset_identity=selector,
-                backend=BackendReference(backend_id="custom_backend", generation=generation),
-                handle={"custom": True},
-            )
+            return CustomDescriptor(dataset_identity=selector)
 
-    class CustomBackend:
-        def get_schema(self, target):
+    class CustomBackend(BackendImplementation):
+        def bind(self, descriptor: BackendDescriptor) -> CustomBinding:
+            return CustomBinding()
+
+        def get_schema(self, bound_target: BoundBackendTarget) -> str:
             return "schema"
 
-        def plan(self, target, columns, max_tickets):
-            return "plan"
+        def plan(
+            self, bound_target: BoundBackendTarget, columns: Iterable[str], max_tickets: int
+        ) -> Plan:
+            return Plan(schema="schema", tasks=[ReadPayload(payload=b"payload")])
 
-        def read_spec(self, read_payload):
-            return "spec"
+        def read_spec(self, read_payload: bytes) -> ReadSpec:
+            return ReadSpec(
+                dataset=DatasetSelector(catalog="custom_cat", target="anything"),
+                columns=[],
+                schema="schema",
+            )
 
-        def read_stream(self, read_payload):
+        def read_stream(self, read_payload: bytes) -> list[object]:
             return []
 
     config_path = tmp_path / "service.yaml"
@@ -184,15 +222,16 @@ def test_runtime_supports_dynamic_catalog_and_backend_registration(tmp_path):
         )
     )
 
-    runtime = DynamicRegistryRuntime(load_service_config(config_path))
-    runtime.register_catalog_type("custom", CustomCatalog())
-    runtime.register_backend("custom_backend", CustomBackend())
-    generation = runtime.reload(load_service_config(config_path))
+    catalog_registry, backend_registry = _build_registries(config_path)
+    catalog_registry.register_catalog_type("custom", CustomCatalog())
+    backend_registry.register_backend("custom_backend", CustomBackend())
+    generation = backend_registry.reload()
 
-    resolved = runtime.resolve("custom_cat", "anything")
+    descriptor = catalog_registry.describe("custom_cat", "anything")
+    resolved = backend_registry.bind_descriptor(descriptor)
 
     assert resolved.backend == BackendReference(backend_id="custom_backend", generation=generation)
-    assert runtime.get_schema(resolved) == "schema"
+    assert backend_registry.schema_for(resolved) == "schema"
 
 
 def test_runtime_generation_binding_fails_closed_after_unload(tmp_path):
@@ -222,12 +261,37 @@ def test_runtime_generation_binding_fails_closed_after_unload(tmp_path):
         )
     )
 
-    runtime = DynamicRegistryRuntime(load_service_config(config_v1))
-    old_generation = runtime.current_generation
-    old_target = runtime.resolve("analytics", "db.users")
+    catalog_registry = DynamicCatalogRegistry(load_service_config(config_v1))
+    backend_registry = DynamicBackendRegistry()
+    old_generation = backend_registry.current_generation
+    old_target = backend_registry.bind_descriptor(
+        catalog_registry.describe("analytics", "db.users")
+    )
 
-    runtime.reload(load_service_config(config_v2))
-    runtime.unload_generation(old_generation)
+    catalog_registry.reload(load_service_config(config_v2))
+    backend_registry.reload()
+    backend_registry.unload_generation(old_generation)
 
     with pytest.raises(ValueError):
-        runtime.read_spec(old_target.backend, b"payload")
+        backend_registry.read_spec_for(old_target.backend, b"payload")
+
+
+def test_backend_registry_rejects_backend_without_read_stream():
+    class InvalidBackend:
+        def bind(self, descriptor: BackendDescriptor):
+            return object()
+
+        def get_schema(self, bound_target):
+            return "schema"
+
+        def plan(self, bound_target, columns, max_tickets):
+            return "plan"
+
+        def read_spec(self, read_payload):
+            return "spec"
+
+    backend_registry = DynamicBackendRegistry()
+    backend_registry.register_backend("broken", cast(Any, InvalidBackend()))
+
+    with pytest.raises(TypeError, match="read_stream"):
+        backend_registry.reload()

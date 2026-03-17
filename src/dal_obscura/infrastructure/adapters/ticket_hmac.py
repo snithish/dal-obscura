@@ -4,6 +4,7 @@ import base64
 import hmac
 import json
 import time
+from binascii import Error as BinasciiError
 from hashlib import sha256
 
 from dal_obscura.domain.ticket_delivery.models import TicketPayload
@@ -30,12 +31,25 @@ class HmacTicketCodecAdapter:
             encoded_payload, signature = token.split(".", 1)
         except ValueError as exc:
             raise PermissionError("Invalid ticket format") from exc
-        raw = base64.urlsafe_b64decode(encoded_payload.encode("utf-8"))
-        expected = hmac.new(self._secret, raw, sha256).hexdigest()
-        if not hmac.compare_digest(expected, signature):
-            raise PermissionError("Ticket signature mismatch")
+        try:
+            raw = base64.urlsafe_b64decode(encoded_payload.encode("utf-8"))
+            expected = hmac.new(self._secret, raw, sha256).hexdigest()
+            if not hmac.compare_digest(expected, signature):
+                raise PermissionError("Ticket signature mismatch")
 
-        payload = json.loads(raw.decode("utf-8"))
-        if int(payload.get("expires_at", 0)) < int(time.time()):
-            raise PermissionError("Ticket expired")
-        return TicketPayload.from_dict(payload)
+            payload = json.loads(raw.decode("utf-8"))
+            if not isinstance(payload, dict):
+                raise PermissionError("Invalid ticket payload")
+            if int(payload.get("expires_at", 0)) < int(time.time()):
+                raise PermissionError("Ticket expired")
+            return TicketPayload.from_dict(payload)
+        except PermissionError:
+            raise
+        except (
+            BinasciiError,
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            raise PermissionError("Invalid ticket payload") from exc

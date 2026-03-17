@@ -2,24 +2,49 @@ from __future__ import annotations
 
 import pickle
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 import duckdb
 import pyarrow as pa
 
 from dal_obscura.domain.query_planning.models import (
+    BackendBinding,
+    BackendDescriptor,
+    BoundBackendTarget,
     DatasetSelector,
     Plan,
     ReadPayload,
     ReadSpec,
-    ResolvedBackendTarget,
 )
+from dal_obscura.infrastructure.adapters.implementation_base import BackendImplementation
 from dal_obscura.infrastructure.adapters.service_config import (
     DEFAULT_SAMPLE_FILES,
     DEFAULT_SAMPLE_ROWS,
 )
 
 _FILE_ARROW_BATCH_SIZE = 8_192
+
+
+@dataclass(frozen=True)
+class FileTableDescriptor:
+    """Resolved descriptor for datasets read through the DuckDB file backend."""
+
+    dataset_identity: DatasetSelector
+    format: str
+    paths: tuple[str, ...]
+    options: dict[str, object]
+    backend_id: str = field(init=False, default="duckdb_file")
+
+
+@dataclass(frozen=True)
+class FileBinding:
+    """DuckDB file binding materialized from a resolved descriptor."""
+
+    format: str
+    paths: tuple[str, ...]
+    options: dict[str, object]
+    backend_id: str = field(init=False, default="duckdb_file")
 
 
 @dataclass(frozen=True)
@@ -34,12 +59,22 @@ class FileReadSpec:
     schema: pa.Schema
 
 
-class DuckDBFileBackend:
+class DuckDBFileBackend(BackendImplementation):
     """Backend that reads CSV, JSON, and Parquet files through DuckDB."""
 
-    def get_schema(self, target: ResolvedBackendTarget) -> pa.Schema:
+    def bind(self, descriptor: BackendDescriptor) -> BackendBinding:
+        """Validates a resolved descriptor and materializes the file binding."""
+        if not isinstance(descriptor, FileTableDescriptor):
+            raise ValueError("File backend requires a FileTableDescriptor")
+        return FileBinding(
+            format=descriptor.format,
+            paths=tuple(descriptor.paths),
+            options=dict(descriptor.options),
+        )
+
+    def get_schema(self, bound_target: BoundBackendTarget) -> pa.Schema:
         """Infers the output schema without reading the full dataset."""
-        file_format, paths, options = _file_config(target)
+        file_format, paths, options = _file_config(_file_binding(bound_target.binding))
         con = duckdb.connect()
         try:
             relation = con.sql(_select_sql(file_format, paths, options, columns=None))
@@ -47,17 +82,19 @@ class DuckDBFileBackend:
         finally:
             con.close()
 
-    def plan(self, target: ResolvedBackendTarget, columns: Iterable[str], max_tickets: int) -> Plan:
+    def plan(
+        self, bound_target: BoundBackendTarget, columns: Iterable[str], max_tickets: int
+    ) -> Plan:
         """Splits the resolved file set into balanced ticket payloads."""
-        file_format, paths, options = _file_config(target)
+        file_format, paths, options = _file_config(_file_binding(bound_target.binding))
         column_list = list(columns)
-        schema = self.get_schema(target)
+        schema = self.get_schema(bound_target)
         groups = _chunk_by_max_tickets(list(paths), max_tickets)
         tasks = [
             ReadPayload(
                 payload=pickle.dumps(
                     FileReadSpec(
-                        dataset=target.dataset_identity,
+                        dataset=bound_target.dataset_identity,
                         format=file_format,
                         paths=tuple(group),
                         columns=column_list,
@@ -75,7 +112,7 @@ class DuckDBFileBackend:
         spec = _decode_spec(read_payload)
         return ReadSpec(dataset=spec.dataset, columns=list(spec.columns), schema=spec.schema)
 
-    def read_stream(self, read_payload: bytes):
+    def read_stream(self, read_payload: bytes) -> Iterable[Any]:
         """Streams the ticket's subset of files as Arrow record batches."""
         spec = _decode_spec(read_payload)
         con = duckdb.connect()
@@ -97,18 +134,24 @@ def _decode_spec(read_payload: bytes) -> FileReadSpec:
     return spec
 
 
-def _file_config(target: ResolvedBackendTarget) -> tuple[str, tuple[str, ...], dict[str, object]]:
-    """Normalizes the backend handle into concrete file scan parameters."""
-    file_format = str(target.handle.get("format", "")).strip().lower()
+def _file_binding(binding: object) -> FileBinding:
+    """Downcasts the backend binding to the file-specific shape."""
+    if not isinstance(binding, FileBinding):
+        raise ValueError("File backend received a non-file binding")
+    return binding
+
+
+def _file_config(binding: FileBinding) -> tuple[str, tuple[str, ...], dict[str, object]]:
+    """Normalizes the backend binding into concrete file scan parameters."""
+    file_format = str(binding.format).strip().lower()
     if file_format not in {"csv", "json", "parquet"}:
         raise ValueError("File backend requires format to be csv, json, or parquet")
 
-    paths_raw = target.handle.get("paths", [])
-    paths = tuple(str(path) for path in paths_raw)
+    paths = tuple(str(path) for path in binding.paths)
     if not paths:
         raise ValueError("File backend requires explicit paths")
 
-    options = dict(target.handle.get("options", {}) or {})
+    options = dict(binding.options or {})
     return file_format, paths, options
 
 

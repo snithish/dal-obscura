@@ -1,4 +1,5 @@
-from dal_obscura.infrastructure.adapters.catalog_resolver import DynamicRegistryRuntime
+from dal_obscura.infrastructure.adapters.backend_registry import DynamicBackendRegistry
+from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
 from dal_obscura.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
@@ -31,7 +32,8 @@ __all__ = [
     "DefaultMaskingAdapter",
     "DuckDBFileBackend",
     "DuckDBRowTransformAdapter",
-    "DynamicRegistryRuntime",
+    "DynamicBackendRegistry",
+    "DynamicCatalogRegistry",
     "HmacTicketCodecAdapter",
     "IcebergBackend",
     "PathConfig",
