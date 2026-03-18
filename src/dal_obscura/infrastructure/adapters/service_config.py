@@ -42,7 +42,7 @@ class CatalogConfig:
     """One named catalog plus any target-specific overrides."""
 
     name: str
-    type: str
+    module: str
     options: dict[str, Any]
     targets: dict[str, CatalogTargetConfig]
 
@@ -92,16 +92,16 @@ def _parse_catalog(name: str, raw: Any) -> CatalogConfig:
     """Parses a single catalog entry from the service config."""
     if not isinstance(raw, dict):
         raise ValueError(f"Catalog {name!r} must be an object")
-    catalog_type = str(raw.get("type", "")).strip().lower()
-    if not catalog_type:
-        raise ValueError(f"Catalog {name!r} must define a type")
+    catalog_module = str(raw.get("module", "")).strip()
+    if not catalog_module:
+        raise ValueError(f"Catalog {name!r} must define a module")
 
     options = dict(raw.get("options", {}) or {})
     targets = {
         str(target_name): _parse_catalog_target(str(target_name), target_raw)
         for target_name, target_raw in dict(raw.get("targets", {}) or {}).items()
     }
-    return CatalogConfig(name=name, type=catalog_type, options=options, targets=targets)
+    return CatalogConfig(name=name, module=catalog_module, options=options, targets=targets)
 
 
 def _parse_catalog_target(name: str, raw: Any) -> CatalogTargetConfig:

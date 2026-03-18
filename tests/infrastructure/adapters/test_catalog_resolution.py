@@ -20,13 +20,28 @@ from dal_obscura.infrastructure.adapters.file_backend import FileTableDescriptor
 from dal_obscura.infrastructure.adapters.iceberg_backend import IcebergTableDescriptor
 from dal_obscura.infrastructure.adapters.implementation_base import (
     BackendImplementation,
-    CatalogImplementation,
 )
-from dal_obscura.infrastructure.adapters.service_config import load_service_config
+from dal_obscura.infrastructure.adapters.service_config import ServiceConfig, load_service_config
 
 
 def _build_registries(config_path):
     catalog_registry = DynamicCatalogRegistry(load_service_config(config_path))
+    backend_registry = DynamicBackendRegistry()
+    return catalog_registry, backend_registry
+
+
+def _build_registries_with_custom_catalog(config_path, module_name, instance):
+    service_config = load_service_config(config_path)
+
+    # Eager registry initialization throws error if the module doesn't exist
+    # So we replace the module list temporarily before reload
+    config_empty = ServiceConfig(catalogs={}, paths=service_config.paths)
+    catalog_registry = DynamicCatalogRegistry(config_empty)
+    catalog_registry._catalog_implementations[module_name] = instance
+
+    # We patch ServiceConfig manually here
+    catalog_registry._current_config = service_config
+
     backend_registry = DynamicBackendRegistry()
     return catalog_registry, backend_registry
 
@@ -38,11 +53,12 @@ def test_load_service_config_parses_catalog_types_and_targets(tmp_path):
             """
             catalogs:
               glue_prod:
-                type: glue
+                module: dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog
                 options:
+                  type: glue
                   warehouse: s3://warehouse
               local_files:
-                type: static
+                module: dal_obscura.infrastructure.adapters.catalog_registry.StaticCatalog
                 targets:
                   users_csv:
                     backend: duckdb_file
@@ -63,7 +79,10 @@ def test_load_service_config_parses_catalog_types_and_targets(tmp_path):
     config = load_service_config(config_path)
 
     assert set(config.catalogs) == {"glue_prod", "local_files"}
-    assert config.catalogs["glue_prod"].type == "glue"
+    assert (
+        config.catalogs["glue_prod"].module
+        == "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog"
+    )
     assert config.catalogs["local_files"].targets["users_csv"].backend == "duckdb_file"
     assert config.catalogs["local_files"].targets["users_csv"].options["sample_rows"] == 111
     assert config.paths[0].glob == "/landing/**/*.csv"
@@ -75,11 +94,21 @@ def test_builtin_catalog_types_resolve_through_registry(tmp_path):
         textwrap.dedent(
             """
             catalogs:
-              sql_cat: {type: sql}
-              glue_cat: {type: glue}
-              hive_cat: {type: hive}
-              unity_cat: {type: unity}
-              polaris_cat: {type: polaris}
+              sql_cat:
+                module: dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog
+                options: {type: sql}
+              glue_cat:
+                module: dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog
+                options: {type: glue}
+              hive_cat:
+                module: dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog
+                options: {type: hive}
+              unity_cat:
+                module: dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog
+                options: {type: unity}
+              polaris_cat:
+                module: dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog
+                options: {type: polaris}
             """
         )
     )
@@ -104,8 +133,9 @@ def test_catalog_registry_can_mix_backend_families_within_one_catalog(tmp_path):
             f"""
             catalogs:
               mixed:
-                type: sql
+                module: dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog
                 options:
+                  type: sql
                   warehouse: s3://warehouse
                 targets:
                   users_csv:
@@ -174,20 +204,41 @@ def test_catalog_registry_rejects_mixed_raw_path_formats(tmp_path):
         catalog_registry.describe(None, str(data_dir / "users.*"))
 
 
-def test_runtime_supports_dynamic_catalog_and_backend_registration(tmp_path):
-    @dataclass(frozen=True)
-    class CustomDescriptor:
-        dataset_identity: DatasetSelector
-        backend_id: str = field(init=False, default="custom_backend")
+def test_runtime_supports_dynamic_catalog_and_backend_registration(tmp_path, monkeypatch):
+
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    module_path = tmp_path / "custom_module_mock.py"
+    module_path.write_text(
+        textwrap.dedent(
+            """
+            from typing import Iterable, Any
+            from dataclasses import dataclass, field
+            from dal_obscura.infrastructure.adapters.implementation_base import (
+                CatalogImplementation,
+            )
+            from dal_obscura.domain.query_planning.models import BackendDescriptor, DatasetSelector
+
+            @dataclass(frozen=True)
+            class CustomDescriptor:
+                dataset_identity: DatasetSelector
+                backend_id: str = field(init=False, default="custom_backend")
+
+            class CustomCatalog(CatalogImplementation):
+                def __init__(self, name, options, targets) -> None:
+                    # stateful init expected
+                    pass
+        
+                def resolve(self, target: str) -> BackendDescriptor:
+                    selector = DatasetSelector(catalog="custom_cat", target=target)
+                    return CustomDescriptor(dataset_identity=selector)
+            """
+        )
+    )
 
     @dataclass(frozen=True)
     class CustomBinding:
         backend_id: str = field(init=False, default="custom_backend")
-
-    class CustomCatalog(CatalogImplementation):
-        def resolve(self, catalog_name: str, catalog_config: Any, target: str) -> BackendDescriptor:
-            selector = DatasetSelector(catalog=catalog_name, target=target)
-            return CustomDescriptor(dataset_identity=selector)
 
     class CustomBackend(BackendImplementation):
         def bind(self, descriptor: BackendDescriptor) -> CustomBinding:
@@ -217,13 +268,12 @@ def test_runtime_supports_dynamic_catalog_and_backend_registration(tmp_path):
             """
             catalogs:
               custom_cat:
-                type: custom
+                module: custom_module_mock.CustomCatalog
             """
         )
     )
 
     catalog_registry, backend_registry = _build_registries(config_path)
-    catalog_registry.register_catalog_type("custom", CustomCatalog())
     backend_registry.register_backend("custom_backend", CustomBackend())
     generation = backend_registry.reload()
 
@@ -241,7 +291,9 @@ def test_runtime_generation_binding_fails_closed_after_unload(tmp_path):
             """
             catalogs:
               analytics:
-                type: sql
+                module: dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog
+                options:
+                  type: sql
             """
         )
     )
@@ -251,7 +303,7 @@ def test_runtime_generation_binding_fails_closed_after_unload(tmp_path):
             """
             catalogs:
               analytics:
-                type: static
+                module: dal_obscura.infrastructure.adapters.catalog_registry.StaticCatalog
                 targets:
                   users_csv:
                     backend: duckdb_file

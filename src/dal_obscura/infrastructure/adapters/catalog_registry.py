@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import fnmatch
 import glob
+import importlib
 import threading
-from collections.abc import Callable, Mapping
-from importlib import metadata
+from collections.abc import Mapping
 from pathlib import Path
-from typing import cast
 
 from dal_obscura.domain.query_planning.models import (
     BackendDescriptor,
@@ -17,7 +16,6 @@ from dal_obscura.infrastructure.adapters.file_backend import FileTableDescriptor
 from dal_obscura.infrastructure.adapters.iceberg_backend import IcebergTableDescriptor
 from dal_obscura.infrastructure.adapters.implementation_base import (
     CatalogImplementation,
-    CatalogRegistration,
 )
 from dal_obscura.infrastructure.adapters.service_config import (
     DEFAULT_SAMPLE_FILES,
@@ -29,7 +27,6 @@ from dal_obscura.infrastructure.adapters.service_config import (
 )
 
 _COMPRESSION_SUFFIXES = (".gz", ".bz2", ".zst")
-_CATALOG_PLUGIN_GROUP = "dal_obscura.catalog_implementations"
 
 
 class DynamicCatalogRegistry:
@@ -39,9 +36,6 @@ class DynamicCatalogRegistry:
         self._lock = threading.RLock()
         self._catalog_implementations: dict[str, CatalogImplementation] = {}
         self._current_config = config
-
-        self._register_builtin_catalogs()
-        self._register_entrypoints()
         self.reload(config)
 
     @property
@@ -50,28 +44,23 @@ class DynamicCatalogRegistry:
         with self._lock:
             return self._current_config
 
-    def register_catalog_type(self, type_name: str, implementation: CatalogRegistration) -> None:
-        """Registers a catalog implementation under a service-config type name."""
-        with self._lock:
-            self._catalog_implementations[type_name.lower()] = _coerce_catalog_implementation(
-                implementation
-            )
-
     def reload(self, config: ServiceConfig) -> None:
-        """Publishes the latest catalog configuration."""
+        """Publishes the latest catalog configuration and instantiates catalogs."""
+        new_catalogs: dict[str, CatalogImplementation] = {}
+        for catalog_config in config.catalogs.values():
+            new_catalogs[catalog_config.name] = _load_and_instantiate_catalog(catalog_config)
+
         with self._lock:
+            self._catalog_implementations = new_catalogs
             self._current_config = config
 
     def describe_catalog(self, catalog_name: str, target: str) -> BackendDescriptor:
         """Resolves a target within a named catalog."""
         with self._lock:
-            catalog_config = self._current_config.catalogs.get(catalog_name)
-            if catalog_config is None:
-                raise ValueError(f"Unknown catalog: {catalog_name}")
-            implementation = self._catalog_implementations.get(catalog_config.type)
+            implementation = self._catalog_implementations.get(catalog_name)
             if implementation is None:
-                raise ValueError(f"Unknown catalog type: {catalog_config.type}")
-        return implementation.resolve(catalog_name, catalog_config, target)
+                raise ValueError(f"Unknown catalog: {catalog_name}")
+        return implementation.resolve(target)
 
     def describe(self, catalog: str | None, target: str) -> BackendDescriptor:
         """Describes either a catalog-based target or a raw filesystem target."""
@@ -79,57 +68,52 @@ class DynamicCatalogRegistry:
             return self.describe_catalog(catalog, target)
         return _resolve_raw_target(self.current_config, target)
 
-    def _register_builtin_catalogs(self) -> None:
-        """Registers the built-in catalog types shipped with the service."""
-        iceberg_catalog = IcebergCatalogImplementation()
-        for type_name in ("sql", "glue", "hive", "unity", "polaris"):
-            self._catalog_implementations[type_name] = iceberg_catalog
-        self._catalog_implementations["static"] = StaticCatalogImplementation()
 
-    def _register_entrypoints(self) -> None:
-        """Loads optional catalog plugins from Python entry points."""
-        for entrypoint in _entry_points_for_group(_CATALOG_PLUGIN_GROUP):
-            self.register_catalog_type(entrypoint.name, entrypoint.load())
-
-
-class IcebergCatalogImplementation(CatalogImplementation):
+class IcebergCatalog(CatalogImplementation):
     """Catalog resolver for SQL-style catalogs configured in the service YAML."""
 
     def resolve(
         self,
-        catalog_name: str,
-        catalog_config: CatalogConfig,
         target: str,
     ) -> BackendDescriptor:
         """Resolves a catalog target to Iceberg by default, with target overrides."""
-        selector = DatasetSelector(catalog=catalog_name, target=target)
-        target_config = _match_catalog_target(catalog_config.targets, target)
+        selector = DatasetSelector(catalog=self.name, target=target)
+        target_config = _match_catalog_target(self.targets, target)
         if target_config is None:
             return IcebergTableDescriptor(
                 dataset_identity=selector,
-                catalog_name=catalog_name,
-                catalog_type=catalog_config.type,
-                catalog_options=dict(catalog_config.options),
+                catalog_name=self.name,
+                catalog_options=dict(self.options),
                 table_identifier=target,
             )
-        return _target_descriptor(selector, catalog_name, catalog_config, target, target_config)
+        catalog_config = CatalogConfig(
+            name=self.name,
+            module=self.__class__.__module__ + "." + self.__class__.__name__,
+            options=self.options,
+            targets=self.targets,
+        )
+        return _target_descriptor(selector, self.name, catalog_config, target, target_config)
 
 
-class StaticCatalogImplementation(CatalogImplementation):
+class StaticCatalog(CatalogImplementation):
     """Catalog resolver for catalogs that require explicit target mappings in YAML."""
 
     def resolve(
         self,
-        catalog_name: str,
-        catalog_config: CatalogConfig,
         target: str,
     ) -> BackendDescriptor:
         """Returns the backend descriptor for the most specific matching target rule."""
-        selector = DatasetSelector(catalog=catalog_name, target=target)
-        target_config = _match_catalog_target(catalog_config.targets, target)
+        selector = DatasetSelector(catalog=self.name, target=target)
+        target_config = _match_catalog_target(self.targets, target)
         if target_config is None:
-            raise ValueError(f"Unknown target {target!r} for catalog {catalog_name!r}")
-        return _target_descriptor(selector, catalog_name, catalog_config, target, target_config)
+            raise ValueError(f"Unknown target {target!r} for catalog {self.name!r}")
+        catalog_config = CatalogConfig(
+            name=self.name,
+            module=self.__class__.__module__ + "." + self.__class__.__name__,
+            options=self.options,
+            targets=self.targets,
+        )
+        return _target_descriptor(selector, self.name, catalog_config, target, target_config)
 
 
 def _resolve_raw_target(service_config: ServiceConfig, target: str) -> BackendDescriptor:
@@ -175,7 +159,6 @@ def _target_descriptor(
         return IcebergTableDescriptor(
             dataset_identity=selector,
             catalog_name=catalog_name,
-            catalog_type=catalog_config.type,
             catalog_options=dict(catalog_config.options),
             table_identifier=target_config.table or requested_target,
         )
@@ -184,7 +167,7 @@ def _target_descriptor(
         backend_id=backend_id,
         data={
             "catalog_name": catalog_name,
-            "catalog_type": catalog_config.type,
+            "catalog_module": catalog_config.module,
             "catalog_options": dict(catalog_config.options),
             "requested_target": requested_target,
             "target_config": {
@@ -257,26 +240,29 @@ def _path_format(path: str) -> str | None:
     return None
 
 
-def _coerce_catalog_implementation(candidate: CatalogRegistration) -> CatalogImplementation:
-    """Instantiates or validates a catalog implementation registered by the runtime."""
-    if isinstance(candidate, CatalogImplementation):
-        return candidate
-    if isinstance(candidate, type):
-        if issubclass(candidate, CatalogImplementation):
-            return candidate()
-        raise TypeError("Catalog implementation must provide resolve()")
+def _load_and_instantiate_catalog(catalog_config: CatalogConfig) -> CatalogImplementation:
+    """Dynamically loads and instantiates a catalog from the `module` configuration."""
+    module_path = catalog_config.module
     try:
-        created = cast(Callable[[], CatalogImplementation], candidate)()
-    except TypeError as exc:
-        raise TypeError("Catalog implementation must provide resolve()") from exc
-    if isinstance(created, CatalogImplementation):
-        return created
-    raise TypeError("Catalog implementation must provide resolve()")
+        if "." not in module_path:
+            raise ValueError(f"Module path {module_path!r} must be a fully qualified class name")
+        module_name, class_name = module_path.rsplit(".", 1)
+        module = importlib.import_module(module_name)
+    except Exception as exc:
+        raise ValueError(f"Failed to load module {module_path!r}: {exc}") from exc
 
+    catalog_cls = getattr(module, class_name, None)
+    if catalog_cls is None:
+        raise ValueError(f"Module {module_name!r} does not define a class named {class_name!r}")
 
-def _entry_points_for_group(group: str):
-    """Handles `importlib.metadata.entry_points()` API differences across Python versions."""
-    discovered = metadata.entry_points()
-    if hasattr(discovered, "select"):
-        return list(discovered.select(group=group))
-    return list(discovered.get(group, []))
+    if not issubclass(catalog_cls, CatalogImplementation):
+        raise TypeError(f"Class {module_path!r} must inherit from CatalogImplementation")
+
+    try:
+        return catalog_cls(
+            name=catalog_config.name,
+            options=dict(catalog_config.options),
+            targets=dict(catalog_config.targets),
+        )
+    except Exception as exc:
+        raise ValueError(f"Failed to instantiate catalog {catalog_config.name!r}: {exc}") from exc

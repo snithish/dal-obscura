@@ -226,8 +226,9 @@ def _write_service_and_policy(
     service_config = {
         "catalogs": {
             "ice_one": {
-                "type": "sql",
+                "module": "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
                 "options": {
+                    "type": "sql",
                     "uri": f"sqlite:///{tmp_path / 'ice_one.db'}",
                     "warehouse": str(tmp_path / "warehouse-one"),
                 },
@@ -241,14 +242,15 @@ def _write_service_and_policy(
                 },
             },
             "ice_two": {
-                "type": "sql",
+                "module": "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
                 "options": {
+                    "type": "sql",
                     "uri": f"sqlite:///{tmp_path / 'ice_two.db'}",
                     "warehouse": str(tmp_path / "warehouse-two"),
                 },
             },
             "local_files": {
-                "type": "static",
+                "module": "dal_obscura.infrastructure.adapters.catalog_registry.StaticCatalog",
                 "targets": {
                     "users_csv": {
                         "backend": "duckdb_file",
@@ -570,7 +572,7 @@ def test_hot_reload_binds_tickets_to_backend_generation(tmp_path):
     updated_target = updated_catalogs["local_files"].targets["users_csv"]
     updated_catalogs["local_files"] = type(updated_catalogs["local_files"])(
         name=updated_catalogs["local_files"].name,
-        type=updated_catalogs["local_files"].type,
+        module=updated_catalogs["local_files"].module,
         options=updated_catalogs["local_files"].options,
         targets={
             **updated_catalogs["local_files"].targets,

@@ -11,23 +11,24 @@ from dal_obscura.domain.query_planning.models import (
     Plan,
     ReadSpec,
 )
-from dal_obscura.infrastructure.adapters.service_config import CatalogConfig
+from dal_obscura.infrastructure.adapters.service_config import CatalogTargetConfig
 
 
 class CatalogImplementation(ABC):
     """Abstract base for catalog implementations registered in the catalog registry."""
 
+    def __init__(self, name: str, options: dict[str, Any], targets: dict[str, CatalogTargetConfig]):
+        """Initialize a new catalog instance with its service-level configuration."""
+        self.name = name
+        self.options = options
+        self.targets = targets
+
     @abstractmethod
     def resolve(
         self,
-        catalog_name: str,
-        catalog_config: CatalogConfig,
         target: str,
     ) -> BackendDescriptor:
         """Resolve a logical catalog target into a backend descriptor."""
-
-
-CatalogRegistration = CatalogImplementation | Callable[[], CatalogImplementation]
 
 
 class BackendImplementation(ABC):

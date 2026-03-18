@@ -28,7 +28,6 @@ class IcebergTableDescriptor:
 
     dataset_identity: DatasetSelector
     catalog_name: str
-    catalog_type: str
     catalog_options: dict
     table_identifier: str
     backend_id: str = field(init=False, default="iceberg")
@@ -39,7 +38,6 @@ class IcebergBinding:
     """Iceberg-specific binding materialized from a resolved descriptor."""
 
     catalog_name: str
-    catalog_type: str
     catalog_options: dict
     table_identifier: str
     backend_id: str = field(init=False, default="iceberg")
@@ -51,7 +49,6 @@ class IcebergReadSpec:
 
     dataset: DatasetSelector
     catalog_name: str
-    catalog_type: str
     catalog_options: dict
     table_identifier: str
     columns: list[str]
@@ -71,27 +68,26 @@ class IcebergBackend(BackendImplementation):
             raise ValueError("Iceberg backend requires an IcebergTableDescriptor")
         return IcebergBinding(
             catalog_name=descriptor.catalog_name,
-            catalog_type=descriptor.catalog_type,
             catalog_options=dict(descriptor.catalog_options),
             table_identifier=descriptor.table_identifier,
         )
 
     def get_schema(self, bound_target: BoundBackendTarget) -> Any:
         """Loads the Iceberg table schema used by planning and validation."""
-        catalog_name, catalog_type, catalog_options, table_identifier = _iceberg_config(
+        catalog_name, catalog_options, table_identifier = _iceberg_config(
             _iceberg_binding(bound_target.binding)
         )
-        table = self._load_table(catalog_name, catalog_type, catalog_options, table_identifier)
+        table = self._load_table(catalog_name, catalog_options, table_identifier)
         return table.schema().as_arrow()
 
     def plan(
         self, bound_target: BoundBackendTarget, columns: Iterable[str], max_tickets: int
     ) -> Plan:
         """Plans file tasks and distributes them across the available tickets."""
-        catalog_name, catalog_type, catalog_options, table_identifier = _iceberg_config(
+        catalog_name, catalog_options, table_identifier = _iceberg_config(
             _iceberg_binding(bound_target.binding)
         )
-        table = self._load_table(catalog_name, catalog_type, catalog_options, table_identifier)
+        table = self._load_table(catalog_name, catalog_options, table_identifier)
         column_tuple = tuple(columns)
         base_schema = table.schema().as_arrow()
         try:
@@ -110,7 +106,6 @@ class IcebergBackend(BackendImplementation):
                     IcebergReadSpec(
                         dataset=bound_target.dataset_identity,
                         catalog_name=catalog_name,
-                        catalog_type=catalog_type,
                         catalog_options=catalog_options,
                         table_identifier=table_identifier,
                         columns=list(column_tuple),
@@ -133,7 +128,6 @@ class IcebergBackend(BackendImplementation):
         spec = _decode_spec(read_payload)
         table = self._load_table(
             spec.catalog_name,
-            spec.catalog_type,
             spec.catalog_options,
             spec.table_identifier,
         )
@@ -159,24 +153,22 @@ class IcebergBackend(BackendImplementation):
     def _load_table(
         self,
         catalog_name: str,
-        catalog_type: str,
         catalog_options: dict,
         table_identifier: str,
     ):
         """Loads the table and enforces the supported Iceberg format versions."""
-        catalog = self._load_catalog(catalog_name, catalog_type, catalog_options)
+        catalog = self._load_catalog(catalog_name, catalog_options)
         table = catalog.load_table(table_identifier)
         format_version = int(getattr(table.metadata, "format_version", 1))
         if format_version not in {2, 3}:
             raise ValueError(f"Unsupported Iceberg format version: {format_version}")
         return table
 
-    def _load_catalog(self, catalog_name: str, catalog_type: str, catalog_options: dict) -> Catalog:
+    def _load_catalog(self, catalog_name: str, catalog_options: dict) -> Catalog:
         """Caches catalog instances because they are reused across many requests."""
         cache_key = json.dumps(
             {
                 "catalog_name": catalog_name,
-                "catalog_type": catalog_type,
                 "catalog_options": catalog_options,
             },
             sort_keys=True,
@@ -184,7 +176,7 @@ class IcebergBackend(BackendImplementation):
         cached = self._catalog_cache.get(cache_key)
         if cached is not None:
             return cached
-        loaded = load_catalog(catalog_name, type=catalog_type, **catalog_options)
+        loaded = load_catalog(catalog_name, **catalog_options)
         self._catalog_cache[cache_key] = loaded
         return loaded
 
@@ -204,17 +196,14 @@ def _iceberg_binding(binding: object) -> IcebergBinding:
     return binding
 
 
-def _iceberg_config(binding: IcebergBinding) -> tuple[str, str, dict, str]:
+def _iceberg_config(binding: IcebergBinding) -> tuple[str, dict, str]:
     """Normalizes the backend binding into catalog load arguments."""
     catalog_name = str(binding.catalog_name).strip()
-    catalog_type = str(binding.catalog_type).strip()
     catalog_options = _catalog_options(binding.catalog_options)
     table_identifier = str(binding.table_identifier).strip()
-    if not catalog_name or not catalog_type or not table_identifier:
-        raise ValueError(
-            "Iceberg backend requires catalog_name, catalog_type, and table_identifier"
-        )
-    return catalog_name, catalog_type, catalog_options, table_identifier
+    if not catalog_name or not table_identifier:
+        raise ValueError("Iceberg backend requires catalog_name, and table_identifier")
+    return catalog_name, catalog_options, table_identifier
 
 
 def _catalog_options(value: object) -> dict:
