@@ -15,8 +15,7 @@ class TicketPayload:
     principal_id: str
     expires_at: int
     nonce: str
-    backend_id: str
-    backend_generation: int
+    format: str
     catalog: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -29,8 +28,7 @@ class TicketPayload:
             "principal_id": self.principal_id,
             "expires_at": self.expires_at,
             "nonce": self.nonce,
-            "backend_id": self.backend_id,
-            "backend_generation": self.backend_generation,
+            "format": self.format,
         }
         if self.catalog is not None:
             payload["catalog"] = self.catalog
@@ -47,7 +45,6 @@ class TicketPayload:
             principal_id=str(payload.get("principal_id", "")),
             expires_at=int(payload.get("expires_at", 0)),
             nonce=str(payload.get("nonce", "")),
-            backend_id=str(payload.get("backend_id", "")),
-            backend_generation=int(payload.get("backend_generation", 0)),
+            format=str(payload.get("format", "")),
             catalog=payload.get("catalog"),
         )

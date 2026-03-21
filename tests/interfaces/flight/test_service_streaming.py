@@ -12,15 +12,9 @@ import pytest
 
 from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
 from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
-from dal_obscura.domain.query_planning.models import (
-    BackendDescriptor,
-    BackendReference,
-    BoundBackendTarget,
-    DatasetSelector,
-    Plan,
-    ReadPayload,
-    ReadSpec,
-)
+from dal_obscura.domain.catalog.ports import ResolvedTable
+from dal_obscura.domain.format_handler.ports import FormatHandler, Plan, ScanTask
+from dal_obscura.domain.query_planning.models import DatasetSelector, PlanRequest
 from dal_obscura.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
@@ -38,61 +32,50 @@ JWT_SECRET = "test-jwt-secret-32-characters-long"
 
 
 class StubCatalogRegistry:
-    def describe(self, catalog: str | None, target: str) -> BackendDescriptor:
-        selector = DatasetSelector(catalog=catalog, target=target)
-        return StubDescriptor(
-            dataset_identity=selector,
+    def describe(self, catalog: str | None, target: str) -> ResolvedTable:
+        return ResolvedTable(
+            catalog_name=catalog or "",
+            table_name=target,
+            format="duckdb_file",
+            table_object={"format": "duckdb_file"},
         )
 
 
-class StubBackend:
+class StubFormatHandler(FormatHandler):
     def __init__(self, schema: pa.Schema, batches: list[pa.RecordBatch]) -> None:
         self._schema = schema
         self._batches = batches
 
-    def bind_descriptor(self, descriptor: BackendDescriptor) -> BoundBackendTarget:
-        return BoundBackendTarget(
-            dataset_identity=descriptor.dataset_identity,
-            backend=BackendReference(backend_id=descriptor.backend_id, generation=1),
-            binding=StubBinding(),
-        )
+    @property
+    def supported_format(self):
+        return "duckdb_file"
 
-    def schema_for(self, bound_target: BoundBackendTarget) -> pa.Schema:
+    def get_schema(self, table: ResolvedTable) -> pa.Schema:
         return self._schema
 
-    def plan_for(
-        self, bound_target: BoundBackendTarget, columns: Iterable[str], max_tickets: int
-    ) -> Plan:
+    def plan(self, table: ResolvedTable, request: PlanRequest, max_tickets: int) -> Plan:
         payload = json.dumps(
             {
-                "catalog": bound_target.dataset_identity.catalog,
-                "target": bound_target.dataset_identity.target,
-                "columns": list(columns),
+                "catalog": request.catalog,
+                "target": request.target,
+                "columns": list(request.columns),
             }
         ).encode("utf-8")
-        return Plan(schema=self._schema, tasks=[ReadPayload(payload=payload)])
-
-    def read_spec_for(self, backend: BackendReference, read_payload: bytes) -> ReadSpec:
-        raw = json.loads(read_payload.decode("utf-8"))
-        return ReadSpec(
-            dataset=DatasetSelector(catalog=raw.get("catalog"), target=str(raw["target"])),
-            columns=list(raw["columns"]),
+        return Plan(
             schema=self._schema,
+            tasks=[ScanTask(format="duckdb_file", schema=self._schema, payload=payload)],
         )
 
-    def read_stream_for(self, backend: BackendReference, read_payload: bytes) -> Iterable[Any]:
-        return iter(self._batches)
+    def execute(self, payload: bytes) -> tuple[pa.Schema, Iterable[Any]]:
+        return self._schema, iter(self._batches)
 
 
-@dataclass(frozen=True)
-class StubDescriptor:
-    dataset_identity: DatasetSelector
-    backend_id: str = field(init=False, default="duckdb_file")
+class StubFormatRegistry:
+    def __init__(self, handler: StubFormatHandler):
+        self._handler = handler
 
-
-@dataclass(frozen=True)
-class StubBinding:
-    backend_id: str = field(init=False, default="duckdb_file")
+    def get_handler(self, format: str):
+        return self._handler
 
 
 class DummyContext:
@@ -110,7 +93,7 @@ def _authorization_header(principal_id: str) -> tuple[bytes, bytes]:
 
 
 def _build_server(
-    backend_registry: StubBackend,
+    format_registry: StubFormatRegistry,
     policy_path,
     jwt_secret: str = JWT_SECRET,
     ticket_secret: str = "secret",
@@ -127,7 +110,7 @@ def _build_server(
         identity=identity,
         authorizer=authorizer,
         catalog_registry=cast(Any, catalog_registry),
-        backend_registry=cast(Any, backend_registry),
+        format_registry=cast(Any, format_registry),
         masking=masking,
         ticket_codec=ticket_codec,
         ticket_ttl_seconds=ticket_ttl_seconds,
@@ -136,7 +119,7 @@ def _build_server(
     fetch_stream = FetchStreamUseCase(
         identity=identity,
         authorizer=authorizer,
-        backend_registry=cast(Any, backend_registry),
+        format_registry=cast(Any, format_registry),
         masking=masking,
         row_transform=row_transform,
         ticket_codec=ticket_codec,
@@ -183,7 +166,8 @@ def test_streaming_contract_emits_multiple_batches(tmp_path, monkeypatch):
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     batch1 = pa.record_batch([pa.array([1, 2]), pa.array(["us", "eu"])], schema=schema)
     batch2 = pa.record_batch([pa.array([3, 4]), pa.array(["us", "us"])], schema=schema)
-    backend = StubBackend(schema, [batch1, batch2])
+    handler = StubFormatHandler(schema, [batch1, batch2])
+    registry = StubFormatRegistry(handler)
 
     policy_path = tmp_path / "policy.yaml"
     policy_path.write_text(
@@ -196,7 +180,7 @@ def test_streaming_contract_emits_multiple_batches(tmp_path, monkeypatch):
 """
         )
     )
-    server = _build_server(backend_registry=backend, policy_path=policy_path)
+    server = _build_server(format_registry=registry, policy_path=policy_path)
     thread = _start_server(server)
 
     client = flight.FlightClient(f"grpc+tcp://localhost:{server.port}")
@@ -224,7 +208,8 @@ def test_streaming_contract_emits_multiple_batches(tmp_path, monkeypatch):
 def test_flight_logs_include_resident_memory(tmp_path, caplog, monkeypatch):
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     batch = pa.record_batch([pa.array([1, 2]), pa.array(["us", "eu"])], schema=schema)
-    backend = StubBackend(schema, [batch])
+    handler = StubFormatHandler(schema, [batch])
+    registry = StubFormatRegistry(handler)
 
     policy_path = tmp_path / "policy.yaml"
     policy_path.write_text(
@@ -241,7 +226,7 @@ def test_flight_logs_include_resident_memory(tmp_path, caplog, monkeypatch):
         "dal_obscura.interfaces.flight.server.get_resident_memory_bytes",
         lambda: 4_242,
     )
-    server = _build_server(backend_registry=backend, policy_path=policy_path)
+    server = _build_server(format_registry=registry, policy_path=policy_path)
     descriptor = flight.FlightDescriptor.for_command(
         json.dumps(
             {
@@ -265,7 +250,8 @@ def test_flight_logs_include_resident_memory(tmp_path, caplog, monkeypatch):
 def test_do_get_rejects_principal_mismatch(tmp_path):
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     batch = pa.record_batch([pa.array([1]), pa.array(["us"])], schema=schema)
-    backend = StubBackend(schema, [batch])
+    handler = StubFormatHandler(schema, [batch])
+    registry = StubFormatRegistry(handler)
 
     policy_path = tmp_path / "policy.yaml"
     policy_path.write_text(
@@ -278,7 +264,7 @@ def test_do_get_rejects_principal_mismatch(tmp_path):
 """
         )
     )
-    server = _build_server(backend_registry=backend, policy_path=policy_path)
+    server = _build_server(format_registry=registry, policy_path=policy_path)
     descriptor = flight.FlightDescriptor.for_command(
         json.dumps(
             {
@@ -299,7 +285,8 @@ def test_do_get_rejects_principal_mismatch(tmp_path):
 def test_descriptor_authorization_field_is_not_accepted(tmp_path):
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     batch = pa.record_batch([pa.array([1]), pa.array(["us"])], schema=schema)
-    backend = StubBackend(schema, [batch])
+    handler = StubFormatHandler(schema, [batch])
+    registry = StubFormatRegistry(handler)
 
     policy_path = tmp_path / "policy.yaml"
     policy_path.write_text(
@@ -312,7 +299,7 @@ def test_descriptor_authorization_field_is_not_accepted(tmp_path):
 """
         )
     )
-    server = _build_server(backend_registry=backend, policy_path=policy_path)
+    server = _build_server(format_registry=registry, policy_path=policy_path)
     descriptor = flight.FlightDescriptor.for_command(
         json.dumps(
             {
@@ -331,7 +318,8 @@ def test_descriptor_authorization_field_is_not_accepted(tmp_path):
 def test_policy_version_is_per_dataset(tmp_path):
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     batch = pa.record_batch([pa.array([1]), pa.array(["us"])], schema=schema)
-    backend = StubBackend(schema, [batch])
+    handler = StubFormatHandler(schema, [batch])
+    registry = StubFormatRegistry(handler)
 
     policy_path = tmp_path / "policy.yaml"
     policy_path.write_text(
@@ -348,7 +336,7 @@ def test_policy_version_is_per_dataset(tmp_path):
 """
         )
     )
-    server = _build_server(backend_registry=backend, policy_path=policy_path)
+    server = _build_server(format_registry=registry, policy_path=policy_path)
     descriptor = flight.FlightDescriptor.for_command(
         json.dumps(
             {
@@ -402,7 +390,8 @@ def test_policy_version_is_per_dataset(tmp_path):
 def test_do_get_requires_authorization_header(tmp_path):
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     batch = pa.record_batch([pa.array([1]), pa.array(["us"])], schema=schema)
-    backend = StubBackend(schema, [batch])
+    handler = StubFormatHandler(schema, [batch])
+    registry = StubFormatRegistry(handler)
 
     policy_path = tmp_path / "policy.yaml"
     policy_path.write_text(
@@ -415,7 +404,7 @@ def test_do_get_requires_authorization_header(tmp_path):
 """
         )
     )
-    server = _build_server(backend_registry=backend, policy_path=policy_path)
+    server = _build_server(format_registry=registry, policy_path=policy_path)
     descriptor = flight.FlightDescriptor.for_command(
         json.dumps(
             {

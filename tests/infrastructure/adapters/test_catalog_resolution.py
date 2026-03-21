@@ -1,49 +1,21 @@
 import textwrap
-from collections.abc import Iterable
-from dataclasses import dataclass, field
-from typing import Any, cast
+from dataclasses import dataclass
+from typing import Any
 
 import pytest
 
-from dal_obscura.domain.query_planning.models import (
-    BackendDescriptor,
-    BackendReference,
-    BoundBackendTarget,
-    DatasetSelector,
-    Plan,
-    ReadPayload,
-    ReadSpec,
-)
-from dal_obscura.infrastructure.adapters.backend_registry import DynamicBackendRegistry
+from dal_obscura.domain.catalog.ports import ResolvedTable
+from dal_obscura.domain.format_handler.ports import FormatHandler, Plan, ScanTask
+from dal_obscura.domain.query_planning.models import DatasetSelector, PlanRequest
 from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
-from dal_obscura.infrastructure.adapters.file_backend import FileTableDescriptor
-from dal_obscura.infrastructure.adapters.iceberg_backend import IcebergTableDescriptor
-from dal_obscura.infrastructure.adapters.implementation_base import (
-    BackendImplementation,
-)
+from dal_obscura.infrastructure.adapters.format_registry import DynamicFormatRegistry
 from dal_obscura.infrastructure.adapters.service_config import ServiceConfig, load_service_config
 
 
 def _build_registries(config_path):
     catalog_registry = DynamicCatalogRegistry(load_service_config(config_path))
-    backend_registry = DynamicBackendRegistry()
-    return catalog_registry, backend_registry
-
-
-def _build_registries_with_custom_catalog(config_path, module_name, instance):
-    service_config = load_service_config(config_path)
-
-    # Eager registry initialization throws error if the module doesn't exist
-    # So we replace the module list temporarily before reload
-    config_empty = ServiceConfig(catalogs={}, paths=service_config.paths)
-    catalog_registry = DynamicCatalogRegistry(config_empty)
-    catalog_registry._catalog_implementations[module_name] = instance
-
-    # We patch ServiceConfig manually here
-    catalog_registry._current_config = service_config
-
-    backend_registry = DynamicBackendRegistry()
-    return catalog_registry, backend_registry
+    format_registry = DynamicFormatRegistry()
+    return catalog_registry, format_registry
 
 
 def test_load_service_config_parses_catalog_types_and_targets(tmp_path):
@@ -113,18 +85,16 @@ def test_builtin_catalog_types_resolve_through_registry(tmp_path):
         )
     )
 
-    catalog_registry, backend_registry = _build_registries(config_path)
+    catalog_registry, format_registry = _build_registries(config_path)
     for catalog_name in ("sql_cat", "glue_cat", "hive_cat", "unity_cat", "polaris_cat"):
-        descriptor = catalog_registry.describe(catalog_name, "db.users")
-        assert isinstance(descriptor, IcebergTableDescriptor)
-        assert descriptor.backend_id == "iceberg"
-        assert descriptor.table_identifier == "db.users"
-        target = backend_registry.bind_descriptor(descriptor)
-        assert target.backend.backend_id == "iceberg"
-        assert target.backend.generation == backend_registry.current_generation
+        resolved = catalog_registry.describe(catalog_name, "db.users")
+        assert getattr(resolved, "format", None) == "iceberg"
+        assert resolved.table_name == "db.users"
+        handler = format_registry.get_handler(resolved.format)
+        assert handler.supported_format == "iceberg"
 
 
-def test_catalog_registry_can_mix_backend_families_within_one_catalog(tmp_path):
+def test_catalog_registry_can_mix_format_families_within_one_catalog(tmp_path):
     csv_path = tmp_path / "users.csv"
     csv_path.write_text("id,name\n1,a\n")
     config_path = tmp_path / "service.yaml"
@@ -146,15 +116,13 @@ def test_catalog_registry_can_mix_backend_families_within_one_catalog(tmp_path):
         )
     )
 
-    catalog_registry, backend_registry = _build_registries(config_path)
+    catalog_registry, format_registry = _build_registries(config_path)
     iceberg_target = catalog_registry.describe("mixed", "db.users")
     file_target = catalog_registry.describe("mixed", "users_csv")
 
-    assert isinstance(iceberg_target, IcebergTableDescriptor)
-    assert isinstance(file_target, FileTableDescriptor)
-    assert backend_registry.bind_descriptor(iceberg_target).backend.backend_id == "iceberg"
-    assert backend_registry.bind_descriptor(file_target).backend.backend_id == "duckdb_file"
-    assert file_target.paths == (str(csv_path),)
+    assert getattr(iceberg_target, "format", None) == "iceberg"
+    assert getattr(file_target, "format", None) == "duckdb_file"
+    assert file_target.table_object["paths"] == (str(csv_path),)
 
 
 def test_catalog_registry_infers_raw_path_format_and_prefers_most_specific_overlay(tmp_path):
@@ -180,15 +148,15 @@ def test_catalog_registry_infers_raw_path_format_and_prefers_most_specific_overl
         )
     )
 
-    catalog_registry, backend_registry = _build_registries(config_path)
+    catalog_registry, _ = _build_registries(config_path)
     resolved = catalog_registry.describe(None, target)
 
-    assert isinstance(resolved, FileTableDescriptor)
-    assert backend_registry.bind_descriptor(resolved).backend.backend_id == "duckdb_file"
-    assert resolved.dataset_identity.catalog is None
-    assert resolved.format == "csv"
-    assert resolved.paths == (str(csv_path),)
-    assert resolved.options == {"sample_rows": 500, "sample_files": 3}
+    assert resolved.format == "duckdb_file"
+    assert resolved.catalog_name == ""
+    assert resolved.table_name == target
+    assert resolved.table_object["format"] == "csv"
+    assert resolved.table_object["paths"] == (str(csv_path),)
+    assert resolved.table_object["options"] == {"sample_rows": 500, "sample_files": 3}
 
 
 def test_catalog_registry_rejects_mixed_raw_path_formats(tmp_path):
@@ -204,146 +172,36 @@ def test_catalog_registry_rejects_mixed_raw_path_formats(tmp_path):
         catalog_registry.describe(None, str(data_dir / "users.*"))
 
 
-def test_runtime_supports_dynamic_catalog_and_backend_registration(tmp_path, monkeypatch):
+def test_runtime_supports_dynamic_format_registration():
+    class CustomFormatHandler(FormatHandler):
+        @property
+        def supported_format(self):
+            return "custom_fmt"
 
-    monkeypatch.syspath_prepend(str(tmp_path))
-
-    module_path = tmp_path / "custom_module_mock.py"
-    module_path.write_text(
-        textwrap.dedent(
-            """
-            from typing import Iterable, Any
-            from dataclasses import dataclass, field
-            from dal_obscura.infrastructure.adapters.implementation_base import (
-                CatalogImplementation,
-            )
-            from dal_obscura.domain.query_planning.models import BackendDescriptor, DatasetSelector
-
-            @dataclass(frozen=True)
-            class CustomDescriptor:
-                dataset_identity: DatasetSelector
-                backend_id: str = field(init=False, default="custom_backend")
-
-            class CustomCatalog(CatalogImplementation):
-                def __init__(self, name, options, targets) -> None:
-                    # stateful init expected
-                    pass
-        
-                def resolve(self, target: str) -> BackendDescriptor:
-                    selector = DatasetSelector(catalog="custom_cat", target=target)
-                    return CustomDescriptor(dataset_identity=selector)
-            """
-        )
-    )
-
-    @dataclass(frozen=True)
-    class CustomBinding:
-        backend_id: str = field(init=False, default="custom_backend")
-
-    class CustomBackend(BackendImplementation):
-        def bind(self, descriptor: BackendDescriptor) -> CustomBinding:
-            return CustomBinding()
-
-        def get_schema(self, bound_target: BoundBackendTarget) -> str:
+        def get_schema(self, table):
             return "schema"
 
-        def plan(
-            self, bound_target: BoundBackendTarget, columns: Iterable[str], max_tickets: int
-        ) -> Plan:
-            return Plan(schema="schema", tasks=[ReadPayload(payload=b"payload")])
-
-        def read_spec(self, read_payload: bytes) -> ReadSpec:
-            return ReadSpec(
-                dataset=DatasetSelector(catalog="custom_cat", target="anything"),
-                columns=[],
+        def plan(self, table, request, max_tickets):
+            return Plan(
                 schema="schema",
+                tasks=[ScanTask(format="custom_fmt", schema="schema", payload=b"p")],
             )
 
-        def read_stream(self, read_payload: bytes) -> list[object]:
+        def execute(self, payload):
             return []
 
-    config_path = tmp_path / "service.yaml"
-    config_path.write_text(
-        textwrap.dedent(
-            """
-            catalogs:
-              custom_cat:
-                module: custom_module_mock.CustomCatalog
-            """
-        )
-    )
+    format_registry = DynamicFormatRegistry()
+    format_registry.register_handler("custom_fmt", CustomFormatHandler())
 
-    catalog_registry, backend_registry = _build_registries(config_path)
-    backend_registry.register_backend("custom_backend", CustomBackend())
-    generation = backend_registry.reload()
-
-    descriptor = catalog_registry.describe("custom_cat", "anything")
-    resolved = backend_registry.bind_descriptor(descriptor)
-
-    assert resolved.backend == BackendReference(backend_id="custom_backend", generation=generation)
-    assert backend_registry.schema_for(resolved) == "schema"
+    handler = format_registry.get_handler("custom_fmt")
+    assert handler.supported_format == "custom_fmt"
 
 
-def test_runtime_generation_binding_fails_closed_after_unload(tmp_path):
-    config_v1 = tmp_path / "service-v1.yaml"
-    config_v1.write_text(
-        textwrap.dedent(
-            """
-            catalogs:
-              analytics:
-                module: dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog
-                options:
-                  type: sql
-            """
-        )
-    )
-    config_v2 = tmp_path / "service-v2.yaml"
-    config_v2.write_text(
-        textwrap.dedent(
-            """
-            catalogs:
-              analytics:
-                module: dal_obscura.infrastructure.adapters.catalog_registry.StaticCatalog
-                targets:
-                  users_csv:
-                    backend: duckdb_file
-                    format: csv
-                    paths: ["/tmp/does-not-exist.csv"]
-            """
-        )
-    )
+def test_format_registry_rejects_handler_without_methods():
+    class InvalidHandler:
+        def execute(self, payload):
+            pass
 
-    catalog_registry = DynamicCatalogRegistry(load_service_config(config_v1))
-    backend_registry = DynamicBackendRegistry()
-    old_generation = backend_registry.current_generation
-    old_target = backend_registry.bind_descriptor(
-        catalog_registry.describe("analytics", "db.users")
-    )
-
-    catalog_registry.reload(load_service_config(config_v2))
-    backend_registry.reload()
-    backend_registry.unload_generation(old_generation)
-
-    with pytest.raises(ValueError):
-        backend_registry.read_spec_for(old_target.backend, b"payload")
-
-
-def test_backend_registry_rejects_backend_without_read_stream():
-    class InvalidBackend:
-        def bind(self, descriptor: BackendDescriptor):
-            return object()
-
-        def get_schema(self, bound_target):
-            return "schema"
-
-        def plan(self, bound_target, columns, max_tickets):
-            return "plan"
-
-        def read_spec(self, read_payload):
-            return "spec"
-
-    backend_registry = DynamicBackendRegistry()
-    backend_registry.register_backend("broken", cast(Any, InvalidBackend()))
-
-    with pytest.raises(TypeError, match="read_stream"):
-        backend_registry.reload()
+    format_registry = DynamicFormatRegistry()
+    with pytest.raises(TypeError, match="plan"):
+        format_registry.register_handler("broken", InvalidHandler())

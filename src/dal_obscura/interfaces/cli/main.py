@@ -5,7 +5,7 @@ import logging
 
 from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
 from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
-from dal_obscura.infrastructure.adapters.backend_registry import DynamicBackendRegistry
+from dal_obscura.infrastructure.adapters.format_registry import DynamicFormatRegistry
 from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
 from dal_obscura.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
@@ -62,7 +62,7 @@ def main() -> None:
     authorizer = PolicyFileAuthorizer(args.policy)
     service_config = load_service_config(args.service_config)
     catalog_registry = DynamicCatalogRegistry(service_config)
-    backend_registry = DynamicBackendRegistry()
+    format_registry = DynamicFormatRegistry()
     masking = DefaultMaskingAdapter()
     row_transform = DuckDBRowTransformAdapter(masking)
     ticket_codec = HmacTicketCodecAdapter(args.ticket_secret)
@@ -71,7 +71,7 @@ def main() -> None:
         identity=identity,
         authorizer=authorizer,
         catalog_registry=catalog_registry,
-        backend_registry=backend_registry,
+        format_registry=format_registry,
         masking=masking,
         ticket_codec=ticket_codec,
         ticket_ttl_seconds=args.ticket_ttl,
@@ -80,7 +80,7 @@ def main() -> None:
     fetch_stream = FetchStreamUseCase(
         identity=identity,
         authorizer=authorizer,
-        backend_registry=backend_registry,
+        format_registry=format_registry,
         masking=masking,
         row_transform=row_transform,
         ticket_codec=ticket_codec,

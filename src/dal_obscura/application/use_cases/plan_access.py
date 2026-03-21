@@ -11,9 +11,11 @@ from dal_obscura.application.ports.authorization import AuthorizationPort
 from dal_obscura.application.ports.identity import IdentityPort
 from dal_obscura.application.ports.masking import MaskingPort
 from dal_obscura.application.ports.ticket_codec import TicketCodecPort
-from dal_obscura.domain.query_planning.models import BoundBackendTarget, PlanRequest
+from dal_obscura.domain.query_planning.models import DatasetSelector, PlanRequest
 from dal_obscura.domain.ticket_delivery.models import TicketPayload
-from dal_obscura.infrastructure.adapters.backend_registry import DynamicBackendRegistry
+from dal_obscura.domain.format_handler.ports import FormatHandler
+from dal_obscura.domain.catalog.ports import ResolvedTable
+from dal_obscura.infrastructure.adapters.format_registry import DynamicFormatRegistry
 from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
 
 
@@ -38,7 +40,7 @@ class PlanAccessUseCase:
         identity: IdentityPort,
         authorizer: AuthorizationPort,
         catalog_registry: DynamicCatalogRegistry,
-        backend_registry: DynamicBackendRegistry,
+        format_registry: DynamicFormatRegistry,
         masking: MaskingPort,
         ticket_codec: TicketCodecPort,
         ticket_ttl_seconds: int,
@@ -49,7 +51,7 @@ class PlanAccessUseCase:
         self._identity = identity
         self._authorizer = authorizer
         self._catalog_registry = catalog_registry
-        self._backend_registry = backend_registry
+        self._format_registry = format_registry
         self._masking = masking
         self._ticket_codec = ticket_codec
         self._ticket_ttl_seconds = ticket_ttl_seconds
@@ -60,27 +62,33 @@ class PlanAccessUseCase:
     def execute(self, request: PlanRequest, headers: Mapping[str, str]) -> PlanAccessResult:
         """Builds a plan for the requested dataset and returns one signed ticket per task."""
         principal = self._identity.authenticate(headers)
-        descriptor = self._catalog_registry.describe(request.catalog, request.target)
-        bound_target = self._backend_registry.bind_descriptor(descriptor)
-        requested_columns = _expand_requested_columns(
-            self._backend_registry, bound_target, request.columns
-        )
+
+        # Phase 1: Discovery via Catalog
+        resolved_table = self._catalog_registry.describe(request.catalog, request.target)
+
+        # Phase 2: Format Handler resolution
+        handler = self._format_registry.get_handler(resolved_table.format)
+
+        dataset_identity = DatasetSelector(catalog=request.catalog, target=request.target)
+        base_schema = handler.get_schema(resolved_table)
+
+        requested_columns = _expand_requested_columns(base_schema, request.columns)
+
         decision = self._authorizer.authorize(
             principal=principal,
-            dataset=bound_target.dataset_identity,
+            dataset=dataset_identity,
             requested_columns=requested_columns,
         )
-        plan = self._backend_registry.plan_for(
-            bound_target, decision.allowed_columns, self._max_tickets
-        )
+
+        plan = handler.plan(resolved_table, request, self._max_tickets)
 
         ticket_tokens: list[str] = []
         for task in plan.tasks:
             # Each ticket carries enough context to re-validate authz later without
             # trusting the client to resubmit the original plan request faithfully.
             payload = TicketPayload(
-                catalog=bound_target.dataset_identity.catalog,
-                target=bound_target.dataset_identity.target,
+                catalog=dataset_identity.catalog,
+                target=dataset_identity.target,
                 columns=decision.allowed_columns,
                 scan={
                     "read_payload": base64.b64encode(task.payload).decode("utf-8"),
@@ -94,8 +102,7 @@ class PlanAccessUseCase:
                 principal_id=principal.id,
                 expires_at=self._now() + self._ticket_ttl_seconds,
                 nonce=self._nonce_factory(),
-                backend_id=bound_target.backend.backend_id,
-                backend_generation=bound_target.backend.generation,
+                format=task.format,
             )
             ticket_tokens.append(self._ticket_codec.sign_payload(payload))
 
@@ -105,26 +112,24 @@ class PlanAccessUseCase:
         return PlanAccessResult(
             output_schema=output_schema,
             ticket_tokens=ticket_tokens,
-            target=bound_target.dataset_identity.target,
+            target=dataset_identity.target,
             columns=decision.allowed_columns,
             principal_id=principal.id,
             policy_version=decision.policy_version,
-            catalog=bound_target.dataset_identity.catalog,
+            catalog=dataset_identity.catalog,
         )
 
 
 def _expand_requested_columns(
-    backend_registry: DynamicBackendRegistry,
-    bound_target: BoundBackendTarget,
+    base_schema: Any,
     columns: list[str],
 ) -> list[str]:
     """Expands `*` into concrete column names so downstream authz remains explicit."""
     requested = list(columns)
     if "*" not in requested:
-        _validate_requested_columns(backend_registry.schema_for(bound_target), requested)
+        _validate_requested_columns(base_schema, requested)
         return requested
-    schema = backend_registry.schema_for(bound_target)
-    return [field.name for field in schema]
+    return [field.name for field in base_schema]
 
 
 def _validate_requested_columns(schema: Any, requested: list[str]) -> None:

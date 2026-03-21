@@ -7,16 +7,7 @@ import threading
 from collections.abc import Mapping
 from pathlib import Path
 
-from dal_obscura.domain.query_planning.models import (
-    BackendDescriptor,
-    DatasetSelector,
-    GenericBackendDescriptor,
-)
-from dal_obscura.infrastructure.adapters.file_backend import FileTableDescriptor
-from dal_obscura.infrastructure.adapters.iceberg_backend import IcebergTableDescriptor
-from dal_obscura.infrastructure.adapters.implementation_base import (
-    CatalogImplementation,
-)
+from dal_obscura.domain.catalog.ports import CatalogPlugin, ResolvedTable
 from dal_obscura.infrastructure.adapters.service_config import (
     DEFAULT_SAMPLE_FILES,
     DEFAULT_SAMPLE_ROWS,
@@ -30,11 +21,11 @@ _COMPRESSION_SUFFIXES = (".gz", ".bz2", ".zst")
 
 
 class DynamicCatalogRegistry:
-    """Stores catalog implementations and resolves dataset requests into descriptors."""
+    """Stores catalog implementations and resolves dataset requests into tables."""
 
     def __init__(self, config: ServiceConfig) -> None:
         self._lock = threading.RLock()
-        self._catalog_implementations: dict[str, CatalogImplementation] = {}
+        self._catalog_implementations: dict[str, CatalogPlugin] = {}
         self._current_config = config
         self.reload(config)
 
@@ -46,7 +37,7 @@ class DynamicCatalogRegistry:
 
     def reload(self, config: ServiceConfig) -> None:
         """Publishes the latest catalog configuration and instantiates catalogs."""
-        new_catalogs: dict[str, CatalogImplementation] = {}
+        new_catalogs: dict[str, CatalogPlugin] = {}
         for catalog_config in config.catalogs.values():
             new_catalogs[catalog_config.name] = _load_and_instantiate_catalog(catalog_config)
 
@@ -54,80 +45,91 @@ class DynamicCatalogRegistry:
             self._catalog_implementations = new_catalogs
             self._current_config = config
 
-    def describe_catalog(self, catalog_name: str, target: str) -> BackendDescriptor:
+    def describe_catalog(self, catalog_name: str, target: str) -> ResolvedTable:
         """Resolves a target within a named catalog."""
         with self._lock:
             implementation = self._catalog_implementations.get(catalog_name)
             if implementation is None:
                 raise ValueError(f"Unknown catalog: {catalog_name}")
-        return implementation.resolve(target)
+        return implementation.get_table(target)
 
-    def describe(self, catalog: str | None, target: str) -> BackendDescriptor:
+    def describe(self, catalog: str | None, target: str) -> ResolvedTable:
         """Describes either a catalog-based target or a raw filesystem target."""
         if catalog is not None:
             return self.describe_catalog(catalog, target)
         return _resolve_raw_target(self.current_config, target)
 
 
-class IcebergCatalog(CatalogImplementation):
+class IcebergCatalog:
     """Catalog resolver for SQL-style catalogs configured in the service YAML."""
 
-    def resolve(
+    def __init__(self, name: str, options: dict[str, Any], targets: dict[str, CatalogTargetConfig]):
+        self._name = name
+        self.options = options
+        self.targets = targets
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def get_table(
         self,
         target: str,
-    ) -> BackendDescriptor:
+    ) -> ResolvedTable:
         """Resolves a catalog target to Iceberg by default, with target overrides."""
-        selector = DatasetSelector(catalog=self.name, target=target)
         target_config = _match_catalog_target(self.targets, target)
         if target_config is None:
-            return IcebergTableDescriptor(
-                dataset_identity=selector,
+            return ResolvedTable(
                 catalog_name=self.name,
-                catalog_options=dict(self.options),
-                table_identifier=target,
+                table_name=target,
+                format="iceberg",
+                table_object={
+                    "catalog_name": self.name,
+                    "catalog_options": dict(self.options),
+                    "table_identifier": target,
+                },
             )
-        catalog_config = CatalogConfig(
-            name=self.name,
-            module=self.__class__.__module__ + "." + self.__class__.__name__,
-            options=self.options,
-            targets=self.targets,
-        )
-        return _target_descriptor(selector, self.name, catalog_config, target, target_config)
+        return _target_descriptor(self.name, self.options, target, target_config)
 
 
-class StaticCatalog(CatalogImplementation):
+class StaticCatalog:
     """Catalog resolver for catalogs that require explicit target mappings in YAML."""
 
-    def resolve(
+    def __init__(self, name: str, options: dict[str, Any], targets: dict[str, CatalogTargetConfig]):
+        self._name = name
+        self.options = options
+        self.targets = targets
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def get_table(
         self,
         target: str,
-    ) -> BackendDescriptor:
+    ) -> ResolvedTable:
         """Returns the backend descriptor for the most specific matching target rule."""
-        selector = DatasetSelector(catalog=self.name, target=target)
         target_config = _match_catalog_target(self.targets, target)
         if target_config is None:
             raise ValueError(f"Unknown target {target!r} for catalog {self.name!r}")
-        catalog_config = CatalogConfig(
-            name=self.name,
-            module=self.__class__.__module__ + "." + self.__class__.__name__,
-            options=self.options,
-            targets=self.targets,
-        )
-        return _target_descriptor(selector, self.name, catalog_config, target, target_config)
+        return _target_descriptor(self.name, self.options, target, target_config)
 
 
-def _resolve_raw_target(service_config: ServiceConfig, target: str) -> BackendDescriptor:
+def _resolve_raw_target(service_config: ServiceConfig, target: str) -> ResolvedTable:
     """Treats the target as a filesystem glob and resolves it to a file descriptor."""
-    selector = DatasetSelector(target=target)
     paths = _expand_paths((target,))
     path_config = _select_path_config(service_config.paths, target)
     options = path_config.options.to_dict() if path_config else _default_file_options()
     file_format = _infer_file_format(paths)
-    return FileTableDescriptor(
-        dataset_identity=selector,
-        format=file_format,
-        paths=paths,
-        options=options,
+    return ResolvedTable(
+        catalog_name="",
+        table_name=target,
+        format="duckdb_file",
+        table_object={
+            "format": file_format,
+            "paths": paths,
+            "options": options,
+        },
     )
 
 
@@ -140,35 +142,44 @@ def _default_file_options() -> dict[str, object]:
 
 
 def _target_descriptor(
-    selector: DatasetSelector,
     catalog_name: str,
-    catalog_config: CatalogConfig,
+    catalog_options: dict,
     requested_target: str,
     target_config: CatalogTargetConfig,
-) -> BackendDescriptor:
-    """Builds the backend-specific descriptor returned by the catalog registry."""
+) -> ResolvedTable:
+    """Builds the format-specific ResolvedTable returned by the catalog."""
     backend_id = target_config.backend or "iceberg"
     if backend_id == "duckdb_file":
-        return FileTableDescriptor(
-            dataset_identity=selector,
-            format=str(target_config.format or ""),
-            paths=_expand_paths(target_config.paths),
-            options=dict(target_config.options),
+        return ResolvedTable(
+            catalog_name=catalog_name,
+            table_name=requested_target,
+            format="duckdb_file",
+            table_object={
+                "format": str(target_config.format or ""),
+                "paths": _expand_paths(target_config.paths),
+                "options": dict(target_config.options),
+            },
         )
     if backend_id == "iceberg":
-        return IcebergTableDescriptor(
-            dataset_identity=selector,
+        return ResolvedTable(
             catalog_name=catalog_name,
-            catalog_options=dict(catalog_config.options),
-            table_identifier=target_config.table or requested_target,
+            table_name=requested_target,
+            format="iceberg",
+            table_object={
+                "catalog_name": catalog_name,
+                "catalog_options": dict(catalog_options),
+                "table_identifier": target_config.table or requested_target,
+            },
         )
-    return GenericBackendDescriptor(
-        dataset_identity=selector,
-        backend_id=backend_id,
-        data={
+
+    # Generic format fallback using the backend_id as format
+    return ResolvedTable(
+        catalog_name=catalog_name,
+        table_name=requested_target,
+        format=backend_id,
+        table_object={
             "catalog_name": catalog_name,
-            "catalog_module": catalog_config.module,
-            "catalog_options": dict(catalog_config.options),
+            "catalog_options": dict(catalog_options),
             "requested_target": requested_target,
             "target_config": {
                 "backend": target_config.backend,
@@ -240,7 +251,7 @@ def _path_format(path: str) -> str | None:
     return None
 
 
-def _load_and_instantiate_catalog(catalog_config: CatalogConfig) -> CatalogImplementation:
+def _load_and_instantiate_catalog(catalog_config: CatalogConfig) -> CatalogPlugin:
     """Dynamically loads and instantiates a catalog from the `module` configuration."""
     module_path = catalog_config.module
     try:
@@ -254,9 +265,6 @@ def _load_and_instantiate_catalog(catalog_config: CatalogConfig) -> CatalogImple
     catalog_cls = getattr(module, class_name, None)
     if catalog_cls is None:
         raise ValueError(f"Module {module_name!r} does not define a class named {class_name!r}")
-
-    if not issubclass(catalog_cls, CatalogImplementation):
-        raise TypeError(f"Class {module_path!r} must inherit from CatalogImplementation")
 
     try:
         return catalog_cls(

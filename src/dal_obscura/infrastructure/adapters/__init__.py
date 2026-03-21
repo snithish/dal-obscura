@@ -1,11 +1,11 @@
-from dal_obscura.infrastructure.adapters.backend_registry import DynamicBackendRegistry
+from dal_obscura.infrastructure.adapters.format_registry import DynamicFormatRegistry
 from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
 from dal_obscura.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
 )
-from dal_obscura.infrastructure.adapters.file_backend import DuckDBFileBackend
-from dal_obscura.infrastructure.adapters.iceberg_backend import IcebergBackend
+from dal_obscura.infrastructure.adapters.duckdb_handler import DuckDBHandler
+from dal_obscura.infrastructure.adapters.iceberg_handler import IcebergHandler
 from dal_obscura.infrastructure.adapters.identity_default import (
     AuthConfig,
     DefaultIdentityAdapter,
@@ -30,12 +30,12 @@ __all__ = [
     "CatalogTargetConfig",
     "DefaultIdentityAdapter",
     "DefaultMaskingAdapter",
-    "DuckDBFileBackend",
+    "DuckDBHandler",
     "DuckDBRowTransformAdapter",
-    "DynamicBackendRegistry",
+    "DynamicFormatRegistry",
     "DynamicCatalogRegistry",
     "HmacTicketCodecAdapter",
-    "IcebergBackend",
+    "IcebergHandler",
     "PathConfig",
     "PolicyFileAuthorizer",
     "SchemaInferenceOptions",
