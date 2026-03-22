@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+
+import pyarrow as pa
 
 
 @dataclass(frozen=True)
@@ -20,4 +21,4 @@ class ReadSpec:
     target: str
     catalog: str | None
     columns: list[str]
-    schema: Any
+    schema: pa.Schema

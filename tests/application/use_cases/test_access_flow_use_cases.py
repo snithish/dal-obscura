@@ -13,10 +13,14 @@ from dal_obscura.domain.access_control.models import AccessDecision, MaskRule, P
 from dal_obscura.domain.catalog.ports import ResolvedTable
 from dal_obscura.domain.format_handler.ports import InputPartition, Plan, ScanTask
 from dal_obscura.domain.query_planning.models import PlanRequest
-from dal_obscura.domain.ticket_delivery.models import TicketPayload
+from dal_obscura.domain.ticket_delivery.models import ScanPayload, TicketPayload
 from dal_obscura.infrastructure.adapters.duckdb_handler import FileTable
 
 AUTHORIZATION_HEADER = {"authorization": "Bearer jwt-token"}
+
+
+def _scan_payload() -> ScanPayload:
+    return {"read_payload": "payload", "row_filter": None, "masks": {}}
 
 
 @dataclass(frozen=True)
@@ -81,13 +85,13 @@ class FakeFormatHandler:
     def supported_format(self):
         return "fake_format"
 
-    def get_schema(self, table: FileTable) -> Any:
+    def get_schema(self, table: FileTable) -> pa.Schema:
         return self._schema
 
     def plan(self, table: FileTable, request: PlanRequest, max_tickets: int) -> Plan:
         return self._plan
 
-    def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[Any]]:
+    def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
         return self._schema, iter(
             [
                 pa.record_batch(
@@ -165,7 +169,7 @@ def test_plan_access_auth_failure():
             catalog="catalog1",
             target="users",
             columns=["id", "region"],
-            scan={},
+            scan=_scan_payload(),
             policy_version=100,
             principal_id="user1",
             expires_at=9999999999,
@@ -197,7 +201,7 @@ def test_plan_access_authz_failure():
             catalog="catalog1",
             target="users",
             columns=["id", "region"],
-            scan={},
+            scan=_scan_payload(),
             policy_version=100,
             principal_id="user1",
             expires_at=9999999999,
@@ -233,7 +237,7 @@ def test_plan_access_expands_wildcard_columns():
             catalog="catalog1",
             target="users",
             columns=["id", "region"],
-            scan={},
+            scan=_scan_payload(),
             policy_version=100,
             principal_id="user1",
             expires_at=9999999999,
@@ -332,13 +336,16 @@ def test_fetch_stream_rejects_invalid_mask_payload():
         catalog="catalog1",
         target="users",
         columns=["id", "region"],
-        scan={
-            "read_payload": base64.b64encode(pickle.dumps(StubInputPartition(b"payload"))).decode(
-                "utf-8"
-            ),
-            "row_filter": None,
-            "masks": {"region": "not-an-object"},
-        },
+        scan=cast(
+            ScanPayload,
+            {
+                "read_payload": base64.b64encode(
+                    pickle.dumps(StubInputPartition(b"payload"))
+                ).decode("utf-8"),
+                "row_filter": None,
+                "masks": {"region": "not-an-object"},
+            },
+        ),
         policy_version=100,
         principal_id="user1",
         expires_at=9999999999,

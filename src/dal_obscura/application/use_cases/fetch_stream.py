@@ -3,7 +3,9 @@ from __future__ import annotations
 import base64
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import cast
+
+import pyarrow as pa
 
 from dal_obscura.application.ports.authorization import AuthorizationPort
 from dal_obscura.application.ports.identity import IdentityPort
@@ -18,8 +20,8 @@ from dal_obscura.infrastructure.adapters.format_registry import DynamicFormatReg
 class FetchStreamResult:
     """Information needed to construct the Flight `do_get` response stream."""
 
-    output_schema: Any
-    result_batches: Iterable[Any]
+    output_schema: pa.Schema
+    result_batches: Iterable[pa.RecordBatch]
     target: str
     principal_id: str
     columns: list[str]

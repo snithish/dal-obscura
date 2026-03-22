@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Protocol
 
 import pyarrow as pa
 
@@ -20,7 +20,7 @@ class ScanTask:
     """A planned unit of work tailored to a specific dataset format."""
 
     format: str
-    schema: Any
+    schema: pa.Schema
     partition: InputPartition
 
 
@@ -28,7 +28,7 @@ class ScanTask:
 class Plan:
     """The complete execution plan covering all split scan tasks."""
 
-    schema: Any
+    schema: pa.Schema
     tasks: list[ScanTask]
 
 
@@ -40,7 +40,7 @@ class FormatHandler(Protocol):
         """The logical dataset format this handler understands, e.g., 'iceberg'."""
         ...
 
-    def get_schema(self, table: ResolvedTable) -> Any:
+    def get_schema(self, table: ResolvedTable) -> pa.Schema:
         """Extracts the generic Arrow schema from the native table object."""
         ...
 

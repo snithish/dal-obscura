@@ -5,7 +5,8 @@ import os
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any
+
+import pyarrow as pa
 
 from dal_obscura.application.ports.authorization import AuthorizationPort
 from dal_obscura.application.ports.identity import IdentityPort
@@ -21,7 +22,7 @@ from dal_obscura.infrastructure.adapters.format_registry import DynamicFormatReg
 class PlanAccessResult:
     """Material returned to Flight `get_flight_info` after authorization succeeds."""
 
-    output_schema: Any
+    output_schema: pa.Schema
     ticket_tokens: list[str]
     target: str
     columns: list[str]
@@ -121,7 +122,7 @@ class PlanAccessUseCase:
 
 
 def _expand_requested_columns(
-    base_schema: Any,
+    base_schema: pa.Schema,
     columns: list[str],
 ) -> list[str]:
     """Expands `*` into concrete column names so downstream authz remains explicit."""
@@ -132,7 +133,7 @@ def _expand_requested_columns(
     return [field.name for field in base_schema]
 
 
-def _validate_requested_columns(schema: Any, requested: list[str]) -> None:
+def _validate_requested_columns(schema: pa.Schema, requested: list[str]) -> None:
     """Fails fast when the client projects columns that are not in the dataset schema."""
     schema_names = {field.name for field in schema}
     missing = [column for column in requested if column not in schema_names]

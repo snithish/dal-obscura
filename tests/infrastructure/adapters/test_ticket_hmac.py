@@ -8,13 +8,17 @@ from dal_obscura.domain.ticket_delivery.models import TicketPayload
 from dal_obscura.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
 
 
+def _scan_payload():
+    return {"read_payload": "payload", "row_filter": None, "masks": {}}
+
+
 def test_ticket_sign_and_verify():
     codec = HmacTicketCodecAdapter("secret")
     payload = TicketPayload(
         catalog="catalog1",
         target="catalog.db.table",
         columns=["id"],
-        scan={"task": {"file": "a"}},
+        scan=_scan_payload(),
         policy_version=1,
         principal_id="user1",
         expires_at=2**31,
@@ -34,7 +38,7 @@ def test_ticket_expiry():
     payload = TicketPayload(
         target="t",
         columns=[],
-        scan={},
+        scan=_scan_payload(),
         policy_version=1,
         principal_id="user1",
         expires_at=0,
@@ -51,7 +55,7 @@ def test_ticket_rejects_tampered_signature():
     payload = TicketPayload(
         target="t",
         columns=["id"],
-        scan={},
+        scan=_scan_payload(),
         policy_version=1,
         principal_id="user1",
         expires_at=2**31,

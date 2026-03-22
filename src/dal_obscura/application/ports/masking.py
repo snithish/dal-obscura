@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Protocol
+
+import pyarrow as pa
 
 from dal_obscura.domain.access_control.models import MaskRule
 
@@ -22,7 +24,7 @@ class MaskingPort(Protocol):
 
     def masked_schema(
         self,
-        base_schema: Any,
+        base_schema: pa.Schema,
         columns: Iterable[str],
         masks: Mapping[str, MaskRule],
-    ) -> Any: ...
+    ) -> pa.Schema: ...

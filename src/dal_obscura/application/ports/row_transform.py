@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from typing import Any, Protocol
+from typing import Protocol
+
+import pyarrow as pa
 
 from dal_obscura.domain.access_control.models import MaskRule
 
@@ -11,8 +13,8 @@ class RowTransformPort(Protocol):
 
     def apply_filters_and_masks_stream(
         self,
-        batches: Iterable[Any],
+        batches: Iterable[pa.RecordBatch],
         columns: Iterable[str],
         row_filter: str | None,
         masks: Mapping[str, MaskRule],
-    ) -> Iterable[Any]: ...
+    ) -> Iterable[pa.RecordBatch]: ...
