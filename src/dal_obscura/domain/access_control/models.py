@@ -3,8 +3,6 @@ from __future__ import annotations
 import fnmatch
 from dataclasses import dataclass
 
-from dal_obscura.domain.query_planning.models import DatasetSelector
-
 
 @dataclass(frozen=True)
 class MaskRule:
@@ -40,12 +38,12 @@ class Policy:
     version: int
     datasets: list[DatasetPolicy]
 
-    def match_dataset(self, selector: DatasetSelector) -> DatasetPolicy | None:
+    def match_dataset(self, target: str, catalog: str | None) -> DatasetPolicy | None:
         """Returns the first dataset policy whose catalog and target glob match."""
         for dataset in self.datasets:
-            if dataset.catalog != selector.catalog:
+            if dataset.catalog != catalog:
                 continue
-            if fnmatch.fnmatch(selector.target, dataset.target):
+            if fnmatch.fnmatch(target, dataset.target):
                 return dataset
         return None
 

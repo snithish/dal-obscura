@@ -11,12 +11,10 @@ from dal_obscura.application.ports.authorization import AuthorizationPort
 from dal_obscura.application.ports.identity import IdentityPort
 from dal_obscura.application.ports.masking import MaskingPort
 from dal_obscura.application.ports.ticket_codec import TicketCodecPort
-from dal_obscura.domain.query_planning.models import DatasetSelector, PlanRequest
+from dal_obscura.domain.query_planning.models import PlanRequest
 from dal_obscura.domain.ticket_delivery.models import TicketPayload
-from dal_obscura.domain.format_handler.ports import FormatHandler
-from dal_obscura.domain.catalog.ports import ResolvedTable
-from dal_obscura.infrastructure.adapters.format_registry import DynamicFormatRegistry
 from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
+from dal_obscura.infrastructure.adapters.format_registry import DynamicFormatRegistry
 
 
 @dataclass(frozen=True)
@@ -69,14 +67,14 @@ class PlanAccessUseCase:
         # Phase 2: Format Handler resolution
         handler = self._format_registry.get_handler(resolved_table.format)
 
-        dataset_identity = DatasetSelector(catalog=request.catalog, target=request.target)
         base_schema = handler.get_schema(resolved_table)
 
         requested_columns = _expand_requested_columns(base_schema, request.columns)
 
         decision = self._authorizer.authorize(
             principal=principal,
-            dataset=dataset_identity,
+            target=request.target,
+            catalog=request.catalog,
             requested_columns=requested_columns,
         )
 
@@ -86,12 +84,14 @@ class PlanAccessUseCase:
         for task in plan.tasks:
             # Each ticket carries enough context to re-validate authz later without
             # trusting the client to resubmit the original plan request faithfully.
+            import pickle
+
             payload = TicketPayload(
-                catalog=dataset_identity.catalog,
-                target=dataset_identity.target,
+                catalog=request.catalog,
+                target=request.target,
                 columns=decision.allowed_columns,
                 scan={
-                    "read_payload": base64.b64encode(task.payload).decode("utf-8"),
+                    "read_payload": base64.b64encode(pickle.dumps(task.partition)).decode("utf-8"),
                     "row_filter": decision.row_filter,
                     "masks": {
                         key: {"type": value.type, "value": value.value}
@@ -112,11 +112,11 @@ class PlanAccessUseCase:
         return PlanAccessResult(
             output_schema=output_schema,
             ticket_tokens=ticket_tokens,
-            target=dataset_identity.target,
+            target=request.target,
             columns=decision.allowed_columns,
             principal_id=principal.id,
             policy_version=decision.policy_version,
-            catalog=dataset_identity.catalog,
+            catalog=request.catalog,
         )
 
 

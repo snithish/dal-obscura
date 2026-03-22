@@ -10,17 +10,17 @@ from dal_obscura.domain.access_control.models import (
     Policy,
     Principal,
 )
-from dal_obscura.domain.query_planning.models import DatasetSelector
 
 
 def resolve_access(
     policy: Policy,
     principal: Principal,
-    dataset: DatasetSelector,
+    target: str,
+    catalog: str | None,
     requested_columns: Iterable[str],
 ) -> tuple[list[str], dict[str, MaskRule], str | None]:
     """Combines all matching rules into a single access decision for the dataset."""
-    matched_dataset = policy.match_dataset(dataset)
+    matched_dataset = policy.match_dataset(target, catalog)
     if not matched_dataset:
         raise PermissionError("No policy for requested table")
 

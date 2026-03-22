@@ -5,14 +5,6 @@ from typing import Any
 
 
 @dataclass(frozen=True)
-class DatasetSelector:
-    """Logical dataset identity used in authz, planning, and ticket validation."""
-
-    target: str
-    catalog: str | None = None
-
-
-@dataclass(frozen=True)
 class PlanRequest:
     """Client request for a dataset plus the projected columns to expose."""
 
@@ -25,6 +17,7 @@ class PlanRequest:
 class ReadSpec:
     """Metadata extracted from a read payload without executing the read."""
 
-    dataset: DatasetSelector
+    target: str
+    catalog: str | None
     columns: list[str]
     schema: Any

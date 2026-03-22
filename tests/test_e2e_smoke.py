@@ -16,7 +16,6 @@ from pyiceberg.schema import Schema
 from pyiceberg.types import (
     ListType,
     LongType,
-    MapType,
     NestedField,
     StringType,
     StructType,
@@ -201,7 +200,9 @@ def test_e2e_flight_server_with_iceberg(configs: tuple[Path, Path]):
     import sys
 
     cmd = [
-        "dal-obscura",
+        sys.executable,
+        "-c",
+        "import sys; from dal_obscura.interfaces.cli.main import main; sys.exit(main())",
         "--location",
         f"grpc://0.0.0.0:{port}",
         "--policy",

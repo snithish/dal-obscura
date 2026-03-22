@@ -1,17 +1,17 @@
 from __future__ import annotations
 
+from abc import ABC
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Protocol
 
 
-@dataclass(frozen=True)
-class ResolvedTable:
+@dataclass(frozen=True, kw_only=True)
+class ResolvedTable(ABC):
     """Standardized dataset metadata returned by Catalogs to isolate them from execution."""
 
     catalog_name: str
     table_name: str
     format: str
-    table_object: Any
 
 
 class CatalogPlugin(Protocol):

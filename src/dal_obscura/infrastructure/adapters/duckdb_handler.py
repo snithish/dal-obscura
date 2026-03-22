@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-import pickle
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any
 
 import duckdb
 import pyarrow as pa
 
 from dal_obscura.domain.catalog.ports import ResolvedTable
-from dal_obscura.domain.format_handler.ports import FormatHandler, Plan, ScanTask
-from dal_obscura.domain.query_planning.models import DatasetSelector, PlanRequest
+from dal_obscura.domain.format_handler.ports import FormatHandler, InputPartition, Plan, ScanTask
+from dal_obscura.domain.query_planning.models import PlanRequest
 from dal_obscura.infrastructure.adapters.service_config import (
     DEFAULT_SAMPLE_FILES,
     DEFAULT_SAMPLE_ROWS,
@@ -19,15 +17,18 @@ from dal_obscura.infrastructure.adapters.service_config import (
 _FILE_ARROW_BATCH_SIZE = 8_192
 
 
-@dataclass(frozen=True)
-class FileReadSpec:
-    """Serialized file-scan instructions embedded inside a signed ticket."""
-
-    dataset: DatasetSelector
-    format: str
+@dataclass(frozen=True, kw_only=True)
+class FileTable(ResolvedTable):
+    file_format: str
     paths: tuple[str, ...]
-    columns: list[str]
     options: dict[str, object]
+
+
+@dataclass(frozen=True, kw_only=True)
+class FileInputPartition(InputPartition):
+    table: FileTable
+    columns: list[str]
+    paths: tuple[str, ...]
 
 
 class DuckDBHandler(FormatHandler):
@@ -39,46 +40,53 @@ class DuckDBHandler(FormatHandler):
 
     def get_schema(self, table: ResolvedTable) -> pa.Schema:
         """Infers the output schema without reading the full dataset."""
-        file_format, paths, options = _file_config(table)
+        if not isinstance(table, FileTable):
+            raise TypeError("DuckDBHandler requires a FileTable")
         con = duckdb.connect()
         try:
-            relation = con.sql(_select_sql(file_format, paths, options, columns=None))
+            relation = con.sql(
+                _select_sql(table.file_format, table.paths, table.options, columns=None)
+            )
             return relation.limit(0).to_arrow_table().schema
         finally:
             con.close()
 
     def plan(self, table: ResolvedTable, request: PlanRequest, max_tickets: int) -> Plan:
         """Splits the resolved file set into balanced ticket payloads."""
-        file_format, paths, options = _file_config(table)
+        if not isinstance(table, FileTable):
+            raise TypeError("DuckDBHandler requires a FileTable")
         column_list = list(request.columns)
         schema = self.get_schema(table)
-        groups = _chunk_by_max_tickets(list(paths), max_tickets)
-
-        dataset = DatasetSelector(catalog=request.catalog, target=request.target)
+        groups = _chunk_by_max_tickets(list(table.paths), max_tickets)
 
         tasks = [
             ScanTask(
                 format=self.supported_format,
                 schema=schema,
-                payload=pickle.dumps(
-                    FileReadSpec(
-                        dataset=dataset,
-                        format=file_format,
-                        paths=tuple(group),
-                        columns=column_list,
-                        options=options,
-                    )
+                partition=FileInputPartition(
+                    table=table,
+                    columns=column_list,
+                    paths=tuple(group),
                 ),
             )
             for group in groups
         ]
         return Plan(schema=schema, tasks=tasks)
 
-    def execute(self, payload: bytes) -> tuple[pa.Schema, Iterable[Any]]:
+    def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
         """Streams the ticket's subset of files as Arrow record batches."""
-        spec = _decode_spec(payload)
+        if not isinstance(partition, FileInputPartition):
+            raise TypeError("DuckDBHandler requires a FileInputPartition")
+
         con = duckdb.connect()
-        relation = con.sql(_select_sql(spec.format, spec.paths, spec.options, columns=spec.columns))
+        relation = con.sql(
+            _select_sql(
+                partition.table.file_format,
+                partition.paths,
+                partition.table.options,
+                columns=partition.columns,
+            )
+        )
         schema = relation.limit(0).to_arrow_table().schema
 
         def _stream():
@@ -89,32 +97,6 @@ class DuckDBHandler(FormatHandler):
                 con.close()
 
         return schema, _stream()
-
-
-def _decode_spec(payload: bytes) -> FileReadSpec:
-    """Deserializes and validates the file read specification."""
-    spec = pickle.loads(payload)
-    if not isinstance(spec, FileReadSpec):
-        raise ValueError("Invalid read payload for DuckDB format handler")
-    return spec
-
-
-def _file_config(table: ResolvedTable) -> tuple[str, tuple[str, ...], dict[str, object]]:
-    """Normalizes the table object into concrete file scan parameters."""
-    if not isinstance(table.table_object, dict):
-        raise ValueError("DuckDB format handler requires table_object to be a configuration dict")
-
-    config = table.table_object
-    file_format = str(config.get("format", "")).strip().lower()
-    if file_format not in {"csv", "json", "parquet"}:
-        raise ValueError("DuckDB handler requires format to be csv, json, or parquet")
-
-    paths = tuple(str(path) for path in config.get("paths", []))
-    if not paths:
-        raise ValueError("DuckDB handler requires explicit paths")
-
-    options = dict(config.get("options", {}))
-    return file_format, paths, options
 
 
 def _select_sql(

@@ -4,7 +4,6 @@ from collections.abc import Iterable
 from typing import Protocol
 
 from dal_obscura.domain.access_control.models import AccessDecision, Principal
-from dal_obscura.domain.query_planning.models import DatasetSelector
 
 
 class AuthorizationPort(Protocol):
@@ -13,8 +12,9 @@ class AuthorizationPort(Protocol):
     def authorize(
         self,
         principal: Principal,
-        dataset: DatasetSelector,
+        target: str,
+        catalog: str | None,
         requested_columns: Iterable[str],
     ) -> AccessDecision: ...
 
-    def current_policy_version(self, dataset: DatasetSelector) -> int | None: ...
+    def current_policy_version(self, target: str, catalog: str | None) -> int | None: ...

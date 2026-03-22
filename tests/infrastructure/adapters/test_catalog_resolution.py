@@ -1,15 +1,27 @@
+from __future__ import annotations
+
 import textwrap
-from dataclasses import dataclass
-from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
-from dal_obscura.domain.catalog.ports import ResolvedTable
-from dal_obscura.domain.format_handler.ports import FormatHandler, Plan, ScanTask
-from dal_obscura.domain.query_planning.models import DatasetSelector, PlanRequest
+from dal_obscura.domain.format_handler.ports import FormatHandler, InputPartition, Plan, ScanTask
 from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
 from dal_obscura.infrastructure.adapters.format_registry import DynamicFormatRegistry
-from dal_obscura.infrastructure.adapters.service_config import ServiceConfig, load_service_config
+from dal_obscura.infrastructure.adapters.service_config import load_service_config
+
+
+@pytest.fixture(autouse=True)
+def mock_pyiceberg_catalog(monkeypatch):
+    mock_catalog = MagicMock()
+    mock_table = MagicMock()
+    mock_table.metadata_location = "s3://fake/metadata.json"
+    mock_table.io.properties = {"s3.region": "us-east-1"}
+    mock_catalog.load_table.return_value = mock_table
+
+    mock_load_catalog = MagicMock(return_value=mock_catalog)
+    monkeypatch.setattr("pyiceberg.catalog.load_catalog", mock_load_catalog)
+    return mock_load_catalog
 
 
 def _build_registries(config_path):
@@ -116,13 +128,13 @@ def test_catalog_registry_can_mix_format_families_within_one_catalog(tmp_path):
         )
     )
 
-    catalog_registry, format_registry = _build_registries(config_path)
+    catalog_registry, _format_registry = _build_registries(config_path)
     iceberg_target = catalog_registry.describe("mixed", "db.users")
     file_target = catalog_registry.describe("mixed", "users_csv")
 
     assert getattr(iceberg_target, "format", None) == "iceberg"
     assert getattr(file_target, "format", None) == "duckdb_file"
-    assert file_target.table_object["paths"] == (str(csv_path),)
+    assert file_target.paths == (str(csv_path),)
 
 
 def test_catalog_registry_infers_raw_path_format_and_prefers_most_specific_overlay(tmp_path):
@@ -154,9 +166,9 @@ def test_catalog_registry_infers_raw_path_format_and_prefers_most_specific_overl
     assert resolved.format == "duckdb_file"
     assert resolved.catalog_name == ""
     assert resolved.table_name == target
-    assert resolved.table_object["format"] == "csv"
-    assert resolved.table_object["paths"] == (str(csv_path),)
-    assert resolved.table_object["options"] == {"sample_rows": 500, "sample_files": 3}
+    assert resolved.file_format == "csv"
+    assert resolved.paths == (str(csv_path),)
+    assert resolved.options == {"sample_rows": 500, "sample_files": 3}
 
 
 def test_catalog_registry_rejects_mixed_raw_path_formats(tmp_path):
@@ -182,13 +194,16 @@ def test_runtime_supports_dynamic_format_registration():
             return "schema"
 
         def plan(self, table, request, max_tickets):
+            class StubPartition(InputPartition):
+                pass
+
             return Plan(
                 schema="schema",
-                tasks=[ScanTask(format="custom_fmt", schema="schema", payload=b"p")],
+                tasks=[ScanTask(format="custom_fmt", schema="schema", partition=StubPartition())],
             )
 
-        def execute(self, payload):
-            return []
+        def execute(self, partition):
+            return "schema", []
 
     format_registry = DynamicFormatRegistry()
     format_registry.register_handler("custom_fmt", CustomFormatHandler())
@@ -204,4 +219,4 @@ def test_format_registry_rejects_handler_without_methods():
 
     format_registry = DynamicFormatRegistry()
     with pytest.raises(TypeError, match="plan"):
-        format_registry.register_handler("broken", InvalidHandler())
+        format_registry.register_handler("broken", InvalidHandler())  # type: ignore[arg-type]

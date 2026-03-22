@@ -1,6 +1,7 @@
 import base64
+import pickle
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, cast
 
 import pyarrow as pa
@@ -10,11 +11,31 @@ from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
 from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
 from dal_obscura.domain.access_control.models import AccessDecision, MaskRule, Principal
 from dal_obscura.domain.catalog.ports import ResolvedTable
-from dal_obscura.domain.format_handler.ports import Plan, ScanTask
-from dal_obscura.domain.query_planning.models import DatasetSelector, PlanRequest
+from dal_obscura.domain.format_handler.ports import InputPartition, Plan, ScanTask
+from dal_obscura.domain.query_planning.models import PlanRequest
 from dal_obscura.domain.ticket_delivery.models import TicketPayload
+from dal_obscura.infrastructure.adapters.duckdb_handler import FileTable
 
 AUTHORIZATION_HEADER = {"authorization": "Bearer jwt-token"}
+
+
+@dataclass(frozen=True)
+class StubInputPartition(InputPartition):
+    payload: bytes
+    _table: ResolvedTable | None = None
+
+    @property
+    def table(self) -> ResolvedTable:
+        from dal_obscura.infrastructure.adapters.duckdb_handler import FileTable
+
+        return self._table or FileTable(
+            catalog_name="",
+            table_name="test",
+            format="test",
+            file_format="test",
+            paths=(),
+            options={},
+        )
 
 
 class FakeIdentity:
@@ -33,21 +54,21 @@ class FakeAuthorizer:
         self._current_version = current_version
         self.last_requested_columns: list[str] | None = None
 
-    def authorize(self, principal, dataset, requested_columns):
+    def authorize(self, principal, target, catalog, requested_columns):
         self.last_requested_columns = list(requested_columns)
         if self._decision is None:
             raise PermissionError("Unauthorized")
         return self._decision
 
-    def current_policy_version(self, dataset):
+    def current_policy_version(self, target, catalog):
         return self._current_version
 
 
 class FakeCatalogRegistry:
-    def __init__(self, table: ResolvedTable) -> None:
+    def __init__(self, table: FileTable) -> None:
         self._table = table
 
-    def describe(self, catalog: str | None, target: str) -> ResolvedTable:
+    def describe(self, catalog: str | None, target: str) -> FileTable:
         return self._table
 
 
@@ -60,14 +81,14 @@ class FakeFormatHandler:
     def supported_format(self):
         return "fake_format"
 
-    def get_schema(self, table: ResolvedTable) -> Any:
+    def get_schema(self, table: FileTable) -> Any:
         return self._schema
 
-    def plan(self, table: ResolvedTable, request: PlanRequest, max_tickets: int) -> Plan:
+    def plan(self, table: FileTable, request: PlanRequest, max_tickets: int) -> Plan:
         return self._plan
 
-    def execute(self, payload: bytes) -> Iterable[Any]:
-        return iter(
+    def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[Any]]:
+        return self._schema, iter(
             [
                 pa.record_batch(
                     [pa.array([1]), pa.array(["us"])],
@@ -113,10 +134,9 @@ class FakeRowTransform:
 
 def _build_use_case_dependencies():
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
-    selector = DatasetSelector(target="users", catalog="catalog1")
-    read_payload = b"payload"
+    read_payload = StubInputPartition(payload=b"payload")
     plan = Plan(
-        schema=schema, tasks=[ScanTask(format="fake_format", schema=schema, payload=read_payload)]
+        schema=schema, tasks=[ScanTask(format="fake_format", schema=schema, partition=read_payload)]
     )
     decision = AccessDecision(
         allowed_columns=["id", "region"],
@@ -124,7 +144,14 @@ def _build_use_case_dependencies():
         row_filter="region = 'us'",
         policy_version=100,
     )
-    resolved_table = ResolvedTable("catalog1", "users", "fake_format", {})
+    resolved_table = FileTable(
+        catalog_name="catalog1",
+        table_name="users",
+        format="fake_format",
+        file_format="fake_format",
+        paths=(),
+        options={},
+    )
     return schema, plan, decision, resolved_table
 
 
@@ -240,7 +267,9 @@ def test_fetch_stream_policy_version_mismatch():
         target="users",
         columns=["id", "region"],
         scan={
-            "read_payload": base64.b64encode(b"payload").decode("utf-8"),
+            "read_payload": base64.b64encode(pickle.dumps(StubInputPartition(b"payload"))).decode(
+                "utf-8"
+            ),
             "row_filter": None,
             "masks": {},
         },
@@ -271,7 +300,9 @@ def test_fetch_stream_principal_mismatch():
         target="users",
         columns=["id", "region"],
         scan={
-            "read_payload": base64.b64encode(b"payload").decode("utf-8"),
+            "read_payload": base64.b64encode(pickle.dumps(StubInputPartition(b"payload"))).decode(
+                "utf-8"
+            ),
             "row_filter": None,
             "masks": {},
         },
@@ -302,7 +333,9 @@ def test_fetch_stream_rejects_invalid_mask_payload():
         target="users",
         columns=["id", "region"],
         scan={
-            "read_payload": base64.b64encode(b"payload").decode("utf-8"),
+            "read_payload": base64.b64encode(pickle.dumps(StubInputPartition(b"payload"))).decode(
+                "utf-8"
+            ),
             "row_filter": None,
             "masks": {"region": "not-an-object"},
         },

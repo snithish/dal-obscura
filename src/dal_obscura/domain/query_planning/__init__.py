@@ -1,9 +1,9 @@
 from dal_obscura.domain.query_planning.models import (
-    DatasetSelector,
     PlanRequest,
+    ReadSpec,
 )
 
 __all__ = [
-    "DatasetSelector",
     "PlanRequest",
+    "ReadSpec",
 ]

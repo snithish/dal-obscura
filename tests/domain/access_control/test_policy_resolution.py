@@ -2,7 +2,6 @@ import textwrap
 
 from dal_obscura.domain.access_control.models import Principal
 from dal_obscura.domain.access_control.policy_resolution import resolve_access
-from dal_obscura.domain.query_planning.models import DatasetSelector
 from dal_obscura.infrastructure.adapters.policy_file_authorizer import load_policy_file
 
 
@@ -30,8 +29,9 @@ def test_resolve_access_allows_columns(tmp_path):
     allowed, masks, row_filter = resolve_access(
         policy,
         principal,
-        DatasetSelector(catalog="analytics", target="catalog.db.table"),
-        ["id", "name", "region"],
+        target="catalog.db.table",
+        catalog="analytics",
+        requested_columns=["id", "name", "region"],
     )
 
     assert allowed == ["id", "name"]
@@ -66,8 +66,9 @@ def test_resolve_access_unions_columns_and_filters(tmp_path):
     allowed, masks, row_filter = resolve_access(
         policy,
         principal,
-        DatasetSelector(target="/landing/data.parquet"),
-        ["id", "name", "region"],
+        target="/landing/data.parquet",
+        catalog=None,
+        requested_columns=["id", "name", "region"],
     )
 
     assert allowed == ["id", "name"]

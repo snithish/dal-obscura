@@ -2,7 +2,7 @@ import json
 import threading
 import time
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, cast
 
 import jwt
@@ -13,8 +13,8 @@ import pytest
 from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
 from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
 from dal_obscura.domain.catalog.ports import ResolvedTable
-from dal_obscura.domain.format_handler.ports import FormatHandler, Plan, ScanTask
-from dal_obscura.domain.query_planning.models import DatasetSelector, PlanRequest
+from dal_obscura.domain.format_handler.ports import FormatHandler, InputPartition, Plan, ScanTask
+from dal_obscura.domain.query_planning.models import PlanRequest
 from dal_obscura.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
@@ -33,11 +33,34 @@ JWT_SECRET = "test-jwt-secret-32-characters-long"
 
 class StubCatalogRegistry:
     def describe(self, catalog: str | None, target: str) -> ResolvedTable:
-        return ResolvedTable(
+        from dal_obscura.infrastructure.adapters.duckdb_handler import FileTable
+
+        return FileTable(
             catalog_name=catalog or "",
             table_name=target,
             format="duckdb_file",
-            table_object={"format": "duckdb_file"},
+            file_format="duckdb_file",
+            paths=(),
+            options={},
+        )
+
+
+@dataclass(frozen=True)
+class StubInputPartition(InputPartition):
+    payload: bytes = b"payload"
+    _table: ResolvedTable | None = None
+
+    @property
+    def table(self) -> ResolvedTable:
+        from dal_obscura.infrastructure.adapters.duckdb_handler import FileTable
+
+        return self._table or FileTable(
+            catalog_name="",
+            table_name="test",
+            format="test",
+            file_format="test",
+            paths=(),
+            options={},
         )
 
 
@@ -63,10 +86,16 @@ class StubFormatHandler(FormatHandler):
         ).encode("utf-8")
         return Plan(
             schema=self._schema,
-            tasks=[ScanTask(format="duckdb_file", schema=self._schema, payload=payload)],
+            tasks=[
+                ScanTask(
+                    format="duckdb_file",
+                    schema=self._schema,
+                    partition=StubInputPartition(payload=payload),
+                )
+            ],
         )
 
-    def execute(self, payload: bytes) -> tuple[pa.Schema, Iterable[Any]]:
+    def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[Any]]:
         return self._schema, iter(self._batches)
 
 

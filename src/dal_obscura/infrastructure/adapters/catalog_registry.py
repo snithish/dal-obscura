@@ -6,8 +6,11 @@ import importlib
 import threading
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from dal_obscura.domain.catalog.ports import CatalogPlugin, ResolvedTable
+from dal_obscura.infrastructure.adapters.duckdb_handler import FileTable
+from dal_obscura.infrastructure.adapters.iceberg_handler import IcebergTable
 from dal_obscura.infrastructure.adapters.service_config import (
     DEFAULT_SAMPLE_FILES,
     DEFAULT_SAMPLE_ROWS,
@@ -78,17 +81,14 @@ class IcebergCatalog:
     ) -> ResolvedTable:
         """Resolves a catalog target to Iceberg by default, with target overrides."""
         target_config = _match_catalog_target(self.targets, target)
+        backend = target_config.backend if target_config else "iceberg"
+
+        if backend == "iceberg":
+            table_identifier = (target_config.table if target_config else None) or target
+            return _resolve_iceberg_metadata(self.name, self.options, target, table_identifier)
+
         if target_config is None:
-            return ResolvedTable(
-                catalog_name=self.name,
-                table_name=target,
-                format="iceberg",
-                table_object={
-                    "catalog_name": self.name,
-                    "catalog_options": dict(self.options),
-                    "table_identifier": target,
-                },
-            )
+            raise ValueError(f"Unknown target {target!r} for catalog {self.name!r}")
         return _target_descriptor(self.name, self.options, target, target_config)
 
 
@@ -121,15 +121,13 @@ def _resolve_raw_target(service_config: ServiceConfig, target: str) -> ResolvedT
     path_config = _select_path_config(service_config.paths, target)
     options = path_config.options.to_dict() if path_config else _default_file_options()
     file_format = _infer_file_format(paths)
-    return ResolvedTable(
+    return FileTable(
         catalog_name="",
         table_name=target,
         format="duckdb_file",
-        table_object={
-            "format": file_format,
-            "paths": paths,
-            "options": options,
-        },
+        file_format=file_format,
+        paths=paths,
+        options=options,
     )
 
 
@@ -150,45 +148,44 @@ def _target_descriptor(
     """Builds the format-specific ResolvedTable returned by the catalog."""
     backend_id = target_config.backend or "iceberg"
     if backend_id == "duckdb_file":
-        return ResolvedTable(
+        return FileTable(
             catalog_name=catalog_name,
             table_name=requested_target,
             format="duckdb_file",
-            table_object={
-                "format": str(target_config.format or ""),
-                "paths": _expand_paths(target_config.paths),
-                "options": dict(target_config.options),
-            },
+            file_format=str(target_config.format or ""),
+            paths=_expand_paths(target_config.paths),
+            options=dict(target_config.options),
         )
     if backend_id == "iceberg":
-        return ResolvedTable(
-            catalog_name=catalog_name,
-            table_name=requested_target,
-            format="iceberg",
-            table_object={
-                "catalog_name": catalog_name,
-                "catalog_options": dict(catalog_options),
-                "table_identifier": target_config.table or requested_target,
-            },
+        return _resolve_iceberg_metadata(
+            catalog_name, catalog_options, requested_target, target_config.table or requested_target
         )
 
-    # Generic format fallback using the backend_id as format
-    return ResolvedTable(
+    raise ValueError(f"Unknown backend {backend_id!r} for target {requested_target!r}")
+
+
+def _resolve_iceberg_metadata(
+    catalog_name: str,
+    catalog_options: dict,
+    requested_target: str,
+    table_identifier: str,
+) -> ResolvedTable:
+    """Contacts the Iceberg catalog to resolve the actual metadata location for a table."""
+    from pyiceberg.catalog import load_catalog
+
+    catalog = load_catalog(catalog_name, **catalog_options)
+    try:
+        pyiceberg_table = catalog.load_table(table_identifier)
+    except Exception as e:
+        raise ValueError(
+            f"Failed to load table {table_identifier!r} from catalog {catalog_name!r}: {e}"
+        ) from e
+
+    return IcebergTable(
         catalog_name=catalog_name,
         table_name=requested_target,
-        format=backend_id,
-        table_object={
-            "catalog_name": catalog_name,
-            "catalog_options": dict(catalog_options),
-            "requested_target": requested_target,
-            "target_config": {
-                "backend": target_config.backend,
-                "table": target_config.table,
-                "format": target_config.format,
-                "paths": list(target_config.paths),
-                "options": dict(target_config.options),
-            },
-        },
+        metadata_location=pyiceberg_table.metadata_location,
+        io_options=dict(pyiceberg_table.io.properties),
     )
 
 

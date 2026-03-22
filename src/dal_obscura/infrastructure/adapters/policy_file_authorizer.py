@@ -16,7 +16,6 @@ from dal_obscura.domain.access_control.models import (
     Principal,
 )
 from dal_obscura.domain.access_control.policy_resolution import dataset_version, resolve_access
-from dal_obscura.domain.query_planning.models import DatasetSelector
 
 
 class PolicyFileAuthorizer:
@@ -28,7 +27,8 @@ class PolicyFileAuthorizer:
     def authorize(
         self,
         principal: Principal,
-        dataset: DatasetSelector,
+        target: str,
+        catalog: str | None,
         requested_columns: Iterable[str],
     ) -> AccessDecision:
         """Reloads the policy file and resolves the effective access decision."""
@@ -36,10 +36,11 @@ class PolicyFileAuthorizer:
         allowed_columns, masks, row_filter = resolve_access(
             policy,
             principal,
-            dataset,
+            target,
+            catalog,
             requested_columns,
         )
-        matched_dataset = policy.match_dataset(dataset)
+        matched_dataset = policy.match_dataset(target, catalog)
         if not matched_dataset:
             raise PermissionError("No policy for requested table")
         return AccessDecision(
@@ -49,10 +50,10 @@ class PolicyFileAuthorizer:
             policy_version=dataset_version(matched_dataset),
         )
 
-    def current_policy_version(self, dataset: DatasetSelector) -> int | None:
+    def current_policy_version(self, target: str, catalog: str | None) -> int | None:
         """Returns the current dataset version hash used to invalidate old tickets."""
         policy = load_policy_file(self._policy_path)
-        matched_dataset = policy.match_dataset(dataset)
+        matched_dataset = policy.match_dataset(target, catalog)
         if not matched_dataset:
             return None
         return dataset_version(matched_dataset)

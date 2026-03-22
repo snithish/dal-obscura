@@ -1,22 +1,21 @@
-import pickle
-
 import pyarrow as pa
-import pytest
 
-from dal_obscura.domain.catalog.ports import ResolvedTable
-from dal_obscura.domain.query_planning.models import DatasetSelector, PlanRequest
+from dal_obscura.domain.query_planning.models import PlanRequest
 from dal_obscura.infrastructure.adapters.duckdb_handler import (
     DuckDBHandler,
-    FileReadSpec,
+    FileInputPartition,
+    FileTable,
 )
 
 
-def _resolved_table(format: str, paths: tuple[str, ...], options: dict) -> ResolvedTable:
-    return ResolvedTable(
+def _file_table(format: str, paths: tuple[str, ...], options: dict) -> FileTable:
+    return FileTable(
         catalog_name="local_files",
         table_name="target",
         format="duckdb_file",
-        table_object={"format": format, "paths": paths, "options": options},
+        file_format=format,
+        paths=paths,
+        options=options,
     )
 
 
@@ -51,13 +50,11 @@ def test_file_handler_uses_bounded_schema_inference_queries(monkeypatch):
     )
     handler = DuckDBHandler()
 
+    handler.get_schema(_file_table("csv", ("users.csv",), {"sample_rows": 321, "sample_files": 5}))
     handler.get_schema(
-        _resolved_table("csv", ("users.csv",), {"sample_rows": 321, "sample_files": 5})
+        _file_table("json", ("events.ndjson",), {"sample_rows": 222, "sample_files": 4})
     )
-    handler.get_schema(
-        _resolved_table("json", ("events.ndjson",), {"sample_rows": 222, "sample_files": 4})
-    )
-    handler.get_schema(_resolved_table("parquet", ("facts.parquet",), {}))
+    handler.get_schema(_file_table("parquet", ("facts.parquet",), {}))
 
     assert (
         "read_csv_auto(['users.csv'], union_by_name=true, sample_size=321, files_to_sniff=5)"
@@ -72,7 +69,7 @@ def test_file_handler_uses_bounded_schema_inference_queries(monkeypatch):
 
 def test_file_handler_plan_stores_explicit_paths(monkeypatch):
     handler = DuckDBHandler()
-    table = _resolved_table("parquet", ("a.parquet", "b.parquet"), {})
+    table = _file_table("parquet", ("a.parquet", "b.parquet"), {})
 
     monkeypatch.setattr(
         handler, "get_schema", lambda table: pa.schema([pa.field("id", pa.int64())])
@@ -80,26 +77,25 @@ def test_file_handler_plan_stores_explicit_paths(monkeypatch):
 
     request = PlanRequest(catalog="local_files", target="facts", columns=["id"])
     plan = handler.plan(table, request, max_tickets=4)
-    specs = [pickle.loads(task.payload) for task in plan.tasks]
+    specs = [task.partition for task in plan.tasks]
 
-    assert all(isinstance(spec, FileReadSpec) for spec in specs)
-    assert {path for spec in specs for path in spec.paths} == {"a.parquet", "b.parquet"}
-    assert all(
-        spec.dataset == DatasetSelector(catalog="local_files", target="facts") for spec in specs
-    )
+    assert all(isinstance(spec, FileInputPartition) for spec in specs)
+    assert {
+        path for spec in specs if isinstance(spec, FileInputPartition) for path in spec.paths
+    } == {"a.parquet", "b.parquet"}
 
 
 def test_file_handler_reads_array_json_documents(tmp_path):
     json_path = tmp_path / "users.json"
     json_path.write_text('[{"id":1,"name":"a"},{"id":2,"name":"b"}]')
     handler = DuckDBHandler()
-    table = _resolved_table("json", (str(json_path),), {"sample_rows": 10, "sample_files": 1})
+    table = _file_table("json", (str(json_path),), {"sample_rows": 10, "sample_files": 1})
 
     schema = handler.get_schema(table)
     request = PlanRequest(catalog="local_files", target="users", columns=["id", "name"])
     plan = handler.plan(table, request, max_tickets=1)
 
-    _, batches = handler.execute(plan.tasks[0].payload)
+    _, batches = handler.execute(plan.tasks[0].partition)
     arrow_table = pa.Table.from_batches(list(batches))
 
     assert schema.names == ["id", "name"]

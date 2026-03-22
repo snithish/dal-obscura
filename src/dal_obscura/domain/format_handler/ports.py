@@ -1,10 +1,18 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Iterable, Protocol
+from typing import Any, Protocol
+
+import pyarrow as pa
 
 from dal_obscura.domain.catalog.ports import ResolvedTable
 from dal_obscura.domain.query_planning.models import PlanRequest
+
+
+@dataclass(frozen=True, kw_only=True)
+class InputPartition:
+    """A strictly typed unit of work planned by a FormatHandler."""
 
 
 @dataclass(frozen=True)
@@ -13,7 +21,7 @@ class ScanTask:
 
     format: str
     schema: Any
-    payload: bytes
+    partition: InputPartition
 
 
 @dataclass(frozen=True)
@@ -40,6 +48,7 @@ class FormatHandler(Protocol):
         """Converts native TableObject to abstract execution Tasks."""
         ...
 
-    def execute(self, payload: bytes) -> tuple[Any, Iterable[Any]]:
-        """Reads data into an Arrow stream based on the provided task payload, returning its schema and batches."""
+    def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
+        """Reads data into an Arrow stream based on the provided task payload,
+        returning its schema and batches."""
         ...

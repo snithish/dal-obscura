@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import threading
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from importlib import metadata
-from typing import Any, cast
+from typing import cast
 
 from dal_obscura.domain.format_handler.ports import FormatHandler
 
