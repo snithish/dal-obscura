@@ -3,8 +3,6 @@ from dal_obscura.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
 )
-from dal_obscura.infrastructure.adapters.format_registry import DynamicFormatRegistry
-from dal_obscura.infrastructure.adapters.iceberg_handler import IcebergHandler
 from dal_obscura.infrastructure.adapters.identity_default import (
     AuthConfig,
     DefaultIdentityAdapter,
@@ -22,6 +20,7 @@ from dal_obscura.infrastructure.adapters.service_config import (
     load_service_config,
 )
 from dal_obscura.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
+from dal_obscura.infrastructure.table_formats.iceberg import IcebergTableFormat
 
 __all__ = [
     "AuthConfig",
@@ -31,9 +30,8 @@ __all__ = [
     "DefaultMaskingAdapter",
     "DuckDBRowTransformAdapter",
     "DynamicCatalogRegistry",
-    "DynamicFormatRegistry",
     "HmacTicketCodecAdapter",
-    "IcebergHandler",
+    "IcebergTableFormat",
     "PathConfig",
     "PolicyFileAuthorizer",
     "SchemaInferenceOptions",

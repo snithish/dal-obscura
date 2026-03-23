@@ -10,7 +10,6 @@ from dal_obscura.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
 )
-from dal_obscura.infrastructure.adapters.format_registry import DynamicFormatRegistry
 from dal_obscura.infrastructure.adapters.identity_default import (
     AuthConfig,
     DefaultIdentityAdapter,
@@ -62,7 +61,6 @@ def main() -> None:
     authorizer = PolicyFileAuthorizer(args.policy)
     service_config = load_service_config(args.service_config)
     catalog_registry = DynamicCatalogRegistry(service_config)
-    format_registry = DynamicFormatRegistry()
     masking = DefaultMaskingAdapter()
     row_transform = DuckDBRowTransformAdapter(masking)
     ticket_codec = HmacTicketCodecAdapter(args.ticket_secret)
@@ -71,7 +69,6 @@ def main() -> None:
         identity=identity,
         authorizer=authorizer,
         catalog_registry=catalog_registry,
-        format_registry=format_registry,
         masking=masking,
         ticket_codec=ticket_codec,
         ticket_ttl_seconds=args.ticket_ttl,
@@ -80,7 +77,6 @@ def main() -> None:
     fetch_stream = FetchStreamUseCase(
         identity=identity,
         authorizer=authorizer,
-        format_registry=format_registry,
         masking=masking,
         row_transform=row_transform,
         ticket_codec=ticket_codec,

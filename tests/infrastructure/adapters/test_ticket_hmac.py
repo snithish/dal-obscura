@@ -23,13 +23,11 @@ def test_ticket_sign_and_verify():
         principal_id="user1",
         expires_at=2**31,
         nonce="abc123",
-        format="iceberg",
     )
     ticket = codec.sign_payload(payload)
     verified = codec.verify(ticket)
     assert verified.catalog == payload.catalog
     assert verified.target == payload.target
-    assert verified.format == payload.format
     assert verified.columns == payload.columns
 
 
@@ -43,7 +41,6 @@ def test_ticket_expiry():
         principal_id="user1",
         expires_at=0,
         nonce="expired",
-        format="iceberg",
     )
     ticket = codec.sign_payload(payload)
     with pytest.raises(PermissionError):
@@ -60,7 +57,6 @@ def test_ticket_rejects_tampered_signature():
         principal_id="user1",
         expires_at=2**31,
         nonce="nonce",
-        format="iceberg",
     )
     ticket = codec.sign_payload(payload)
     tampered = ticket[:-1] + ("0" if ticket[-1] != "0" else "1")

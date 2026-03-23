@@ -15,7 +15,6 @@ from dal_obscura.application.ports.ticket_codec import TicketCodecPort
 from dal_obscura.domain.query_planning.models import PlanRequest
 from dal_obscura.domain.ticket_delivery.models import TicketPayload
 from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
-from dal_obscura.infrastructure.adapters.format_registry import DynamicFormatRegistry
 
 
 @dataclass(frozen=True)
@@ -39,7 +38,6 @@ class PlanAccessUseCase:
         identity: IdentityPort,
         authorizer: AuthorizationPort,
         catalog_registry: DynamicCatalogRegistry,
-        format_registry: DynamicFormatRegistry,
         masking: MaskingPort,
         ticket_codec: TicketCodecPort,
         ticket_ttl_seconds: int,
@@ -50,7 +48,6 @@ class PlanAccessUseCase:
         self._identity = identity
         self._authorizer = authorizer
         self._catalog_registry = catalog_registry
-        self._format_registry = format_registry
         self._masking = masking
         self._ticket_codec = ticket_codec
         self._ticket_ttl_seconds = ticket_ttl_seconds
@@ -63,12 +60,8 @@ class PlanAccessUseCase:
         principal = self._identity.authenticate(headers)
 
         # Phase 1: Discovery via Catalog
-        resolved_table = self._catalog_registry.describe(request.catalog, request.target)
-
-        # Phase 2: Format Handler resolution
-        handler = self._format_registry.get_handler(resolved_table.format)
-
-        base_schema = handler.get_schema(resolved_table)
+        table_format = self._catalog_registry.describe(request.catalog, request.target)
+        base_schema = table_format.get_schema()
 
         requested_columns = _expand_requested_columns(base_schema, request.columns)
 
@@ -79,7 +72,7 @@ class PlanAccessUseCase:
             requested_columns=requested_columns,
         )
 
-        plan = handler.plan(resolved_table, request, self._max_tickets)
+        plan = table_format.plan(request, self._max_tickets)
 
         ticket_tokens: list[str] = []
         for task in plan.tasks:
@@ -92,7 +85,7 @@ class PlanAccessUseCase:
                 target=request.target,
                 columns=decision.allowed_columns,
                 scan={
-                    "read_payload": base64.b64encode(pickle.dumps(task.partition)).decode("utf-8"),
+                    "read_payload": base64.b64encode(pickle.dumps(task)).decode("utf-8"),
                     "row_filter": decision.row_filter,
                     "masks": {
                         key: {"type": value.type, "value": value.value}
@@ -103,7 +96,6 @@ class PlanAccessUseCase:
                 principal_id=principal.id,
                 expires_at=self._now() + self._ticket_ttl_seconds,
                 nonce=self._nonce_factory(),
-                format=task.format,
             )
             ticket_tokens.append(self._ticket_codec.sign_payload(payload))
 

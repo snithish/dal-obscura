@@ -8,46 +8,35 @@ import pyarrow as pa
 from pyiceberg.io.pyarrow import ArrowScan
 from pyiceberg.table import ALWAYS_TRUE
 
-from dal_obscura.domain.catalog.ports import ResolvedTable
-from dal_obscura.domain.format_handler.ports import FormatHandler, InputPartition, Plan, ScanTask
+from dal_obscura.domain.catalog.ports import TableFormat
 from dal_obscura.domain.query_planning.models import PlanRequest
-
-
-@dataclass(frozen=True, kw_only=True)
-class IcebergTable(ResolvedTable):
-    format: str = "iceberg"
-    metadata_location: str
-    io_options: dict
+from dal_obscura.domain.table_format.ports import InputPartition, Plan, ScanTask
 
 
 @dataclass(frozen=True, kw_only=True)
 class IcebergInputPartition(InputPartition):
     """Concrete partition containing specific Iceberg file scan tasks."""
 
-    table: IcebergTable
     columns: list[str]
     tasks: list[bytes]
 
 
-class IcebergHandler(FormatHandler):
-    """Format handler that plans and reads Iceberg tables via PyIceberg."""
+@dataclass(frozen=True, kw_only=True)
+class IcebergTableFormat(TableFormat):
+    """Catalog-resolved Iceberg table that can self-plan and self-execute."""
 
-    @property
-    def supported_format(self) -> str:
-        return "iceberg"
+    format: str = "iceberg"
+    metadata_location: str
+    io_options: dict[str, object]
 
-    def get_schema(self, table: ResolvedTable) -> pa.Schema:
+    def get_schema(self) -> pa.Schema:
         """Loads the Iceberg table schema used by planning and validation."""
-        if not isinstance(table, IcebergTable):
-            raise TypeError("IcebergHandler requires an IcebergTable")
-        pyiceberg_table = self._load_table(table.metadata_location, table.io_options)
+        pyiceberg_table = self._load_table()
         return pyiceberg_table.schema().as_arrow()
 
-    def plan(self, table: ResolvedTable, request: PlanRequest, max_tickets: int) -> Plan:
+    def plan(self, request: PlanRequest, max_tickets: int) -> Plan:
         """Plans file tasks and distributes them across the available tickets."""
-        if not isinstance(table, IcebergTable):
-            raise TypeError("IcebergHandler requires an IcebergTable")
-        pyiceberg_table = self._load_table(table.metadata_location, table.io_options)
+        pyiceberg_table = self._load_table()
 
         column_tuple = tuple(request.columns)
         base_schema = pyiceberg_table.schema().as_arrow()
@@ -64,10 +53,9 @@ class IcebergHandler(FormatHandler):
 
         tasks = [
             ScanTask(
-                format=self.supported_format,
+                table_format=self,
                 schema=base_schema,
                 partition=IcebergInputPartition(
-                    table=table,
                     columns=list(column_tuple),
                     tasks=[pickle.dumps(task) for task in group],
                 ),
@@ -79,12 +67,9 @@ class IcebergHandler(FormatHandler):
     def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
         """Executes the pre-planned Iceberg file tasks stored in the ticket."""
         if not isinstance(partition, IcebergInputPartition):
-            raise TypeError("IcebergHandler requires an IcebergInputPartition")
+            raise TypeError("IcebergTableFormat requires an IcebergInputPartition")
 
-        table = self._load_table(
-            partition.table.metadata_location,
-            partition.table.io_options,
-        )
+        table = self._load_table()
         column_tuple = tuple(partition.columns)
         file_tasks = [pickle.loads(task) for task in partition.tasks]
 
@@ -107,14 +92,12 @@ class IcebergHandler(FormatHandler):
 
     def _load_table(
         self,
-        metadata_location: str,
-        io_options: dict,
     ):
         """Loads the table from metadata location and enforces the supported
         Iceberg format versions."""
         from pyiceberg.table import StaticTable
 
-        table = StaticTable.from_metadata(metadata_location, properties=io_options)
+        table = StaticTable.from_metadata(self.metadata_location, properties=self.io_options)
         format_version = int(getattr(table.metadata, "format_version", 1))
         if format_version not in {2, 3}:
             raise ValueError(f"Unsupported Iceberg format version: {format_version}")

@@ -4,13 +4,13 @@ import importlib
 import threading
 from typing import Any
 
-from dal_obscura.domain.catalog.ports import CatalogPlugin, ResolvedTable
-from dal_obscura.infrastructure.adapters.iceberg_handler import IcebergTable
+from dal_obscura.domain.catalog.ports import CatalogPlugin, TableFormat
 from dal_obscura.infrastructure.adapters.service_config import (
     CatalogConfig,
     CatalogTargetConfig,
     ServiceConfig,
 )
+from dal_obscura.infrastructure.table_formats.iceberg import IcebergTableFormat
 
 
 class DynamicCatalogRegistry:
@@ -38,7 +38,7 @@ class DynamicCatalogRegistry:
             self._catalog_implementations = new_catalogs
             self._current_config = config
 
-    def describe_catalog(self, catalog_name: str, target: str) -> ResolvedTable:
+    def describe_catalog(self, catalog_name: str, target: str) -> TableFormat:
         """Resolves a target within a named catalog."""
         with self._lock:
             implementation = self._catalog_implementations.get(catalog_name)
@@ -46,7 +46,7 @@ class DynamicCatalogRegistry:
                 raise ValueError(f"Unknown catalog: {catalog_name}")
         return implementation.get_table(target)
 
-    def describe(self, catalog: str | None, target: str) -> ResolvedTable:
+    def describe(self, catalog: str | None, target: str) -> TableFormat:
         """Describes a target by asking the requested catalog implementation."""
         if catalog is None:
             raise ValueError("Catalog name is required to resolve a target")
@@ -69,7 +69,7 @@ class IcebergCatalog:
     def get_table(
         self,
         target: str,
-    ) -> ResolvedTable:
+    ) -> TableFormat:
         """Resolves an Iceberg target, optionally applying exact target overrides."""
         target_config = self.targets.get(target)
         if target_config is not None:
@@ -94,7 +94,7 @@ class StaticCatalog:
     def get_table(
         self,
         target: str,
-    ) -> ResolvedTable:
+    ) -> TableFormat:
         """Resolves an explicitly configured target by loading it from the catalog."""
         target_config = self.targets.get(target)
         if target_config is None:
@@ -111,7 +111,7 @@ def _resolve_iceberg_metadata(
     catalog_name: str,
     requested_target: str,
     table_identifier: str,
-) -> ResolvedTable:
+) -> TableFormat:
     """Contacts the Iceberg catalog to resolve the actual metadata location for a table."""
     try:
         pyiceberg_table = catalog.load_table(table_identifier)
@@ -120,7 +120,7 @@ def _resolve_iceberg_metadata(
             f"Failed to load table {table_identifier!r} from catalog {catalog_name!r}: {e}"
         ) from e
 
-    return IcebergTable(
+    return IcebergTableFormat(
         catalog_name=catalog_name,
         table_name=requested_target,
         metadata_location=pyiceberg_table.metadata_location,

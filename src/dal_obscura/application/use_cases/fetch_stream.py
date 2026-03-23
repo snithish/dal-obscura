@@ -13,7 +13,7 @@ from dal_obscura.application.ports.masking import MaskingPort
 from dal_obscura.application.ports.row_transform import RowTransformPort
 from dal_obscura.application.ports.ticket_codec import TicketCodecPort
 from dal_obscura.domain.access_control.models import MaskRule
-from dal_obscura.infrastructure.adapters.format_registry import DynamicFormatRegistry
+from dal_obscura.domain.table_format.ports import ScanTask
 
 
 @dataclass(frozen=True)
@@ -44,14 +44,12 @@ class FetchStreamUseCase:
         self,
         identity: IdentityPort,
         authorizer: AuthorizationPort,
-        format_registry: DynamicFormatRegistry,
         masking: MaskingPort,
         row_transform: RowTransformPort,
         ticket_codec: TicketCodecPort,
     ) -> None:
         self._identity = identity
         self._authorizer = authorizer
-        self._format_registry = format_registry
         self._masking = masking
         self._row_transform = row_transform
         self._ticket_codec = ticket_codec
@@ -69,13 +67,13 @@ class FetchStreamUseCase:
 
         scan = _decode_scan(payload.scan)
 
-        handler = self._format_registry.get_handler(payload.format)
-
         import pickle
 
-        partition = pickle.loads(scan.read_payload)
+        task = pickle.loads(scan.read_payload)
+        if not isinstance(task, ScanTask):
+            raise ValueError("Invalid read payload in ticket")
 
-        original_schema, batches = handler.execute(partition)
+        original_schema, batches = task.table_format.execute(task.partition)
 
         result_batches = self._row_transform.apply_filters_and_masks_stream(
             batches, payload.columns, scan.row_filter, scan.masks

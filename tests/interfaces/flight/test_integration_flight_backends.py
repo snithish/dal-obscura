@@ -19,7 +19,6 @@ from dal_obscura.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
 )
-from dal_obscura.infrastructure.adapters.format_registry import DynamicFormatRegistry
 from dal_obscura.infrastructure.adapters.identity_default import (
     AuthConfig,
     DefaultIdentityAdapter,
@@ -45,7 +44,6 @@ def _start_server(server: DataAccessFlightService) -> threading.Thread:
 
 def _build_server(
     catalog_registry: DynamicCatalogRegistry,
-    format_registry: DynamicFormatRegistry,
     policy_path: Path,
     max_tickets: int = 4,
 ):
@@ -58,7 +56,6 @@ def _build_server(
         identity=identity,
         authorizer=authorizer,
         catalog_registry=catalog_registry,
-        format_registry=format_registry,
         masking=masking,
         ticket_codec=ticket_codec,
         ticket_ttl_seconds=300,
@@ -67,7 +64,6 @@ def _build_server(
     fetch_stream = FetchStreamUseCase(
         identity=identity,
         authorizer=authorizer,
-        format_registry=format_registry,
         masking=masking,
         row_transform=row_transform,
         ticket_codec=ticket_codec,
@@ -106,7 +102,7 @@ def _flight_request(client: flight.FlightClient, payload: dict[str, object]):
 
 def _build_registries(service_config_path: Path):
     service_config = load_service_config(service_config_path)
-    return DynamicCatalogRegistry(service_config), DynamicFormatRegistry()
+    return DynamicCatalogRegistry(service_config)
 
 
 def _write_csv_files(base_dir: Path, file_count: int, rows_per_file: int) -> str:
@@ -298,8 +294,8 @@ def test_flight_plan_and_get_with_iceberg_multi_catalog(tmp_path):
         raw_glob=raw_glob,
     )
 
-    catalog_registry, format_registry = _build_registries(service_config_path)
-    server = _build_server(catalog_registry, format_registry, policy_path, max_tickets=4)
+    catalog_registry = _build_registries(service_config_path)
+    server = _build_server(catalog_registry, policy_path, max_tickets=4)
     thread = _start_server(server)
     client = flight.FlightClient(f"grpc+tcp://localhost:{server.port}")
 
@@ -337,8 +333,8 @@ def test_flight_plan_and_get_with_mixed_catalog_formats(tmp_path):
         raw_glob=raw_glob,
     )
 
-    catalog_registry, format_registry = _build_registries(service_config_path)
-    server = _build_server(catalog_registry, format_registry, policy_path)
+    catalog_registry = _build_registries(service_config_path)
+    server = _build_server(catalog_registry, policy_path)
     thread = _start_server(server)
     client = flight.FlightClient(f"grpc+tcp://localhost:{server.port}")
 
@@ -375,8 +371,8 @@ def test_flight_plan_and_get_with_json_catalog(tmp_path):
         raw_glob=raw_glob,
     )
 
-    catalog_registry, format_registry = _build_registries(service_config_path)
-    server = _build_server(catalog_registry, format_registry, policy_path)
+    catalog_registry = _build_registries(service_config_path)
+    server = _build_server(catalog_registry, policy_path)
     thread = _start_server(server)
     client = flight.FlightClient(f"grpc+tcp://localhost:{server.port}")
     info, table = _flight_request(
@@ -406,8 +402,8 @@ def test_flight_plan_and_get_with_raw_path(tmp_path):
         raw_glob=raw_glob,
     )
 
-    catalog_registry, format_registry = _build_registries(service_config_path)
-    server = _build_server(catalog_registry, format_registry, policy_path)
+    catalog_registry = _build_registries(service_config_path)
+    server = _build_server(catalog_registry, policy_path)
     thread = _start_server(server)
     client = flight.FlightClient(f"grpc+tcp://localhost:{server.port}")
     info, table = _flight_request(
@@ -437,8 +433,8 @@ def test_flight_plan_and_get_with_parquet_multi_file_large(tmp_path):
         raw_glob=raw_glob,
     )
 
-    catalog_registry, format_registry = _build_registries(service_config_path)
-    server = _build_server(catalog_registry, format_registry, policy_path, max_tickets=4)
+    catalog_registry = _build_registries(service_config_path)
+    server = _build_server(catalog_registry, policy_path, max_tickets=4)
     thread = _start_server(server)
     client = flight.FlightClient(f"grpc+tcp://localhost:{server.port}")
     info, table = _flight_request(
@@ -470,8 +466,8 @@ def test_hot_reload_does_not_break_format_registry(tmp_path):
         parquet_glob=parquet_glob,
         raw_glob=raw_glob,
     )
-    catalog_registry, format_registry = _build_registries(service_config_path)
-    server = _build_server(catalog_registry, format_registry, policy_path)
+    catalog_registry = _build_registries(service_config_path)
+    server = _build_server(catalog_registry, policy_path)
     thread = _start_server(server)
     client = flight.FlightClient(f"grpc+tcp://localhost:{server.port}")
 

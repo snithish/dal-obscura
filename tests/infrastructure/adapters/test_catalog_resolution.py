@@ -5,9 +5,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from dal_obscura.domain.format_handler.ports import FormatHandler, InputPartition, Plan, ScanTask
+from dal_obscura.domain.catalog.ports import TableFormat
 from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
-from dal_obscura.infrastructure.adapters.format_registry import DynamicFormatRegistry
 from dal_obscura.infrastructure.adapters.service_config import load_service_config
 
 
@@ -24,10 +23,8 @@ def mock_pyiceberg_catalog(monkeypatch):
     return mock_load_catalog
 
 
-def _build_registries(config_path):
-    catalog_registry = DynamicCatalogRegistry(load_service_config(config_path))
-    format_registry = DynamicFormatRegistry()
-    return catalog_registry, format_registry
+def _build_registry(config_path):
+    return DynamicCatalogRegistry(load_service_config(config_path))
 
 
 def test_load_service_config_parses_catalog_types_and_targets(tmp_path):
@@ -90,13 +87,12 @@ def test_builtin_catalog_types_resolve_through_registry(tmp_path):
         )
     )
 
-    catalog_registry, format_registry = _build_registries(config_path)
+    catalog_registry = _build_registry(config_path)
     for catalog_name in ("sql_cat", "glue_cat", "hive_cat", "unity_cat", "polaris_cat"):
-        resolved = catalog_registry.describe(catalog_name, "db.users")
-        assert getattr(resolved, "format", None) == "iceberg"
-        assert resolved.table_name == "db.users"
-        handler = format_registry.get_handler(resolved.format)
-        assert handler.supported_format == "iceberg"
+        table_format = catalog_registry.describe(catalog_name, "db.users")
+        assert isinstance(table_format, TableFormat)
+        assert table_format.format == "iceberg"
+        assert table_format.table_name == "db.users"
 
 
 def test_catalog_registry_rejects_non_iceberg_target_backends(tmp_path):
@@ -118,14 +114,14 @@ def test_catalog_registry_rejects_non_iceberg_target_backends(tmp_path):
     )
 
     with pytest.raises(ValueError, match="Unsupported backend"):
-        _build_registries(config_path)
+        _build_registry(config_path)
 
 
 def test_catalog_registry_requires_catalog_name(tmp_path):
     config_path = tmp_path / "empty.yaml"
     config_path.write_text("{}")
 
-    catalog_registry, _ = _build_registries(config_path)
+    catalog_registry = _build_registry(config_path)
     with pytest.raises(ValueError, match="Catalog name is required"):
         catalog_registry.describe(None, "users")
 
@@ -148,7 +144,7 @@ def test_iceberg_catalog_uses_exact_target_overrides_not_wildcards(
         )
     )
 
-    catalog_registry, _ = _build_registries(config_path)
+    catalog_registry = _build_registry(config_path)
     catalog_registry.describe("exact_only", "db.users")
 
     mock_catalog = mock_pyiceberg_catalog.return_value
@@ -168,46 +164,8 @@ def test_iceberg_catalog_is_instantiated_once_and_reused(tmp_path, mock_pyiceber
         )
     )
 
-    catalog_registry, _ = _build_registries(config_path)
+    catalog_registry = _build_registry(config_path)
     catalog_registry.describe("sql_cat", "db.users")
     catalog_registry.describe("sql_cat", "db.orders")
 
     assert mock_pyiceberg_catalog.call_count == 1
-
-
-def test_runtime_supports_dynamic_format_registration():
-    class CustomFormatHandler(FormatHandler):
-        @property
-        def supported_format(self):
-            return "custom_fmt"
-
-        def get_schema(self, table):
-            return "schema"
-
-        def plan(self, table, request, max_tickets):
-            class StubPartition(InputPartition):
-                pass
-
-            return Plan(
-                schema="schema",
-                tasks=[ScanTask(format="custom_fmt", schema="schema", partition=StubPartition())],
-            )
-
-        def execute(self, partition):
-            return "schema", []
-
-    format_registry = DynamicFormatRegistry()
-    format_registry.register_handler("custom_fmt", CustomFormatHandler())
-
-    handler = format_registry.get_handler("custom_fmt")
-    assert handler.supported_format == "custom_fmt"
-
-
-def test_format_registry_rejects_handler_without_methods():
-    class InvalidHandler:
-        def execute(self, payload):
-            pass
-
-    format_registry = DynamicFormatRegistry()
-    with pytest.raises(TypeError, match="plan"):
-        format_registry.register_handler("broken", InvalidHandler())  # type: ignore[arg-type]

@@ -12,9 +12,9 @@ import pytest
 
 from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
 from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
-from dal_obscura.domain.catalog.ports import ResolvedTable
-from dal_obscura.domain.format_handler.ports import FormatHandler, InputPartition, Plan, ScanTask
+from dal_obscura.domain.catalog.ports import TableFormat
 from dal_obscura.domain.query_planning.models import PlanRequest
+from dal_obscura.domain.table_format.ports import InputPartition, Plan, ScanTask
 from dal_obscura.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
@@ -32,46 +32,20 @@ JWT_SECRET = "test-jwt-secret-32-characters-long"
 
 
 @dataclass(frozen=True, kw_only=True)
-class StubResolvedTable(ResolvedTable):
-    pass
-
-
-class StubCatalogRegistry:
-    def describe(self, catalog: str | None, target: str) -> ResolvedTable:
-        return StubResolvedTable(
-            catalog_name=catalog or "",
-            table_name=target,
-            format="stub_format",
-        )
-
-
-@dataclass(frozen=True)
 class StubInputPartition(InputPartition):
     payload: bytes = b"payload"
-    _table: ResolvedTable | None = None
-
-    @property
-    def table(self) -> ResolvedTable:
-        return self._table or StubResolvedTable(
-            catalog_name="",
-            table_name="test",
-            format="test",
-        )
 
 
-class StubFormatHandler(FormatHandler):
-    def __init__(self, schema: pa.Schema, batches: list[pa.RecordBatch]) -> None:
-        self._schema = schema
-        self._batches = batches
+@dataclass(frozen=True, kw_only=True)
+class StubTableFormat(TableFormat):
+    schema: pa.Schema
+    batches: tuple[pa.RecordBatch, ...]
 
-    @property
-    def supported_format(self):
-        return "stub_format"
+    def get_schema(self) -> pa.Schema:
+        return self.schema
 
-    def get_schema(self, table: ResolvedTable) -> pa.Schema:
-        return self._schema
-
-    def plan(self, table: ResolvedTable, request: PlanRequest, max_tickets: int) -> Plan:
+    def plan(self, request: PlanRequest, max_tickets: int) -> Plan:
+        del max_tickets
         payload = json.dumps(
             {
                 "catalog": request.catalog,
@@ -80,26 +54,29 @@ class StubFormatHandler(FormatHandler):
             }
         ).encode("utf-8")
         return Plan(
-            schema=self._schema,
+            schema=self.schema,
             tasks=[
                 ScanTask(
-                    format="stub_format",
-                    schema=self._schema,
+                    table_format=self,
+                    schema=self.schema,
                     partition=StubInputPartition(payload=payload),
                 )
             ],
         )
 
     def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[Any]]:
-        return self._schema, iter(self._batches)
+        if not isinstance(partition, StubInputPartition):
+            raise TypeError("StubTableFormat requires a StubInputPartition")
+        return self.schema, iter(self.batches)
 
 
-class StubFormatRegistry:
-    def __init__(self, handler: StubFormatHandler):
-        self._handler = handler
+class StubCatalogRegistry:
+    def __init__(self, table_format: StubTableFormat) -> None:
+        self._table_format = table_format
 
-    def get_handler(self, format: str):
-        return self._handler
+    def describe(self, catalog: str | None, target: str) -> TableFormat:
+        del catalog, target
+        return self._table_format
 
 
 class DummyContext:
@@ -117,7 +94,7 @@ def _authorization_header(principal_id: str) -> tuple[bytes, bytes]:
 
 
 def _build_server(
-    format_registry: StubFormatRegistry,
+    table_format: StubTableFormat,
     policy_path,
     jwt_secret: str = JWT_SECRET,
     ticket_secret: str = "secret",
@@ -126,7 +103,7 @@ def _build_server(
 ) -> DataAccessFlightService:
     identity = DefaultIdentityAdapter(AuthConfig(jwt_secret=jwt_secret))
     authorizer = PolicyFileAuthorizer(policy_path)
-    catalog_registry = StubCatalogRegistry()
+    catalog_registry = StubCatalogRegistry(table_format)
     masking = DefaultMaskingAdapter()
     row_transform = DuckDBRowTransformAdapter(masking)
     ticket_codec = HmacTicketCodecAdapter(ticket_secret)
@@ -134,7 +111,6 @@ def _build_server(
         identity=identity,
         authorizer=authorizer,
         catalog_registry=cast(Any, catalog_registry),
-        format_registry=cast(Any, format_registry),
         masking=masking,
         ticket_codec=ticket_codec,
         ticket_ttl_seconds=ticket_ttl_seconds,
@@ -143,7 +119,6 @@ def _build_server(
     fetch_stream = FetchStreamUseCase(
         identity=identity,
         authorizer=authorizer,
-        format_registry=cast(Any, format_registry),
         masking=masking,
         row_transform=row_transform,
         ticket_codec=ticket_codec,
@@ -190,8 +165,13 @@ def test_streaming_contract_emits_multiple_batches(tmp_path, monkeypatch):
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     batch1 = pa.record_batch([pa.array([1, 2]), pa.array(["us", "eu"])], schema=schema)
     batch2 = pa.record_batch([pa.array([3, 4]), pa.array(["us", "us"])], schema=schema)
-    handler = StubFormatHandler(schema, [batch1, batch2])
-    registry = StubFormatRegistry(handler)
+    table_format = StubTableFormat(
+        catalog_name="analytics",
+        table_name="test.table",
+        format="stub_format",
+        schema=schema,
+        batches=(batch1, batch2),
+    )
 
     policy_path = tmp_path / "policy.yaml"
     policy_path.write_text(
@@ -204,7 +184,7 @@ def test_streaming_contract_emits_multiple_batches(tmp_path, monkeypatch):
 """
         )
     )
-    server = _build_server(format_registry=registry, policy_path=policy_path)
+    server = _build_server(table_format=table_format, policy_path=policy_path)
     thread = _start_server(server)
 
     client = flight.FlightClient(f"grpc+tcp://localhost:{server.port}")
@@ -232,8 +212,13 @@ def test_streaming_contract_emits_multiple_batches(tmp_path, monkeypatch):
 def test_flight_logs_include_resident_memory(tmp_path, caplog, monkeypatch):
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     batch = pa.record_batch([pa.array([1, 2]), pa.array(["us", "eu"])], schema=schema)
-    handler = StubFormatHandler(schema, [batch])
-    registry = StubFormatRegistry(handler)
+    table_format = StubTableFormat(
+        catalog_name="analytics",
+        table_name="test.table",
+        format="stub_format",
+        schema=schema,
+        batches=(batch,),
+    )
 
     policy_path = tmp_path / "policy.yaml"
     policy_path.write_text(
@@ -250,7 +235,7 @@ def test_flight_logs_include_resident_memory(tmp_path, caplog, monkeypatch):
         "dal_obscura.interfaces.flight.server.get_resident_memory_bytes",
         lambda: 4_242,
     )
-    server = _build_server(format_registry=registry, policy_path=policy_path)
+    server = _build_server(table_format=table_format, policy_path=policy_path)
     descriptor = flight.FlightDescriptor.for_command(
         json.dumps(
             {
@@ -274,8 +259,13 @@ def test_flight_logs_include_resident_memory(tmp_path, caplog, monkeypatch):
 def test_do_get_rejects_principal_mismatch(tmp_path):
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     batch = pa.record_batch([pa.array([1]), pa.array(["us"])], schema=schema)
-    handler = StubFormatHandler(schema, [batch])
-    registry = StubFormatRegistry(handler)
+    table_format = StubTableFormat(
+        catalog_name="analytics",
+        table_name="test.table",
+        format="stub_format",
+        schema=schema,
+        batches=(batch,),
+    )
 
     policy_path = tmp_path / "policy.yaml"
     policy_path.write_text(
@@ -288,7 +278,7 @@ def test_do_get_rejects_principal_mismatch(tmp_path):
 """
         )
     )
-    server = _build_server(format_registry=registry, policy_path=policy_path)
+    server = _build_server(table_format=table_format, policy_path=policy_path)
     descriptor = flight.FlightDescriptor.for_command(
         json.dumps(
             {
@@ -309,8 +299,13 @@ def test_do_get_rejects_principal_mismatch(tmp_path):
 def test_descriptor_authorization_field_is_not_accepted(tmp_path):
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     batch = pa.record_batch([pa.array([1]), pa.array(["us"])], schema=schema)
-    handler = StubFormatHandler(schema, [batch])
-    registry = StubFormatRegistry(handler)
+    table_format = StubTableFormat(
+        catalog_name="analytics",
+        table_name="test.table",
+        format="stub_format",
+        schema=schema,
+        batches=(batch,),
+    )
 
     policy_path = tmp_path / "policy.yaml"
     policy_path.write_text(
@@ -323,7 +318,7 @@ def test_descriptor_authorization_field_is_not_accepted(tmp_path):
 """
         )
     )
-    server = _build_server(format_registry=registry, policy_path=policy_path)
+    server = _build_server(table_format=table_format, policy_path=policy_path)
     descriptor = flight.FlightDescriptor.for_command(
         json.dumps(
             {
@@ -342,8 +337,13 @@ def test_descriptor_authorization_field_is_not_accepted(tmp_path):
 def test_policy_version_is_per_dataset(tmp_path):
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     batch = pa.record_batch([pa.array([1]), pa.array(["us"])], schema=schema)
-    handler = StubFormatHandler(schema, [batch])
-    registry = StubFormatRegistry(handler)
+    table_format = StubTableFormat(
+        catalog_name="analytics",
+        table_name="test.table",
+        format="stub_format",
+        schema=schema,
+        batches=(batch,),
+    )
 
     policy_path = tmp_path / "policy.yaml"
     policy_path.write_text(
@@ -360,7 +360,7 @@ def test_policy_version_is_per_dataset(tmp_path):
 """
         )
     )
-    server = _build_server(format_registry=registry, policy_path=policy_path)
+    server = _build_server(table_format=table_format, policy_path=policy_path)
     descriptor = flight.FlightDescriptor.for_command(
         json.dumps(
             {
@@ -414,8 +414,13 @@ def test_policy_version_is_per_dataset(tmp_path):
 def test_do_get_requires_authorization_header(tmp_path):
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     batch = pa.record_batch([pa.array([1]), pa.array(["us"])], schema=schema)
-    handler = StubFormatHandler(schema, [batch])
-    registry = StubFormatRegistry(handler)
+    table_format = StubTableFormat(
+        catalog_name="analytics",
+        table_name="test.table",
+        format="stub_format",
+        schema=schema,
+        batches=(batch,),
+    )
 
     policy_path = tmp_path / "policy.yaml"
     policy_path.write_text(
@@ -428,7 +433,7 @@ def test_do_get_requires_authorization_header(tmp_path):
 """
         )
     )
-    server = _build_server(format_registry=registry, policy_path=policy_path)
+    server = _build_server(table_format=table_format, policy_path=policy_path)
     descriptor = flight.FlightDescriptor.for_command(
         json.dumps(
             {

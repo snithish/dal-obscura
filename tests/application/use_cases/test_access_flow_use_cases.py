@@ -10,9 +10,9 @@ import pytest
 from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
 from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
 from dal_obscura.domain.access_control.models import AccessDecision, MaskRule, Principal
-from dal_obscura.domain.catalog.ports import ResolvedTable
-from dal_obscura.domain.format_handler.ports import InputPartition, Plan, ScanTask
+from dal_obscura.domain.catalog.ports import TableFormat
 from dal_obscura.domain.query_planning.models import PlanRequest
+from dal_obscura.domain.table_format.ports import InputPartition, Plan, ScanTask
 from dal_obscura.domain.ticket_delivery.models import ScanPayload, TicketPayload
 
 AUTHORIZATION_HEADER = {"authorization": "Bearer jwt-token"}
@@ -22,23 +22,36 @@ def _scan_payload() -> ScanPayload:
     return {"read_payload": "payload", "row_filter": None, "masks": {}}
 
 
-@dataclass(frozen=True, kw_only=True)
-class StubResolvedTable(ResolvedTable):
-    pass
-
-
 @dataclass(frozen=True)
 class StubInputPartition(InputPartition):
     payload: bytes
-    _table: ResolvedTable | None = None
 
-    @property
-    def table(self) -> ResolvedTable:
-        return self._table or StubResolvedTable(
-            catalog_name="",
-            table_name="test",
-            format="test",
+
+@dataclass(frozen=True, kw_only=True)
+class StubTableFormat(TableFormat):
+    schema: pa.Schema
+    batches: tuple[pa.RecordBatch, ...]
+
+    def get_schema(self) -> pa.Schema:
+        return self.schema
+
+    def plan(self, request: PlanRequest, max_tickets: int) -> Plan:
+        del request, max_tickets
+        return Plan(
+            schema=self.schema,
+            tasks=[
+                ScanTask(
+                    table_format=self,
+                    schema=self.schema,
+                    partition=StubInputPartition(payload=b"payload"),
+                )
+            ],
         )
+
+    def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
+        if not isinstance(partition, StubInputPartition):
+            raise TypeError("StubTableFormat requires a StubInputPartition")
+        return self.schema, iter(self.batches)
 
 
 class FakeIdentity:
@@ -68,45 +81,12 @@ class FakeAuthorizer:
 
 
 class FakeCatalogRegistry:
-    def __init__(self, table: ResolvedTable) -> None:
-        self._table = table
+    def __init__(self, table_format: TableFormat) -> None:
+        self._table_format = table_format
 
-    def describe(self, catalog: str | None, target: str) -> ResolvedTable:
-        return self._table
-
-
-class FakeFormatHandler:
-    def __init__(self, schema: pa.Schema, plan: Plan) -> None:
-        self._schema = schema
-        self._plan = plan
-
-    @property
-    def supported_format(self):
-        return "fake_format"
-
-    def get_schema(self, table: ResolvedTable) -> pa.Schema:
-        return self._schema
-
-    def plan(self, table: ResolvedTable, request: PlanRequest, max_tickets: int) -> Plan:
-        return self._plan
-
-    def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
-        return self._schema, iter(
-            [
-                pa.record_batch(
-                    [pa.array([1]), pa.array(["us"])],
-                    schema=pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())]),
-                )
-            ]
-        )
-
-
-class FakeFormatRegistry:
-    def __init__(self, handler: FakeFormatHandler):
-        self._handler = handler
-
-    def get_handler(self, format: str):
-        return self._handler
+    def describe(self, catalog: str | None, target: str) -> TableFormat:
+        del catalog, target
+        return self._table_format
 
 
 class FakeMasking:
@@ -127,6 +107,7 @@ class FakeTicketCodec:
         return "signed-token"
 
     def verify(self, token: str) -> TicketPayload:
+        del token
         return self._payload
 
 
@@ -137,9 +118,11 @@ class FakeRowTransform:
 
 def _build_use_case_dependencies():
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
-    read_payload = StubInputPartition(payload=b"payload")
-    plan = Plan(
-        schema=schema, tasks=[ScanTask(format="fake_format", schema=schema, partition=read_payload)]
+    batches = (
+        pa.record_batch(
+            [pa.array([1]), pa.array(["us"])],
+            schema=pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())]),
+        ),
     )
     decision = AccessDecision(
         allowed_columns=["id", "region"],
@@ -147,18 +130,28 @@ def _build_use_case_dependencies():
         row_filter="region = 'us'",
         policy_version=100,
     )
-    resolved_table = StubResolvedTable(
+    table_format = StubTableFormat(
         catalog_name="catalog1",
         table_name="users",
         format="fake_format",
+        schema=schema,
+        batches=batches,
     )
-    return schema, plan, decision, resolved_table
+    return schema, decision, table_format
+
+
+def _encode_scan_task(table_format: TableFormat, schema: pa.Schema) -> str:
+    task = ScanTask(
+        table_format=table_format,
+        schema=schema,
+        partition=StubInputPartition(payload=b"payload"),
+    )
+    return base64.b64encode(pickle.dumps(task)).decode("utf-8")
 
 
 def test_plan_access_auth_failure():
-    schema, plan, decision, resolved_table = _build_use_case_dependencies()
-    catalog_registry = FakeCatalogRegistry(resolved_table)
-    format_registry = FakeFormatRegistry(FakeFormatHandler(schema, plan))
+    _schema, decision, table_format = _build_use_case_dependencies()
+    catalog_registry = FakeCatalogRegistry(table_format)
     authorizer = FakeAuthorizer(decision=decision)
     ticket_codec = FakeTicketCodec(
         TicketPayload(
@@ -170,14 +163,12 @@ def test_plan_access_auth_failure():
             principal_id="user1",
             expires_at=9999999999,
             nonce="abc",
-            format="fake_format",
         )
     )
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=None),
         authorizer=authorizer,
         catalog_registry=cast(Any, catalog_registry),
-        format_registry=cast(Any, format_registry),
         masking=FakeMasking(),
         ticket_codec=ticket_codec,
         ticket_ttl_seconds=300,
@@ -189,9 +180,8 @@ def test_plan_access_auth_failure():
 
 
 def test_plan_access_authz_failure():
-    schema, plan, _, resolved_table = _build_use_case_dependencies()
-    catalog_registry = FakeCatalogRegistry(resolved_table)
-    format_registry = FakeFormatRegistry(FakeFormatHandler(schema, plan))
+    _schema, _, table_format = _build_use_case_dependencies()
+    catalog_registry = FakeCatalogRegistry(table_format)
     ticket_codec = FakeTicketCodec(
         TicketPayload(
             catalog="catalog1",
@@ -202,14 +192,12 @@ def test_plan_access_authz_failure():
             principal_id="user1",
             expires_at=9999999999,
             nonce="abc",
-            format="fake_format",
         )
     )
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         authorizer=FakeAuthorizer(decision=None),
         catalog_registry=cast(Any, catalog_registry),
-        format_registry=cast(Any, format_registry),
         masking=FakeMasking(),
         ticket_codec=ticket_codec,
         ticket_ttl_seconds=300,
@@ -224,9 +212,8 @@ def test_plan_access_authz_failure():
 
 
 def test_plan_access_expands_wildcard_columns():
-    schema, plan, decision, resolved_table = _build_use_case_dependencies()
-    catalog_registry = FakeCatalogRegistry(resolved_table)
-    format_registry = FakeFormatRegistry(FakeFormatHandler(schema, plan))
+    _schema, decision, table_format = _build_use_case_dependencies()
+    catalog_registry = FakeCatalogRegistry(table_format)
     authorizer = FakeAuthorizer(decision=decision)
     ticket_codec = FakeTicketCodec(
         TicketPayload(
@@ -238,14 +225,12 @@ def test_plan_access_expands_wildcard_columns():
             principal_id="user1",
             expires_at=9999999999,
             nonce="abc",
-            format="fake_format",
         )
     )
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         authorizer=authorizer,
         catalog_registry=cast(Any, catalog_registry),
-        format_registry=cast(Any, format_registry),
         masking=FakeMasking(),
         ticket_codec=ticket_codec,
         ticket_ttl_seconds=300,
@@ -260,16 +245,13 @@ def test_plan_access_expands_wildcard_columns():
 
 
 def test_fetch_stream_policy_version_mismatch():
-    schema, plan, decision, _ = _build_use_case_dependencies()
-    format_registry = FakeFormatRegistry(FakeFormatHandler(schema, plan))
+    schema, decision, table_format = _build_use_case_dependencies()
     payload = TicketPayload(
         catalog="catalog1",
         target="users",
         columns=["id", "region"],
         scan={
-            "read_payload": base64.b64encode(pickle.dumps(StubInputPartition(b"payload"))).decode(
-                "utf-8"
-            ),
+            "read_payload": _encode_scan_task(table_format, schema),
             "row_filter": None,
             "masks": {},
         },
@@ -277,12 +259,10 @@ def test_fetch_stream_policy_version_mismatch():
         principal_id="user1",
         expires_at=9999999999,
         nonce="abc",
-        format="fake_format",
     )
     use_case = FetchStreamUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         authorizer=FakeAuthorizer(decision=decision, current_version=101),
-        format_registry=cast(Any, format_registry),
         masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
@@ -293,8 +273,66 @@ def test_fetch_stream_policy_version_mismatch():
 
 
 def test_fetch_stream_principal_mismatch():
-    schema, plan, decision, _ = _build_use_case_dependencies()
-    format_registry = FakeFormatRegistry(FakeFormatHandler(schema, plan))
+    schema, decision, table_format = _build_use_case_dependencies()
+    payload = TicketPayload(
+        catalog="catalog1",
+        target="users",
+        columns=["id", "region"],
+        scan={
+            "read_payload": _encode_scan_task(table_format, schema),
+            "row_filter": None,
+            "masks": {},
+        },
+        policy_version=100,
+        principal_id="user1",
+        expires_at=9999999999,
+        nonce="abc",
+    )
+    use_case = FetchStreamUseCase(
+        identity=FakeIdentity(principal=Principal(id="user2", groups=[], attributes={})),
+        authorizer=FakeAuthorizer(decision=decision, current_version=100),
+        masking=FakeMasking(),
+        row_transform=FakeRowTransform(),
+        ticket_codec=FakeTicketCodec(payload),
+    )
+
+    with pytest.raises(PermissionError):
+        use_case.execute("token", AUTHORIZATION_HEADER)
+
+
+def test_fetch_stream_rejects_invalid_mask_payload():
+    schema, decision, table_format = _build_use_case_dependencies()
+    payload = TicketPayload(
+        catalog="catalog1",
+        target="users",
+        columns=["id", "region"],
+        scan=cast(
+            ScanPayload,
+            {
+                "read_payload": _encode_scan_task(table_format, schema),
+                "row_filter": None,
+                "masks": {"region": "not-an-object"},
+            },
+        ),
+        policy_version=100,
+        principal_id="user1",
+        expires_at=9999999999,
+        nonce="abc",
+    )
+    use_case = FetchStreamUseCase(
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+        authorizer=FakeAuthorizer(decision=decision, current_version=100),
+        masking=FakeMasking(),
+        row_transform=FakeRowTransform(),
+        ticket_codec=FakeTicketCodec(payload),
+    )
+
+    with pytest.raises(ValueError, match="Invalid mask payload"):
+        use_case.execute("token", AUTHORIZATION_HEADER)
+
+
+def test_fetch_stream_rejects_legacy_partition_payload():
+    _, decision, _ = _build_use_case_dependencies()
     payload = TicketPayload(
         catalog="catalog1",
         target="users",
@@ -310,52 +348,14 @@ def test_fetch_stream_principal_mismatch():
         principal_id="user1",
         expires_at=9999999999,
         nonce="abc",
-        format="fake_format",
-    )
-    use_case = FetchStreamUseCase(
-        identity=FakeIdentity(principal=Principal(id="user2", groups=[], attributes={})),
-        authorizer=FakeAuthorizer(decision=decision, current_version=100),
-        format_registry=cast(Any, format_registry),
-        masking=FakeMasking(),
-        row_transform=FakeRowTransform(),
-        ticket_codec=FakeTicketCodec(payload),
-    )
-
-    with pytest.raises(PermissionError):
-        use_case.execute("token", AUTHORIZATION_HEADER)
-
-
-def test_fetch_stream_rejects_invalid_mask_payload():
-    schema, plan, decision, _ = _build_use_case_dependencies()
-    format_registry = FakeFormatRegistry(FakeFormatHandler(schema, plan))
-    payload = TicketPayload(
-        catalog="catalog1",
-        target="users",
-        columns=["id", "region"],
-        scan=cast(
-            ScanPayload,
-            {
-                "read_payload": base64.b64encode(
-                    pickle.dumps(StubInputPartition(b"payload"))
-                ).decode("utf-8"),
-                "row_filter": None,
-                "masks": {"region": "not-an-object"},
-            },
-        ),
-        policy_version=100,
-        principal_id="user1",
-        expires_at=9999999999,
-        nonce="abc",
-        format="fake_format",
     )
     use_case = FetchStreamUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         authorizer=FakeAuthorizer(decision=decision, current_version=100),
-        format_registry=cast(Any, format_registry),
         masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
     )
 
-    with pytest.raises(ValueError, match="Invalid mask payload"):
+    with pytest.raises(ValueError, match="Invalid read payload"):
         use_case.execute("token", AUTHORIZATION_HEADER)
