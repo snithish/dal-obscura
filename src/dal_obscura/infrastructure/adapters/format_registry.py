@@ -45,17 +45,6 @@ class DynamicFormatRegistry:
         except ImportError:
             pass
 
-        try:
-            from dal_obscura.infrastructure.adapters.duckdb_handler import DuckDBHandler
-
-            self.register_handler("duckdb_file", DuckDBHandler)
-            # csv, parquet, json are also theoretically duckdb
-            self.register_handler("csv", DuckDBHandler)
-            self.register_handler("parquet", DuckDBHandler)
-            self.register_handler("json", DuckDBHandler)
-        except ImportError:
-            pass
-
     def _register_entrypoints(self) -> None:
         """Loads optional format handler plugins from Python entry points."""
         for entrypoint in _entry_points_for_group(_FORMAT_PLUGIN_GROUP):

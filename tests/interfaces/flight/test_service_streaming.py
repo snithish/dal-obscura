@@ -31,17 +31,17 @@ from dal_obscura.interfaces.flight.server import DataAccessFlightService
 JWT_SECRET = "test-jwt-secret-32-characters-long"
 
 
+@dataclass(frozen=True, kw_only=True)
+class StubResolvedTable(ResolvedTable):
+    pass
+
+
 class StubCatalogRegistry:
     def describe(self, catalog: str | None, target: str) -> ResolvedTable:
-        from dal_obscura.infrastructure.adapters.duckdb_handler import FileTable
-
-        return FileTable(
+        return StubResolvedTable(
             catalog_name=catalog or "",
             table_name=target,
-            format="duckdb_file",
-            file_format="duckdb_file",
-            paths=(),
-            options={},
+            format="stub_format",
         )
 
 
@@ -52,15 +52,10 @@ class StubInputPartition(InputPartition):
 
     @property
     def table(self) -> ResolvedTable:
-        from dal_obscura.infrastructure.adapters.duckdb_handler import FileTable
-
-        return self._table or FileTable(
+        return self._table or StubResolvedTable(
             catalog_name="",
             table_name="test",
             format="test",
-            file_format="test",
-            paths=(),
-            options={},
         )
 
 
@@ -71,7 +66,7 @@ class StubFormatHandler(FormatHandler):
 
     @property
     def supported_format(self):
-        return "duckdb_file"
+        return "stub_format"
 
     def get_schema(self, table: ResolvedTable) -> pa.Schema:
         return self._schema
@@ -88,7 +83,7 @@ class StubFormatHandler(FormatHandler):
             schema=self._schema,
             tasks=[
                 ScanTask(
-                    format="duckdb_file",
+                    format="stub_format",
                     schema=self._schema,
                     partition=StubInputPartition(payload=payload),
                 )

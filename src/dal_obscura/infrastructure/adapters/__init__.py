@@ -1,5 +1,4 @@
 from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
-from dal_obscura.infrastructure.adapters.duckdb_handler import DuckDBHandler
 from dal_obscura.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
@@ -30,7 +29,6 @@ __all__ = [
     "CatalogTargetConfig",
     "DefaultIdentityAdapter",
     "DefaultMaskingAdapter",
-    "DuckDBHandler",
     "DuckDBRowTransformAdapter",
     "DynamicCatalogRegistry",
     "DynamicFormatRegistry",

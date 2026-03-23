@@ -23,7 +23,7 @@ def test_ticket_sign_and_verify():
         principal_id="user1",
         expires_at=2**31,
         nonce="abc123",
-        format="duckdb_file",
+        format="iceberg",
     )
     ticket = codec.sign_payload(payload)
     verified = codec.verify(ticket)
@@ -43,7 +43,7 @@ def test_ticket_expiry():
         principal_id="user1",
         expires_at=0,
         nonce="expired",
-        format="duckdb_file",
+        format="iceberg",
     )
     ticket = codec.sign_payload(payload)
     with pytest.raises(PermissionError):
@@ -60,7 +60,7 @@ def test_ticket_rejects_tampered_signature():
         principal_id="user1",
         expires_at=2**31,
         nonce="nonce",
-        format="duckdb_file",
+        format="iceberg",
     )
     ticket = codec.sign_payload(payload)
     tampered = ticket[:-1] + ("0" if ticket[-1] != "0" else "1")

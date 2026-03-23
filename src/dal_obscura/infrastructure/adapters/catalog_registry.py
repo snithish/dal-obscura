@@ -1,26 +1,16 @@
 from __future__ import annotations
 
-import fnmatch
-import glob
 import importlib
 import threading
-from collections.abc import Mapping
-from pathlib import Path
 from typing import Any
 
 from dal_obscura.domain.catalog.ports import CatalogPlugin, ResolvedTable
-from dal_obscura.infrastructure.adapters.duckdb_handler import FileTable
 from dal_obscura.infrastructure.adapters.iceberg_handler import IcebergTable
 from dal_obscura.infrastructure.adapters.service_config import (
-    DEFAULT_SAMPLE_FILES,
-    DEFAULT_SAMPLE_ROWS,
     CatalogConfig,
     CatalogTargetConfig,
-    PathConfig,
     ServiceConfig,
 )
-
-_COMPRESSION_SUFFIXES = (".gz", ".bz2", ".zst")
 
 
 class DynamicCatalogRegistry:
@@ -57,10 +47,10 @@ class DynamicCatalogRegistry:
         return implementation.get_table(target)
 
     def describe(self, catalog: str | None, target: str) -> ResolvedTable:
-        """Describes either a catalog-based target or a raw filesystem target."""
-        if catalog is not None:
-            return self.describe_catalog(catalog, target)
-        return _resolve_raw_target(self.current_config, target)
+        """Describes a target by asking the requested catalog implementation."""
+        if catalog is None:
+            raise ValueError("Catalog name is required to resolve a target")
+        return self.describe_catalog(catalog, target)
 
 
 class IcebergCatalog:
@@ -70,6 +60,7 @@ class IcebergCatalog:
         self._name = name
         self.options = options
         self.targets = targets
+        self._catalog = _load_iceberg_catalog(name, options)
 
     @property
     def name(self) -> str:
@@ -79,17 +70,12 @@ class IcebergCatalog:
         self,
         target: str,
     ) -> ResolvedTable:
-        """Resolves a catalog target to Iceberg by default, with target overrides."""
-        target_config = _match_catalog_target(self.targets, target)
-        backend = target_config.backend if target_config else "iceberg"
-
-        if backend == "iceberg":
-            table_identifier = (target_config.table if target_config else None) or target
-            return _resolve_iceberg_metadata(self.name, self.options, target, table_identifier)
-
-        if target_config is None:
-            raise ValueError(f"Unknown target {target!r} for catalog {self.name!r}")
-        return _target_descriptor(self.name, self.options, target, target_config)
+        """Resolves an Iceberg target, optionally applying exact target overrides."""
+        target_config = self.targets.get(target)
+        if target_config is not None:
+            _ensure_iceberg_backend(self.name, target, target_config)
+        table_identifier = (target_config.table if target_config else None) or target
+        return _resolve_iceberg_metadata(self._catalog, self.name, target, table_identifier)
 
 
 class StaticCatalog:
@@ -99,6 +85,7 @@ class StaticCatalog:
         self._name = name
         self.options = options
         self.targets = targets
+        self._catalog: Any | None = None
 
     @property
     def name(self) -> str:
@@ -108,72 +95,24 @@ class StaticCatalog:
         self,
         target: str,
     ) -> ResolvedTable:
-        """Returns the backend descriptor for the most specific matching target rule."""
-        target_config = _match_catalog_target(self.targets, target)
+        """Resolves an explicitly configured target by loading it from the catalog."""
+        target_config = self.targets.get(target)
         if target_config is None:
             raise ValueError(f"Unknown target {target!r} for catalog {self.name!r}")
-        return _target_descriptor(self.name, self.options, target, target_config)
-
-
-def _resolve_raw_target(service_config: ServiceConfig, target: str) -> ResolvedTable:
-    """Treats the target as a filesystem glob and resolves it to a file descriptor."""
-    paths = _expand_paths((target,))
-    path_config = _select_path_config(service_config.paths, target)
-    options = path_config.options.to_dict() if path_config else _default_file_options()
-    file_format = _infer_file_format(paths)
-    return FileTable(
-        catalog_name="",
-        table_name=target,
-        format="duckdb_file",
-        file_format=file_format,
-        paths=paths,
-        options=options,
-    )
-
-
-def _default_file_options() -> dict[str, object]:
-    """Default schema inference settings for ad-hoc file targets."""
-    return {
-        "sample_rows": DEFAULT_SAMPLE_ROWS,
-        "sample_files": DEFAULT_SAMPLE_FILES,
-    }
-
-
-def _target_descriptor(
-    catalog_name: str,
-    catalog_options: dict,
-    requested_target: str,
-    target_config: CatalogTargetConfig,
-) -> ResolvedTable:
-    """Builds the format-specific ResolvedTable returned by the catalog."""
-    backend_id = target_config.backend or "iceberg"
-    if backend_id == "duckdb_file":
-        return FileTable(
-            catalog_name=catalog_name,
-            table_name=requested_target,
-            format="duckdb_file",
-            file_format=str(target_config.format or ""),
-            paths=_expand_paths(target_config.paths),
-            options=dict(target_config.options),
-        )
-    if backend_id == "iceberg":
-        return _resolve_iceberg_metadata(
-            catalog_name, catalog_options, requested_target, target_config.table or requested_target
-        )
-
-    raise ValueError(f"Unknown backend {backend_id!r} for target {requested_target!r}")
+        _ensure_iceberg_backend(self.name, target, target_config)
+        if self._catalog is None:
+            self._catalog = _load_iceberg_catalog(self.name, self.options)
+        table_identifier = target_config.table or target
+        return _resolve_iceberg_metadata(self._catalog, self.name, target, table_identifier)
 
 
 def _resolve_iceberg_metadata(
+    catalog: Any,
     catalog_name: str,
-    catalog_options: dict,
     requested_target: str,
     table_identifier: str,
 ) -> ResolvedTable:
     """Contacts the Iceberg catalog to resolve the actual metadata location for a table."""
-    from pyiceberg.catalog import load_catalog
-
-    catalog = load_catalog(catalog_name, **catalog_options)
     try:
         pyiceberg_table = catalog.load_table(table_identifier)
     except Exception as e:
@@ -189,63 +128,28 @@ def _resolve_iceberg_metadata(
     )
 
 
-def _match_catalog_target(
-    targets: Mapping[str, CatalogTargetConfig], target: str
-) -> CatalogTargetConfig | None:
-    """Returns the most specific target pattern that matches the request."""
-    matches = [
-        (pattern, config) for pattern, config in targets.items() if fnmatch.fnmatch(target, pattern)
-    ]
-    if not matches:
-        return None
-    return max(matches, key=lambda item: len(item[0]))[1]
+def _load_iceberg_catalog(catalog_name: str, catalog_options: dict[str, Any]) -> Any:
+    """Loads and caches the underlying PyIceberg catalog implementation."""
+    from pyiceberg.catalog import load_catalog
+
+    try:
+        return load_catalog(catalog_name, **catalog_options)
+    except Exception as exc:
+        raise ValueError(f"Failed to load catalog {catalog_name!r}: {exc}") from exc
 
 
-def _expand_paths(patterns: tuple[str, ...]) -> tuple[str, ...]:
-    """Expands globs into a stable, de-duplicated list of files."""
-    expanded: list[str] = []
-    for pattern in patterns:
-        matches = sorted(glob.glob(pattern, recursive=True))
-        expanded.extend(match for match in matches if Path(match).is_file())
-    unique_paths = tuple(dict.fromkeys(expanded))
-    if not unique_paths:
-        raise ValueError("Target did not resolve to any files")
-    return unique_paths
-
-
-def _select_path_config(path_configs: tuple[PathConfig, ...], target: str) -> PathConfig | None:
-    """Returns the most specific raw-path config that matches the target."""
-    matches = [config for config in path_configs if fnmatch.fnmatch(target, config.glob)]
-    if not matches:
-        return None
-    return max(matches, key=lambda config: len(config.glob))
-
-
-def _infer_file_format(paths: tuple[str, ...]) -> str:
-    """Ensures every resolved file shares the same supported format."""
-    formats = {_path_format(path) for path in paths}
-    if len(formats) != 1:
-        raise ValueError("Target resolved to mixed or unsupported file formats")
-    file_format = formats.pop()
-    if file_format is None:
-        raise ValueError("Target resolved to mixed or unsupported file formats")
-    return file_format
-
-
-def _path_format(path: str) -> str | None:
-    """Infers the data format from the file suffix, ignoring compression suffixes."""
-    lower_path = path.lower()
-    for suffix in _COMPRESSION_SUFFIXES:
-        if lower_path.endswith(suffix):
-            lower_path = lower_path[: -len(suffix)]
-            break
-    if lower_path.endswith(".csv"):
-        return "csv"
-    if lower_path.endswith((".json", ".jsonl", ".ndjson")):
-        return "json"
-    if lower_path.endswith(".parquet"):
-        return "parquet"
-    return None
+def _ensure_iceberg_backend(
+    catalog_name: str,
+    requested_target: str,
+    target_config: CatalogTargetConfig,
+) -> None:
+    """Rejects non-Iceberg target overrides until other backends are implemented."""
+    backend_id = target_config.backend or "iceberg"
+    if backend_id != "iceberg":
+        raise ValueError(
+            f"Unsupported backend {backend_id!r} for target {requested_target!r} in "
+            f"catalog {catalog_name!r}; only 'iceberg' is currently supported"
+        )
 
 
 def _load_and_instantiate_catalog(catalog_config: CatalogConfig) -> CatalogPlugin:

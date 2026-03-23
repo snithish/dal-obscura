@@ -14,13 +14,17 @@ from dal_obscura.domain.catalog.ports import ResolvedTable
 from dal_obscura.domain.format_handler.ports import InputPartition, Plan, ScanTask
 from dal_obscura.domain.query_planning.models import PlanRequest
 from dal_obscura.domain.ticket_delivery.models import ScanPayload, TicketPayload
-from dal_obscura.infrastructure.adapters.duckdb_handler import FileTable
 
 AUTHORIZATION_HEADER = {"authorization": "Bearer jwt-token"}
 
 
 def _scan_payload() -> ScanPayload:
     return {"read_payload": "payload", "row_filter": None, "masks": {}}
+
+
+@dataclass(frozen=True, kw_only=True)
+class StubResolvedTable(ResolvedTable):
+    pass
 
 
 @dataclass(frozen=True)
@@ -30,15 +34,10 @@ class StubInputPartition(InputPartition):
 
     @property
     def table(self) -> ResolvedTable:
-        from dal_obscura.infrastructure.adapters.duckdb_handler import FileTable
-
-        return self._table or FileTable(
+        return self._table or StubResolvedTable(
             catalog_name="",
             table_name="test",
             format="test",
-            file_format="test",
-            paths=(),
-            options={},
         )
 
 
@@ -69,10 +68,10 @@ class FakeAuthorizer:
 
 
 class FakeCatalogRegistry:
-    def __init__(self, table: FileTable) -> None:
+    def __init__(self, table: ResolvedTable) -> None:
         self._table = table
 
-    def describe(self, catalog: str | None, target: str) -> FileTable:
+    def describe(self, catalog: str | None, target: str) -> ResolvedTable:
         return self._table
 
 
@@ -85,10 +84,10 @@ class FakeFormatHandler:
     def supported_format(self):
         return "fake_format"
 
-    def get_schema(self, table: FileTable) -> pa.Schema:
+    def get_schema(self, table: ResolvedTable) -> pa.Schema:
         return self._schema
 
-    def plan(self, table: FileTable, request: PlanRequest, max_tickets: int) -> Plan:
+    def plan(self, table: ResolvedTable, request: PlanRequest, max_tickets: int) -> Plan:
         return self._plan
 
     def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
@@ -148,13 +147,10 @@ def _build_use_case_dependencies():
         row_filter="region = 'us'",
         policy_version=100,
     )
-    resolved_table = FileTable(
+    resolved_table = StubResolvedTable(
         catalog_name="catalog1",
         table_name="users",
         format="fake_format",
-        file_format="fake_format",
-        paths=(),
-        options={},
     )
     return schema, plan, decision, resolved_table
 

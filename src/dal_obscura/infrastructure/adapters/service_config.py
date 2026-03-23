@@ -105,38 +105,27 @@ def _parse_catalog(name: str, raw: Any) -> CatalogConfig:
 
 
 def _parse_catalog_target(name: str, raw: Any) -> CatalogTargetConfig:
-    """Parses a target override and infers the backend when possible."""
+    """Parses a target override for currently supported catalog backends."""
     if not isinstance(raw, dict):
         raise ValueError(f"Target {name!r} must be an object")
 
     backend = raw.get("backend")
-    backend_name = str(backend).strip().lower() if backend else None
-    file_format = raw.get("format")
-    normalized_format = str(file_format).strip().lower() if file_format else None
-    if normalized_format is not None and normalized_format not in {"csv", "json", "parquet"}:
-        raise ValueError(f"Target {name!r} format must be csv, json, or parquet")
+    backend_name = str(backend).strip().lower() if backend else "iceberg"
+    if backend_name != "iceberg":
+        raise ValueError(f"Unsupported backend {backend_name!r} for target {name!r}")
 
-    paths = tuple(str(item) for item in raw.get("paths", []) or [])
+    if raw.get("format") is not None:
+        raise ValueError(f"Target {name!r} uses unsupported field 'format'")
+    if raw.get("paths") is not None:
+        raise ValueError(f"Target {name!r} uses unsupported field 'paths'")
+    if raw.get("options") is not None:
+        raise ValueError(f"Target {name!r} uses unsupported field 'options'")
+
     table = str(raw.get("table", "")).strip() or None
-    options = _parse_target_options(raw.get("options", {}))
-
-    if backend_name is None:
-        if normalized_format is not None or paths:
-            backend_name = "duckdb_file"
-        elif table is not None:
-            backend_name = "iceberg"
-
-    if backend_name == "duckdb_file" and normalized_format is None:
-        raise ValueError(f"Target {name!r} with backend duckdb_file must define format")
-    if backend_name == "duckdb_file" and not paths:
-        raise ValueError(f"Target {name!r} with backend duckdb_file must define paths")
 
     return CatalogTargetConfig(
         backend=backend_name,
         table=table,
-        format=normalized_format,
-        paths=paths,
-        options=options,
     )
 
 
@@ -148,20 +137,6 @@ def _parse_path_config(raw: Any) -> PathConfig:
     if not target_glob:
         raise ValueError("Path config entries must define 'glob'")
     return PathConfig(glob=target_glob, options=_parse_schema_options(raw.get("options", {})))
-
-
-def _parse_target_options(raw: Any) -> dict[str, Any]:
-    """Adds default sampling options to file-backed targets."""
-    if raw is None:
-        return {}
-    if not isinstance(raw, dict):
-        raise ValueError("Target options must be an object")
-    options = dict(raw)
-    if "sample_rows" not in options:
-        options["sample_rows"] = DEFAULT_SAMPLE_ROWS
-    if "sample_files" not in options:
-        options["sample_files"] = DEFAULT_SAMPLE_FILES
-    return options
 
 
 def _parse_schema_options(raw: Any) -> SchemaInferenceOptions:

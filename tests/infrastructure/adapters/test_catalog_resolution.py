@@ -41,35 +41,28 @@ def test_load_service_config_parses_catalog_types_and_targets(tmp_path):
                 options:
                   type: glue
                   warehouse: s3://warehouse
-              local_files:
+              static_alias:
                 module: dal_obscura.infrastructure.adapters.catalog_registry.StaticCatalog
-                targets:
-                  users_csv:
-                    backend: duckdb_file
-                    format: csv
-                    paths: ["./data/*.csv"]
-                    options:
-                      sample_rows: 111
-                      sample_files: 2
-            paths:
-              - glob: "/landing/**/*.csv"
                 options:
-                  sample_rows: 333
-                  sample_files: 4
+                  type: glue
+                  warehouse: s3://warehouse
+                targets:
+                  users_alias:
+                    backend: iceberg
+                    table: analytics.users
             """
         )
     )
 
     config = load_service_config(config_path)
 
-    assert set(config.catalogs) == {"glue_prod", "local_files"}
+    assert set(config.catalogs) == {"glue_prod", "static_alias"}
     assert (
         config.catalogs["glue_prod"].module
         == "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog"
     )
-    assert config.catalogs["local_files"].targets["users_csv"].backend == "duckdb_file"
-    assert config.catalogs["local_files"].targets["users_csv"].options["sample_rows"] == 111
-    assert config.paths[0].glob == "/landing/**/*.csv"
+    assert config.catalogs["static_alias"].targets["users_alias"].backend == "iceberg"
+    assert config.catalogs["static_alias"].targets["users_alias"].table == "analytics.users"
 
 
 def test_builtin_catalog_types_resolve_through_registry(tmp_path):
@@ -106,13 +99,11 @@ def test_builtin_catalog_types_resolve_through_registry(tmp_path):
         assert handler.supported_format == "iceberg"
 
 
-def test_catalog_registry_can_mix_format_families_within_one_catalog(tmp_path):
-    csv_path = tmp_path / "users.csv"
-    csv_path.write_text("id,name\n1,a\n")
+def test_catalog_registry_rejects_non_iceberg_target_backends(tmp_path):
     config_path = tmp_path / "service.yaml"
     config_path.write_text(
         textwrap.dedent(
-            f"""
+            """
             catalogs:
               mixed:
                 module: dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog
@@ -122,66 +113,66 @@ def test_catalog_registry_can_mix_format_families_within_one_catalog(tmp_path):
                 targets:
                   users_csv:
                     backend: duckdb_file
-                    format: csv
-                    paths: ["{csv_path}"]
             """
         )
     )
 
-    catalog_registry, _format_registry = _build_registries(config_path)
-    iceberg_target = catalog_registry.describe("mixed", "db.users")
-    file_target = catalog_registry.describe("mixed", "users_csv")
-
-    assert getattr(iceberg_target, "format", None) == "iceberg"
-    assert getattr(file_target, "format", None) == "duckdb_file"
-    assert file_target.paths == (str(csv_path),)
+    with pytest.raises(ValueError, match="Unsupported backend"):
+        _build_registries(config_path)
 
 
-def test_catalog_registry_infers_raw_path_format_and_prefers_most_specific_overlay(tmp_path):
-    raw_dir = tmp_path / "landing" / "special"
-    raw_dir.mkdir(parents=True)
-    csv_path = raw_dir / "users.csv"
-    csv_path.write_text("id,name\n1,a\n")
-    target = str(raw_dir / "*.csv")
-    config_path = tmp_path / "service.yaml"
-    config_path.write_text(
-        textwrap.dedent(
-            f"""
-            paths:
-              - glob: "{tmp_path}/landing/**/*.csv"
-                options:
-                  sample_rows: 10
-                  sample_files: 1
-              - glob: "{target}"
-                options:
-                  sample_rows: 500
-                  sample_files: 3
-            """
-        )
-    )
-
-    catalog_registry, _ = _build_registries(config_path)
-    resolved = catalog_registry.describe(None, target)
-
-    assert resolved.format == "duckdb_file"
-    assert resolved.catalog_name == ""
-    assert resolved.table_name == target
-    assert resolved.file_format == "csv"
-    assert resolved.paths == (str(csv_path),)
-    assert resolved.options == {"sample_rows": 500, "sample_files": 3}
-
-
-def test_catalog_registry_rejects_mixed_raw_path_formats(tmp_path):
-    data_dir = tmp_path / "landing"
-    data_dir.mkdir()
-    (data_dir / "users.csv").write_text("id,name\n1,a\n")
-    (data_dir / "users.json").write_text('{"id":1,"name":"a"}\n')
+def test_catalog_registry_requires_catalog_name(tmp_path):
     config_path = tmp_path / "empty.yaml"
     config_path.write_text("{}")
 
     catalog_registry, _ = _build_registries(config_path)
-    with pytest.raises(ValueError):
-        catalog_registry.describe(None, str(data_dir / "users.*"))
+    with pytest.raises(ValueError, match="Catalog name is required"):
+        catalog_registry.describe(None, "users")
+
+
+def test_iceberg_catalog_uses_exact_target_overrides_not_wildcards(
+    tmp_path, mock_pyiceberg_catalog
+):
+    config_path = tmp_path / "service.yaml"
+    config_path.write_text(
+        textwrap.dedent(
+            """
+            catalogs:
+              exact_only:
+                module: dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog
+                options: {type: sql}
+                targets:
+                  db.*:
+                    table: analytics.override_users
+            """
+        )
+    )
+
+    catalog_registry, _ = _build_registries(config_path)
+    catalog_registry.describe("exact_only", "db.users")
+
+    mock_catalog = mock_pyiceberg_catalog.return_value
+    assert mock_catalog.load_table.call_args_list[-1].args[0] == "db.users"
+
+
+def test_iceberg_catalog_is_instantiated_once_and_reused(tmp_path, mock_pyiceberg_catalog):
+    config_path = tmp_path / "service.yaml"
+    config_path.write_text(
+        textwrap.dedent(
+            """
+            catalogs:
+              sql_cat:
+                module: dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog
+                options: {type: sql}
+            """
+        )
+    )
+
+    catalog_registry, _ = _build_registries(config_path)
+    catalog_registry.describe("sql_cat", "db.users")
+    catalog_registry.describe("sql_cat", "db.orders")
+
+    assert mock_pyiceberg_catalog.call_count == 1
 
 
 def test_runtime_supports_dynamic_format_registration():

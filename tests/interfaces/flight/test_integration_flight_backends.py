@@ -223,6 +223,7 @@ def _write_service_and_policy(
     parquet_glob: str,
     raw_glob: str,
 ) -> tuple[Path, Path]:
+    del csv_glob, json_glob, parquet_glob, raw_glob
     service_config = {
         "catalogs": {
             "ice_one": {
@@ -231,14 +232,6 @@ def _write_service_and_policy(
                     "type": "sql",
                     "uri": f"sqlite:///{tmp_path / 'ice_one.db'}",
                     "warehouse": str(tmp_path / "warehouse-one"),
-                },
-                "targets": {
-                    "users_csv": {
-                        "backend": "duckdb_file",
-                        "format": "csv",
-                        "paths": [csv_glob],
-                        "options": {"sample_rows": 2000, "sample_files": 2},
-                    }
                 },
             },
             "ice_two": {
@@ -249,32 +242,7 @@ def _write_service_and_policy(
                     "warehouse": str(tmp_path / "warehouse-two"),
                 },
             },
-            "local_files": {
-                "module": "dal_obscura.infrastructure.adapters.catalog_registry.StaticCatalog",
-                "targets": {
-                    "users_csv": {
-                        "backend": "duckdb_file",
-                        "format": "csv",
-                        "paths": [csv_glob],
-                        "options": {"sample_rows": 2000, "sample_files": 2},
-                    },
-                    "events_json": {
-                        "backend": "duckdb_file",
-                        "format": "json",
-                        "paths": [json_glob],
-                        "options": {"sample_rows": 2000, "sample_files": 2},
-                    },
-                    "facts_parquet": {
-                        "backend": "duckdb_file",
-                        "format": "parquet",
-                        "paths": [parquet_glob],
-                    },
-                },
-            },
         },
-        "paths": [
-            {"glob": raw_glob, "options": {"sample_rows": 1000, "sample_files": 1}},
-        ],
     }
     policy = {
         "version": 1,
@@ -291,16 +259,6 @@ def _write_service_and_policy(
                             }
                         ]
                     },
-                    "users_csv": {
-                        "rules": [
-                            {
-                                "principals": ["user1"],
-                                "columns": ["id", "email", "region"],
-                                "masks": {"id": {"type": "hash"}},
-                                "row_filter": "region = 'us'",
-                            }
-                        ]
-                    },
                 }
             },
             "ice_two": {
@@ -315,54 +273,7 @@ def _write_service_and_policy(
                     }
                 }
             },
-            "local_files": {
-                "targets": {
-                    "users_csv": {
-                        "rules": [
-                            {
-                                "principals": ["user1"],
-                                "columns": ["id", "email", "region"],
-                                "masks": {"id": {"type": "hash"}},
-                                "row_filter": "region = 'us'",
-                            }
-                        ]
-                    },
-                    "events_json": {
-                        "rules": [
-                            {
-                                "principals": ["user1"],
-                                "columns": ["id", "email", "region"],
-                                "masks": {"id": {"type": "hash"}},
-                                "row_filter": "region = 'us'",
-                            }
-                        ]
-                    },
-                    "facts_parquet": {
-                        "rules": [
-                            {
-                                "principals": ["user1"],
-                                "columns": ["id", "email", "region"],
-                                "masks": {"id": {"type": "hash"}},
-                                "row_filter": "region = 'us'",
-                            }
-                        ]
-                    },
-                }
-            },
         },
-        "paths": [
-            {
-                "target": raw_glob,
-                "rules": [
-                    {
-                        "principals": ["user1"],
-                        "columns": ["id", "email", "region"],
-                        "masks": {"id": {"type": "hash"}},
-                        "row_filter": "region = 'us'",
-                    }
-                ],
-            }
-        ],
     }
 
     service_config_path = tmp_path / "service.yaml"
@@ -411,6 +322,7 @@ def test_flight_plan_and_get_with_iceberg_multi_catalog(tmp_path):
     thread.join(timeout=2)
 
 
+@pytest.mark.skip(reason="duckdb_file backend is temporarily removed")
 def test_flight_plan_and_get_with_mixed_catalog_formats(tmp_path):
     table_id_one = _create_iceberg_table(tmp_path, "ice_one", "warehouse-one", [1, 2, 3, 4])
     csv_glob = _write_csv_files(tmp_path / "csv", file_count=2, rows_per_file=10)
@@ -449,6 +361,7 @@ def test_flight_plan_and_get_with_mixed_catalog_formats(tmp_path):
     thread.join(timeout=2)
 
 
+@pytest.mark.skip(reason="duckdb_file backend is temporarily removed")
 def test_flight_plan_and_get_with_json_catalog(tmp_path):
     csv_glob = _write_csv_files(tmp_path / "csv", file_count=1, rows_per_file=4)
     json_glob = _write_ndjson_files(tmp_path / "json", file_count=2, rows_per_file=10)
@@ -479,6 +392,7 @@ def test_flight_plan_and_get_with_json_catalog(tmp_path):
     thread.join(timeout=2)
 
 
+@pytest.mark.skip(reason="duckdb_file backend is temporarily removed")
 def test_flight_plan_and_get_with_raw_path(tmp_path):
     csv_glob = _write_csv_files(tmp_path / "csv", file_count=1, rows_per_file=4)
     json_glob = _write_ndjson_files(tmp_path / "json", file_count=1, rows_per_file=4)
@@ -509,6 +423,7 @@ def test_flight_plan_and_get_with_raw_path(tmp_path):
     thread.join(timeout=2)
 
 
+@pytest.mark.skip(reason="duckdb_file backend is temporarily removed")
 def test_flight_plan_and_get_with_parquet_multi_file_large(tmp_path):
     csv_glob = _write_csv_files(tmp_path / "csv", file_count=1, rows_per_file=4)
     json_glob = _write_ndjson_files(tmp_path / "json", file_count=1, rows_per_file=4)
@@ -540,6 +455,7 @@ def test_flight_plan_and_get_with_parquet_multi_file_large(tmp_path):
     thread.join(timeout=2)
 
 
+@pytest.mark.skip(reason="duckdb_file backend is temporarily removed")
 def test_hot_reload_does_not_break_format_registry(tmp_path):
     csv_glob_v1 = _write_csv_files(tmp_path / "csv-v1", file_count=1, rows_per_file=4)
     csv_glob_v2 = _write_csv_files(tmp_path / "csv-v2", file_count=1, rows_per_file=6)
