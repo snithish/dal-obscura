@@ -7,7 +7,7 @@ import pytest
 
 from dal_obscura.domain.catalog.ports import TableFormat
 from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
-from dal_obscura.infrastructure.adapters.service_config import load_service_config
+from dal_obscura.infrastructure.adapters.service_config import load_catalog_config
 
 
 @pytest.fixture(autouse=True)
@@ -24,10 +24,10 @@ def mock_pyiceberg_catalog(monkeypatch):
 
 
 def _build_registry(config_path):
-    return DynamicCatalogRegistry(load_service_config(config_path))
+    return DynamicCatalogRegistry(load_catalog_config(config_path))
 
 
-def test_load_service_config_parses_catalog_types_and_targets(tmp_path):
+def test_load_catalog_config_parses_catalog_types_and_targets(tmp_path):
     config_path = tmp_path / "service.yaml"
     config_path.write_text(
         textwrap.dedent(
@@ -51,7 +51,7 @@ def test_load_service_config_parses_catalog_types_and_targets(tmp_path):
         )
     )
 
-    config = load_service_config(config_path)
+    config = load_catalog_config(config_path)
 
     assert set(config.catalogs) == {"glue_prod", "static_alias"}
     assert (
@@ -115,6 +115,25 @@ def test_catalog_registry_rejects_non_iceberg_target_backends(tmp_path):
 
     with pytest.raises(ValueError, match="Unsupported backend"):
         _build_registry(config_path)
+
+
+def test_catalog_config_rejects_unknown_target_fields(tmp_path):
+    config_path = tmp_path / "service.yaml"
+    config_path.write_text(
+        textwrap.dedent(
+            """
+            catalogs:
+              mixed:
+                module: dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog
+                targets:
+                  users:
+                    format: iceberg
+            """
+        )
+    )
+
+    with pytest.raises(ValueError, match="format"):
+        load_catalog_config(config_path)
 
 
 def test_catalog_registry_requires_catalog_name(tmp_path):

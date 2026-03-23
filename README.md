@@ -6,7 +6,7 @@ Data access layer with Arrow Flight, Iceberg, masking, and row filters.
 - Arrow Flight plan/ticket flow with HMAC-signed tickets
 - Iceberg v2/v3 backend (pyiceberg)
 - DuckDB-powered row filters and column masks
-- YAML/JSON policy-driven authz
+- YAML policy-driven authz
 
 ## Architecture
 - `domain/`
@@ -53,15 +53,34 @@ datasets:
 
 ```bash
 uv run dal-obscura \
-  --policy policy.yaml \
-  --ticket-secret supersecret \
-  --jwt-secret jwtsecret \
-  --max-tickets 64 \
-  --catalog my_catalog \
-  --catalog-options '{"uri": "http://catalog:8181"}'
+  --app-config app.yaml
 ```
 
 Clients must send JWTs as `Authorization: Bearer <token>` headers on both `get_flight_info` and `do_get`.
+
+`app.yaml` references `catalogs.yaml` and `policies.yaml`, and runtime secrets are loaded via secret references (for example, env vars):
+
+```yaml
+location: grpc://0.0.0.0:8815
+catalog_file: catalogs.yaml
+policy_file: policies.yaml
+secret_provider:
+  module: dal_obscura.infrastructure.adapters.secret_providers.EnvSecretProvider
+  args: {}
+ticket:
+  ttl_seconds: 900
+  max_tickets: 64
+  secret:
+    key: DAL_OBSCURA_TICKET_SECRET
+auth:
+  jwt_secret:
+    key: DAL_OBSCURA_JWT_SECRET
+  jwt_issuer: null
+  jwt_audience: null
+logging:
+  level: INFO
+  json: true
+```
 
 ## Development
 
@@ -82,6 +101,5 @@ After `uv sync --dev`, install the hooks with `uv run pre-commit install`. The c
 - Nested field masks use DuckDB `struct_update` to update nested structs.
 
 ## Logging
-- JSON logs by default. Override with `--log-plain`.
-- Configure level via `--log-level` or `DAL_OBSCURA_LOG_LEVEL`.
-- Configure JSON via `DAL_OBSCURA_LOG_JSON=true|false`.
+- JSON logs by default.
+- Configure level and JSON output in `app.yaml` under `logging`.

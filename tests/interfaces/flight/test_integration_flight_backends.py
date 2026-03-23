@@ -24,7 +24,7 @@ from dal_obscura.infrastructure.adapters.identity_default import (
     DefaultIdentityAdapter,
 )
 from dal_obscura.infrastructure.adapters.policy_file_authorizer import PolicyFileAuthorizer
-from dal_obscura.infrastructure.adapters.service_config import load_service_config
+from dal_obscura.infrastructure.adapters.service_config import load_catalog_config
 from dal_obscura.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
 from dal_obscura.interfaces.flight.server import DataAccessFlightService
 
@@ -101,7 +101,7 @@ def _flight_request(client: flight.FlightClient, payload: dict[str, object]):
 
 
 def _build_registries(service_config_path: Path):
-    service_config = load_service_config(service_config_path)
+    service_config = load_catalog_config(service_config_path)
     return DynamicCatalogRegistry(service_config)
 
 
@@ -478,7 +478,7 @@ def test_hot_reload_does_not_break_format_registry(tmp_path):
     old_table = _read_table(client, old_info, options)
     old_ticket = old_info.endpoints[0].ticket
 
-    service_config = load_service_config(service_config_path)
+    service_config = load_catalog_config(service_config_path)
     updated_catalogs = dict(service_config.catalogs)
     updated_target = updated_catalogs["local_files"].targets["users_csv"]
     updated_catalogs["local_files"] = type(updated_catalogs["local_files"])(

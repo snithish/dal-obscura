@@ -1,14 +1,82 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import yaml
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 DEFAULT_SAMPLE_ROWS = 20_000
 DEFAULT_SAMPLE_FILES = 4
+
+
+class _StrictModel(BaseModel):
+    """Base model used by config schemas to reject unknown keys."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+class _SchemaInferenceOptionsModel(_StrictModel):
+    sample_rows: int = Field(default=DEFAULT_SAMPLE_ROWS, gt=0)
+    sample_files: int = Field(default=DEFAULT_SAMPLE_FILES, gt=0)
+
+
+class _CatalogTargetModel(_StrictModel):
+    backend: str | None = None
+    table: str | None = None
+
+    @field_validator("backend")
+    @classmethod
+    def _validate_backend(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        backend = value.strip().lower()
+        if not backend:
+            return None
+        if backend != "iceberg":
+            raise ValueError(f"Unsupported backend {backend!r}; only 'iceberg' is supported")
+        return backend
+
+    @field_validator("table")
+    @classmethod
+    def _normalize_table(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        table = value.strip()
+        return table or None
+
+
+class _CatalogModel(_StrictModel):
+    module: str = Field(min_length=1)
+    options: dict[str, Any] = Field(default_factory=dict)
+    targets: dict[str, _CatalogTargetModel] = Field(default_factory=dict)
+
+    @field_validator("module")
+    @classmethod
+    def _validate_module(cls, value: str) -> str:
+        module = value.strip()
+        if not module:
+            raise ValueError("Catalog module must be non-empty")
+        return module
+
+
+class _PathConfigModel(_StrictModel):
+    glob: str = Field(min_length=1)
+    options: _SchemaInferenceOptionsModel = Field(default_factory=_SchemaInferenceOptionsModel)
+
+    @field_validator("glob")
+    @classmethod
+    def _validate_glob(cls, value: str) -> str:
+        glob = value.strip()
+        if not glob:
+            raise ValueError("Path glob must be non-empty")
+        return glob
+
+
+class _CatalogConfigDocument(_StrictModel):
+    catalogs: dict[str, _CatalogModel] = Field(default_factory=dict)
+    paths: list[_PathConfigModel] = Field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -63,89 +131,60 @@ class ServiceConfig:
     paths: tuple[PathConfig, ...]
 
 
-def load_service_config(path: str | Path) -> ServiceConfig:
-    """Loads and validates the YAML/JSON service configuration file."""
+def load_catalog_config(path: str | Path) -> ServiceConfig:
+    """Loads and validates the YAML catalog configuration file."""
     config_path = Path(path)
-    if not config_path.exists():
-        raise FileNotFoundError(config_path)
+    raw = _load_yaml_object(config_path, "Catalog config")
+    try:
+        document = _CatalogConfigDocument.model_validate(raw)
+    except ValidationError as exc:
+        raise ValueError(f"Invalid catalog config: {exc}") from exc
 
-    suffix = config_path.suffix.lower()
-    if suffix in {".yml", ".yaml"}:
-        raw = yaml.safe_load(config_path.read_text())
-    elif suffix == ".json":
-        raw = json.loads(config_path.read_text())
-    else:
-        raise ValueError("Service config must be .yaml, .yml, or .json")
-
-    if not isinstance(raw, dict):
-        raise ValueError("Service config must contain a JSON/YAML object")
-
-    catalogs = {
-        str(name): _parse_catalog(str(name), value)
-        for name, value in dict(raw.get("catalogs", {})).items()
-    }
-    paths = tuple(_parse_path_config(item) for item in raw.get("paths", []) or [])
+    catalogs = {name: _catalog_from_model(name, value) for name, value in document.catalogs.items()}
+    paths = tuple(_path_from_model(item) for item in document.paths)
     return ServiceConfig(catalogs=catalogs, paths=paths)
 
 
-def _parse_catalog(name: str, raw: Any) -> CatalogConfig:
-    """Parses a single catalog entry from the service config."""
+def _load_yaml_object(path: Path, label: str) -> dict[str, object]:
+    """Loads a YAML object document from disk."""
+    if not path.exists():
+        raise FileNotFoundError(path)
+    if path.suffix.lower() not in {".yaml", ".yml"}:
+        raise ValueError(f"{label} must be .yaml or .yml")
+    raw = yaml.safe_load(path.read_text())
     if not isinstance(raw, dict):
-        raise ValueError(f"Catalog {name!r} must be an object")
-    catalog_module = str(raw.get("module", "")).strip()
-    if not catalog_module:
-        raise ValueError(f"Catalog {name!r} must define a module")
+        raise ValueError(f"{label} must contain a YAML object")
+    return raw
 
-    options = dict(raw.get("options", {}) or {})
+
+def _catalog_from_model(name: str, model: _CatalogModel) -> CatalogConfig:
+    """Converts validated catalog models into runtime dataclasses."""
     targets = {
-        str(target_name): _parse_catalog_target(str(target_name), target_raw)
-        for target_name, target_raw in dict(raw.get("targets", {}) or {}).items()
+        target_name: _catalog_target_from_model(target)
+        for target_name, target in model.targets.items()
     }
-    return CatalogConfig(name=name, module=catalog_module, options=options, targets=targets)
-
-
-def _parse_catalog_target(name: str, raw: Any) -> CatalogTargetConfig:
-    """Parses a target override for currently supported catalog backends."""
-    if not isinstance(raw, dict):
-        raise ValueError(f"Target {name!r} must be an object")
-
-    backend = raw.get("backend")
-    backend_name = str(backend).strip().lower() if backend else "iceberg"
-    if backend_name != "iceberg":
-        raise ValueError(f"Unsupported backend {backend_name!r} for target {name!r}")
-
-    if raw.get("format") is not None:
-        raise ValueError(f"Target {name!r} uses unsupported field 'format'")
-    if raw.get("paths") is not None:
-        raise ValueError(f"Target {name!r} uses unsupported field 'paths'")
-    if raw.get("options") is not None:
-        raise ValueError(f"Target {name!r} uses unsupported field 'options'")
-
-    table = str(raw.get("table", "")).strip() or None
-
-    return CatalogTargetConfig(
-        backend=backend_name,
-        table=table,
+    return CatalogConfig(
+        name=name,
+        module=model.module,
+        options=dict(model.options),
+        targets=targets,
     )
 
 
-def _parse_path_config(raw: Any) -> PathConfig:
-    """Parses one raw-path matching rule used for ad-hoc file targets."""
-    if not isinstance(raw, dict):
-        raise ValueError("Path config entries must be objects")
-    target_glob = str(raw.get("glob", "")).strip()
-    if not target_glob:
-        raise ValueError("Path config entries must define 'glob'")
-    return PathConfig(glob=target_glob, options=_parse_schema_options(raw.get("options", {})))
+def _catalog_target_from_model(model: _CatalogTargetModel) -> CatalogTargetConfig:
+    """Converts one validated target override into runtime dataclass."""
+    return CatalogTargetConfig(
+        backend=model.backend or "iceberg",
+        table=model.table,
+    )
 
 
-def _parse_schema_options(raw: Any) -> SchemaInferenceOptions:
-    """Normalizes schema inference options into strongly typed values."""
-    if raw is None:
-        raw = {}
-    if not isinstance(raw, dict):
-        raise ValueError("Schema inference options must be an object")
-    return SchemaInferenceOptions(
-        sample_rows=int(raw.get("sample_rows", DEFAULT_SAMPLE_ROWS)),
-        sample_files=int(raw.get("sample_files", DEFAULT_SAMPLE_FILES)),
+def _path_from_model(model: _PathConfigModel) -> PathConfig:
+    """Converts validated path models into runtime dataclasses."""
+    return PathConfig(
+        glob=model.glob,
+        options=SchemaInferenceOptions(
+            sample_rows=model.options.sample_rows,
+            sample_files=model.options.sample_files,
+        ),
     )

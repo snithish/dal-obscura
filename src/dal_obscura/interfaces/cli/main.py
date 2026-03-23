@@ -5,6 +5,7 @@ import logging
 
 from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
 from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
+from dal_obscura.infrastructure.adapters.app_config import load_app_config
 from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
 from dal_obscura.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
@@ -15,7 +16,7 @@ from dal_obscura.infrastructure.adapters.identity_default import (
     DefaultIdentityAdapter,
 )
 from dal_obscura.infrastructure.adapters.policy_file_authorizer import PolicyFileAuthorizer
-from dal_obscura.infrastructure.adapters.service_config import load_service_config
+from dal_obscura.infrastructure.adapters.service_config import load_catalog_config
 from dal_obscura.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
 from dal_obscura.interfaces.flight.server import DataAccessFlightService
 from dal_obscura.logging_config import LoggingConfig, setup_logging
@@ -26,26 +27,12 @@ LOGGER = logging.getLogger(__name__)
 def main() -> None:
     """CLI entry point that wires adapters together and starts the Flight server."""
     parser = argparse.ArgumentParser(description="dal-obscura Flight service")
-    parser.add_argument("--location", default="grpc://0.0.0.0:8815")
-    parser.add_argument("--policy", required=True)
-    parser.add_argument("--ticket-secret", required=True)
-    parser.add_argument("--ticket-ttl", type=int, default=900)
-    parser.add_argument("--max-tickets", type=int, default=64)
-    parser.add_argument("--service-config", required=True)
-    parser.add_argument("--jwt-secret", required=True)
-    parser.add_argument("--jwt-issuer")
-    parser.add_argument("--jwt-audience")
-    parser.add_argument("--log-level", default=None)
-    parser.add_argument("--log-json", action="store_true")
-    parser.add_argument("--log-plain", action="store_true")
+    parser.add_argument("--app-config", required=True)
     args = parser.parse_args()
 
-    log_json = args.log_json or (not args.log_plain)
+    app_config = load_app_config(args.app_config)
     setup_logging(
-        LoggingConfig(
-            level=args.log_level or "INFO",
-            json=log_json,
-        )
+        LoggingConfig(level=app_config.logging.level, json=app_config.logging.json_output)
     )
     LOGGER.info("Starting dal-obscura service")
 
@@ -53,17 +40,17 @@ def main() -> None:
     # below is pure wiring so the use cases can stay free of transport details.
     identity = DefaultIdentityAdapter(
         AuthConfig(
-            jwt_secret=args.jwt_secret,
-            jwt_issuer=args.jwt_issuer,
-            jwt_audience=args.jwt_audience,
+            jwt_secret=app_config.auth.jwt_secret,
+            jwt_issuer=app_config.auth.jwt_issuer,
+            jwt_audience=app_config.auth.jwt_audience,
         )
     )
-    authorizer = PolicyFileAuthorizer(args.policy)
-    service_config = load_service_config(args.service_config)
+    authorizer = PolicyFileAuthorizer(app_config.policy_file)
+    service_config = load_catalog_config(app_config.catalog_file)
     catalog_registry = DynamicCatalogRegistry(service_config)
     masking = DefaultMaskingAdapter()
     row_transform = DuckDBRowTransformAdapter(masking)
-    ticket_codec = HmacTicketCodecAdapter(args.ticket_secret)
+    ticket_codec = HmacTicketCodecAdapter(app_config.ticket.secret)
 
     plan_access = PlanAccessUseCase(
         identity=identity,
@@ -71,8 +58,8 @@ def main() -> None:
         catalog_registry=catalog_registry,
         masking=masking,
         ticket_codec=ticket_codec,
-        ticket_ttl_seconds=args.ticket_ttl,
-        max_tickets=args.max_tickets,
+        ticket_ttl_seconds=app_config.ticket.ttl_seconds,
+        max_tickets=app_config.ticket.max_tickets,
     )
     fetch_stream = FetchStreamUseCase(
         identity=identity,
@@ -82,7 +69,7 @@ def main() -> None:
         ticket_codec=ticket_codec,
     )
     server = DataAccessFlightService(
-        location=args.location,
+        location=app_config.location,
         plan_access_use_case=plan_access,
         fetch_stream_use_case=fetch_stream,
     )

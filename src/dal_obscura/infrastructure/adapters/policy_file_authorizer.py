@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any
 
 import yaml
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from dal_obscura.domain.access_control.models import (
     AccessDecision,
@@ -18,8 +17,53 @@ from dal_obscura.domain.access_control.models import (
 from dal_obscura.domain.access_control.policy_resolution import dataset_version, resolve_access
 
 
+class _StrictModel(BaseModel):
+    """Base model used by config schemas to reject unknown keys."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+class _MaskObjectModel(_StrictModel):
+    type: str = Field(min_length=1)
+    value: object | None = None
+
+
+class _AccessRuleModel(_StrictModel):
+    principals: list[str] = Field(default_factory=list)
+    columns: list[str] = Field(default_factory=list)
+    masks: dict[str, str | _MaskObjectModel] = Field(default_factory=dict)
+    row_filter: str | None = None
+
+    @field_validator("row_filter")
+    @classmethod
+    def _normalize_row_filter(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
+class _TargetPolicyModel(_StrictModel):
+    rules: list[_AccessRuleModel] = Field(default_factory=list)
+
+
+class _CatalogPolicyModel(_StrictModel):
+    targets: dict[str, _TargetPolicyModel] = Field(default_factory=dict)
+
+
+class _PathDatasetModel(_StrictModel):
+    target: str = Field(min_length=1)
+    rules: list[_AccessRuleModel] = Field(default_factory=list)
+
+
+class _PolicyDocument(_StrictModel):
+    version: int = 1
+    catalogs: dict[str, _CatalogPolicyModel] = Field(default_factory=dict)
+    paths: list[_PathDatasetModel] = Field(default_factory=list)
+
+
 class PolicyFileAuthorizer:
-    """Authorization adapter backed by a YAML or JSON policy document on disk."""
+    """Authorization adapter backed by a YAML policy document on disk."""
 
     def __init__(self, policy_path: str | Path) -> None:
         self._policy_path = Path(policy_path)
@@ -32,7 +76,7 @@ class PolicyFileAuthorizer:
         requested_columns: Iterable[str],
     ) -> AccessDecision:
         """Reloads the policy file and resolves the effective access decision."""
-        policy = load_policy_file(self._policy_path)
+        policy = load_policy_config(self._policy_path)
         allowed_columns, masks, row_filter = resolve_access(
             policy,
             principal,
@@ -52,67 +96,59 @@ class PolicyFileAuthorizer:
 
     def current_policy_version(self, target: str, catalog: str | None) -> int | None:
         """Returns the current dataset version hash used to invalidate old tickets."""
-        policy = load_policy_file(self._policy_path)
+        policy = load_policy_config(self._policy_path)
         matched_dataset = policy.match_dataset(target, catalog)
         if not matched_dataset:
             return None
         return dataset_version(matched_dataset)
 
 
-def load_policy_file(path: str | Path) -> Policy:
+def load_policy_config(path: str | Path) -> Policy:
     """Loads the policy file and normalizes both catalog and raw-path rules."""
     policy_path = Path(path)
-    if not policy_path.exists():
-        raise FileNotFoundError(policy_path)
+    raw = _load_yaml_object(policy_path, "Policy config")
+    try:
+        document = _PolicyDocument.model_validate(raw)
+    except ValidationError as exc:
+        raise ValueError(f"Invalid policy config: {exc}") from exc
 
-    suffix = policy_path.suffix.lower()
-    if suffix in {".yml", ".yaml"}:
-        raw = yaml.safe_load(policy_path.read_text())
-    elif suffix == ".json":
-        raw = json.loads(policy_path.read_text())
-    else:
-        raise ValueError("Policy file must be .yaml, .yml, or .json")
-
-    if not isinstance(raw, dict):
-        raise ValueError("Policy file must contain a JSON/YAML object")
-    version = int(raw.get("version", 1))
     datasets = _merge_datasets(
         [
-            *_parse_catalog_datasets(raw.get("catalogs", {}) or {}),
-            *_parse_path_datasets(raw.get("paths", []) or []),
+            *_catalog_datasets_from_model(document.catalogs),
+            *_path_datasets_from_model(document.paths),
         ]
     )
-    return Policy(version=version, datasets=datasets)
+    return Policy(version=document.version, datasets=datasets)
 
 
-def _parse_catalog_datasets(raw: dict[str, Any]) -> list[DatasetPolicy]:
+def _load_yaml_object(path: Path, label: str) -> dict[str, object]:
+    """Loads a YAML object document from disk."""
+    if not path.exists():
+        raise FileNotFoundError(path)
+    if path.suffix.lower() not in {".yaml", ".yml"}:
+        raise ValueError(f"{label} must be .yaml or .yml")
+    raw = yaml.safe_load(path.read_text())
+    if not isinstance(raw, dict):
+        raise ValueError(f"{label} must contain a YAML object")
+    return raw
+
+
+def _catalog_datasets_from_model(raw: dict[str, _CatalogPolicyModel]) -> list[DatasetPolicy]:
     """Extracts dataset policies scoped under named catalogs."""
     datasets: list[DatasetPolicy] = []
-    for catalog_name, catalog_data in dict(raw).items():
-        if not isinstance(catalog_data, dict):
-            raise ValueError(f"Catalog policy {catalog_name!r} must be an object")
-        targets = dict(catalog_data.get("targets", {}) or {})
-        for target_name, target_data in targets.items():
-            if not isinstance(target_data, dict):
-                raise ValueError(f"Target policy {target_name!r} must be an object")
-            rules = [_parse_rule(item) for item in target_data.get("rules", [])]
-            datasets.append(
-                DatasetPolicy(target=str(target_name), catalog=str(catalog_name), rules=rules)
-            )
+    for catalog_name, catalog_data in raw.items():
+        for target_name, target_data in catalog_data.targets.items():
+            rules = [_rule_from_model(item) for item in target_data.rules]
+            datasets.append(DatasetPolicy(target=target_name, catalog=catalog_name, rules=rules))
     return datasets
 
 
-def _parse_path_datasets(raw: list[Any]) -> list[DatasetPolicy]:
+def _path_datasets_from_model(raw: list[_PathDatasetModel]) -> list[DatasetPolicy]:
     """Extracts dataset policies that apply to direct file path targets."""
     datasets: list[DatasetPolicy] = []
     for item in raw:
-        if not isinstance(item, dict):
-            raise ValueError("Path policy entries must be objects")
-        target = item.get("target")
-        if not target:
-            raise ValueError("Path policy missing 'target'")
-        rules = [_parse_rule(rule) for rule in item.get("rules", [])]
-        datasets.append(DatasetPolicy(target=str(target), catalog=None, rules=rules))
+        rules = [_rule_from_model(rule) for rule in item.rules]
+        datasets.append(DatasetPolicy(target=item.target, catalog=None, rules=rules))
     return datasets
 
 
@@ -135,28 +171,23 @@ def _merge_datasets(datasets: list[DatasetPolicy]) -> list[DatasetPolicy]:
     return [merged[key] for key in ordered_keys]
 
 
-def _parse_rule(raw: dict[str, Any]) -> AccessRule:
-    """Normalizes one raw access rule from the policy document."""
-    principals = [str(item) for item in raw.get("principals", [])]
-    columns = [str(item) for item in raw.get("columns", [])]
-    masks_raw = raw.get("masks", {}) or {}
-    masks = {str(key): _parse_mask(value) for key, value in masks_raw.items()}
-    row_filter = raw.get("row_filter")
+def _rule_from_model(raw: _AccessRuleModel) -> AccessRule:
+    """Converts one validated access rule into a domain object."""
+    principals = [str(item) for item in raw.principals]
+    columns = [str(item) for item in raw.columns]
+    masks = {str(key): _parse_mask(value) for key, value in raw.masks.items()}
     return AccessRule(
         principals=principals,
         columns=columns,
         masks=masks,
-        row_filter=str(row_filter) if row_filter else None,
+        row_filter=raw.row_filter,
     )
 
 
-def _parse_mask(value: Any) -> MaskRule:
+def _parse_mask(value: object) -> MaskRule:
     """Supports shorthand string masks as well as object-shaped mask rules."""
     if isinstance(value, str):
         return MaskRule(type=value)
-    if not isinstance(value, dict):
-        raise ValueError("Mask rule must be a string or object")
-    mask_type = value.get("type")
-    if not mask_type:
-        raise ValueError("Mask rule missing 'type'")
-    return MaskRule(type=str(mask_type), value=value.get("value"))
+    if isinstance(value, _MaskObjectModel):
+        return MaskRule(type=value.type, value=value.value)
+    raise ValueError("Mask rule must be a string or object")

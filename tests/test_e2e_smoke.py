@@ -148,7 +148,7 @@ def iceberg_setup(tmp_path: Path) -> tuple[str, Path]:
 def configs(tmp_path: Path, iceberg_setup: tuple[str, Path]) -> tuple[Path, Path]:
     catalog_uri, warehouse = iceberg_setup
 
-    service_config = {
+    catalog_config = {
         "catalogs": {
             "e2e_catalog": {
                 "module": "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
@@ -161,9 +161,9 @@ def configs(tmp_path: Path, iceberg_setup: tuple[str, Path]) -> tuple[Path, Path
         }
     }
 
-    service_path = tmp_path / "service.yaml"
-    with open(service_path, "w") as f:
-        yaml.safe_dump(service_config, f)
+    catalog_path = tmp_path / "catalogs.yaml"
+    with open(catalog_path, "w") as f:
+        yaml.safe_dump(catalog_config, f)
 
     policy = {
         "version": 1,
@@ -183,36 +183,63 @@ def configs(tmp_path: Path, iceberg_setup: tuple[str, Path]) -> tuple[Path, Path
         },
     }
 
-    policy_path = tmp_path / "policy.json"
+    policy_path = tmp_path / "policies.yaml"
     with open(policy_path, "w") as f:
-        json.dump(policy, f)
+        yaml.safe_dump(policy, f)
 
-    return service_path, policy_path
+    return catalog_path, policy_path
 
 
 def test_e2e_flight_server_with_iceberg(configs: tuple[Path, Path]):
-    service_path, policy_path = configs
+    catalog_path, policy_path = configs
     port = get_free_port()
     jwt_secret = "e2e-very-secret-key-that-is-long-enough"
     ticket_secret = "e2e-ticket-secret"
+    jwt_secret_env = "DAL_OBSCURA_E2E_JWT_SECRET"
+    ticket_secret_env = "DAL_OBSCURA_E2E_TICKET_SECRET"
+    app_path = catalog_path.parent / "app.yaml"
+    app_path.write_text(
+        yaml.safe_dump(
+            {
+                "location": f"grpc://0.0.0.0:{port}",
+                "catalog_file": catalog_path.name,
+                "policy_file": policy_path.name,
+                "secret_provider": {
+                    "module": (
+                        "dal_obscura.infrastructure.adapters.secret_providers.EnvSecretProvider"
+                    ),
+                    "args": {},
+                },
+                "ticket": {
+                    "ttl_seconds": 900,
+                    "max_tickets": 64,
+                    "secret": {"key": ticket_secret_env},
+                },
+                "auth": {
+                    "jwt_secret": {"key": jwt_secret_env},
+                },
+                "logging": {
+                    "level": "INFO",
+                    "json": True,
+                },
+            },
+            sort_keys=False,
+        )
+    )
 
     import os
     import sys
+
+    env = dict(os.environ)
+    env[jwt_secret_env] = jwt_secret
+    env[ticket_secret_env] = ticket_secret
 
     cmd = [
         sys.executable,
         "-c",
         "import sys; from dal_obscura.interfaces.cli.main import main; sys.exit(main())",
-        "--location",
-        f"grpc://0.0.0.0:{port}",
-        "--policy",
-        str(policy_path),
-        "--service-config",
-        str(service_path),
-        "--ticket-secret",
-        ticket_secret,
-        "--jwt-secret",
-        jwt_secret,
+        "--app-config",
+        str(app_path),
     ]
 
     if os.environ.get("DEBUG_SERVER") == "1":
@@ -225,16 +252,8 @@ def test_e2e_flight_server_with_iceberg(configs: tuple[Path, Path]):
             "--wait-for-client",
             "-m",
             "dal_obscura.interfaces.cli.main",
-            "--location",
-            f"grpc://0.0.0.0:{port}",
-            "--policy",
-            str(policy_path),
-            "--service-config",
-            str(service_path),
-            "--ticket-secret",
-            ticket_secret,
-            "--jwt-secret",
-            jwt_secret,
+            "--app-config",
+            str(app_path),
         ]
 
     process = subprocess.Popen(
@@ -242,6 +261,7 @@ def test_e2e_flight_server_with_iceberg(configs: tuple[Path, Path]):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        env=env,
     )
 
     # Wait for server to be healthy
