@@ -30,16 +30,14 @@ class DefaultMaskingAdapter:
             if column == "*":
                 for field in base_schema:
                     if field.name not in seen:
-                        selected_fields.append(_masked_field(field, masks.get(field.name)))
+                        selected_fields.append(_masked_field(field, field.name, masks))
                         seen.add(field.name)
                 continue
 
-            top_level = column.split(".")[0]
-            if top_level in seen:
+            if column in seen:
                 continue
-            field = base_schema.field(top_level)
-            selected_fields.append(_masked_field(field, masks.get(top_level)))
-            seen.add(top_level)
+            selected_fields.append(_selected_field(base_schema, column, masks))
+            seen.add(column)
 
         return pa.schema(selected_fields)
 
@@ -114,19 +112,18 @@ def _build_select_list(columns: Iterable[str], masks: Mapping[str, MaskRule]) ->
     for column in columns:
         if column in masks:
             expr = _mask_expression(column, masks[column])
-            expr = _apply_nested_mask(column, expr)
             select_list.append(f'{expr} AS "{column}"')
             masked_columns.append(column)
             continue
 
-        nested_masks = {k: v for k, v in masks.items() if k.startswith(f"{column}.")}
+        nested_masks = {k: v for k, v in masks.items() if _is_descendant_path(k, column)}
         if nested_masks:
             expr = column
             for path, mask in nested_masks.items():
                 masked_expr = _mask_expression(path, mask)
                 # Nested masks are applied from the leaf upward so each struct update
                 # wraps the previous expression in the correct order.
-                expr = _apply_nested_mask_on_root(expr, path, masked_expr)
+                expr = _apply_nested_mask_on_root(expr, column, path, masked_expr)
                 masked_columns.append(path)
             select_list.append(f'{expr} AS "{column}"')
         else:
@@ -151,31 +148,68 @@ def _mask_expression(column: str, mask: MaskRule) -> str:
     raise ValueError(f"Unsupported mask type: {mask.type}")
 
 
-def _apply_nested_mask(path: str, expr: str) -> str:
-    """Reattaches a nested field expression to its top-level struct column."""
-    parts = path.split(".")
-    if len(parts) == 1:
-        return expr
-    return _apply_nested_mask_on_root(parts[0], path, expr)
+def _is_descendant_path(path: str, parent: str) -> bool:
+    """Returns whether `path` is nested underneath `parent`."""
+    return path.startswith(f"{parent}.")
 
 
-def _apply_nested_mask_on_root(root_expr: str, path: str, expr: str) -> str:
-    """Applies a nested field replacement on top of a root struct expression."""
-    parts = path.split(".")
-    if len(parts) == 1:
+def _apply_nested_mask_on_root(root_expr: str, root_path: str, path: str, expr: str) -> str:
+    """Applies a nested field replacement on top of a selected struct expression."""
+    relative_parts = path.split(".")[len(root_path.split(".")) :]
+    if not relative_parts:
         return expr
+
     updated = expr
-    for depth in range(len(parts) - 1, 0, -1):
-        field = parts[depth]
-        base = f"({root_expr})" if depth == 1 else f"({root_expr}).{'.'.join(parts[1:depth])}"
+    for depth in range(len(relative_parts) - 1, -1, -1):
+        field = relative_parts[depth]
+        base = (
+            f"({root_expr})" if depth == 0 else f"({root_expr}).{'.'.join(relative_parts[:depth])}"
+        )
         updated = f'struct_update({base}, "{field}" := {updated})'
     return updated
 
 
-def _masked_field(field: pa.Field, mask: MaskRule | None) -> pa.Field:
+def _selected_field(base_schema: pa.Schema, column: str, masks: Mapping[str, MaskRule]) -> pa.Field:
+    """Returns the visible field for a requested top-level or nested column path."""
+    field = _field_for_path(base_schema, column)
+    masked = _masked_field(field, column, masks)
+    return pa.field(column, masked.type, nullable=masked.nullable, metadata=masked.metadata)
+
+
+def _field_for_path(schema: pa.Schema, path: str) -> pa.Field:
+    """Resolves a top-level or nested field path from the Arrow schema."""
+    parts = path.split(".")
+    field = schema.field(parts[0])
+    for part in parts[1:]:
+        field = field.type.field(part)
+    return field
+
+
+def _masked_field(field: pa.Field, path: str, masks: Mapping[str, MaskRule]) -> pa.Field:
     """Adjusts the visible field type when masking changes the value representation."""
-    if not mask:
+    mask = masks.get(path)
+    if mask is not None:
+        return _masked_leaf_field(field, mask)
+
+    if not pa.types.is_struct(field.type):
         return field
+
+    nested_fields = [_masked_field(child, f"{path}.{child.name}", masks) for child in field.type]
+    if all(
+        original.equals(updated)
+        for original, updated in zip(field.type, nested_fields, strict=False)
+    ):
+        return field
+    return pa.field(
+        field.name,
+        pa.struct(nested_fields),
+        nullable=field.nullable,
+        metadata=field.metadata,
+    )
+
+
+def _masked_leaf_field(field: pa.Field, mask: MaskRule) -> pa.Field:
+    """Adjusts the field type for a direct mask attached to the selected path."""
     mask_type = mask.type.lower()
     if mask_type in {"hash", "redact"}:
         return pa.field(field.name, pa.string(), nullable=True)

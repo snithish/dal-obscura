@@ -127,10 +127,33 @@ def _expand_requested_columns(
 
 def _validate_requested_columns(schema: pa.Schema, requested: list[str]) -> None:
     """Fails fast when the client projects columns that are not in the dataset schema."""
-    schema_names = {field.name for field in schema}
-    missing = [column for column in requested if column not in schema_names]
+    missing = [column for column in requested if not _schema_has_path(schema, column)]
     if missing:
         raise ValueError(f"Unknown columns requested: {', '.join(missing)}")
+
+
+def _schema_has_path(schema: pa.Schema, column: str) -> bool:
+    """Returns whether a top-level or nested struct field path exists in the schema."""
+    parts = column.split(".")
+    current_type: pa.DataType | None = None
+
+    for index, part in enumerate(parts):
+        if index == 0:
+            try:
+                current_type = schema.field(part).type
+            except KeyError:
+                return False
+            continue
+
+        if current_type is None or not pa.types.is_struct(current_type):
+            return False
+        struct_type = current_type
+        try:
+            current_type = struct_type.field(part).type
+        except KeyError:
+            return False
+
+    return True
 
 
 def _epoch_seconds() -> int:

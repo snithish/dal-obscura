@@ -244,6 +244,66 @@ def test_plan_access_expands_wildcard_columns():
     assert authorizer.last_requested_columns == ["id", "region"]
 
 
+def test_plan_access_accepts_nested_requested_columns():
+    schema = pa.schema(
+        [
+            pa.field(
+                "user",
+                pa.struct(
+                    [
+                        pa.field(
+                            "address",
+                            pa.struct([pa.field("zip", pa.int64())]),
+                        )
+                    ]
+                ),
+            )
+        ]
+    )
+    table_format = StubTableFormat(
+        catalog_name="catalog1",
+        table_name="users",
+        format="fake_format",
+        schema=schema,
+        batches=(),
+    )
+    decision = AccessDecision(
+        allowed_columns=["user.address.zip"],
+        masks={"user.address.zip": MaskRule(type="hash")},
+        row_filter=None,
+        policy_version=100,
+    )
+    authorizer = FakeAuthorizer(decision=decision)
+    ticket_codec = FakeTicketCodec(
+        TicketPayload(
+            catalog="catalog1",
+            target="users",
+            columns=["user.address.zip"],
+            scan=_scan_payload(),
+            policy_version=100,
+            principal_id="user1",
+            expires_at=9999999999,
+            nonce="abc",
+        )
+    )
+    use_case = PlanAccessUseCase(
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+        authorizer=authorizer,
+        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        masking=FakeMasking(),
+        ticket_codec=ticket_codec,
+        ticket_ttl_seconds=300,
+        max_tickets=1,
+    )
+
+    use_case.execute(
+        PlanRequest(catalog="catalog1", target="users", columns=["user.address.zip"]),
+        AUTHORIZATION_HEADER,
+    )
+
+    assert authorizer.last_requested_columns == ["user.address.zip"]
+
+
 def test_fetch_stream_policy_version_mismatch():
     schema, decision, table_format = _build_use_case_dependencies()
     payload = TicketPayload(

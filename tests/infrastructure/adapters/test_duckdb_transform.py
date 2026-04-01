@@ -29,7 +29,76 @@ def test_nested_mask_expression():
         ["user.address.zip"],
         {"user.address.zip": MaskRule(type="hash")},
     )
-    assert "struct_update" in selection.select_list[0]
+    assert selection.select_list == [
+        'sha256(CAST(user.address.zip AS VARCHAR)) AS "user.address.zip"'
+    ]
+
+
+def test_nested_struct_selection_applies_descendant_masks():
+    selection = DefaultMaskingAdapter().apply(
+        ["user.address"],
+        {"user.address.zip": MaskRule(type="hash")},
+    )
+    assert 'struct_update((user.address), "zip"' in selection.select_list[0]
+
+
+def test_masked_schema_updates_nested_field_types():
+    schema = pa.schema(
+        [
+            pa.field(
+                "user",
+                pa.struct(
+                    [
+                        pa.field(
+                            "address",
+                            pa.struct(
+                                [
+                                    pa.field("zip", pa.int64()),
+                                    pa.field("city", pa.string()),
+                                ]
+                            ),
+                        )
+                    ]
+                ),
+            )
+        ]
+    )
+
+    masked_schema = DefaultMaskingAdapter().masked_schema(
+        schema,
+        ["user"],
+        {"user.address.zip": MaskRule(type="hash")},
+    )
+
+    address_field = masked_schema.field("user").type.field("address")
+    assert address_field.type.field("zip").type == pa.string()
+
+
+def test_masked_schema_exposes_nested_projection_as_dotted_column():
+    schema = pa.schema(
+        [
+            pa.field(
+                "user",
+                pa.struct(
+                    [
+                        pa.field(
+                            "address",
+                            pa.struct([pa.field("zip", pa.int64())]),
+                        )
+                    ]
+                ),
+            )
+        ]
+    )
+
+    masked_schema = DefaultMaskingAdapter().masked_schema(
+        schema,
+        ["user.address.zip"],
+        {"user.address.zip": MaskRule(type="hash")},
+    )
+
+    assert masked_schema.names == ["user.address.zip"]
+    assert masked_schema.field("user.address.zip").type == pa.string()
 
 
 def test_default_mask_renders_literal():

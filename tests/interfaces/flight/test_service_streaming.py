@@ -209,6 +209,189 @@ def test_streaming_contract_emits_multiple_batches(tmp_path, monkeypatch):
     thread.join(timeout=2)
 
 
+def test_flight_streaming_masks_nested_struct_fields_and_filters_rows(tmp_path):
+    user_type = pa.struct(
+        [
+            pa.field("email", pa.string()),
+            pa.field(
+                "address",
+                pa.struct(
+                    [
+                        pa.field("zip", pa.int64()),
+                        pa.field("city", pa.string()),
+                    ]
+                ),
+            ),
+        ]
+    )
+    schema = pa.schema(
+        [
+            pa.field("id", pa.int64()),
+            pa.field("region", pa.string()),
+            pa.field("user", user_type),
+        ]
+    )
+    batch = pa.record_batch(
+        [
+            pa.array([1, 2, 3], type=pa.int64()),
+            pa.array(["us", "eu", "us"], type=pa.string()),
+            pa.array(
+                [
+                    {"email": "alpha@example.com", "address": {"zip": 1011, "city": "AMS"}},
+                    {"email": "beta@example.com", "address": {"zip": 2022, "city": "BER"}},
+                    {"email": "gamma@example.com", "address": {"zip": 3033, "city": "NYC"}},
+                ],
+                type=user_type,
+            ),
+        ],
+        schema=schema,
+    )
+    table_format = StubTableFormat(
+        catalog_name="analytics",
+        table_name="test.table",
+        format="stub_format",
+        schema=schema,
+        batches=(batch,),
+    )
+
+    policy_path = tmp_path / "policy.yaml"
+    policy_path.write_text(
+        _catalog_policy(
+            """
+      "test.table":
+        rules:
+          - principals: ["user1"]
+            columns: ["id", "user"]
+            masks:
+              "user.address.zip":
+                type: "hash"
+            row_filter: "region = 'us'"
+"""
+        )
+    )
+    server = _build_server(table_format=table_format, policy_path=policy_path)
+    thread = _start_server(server)
+    client = flight.FlightClient(f"grpc+tcp://localhost:{server.port}")
+    descriptor = flight.FlightDescriptor.for_command(
+        json.dumps(
+            {
+                "catalog": "analytics",
+                "target": "test.table",
+                "columns": ["id", "user"],
+            }
+        ).encode("utf-8")
+    )
+    options = flight.FlightCallOptions(headers=[_authorization_header("user1")])
+
+    info = client.get_flight_info(descriptor, options=options)
+    table = client.do_get(info.endpoints[0].ticket, options=options).read_all()
+
+    user_field = info.schema.field("user")
+    address_field = user_field.type.field("address")
+    assert address_field.type.field("zip").type == pa.string()
+    assert table.num_rows == 2
+    assert [row["id"] for row in table.to_pylist()] == [1, 3]
+    assert all(len(row["user"]["address"]["zip"]) == 64 for row in table.to_pylist())
+
+    server.shutdown()
+    thread.join(timeout=2)
+
+
+def test_flight_streaming_supports_nested_projection_with_combined_row_filters(tmp_path):
+    user_type = pa.struct(
+        [
+            pa.field("email", pa.string()),
+            pa.field(
+                "address",
+                pa.struct([pa.field("zip", pa.int64())]),
+            ),
+        ]
+    )
+    schema = pa.schema(
+        [
+            pa.field("id", pa.int64()),
+            pa.field("region", pa.string()),
+            pa.field("active", pa.bool_()),
+            pa.field("user", user_type),
+        ]
+    )
+    batch = pa.record_batch(
+        [
+            pa.array([1, 2, 3, 4], type=pa.int64()),
+            pa.array(["us", "us", "eu", "us"], type=pa.string()),
+            pa.array([True, False, True, True], type=pa.bool_()),
+            pa.array(
+                [
+                    {"email": "alpha@example.com", "address": {"zip": 1011}},
+                    {"email": "beta@example.com", "address": {"zip": 2022}},
+                    {"email": "gamma@example.com", "address": {"zip": 3033}},
+                    {"email": "delta@example.com", "address": {"zip": 4044}},
+                ],
+                type=user_type,
+            ),
+        ],
+        schema=schema,
+    )
+    table_format = StubTableFormat(
+        catalog_name="analytics",
+        table_name="test.table",
+        format="stub_format",
+        schema=schema,
+        batches=(batch,),
+    )
+
+    policy_path = tmp_path / "policy.yaml"
+    policy_path.write_text(
+        _catalog_policy(
+            """
+      "test.table":
+        rules:
+          - principals: ["group:analyst"]
+            columns: ["id", "user.address.zip"]
+            masks:
+              "user.address.zip":
+                type: "hash"
+            row_filter: "region = 'us'"
+          - principals: ["user1"]
+            columns: ["user.email"]
+            masks:
+              "user.email":
+                type: "redact"
+                value: "[hidden]"
+            row_filter: "active = true"
+"""
+        )
+    )
+    server = _build_server(table_format=table_format, policy_path=policy_path)
+    thread = _start_server(server)
+    client = flight.FlightClient(f"grpc+tcp://localhost:{server.port}")
+    descriptor = flight.FlightDescriptor.for_command(
+        json.dumps(
+            {
+                "catalog": "analytics",
+                "target": "test.table",
+                "columns": ["id", "user.address.zip", "user.email"],
+            }
+        ).encode("utf-8")
+    )
+    token = jwt.encode({"sub": "user1", "groups": ["analyst"]}, JWT_SECRET, algorithm="HS256")
+    options = flight.FlightCallOptions(headers=[(b"authorization", f"Bearer {token}".encode())])
+
+    info = client.get_flight_info(descriptor, options=options)
+    table = client.do_get(info.endpoints[0].ticket, options=options).read_all()
+
+    assert info.schema.names == ["id", "user.address.zip", "user.email"]
+    assert info.schema.field("user.address.zip").type == pa.string()
+    assert info.schema.field("user.email").type == pa.string()
+    assert table.num_rows == 2
+    assert table.column("id").to_pylist() == [1, 4]
+    assert table.column("user.email").to_pylist() == ["[hidden]", "[hidden]"]
+    assert all(len(value) == 64 for value in table.column("user.address.zip").to_pylist())
+
+    server.shutdown()
+    thread.join(timeout=2)
+
+
 def test_flight_logs_include_resident_memory(tmp_path, caplog, monkeypatch):
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     batch = pa.record_batch([pa.array([1, 2]), pa.array(["us", "eu"])], schema=schema)
