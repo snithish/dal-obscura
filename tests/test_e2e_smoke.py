@@ -9,8 +9,6 @@ import pyarrow as pa
 import pyarrow.flight as flight
 import pytest
 import yaml
-
-pytest.importorskip("pyiceberg")
 from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
 from pyiceberg.types import (
