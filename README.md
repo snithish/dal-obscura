@@ -47,6 +47,16 @@ datasets:
           email: { type: "redact", value: "***" }
           "user.address.zip": { type: "hash" }
         row_filter: "region = 'us'"
+      - principals: ["group:analyst"]
+        when:
+          tenant: "acme"
+          clearance: ["high", "internal"]
+        columns: ["id", "email"]
+      - principals: ["group:analyst"]
+        when:
+          clearance: "low"
+        effect: deny
+        columns: ["email"]
 ```
 
 ## Running
@@ -125,6 +135,7 @@ After `uv sync --dev`, install the hooks with `uv run pre-commit install`. The c
 
 ## Current Limitations
 - Iceberg pushdown is currently conservative: mixed `AND` predicates split, but nested-field predicates and unsupported shapes remain residual-only.
+- ABAC conditions currently support exact principal-attribute matches and membership in an explicit allowed-value list.
 - Tickets still serialize Python scan tasks directly, which keeps the transport format tied to Python internals.
 
 ## Logging

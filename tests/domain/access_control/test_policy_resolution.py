@@ -129,3 +129,146 @@ def test_policy_config_rejects_unknown_keys(tmp_path):
 
     with pytest.raises(ValueError, match="unknown"):
         load_policy_config(policy_path)
+
+
+def test_resolve_access_allows_by_role_and_principal_attributes(tmp_path):
+    policy_text = textwrap.dedent(
+        """
+        version: 1
+        catalogs:
+          analytics:
+            targets:
+              "catalog.db.table":
+                rules:
+                  - principals: ["group:analyst"]
+                    when:
+                      tenant: "acme"
+                    columns: ["id", "region"]
+                    row_filter: "region = 'us'"
+        """
+    )
+    policy_path = tmp_path / "policy.yaml"
+    policy_path.write_text(policy_text)
+    policy = load_policy_config(policy_path)
+    principal = Principal(id="user1", groups=["analyst"], attributes={"tenant": "acme"})
+
+    allowed, _masks, row_filter = resolve_access(
+        policy,
+        principal,
+        target="catalog.db.table",
+        catalog="analytics",
+        requested_columns=["id", "region"],
+    )
+
+    assert allowed == ["id", "region"]
+    assert row_filter == "(region = 'us')"
+
+
+def test_resolve_access_denies_override_allows(tmp_path):
+    policy_text = textwrap.dedent(
+        """
+        version: 1
+        catalogs:
+          analytics:
+            targets:
+              "catalog.db.table":
+                rules:
+                  - principals: ["group:analyst"]
+                    columns: ["id", "email"]
+                  - principals: ["group:analyst"]
+                    when:
+                      clearance: "low"
+                    effect: deny
+                    columns: ["email"]
+        """
+    )
+    policy_path = tmp_path / "policy.yaml"
+    policy_path.write_text(policy_text)
+    policy = load_policy_config(policy_path)
+    principal = Principal(id="user1", groups=["analyst"], attributes={"clearance": "low"})
+
+    allowed, _masks, row_filter = resolve_access(
+        policy,
+        principal,
+        target="catalog.db.table",
+        catalog="analytics",
+        requested_columns=["id", "email"],
+    )
+
+    assert allowed == ["id"]
+    assert row_filter is None
+
+
+def test_resolve_access_applies_deny_precedence_across_multiple_rules(tmp_path):
+    policy_text = textwrap.dedent(
+        """
+        version: 1
+        catalogs:
+          analytics:
+            targets:
+              "catalog.db.table":
+                rules:
+                  - principals: ["group:analyst"]
+                    columns: ["id"]
+                  - principals: ["group:analyst"]
+                    when:
+                      region_scope: ["eu", "global"]
+                    columns: ["email"]
+                  - principals: ["group:analyst"]
+                    when:
+                      region_scope: "eu"
+                    effect: deny
+                    columns: ["email"]
+        """
+    )
+    policy_path = tmp_path / "policy.yaml"
+    policy_path.write_text(policy_text)
+    policy = load_policy_config(policy_path)
+    principal = Principal(id="user1", groups=["analyst"], attributes={"region_scope": "eu"})
+
+    allowed, _masks, _row_filter = resolve_access(
+        policy,
+        principal,
+        target="catalog.db.table",
+        catalog="analytics",
+        requested_columns=["id", "email"],
+    )
+
+    assert allowed == ["id"]
+
+
+def test_policy_version_changes_when_abac_clauses_change(tmp_path):
+    base_text = textwrap.dedent(
+        """
+        version: 1
+        catalogs:
+          analytics:
+            targets:
+              "catalog.db.table":
+                rules:
+                  - principals: ["group:analyst"]
+                    when:
+                      tenant: "{tenant}"
+                    columns: ["id"]
+        """
+    )
+    policy_one = load_policy_config(
+        _write_policy(tmp_path / "policy-one.yaml", base_text.format(tenant="acme"))
+    )
+    policy_two = load_policy_config(
+        _write_policy(tmp_path / "policy-two.yaml", base_text.format(tenant="globex"))
+    )
+
+    dataset_one = policy_one.match_dataset("catalog.db.table", "analytics")
+    dataset_two = policy_two.match_dataset("catalog.db.table", "analytics")
+
+    assert dataset_one is not None
+    assert dataset_two is not None
+    from dal_obscura.domain.access_control.policy_resolution import dataset_version
+
+    assert dataset_version(dataset_one) != dataset_version(dataset_two)
+
+
+def _write_policy(path, text: str):
+    path.write_text(text)
+    return path

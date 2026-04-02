@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -31,16 +32,54 @@ class _MaskObjectModel(_StrictModel):
 class _AccessRuleModel(_StrictModel):
     principals: list[str] = Field(default_factory=list)
     columns: list[str] = Field(default_factory=list)
+    effect: Literal["allow", "deny"] = "allow"
+    when: dict[str, str | list[str]] = Field(default_factory=dict)
     masks: dict[str, str | _MaskObjectModel] = Field(default_factory=dict)
     row_filter: str | None = None
 
     @field_validator("row_filter")
     @classmethod
-    def _normalize_row_filter(cls, value: str | None) -> str | None:
+    def _normalize_row_filter(cls, value: str | None, info) -> str | None:
         if value is None:
             return None
         normalized = value.strip()
+        if info.data.get("effect") == "deny" and normalized:
+            raise ValueError("deny rules may not define row_filter")
         return normalized or None
+
+    @field_validator("when")
+    @classmethod
+    def _normalize_when(
+        cls,
+        value: dict[str, str | list[str]],
+    ) -> dict[str, str | list[str]]:
+        normalized: dict[str, str | list[str]] = {}
+        for key, raw in value.items():
+            condition_key = str(key).strip()
+            if not condition_key:
+                raise ValueError("when condition keys must be non-empty")
+            if isinstance(raw, list):
+                normalized_values = [str(item).strip() for item in raw if str(item).strip()]
+                if not normalized_values:
+                    raise ValueError("when condition lists must contain at least one value")
+                normalized[condition_key] = normalized_values
+                continue
+            raw_value = str(raw).strip()
+            if not raw_value:
+                raise ValueError("when condition values must be non-empty")
+            normalized[condition_key] = raw_value
+        return normalized
+
+    @field_validator("masks")
+    @classmethod
+    def _reject_masks_on_deny(
+        cls,
+        value: dict[str, str | _MaskObjectModel],
+        info,
+    ) -> dict[str, str | _MaskObjectModel]:
+        if info.data.get("effect") == "deny" and value:
+            raise ValueError("deny rules may not define masks")
+        return value
 
 
 class _TargetPolicyModel(_StrictModel):
@@ -181,6 +220,8 @@ def _rule_from_model(raw: _AccessRuleModel) -> AccessRule:
         columns=columns,
         masks=masks,
         row_filter=raw.row_filter,
+        effect=raw.effect,
+        when={str(key): value for key, value in raw.when.items()} or None,
     )
 
 

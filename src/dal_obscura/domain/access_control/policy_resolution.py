@@ -3,12 +3,14 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Iterable
+from typing import cast
 
 from dal_obscura.domain.access_control.models import (
     DatasetPolicy,
     MaskRule,
     Policy,
     Principal,
+    PrincipalConditionValue,
 )
 
 
@@ -26,6 +28,7 @@ def resolve_access(
 
     principal_tokens = set(principal.tokens())
     allowed_set: set[str] = set()
+    denied_set: set[str] = set()
     masks: dict[str, MaskRule] = {}
     row_filters: list[str] = []
 
@@ -33,25 +36,37 @@ def resolve_access(
     for rule in matched_dataset.rules:
         if not principal_tokens.intersection(rule.principals):
             continue
+        if not _matches_conditions(principal, rule.when):
+            continue
+
+        matching_columns = (
+            requested if "*" in rule.columns else [c for c in requested if c in rule.columns]
+        )
+        if rule.effect == "deny":
+            denied_set.update(matching_columns)
+            for column in matching_columns:
+                masks.pop(column, None)
+            continue
 
         # Rule matches are unioned so multiple roles can widen the projection while
         # still allowing the stricter mask precedence rules below to win.
-        allowed_columns = (
-            requested if "*" in rule.columns else [c for c in requested if c in rule.columns]
-        )
-        allowed_set.update(allowed_columns)
+        allowed_set.update(column for column in matching_columns if column not in denied_set)
         for column, mask in rule.masks.items():
+            if column in denied_set:
+                continue
             existing = masks.get(column)
             masks[column] = _choose_mask(existing, mask)
         if rule.row_filter:
             row_filters.append(rule.row_filter)
 
-    if not allowed_set:
+    effective_allowed = [
+        column for column in requested if column in allowed_set and column not in denied_set
+    ]
+    if not effective_allowed:
         raise PermissionError("No allowed columns for principal")
 
     combined_filter = " AND ".join(f"({part})" for part in row_filters) if row_filters else None
-    ordered_allowed = [column for column in requested if column in allowed_set]
-    return ordered_allowed, masks, combined_filter
+    return effective_allowed, masks, combined_filter
 
 
 def dataset_version(dataset: DatasetPolicy) -> int:
@@ -68,6 +83,8 @@ def dataset_version(dataset: DatasetPolicy) -> int:
                     for name, mask in rule.masks.items()
                 },
                 "row_filter": rule.row_filter,
+                "effect": rule.effect,
+                "when": rule.when,
             }
             for rule in dataset.rules
         ],
@@ -97,3 +114,23 @@ def _mask_precedence(mask: MaskRule) -> int:
     if mask_type == "default":
         return 1
     return 0
+
+
+def _matches_conditions(
+    principal: Principal,
+    when: dict[str, PrincipalConditionValue] | None,
+) -> bool:
+    if not when:
+        return True
+
+    for key, expected in when.items():
+        actual = principal.attributes.get(key)
+        if actual is None:
+            return False
+        if isinstance(expected, list):
+            if actual not in {str(item) for item in expected}:
+                return False
+            continue
+        if actual != cast(str, expected):
+            return False
+    return True

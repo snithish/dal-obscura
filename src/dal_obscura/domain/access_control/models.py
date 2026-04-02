@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import fnmatch
 from dataclasses import dataclass
+from typing import Literal
+
+PrincipalConditionValue = str | list[str]
 
 
 @dataclass(frozen=True)
@@ -20,6 +23,8 @@ class AccessRule:
     columns: list[str]
     masks: dict[str, MaskRule]
     row_filter: str | None
+    effect: Literal["allow", "deny"] = "allow"
+    when: dict[str, PrincipalConditionValue] | None = None
 
 
 @dataclass(frozen=True)
