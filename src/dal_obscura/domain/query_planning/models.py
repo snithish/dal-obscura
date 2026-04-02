@@ -15,6 +15,15 @@ class PlanRequest:
 
 
 @dataclass(frozen=True)
+class ExecutionProjection:
+    """Visible columns plus hidden dependencies required for execution."""
+
+    visible_columns: list[str]
+    internal_dependency_columns: list[str]
+    execution_columns: list[str]
+
+
+@dataclass(frozen=True)
 class ReadSpec:
     """Metadata extracted from a read payload without executing the read."""
 

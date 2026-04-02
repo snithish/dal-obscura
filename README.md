@@ -122,7 +122,6 @@ After `uv sync --dev`, install the hooks with `uv run pre-commit install`. The c
 - Nested field masks use DuckDB `struct_update` to update nested structs.
 
 ## Current Limitations
-- Planning still uses the visible client projection. Hidden columns required by row filters or mask dependencies are not yet added to an internal execution projection.
 - Iceberg execution still uses unconditional `ALWAYS_TRUE` and does not push policy predicates into file planning or scan execution yet.
 - Row filters remain raw DuckDB SQL strings; they are not yet validated against schema or compiled into a structured predicate representation.
 - Tickets still serialize Python scan tasks directly, which keeps the transport format tied to Python internals.

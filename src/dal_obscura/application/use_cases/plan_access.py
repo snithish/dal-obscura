@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import os
+import re
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -12,7 +13,8 @@ from dal_obscura.application.ports.authorization import AuthorizationPort
 from dal_obscura.application.ports.identity import IdentityPort
 from dal_obscura.application.ports.masking import MaskingPort
 from dal_obscura.application.ports.ticket_codec import TicketCodecPort
-from dal_obscura.domain.query_planning.models import PlanRequest
+from dal_obscura.domain.access_control.models import AccessDecision
+from dal_obscura.domain.query_planning.models import ExecutionProjection, PlanRequest
 from dal_obscura.domain.ticket_delivery.models import TicketPayload
 from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
 
@@ -72,7 +74,13 @@ class PlanAccessUseCase:
             requested_columns=requested_columns,
         )
 
-        plan = table_format.plan(request, self._max_tickets)
+        execution_projection = _build_execution_projection(base_schema, decision)
+        execution_request = PlanRequest(
+            catalog=request.catalog,
+            target=request.target,
+            columns=execution_projection.execution_columns,
+        )
+        plan = table_format.plan(execution_request, self._max_tickets)
 
         ticket_tokens: list[str] = []
         for task in plan.tasks:
@@ -83,7 +91,7 @@ class PlanAccessUseCase:
             payload = TicketPayload(
                 catalog=request.catalog,
                 target=request.target,
-                columns=decision.allowed_columns,
+                columns=execution_projection.visible_columns,
                 scan={
                     "read_payload": base64.b64encode(pickle.dumps(task)).decode("utf-8"),
                     "row_filter": decision.row_filter,
@@ -100,17 +108,35 @@ class PlanAccessUseCase:
             ticket_tokens.append(self._ticket_codec.sign_payload(payload))
 
         output_schema = self._masking.masked_schema(
-            plan.schema, decision.allowed_columns, decision.masks
+            base_schema, execution_projection.visible_columns, decision.masks
         )
         return PlanAccessResult(
             output_schema=output_schema,
             ticket_tokens=ticket_tokens,
             target=request.target,
-            columns=decision.allowed_columns,
+            columns=execution_projection.visible_columns,
             principal_id=principal.id,
             policy_version=decision.policy_version,
             catalog=request.catalog,
         )
+
+
+def _build_execution_projection(
+    base_schema: pa.Schema,
+    decision: AccessDecision,
+) -> ExecutionProjection:
+    """Builds the visible and internal columns needed to enforce policy safely."""
+    visible_columns = list(decision.allowed_columns)
+    internal_dependency_columns = [
+        column
+        for column in _extract_filter_dependencies(base_schema, decision.row_filter)
+        if column not in visible_columns
+    ]
+    return ExecutionProjection(
+        visible_columns=visible_columns,
+        internal_dependency_columns=internal_dependency_columns,
+        execution_columns=[*visible_columns, *internal_dependency_columns],
+    )
 
 
 def _expand_requested_columns(
@@ -154,6 +180,53 @@ def _schema_has_path(schema: pa.Schema, column: str) -> bool:
             return False
 
     return True
+
+
+def _extract_filter_dependencies(schema: pa.Schema, row_filter: str | None) -> list[str]:
+    """Finds schema paths referenced directly in a raw row filter string."""
+    if not row_filter:
+        return []
+
+    referenced_paths: list[str] = []
+    seen: set[str] = set()
+    normalized_filter = row_filter.lower()
+
+    for path in _schema_paths(schema):
+        if path.lower() in seen:
+            continue
+        if any(_is_descendant_path(matched_path, path) for matched_path in referenced_paths):
+            continue
+        if _path_appears_in_filter(path, normalized_filter):
+            referenced_paths.append(path)
+            seen.add(path.lower())
+
+    return referenced_paths
+
+
+def _schema_paths(schema: pa.Schema) -> list[str]:
+    """Returns all top-level and nested struct field paths in depth-first order."""
+    paths: list[str] = []
+
+    def visit(field: pa.Field, prefix: str) -> None:
+        path = f"{prefix}.{field.name}" if prefix else field.name
+        paths.append(path)
+        if pa.types.is_struct(field.type):
+            for child in field.type:
+                visit(child, path)
+
+    for field in schema:
+        visit(field, "")
+
+    return sorted(paths, key=lambda path: len(path), reverse=True)
+
+
+def _path_appears_in_filter(path: str, normalized_filter: str) -> bool:
+    pattern = rf"(?<![A-Za-z0-9_]){re.escape(path.lower())}(?![A-Za-z0-9_])"
+    return re.search(pattern, normalized_filter) is not None
+
+
+def _is_descendant_path(path: str, parent: str) -> bool:
+    return path.startswith(f"{parent}.")
 
 
 def _epoch_seconds() -> int:

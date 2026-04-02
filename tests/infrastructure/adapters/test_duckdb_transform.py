@@ -236,6 +236,30 @@ def test_duckdb_transform_streams_chunked_output(monkeypatch):
     assert sum(batch.num_rows for batch in result_batches) == 6
 
 
+def test_duckdb_transform_filters_on_hidden_execution_column():
+    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
+    input_batch = pa.record_batch(
+        [
+            pa.array([1, 2, 3], type=pa.int64()),
+            pa.array(["us", "eu", "us"], type=pa.string()),
+        ],
+        names=["id", "region"],
+    )
+
+    result_batches = list(
+        adapter.apply_filters_and_masks_stream(
+            [input_batch],
+            ["id"],
+            "region = 'us'",
+            {},
+        )
+    )
+    result = pa.Table.from_batches(result_batches)
+
+    assert result.schema.names == ["id"]
+    assert result.column("id").to_pylist() == [1, 3]
+
+
 def test_duckdb_transform_memory_is_bounded_in_subprocess():
     script = textwrap.dedent(
         """

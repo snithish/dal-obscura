@@ -332,13 +332,6 @@ def test_plan_access_accepts_nested_requested_columns():
     assert authorizer.last_requested_columns == ["user.address.zip"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Phase 1: planner still uses only the visible client projection and omits "
-        "hidden policy dependencies"
-    ),
-)
 def test_plan_access_includes_hidden_row_filter_dependency_columns_in_execution_plan():
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     planned_columns: list[list[str]] = []
@@ -386,6 +379,118 @@ def test_plan_access_includes_hidden_row_filter_dependency_columns_in_execution_
     assert authorizer.last_requested_columns == ["id"]
     assert result.columns == ["id"]
     assert planned_columns == [["id", "region"]]
+
+
+def test_plan_access_includes_nested_row_filter_dependency_columns_in_execution_plan():
+    schema = pa.schema(
+        [
+            pa.field("id", pa.int64()),
+            pa.field(
+                "user",
+                pa.struct(
+                    [
+                        pa.field(
+                            "address",
+                            pa.struct([pa.field("zip", pa.int64())]),
+                        )
+                    ]
+                ),
+            ),
+        ]
+    )
+    planned_columns: list[list[str]] = []
+    table_format = TrackingTableFormat(
+        catalog_name="catalog1",
+        table_name="users",
+        format="fake_format",
+        schema=schema,
+        planned_columns=planned_columns,
+    )
+    decision = AccessDecision(
+        allowed_columns=["id"],
+        masks={},
+        row_filter="user.address.zip > 10000",
+        policy_version=100,
+    )
+    use_case = PlanAccessUseCase(
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+        authorizer=FakeAuthorizer(decision=decision),
+        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        masking=FakeMasking(),
+        ticket_codec=FakeTicketCodec(
+            TicketPayload(
+                catalog="catalog1",
+                target="users",
+                columns=["id"],
+                scan=_scan_payload(),
+                policy_version=100,
+                principal_id="user1",
+                expires_at=9999999999,
+                nonce="abc",
+            )
+        ),
+        ticket_ttl_seconds=300,
+        max_tickets=1,
+    )
+
+    use_case.execute(
+        PlanRequest(catalog="catalog1", target="users", columns=["id"]),
+        AUTHORIZATION_HEADER,
+    )
+
+    assert planned_columns == [["id", "user.address.zip"]]
+
+
+def test_plan_access_excludes_denied_requested_columns_from_execution_plan():
+    schema = pa.schema(
+        [
+            pa.field("id", pa.int64()),
+            pa.field("secret", pa.string()),
+        ]
+    )
+    planned_columns: list[list[str]] = []
+    table_format = TrackingTableFormat(
+        catalog_name="catalog1",
+        table_name="users",
+        format="fake_format",
+        schema=schema,
+        planned_columns=planned_columns,
+    )
+    use_case = PlanAccessUseCase(
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+        authorizer=FakeAuthorizer(
+            decision=AccessDecision(
+                allowed_columns=["id"],
+                masks={},
+                row_filter=None,
+                policy_version=100,
+            )
+        ),
+        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        masking=FakeMasking(),
+        ticket_codec=FakeTicketCodec(
+            TicketPayload(
+                catalog="catalog1",
+                target="users",
+                columns=["id"],
+                scan=_scan_payload(),
+                policy_version=100,
+                principal_id="user1",
+                expires_at=9999999999,
+                nonce="abc",
+            )
+        ),
+        ticket_ttl_seconds=300,
+        max_tickets=1,
+    )
+
+    result = use_case.execute(
+        PlanRequest(catalog="catalog1", target="users", columns=["id", "secret"]),
+        AUTHORIZATION_HEADER,
+    )
+
+    assert result.columns == ["id"]
+    assert planned_columns == [["id"]]
 
 
 def test_fetch_stream_policy_version_mismatch():
