@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import pyarrow as pa
 
+from dal_obscura.domain.access_control.filters import RowFilter
 from dal_obscura.domain.catalog.ports import TableFormat
 
 
@@ -27,3 +28,4 @@ class Plan:
 
     schema: pa.Schema
     tasks: list[ScanTask]
+    residual_row_filter: RowFilter | None = None

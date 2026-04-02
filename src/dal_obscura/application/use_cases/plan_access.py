@@ -85,6 +85,7 @@ class PlanAccessUseCase:
             catalog=request.catalog,
             target=request.target,
             columns=execution_projection.execution_columns,
+            row_filter=validated_row_filter,
         )
         plan = table_format.plan(execution_request, self._max_tickets)
 
@@ -101,8 +102,8 @@ class PlanAccessUseCase:
                 scan={
                     "read_payload": base64.b64encode(pickle.dumps(task)).decode("utf-8"),
                     "row_filter": None
-                    if validated_row_filter is None
-                    else serialize_row_filter(validated_row_filter),
+                    if plan.residual_row_filter is None
+                    else serialize_row_filter(plan.residual_row_filter),
                     "masks": {
                         key: {"type": value.type, "value": value.value}
                         for key, value in decision.masks.items()

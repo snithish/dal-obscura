@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 import pyarrow as pa
 
+from dal_obscura.domain.access_control.filters import RowFilter
+
 
 @dataclass(frozen=True)
 class PlanRequest:
@@ -12,6 +14,7 @@ class PlanRequest:
     target: str
     columns: list[str]
     catalog: str | None = None
+    row_filter: RowFilter | None = None
 
 
 @dataclass(frozen=True)

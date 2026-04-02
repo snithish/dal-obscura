@@ -36,7 +36,7 @@ class StubTableFormat(TableFormat):
         return self.schema
 
     def plan(self, request: PlanRequest, max_tickets: int) -> Plan:
-        del request, max_tickets
+        del max_tickets
         return Plan(
             schema=self.schema,
             tasks=[
@@ -46,6 +46,7 @@ class StubTableFormat(TableFormat):
                     partition=StubInputPartition(payload=b"payload"),
                 )
             ],
+            residual_row_filter=request.row_filter,
         )
 
     def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
@@ -74,6 +75,7 @@ class TrackingTableFormat(TableFormat):
                     partition=StubInputPartition(payload=b"payload"),
                 )
             ],
+            residual_row_filter=request.row_filter,
         )
 
     def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
@@ -276,6 +278,7 @@ def test_plan_access_expands_wildcard_columns():
         "operator": "=",
         "value": "us",
     }
+    assert ticket_codec.signed_payloads[0].scan["row_filter"] is not None
 
 
 def test_plan_access_accepts_nested_requested_columns():

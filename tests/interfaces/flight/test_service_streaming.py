@@ -62,6 +62,7 @@ class StubTableFormat(TableFormat):
                     partition=StubInputPartition(payload=payload),
                 )
             ],
+            residual_row_filter=request.row_filter,
         )
 
     def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[Any]]:

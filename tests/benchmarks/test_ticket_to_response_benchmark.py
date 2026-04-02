@@ -44,7 +44,7 @@ class StubTableFormat(TableFormat):
         return self.schema
 
     def plan(self, request: PlanRequest, max_tickets: int) -> Plan:
-        del request, max_tickets
+        del max_tickets
         return Plan(
             schema=self.schema,
             tasks=[
@@ -54,6 +54,7 @@ class StubTableFormat(TableFormat):
                     partition=StubInputPartition(),
                 )
             ],
+            residual_row_filter=request.row_filter,
         )
 
     def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[Any]]:
