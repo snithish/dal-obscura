@@ -81,6 +81,65 @@ def _nested_batches(batch_count: int, rows_per_batch: int) -> list[pa.RecordBatc
 
 
 @pytest.mark.benchmark(group="row-filter-mask")
+def test_benchmark_row_filter_only(benchmark):
+    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
+    batch_count = 8
+    rows_per_batch = 4_096
+    batches = _scalar_batches(batch_count=batch_count, rows_per_batch=rows_per_batch)
+    expected_rows = batch_count * (rows_per_batch // 2)
+
+    def run() -> pa.Table:
+        result = list(
+            adapter.apply_filters_and_masks_stream(
+                batches,
+                ["id", "email", "region"],
+                "region = 'us'",
+                {},
+            )
+        )
+        return pa.Table.from_batches(result)
+
+    table = benchmark(run)
+
+    benchmark.extra_info["scenario"] = "filter-only"
+    benchmark.extra_info["input_rows"] = batch_count * rows_per_batch
+    benchmark.extra_info["output_rows"] = expected_rows
+    assert table.num_rows == expected_rows
+    assert table.schema.names == ["id", "email", "region"]
+
+
+@pytest.mark.benchmark(group="row-filter-mask")
+def test_benchmark_mask_only(benchmark):
+    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
+    batch_count = 8
+    rows_per_batch = 4_096
+    batches = _scalar_batches(batch_count=batch_count, rows_per_batch=rows_per_batch)
+
+    def run() -> pa.Table:
+        result = list(
+            adapter.apply_filters_and_masks_stream(
+                batches,
+                ["id", "email", "region"],
+                None,
+                {
+                    "id": MaskRule(type="hash"),
+                    "email": MaskRule(type="redact", value="[hidden]"),
+                },
+            )
+        )
+        return pa.Table.from_batches(result)
+
+    table = benchmark(run)
+
+    benchmark.extra_info["scenario"] = "mask-only"
+    benchmark.extra_info["input_rows"] = batch_count * rows_per_batch
+    benchmark.extra_info["output_rows"] = batch_count * rows_per_batch
+    assert table.num_rows == batch_count * rows_per_batch
+    assert table.schema.field("id").type == pa.string()
+    assert table.column("email").to_pylist()[:3] == ["[hidden]", "[hidden]", "[hidden]"]
+
+
+@pytest.mark.benchmark(group="row-filter-mask")
 def test_benchmark_row_filter_and_top_level_masks(benchmark):
     adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
     batches = _scalar_batches(batch_count=8, rows_per_batch=4_096)
@@ -102,6 +161,7 @@ def test_benchmark_row_filter_and_top_level_masks(benchmark):
 
     table = benchmark(run)
 
+    benchmark.extra_info["scenario"] = "filter-plus-mask"
     benchmark.extra_info["input_rows"] = 8 * 4_096
     benchmark.extra_info["output_rows"] = expected_rows
     assert table.num_rows == expected_rows
@@ -130,6 +190,7 @@ def test_benchmark_row_filter_and_nested_masks(benchmark):
 
     table = benchmark(run)
 
+    benchmark.extra_info["scenario"] = "nested-field-mask"
     benchmark.extra_info["input_rows"] = batch_count * rows_per_batch
     benchmark.extra_info["output_rows"] = expected_rows
     assert table.num_rows == expected_rows

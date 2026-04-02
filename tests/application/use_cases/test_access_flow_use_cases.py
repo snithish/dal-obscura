@@ -54,6 +54,34 @@ class StubTableFormat(TableFormat):
         return self.schema, iter(self.batches)
 
 
+@dataclass(frozen=True, kw_only=True)
+class TrackingTableFormat(TableFormat):
+    schema: pa.Schema
+    planned_columns: list[list[str]]
+
+    def get_schema(self) -> pa.Schema:
+        return self.schema
+
+    def plan(self, request: PlanRequest, max_tickets: int) -> Plan:
+        del max_tickets
+        self.planned_columns.append(list(request.columns))
+        return Plan(
+            schema=self.schema,
+            tasks=[
+                ScanTask(
+                    table_format=self,
+                    schema=self.schema,
+                    partition=StubInputPartition(payload=b"payload"),
+                )
+            ],
+        )
+
+    def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
+        if not isinstance(partition, StubInputPartition):
+            raise TypeError("TrackingTableFormat requires a StubInputPartition")
+        return self.schema, iter(())
+
+
 class FakeIdentity:
     def __init__(self, principal: Principal | None) -> None:
         self._principal = principal
@@ -302,6 +330,62 @@ def test_plan_access_accepts_nested_requested_columns():
     )
 
     assert authorizer.last_requested_columns == ["user.address.zip"]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Phase 1: planner still uses only the visible client projection and omits "
+        "hidden policy dependencies"
+    ),
+)
+def test_plan_access_includes_hidden_row_filter_dependency_columns_in_execution_plan():
+    schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
+    planned_columns: list[list[str]] = []
+    table_format = TrackingTableFormat(
+        catalog_name="catalog1",
+        table_name="users",
+        format="fake_format",
+        schema=schema,
+        planned_columns=planned_columns,
+    )
+    decision = AccessDecision(
+        allowed_columns=["id"],
+        masks={},
+        row_filter="region = 'us'",
+        policy_version=100,
+    )
+    authorizer = FakeAuthorizer(decision=decision)
+    ticket_codec = FakeTicketCodec(
+        TicketPayload(
+            catalog="catalog1",
+            target="users",
+            columns=["id"],
+            scan=_scan_payload(),
+            policy_version=100,
+            principal_id="user1",
+            expires_at=9999999999,
+            nonce="abc",
+        )
+    )
+    use_case = PlanAccessUseCase(
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+        authorizer=authorizer,
+        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        masking=FakeMasking(),
+        ticket_codec=ticket_codec,
+        ticket_ttl_seconds=300,
+        max_tickets=1,
+    )
+
+    result = use_case.execute(
+        PlanRequest(catalog="catalog1", target="users", columns=["id"]),
+        AUTHORIZATION_HEADER,
+    )
+
+    assert authorizer.last_requested_columns == ["id"]
+    assert result.columns == ["id"]
+    assert planned_columns == [["id", "region"]]
 
 
 def test_fetch_stream_policy_version_mismatch():

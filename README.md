@@ -92,6 +92,27 @@ uv run ruff format .
 uv run ty check
 ```
 
+Benchmark baselines:
+
+```bash
+uv run pytest tests/benchmarks --benchmark-only
+uv run pytest tests/benchmarks/test_masking_row_filter_benchmarks.py --benchmark-only --benchmark-json .benchmarks/row-filter-mask.json
+uv run pytest tests/benchmarks/test_iceberg_multifile_benchmark.py --benchmark-only --benchmark-json .benchmarks/iceberg-multifile.json
+```
+
+Use the JSON output as the before/after artifact for any planner, filter, masking, or Iceberg execution change. Compare:
+- `row-filter-mask`: `filter-only`, `mask-only`, `filter-plus-mask`, and `nested-field-mask`
+- `iceberg-multifile`: large multi-file execution baseline
+
+## Test Matrix
+- `tests/application/use_cases/test_access_flow_use_cases.py`: access-flow planning and ticket/fetch guardrails, including wildcard expansion, nested requests, and pending internal-dependency regressions.
+- `tests/domain/access_control/test_policy_resolution.py`: policy resolution, rule union semantics, row-filter composition, and policy parsing validation.
+- `tests/infrastructure/adapters/test_duckdb_transform.py`: masked schema derivation, nested struct masking, and DuckDB projection behavior.
+- `tests/infrastructure/adapters/test_iceberg_phase0_regressions.py`: current Iceberg planning baseline plus pending predicate-pushdown regression coverage.
+- `tests/interfaces/flight/test_service_streaming.py`: end-to-end Flight behavior for authorization, filtering, masking, and streaming.
+- `tests/benchmarks/test_masking_row_filter_benchmarks.py`: row-filter and masking throughput baselines.
+- `tests/benchmarks/test_iceberg_multifile_benchmark.py`: large multi-file Iceberg execution baseline.
+
 ## Pre-commit hooks
 
 After `uv sync --dev`, install the hooks with `uv run pre-commit install`. The configured hooks run `uv run ruff format` and `uv run ruff check` (each passed the staged python files), plus `uv run ty check` and `uv run pytest --maxfail=1 --disable-warnings` on every commit to guard formatting, linting, typing, and a quick smoke test. Re-run them manually with `uv run pre-commit run --all-files` if needed.
@@ -99,6 +120,12 @@ After `uv sync --dev`, install the hooks with `uv run pre-commit install`. The c
 ## Notes
 - Mask expressions are executed in DuckDB SQL.
 - Nested field masks use DuckDB `struct_update` to update nested structs.
+
+## Current Limitations
+- Planning still uses the visible client projection. Hidden columns required by row filters or mask dependencies are not yet added to an internal execution projection.
+- Iceberg execution still uses unconditional `ALWAYS_TRUE` and does not push policy predicates into file planning or scan execution yet.
+- Row filters remain raw DuckDB SQL strings; they are not yet validated against schema or compiled into a structured predicate representation.
+- Tickets still serialize Python scan tasks directly, which keeps the transport format tied to Python internals.
 
 ## Logging
 - JSON logs by default.
