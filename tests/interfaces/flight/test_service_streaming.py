@@ -393,6 +393,91 @@ def test_flight_streaming_supports_nested_projection_with_combined_row_filters(t
     thread.join(timeout=2)
 
 
+def test_flight_streaming_masks_list_of_struct_fields(tmp_path):
+    preference_type = pa.struct(
+        [
+            pa.field("name", pa.string()),
+            pa.field("theme", pa.string()),
+        ]
+    )
+    metadata_type = pa.struct(
+        [
+            pa.field("preferences", pa.list_(preference_type)),
+        ]
+    )
+    schema = pa.schema(
+        [
+            pa.field("id", pa.int64()),
+            pa.field("metadata", metadata_type),
+        ]
+    )
+    batch = pa.record_batch(
+        [
+            pa.array([1], type=pa.int64()),
+            pa.array(
+                [
+                    {
+                        "preferences": [
+                            {"name": "web", "theme": "dark"},
+                            {"name": "mobile", "theme": "light"},
+                        ]
+                    }
+                ],
+                type=metadata_type,
+            ),
+        ],
+        schema=schema,
+    )
+    table_format = StubTableFormat(
+        catalog_name="analytics",
+        table_name="test.table",
+        format="stub_format",
+        schema=schema,
+        batches=(batch,),
+    )
+
+    policy_path = tmp_path / "policy.yaml"
+    policy_path.write_text(
+        _catalog_policy(
+            """
+      "test.table":
+        rules:
+          - principals: ["user1"]
+            columns: ["id", "metadata"]
+            masks:
+              "metadata.preferences.theme":
+                type: "redact"
+                value: "[hidden]"
+"""
+        )
+    )
+    server = _build_server(table_format=table_format, policy_path=policy_path)
+    thread = _start_server(server)
+    client = flight.FlightClient(f"grpc+tcp://localhost:{server.port}")
+    descriptor = flight.FlightDescriptor.for_command(
+        json.dumps(
+            {
+                "catalog": "analytics",
+                "target": "test.table",
+                "columns": ["id", "metadata"],
+            }
+        ).encode("utf-8")
+    )
+    options = flight.FlightCallOptions(headers=[_authorization_header("user1")])
+
+    info = client.get_flight_info(descriptor, options=options)
+    table = client.do_get(info.endpoints[0].ticket, options=options).read_all()
+
+    metadata_field = info.schema.field("metadata")
+    preferences_field = metadata_field.type.field("preferences")
+    assert preferences_field.type.value_field.type.field("theme").type == pa.string()
+    preferences = table.column("metadata").to_pylist()[0]["preferences"]
+    assert [item["theme"] for item in preferences] == ["[hidden]", "[hidden]"]
+
+    server.shutdown()
+    thread.join(timeout=2)
+
+
 def test_flight_logs_include_resident_memory(tmp_path, caplog, monkeypatch):
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     batch = pa.record_batch([pa.array([1, 2]), pa.array(["us", "eu"])], schema=schema)

@@ -120,7 +120,7 @@ class FakeCatalogRegistry:
 
 
 class FakeMasking:
-    def apply(self, columns, masks):
+    def apply(self, base_schema, columns, masks):
         return None
 
     def masked_schema(self, base_schema, columns, masks):

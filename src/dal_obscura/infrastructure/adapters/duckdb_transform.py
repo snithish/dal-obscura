@@ -16,9 +16,14 @@ _DUCKDB_ARROW_OUTPUT_BATCH_SIZE = 8_192
 class DefaultMaskingAdapter:
     """Builds DuckDB projection expressions and the schema they imply."""
 
-    def apply(self, columns: Iterable[str], masks: Mapping[str, MaskRule]) -> MaskedSelection:
+    def apply(
+        self,
+        base_schema: pa.Schema,
+        columns: Iterable[str],
+        masks: Mapping[str, MaskRule],
+    ) -> MaskedSelection:
         """Returns the DuckDB SELECT list for the requested columns and masks."""
-        return _build_select_list(columns, masks)
+        return _build_select_list(base_schema, columns, masks)
 
     def masked_schema(
         self, base_schema: pa.Schema, columns: Iterable[str], masks: Mapping[str, MaskRule]
@@ -57,13 +62,12 @@ class DuckDBRowTransformAdapter:
         masks: Mapping[str, MaskRule],
     ) -> Iterable[pa.RecordBatch]:
         """Builds a transient DuckDB query and streams transformed record batches."""
-        query = _build_query(columns, row_filter, masks, self._masking)
-
         batch_iter = iter(batches)
         try:
             first_batch = next(batch_iter)
         except StopIteration:
             return iter(())
+        query = _build_query(first_batch.schema, columns, row_filter, masks, self._masking)
 
         reader = pa.RecordBatchReader.from_batches(
             first_batch.schema,
@@ -92,20 +96,25 @@ def _stream_query_results(
 
 
 def _build_query(
+    base_schema: pa.Schema,
     columns: Iterable[str],
     row_filter: RowFilter | None,
     masks: Mapping[str, MaskRule],
     masking: DefaultMaskingAdapter,
 ) -> str:
     """Builds the SQL statement used to apply projection, masks, and filters."""
-    selection = masking.apply(columns, masks)
+    selection = masking.apply(base_schema, columns, masks)
     query = f"SELECT {', '.join(selection.select_list)} FROM input"
     if row_filter:
         query += f" WHERE {row_filter_to_sql(row_filter)}"
     return query
 
 
-def _build_select_list(columns: Iterable[str], masks: Mapping[str, MaskRule]) -> MaskedSelection:
+def _build_select_list(
+    base_schema: pa.Schema,
+    columns: Iterable[str],
+    masks: Mapping[str, MaskRule],
+) -> MaskedSelection:
     """Builds projection expressions for both top-level and nested masked fields."""
     select_list: list[str] = []
     masked_columns: list[str] = []
@@ -119,13 +128,13 @@ def _build_select_list(columns: Iterable[str], masks: Mapping[str, MaskRule]) ->
 
         nested_masks = {k: v for k, v in masks.items() if _is_descendant_path(k, column)}
         if nested_masks:
-            expr = column
-            for path, mask in nested_masks.items():
-                masked_expr = _mask_expression(path, mask)
-                # Nested masks are applied from the leaf upward so each struct update
-                # wraps the previous expression in the correct order.
-                expr = _apply_nested_mask_on_root(expr, column, path, masked_expr)
-                masked_columns.append(path)
+            expr = _apply_nested_masks(
+                column,
+                column,
+                _field_for_path(base_schema, column).type,
+                masks,
+            )
+            masked_columns.extend(sorted(nested_masks))
             select_list.append(f'{expr} AS "{column}"')
         else:
             select_list.append(f'{column} AS "{column}"')
@@ -142,6 +151,21 @@ def _mask_expression(column: str, mask: MaskRule) -> str:
         return _sql_literal(str(mask.value or "***"))
     if mask_type == "hash":
         return f"sha256(CAST({column} AS VARCHAR))"
+    if mask_type == "email":
+        return f"regexp_replace(CAST({column} AS VARCHAR), '(^.).*(@.*$)', '\\1***\\2')"
+    if mask_type == "keep_last":
+        if not isinstance(mask.value, int) or mask.value < 0:
+            raise ValueError("keep_last mask requires a non-negative integer value")
+        text_column = f"CAST({column} AS VARCHAR)"
+        keep = mask.value
+        return (
+            "CASE "
+            f"WHEN length({text_column}) <= {keep} THEN {text_column} "
+            "ELSE "
+            f"repeat('*', greatest(length({text_column}) - {keep}, 0)) "
+            f"|| right({text_column}, {keep}) "
+            "END"
+        )
     if mask_type == "default":
         if mask.value is None:
             raise ValueError("default mask requires a value")
@@ -154,20 +178,49 @@ def _is_descendant_path(path: str, parent: str) -> bool:
     return path.startswith(f"{parent}.")
 
 
-def _apply_nested_mask_on_root(root_expr: str, root_path: str, path: str, expr: str) -> str:
-    """Applies a nested field replacement on top of a selected struct expression."""
-    relative_parts = path.split(".")[len(root_path.split(".")) :]
-    if not relative_parts:
-        return expr
+def _apply_nested_masks(
+    expr: str,
+    path: str,
+    data_type: pa.DataType,
+    masks: Mapping[str, MaskRule],
+    *,
+    item_var: str = "_item",
+) -> str:
+    direct_mask = masks.get(path)
+    if direct_mask is not None:
+        return _mask_expression(expr, direct_mask)
 
-    updated = expr
-    for depth in range(len(relative_parts) - 1, -1, -1):
-        field = relative_parts[depth]
-        base = (
-            f"({root_expr})" if depth == 0 else f"({root_expr}).{'.'.join(relative_parts[:depth])}"
+    if pa.types.is_struct(data_type):
+        updated_expr = expr
+        for child in data_type:
+            child_path = f"{path}.{child.name}"
+            if not _has_mask_for_path(child_path, masks):
+                continue
+            child_expr = _apply_nested_masks(
+                f"({updated_expr}).{child.name}",
+                child_path,
+                child.type,
+                masks,
+                item_var=item_var,
+            )
+            updated_expr = f'struct_update({updated_expr}, "{child.name}" := {child_expr})'
+        return updated_expr
+
+    if pa.types.is_list(data_type) or pa.types.is_large_list(data_type):
+        value_field = data_type.value_field
+        if not _has_descendant_mask(path, masks):
+            return expr
+        child_var = f"{item_var}_{len(path.split('.'))}"
+        transformed = _apply_nested_masks(
+            child_var,
+            path,
+            value_field.type,
+            masks,
+            item_var=child_var,
         )
-        updated = f'struct_update({base}, "{field}" := {updated})'
-    return updated
+        return f"list_transform({expr}, {child_var} -> {transformed})"
+
+    return expr
 
 
 def _selected_field(base_schema: pa.Schema, column: str, masks: Mapping[str, MaskRule]) -> pa.Field:
@@ -182,7 +235,11 @@ def _field_for_path(schema: pa.Schema, path: str) -> pa.Field:
     parts = path.split(".")
     field = schema.field(parts[0])
     for part in parts[1:]:
-        field = field.type.field(part)
+        field_type = field.type
+        if pa.types.is_list(field_type) or pa.types.is_large_list(field_type):
+            field = field_type.value_field
+            field_type = field.type
+        field = field_type.field(part)
     return field
 
 
@@ -193,6 +250,22 @@ def _masked_field(field: pa.Field, path: str, masks: Mapping[str, MaskRule]) -> 
         return _masked_leaf_field(field, mask)
 
     if not pa.types.is_struct(field.type):
+        if pa.types.is_list(field.type) or pa.types.is_large_list(field.type):
+            value_field = field.type.value_field
+            nested_value_field = _masked_field(value_field, path, masks)
+            if nested_value_field.equals(value_field):
+                return field
+            list_type = (
+                pa.list_(nested_value_field)
+                if pa.types.is_list(field.type)
+                else pa.large_list(nested_value_field)
+            )
+            return pa.field(
+                field.name,
+                list_type,
+                nullable=field.nullable,
+                metadata=field.metadata,
+            )
         return field
 
     nested_fields = [_masked_field(child, f"{path}.{child.name}", masks) for child in field.type]
@@ -212,9 +285,17 @@ def _masked_field(field: pa.Field, path: str, masks: Mapping[str, MaskRule]) -> 
 def _masked_leaf_field(field: pa.Field, mask: MaskRule) -> pa.Field:
     """Adjusts the field type for a direct mask attached to the selected path."""
     mask_type = mask.type.lower()
-    if mask_type in {"hash", "redact"}:
+    if mask_type in {"hash", "redact", "email", "keep_last"}:
         return pa.field(field.name, pa.string(), nullable=True)
     return field
+
+
+def _has_mask_for_path(path: str, masks: Mapping[str, MaskRule]) -> bool:
+    return path in masks or _has_descendant_mask(path, masks)
+
+
+def _has_descendant_mask(path: str, masks: Mapping[str, MaskRule]) -> bool:
+    return any(_is_descendant_path(mask_path, path) for mask_path in masks)
 
 
 def _sql_literal(value: object) -> str:

@@ -129,13 +129,15 @@ After `uv sync --dev`, install the hooks with `uv run pre-commit install`. The c
 
 ## Notes
 - Mask expressions are executed in DuckDB SQL.
+- Supported mask types include `null`, `redact`, `hash`, `default`, `email`, and `keep_last`.
 - Row filters are validated against the Arrow schema before planning and currently support comparisons, `AND`/`OR`, `IN`, and `IS NULL`/`IS NOT NULL`.
 - Iceberg planning pushes down a safe subset of validated row filters for top-level fields; unsupported or nested predicates remain residual DuckDB filters for exact correctness.
-- Nested field masks use DuckDB `struct_update` to update nested structs.
+- Nested field masks use DuckDB `struct_update`, and list-of-struct masks use `list_transform` plus `struct_update`.
 
 ## Current Limitations
 - Iceberg pushdown is currently conservative: mixed `AND` predicates split, but nested-field predicates and unsupported shapes remain residual-only.
 - ABAC conditions currently support exact principal-attribute matches and membership in an explicit allowed-value list.
+- Collection masking currently targets list-of-struct paths and does not yet support arbitrary scalar lists or deeper heterogeneous container rewrites.
 - Tickets still serialize Python scan tasks directly, which keeps the transport format tied to Python internals.
 
 ## Logging

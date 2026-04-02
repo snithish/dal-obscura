@@ -20,7 +20,12 @@ class MaskedSelection:
 class MaskingPort(Protocol):
     """Builds masked projections and the schema those projections expose."""
 
-    def apply(self, columns: Iterable[str], masks: Mapping[str, MaskRule]) -> MaskedSelection: ...
+    def apply(
+        self,
+        base_schema: pa.Schema,
+        columns: Iterable[str],
+        masks: Mapping[str, MaskRule],
+    ) -> MaskedSelection: ...
 
     def masked_schema(
         self,

@@ -17,7 +17,9 @@ from dal_obscura.infrastructure.adapters.duckdb_transform import (
 
 
 def test_mask_select_list_basic():
+    schema = pa.schema([pa.field("id", pa.int64()), pa.field("name", pa.string())])
     selection = DefaultMaskingAdapter().apply(
+        schema,
         ["id", "name"],
         {"name": MaskRule(type="redact", value="***")},
     )
@@ -26,7 +28,23 @@ def test_mask_select_list_basic():
 
 
 def test_nested_mask_expression():
+    schema = pa.schema(
+        [
+            pa.field(
+                "user",
+                pa.struct(
+                    [
+                        pa.field(
+                            "address",
+                            pa.struct([pa.field("zip", pa.int64())]),
+                        )
+                    ]
+                ),
+            )
+        ]
+    )
     selection = DefaultMaskingAdapter().apply(
+        schema,
         ["user.address.zip"],
         {"user.address.zip": MaskRule(type="hash")},
     )
@@ -36,11 +54,27 @@ def test_nested_mask_expression():
 
 
 def test_nested_struct_selection_applies_descendant_masks():
+    schema = pa.schema(
+        [
+            pa.field(
+                "user",
+                pa.struct(
+                    [
+                        pa.field(
+                            "address",
+                            pa.struct([pa.field("zip", pa.int64())]),
+                        )
+                    ]
+                ),
+            )
+        ]
+    )
     selection = DefaultMaskingAdapter().apply(
+        schema,
         ["user.address"],
         {"user.address.zip": MaskRule(type="hash")},
     )
-    assert 'struct_update((user.address), "zip"' in selection.select_list[0]
+    assert 'struct_update(user.address, "zip"' in selection.select_list[0]
 
 
 def test_masked_schema_updates_nested_field_types():
@@ -103,11 +137,105 @@ def test_masked_schema_exposes_nested_projection_as_dotted_column():
 
 
 def test_default_mask_renders_literal():
+    schema = pa.schema([pa.field("status", pa.string())])
     selection = DefaultMaskingAdapter().apply(
+        schema,
         ["status"],
         {"status": MaskRule(type="default", value="unknown")},
     )
     assert "'unknown'" in selection.select_list[0]
+
+
+def test_email_mask_renders_masking_expression():
+    schema = pa.schema([pa.field("email", pa.string())])
+    selection = DefaultMaskingAdapter().apply(
+        schema,
+        ["email"],
+        {"email": MaskRule(type="email")},
+    )
+
+    assert "regexp_replace" in selection.select_list[0]
+    assert 'AS "email"' in selection.select_list[0]
+
+
+def test_keep_last_mask_renders_masking_expression():
+    schema = pa.schema([pa.field("account_id", pa.string())])
+    selection = DefaultMaskingAdapter().apply(
+        schema,
+        ["account_id"],
+        {"account_id": MaskRule(type="keep_last", value=4)},
+    )
+
+    assert "right(CAST(account_id AS VARCHAR), 4)" in selection.select_list[0]
+    assert "repeat('*'" in selection.select_list[0]
+
+
+def test_masked_schema_updates_list_of_struct_nested_field_types():
+    schema = pa.schema(
+        [
+            pa.field(
+                "metadata",
+                pa.struct(
+                    [
+                        pa.field(
+                            "preferences",
+                            pa.list_(
+                                pa.struct(
+                                    [
+                                        pa.field("name", pa.string()),
+                                        pa.field("theme", pa.string()),
+                                    ]
+                                )
+                            ),
+                        )
+                    ]
+                ),
+            )
+        ]
+    )
+
+    masked_schema = DefaultMaskingAdapter().masked_schema(
+        schema,
+        ["metadata"],
+        {"metadata.preferences.theme": MaskRule(type="redact", value="[hidden]")},
+    )
+
+    preferences_field = masked_schema.field("metadata").type.field("preferences")
+    theme_field = preferences_field.type.value_field.type.field("theme")
+    assert theme_field.type == pa.string()
+
+
+def test_list_of_struct_selection_applies_descendant_masks():
+    schema = pa.schema(
+        [
+            pa.field(
+                "metadata",
+                pa.struct(
+                    [
+                        pa.field(
+                            "preferences",
+                            pa.list_(
+                                pa.struct(
+                                    [
+                                        pa.field("name", pa.string()),
+                                        pa.field("theme", pa.string()),
+                                    ]
+                                )
+                            ),
+                        )
+                    ]
+                ),
+            )
+        ]
+    )
+    selection = DefaultMaskingAdapter().apply(
+        schema,
+        ["metadata"],
+        {"metadata.preferences.theme": MaskRule(type="redact", value="[hidden]")},
+    )
+
+    assert "list_transform" in selection.select_list[0]
+    assert 'struct_update(_item_2, "theme"' in selection.select_list[0]
 
 
 def test_duckdb_transform_uses_single_arrow_stream_query(monkeypatch):
@@ -266,6 +394,57 @@ def test_duckdb_transform_filters_on_hidden_execution_column():
 
     assert result.schema.names == ["id"]
     assert result.column("id").to_pylist() == [1, 3]
+
+
+def test_duckdb_transform_applies_list_of_struct_mask():
+    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
+    preference_type = pa.struct(
+        [
+            pa.field("name", pa.string()),
+            pa.field("theme", pa.string()),
+        ]
+    )
+    schema = pa.schema(
+        [
+            pa.field(
+                "metadata",
+                pa.struct(
+                    [
+                        pa.field("preferences", pa.list_(preference_type)),
+                    ]
+                ),
+            )
+        ]
+    )
+    input_batch = pa.record_batch(
+        [
+            pa.array(
+                [
+                    {
+                        "preferences": [
+                            {"name": "web", "theme": "dark"},
+                            {"name": "mobile", "theme": "light"},
+                        ]
+                    }
+                ],
+                type=schema.field("metadata").type,
+            )
+        ],
+        schema=schema,
+    )
+
+    result_batches = list(
+        adapter.apply_filters_and_masks_stream(
+            [input_batch],
+            ["metadata"],
+            None,
+            {"metadata.preferences.theme": MaskRule(type="redact", value="[hidden]")},
+        )
+    )
+    result = pa.Table.from_batches(result_batches)
+
+    preferences = result.column("metadata").to_pylist()[0]["preferences"]
+    assert [item["theme"] for item in preferences] == ["[hidden]", "[hidden]"]
 
 
 def test_duckdb_transform_memory_is_bounded_in_subprocess():
