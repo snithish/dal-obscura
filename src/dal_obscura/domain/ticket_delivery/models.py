@@ -4,6 +4,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TypedDict, cast
 
+from dal_obscura.domain.access_control.filters import RowFilterPayload
+
 
 class MaskPayload(TypedDict):
     type: str
@@ -12,7 +14,7 @@ class MaskPayload(TypedDict):
 
 class ScanPayload(TypedDict):
     read_payload: str
-    row_filter: str | None
+    row_filter: RowFilterPayload | None
     masks: dict[str, MaskPayload]
 
 
@@ -94,7 +96,7 @@ def _coerce_scan_payload(raw: object) -> ScanPayload:
     row_filter = raw_mapping.get("row_filter")
     return {
         "read_payload": "" if read_payload is None else str(read_payload),
-        "row_filter": None if row_filter is None else str(row_filter),
+        "row_filter": _coerce_row_filter(row_filter),
         "masks": _coerce_masks(raw_mapping.get("masks")),
     }
 
@@ -113,3 +115,11 @@ def _coerce_masks(raw: object) -> dict[str, MaskPayload]:
             continue
         masks[key] = {"type": str(mask_type), "value": mask_mapping.get("value")}
     return masks
+
+
+def _coerce_row_filter(raw: object) -> RowFilterPayload | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping):
+        return None
+    return {str(key): value for key, value in raw.items()}

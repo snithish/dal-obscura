@@ -270,6 +270,12 @@ def test_plan_access_expands_wildcard_columns():
     )
 
     assert authorizer.last_requested_columns == ["id", "region"]
+    assert ticket_codec.signed_payloads[0].scan["row_filter"] == {
+        "type": "comparison",
+        "field": "region",
+        "operator": "=",
+        "value": "us",
+    }
 
 
 def test_plan_access_accepts_nested_requested_columns():
@@ -577,6 +583,37 @@ def test_fetch_stream_rejects_invalid_mask_payload():
     )
 
     with pytest.raises(ValueError, match="Invalid mask payload"):
+        use_case.execute("token", AUTHORIZATION_HEADER)
+
+
+def test_fetch_stream_rejects_invalid_row_filter_payload():
+    schema, decision, table_format = _build_use_case_dependencies()
+    payload = TicketPayload(
+        catalog="catalog1",
+        target="users",
+        columns=["id", "region"],
+        scan=cast(
+            ScanPayload,
+            {
+                "read_payload": _encode_scan_task(table_format, schema),
+                "row_filter": {"type": "comparison", "field": "region"},
+                "masks": {},
+            },
+        ),
+        policy_version=100,
+        principal_id="user1",
+        expires_at=9999999999,
+        nonce="abc",
+    )
+    use_case = FetchStreamUseCase(
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+        authorizer=FakeAuthorizer(decision=decision, current_version=100),
+        masking=FakeMasking(),
+        row_transform=FakeRowTransform(),
+        ticket_codec=FakeTicketCodec(payload),
+    )
+
+    with pytest.raises(ValueError, match="Invalid row filter payload"):
         use_case.execute("token", AUTHORIZATION_HEADER)
 
 

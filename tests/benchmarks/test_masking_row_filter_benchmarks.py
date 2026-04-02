@@ -1,6 +1,7 @@
 import pyarrow as pa
 import pytest
 
+from dal_obscura.domain.access_control.filters import parse_row_filter
 from dal_obscura.domain.access_control.models import MaskRule
 from dal_obscura.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
@@ -87,13 +88,14 @@ def test_benchmark_row_filter_only(benchmark):
     rows_per_batch = 4_096
     batches = _scalar_batches(batch_count=batch_count, rows_per_batch=rows_per_batch)
     expected_rows = batch_count * (rows_per_batch // 2)
+    row_filter = parse_row_filter("region = 'us'", batches[0].schema)
 
     def run() -> pa.Table:
         result = list(
             adapter.apply_filters_and_masks_stream(
                 batches,
                 ["id", "email", "region"],
-                "region = 'us'",
+                row_filter,
                 {},
             )
         )
@@ -144,13 +146,14 @@ def test_benchmark_row_filter_and_top_level_masks(benchmark):
     adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
     batches = _scalar_batches(batch_count=8, rows_per_batch=4_096)
     expected_rows = 8 * 2_048
+    row_filter = parse_row_filter("region = 'us'", batches[0].schema)
 
     def run() -> pa.Table:
         result = list(
             adapter.apply_filters_and_masks_stream(
                 batches,
                 ["id", "email", "region"],
-                "region = 'us'",
+                row_filter,
                 {
                     "id": MaskRule(type="hash"),
                     "email": MaskRule(type="redact", value="[hidden]"),
@@ -176,13 +179,14 @@ def test_benchmark_row_filter_and_nested_masks(benchmark):
     rows_per_batch = 2_048
     batches = _nested_batches(batch_count=batch_count, rows_per_batch=rows_per_batch)
     expected_rows = sum(value % 3 != 0 for value in range(batch_count * rows_per_batch))
+    row_filter = parse_row_filter("active = true", batches[0].schema)
 
     def run() -> pa.Table:
         result = list(
             adapter.apply_filters_and_masks_stream(
                 batches,
                 ["id", "user"],
-                "active = true",
+                row_filter,
                 {"user.address.zip": MaskRule(type="hash")},
             )
         )

@@ -5,6 +5,7 @@ from typing import Protocol
 
 import pyarrow as pa
 
+from dal_obscura.domain.access_control.filters import RowFilter
 from dal_obscura.domain.access_control.models import MaskRule
 
 
@@ -15,6 +16,6 @@ class RowTransformPort(Protocol):
         self,
         batches: Iterable[pa.RecordBatch],
         columns: Iterable[str],
-        row_filter: str | None,
+        row_filter: RowFilter | None,
         masks: Mapping[str, MaskRule],
     ) -> Iterable[pa.RecordBatch]: ...

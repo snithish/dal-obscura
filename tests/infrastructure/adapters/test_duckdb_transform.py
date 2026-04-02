@@ -8,6 +8,7 @@ from typing import cast
 import pyarrow as pa
 
 import dal_obscura.infrastructure.adapters.duckdb_transform as duckdb_transform
+from dal_obscura.domain.access_control.filters import parse_row_filter
 from dal_obscura.domain.access_control.models import MaskRule
 from dal_obscura.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
@@ -154,7 +155,14 @@ def test_duckdb_transform_uses_single_arrow_stream_query(monkeypatch):
         pa.record_batch([pa.array([3, 4])], names=["id"]),
     ]
 
-    result = list(adapter.apply_filters_and_masks_stream(input_batches, ["id"], "id > 1", {}))
+    result = list(
+        adapter.apply_filters_and_masks_stream(
+            input_batches,
+            ["id"],
+            parse_row_filter("id > 1", pa.schema([pa.field("id", pa.int64())])),
+            {},
+        )
+    )
 
     assert len(result) == 1
     assert result[0].equals(result_batch)
@@ -250,7 +258,7 @@ def test_duckdb_transform_filters_on_hidden_execution_column():
         adapter.apply_filters_and_masks_stream(
             [input_batch],
             ["id"],
-            "region = 'us'",
+            parse_row_filter("region = 'us'", input_batch.schema),
             {},
         )
     )
@@ -269,6 +277,7 @@ def test_duckdb_transform_memory_is_bounded_in_subprocess():
         import psutil
         import pyarrow as pa
 
+        from dal_obscura.domain.access_control.filters import parse_row_filter
         from dal_obscura.infrastructure.adapters.duckdb_transform import (
             DefaultMaskingAdapter,
             DuckDBRowTransformAdapter,
@@ -296,7 +305,15 @@ def test_duckdb_transform_memory_is_bounded_in_subprocess():
         for batch in adapter.apply_filters_and_masks_stream(
             source(),
             ["id", "value"],
-            "id >= 0",
+            parse_row_filter(
+                "id >= 0",
+                pa.schema(
+                    [
+                        pa.field("id", pa.int64()),
+                        pa.field("value", pa.int64()),
+                    ]
+                ),
+            ),
             {},
         ):
             row_count += batch.num_rows

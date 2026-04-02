@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import base64
 import os
-import re
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -13,6 +12,12 @@ from dal_obscura.application.ports.authorization import AuthorizationPort
 from dal_obscura.application.ports.identity import IdentityPort
 from dal_obscura.application.ports.masking import MaskingPort
 from dal_obscura.application.ports.ticket_codec import TicketCodecPort
+from dal_obscura.domain.access_control.filters import (
+    RowFilter,
+    extract_row_filter_dependencies,
+    parse_row_filter,
+    serialize_row_filter,
+)
 from dal_obscura.domain.access_control.models import AccessDecision
 from dal_obscura.domain.query_planning.models import ExecutionProjection, PlanRequest
 from dal_obscura.domain.ticket_delivery.models import TicketPayload
@@ -74,7 +79,8 @@ class PlanAccessUseCase:
             requested_columns=requested_columns,
         )
 
-        execution_projection = _build_execution_projection(base_schema, decision)
+        validated_row_filter = _validate_row_filter(base_schema, decision.row_filter)
+        execution_projection = _build_execution_projection(decision, validated_row_filter)
         execution_request = PlanRequest(
             catalog=request.catalog,
             target=request.target,
@@ -94,7 +100,9 @@ class PlanAccessUseCase:
                 columns=execution_projection.visible_columns,
                 scan={
                     "read_payload": base64.b64encode(pickle.dumps(task)).decode("utf-8"),
-                    "row_filter": decision.row_filter,
+                    "row_filter": None
+                    if validated_row_filter is None
+                    else serialize_row_filter(validated_row_filter),
                     "masks": {
                         key: {"type": value.type, "value": value.value}
                         for key, value in decision.masks.items()
@@ -122,14 +130,14 @@ class PlanAccessUseCase:
 
 
 def _build_execution_projection(
-    base_schema: pa.Schema,
     decision: AccessDecision,
+    row_filter: RowFilter | None,
 ) -> ExecutionProjection:
     """Builds the visible and internal columns needed to enforce policy safely."""
     visible_columns = list(decision.allowed_columns)
     internal_dependency_columns = [
         column
-        for column in _extract_filter_dependencies(base_schema, decision.row_filter)
+        for column in _extract_filter_dependencies(row_filter)
         if column not in visible_columns
     ]
     return ExecutionProjection(
@@ -182,51 +190,16 @@ def _schema_has_path(schema: pa.Schema, column: str) -> bool:
     return True
 
 
-def _extract_filter_dependencies(schema: pa.Schema, row_filter: str | None) -> list[str]:
-    """Finds schema paths referenced directly in a raw row filter string."""
+def _extract_filter_dependencies(row_filter: RowFilter | None) -> list[str]:
     if not row_filter:
         return []
-
-    referenced_paths: list[str] = []
-    seen: set[str] = set()
-    normalized_filter = row_filter.lower()
-
-    for path in _schema_paths(schema):
-        if path.lower() in seen:
-            continue
-        if any(_is_descendant_path(matched_path, path) for matched_path in referenced_paths):
-            continue
-        if _path_appears_in_filter(path, normalized_filter):
-            referenced_paths.append(path)
-            seen.add(path.lower())
-
-    return referenced_paths
+    return extract_row_filter_dependencies(row_filter)
 
 
-def _schema_paths(schema: pa.Schema) -> list[str]:
-    """Returns all top-level and nested struct field paths in depth-first order."""
-    paths: list[str] = []
-
-    def visit(field: pa.Field, prefix: str) -> None:
-        path = f"{prefix}.{field.name}" if prefix else field.name
-        paths.append(path)
-        if pa.types.is_struct(field.type):
-            for child in field.type:
-                visit(child, path)
-
-    for field in schema:
-        visit(field, "")
-
-    return sorted(paths, key=lambda path: len(path), reverse=True)
-
-
-def _path_appears_in_filter(path: str, normalized_filter: str) -> bool:
-    pattern = rf"(?<![A-Za-z0-9_]){re.escape(path.lower())}(?![A-Za-z0-9_])"
-    return re.search(pattern, normalized_filter) is not None
-
-
-def _is_descendant_path(path: str, parent: str) -> bool:
-    return path.startswith(f"{parent}.")
+def _validate_row_filter(schema: pa.Schema, row_filter: str | None) -> RowFilter | None:
+    if row_filter is None:
+        return None
+    return parse_row_filter(row_filter, schema)
 
 
 def _epoch_seconds() -> int:

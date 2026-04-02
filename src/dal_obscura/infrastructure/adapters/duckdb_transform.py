@@ -7,6 +7,7 @@ import duckdb
 import pyarrow as pa
 
 from dal_obscura.application.ports.masking import MaskedSelection
+from dal_obscura.domain.access_control.filters import RowFilter, row_filter_to_sql
 from dal_obscura.domain.access_control.models import MaskRule
 
 _DUCKDB_ARROW_OUTPUT_BATCH_SIZE = 8_192
@@ -52,7 +53,7 @@ class DuckDBRowTransformAdapter:
         self,
         batches: Iterable[pa.RecordBatch],
         columns: Iterable[str],
-        row_filter: str | None,
+        row_filter: RowFilter | None,
         masks: Mapping[str, MaskRule],
     ) -> Iterable[pa.RecordBatch]:
         """Builds a transient DuckDB query and streams transformed record batches."""
@@ -92,7 +93,7 @@ def _stream_query_results(
 
 def _build_query(
     columns: Iterable[str],
-    row_filter: str | None,
+    row_filter: RowFilter | None,
     masks: Mapping[str, MaskRule],
     masking: DefaultMaskingAdapter,
 ) -> str:
@@ -100,7 +101,7 @@ def _build_query(
     selection = masking.apply(columns, masks)
     query = f"SELECT {', '.join(selection.select_list)} FROM input"
     if row_filter:
-        query += f" WHERE {row_filter}"
+        query += f" WHERE {row_filter_to_sql(row_filter)}"
     return query
 
 

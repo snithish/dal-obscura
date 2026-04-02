@@ -12,6 +12,7 @@ from dal_obscura.application.ports.identity import IdentityPort
 from dal_obscura.application.ports.masking import MaskingPort
 from dal_obscura.application.ports.row_transform import RowTransformPort
 from dal_obscura.application.ports.ticket_codec import TicketCodecPort
+from dal_obscura.domain.access_control.filters import RowFilter, deserialize_row_filter
 from dal_obscura.domain.access_control.models import MaskRule
 from dal_obscura.domain.table_format.ports import ScanTask
 
@@ -33,7 +34,7 @@ class DecodedScan:
     """Scan instructions restored from a ticket's serialized payload."""
 
     read_payload: bytes
-    row_filter: str | None
+    row_filter: RowFilter | None
     masks: dict[str, MaskRule]
 
 
@@ -115,13 +116,13 @@ def _decode_scan(scan_info: Mapping[str, object]) -> DecodedScan:
 
     return DecodedScan(
         read_payload=base64.b64decode(str(read_payload).encode("utf-8")),
-        row_filter=_optional_string(scan_info.get("row_filter")),
+        row_filter=_optional_row_filter(scan_info.get("row_filter")),
         masks=parsed_masks,
     )
 
 
-def _optional_string(value: object) -> str | None:
-    """Normalizes optional scalar values from JSON-like ticket payloads."""
+def _optional_row_filter(value: object) -> RowFilter | None:
+    """Normalizes an optional validated row filter from the ticket payload."""
     if value is None:
         return None
-    return str(value)
+    return deserialize_row_filter(value)
