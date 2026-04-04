@@ -23,7 +23,7 @@ The design goal is to remove the custom parser/compiler logic, adopt SQLGlot wit
 
 ## Non-Goals
 
-- Supporting arbitrary SQL functions or full DuckDB expression semantics for Iceberg pushdown.
+- Making Iceberg pushdown the limiting factor for the overall filter language.
 - Preserving the current JSON tree payload shape used for serialized row filters.
 - Refactoring masking behavior beyond the minimum integration changes required by the new filter representation.
 
@@ -37,6 +37,8 @@ Use SQLGlot as the only internal AST for row filters.
 - Iceberg pushdown transpiles SQLGlot expressions into PyIceberg `BooleanExpression` objects for the pushdown-safe subset only.
 - Tickets and format partitions serialize row filters as normalized SQL strings rather than the current custom JSON tree.
 
+The overall accepted filter language should be broad DuckDB SQL as represented by SQLGlot, not a narrow policy-specific predicate subset. Iceberg pushdown support remains intentionally narrower than the accepted filter language.
+
 ## Architecture
 
 ### Canonical Filter Object
@@ -44,9 +46,8 @@ Use SQLGlot as the only internal AST for row filters.
 `RowFilter` becomes a lightweight wrapper around a validated SQLGlot expression and its normalized DuckDB SQL string. The object is canonical only after:
 
 1. Parsing with SQLGlot.
-2. Validating supported expression shapes.
-3. Validating referenced columns against the Arrow schema.
-4. Normalizing SQL for deterministic serialization.
+2. Validating referenced columns against the Arrow schema.
+3. Normalizing SQL for deterministic serialization.
 
 This replaces the current `ComparisonFilter`, `InFilter`, `NullFilter`, and `BooleanFilter` dataclasses as the internal model.
 
@@ -60,7 +61,6 @@ Schema validation is required when parsing raw policy input during planning. Des
 - render canonical DuckDB SQL
 - extract referenced column paths in stable first-seen order
 - serialize and deserialize filter payloads as strings
-- walk SQLGlot expressions to validate allowed shapes
 - walk SQLGlot column references to validate schema paths
 
 This module must not include Iceberg-specific pushdown rules or DuckDB execution concerns beyond canonical SQL rendering.
@@ -84,30 +84,35 @@ This keeps format-specific pushdown rules inside the format implementation.
 
 ## Filter Semantics
 
-### Supported Filter Shapes
+### Accepted Filter Surface
 
-The supported policy/filter language remains intentionally narrow even though SQLGlot can parse more:
+The accepted filter language should be as broad as practical for DuckDB execution. The domain layer should accept boolean-valued DuckDB expressions that SQLGlot can parse and normalize with the DuckDB dialect. This includes simple predicates but is not limited to them.
 
-- comparison predicates on column references and scalar literals
-- `AND` / `OR`
-- `IN`
-- `IS NULL` / `IS NOT NULL`
-- parenthesized boolean composition
-- top-level and nested dotted column references
+Examples of valid expression categories include:
 
-Anything outside this supported subset must fail validation in the domain filter layer even if SQLGlot can parse it.
-
-### Unsupported Shapes
-
-The domain filter layer must reject:
-
+- comparisons and boolean composition
+- `IN`, `BETWEEN`, and null predicates
 - function calls
 - arithmetic expressions
-- subqueries
-- unary boolean negation for now
-- arbitrary computed expressions on either side of a predicate
+- casts and other computed expressions
+- parenthesized boolean composition
+- top-level and nested dotted column references
+- other DuckDB-compatible SQLGlot expressions that evaluate to a boolean filter condition
 
-This keeps the filter model aligned with current behavior and avoids ambiguous pushdown semantics.
+The domain layer must not maintain a hand-authored allowlist of expression node types beyond what is required to treat the final expression as a filter and to resolve referenced columns against the Arrow schema.
+
+### Pushdown Boundary
+
+Iceberg pushdown is narrower than the accepted filter language. `IcebergTableFormat` should only push down predicates that can be transpiled soundly into PyIceberg expressions while preserving semantics. Everything else remains a residual DuckDB filter.
+
+Examples of expressions that may remain residual-only include:
+
+- functions such as `lower(region) = 'us'`
+- arithmetic or computed predicates
+- expressions requiring DuckDB-specific evaluation semantics
+- any SQLGlot subtree that cannot be mapped cleanly to PyIceberg
+
+This keeps the overall filter language broad while keeping Iceberg pushdown conservative and correct.
 
 ## Data Flow
 
@@ -183,10 +188,12 @@ Validation must remain strict and explicit:
 
 - all referenced columns must exist in the Arrow schema
 - nested dotted paths must resolve correctly through Arrow structs
-- only the supported predicate shapes listed above are accepted
 - serialization must be deterministic so tickets are stable
+- the final expression must represent a filter condition suitable for DuckDB execution
 
-The implementation should validate all raw policy input before planning consumes a filter. Execution-time deserialization should re-parse and validate supported expression shape, but it may trust schema-path validation from the signed ticket issuance path.
+Validation must not reject expressions merely because they use functions or other non-trivial SQL constructs. The goal is broad DuckDB compatibility, with residual execution in DuckDB handling any expression that Iceberg cannot push down.
+
+The implementation should validate all raw policy input before planning consumes a filter. Execution-time deserialization should re-parse the canonical SQL form and may trust schema-path validation from the signed ticket issuance path.
 
 ## Testing Strategy
 
@@ -194,11 +201,11 @@ The implementation should validate all raw policy input before planning consumes
 
 Update `tests/domain/access_control/test_row_filters.py` to cover:
 
-- valid SQLGlot-backed parsing for the supported subset
-- rejection of unsupported expressions such as functions and unary `NOT`
+- valid SQLGlot-backed parsing for both simple predicates and richer DuckDB-style expressions
 - stable dependency extraction from SQLGlot trees
 - deterministic SQL serialization
 - string-based serialization and deserialization round-trips
+- column-resolution validation for expressions that contain functions and computed terms
 
 ### Iceberg Tests
 
@@ -208,6 +215,7 @@ Update `tests/infrastructure/adapters/test_iceberg_phase0_regressions.py` to cov
 - mixed `AND` predicates splitting into pushdown and residual filters
 - partition payloads storing normalized SQL strings
 - execution recompiling string payloads into PyIceberg expressions
+- complex DuckDB expressions remaining fully residual when they are not pushdown-safe
 
 ### DuckDB Tests
 
@@ -225,9 +233,9 @@ Update `tests/application/use_cases/test_access_flow_use_cases.py` to cover:
 
 ## Risks And Mitigations
 
-### Risk: SQLGlot accepts more syntax than the system should support
+### Risk: SQLGlot parses richer syntax than the system can statically reason about
 
-Mitigation: add an explicit expression-shape validator after parsing and fail closed for anything outside the supported subset.
+Mitigation: keep the acceptance boundary broad, but require successful SQLGlot parsing, stable normalization, referenced-column resolution, and a final boolean filter condition. Do not add a narrow node-type allowlist.
 
 ### Risk: SQL normalization changes string formatting in tests or payloads
 
@@ -236,6 +244,10 @@ Mitigation: treat SQLGlot-normalized SQL as canonical and update tests to assert
 ### Risk: Iceberg pushdown semantics drift from DuckDB semantics
 
 Mitigation: keep pushdown conservative and always preserve a residual DuckDB filter whenever a predicate cannot be proven safe.
+
+### Risk: SQLGlot may not cover every edge of DuckDB syntax
+
+Mitigation: define the operational support boundary as DuckDB-compatible filter SQL that SQLGlot can parse and round-trip in the DuckDB dialect, then add regression tests for the concrete expression patterns the project relies on.
 
 ## Implementation Summary
 
