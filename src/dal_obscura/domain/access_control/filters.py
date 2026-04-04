@@ -1,59 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal, cast
+from typing import cast
 
 import pyarrow as pa
 from sqlglot import exp, parse_one
 from sqlglot.errors import ParseError
-
-ScalarValue = str | int | float | bool | None
-ComparisonOperator = Literal["=", "!=", "<", "<=", ">", ">="]
-BooleanOperator = Literal["and", "or"]
-
-
-@dataclass(frozen=True)
-class FieldReference:
-    path: str
-
-
-@dataclass(frozen=True)
-class LiteralValue:
-    value: ScalarValue
-
-
-@dataclass(frozen=True)
-class ComparisonFilter:
-    field: FieldReference
-    operator: ComparisonOperator
-    value: LiteralValue
-
-
-@dataclass(frozen=True)
-class InFilter:
-    field: FieldReference
-    values: tuple[LiteralValue, ...]
-
-
-@dataclass(frozen=True)
-class NullFilter:
-    field: FieldReference
-    is_null: bool
-
-
-@dataclass(frozen=True)
-class BooleanFilter:
-    operator: BooleanOperator
-    clauses: tuple[object, ...]
 
 
 @dataclass(frozen=True)
 class RowFilter:
     sql: str
     expression: exp.Expression = field(repr=False, compare=False)
-
-
-RowFilterPayload = str
 
 
 def parse_row_filter(expression: str, schema: pa.Schema) -> RowFilter:
