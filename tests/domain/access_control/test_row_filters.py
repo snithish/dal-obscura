@@ -2,10 +2,7 @@ import pyarrow as pa
 import pytest
 
 from dal_obscura.domain.access_control.filters import (
-    BooleanFilter,
-    ComparisonFilter,
-    InFilter,
-    NullFilter,
+    RowFilter,
     deserialize_row_filter,
     extract_row_filter_dependencies,
     parse_row_filter,
@@ -35,58 +32,41 @@ def _schema() -> pa.Schema:
     )
 
 
-def test_parse_row_filter_validates_known_columns():
+def test_parse_row_filter_accepts_function_and_computed_predicates():
+    row_filter = parse_row_filter("lower(region) = 'us' AND id + 1 > 5", _schema())
+
+    assert isinstance(row_filter, RowFilter)
+    assert row_filter_to_sql(row_filter) == "LOWER(region) = 'us' AND id + 1 > 5"
+
+
+def test_parse_row_filter_validates_columns_inside_functions():
     with pytest.raises(ValueError, match="Unknown column"):
-        parse_row_filter("missing = 1", _schema())
+        parse_row_filter("lower(missing) = 'us'", _schema())
 
 
-def test_parse_row_filter_rejects_unsupported_operator():
-    with pytest.raises(
-        ValueError,
-        match=r"Unsupported row filter syntax|Expected literal|Expected comparison operator",
-    ):
-        parse_row_filter("region LIKE 'us%'", _schema())
-
-
-def test_parse_row_filter_extracts_nested_dependencies():
-    row_filter = parse_row_filter("user.address.zip > 10000 AND region = 'us'", _schema())
+def test_parse_row_filter_extracts_dependencies_from_nested_function_predicates():
+    row_filter = parse_row_filter(
+        "COALESCE(user.address.zip, 0) > 10000 AND lower(region) = 'us'",
+        _schema(),
+    )
 
     assert extract_row_filter_dependencies(row_filter) == ["user.address.zip", "region"]
 
 
-def test_parse_row_filter_renders_equivalent_duckdb_sql():
-    row_filter = parse_row_filter(
-        "(region = 'us' OR region = 'eu') AND active = true",
-        _schema(),
-    )
-
-    assert row_filter_to_sql(row_filter) == (
-        "((region = 'us') OR (region = 'eu')) AND (active = TRUE)"
-    )
+def test_parse_row_filter_rejects_query_statements():
+    with pytest.raises(ValueError, match="Row filter must be a DuckDB expression"):
+        parse_row_filter("SELECT * FROM users", _schema())
 
 
-def test_parse_row_filter_supports_in_and_null_checks():
-    row_filter = parse_row_filter("region IN ('us', 'eu') OR user.address.zip IS NULL", _schema())
+def test_row_filter_serialization_round_trips_as_sql_string():
+    row_filter = parse_row_filter("lower(region) = 'us' AND active", _schema())
 
-    assert isinstance(row_filter, BooleanFilter)
-    assert isinstance(row_filter.clauses[0], InFilter)
-    assert isinstance(row_filter.clauses[1], NullFilter)
+    payload = serialize_row_filter(row_filter)
 
-
-def test_row_filter_serialization_round_trips():
-    row_filter = parse_row_filter("region = 'us' AND active = true", _schema())
-
-    restored = deserialize_row_filter(serialize_row_filter(row_filter))
-
-    assert restored == row_filter
+    assert payload == "LOWER(region) = 'us' AND active"
+    assert deserialize_row_filter(payload) == row_filter
 
 
-def test_row_filter_deserialization_rejects_invalid_payload():
+def test_row_filter_deserialization_rejects_non_string_payload():
     with pytest.raises(ValueError, match="Invalid row filter payload"):
-        deserialize_row_filter({"type": "comparison", "field": "region"})
-
-
-def test_parse_row_filter_returns_comparison_node():
-    row_filter = parse_row_filter("region = 'us'", _schema())
-
-    assert isinstance(row_filter, ComparisonFilter)
+        deserialize_row_filter({"type": "comparison"})

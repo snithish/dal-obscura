@@ -22,6 +22,48 @@ def _scan_payload() -> ScanPayload:
     return {"read_payload": "payload", "row_filter": None, "masks": {}}
 
 
+def test_ticket_payload_from_dict_keeps_string_row_filter():
+    payload = TicketPayload.from_dict(
+        {
+            "catalog": "catalog1",
+            "target": "users",
+            "columns": ["id"],
+            "scan": {
+                "read_payload": "payload",
+                "row_filter": "LOWER(region) = 'us'",
+                "masks": {},
+            },
+            "policy_version": 100,
+            "principal_id": "user1",
+            "expires_at": 9999999999,
+            "nonce": "abc",
+        }
+    )
+
+    assert payload.scan["row_filter"] == "LOWER(region) = 'us'"
+
+
+def test_ticket_payload_from_dict_rejects_non_string_row_filter():
+    payload = TicketPayload.from_dict(
+        {
+            "catalog": "catalog1",
+            "target": "users",
+            "columns": ["id"],
+            "scan": {
+                "read_payload": "payload",
+                "row_filter": {"type": "comparison"},
+                "masks": {},
+            },
+            "policy_version": 100,
+            "principal_id": "user1",
+            "expires_at": 9999999999,
+            "nonce": "abc",
+        }
+    )
+
+    assert payload.scan["row_filter"] is None
+
+
 @dataclass(frozen=True)
 class StubInputPartition(InputPartition):
     payload: bytes
@@ -272,12 +314,7 @@ def test_plan_access_expands_wildcard_columns():
     )
 
     assert authorizer.last_requested_columns == ["id", "region"]
-    assert ticket_codec.signed_payloads[0].scan["row_filter"] == {
-        "type": "comparison",
-        "field": "region",
-        "operator": "=",
-        "value": "us",
-    }
+    assert ticket_codec.signed_payloads[0].scan["row_filter"] == "region = 'us'"
     assert ticket_codec.signed_payloads[0].scan["row_filter"] is not None
 
 
@@ -387,6 +424,51 @@ def test_plan_access_includes_hidden_row_filter_dependency_columns_in_execution_
 
     assert authorizer.last_requested_columns == ["id"]
     assert result.columns == ["id"]
+    assert planned_columns == [["id", "region"]]
+
+
+def test_plan_access_tracks_dependencies_for_function_filters():
+    schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
+    planned_columns: list[list[str]] = []
+    table_format = TrackingTableFormat(
+        catalog_name="catalog1",
+        table_name="users",
+        format="fake_format",
+        schema=schema,
+        planned_columns=planned_columns,
+    )
+    decision = AccessDecision(
+        allowed_columns=["id"],
+        masks={},
+        row_filter="lower(region) = 'us'",
+        policy_version=100,
+    )
+    use_case = PlanAccessUseCase(
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+        authorizer=FakeAuthorizer(decision=decision),
+        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        masking=FakeMasking(),
+        ticket_codec=FakeTicketCodec(
+            TicketPayload(
+                catalog="catalog1",
+                target="users",
+                columns=["id"],
+                scan=_scan_payload(),
+                policy_version=100,
+                principal_id="user1",
+                expires_at=9999999999,
+                nonce="abc",
+            )
+        ),
+        ticket_ttl_seconds=300,
+        max_tickets=1,
+    )
+
+    use_case.execute(
+        PlanRequest(catalog="catalog1", target="users", columns=["id"]),
+        AUTHORIZATION_HEADER,
+    )
+
     assert planned_columns == [["id", "region"]]
 
 
@@ -589,7 +671,7 @@ def test_fetch_stream_rejects_invalid_mask_payload():
         use_case.execute("token", AUTHORIZATION_HEADER)
 
 
-def test_fetch_stream_rejects_invalid_row_filter_payload():
+def test_fetch_stream_rejects_non_string_row_filter_payload():
     schema, decision, table_format = _build_use_case_dependencies()
     payload = TicketPayload(
         catalog="catalog1",

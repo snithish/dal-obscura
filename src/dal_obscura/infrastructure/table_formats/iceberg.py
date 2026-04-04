@@ -22,15 +22,10 @@ from pyiceberg.expressions import (
 )
 from pyiceberg.io.pyarrow import ArrowScan
 from pyiceberg.table import ALWAYS_TRUE
+from sqlglot import exp
 
 from dal_obscura.domain.access_control.filters import (
-    BooleanFilter,
-    BooleanOperator,
-    ComparisonFilter,
-    InFilter,
-    NullFilter,
     RowFilter,
-    RowFilterPayload,
     deserialize_row_filter,
     serialize_row_filter,
 )
@@ -45,7 +40,7 @@ class IcebergInputPartition(InputPartition):
 
     columns: list[str]
     tasks: list[bytes]
-    pushdown_row_filter: RowFilterPayload | None = None
+    pushdown_row_filter: str | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -159,92 +154,172 @@ def _chunk_by_max_tickets(tasks: list, max_tickets: int) -> list[list]:
 def _split_row_filter(row_filter: RowFilter | None) -> tuple[RowFilter | None, RowFilter | None]:
     if row_filter is None:
         return None, None
-    if _is_pushdown_safe(row_filter):
-        return row_filter, None
-    if isinstance(row_filter, BooleanFilter) and row_filter.operator == "and":
-        pushdown_clauses: list[RowFilter] = []
-        residual_clauses: list[RowFilter] = []
-        for clause in row_filter.clauses:
-            pushdown_clause, residual_clause = _split_row_filter(clause)
-            if pushdown_clause is not None:
-                pushdown_clauses.append(pushdown_clause)
-            if residual_clause is not None:
-                residual_clauses.append(residual_clause)
-        return _combine_boolean("and", pushdown_clauses), _combine_boolean("and", residual_clauses)
-    return None, row_filter
+
+    clauses = _flatten_and_clauses(row_filter.expression)
+    pushdown_clauses = [clause for clause in clauses if _is_pushdown_safe(clause)]
+    residual_clauses = [clause for clause in clauses if not _is_pushdown_safe(clause)]
+
+    return _row_filter_from_clauses(pushdown_clauses), _row_filter_from_clauses(residual_clauses)
 
 
-def _is_pushdown_safe(row_filter: RowFilter) -> bool:
-    if isinstance(row_filter, BooleanFilter):
-        if row_filter.operator == "and":
-            return all(_is_pushdown_safe(clause) for clause in row_filter.clauses)
-        return all(_is_pushdown_safe(clause) for clause in row_filter.clauses)
-    return "." not in row_filter.field.path
+def _flatten_and_clauses(expression: exp.Expression) -> list[exp.Expression]:
+    expression = _strip_parens(expression)
+    if isinstance(expression, exp.And):
+        return _flatten_and_clauses(expression.this) + _flatten_and_clauses(expression.expression)
+    return [expression.copy()]
 
 
-def _combine_boolean(operator: BooleanOperator, clauses: list[RowFilter]) -> RowFilter | None:
+def _row_filter_from_clauses(clauses: list[exp.Expression]) -> RowFilter | None:
     if not clauses:
         return None
     if len(clauses) == 1:
-        return clauses[0]
-    return BooleanFilter(operator=operator, clauses=tuple(clauses))
+        return deserialize_row_filter(clauses[0].sql(dialect="duckdb"))
+
+    sql = " AND ".join(f"({clause.sql(dialect='duckdb')})" for clause in clauses)
+    return deserialize_row_filter(sql)
+
+
+def _is_pushdown_safe(expression: exp.Expression) -> bool:
+    expression = _strip_parens(expression)
+
+    if isinstance(expression, (exp.And, exp.Or)):
+        return _is_pushdown_safe(expression.this) and _is_pushdown_safe(expression.expression)
+
+    if isinstance(expression, (exp.EQ, exp.NEQ, exp.GT, exp.GTE, exp.LT, exp.LTE)):
+        return _is_top_level_column(expression.this) and _is_scalar_literal(expression.expression)
+
+    if isinstance(expression, exp.In):
+        return _is_top_level_column(expression.this) and all(
+            _is_scalar_literal(item) for item in expression.expressions
+        )
+
+    if isinstance(expression, exp.Is):
+        return _is_top_level_column(expression.this) and isinstance(expression.expression, exp.Null)
+
+    if isinstance(expression, exp.Not):
+        return (
+            isinstance(expression.this, exp.Is)
+            and _is_top_level_column(expression.this.this)
+            and isinstance(expression.this.expression, exp.Null)
+        )
+
+    return False
+
+
+def _is_top_level_column(node: exp.Expression) -> bool:
+    return isinstance(node, exp.Column) and len(node.parts) == 1
+
+
+def _is_scalar_literal(node: exp.Expression) -> bool:
+    node = _strip_parens(node)
+    return isinstance(node, (exp.Boolean, exp.Literal, exp.Null))
+
+
+def _strip_parens(node: exp.Expression) -> exp.Expression:
+    while isinstance(node, exp.Paren):
+        node = node.this
+    return node
 
 
 def _compile_row_filter(row_filter: RowFilter | None) -> BooleanExpression:
     if row_filter is None:
         return ALWAYS_TRUE
-    if isinstance(row_filter, ComparisonFilter):
-        return _compile_comparison_filter(row_filter)
-    if isinstance(row_filter, InFilter):
-        in_expr = cast(Any, In)
+    return _compile_expression(row_filter.expression)
+
+
+def _compile_expression(expression: exp.Expression) -> BooleanExpression:
+    expression = _strip_parens(expression)
+
+    if isinstance(expression, exp.And):
+        return And(
+            _compile_expression(expression.this),
+            _compile_expression(expression.expression),
+        )
+    if isinstance(expression, exp.Or):
+        return Or(
+            _compile_expression(expression.this),
+            _compile_expression(expression.expression),
+        )
+    if isinstance(expression, exp.EQ):
         return cast(
             BooleanExpression,
-            in_expr(
-                term=row_filter.field.path,
-                literals=[value.value for value in row_filter.values],
+            cast(Any, EqualTo)(
+                term=_column_name(expression.this),
+                value=_literal_value(expression.expression),
             ),
         )
-    if isinstance(row_filter, NullFilter):
-        if row_filter.is_null:
-            return cast(BooleanExpression, cast(Any, IsNull)(term=row_filter.field.path))
-        return cast(BooleanExpression, cast(Any, NotNull)(term=row_filter.field.path))
-    compiled_clauses = [_compile_row_filter(clause) for clause in row_filter.clauses]
-    left, right, *rest = compiled_clauses
-    if row_filter.operator == "and":
-        return And(left, right, *rest)
-    return Or(left, right, *rest)
-
-
-def _compile_comparison_filter(row_filter: ComparisonFilter) -> BooleanExpression:
-    if row_filter.operator == "=":
+    if isinstance(expression, exp.NEQ):
         return cast(
             BooleanExpression,
-            cast(Any, EqualTo)(term=row_filter.field.path, value=row_filter.value.value),
+            cast(Any, NotEqualTo)(
+                term=_column_name(expression.this),
+                value=_literal_value(expression.expression),
+            ),
         )
-    if row_filter.operator == "!=":
+    if isinstance(expression, exp.GT):
         return cast(
             BooleanExpression,
-            cast(Any, NotEqualTo)(term=row_filter.field.path, value=row_filter.value.value),
+            cast(Any, GreaterThan)(
+                term=_column_name(expression.this),
+                value=_literal_value(expression.expression),
+            ),
         )
-    if row_filter.operator == ">":
-        return cast(
-            BooleanExpression,
-            cast(Any, GreaterThan)(term=row_filter.field.path, value=row_filter.value.value),
-        )
-    if row_filter.operator == ">=":
+    if isinstance(expression, exp.GTE):
         return cast(
             BooleanExpression,
             cast(Any, GreaterThanOrEqual)(
-                term=row_filter.field.path,
-                value=row_filter.value.value,
+                term=_column_name(expression.this),
+                value=_literal_value(expression.expression),
             ),
         )
-    if row_filter.operator == "<":
+    if isinstance(expression, exp.LT):
         return cast(
             BooleanExpression,
-            cast(Any, LessThan)(term=row_filter.field.path, value=row_filter.value.value),
+            cast(Any, LessThan)(
+                term=_column_name(expression.this),
+                value=_literal_value(expression.expression),
+            ),
         )
-    return cast(
-        BooleanExpression,
-        cast(Any, LessThanOrEqual)(term=row_filter.field.path, value=row_filter.value.value),
-    )
+    if isinstance(expression, exp.LTE):
+        return cast(
+            BooleanExpression,
+            cast(Any, LessThanOrEqual)(
+                term=_column_name(expression.this),
+                value=_literal_value(expression.expression),
+            ),
+        )
+    if isinstance(expression, exp.In):
+        return cast(
+            BooleanExpression,
+            cast(Any, In)(
+                term=_column_name(expression.this),
+                literals=[_literal_value(item) for item in expression.expressions],
+            ),
+        )
+    if isinstance(expression, exp.Is):
+        return cast(BooleanExpression, cast(Any, IsNull)(term=_column_name(expression.this)))
+    if isinstance(expression, exp.Not) and isinstance(expression.this, exp.Is):
+        return cast(BooleanExpression, cast(Any, NotNull)(term=_column_name(expression.this.this)))
+
+    raise ValueError(f"Unsupported Iceberg pushdown expression: {expression.sql(dialect='duckdb')}")
+
+
+def _column_name(node: exp.Expression) -> str:
+    if not _is_top_level_column(node):
+        raise ValueError("Iceberg pushdown requires top-level column references")
+
+    column = cast(exp.Column, node)
+    return column.name
+
+
+def _literal_value(node: exp.Expression) -> object:
+    node = _strip_parens(node)
+
+    if isinstance(node, exp.Boolean):
+        return bool(node.this)
+    if isinstance(node, exp.Literal):
+        return node.to_py()
+    if isinstance(node, exp.Null):
+        return None
+
+    raise ValueError("Iceberg pushdown requires scalar literal values")

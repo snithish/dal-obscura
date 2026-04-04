@@ -396,6 +396,54 @@ def test_duckdb_transform_filters_on_hidden_execution_column():
     assert result.column("id").to_pylist() == [1, 3]
 
 
+def test_duckdb_transform_uses_canonical_sql_for_function_filters(monkeypatch):
+    result_batch = pa.record_batch([pa.array([10])], names=["id"])
+
+    class FakeRelation:
+        def __init__(self) -> None:
+            self.query_calls: list[tuple[str, str]] = []
+
+        def query(self, table_name: str, query: str):
+            self.query_calls.append((table_name, query))
+            return self
+
+        def to_arrow_reader(self, batch_size: int):
+            del batch_size
+            return iter([result_batch])
+
+    class FakeConnection:
+        def __init__(self) -> None:
+            self.relation = FakeRelation()
+
+        def from_arrow(self, reader: pa.RecordBatchReader):
+            del reader
+            return self.relation
+
+        def close(self) -> None:
+            return None
+
+    fake_connection = FakeConnection()
+    monkeypatch.setattr(duckdb_transform.duckdb, "connect", lambda: fake_connection)
+    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
+    input_batch = pa.record_batch(
+        [pa.array([1], type=pa.int64()), pa.array(["us"], type=pa.string())],
+        names=["id", "region"],
+    )
+
+    list(
+        adapter.apply_filters_and_masks_stream(
+            [input_batch],
+            ["id"],
+            parse_row_filter("lower(region) = 'us'", input_batch.schema),
+            {},
+        )
+    )
+
+    assert fake_connection.relation.query_calls == [
+        ("input", "SELECT id AS \"id\" FROM input WHERE LOWER(region) = 'us'")
+    ]
+
+
 def test_duckdb_transform_applies_list_of_struct_mask():
     adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
     preference_type = pa.struct(
