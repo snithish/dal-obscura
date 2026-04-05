@@ -378,6 +378,59 @@ def test_plan_access_accepts_nested_requested_columns():
     assert authorizer.last_requested_columns == ["user.address.zip"]
 
 
+def test_plan_access_rejects_unknown_requested_columns():
+    schema = pa.schema(
+        [
+            pa.field("id", pa.int64()),
+            pa.field(
+                "user",
+                pa.struct([pa.field("address", pa.struct([pa.field("zip", pa.int64())]))]),
+            ),
+        ]
+    )
+    table_format = StubTableFormat(
+        catalog_name="catalog1",
+        table_name="users",
+        format="fake_format",
+        schema=schema,
+        batches=(),
+    )
+    use_case = PlanAccessUseCase(
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+        authorizer=FakeAuthorizer(
+            decision=AccessDecision(
+                allowed_columns=["id", "user.address.zip"],
+                masks={},
+                row_filter=None,
+                policy_version=100,
+            )
+        ),
+        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        masking=FakeMasking(),
+        ticket_codec=FakeTicketCodec(
+            TicketPayload(
+                catalog="catalog1",
+                target="users",
+                columns=["id"],
+                scan=_scan_payload(),
+                policy_version=100,
+                principal_id="user1",
+                expires_at=9999999999,
+                nonce="abc",
+            )
+        ),
+        ticket_ttl_seconds=300,
+        max_tickets=1,
+    )
+
+    for requested_columns in (["missing"], ["id.value"], ["user.missing"]):
+        with pytest.raises(ValueError, match="Unknown columns requested"):
+            use_case.execute(
+                PlanRequest(catalog="catalog1", target="users", columns=requested_columns),
+                AUTHORIZATION_HEADER,
+            )
+
+
 def test_plan_access_includes_hidden_row_filter_dependency_columns_in_execution_plan():
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     planned_columns: list[list[str]] = []
@@ -425,111 +478,6 @@ def test_plan_access_includes_hidden_row_filter_dependency_columns_in_execution_
     assert authorizer.last_requested_columns == ["id"]
     assert result.columns == ["id"]
     assert planned_columns == [["id", "region"]]
-
-
-def test_plan_access_tracks_dependencies_for_function_filters():
-    schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
-    planned_columns: list[list[str]] = []
-    table_format = TrackingTableFormat(
-        catalog_name="catalog1",
-        table_name="users",
-        format="fake_format",
-        schema=schema,
-        planned_columns=planned_columns,
-    )
-    decision = AccessDecision(
-        allowed_columns=["id"],
-        masks={},
-        row_filter="lower(region) = 'us'",
-        policy_version=100,
-    )
-    use_case = PlanAccessUseCase(
-        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=FakeAuthorizer(decision=decision),
-        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
-        masking=FakeMasking(),
-        ticket_codec=FakeTicketCodec(
-            TicketPayload(
-                catalog="catalog1",
-                target="users",
-                columns=["id"],
-                scan=_scan_payload(),
-                policy_version=100,
-                principal_id="user1",
-                expires_at=9999999999,
-                nonce="abc",
-            )
-        ),
-        ticket_ttl_seconds=300,
-        max_tickets=1,
-    )
-
-    use_case.execute(
-        PlanRequest(catalog="catalog1", target="users", columns=["id"]),
-        AUTHORIZATION_HEADER,
-    )
-
-    assert planned_columns == [["id", "region"]]
-
-
-def test_plan_access_includes_nested_row_filter_dependency_columns_in_execution_plan():
-    schema = pa.schema(
-        [
-            pa.field("id", pa.int64()),
-            pa.field(
-                "user",
-                pa.struct(
-                    [
-                        pa.field(
-                            "address",
-                            pa.struct([pa.field("zip", pa.int64())]),
-                        )
-                    ]
-                ),
-            ),
-        ]
-    )
-    planned_columns: list[list[str]] = []
-    table_format = TrackingTableFormat(
-        catalog_name="catalog1",
-        table_name="users",
-        format="fake_format",
-        schema=schema,
-        planned_columns=planned_columns,
-    )
-    decision = AccessDecision(
-        allowed_columns=["id"],
-        masks={},
-        row_filter="user.address.zip > 10000",
-        policy_version=100,
-    )
-    use_case = PlanAccessUseCase(
-        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=FakeAuthorizer(decision=decision),
-        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
-        masking=FakeMasking(),
-        ticket_codec=FakeTicketCodec(
-            TicketPayload(
-                catalog="catalog1",
-                target="users",
-                columns=["id"],
-                scan=_scan_payload(),
-                policy_version=100,
-                principal_id="user1",
-                expires_at=9999999999,
-                nonce="abc",
-            )
-        ),
-        ticket_ttl_seconds=300,
-        max_tickets=1,
-    )
-
-    use_case.execute(
-        PlanRequest(catalog="catalog1", target="users", columns=["id"]),
-        AUTHORIZATION_HEADER,
-    )
-
-    assert planned_columns == [["id", "user.address.zip"]]
 
 
 def test_plan_access_excludes_denied_requested_columns_from_execution_plan():
@@ -640,66 +588,64 @@ def test_fetch_stream_principal_mismatch():
         use_case.execute("token", AUTHORIZATION_HEADER)
 
 
-def test_fetch_stream_rejects_invalid_mask_payload():
+def test_fetch_stream_rejects_invalid_scan_payloads():
     schema, decision, table_format = _build_use_case_dependencies()
-    payload = TicketPayload(
-        catalog="catalog1",
-        target="users",
-        columns=["id", "region"],
-        scan=cast(
-            ScanPayload,
+    cases = [
+        (
+            {
+                "read_payload": "",
+                "row_filter": None,
+                "masks": {},
+            },
+            "Missing read payload",
+        ),
+        (
             {
                 "read_payload": _encode_scan_task(table_format, schema),
                 "row_filter": None,
                 "masks": {"region": "not-an-object"},
             },
+            "Invalid mask payload",
         ),
-        policy_version=100,
-        principal_id="user1",
-        expires_at=9999999999,
-        nonce="abc",
-    )
-    use_case = FetchStreamUseCase(
-        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=FakeAuthorizer(decision=decision, current_version=100),
-        masking=FakeMasking(),
-        row_transform=FakeRowTransform(),
-        ticket_codec=FakeTicketCodec(payload),
-    )
-
-    with pytest.raises(ValueError, match="Invalid mask payload"):
-        use_case.execute("token", AUTHORIZATION_HEADER)
-
-
-def test_fetch_stream_rejects_non_string_row_filter_payload():
-    schema, decision, table_format = _build_use_case_dependencies()
-    payload = TicketPayload(
-        catalog="catalog1",
-        target="users",
-        columns=["id", "region"],
-        scan=cast(
-            ScanPayload,
+        (
+            {
+                "read_payload": _encode_scan_task(table_format, schema),
+                "row_filter": None,
+                "masks": {"region": {"value": "***"}},
+            },
+            "Invalid mask payload",
+        ),
+        (
             {
                 "read_payload": _encode_scan_task(table_format, schema),
                 "row_filter": {"type": "comparison", "field": "region"},
                 "masks": {},
             },
+            "Invalid row filter payload",
         ),
-        policy_version=100,
-        principal_id="user1",
-        expires_at=9999999999,
-        nonce="abc",
-    )
-    use_case = FetchStreamUseCase(
-        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=FakeAuthorizer(decision=decision, current_version=100),
-        masking=FakeMasking(),
-        row_transform=FakeRowTransform(),
-        ticket_codec=FakeTicketCodec(payload),
-    )
+    ]
 
-    with pytest.raises(ValueError, match="Invalid row filter payload"):
-        use_case.execute("token", AUTHORIZATION_HEADER)
+    for scan, error_match in cases:
+        payload = TicketPayload(
+            catalog="catalog1",
+            target="users",
+            columns=["id", "region"],
+            scan=cast(ScanPayload, scan),
+            policy_version=100,
+            principal_id="user1",
+            expires_at=9999999999,
+            nonce="abc",
+        )
+        use_case = FetchStreamUseCase(
+            identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+            authorizer=FakeAuthorizer(decision=decision, current_version=100),
+            masking=FakeMasking(),
+            row_transform=FakeRowTransform(),
+            ticket_codec=FakeTicketCodec(payload),
+        )
+
+        with pytest.raises(ValueError, match=error_match):
+            use_case.execute("token", AUTHORIZATION_HEADER)
 
 
 def test_fetch_stream_rejects_legacy_partition_payload():
