@@ -174,6 +174,37 @@ def test_iceberg_plan_keeps_computed_expression_fully_residual(monkeypatch):
     assert row_filter_to_sql(plan.residual_row_filter) == "id + 1 > 5"
 
 
+def test_iceberg_plan_splits_combined_filters_with_safe_and_residual_clauses(monkeypatch):
+    schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
+    table = _FakeTable(schema_value=schema)
+    table_format = IcebergTableFormat(
+        catalog_name="analytics",
+        table_name="users",
+        metadata_location="/tmp/metadata.json",
+        io_options={},
+    )
+    monkeypatch.setattr(IcebergTableFormat, "_load_table", lambda self: table)
+
+    plan = table_format.plan(
+        PlanRequest(
+            catalog="analytics",
+            target="users",
+            columns=["id", "region"],
+            row_filter=parse_row_filter(
+                "id > 1 AND region = 'us' AND LOWER(region) = 'us'",
+                schema,
+            ),
+        ),
+        max_tickets=1,
+    )
+
+    partition = plan.tasks[0].partition
+    assert isinstance(partition, IcebergInputPartition)
+    assert partition.pushdown_row_filter == "id > 1 AND region = 'us'"
+    assert plan.residual_row_filter is not None
+    assert row_filter_to_sql(plan.residual_row_filter) == "LOWER(region) = 'us'"
+
+
 def test_iceberg_execute_deserializes_sql_string_pushdown_filter(monkeypatch):
     captured: dict[str, object] = {}
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])

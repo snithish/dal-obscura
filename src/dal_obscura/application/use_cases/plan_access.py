@@ -14,6 +14,7 @@ from dal_obscura.application.ports.masking import MaskingPort
 from dal_obscura.application.ports.ticket_codec import TicketCodecPort
 from dal_obscura.domain.access_control.filters import (
     RowFilter,
+    combine_row_filters,
     extract_row_filter_dependencies,
     parse_row_filter,
     serialize_row_filter,
@@ -85,7 +86,7 @@ class PlanAccessUseCase:
         _authorize_requested_row_filter(requested_row_filter, decision)
 
         policy_row_filter = _validate_policy_row_filter(base_schema, decision.row_filter)
-        effective_row_filter = requested_row_filter or policy_row_filter
+        effective_row_filter = combine_row_filters(policy_row_filter, requested_row_filter)
         execution_projection = _build_execution_projection(visible_columns, effective_row_filter)
         execution_request = PlanRequest(
             catalog=request.catalog,

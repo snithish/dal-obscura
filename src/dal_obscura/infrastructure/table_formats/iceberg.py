@@ -172,11 +172,11 @@ def _flatten_and_clauses(expression: exp.Expression) -> list[exp.Expression]:
 def _row_filter_from_clauses(clauses: list[exp.Expression]) -> RowFilter | None:
     if not clauses:
         return None
-    if len(clauses) == 1:
-        return deserialize_row_filter(clauses[0].sql(dialect="duckdb"))
 
-    sql = " AND ".join(f"({clause.sql(dialect='duckdb')})" for clause in clauses)
-    return deserialize_row_filter(sql)
+    expression = clauses[0].copy()
+    for clause in clauses[1:]:
+        expression = exp.and_(expression, clause.copy())
+    return deserialize_row_filter(expression.sql(dialect="duckdb"))
 
 
 def _is_pushdown_safe(expression: exp.Expression) -> bool:

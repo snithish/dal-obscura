@@ -28,6 +28,20 @@ def validate_row_filter_against_schema(row_filter: RowFilter, schema: pa.Schema)
     return row_filter
 
 
+def combine_row_filters(*row_filters: RowFilter | None) -> RowFilter | None:
+    """Combines multiple row filters with `AND` while preserving SQL semantics."""
+    active_filters = [row_filter for row_filter in row_filters if row_filter is not None]
+    if not active_filters:
+        return None
+    if len(active_filters) == 1:
+        return active_filters[0]
+
+    expression = active_filters[0].expression.copy()
+    for row_filter in active_filters[1:]:
+        expression = exp.and_(expression, row_filter.expression.copy())
+    return _build_row_filter(cast(exp.Expression, expression))
+
+
 def row_filter_to_sql(row_filter: RowFilter) -> str:
     """Renders the canonical DuckDB SQL string for a validated filter."""
     return row_filter.sql

@@ -9,7 +9,7 @@ import pytest
 
 from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
 from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
-from dal_obscura.domain.access_control.filters import deserialize_row_filter
+from dal_obscura.domain.access_control.filters import deserialize_row_filter, row_filter_to_sql
 from dal_obscura.domain.access_control.models import AccessDecision, MaskRule, Principal
 from dal_obscura.domain.catalog.ports import TableFormat
 from dal_obscura.domain.query_planning.models import PlanRequest
@@ -643,6 +643,123 @@ def test_plan_access_allows_requested_row_filter_on_visible_unmasked_hidden_depe
 
     assert result.columns == ["id"]
     assert planned_columns == [["id", "region"]]
+
+
+def test_plan_access_combines_policy_and_requested_row_filters_before_ticketing():
+    schema = pa.schema(
+        [
+            pa.field("id", pa.int64()),
+            pa.field("region", pa.string()),
+            pa.field("active", pa.bool_()),
+        ]
+    )
+    planned_columns: list[list[str]] = []
+    table_format = TrackingTableFormat(
+        catalog_name="catalog1",
+        table_name="users",
+        format="fake_format",
+        schema=schema,
+        planned_columns=planned_columns,
+    )
+    ticket_codec = FakeTicketCodec(
+        TicketPayload(
+            catalog="catalog1",
+            target="users",
+            columns=["id"],
+            scan=_scan_payload(),
+            policy_version=100,
+            principal_id="user1",
+            expires_at=9999999999,
+            nonce="abc",
+        )
+    )
+    use_case = PlanAccessUseCase(
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+        authorizer=FakeAuthorizer(
+            decision=AccessDecision(
+                allowed_columns=["id", "region", "active"],
+                masks={},
+                row_filter="active = true",
+                policy_version=100,
+            )
+        ),
+        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        masking=FakeMasking(),
+        ticket_codec=ticket_codec,
+        ticket_ttl_seconds=300,
+        max_tickets=1,
+    )
+
+    use_case.execute(
+        PlanRequest(
+            catalog="catalog1",
+            target="users",
+            columns=["id"],
+            row_filter=deserialize_row_filter("region = 'us'"),
+        ),
+        AUTHORIZATION_HEADER,
+    )
+
+    payload_filter = ticket_codec.signed_payloads[0].scan["row_filter"]
+    assert payload_filter is not None
+    assert (
+        row_filter_to_sql(deserialize_row_filter(payload_filter))
+        == "active = TRUE AND region = 'us'"
+    )
+    assert planned_columns == [["id", "active", "region"]]
+
+
+def test_plan_access_revalidates_requested_row_filter_against_base_schema():
+    schema = pa.schema([pa.field("id", pa.int64())])
+    use_case = PlanAccessUseCase(
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+        authorizer=FakeAuthorizer(
+            decision=AccessDecision(
+                allowed_columns=["id"],
+                masks={},
+                row_filter=None,
+                policy_version=100,
+            )
+        ),
+        catalog_registry=cast(
+            Any,
+            FakeCatalogRegistry(
+                TrackingTableFormat(
+                    catalog_name="catalog1",
+                    table_name="users",
+                    format="fake_format",
+                    schema=schema,
+                    planned_columns=[],
+                )
+            ),
+        ),
+        masking=FakeMasking(),
+        ticket_codec=FakeTicketCodec(
+            TicketPayload(
+                catalog="catalog1",
+                target="users",
+                columns=["id"],
+                scan=_scan_payload(),
+                policy_version=100,
+                principal_id="user1",
+                expires_at=9999999999,
+                nonce="abc",
+            )
+        ),
+        ticket_ttl_seconds=300,
+        max_tickets=1,
+    )
+
+    with pytest.raises(ValueError, match="Unknown column in row filter: missing"):
+        use_case.execute(
+            PlanRequest(
+                catalog="catalog1",
+                target="users",
+                columns=["id"],
+                row_filter=deserialize_row_filter("missing = 1"),
+            ),
+            AUTHORIZATION_HEADER,
+        )
 
 
 def test_plan_access_excludes_denied_requested_columns_from_execution_plan():
