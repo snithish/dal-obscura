@@ -22,6 +22,12 @@ def parse_row_filter(expression: str, schema: pa.Schema) -> RowFilter:
     return _build_row_filter(parsed)
 
 
+def validate_row_filter_against_schema(row_filter: RowFilter, schema: pa.Schema) -> RowFilter:
+    """Checks that a previously parsed row filter only references schema columns."""
+    _validate_column_references(row_filter.expression, schema)
+    return row_filter
+
+
 def row_filter_to_sql(row_filter: RowFilter) -> str:
     """Renders the canonical DuckDB SQL string for a validated filter."""
     return row_filter.sql

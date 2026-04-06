@@ -17,6 +17,7 @@ from dal_obscura.domain.access_control.filters import (
     extract_row_filter_dependencies,
     parse_row_filter,
     serialize_row_filter,
+    validate_row_filter_against_schema,
 )
 from dal_obscura.domain.access_control.models import AccessDecision
 from dal_obscura.domain.query_planning.models import ExecutionProjection, PlanRequest
@@ -71,21 +72,26 @@ class PlanAccessUseCase:
         base_schema = table_format.get_schema()
 
         requested_columns = _expand_requested_columns(base_schema, request.columns)
+        requested_row_filter = _validate_requested_row_filter(base_schema, request.row_filter)
 
         decision = self._authorizer.authorize(
             principal=principal,
             target=request.target,
             catalog=request.catalog,
-            requested_columns=requested_columns,
+            requested_columns=_build_authorization_columns(requested_columns, requested_row_filter),
         )
 
-        validated_row_filter = _validate_row_filter(base_schema, decision.row_filter)
-        execution_projection = _build_execution_projection(decision, validated_row_filter)
+        visible_columns = _visible_columns(requested_columns, decision)
+        _authorize_requested_row_filter(requested_row_filter, decision)
+
+        policy_row_filter = _validate_policy_row_filter(base_schema, decision.row_filter)
+        effective_row_filter = requested_row_filter or policy_row_filter
+        execution_projection = _build_execution_projection(visible_columns, effective_row_filter)
         execution_request = PlanRequest(
             catalog=request.catalog,
             target=request.target,
             columns=execution_projection.execution_columns,
-            row_filter=validated_row_filter,
+            row_filter=effective_row_filter,
         )
         plan = table_format.plan(execution_request, self._max_tickets)
 
@@ -131,11 +137,10 @@ class PlanAccessUseCase:
 
 
 def _build_execution_projection(
-    decision: AccessDecision,
+    visible_columns: list[str],
     row_filter: RowFilter | None,
 ) -> ExecutionProjection:
     """Builds the visible and internal columns needed to enforce policy safely."""
-    visible_columns = list(decision.allowed_columns)
     internal_dependency_columns = [
         column
         for column in _extract_filter_dependencies(row_filter)
@@ -197,10 +202,63 @@ def _extract_filter_dependencies(row_filter: RowFilter | None) -> list[str]:
     return extract_row_filter_dependencies(row_filter)
 
 
-def _validate_row_filter(schema: pa.Schema, row_filter: str | None) -> RowFilter | None:
+def _build_authorization_columns(
+    requested_columns: list[str],
+    row_filter: RowFilter | None,
+) -> list[str]:
+    authorization_columns = list(requested_columns)
+    for dependency in _extract_filter_dependencies(row_filter):
+        if dependency not in authorization_columns:
+            authorization_columns.append(dependency)
+    return authorization_columns
+
+
+def _visible_columns(
+    requested_columns: list[str],
+    decision: AccessDecision,
+) -> list[str]:
+    visible_columns = [column for column in requested_columns if column in decision.allowed_columns]
+    if not visible_columns:
+        raise PermissionError("No allowed columns for principal")
+    return visible_columns
+
+
+def _authorize_requested_row_filter(
+    row_filter: RowFilter | None,
+    decision: AccessDecision,
+) -> None:
+    if row_filter is None:
+        return
+
+    dependencies = _extract_filter_dependencies(row_filter)
+
+    masked = [column for column in dependencies if column in decision.masks]
+    if masked:
+        raise PermissionError(
+            "Requested row filter may not reference masked columns: " + ", ".join(masked)
+        )
+
+    invisible = [column for column in dependencies if column not in decision.allowed_columns]
+    if invisible:
+        raise PermissionError(
+            "Requested row filter may only reference visible unmasked columns: "
+            + ", ".join(invisible)
+        )
+
+
+def _validate_policy_row_filter(schema: pa.Schema, row_filter: str | None) -> RowFilter | None:
     if row_filter is None:
         return None
     return parse_row_filter(row_filter, schema)
+
+
+def _validate_requested_row_filter(
+    schema: pa.Schema,
+    row_filter: RowFilter | None,
+) -> RowFilter | None:
+    if row_filter is None:
+        return None
+    return validate_row_filter_against_schema(row_filter, schema)
 
 
 def _epoch_seconds() -> int:
