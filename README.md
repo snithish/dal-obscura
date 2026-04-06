@@ -68,6 +68,24 @@ uv run dal-obscura \
 
 Clients must send JWTs as `Authorization: Bearer <token>` headers on both `get_flight_info` and `do_get`.
 
+Clients may include an optional `row_filter` in the `get_flight_info` command payload:
+
+```json
+{
+  "catalog": "analytics",
+  "target": "default.users",
+  "columns": ["id", "email"],
+  "row_filter": "region = 'us'"
+}
+```
+
+Engine `row_filter` values are validated as DuckDB SQL expressions. They may
+reference columns that are not projected back to the client, but only when
+those columns are plainly visible and unmasked under policy. The service
+combines the engine filter with any policy filter using `AND`, pushes down the
+safe subset during backend planning, and evaluates any unsupported remainder in
+DuckDB during streaming.
+
 `app.yaml` references `catalogs.yaml` and `policies.yaml`, and runtime secrets are loaded via secret references (for example, env vars):
 
 ```yaml
