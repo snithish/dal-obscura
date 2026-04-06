@@ -2,16 +2,13 @@ import json
 import subprocess
 import sys
 import textwrap
-import threading
 import time
 from collections.abc import Iterable
 from contextlib import suppress
-from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any, cast
 
-import jwt
 import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.flight as flight
@@ -31,25 +28,16 @@ from pyiceberg.types import (
     TimestampType,
 )
 
-from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
-from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
-from dal_obscura.domain.catalog.ports import TableFormat
-from dal_obscura.domain.query_planning.models import PlanRequest
-from dal_obscura.domain.table_format.ports import InputPartition, Plan, ScanTask
 from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
-from dal_obscura.infrastructure.adapters.duckdb_transform import (
-    _DUCKDB_ARROW_OUTPUT_BATCH_SIZE,
-    DefaultMaskingAdapter,
-    DuckDBRowTransformAdapter,
-)
-from dal_obscura.infrastructure.adapters.identity_default import (
-    AuthConfig,
-    DefaultIdentityAdapter,
-)
-from dal_obscura.infrastructure.adapters.policy_file_authorizer import PolicyFileAuthorizer
+from dal_obscura.infrastructure.adapters.duckdb_transform import _DUCKDB_ARROW_OUTPUT_BATCH_SIZE
 from dal_obscura.infrastructure.adapters.service_config import load_catalog_config
-from dal_obscura.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
-from dal_obscura.interfaces.flight.server import DataAccessFlightService
+from tests.support.flight import (
+    StubTableFormat,
+    build_flight_service,
+    command_descriptor,
+    flight_call_options,
+    running_flight_client,
+)
 
 JWT_SECRET = "benchmark-jwt-secret-32-characters"
 LARGE_BENCHMARK_TOTAL_ROWS = 25_000_000
@@ -61,127 +49,6 @@ LARGE_BENCHMARK_MAX_TICKETS = 4
 # accidental full-result materialization to slip through.
 LARGE_BENCHMARK_RSS_LIMIT_BYTES = 1_900_000_000
 PC = cast(Any, pc)
-
-
-@dataclass(frozen=True, kw_only=True)
-class StubInputPartition(InputPartition):
-    payload: bytes = b"payload"
-
-
-@dataclass(frozen=True, kw_only=True)
-class StubTableFormat(TableFormat):
-    schema: pa.Schema
-    batches: tuple[pa.RecordBatch, ...]
-
-    def get_schema(self) -> pa.Schema:
-        return self.schema
-
-    def plan(self, request: PlanRequest, max_tickets: int) -> Plan:
-        del max_tickets
-        return Plan(
-            schema=self.schema,
-            tasks=[
-                ScanTask(
-                    table_format=self,
-                    schema=self.schema,
-                    partition=StubInputPartition(),
-                )
-            ],
-            residual_row_filter=request.row_filter,
-        )
-
-    def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[Any]]:
-        if not isinstance(partition, StubInputPartition):
-            raise TypeError("StubTableFormat requires a StubInputPartition")
-        return self.schema, iter(self.batches)
-
-
-class StubCatalogRegistry:
-    def __init__(self, table_format: StubTableFormat) -> None:
-        self._table_format = table_format
-
-    def describe(self, catalog: str | None, target: str) -> TableFormat:
-        del catalog, target
-        return self._table_format
-
-
-def _build_server(table_format: StubTableFormat, policy_path) -> DataAccessFlightService:
-    identity = DefaultIdentityAdapter(AuthConfig(jwt_secret=JWT_SECRET))
-    authorizer = PolicyFileAuthorizer(policy_path)
-    masking = DefaultMaskingAdapter()
-    row_transform = DuckDBRowTransformAdapter(masking)
-    ticket_codec = HmacTicketCodecAdapter("benchmark-ticket-secret")
-    plan_access = PlanAccessUseCase(
-        identity=identity,
-        authorizer=authorizer,
-        catalog_registry=cast(Any, StubCatalogRegistry(table_format)),
-        masking=masking,
-        ticket_codec=ticket_codec,
-        ticket_ttl_seconds=300,
-        max_tickets=1,
-    )
-    fetch_stream = FetchStreamUseCase(
-        identity=identity,
-        authorizer=authorizer,
-        masking=masking,
-        row_transform=row_transform,
-        ticket_codec=ticket_codec,
-    )
-    return DataAccessFlightService(
-        location="grpc+tcp://0.0.0.0:0",
-        plan_access_use_case=plan_access,
-        fetch_stream_use_case=fetch_stream,
-    )
-
-
-def _build_catalog_server(
-    catalog_registry: DynamicCatalogRegistry,
-    policy_path: Path,
-    *,
-    max_tickets: int = 1,
-) -> DataAccessFlightService:
-    identity = DefaultIdentityAdapter(AuthConfig(jwt_secret=JWT_SECRET))
-    authorizer = PolicyFileAuthorizer(policy_path)
-    masking = DefaultMaskingAdapter()
-    row_transform = DuckDBRowTransformAdapter(masking)
-    ticket_codec = HmacTicketCodecAdapter("benchmark-ticket-secret")
-    plan_access = PlanAccessUseCase(
-        identity=identity,
-        authorizer=authorizer,
-        catalog_registry=catalog_registry,
-        masking=masking,
-        ticket_codec=ticket_codec,
-        ticket_ttl_seconds=300,
-        max_tickets=max_tickets,
-    )
-    fetch_stream = FetchStreamUseCase(
-        identity=identity,
-        authorizer=authorizer,
-        masking=masking,
-        row_transform=row_transform,
-        ticket_codec=ticket_codec,
-    )
-    return DataAccessFlightService(
-        location="grpc+tcp://0.0.0.0:0",
-        plan_access_use_case=plan_access,
-        fetch_stream_use_case=fetch_stream,
-    )
-
-
-def _start_server(server: DataAccessFlightService) -> threading.Thread:
-    thread = threading.Thread(target=server.serve, daemon=True)
-    thread.start()
-    deadline = time.time() + 5
-    while time.time() < deadline:
-        if server.port > 0:
-            return thread
-        time.sleep(0.05)
-    raise RuntimeError("Flight server failed to start")
-
-
-def _flight_options() -> flight.FlightCallOptions:
-    token = jwt.encode({"sub": "user1", "groups": ["analyst"]}, JWT_SECRET, algorithm="HS256")
-    return flight.FlightCallOptions(headers=[(b"authorization", f"Bearer {token}".encode())])
 
 
 def _benchmark_complex_schema() -> pa.Schema:
@@ -541,12 +408,16 @@ def _run_iceberg_stream_scenario(
     )
     planned_file_count = len(list(loaded_catalog.load_table(identifier).scan().plan_files()))
     catalog_registry = DynamicCatalogRegistry(load_catalog_config(service_config_path))
-    server = _build_catalog_server(catalog_registry, policy_path, max_tickets=max_tickets)
-    thread = _start_server(server)
-    client = flight.FlightClient(f"grpc+tcp://localhost:{server.port}")
-    options = _flight_options()
-    descriptor = flight.FlightDescriptor.for_command(
-        json.dumps(
+    server = build_flight_service(
+        catalog_registry=catalog_registry,
+        policy_path=policy_path,
+        jwt_secret=JWT_SECRET,
+        ticket_secret="benchmark-ticket-secret",
+        max_tickets=max_tickets,
+    )
+    with running_flight_client(server) as client:
+        options = flight_call_options("user1", groups=["analyst"], jwt_secret=JWT_SECRET)
+        descriptor = command_descriptor(
             {
                 "catalog": catalog_name,
                 "target": identifier,
@@ -566,11 +437,8 @@ def _run_iceberg_stream_scenario(
                     "tags",
                 ],
             }
-        ).encode("utf-8")
-    )
-    info = client.get_flight_info(descriptor, options=options)
-
-    try:
+        )
+        info = client.get_flight_info(descriptor, options=options)
         baseline_rss = None
         if sample_rss:
             import psutil
@@ -588,9 +456,6 @@ def _run_iceberg_stream_scenario(
             "total_rows": total_rows,
             "rows_per_file": rows_per_file,
         }
-    finally:
-        server.shutdown()
-        thread.join(timeout=2)
 
 
 def _run_large_iceberg_stream_scenario(
@@ -699,33 +564,32 @@ catalogs:
 """
     )
 
-    server = _build_server(table_format=table_format, policy_path=policy_path)
-    thread = _start_server(server)
-    client = flight.FlightClient(f"grpc+tcp://localhost:{server.port}")
-    options = _flight_options()
-    descriptor = flight.FlightDescriptor.for_command(
-        json.dumps(
+    expected_rows = sum(
+        value % 2 == 0 and value % 3 != 0 for value in range(batch_count * rows_per_batch)
+    )
+
+    server = build_flight_service(
+        table_format=table_format,
+        policy_path=policy_path,
+        jwt_secret=JWT_SECRET,
+        ticket_secret="benchmark-ticket-secret",
+    )
+    with running_flight_client(server) as client:
+        options = flight_call_options("user1", groups=["analyst"], jwt_secret=JWT_SECRET)
+        descriptor = command_descriptor(
             {
                 "catalog": "analytics",
                 "target": "bench.table",
                 "columns": ["id", "user", "account"],
             }
-        ).encode("utf-8")
-    )
-    info = client.get_flight_info(descriptor, options=options)
-    ticket = info.endpoints[0].ticket
-    expected_rows = sum(
-        value % 2 == 0 and value % 3 != 0 for value in range(batch_count * rows_per_batch)
-    )
+        )
+        info = client.get_flight_info(descriptor, options=options)
+        ticket = info.endpoints[0].ticket
 
-    def run() -> pa.Table:
-        return client.do_get(ticket, options=options).read_all()
+        def run() -> pa.Table:
+            return client.do_get(ticket, options=options).read_all()
 
-    try:
         table = benchmark(run)
-    finally:
-        server.shutdown()
-        thread.join(timeout=2)
 
     benchmark.extra_info["input_rows"] = batch_count * rows_per_batch
     benchmark.extra_info["output_rows"] = expected_rows
