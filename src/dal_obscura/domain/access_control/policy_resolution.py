@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Iterable
-from typing import cast
 
 from dal_obscura.domain.access_control.models import (
     DatasetPolicy,
@@ -131,6 +130,6 @@ def _matches_conditions(
             if actual not in {str(item) for item in expected}:
                 return False
             continue
-        if actual != cast(str, expected):
+        if actual != expected:
             return False
     return True
