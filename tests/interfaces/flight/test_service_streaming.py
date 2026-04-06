@@ -35,6 +35,36 @@ def test_parse_descriptor_rejects_path_descriptor():
         parse_descriptor(descriptor)
 
 
+def test_parse_descriptor_accepts_optional_row_filter():
+    descriptor = command_descriptor(
+        {
+            "catalog": "analytics",
+            "target": "test.table",
+            "columns": ["id"],
+            "row_filter": "region = 'us'",
+        }
+    )
+
+    request = parse_descriptor(descriptor)
+
+    assert request.row_filter is not None
+    assert request.row_filter.sql == "region = 'us'"
+
+
+def test_parse_descriptor_rejects_invalid_row_filter_syntax():
+    descriptor = command_descriptor(
+        {
+            "catalog": "analytics",
+            "target": "test.table",
+            "columns": ["id"],
+            "row_filter": "region = ",
+        }
+    )
+
+    with pytest.raises(ValueError, match="Invalid row filter syntax"):
+        parse_descriptor(descriptor)
+
+
 def test_streaming_contract_emits_multiple_batches(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "dal_obscura.infrastructure.adapters.duckdb_transform._DUCKDB_ARROW_OUTPUT_BATCH_SIZE",

@@ -5,6 +5,7 @@ from collections.abc import Mapping
 
 import pyarrow.flight as flight
 
+from dal_obscura.domain.access_control.filters import RowFilter, deserialize_row_filter
 from dal_obscura.domain.query_planning.models import PlanRequest
 
 REQUEST_HEADERS_MIDDLEWARE_KEY = "request_headers"
@@ -60,8 +61,17 @@ def parse_descriptor(descriptor: flight.FlightDescriptor) -> PlanRequest:
             catalog=str(data["catalog"]) if data.get("catalog") else None,
             target=str(data["target"]),
             columns=list(data["columns"]),
+            row_filter=_optional_descriptor_row_filter(data.get("row_filter")),
         )
     raise ValueError("Invalid Flight descriptor")
+
+
+def _optional_descriptor_row_filter(value: object) -> RowFilter | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("Descriptor row_filter must be a non-empty string")
+    return deserialize_row_filter(value)
 
 
 def _decode_header_value(value: object) -> str:
