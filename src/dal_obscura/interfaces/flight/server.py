@@ -57,6 +57,8 @@ class DataAccessFlightService(flight.FlightServerBase):
                 principal=result.principal_id,
                 columns=result.columns,
                 policy_version=result.policy_version,
+                requested_row_filter_present=result.requested_row_filter_present,
+                requested_row_filter_dependency_count=result.requested_row_filter_dependency_count,
             ),
         )
         endpoints = [

@@ -37,6 +37,8 @@ class PlanAccessResult:
     principal_id: str
     policy_version: int
     catalog: str | None = None
+    requested_row_filter_present: bool = False
+    requested_row_filter_dependency_count: int = 0
 
 
 class PlanAccessUseCase:
@@ -74,6 +76,7 @@ class PlanAccessUseCase:
 
         requested_columns = _expand_requested_columns(base_schema, request.columns)
         requested_row_filter = _validate_requested_row_filter(base_schema, request.row_filter)
+        requested_filter_dependencies = _extract_filter_dependencies(requested_row_filter)
 
         decision = self._authorizer.authorize(
             principal=principal,
@@ -134,6 +137,8 @@ class PlanAccessUseCase:
             principal_id=principal.id,
             policy_version=decision.policy_version,
             catalog=request.catalog,
+            requested_row_filter_present=requested_row_filter is not None,
+            requested_row_filter_dependency_count=len(requested_filter_dependencies),
         )
 
 

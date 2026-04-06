@@ -9,6 +9,7 @@ from tests.support.flight import (
     build_flight_service,
     command_descriptor,
     flight_call_options,
+    flight_request,
     make_jwt,
     running_flight_client,
 )
@@ -277,6 +278,58 @@ def test_flight_streaming_masks_list_of_struct_fields(tmp_path):
         assert [item["theme"] for item in preferences] == ["[hidden]", "[hidden]"]
 
 
+def test_flight_streaming_combines_policy_and_requested_row_filters(tmp_path):
+    schema = pa.schema(
+        [
+            pa.field("id", pa.int64()),
+            pa.field("region", pa.string()),
+            pa.field("active", pa.bool_()),
+        ]
+    )
+    batch = pa.record_batch(
+        [
+            pa.array([1, 2, 3, 4], type=pa.int64()),
+            pa.array(["us", "us", "eu", "us"], type=pa.string()),
+            pa.array([True, False, True, True], type=pa.bool_()),
+        ],
+        schema=schema,
+    )
+    table_format = StubTableFormat(
+        catalog_name="analytics",
+        table_name="test.table",
+        format="stub_format",
+        schema=schema,
+        batches=(batch,),
+    )
+    policy_path = tmp_path / "policy.yaml"
+    policy_path.write_text(
+        _catalog_policy(
+            """
+      "test.table":
+        rules:
+          - principals: ["user1"]
+            columns: ["id", "region", "active"]
+            row_filter: "active = true"
+"""
+        )
+    )
+    server = build_flight_service(table_format=table_format, policy_path=policy_path)
+
+    with running_flight_client(server) as client:
+        info, table = flight_request(
+            client,
+            {
+                "catalog": "analytics",
+                "target": "test.table",
+                "columns": ["id"],
+                "row_filter": "region = 'us'",
+            },
+        )
+
+    assert info.schema.names == ["id"]
+    assert table.column("id").to_pylist() == [1, 4]
+
+
 def test_flight_logs_include_resident_memory(tmp_path, caplog, monkeypatch):
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     batch = pa.record_batch([pa.array([1, 2]), pa.array(["us", "eu"])], schema=schema)
@@ -320,6 +373,47 @@ def test_flight_logs_include_resident_memory(tmp_path, caplog, monkeypatch):
     records = [record for record in caplog.records if record.message in {"plan_request", "do_get"}]
     assert [record.message for record in records] == ["plan_request", "do_get"]
     assert all(record.resident_memory_bytes == 4_242 for record in records)
+
+
+def test_flight_logs_requested_row_filter_presence(tmp_path, caplog):
+    schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
+    batch = pa.record_batch([pa.array([1, 2]), pa.array(["us", "eu"])], schema=schema)
+    table_format = StubTableFormat(
+        catalog_name="analytics",
+        table_name="test.table",
+        format="stub_format",
+        schema=schema,
+        batches=(batch,),
+    )
+
+    policy_path = tmp_path / "policy.yaml"
+    policy_path.write_text(
+        _catalog_policy(
+            """
+      "test.table":
+        rules:
+          - principals: ["user1"]
+            columns: ["id", "region"]
+"""
+        )
+    )
+    server = build_flight_service(table_format=table_format, policy_path=policy_path)
+    descriptor = command_descriptor(
+        {
+            "catalog": "analytics",
+            "target": "test.table",
+            "columns": ["id"],
+            "row_filter": "region = 'us'",
+        }
+    )
+    context = DummyContext(headers=[authorization_header("user1")])
+
+    with caplog.at_level("INFO"):
+        server.get_flight_info(context, descriptor)
+
+    record = next(item for item in caplog.records if item.msg == "plan_request")
+    assert record.requested_row_filter_present is True
+    assert record.requested_row_filter_dependency_count == 1
 
 
 def test_do_get_rejects_principal_mismatch(tmp_path):

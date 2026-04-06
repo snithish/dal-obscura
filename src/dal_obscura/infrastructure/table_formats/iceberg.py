@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import pickle
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -33,6 +34,8 @@ from dal_obscura.domain.catalog.ports import TableFormat
 from dal_obscura.domain.query_planning.models import PlanRequest
 from dal_obscura.domain.table_format.ports import InputPartition, Plan, ScanTask
 
+LOGGER = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True, kw_only=True)
 class IcebergInputPartition(InputPartition):
@@ -63,6 +66,13 @@ class IcebergTableFormat(TableFormat):
         column_tuple = tuple(request.columns)
         base_schema = pyiceberg_table.schema().as_arrow()
         pushdown_row_filter, residual_row_filter = _split_row_filter(request.row_filter)
+        LOGGER.debug(
+            "iceberg_filter_split",
+            extra={
+                "pushdown_row_filter_present": pushdown_row_filter is not None,
+                "residual_row_filter_present": residual_row_filter is not None,
+            },
+        )
         iceberg_row_filter = _compile_row_filter(pushdown_row_filter)
 
         try:

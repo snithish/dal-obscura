@@ -179,6 +179,63 @@ def test_flight_plan_and_get_with_static_catalog_alias(tmp_path):
         assert set(alias_table.column("region").to_pylist()) == {"us"}
 
 
+def test_flight_plan_and_get_with_iceberg_requested_row_filter_on_unprojected_column(tmp_path):
+    table_id = create_iceberg_table(tmp_path, "ice_one", "warehouse-one", [1, 2, 3, 4])
+    service_config_path, policy_path = write_yaml_files(
+        tmp_path,
+        service_config={
+            "catalogs": {
+                "ice_one": {
+                    "module": "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+                    "options": {
+                        "type": "sql",
+                        "uri": f"sqlite:///{tmp_path / 'ice_one.db'}",
+                        "warehouse": str(tmp_path / "warehouse-one"),
+                    },
+                },
+            },
+        },
+        policy={
+            "version": 1,
+            "catalogs": {
+                "ice_one": {
+                    "targets": {
+                        table_id: {
+                            "rules": [
+                                {
+                                    "principals": ["user1"],
+                                    "columns": ["id", "email", "region"],
+                                    "row_filter": "id > 1",
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+        },
+    )
+
+    server = build_flight_service(
+        catalog_registry=_build_registries(service_config_path),
+        policy_path=policy_path,
+        max_tickets=4,
+    )
+
+    with running_flight_client(server) as client:
+        info, table = flight_request(
+            client,
+            {
+                "catalog": "ice_one",
+                "target": table_id,
+                "columns": ["id", "email"],
+                "row_filter": "LOWER(region) = 'us'",
+            },
+        )
+
+    assert info.schema.names == ["id", "email"]
+    assert table.column("id").to_pylist() == [2, 4]
+
+
 def test_flight_plan_and_get_with_multiple_static_alias_targets(tmp_path):
     users_id = create_iceberg_table(
         tmp_path,
