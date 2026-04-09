@@ -7,6 +7,8 @@ import io.dalobscura.connectors.client.DalObscuraPlannedPartition;
 import io.dalobscura.connectors.client.DalObscuraPlannedRead;
 import io.dalobscura.connectors.client.DalObscuraReadClient;
 import io.dalobscura.connectors.client.DalObscuraTicketStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +51,28 @@ class DalObscuraScanBuilderTest {
         assertEquals(List.of("id"), client.planRequests().get(1).columns());
         assertEquals(Optional.of("region = 'us'"), client.planRequests().get(1).rowFilter());
         assertEquals(2, partitions.length);
+    }
+
+    @Test
+    void createsSerializableInputPartitions() throws Exception {
+        RecordingClient client = new RecordingClient();
+        DalObscuraTable table =
+                new DalObscuraTable(
+                        new DalObscuraConnectorOptions(
+                                "grpc+tcp://localhost:8815",
+                                "analytics",
+                                "default.users",
+                                "token-123"),
+                        () -> client);
+
+        DalObscuraScanBuilder builder =
+                (DalObscuraScanBuilder) table.newScanBuilder(new CaseInsensitiveStringMap(Map.of()));
+        InputPartition[] partitions = builder.build().toBatch().planInputPartitions();
+
+        try (ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+                ObjectOutputStream output = new ObjectOutputStream(buffer)) {
+            output.writeObject(partitions[0]);
+        }
     }
 
     private static final class RecordingClient implements DalObscuraReadClient {

@@ -1,0 +1,9 @@
+{
+  "name": "missing-token",
+  "readOptions": {
+    "dal.uri": "grpc+tcp://localhost:8815",
+    "dal.catalog": "analytics",
+    "dal.target": "default.users"
+  },
+  "expectedError": "Missing required option: dal.auth.token"
+}

@@ -39,7 +39,7 @@ public final class ArrowToSparkSchemaMapper {
         if (type instanceof ArrowType.Bool) {
             return DataTypes.BooleanType;
         }
-        if (type instanceof ArrowType.Utf8) {
+        if (type instanceof ArrowType.Utf8 || type instanceof ArrowType.LargeUtf8) {
             return DataTypes.StringType;
         }
         if (type instanceof ArrowType.Binary || type instanceof ArrowType.LargeBinary) {

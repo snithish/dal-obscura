@@ -1,8 +1,9 @@
 package io.dalobscura.connectors.client;
 
+import java.io.Serializable;
 import java.util.List;
 
-public final class DalObscuraPlannedPartition {
+public final class DalObscuraPlannedPartition implements Serializable {
     private final String ticket;
     private final List<String> locations;
 

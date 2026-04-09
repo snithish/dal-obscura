@@ -9,4 +9,11 @@
     <relativePath>../pom.xml</relativePath>
   </parent>
   <artifactId>connector-testkit-jvm</artifactId>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+    </dependency>
+  </dependencies>
 </project>

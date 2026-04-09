@@ -163,12 +163,15 @@ normal projection/filter pushdown through DataSource V2.
 - per-read `.option(...)` values override session configuration
 - session configuration is the fallback for repeated reads in one Spark session
 - the token is required on both planning and fetch calls
-- session configuration keys mirror option names under the
-  `spark.dal_obscura.*` prefix, for example:
-  - `spark.dal_obscura.uri`
-  - `spark.dal_obscura.catalog`
-  - `spark.dal_obscura.target`
-  - `spark.dal_obscura.auth.token`
+- `dal.uri` accepts either `grpc+tcp://host:port` or
+  `grpc+tls://host:port`
+- the datasource should implement `SessionConfigSupport` with
+  `keyPrefix() == "dal_obscura"`, so Spark session configuration falls through
+  under the `spark.datasource.dal_obscura.*` prefix, for example:
+  - `spark.datasource.dal_obscura.uri`
+  - `spark.datasource.dal_obscura.catalog`
+  - `spark.datasource.dal_obscura.target`
+  - `spark.datasource.dal_obscura.auth.token`
 
 ## Runtime Flow
 

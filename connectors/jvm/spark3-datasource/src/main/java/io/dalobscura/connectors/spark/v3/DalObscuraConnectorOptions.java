@@ -1,6 +1,8 @@
 package io.dalobscura.connectors.spark.v3;
 
-public final class DalObscuraConnectorOptions {
+import java.io.Serializable;
+
+public final class DalObscuraConnectorOptions implements Serializable {
     private final String uri;
     private final String catalog;
     private final String target;

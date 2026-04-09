@@ -68,4 +68,19 @@ class ArrowToSparkSchemaMapperTest {
         assertEquals(DataTypes.BooleanType, activeField.dataType());
         assertEquals(DataTypes.TimestampType, createdAtField.dataType());
     }
+
+    @Test
+    void mapsLargeUtf8ToSparkString() {
+        Schema schema =
+                new Schema(
+                        List.of(
+                                new Field(
+                                        "email",
+                                        FieldType.nullable(new ArrowType.LargeUtf8()),
+                                        null)));
+
+        StructType result = mapper.toStructType(schema);
+
+        assertEquals(DataTypes.StringType, result.fields()[0].dataType());
+    }
 }
