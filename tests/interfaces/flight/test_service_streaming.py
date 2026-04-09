@@ -30,6 +30,161 @@ catalogs:
 """
 
 
+@pytest.mark.parametrize(
+    ("column_name", "field", "value", "mask_block", "expected_type"),
+    [
+        (
+            "hashed_id",
+            pa.field("hashed_id", pa.int64()),
+            pa.array([1234], type=pa.int64()),
+            """
+            masks:
+              hashed_id:
+                type: "hash"
+""",
+            pa.string(),
+        ),
+        (
+            "redacted_score",
+            pa.field("redacted_score", pa.int64()),
+            pa.array([87], type=pa.int64()),
+            """
+            masks:
+              redacted_score:
+                type: "redact"
+                value: "***"
+""",
+            pa.string(),
+        ),
+        (
+            "email_address",
+            pa.field("email_address", pa.string()),
+            pa.array(["alpha@example.com"], type=pa.string()),
+            """
+            masks:
+              email_address:
+                type: "email"
+""",
+            pa.string(),
+        ),
+        (
+            "account_id",
+            pa.field("account_id", pa.int64()),
+            pa.array([123456], type=pa.int64()),
+            """
+            masks:
+              account_id:
+                type: "keep_last"
+                value: 2
+""",
+            pa.string(),
+        ),
+        (
+            "default_text",
+            pa.field("default_text", pa.int64()),
+            pa.array([42], type=pa.int64()),
+            """
+            masks:
+              default_text:
+                type: "default"
+                value: "fallback"
+""",
+            pa.string(),
+        ),
+        (
+            "default_flag",
+            pa.field("default_flag", pa.string()),
+            pa.array(["no"], type=pa.string()),
+            """
+            masks:
+              default_flag:
+                type: "default"
+                value: true
+""",
+            pa.bool_(),
+        ),
+        (
+            "default_count",
+            pa.field("default_count", pa.string()),
+            pa.array(["missing"], type=pa.string()),
+            """
+            masks:
+              default_count:
+                type: "default"
+                value: 7
+""",
+            pa.int32(),
+        ),
+        (
+            "default_ratio",
+            pa.field("default_ratio", pa.string()),
+            pa.array(["missing"], type=pa.string()),
+            """
+            masks:
+              default_ratio:
+                type: "default"
+                value: 1.5
+""",
+            pa.decimal128(2, 1),
+        ),
+        (
+            "suppressed_id",
+            pa.field("suppressed_id", pa.int64()),
+            pa.array([99], type=pa.int64()),
+            """
+            masks:
+              suppressed_id:
+                type: "null"
+""",
+            pa.int64(),
+        ),
+    ],
+)
+def test_flight_info_schema_matches_mask_output_types(
+    tmp_path,
+    column_name,
+    field,
+    value,
+    mask_block,
+    expected_type,
+):
+    schema = pa.schema([field])
+    batch = pa.record_batch([value], schema=schema)
+    table_format = StubTableFormat(
+        catalog_name="analytics",
+        table_name="test.table",
+        format="stub_format",
+        schema=schema,
+        batches=(batch,),
+    )
+
+    policy_path = tmp_path / "policy.yaml"
+    policy_path.write_text(
+        _catalog_policy(
+            f"""
+      "test.table":
+        rules:
+          - principals: ["user1"]
+            columns: ["{column_name}"]
+{mask_block}"""
+        )
+    )
+    server = build_flight_service(table_format=table_format, policy_path=policy_path)
+
+    with running_flight_client(server) as client:
+        info, table = flight_request(
+            client,
+            {
+                "catalog": "analytics",
+                "target": "test.table",
+                "columns": [column_name],
+            },
+        )
+
+    assert info.schema.field(column_name).type == expected_type
+    assert table.schema.field(column_name).type == expected_type
+
+
 def test_parse_descriptor_rejects_path_descriptor():
     descriptor = flight.FlightDescriptor.for_path("analytics", "users")
     with pytest.raises(ValueError):

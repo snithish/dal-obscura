@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator, Mapping
+from functools import lru_cache
 from itertools import chain
 
 import duckdb
@@ -287,6 +288,10 @@ def _masked_leaf_field(field: pa.Field, mask: MaskRule) -> pa.Field:
     mask_type = mask.type.lower()
     if mask_type in {"hash", "redact", "email", "keep_last"}:
         return pa.field(field.name, pa.string(), nullable=True)
+    if mask_type == "default":
+        if mask.value is None:
+            raise ValueError("default mask requires a value")
+        return pa.field(field.name, _default_mask_type(mask.value), nullable=field.nullable)
     return field
 
 
@@ -310,3 +315,17 @@ def _sql_literal(value: object) -> str:
         escaped = value.replace("'", "''")
         return f"'{escaped}'"
     raise ValueError("default mask requires a scalar literal")
+
+
+def _default_mask_type(value: object) -> pa.DataType:
+    """Matches the Arrow type DuckDB emits for the configured default literal."""
+    return _duckdb_literal_arrow_type(_sql_literal(value))
+
+
+@lru_cache(maxsize=128)
+def _duckdb_literal_arrow_type(literal: str) -> pa.DataType:
+    con = duckdb.connect()
+    try:
+        return con.sql(f"SELECT {literal} AS value").arrow().read_all().schema.field("value").type
+    finally:
+        con.close()

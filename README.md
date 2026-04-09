@@ -148,6 +148,7 @@ After `uv sync --dev`, install the hooks with `uv run pre-commit install`. The c
 ## Notes
 - Mask expressions are executed in DuckDB SQL.
 - Supported mask types include `null`, `redact`, `hash`, `default`, `email`, and `keep_last`.
+- `hash`, `redact`, `email`, and `keep_last` expose masked values as Arrow `string`; `default` exposes the Arrow type DuckDB infers for the configured literal, while `null` preserves the original field type.
 - Row filters are validated against the Arrow schema before planning and currently support comparisons, `AND`/`OR`, `IN`, and `IS NULL`/`IS NOT NULL`.
 - Iceberg planning pushes down a safe subset of validated row filters for top-level fields; unsupported or nested predicates remain residual DuckDB filters for exact correctness.
 - Nested field masks use DuckDB `struct_update`, and list-of-struct masks use `list_transform` plus `struct_update`.
