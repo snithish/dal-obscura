@@ -1,0 +1,20 @@
+[
+  {
+    "name": "simple-equality",
+    "sparkFilters": ["EqualTo(region,'us')"],
+    "expectedSql": "region = 'us'",
+    "residualCount": 0
+  },
+  {
+    "name": "partial-and",
+    "sparkFilters": ["And(EqualTo(region,'us'),Not(EqualTo(region,'eu')))"],
+    "expectedSql": "region = 'us'",
+    "residualCount": 1
+  },
+  {
+    "name": "unsupported-or",
+    "sparkFilters": ["Or(EqualTo(region,'us'),Not(EqualTo(region,'eu')))"],
+    "expectedSql": null,
+    "residualCount": 1
+  }
+]
