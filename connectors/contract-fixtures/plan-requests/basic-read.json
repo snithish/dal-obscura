@@ -1,0 +1,6 @@
+{
+  "catalog": "analytics",
+  "target": "default.users",
+  "columns": ["id", "email"],
+  "row_filter": "region = 'us'"
+}
