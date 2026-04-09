@@ -75,6 +75,39 @@ class DalObscuraScanBuilderTest {
         }
     }
 
+    @Test
+    void plansNestedProjectedColumnsAsDottedPaths() {
+        RecordingClient client = new RecordingClient();
+        StructType fullSchema =
+                new StructType()
+                        .add(
+                                "user",
+                                new StructType()
+                                        .add(
+                                                "address",
+                                                new StructType().add("zip", "string").add("city", "string"))
+                                        .add("email", "string"));
+        DalObscuraScanBuilder builder =
+                new DalObscuraScanBuilder(
+                        new DalObscuraConnectorOptions(
+                                "grpc+tcp://localhost:8815",
+                                "analytics",
+                                "default.users",
+                                "token-123"),
+                        () -> client,
+                        fullSchema);
+
+        builder.pruneColumns(
+                new StructType()
+                        .add(
+                                "user",
+                                new StructType().add("address", new StructType().add("zip", "string"))));
+
+        builder.build();
+
+        assertEquals(List.of("user.address.zip"), client.planRequests().get(0).columns());
+    }
+
     private static final class RecordingClient implements DalObscuraReadClient {
         private final ArrayList<DalObscuraPlanRequest> planRequests = new ArrayList<>();
 

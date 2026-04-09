@@ -27,8 +27,7 @@ public final class SparkFilterSqlTranslator {
             residual.addAll(piece.residual());
         }
 
-        Optional<String> pushedSql =
-                pushed.isEmpty() ? Optional.empty() : Optional.of(String.join(" AND ", pushed));
+        Optional<String> pushedSql = joinConjuncts(pushed);
         return new SparkFilterTranslation(pushedSql, residual.toArray(new Filter[0]));
     }
 
@@ -43,9 +42,7 @@ public final class SparkFilterSqlTranslator {
             List<Filter> residual = new ArrayList<>();
             residual.addAll(left.residual());
             residual.addAll(right.residual());
-            return new TranslationPiece(
-                    conjuncts.isEmpty() ? Optional.empty() : Optional.of(String.join(" AND ", conjuncts)),
-                    residual);
+            return new TranslationPiece(joinConjuncts(conjuncts), residual);
         }
 
         if (filter instanceof Or) {
@@ -100,6 +97,9 @@ public final class SparkFilterSqlTranslator {
 
         if (filter instanceof In) {
             In in = (In) filter;
+            if (in.values().length == 0) {
+                return new TranslationPiece(Optional.empty(), List.of(filter));
+            }
             String values =
                     Arrays.stream(in.values())
                             .map(this::literal)
@@ -130,6 +130,39 @@ public final class SparkFilterSqlTranslator {
             return "'" + s.replace("'", "''") + "'";
         }
         return String.valueOf(value);
+    }
+
+    private Optional<String> joinConjuncts(List<String> conjuncts) {
+        if (conjuncts.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(
+                conjuncts.stream()
+                        .map(this::groupForConjunction)
+                        .collect(Collectors.joining(" AND ")));
+    }
+
+    private String groupForConjunction(String sql) {
+        return hasTopLevelOr(sql) ? "(" + sql + ")" : sql;
+    }
+
+    private boolean hasTopLevelOr(String sql) {
+        int depth = 0;
+        for (int index = 0; index < sql.length(); index++) {
+            char current = sql.charAt(index);
+            if (current == '(') {
+                depth++;
+                continue;
+            }
+            if (current == ')') {
+                depth = Math.max(0, depth - 1);
+                continue;
+            }
+            if (depth == 0 && sql.startsWith(" OR ", index)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static final class TranslationPiece {

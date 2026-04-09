@@ -8,6 +8,7 @@ import org.apache.spark.sql.sources.And;
 import org.apache.spark.sql.sources.EqualTo;
 import org.apache.spark.sql.sources.Filter;
 import org.apache.spark.sql.sources.GreaterThan;
+import org.apache.spark.sql.sources.In;
 import org.apache.spark.sql.sources.Not;
 import org.apache.spark.sql.sources.Or;
 import org.junit.jupiter.api.Test;
@@ -62,5 +63,48 @@ class SparkFilterSqlTranslatorTest {
 
         assertEquals("region = 'us'", translation.pushedSql().orElseThrow());
         assertArrayEquals(new Filter[] {new Not(new EqualTo("region", "eu"))}, translation.residualFilters());
+    }
+
+    @Test
+    void keepsEmptyInFilterResidual() {
+        Filter emptyIn = new In("region", new Object[0]);
+
+        SparkFilterTranslation translation = translator.translate(new Filter[] {emptyIn});
+
+        assertTrue(translation.pushedSql().isEmpty());
+        assertArrayEquals(new Filter[] {emptyIn}, translation.residualFilters());
+    }
+
+    @Test
+    void preservesOrGroupingInsideConjunctions() {
+        Filter grouped =
+                new And(
+                        new EqualTo("id", 5),
+                        new Or(
+                                new EqualTo("region", "us"),
+                                new EqualTo("region", "eu")));
+
+        SparkFilterTranslation translation = translator.translate(new Filter[] {grouped});
+
+        assertEquals(
+                "id = 5 AND ((region = 'us') OR (region = 'eu'))",
+                translation.pushedSql().orElseThrow());
+        assertArrayEquals(new Filter[0], translation.residualFilters());
+    }
+
+    @Test
+    void preservesOrGroupingAcrossTopLevelConjuncts() {
+        Filter disjunction =
+                new Or(
+                        new EqualTo("region", "us"),
+                        new EqualTo("region", "eu"));
+
+        SparkFilterTranslation translation =
+                translator.translate(new Filter[] {disjunction, new EqualTo("active", true)});
+
+        assertEquals(
+                "((region = 'us') OR (region = 'eu')) AND active = true",
+                translation.pushedSql().orElseThrow());
+        assertArrayEquals(new Filter[0], translation.residualFilters());
     }
 }
