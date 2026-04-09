@@ -20,7 +20,7 @@
     <junit.version>5.10.2</junit.version>
     <spark.version>3.5.6</spark.version>
     <arrow.version>15.0.2</arrow.version>
-    <arrow.netty.jvmArgs>-Dio.netty.tryReflectionSetAccessible=true</arrow.netty.jvmArgs>
+    <arrow.jvmArgs>--add-opens=java.base/java.nio=ALL-UNNAMED -Dio.netty.tryReflectionSetAccessible=true</arrow.jvmArgs>
   </properties>
 
   <dependencyManagement>
@@ -52,7 +52,7 @@
           <artifactId>maven-surefire-plugin</artifactId>
           <version>3.2.5</version>
           <configuration>
-            <argLine>${arrow.netty.jvmArgs}</argLine>
+            <argLine>${arrow.jvmArgs}</argLine>
             <useModulePath>false</useModulePath>
           </configuration>
         </plugin>
@@ -61,7 +61,7 @@
           <artifactId>maven-failsafe-plugin</artifactId>
           <version>3.2.5</version>
           <configuration>
-            <argLine>${arrow.netty.jvmArgs}</argLine>
+            <argLine>${arrow.jvmArgs}</argLine>
             <useModulePath>false</useModulePath>
           </configuration>
         </plugin>

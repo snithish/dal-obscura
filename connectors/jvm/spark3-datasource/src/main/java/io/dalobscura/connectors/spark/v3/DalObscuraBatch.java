@@ -5,7 +5,6 @@ import io.dalobscura.connectors.client.DalObscuraPlannedRead;
 import io.dalobscura.connectors.client.DalObscuraReadClientFactory;
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.connector.read.Batch;
 import org.apache.spark.sql.connector.read.InputPartition;
 import org.apache.spark.sql.connector.read.PartitionReader;
@@ -56,12 +55,6 @@ public final class DalObscuraBatch implements Scan, Batch {
 
     @Override
     public PartitionReaderFactory createReaderFactory() {
-        return new PartitionReaderFactory() {
-            @Override
-            public PartitionReader<InternalRow> createReader(InputPartition partition) {
-                throw new UnsupportedOperationException(
-                        "Columnar partition reader is implemented in Task 5");
-            }
-        };
+        return new DalObscuraPartitionReaderFactory(clientFactory);
     }
 }
