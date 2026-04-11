@@ -2,11 +2,13 @@ package io.dalobscura.connectors.testkit;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 public final class FixtureBuilderRunner {
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -37,6 +39,7 @@ public final class FixtureBuilderRunner {
         }
 
         JsonNode node = MAPPER.readTree(extractJsonPayload(output));
+        JsonNode expected = node.path("expected");
         return new FixtureBundle(
                 node.get("uri").asText(),
                 node.get("catalog").asText(),
@@ -44,7 +47,12 @@ public final class FixtureBuilderRunner {
                 node.get("user_token").asText(),
                 Path.of(node.get("app_path").asText()),
                 node.get("jwt_secret").asText(),
-                node.get("ticket_secret").asText());
+                node.get("ticket_secret").asText(),
+                expected.path("row_count").asLong(),
+                expected.path("supports_multiple_tickets").asBoolean(),
+                readSampleUsEvenIds(expected),
+                expected.path("masked_zip_hash_length").asInt(
+                        expected.path("sample_values").path("hash_hex_length").asInt()));
     }
 
     static Path workspaceRoot() throws IOException {
@@ -73,5 +81,18 @@ public final class FixtureBuilderRunner {
             }
         }
         throw new IllegalStateException("Fixture builder did not emit JSON:\n" + output);
+    }
+
+    private static List<Long> readSampleUsEvenIds(JsonNode expected) {
+        JsonNode ids = expected.path("sample_us_even_ids");
+        if (!ids.isArray() || ids.isEmpty()) {
+            return List.of(0L, 2L, 4L);
+        }
+
+        List<Long> result = new ArrayList<>(ids.size());
+        for (JsonNode id : ids) {
+            result.add(id.asLong());
+        }
+        return result;
     }
 }
