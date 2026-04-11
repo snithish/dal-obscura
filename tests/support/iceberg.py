@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import suppress
 from pathlib import Path
+from typing import Any
 
 import pyarrow as pa
 import yaml
@@ -9,6 +10,29 @@ from pyiceberg.catalog import load_catalog
 from pyiceberg.partitioning import PartitionSpec
 from pyiceberg.schema import Schema
 from pyiceberg.types import LongType, NestedField, StringType
+
+
+def _generated_column_values(field: pa.Field, batch_values: list[int]) -> list[Any]:
+    if pa.types.is_integer(field.type) or field.name.endswith("_id") or field.name == "id":
+        return batch_values
+    if field.name == "email":
+        return [f"user{i}@example.com" for i in batch_values]
+    if field.name == "region":
+        return ["us" if i % 2 == 0 else "eu" for i in batch_values]
+    if pa.types.is_string(field.type):
+        return [f"{field.name}-{i}" for i in batch_values]
+    return batch_values
+
+
+def _generated_batch_table(
+    batch_values: list[int],
+    *,
+    schema: pa.Schema,
+) -> pa.Table:
+    return pa.table(
+        {field.name: _generated_column_values(field, batch_values) for field in schema},
+        schema=schema,
+    )
 
 
 def create_iceberg_table(
@@ -69,16 +93,7 @@ def create_iceberg_table(
         append_schema = arrow_schema if arrow_schema is not None else default_arrow_schema
         batches = append_batches or [values or []]
         for batch_values in batches:
-            table.append(
-                pa.table(
-                    {
-                        "id": batch_values,
-                        "email": [f"user{i}@example.com" for i in batch_values],
-                        "region": ["us" if i % 2 == 0 else "eu" for i in batch_values],
-                    },
-                    schema=append_schema,
-                )
-            )
+            table.append(_generated_batch_table(batch_values, schema=append_schema))
     return identifier
 
 

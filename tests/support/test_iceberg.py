@@ -96,6 +96,36 @@ def test_create_iceberg_table_supports_custom_arrow_schema_and_append_tables(
     }
 
 
+def test_create_iceberg_table_supports_custom_arrow_schema_with_generated_rows(
+    tmp_path: Path,
+):
+    arrow_schema = pa.schema(
+        [
+            pa.field("user_id", pa.int64(), nullable=False),
+            pa.field("display_name", pa.string(), nullable=False),
+        ]
+    )
+
+    table_id = create_iceberg_table(
+        tmp_path,
+        "generated_catalog",
+        "generated-warehouse",
+        [1, 2],
+        arrow_schema=arrow_schema,
+        identifier="analytics.people",
+    )
+
+    assert table_id == "analytics.people"
+
+    catalog = _load_sql_catalog(tmp_path, "generated_catalog", "generated-warehouse")
+    table = catalog.load_table(table_id)
+
+    assert _sorted_table_dict(table.scan().to_arrow(), "user_id") == {
+        "user_id": [1, 2],
+        "display_name": ["display_name-1", "display_name-2"],
+    }
+
+
 def test_create_iceberg_table_accepts_partition_spec(tmp_path: Path):
     partition_spec = PartitionSpec(
         PartitionField(
