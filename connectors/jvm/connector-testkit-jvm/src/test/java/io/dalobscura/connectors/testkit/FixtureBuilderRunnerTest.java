@@ -13,7 +13,7 @@ class FixtureBuilderRunnerTest {
 
         assertEquals(125_000L, bundle.expectedRowCount());
         assertTrue(bundle.supportsMultipleTickets());
-        assertEquals(List.of(0L, 2L, 4L), bundle.sampleUsEvenIds());
+        assertEquals(List.of(0L, 4L, 8L), bundle.sampleUsEvenIds());
         assertEquals(64, bundle.maskedZipHashLength());
     }
 }

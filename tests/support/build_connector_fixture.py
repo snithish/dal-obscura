@@ -454,6 +454,8 @@ def _expected_metadata() -> dict[str, object]:
             "null_nickname": None,
             "hash_hex_length": 64,
         },
+        "sample_us_even_ids": [0, 4, 8],
+        "masked_zip_hash_length": 64,
         "filter_examples": {
             "pushdown": "market = 'enterprise'",
             "residual": "score >= 900.0",

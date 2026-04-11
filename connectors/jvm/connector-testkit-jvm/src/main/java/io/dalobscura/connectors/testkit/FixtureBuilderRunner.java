@@ -2,12 +2,12 @@ package io.dalobscura.connectors.testkit;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.ArrayList;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 public final class FixtureBuilderRunner {
@@ -51,8 +51,7 @@ public final class FixtureBuilderRunner {
                 expected.path("row_count").asLong(),
                 expected.path("supports_multiple_tickets").asBoolean(),
                 readSampleUsEvenIds(expected),
-                expected.path("masked_zip_hash_length").asInt(
-                        expected.path("sample_values").path("hash_hex_length").asInt()));
+                expected.path("masked_zip_hash_length").asInt());
     }
 
     static Path workspaceRoot() throws IOException {
@@ -86,7 +85,7 @@ public final class FixtureBuilderRunner {
     private static List<Long> readSampleUsEvenIds(JsonNode expected) {
         JsonNode ids = expected.path("sample_us_even_ids");
         if (!ids.isArray() || ids.isEmpty()) {
-            return List.of(0L, 2L, 4L);
+            throw new IllegalStateException("Fixture expected sample_us_even_ids metadata");
         }
 
         List<Long> result = new ArrayList<>(ids.size());
