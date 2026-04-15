@@ -5,6 +5,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.arrow.flight.FlightCallHeaders;
 import org.apache.arrow.flight.FlightClient;
@@ -18,6 +19,7 @@ import org.apache.arrow.flight.Ticket;
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.types.pojo.Schema;
 
 public final class FlightDalObscuraReadClient implements DalObscuraReadClient {
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -30,10 +32,22 @@ public final class FlightDalObscuraReadClient implements DalObscuraReadClient {
     }
 
     @Override
+    public Schema fetchSchema(String catalog, String target, String authToken) {
+        return client.getSchema(
+                        FlightDescriptor.command(
+                                encodePlanCommand(
+                                        new DalObscuraPlanRequest(
+                                                catalog, target, List.of("*"), Optional.empty()))),
+                        headerOption(authToken))
+                .getSchema();
+    }
+
+    @Override
     public DalObscuraPlannedRead plan(DalObscuraPlanRequest request, String authToken) {
+        byte[] command = encodePlanCommand(request);
         FlightInfo info =
                 client.getInfo(
-                        FlightDescriptor.command(encodePlanCommand(request)),
+                        FlightDescriptor.command(command),
                         headerOption(authToken));
 
         List<DalObscuraPlannedPartition> partitions =

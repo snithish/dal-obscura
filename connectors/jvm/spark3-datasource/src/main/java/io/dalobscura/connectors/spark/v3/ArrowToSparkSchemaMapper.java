@@ -72,6 +72,13 @@ public final class ArrowToSparkSchemaMapper {
             Field elementField = field.getChildren().get(0);
             return DataTypes.createArrayType(toSparkType(elementField), elementField.isNullable());
         }
+        if (type instanceof ArrowType.Map) {
+            Field entriesField = field.getChildren().get(0);
+            Field keyField = entriesField.getChildren().get(0);
+            Field valueField = entriesField.getChildren().get(1);
+            return DataTypes.createMapType(
+                    toSparkType(keyField), toSparkType(valueField), valueField.isNullable());
+        }
         if (type instanceof ArrowType.Struct) {
             return toStructType(new Schema(field.getChildren()));
         }

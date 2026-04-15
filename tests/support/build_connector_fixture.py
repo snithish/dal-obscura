@@ -254,7 +254,13 @@ def _partition_spec() -> PartitionSpec:
             field_id=1000,
             transform=IdentityTransform(),
             name="region",
-        )
+        ),
+        PartitionField(
+            source_id=3,
+            field_id=1001,
+            transform=IdentityTransform(),
+            name="market",
+        ),
     )
 
 
@@ -534,13 +540,18 @@ def main() -> None:
                                             "status",
                                             "notes",
                                             "nickname",
-                                            "tags",
-                                            "attributes",
-                                            "user",
-                                            "account",
-                                            "devices",
-                                            "support_ticket",
-                                        ],
+                                        "tags",
+                                        "attributes",
+                                        "user",
+                                        "user.email",
+                                        "user.address.zip",
+                                        "user.preferences.theme",
+                                        "account",
+                                        "account.manager.region",
+                                        "devices",
+                                        "support_ticket",
+                                        "support_ticket.ticket_id",
+                                    ],
                                         "masks": {
                                             "id": {"type": "hash"},
                                             "account_number": {
@@ -562,6 +573,7 @@ def main() -> None:
                                                 "type": "redact",
                                                 "value": "[hidden-theme]",
                                             },
+                                            "support_ticket.ticket_id": {"type": "hash"},
                                         },
                                         "row_filter": POLICY_ROW_FILTER,
                                     },

@@ -12,8 +12,13 @@ import java.util.List;
 import java.util.Optional;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.BigIntVector;
+import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
+import org.apache.arrow.vector.complex.StructVector;
+import org.apache.arrow.vector.types.pojo.ArrowType;
+import org.apache.arrow.vector.types.pojo.FieldType;
 import org.apache.spark.sql.vectorized.ColumnarBatch;
+import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.jupiter.api.Test;
 
 class DalObscuraPartitionReaderTest {
@@ -38,7 +43,8 @@ class DalObscuraPartitionReaderTest {
                                             "grpc+tcp://localhost:8815",
                                             "analytics",
                                             "default.users",
-                                            "token-123")))) {
+                                            "token-123"),
+                                    new org.apache.spark.sql.types.StructType().add("id", "long")))) {
                 assertTrue(reader.next());
                 ColumnarBatch batch = reader.get();
                 assertEquals(2, batch.numRows());
@@ -48,11 +54,80 @@ class DalObscuraPartitionReaderTest {
         }
     }
 
+    @Test
+    void reshapesStructVectorsToMatchSparkPrunedNestedSchema() throws Exception {
+        try (RootAllocator allocator = new RootAllocator(Long.MAX_VALUE)) {
+            StructVector account = StructVector.empty("account", allocator);
+            VarCharVector status =
+                    account.addOrGet("status", FieldType.nullable(new ArrowType.Utf8()), VarCharVector.class);
+            VarCharVector tier =
+                    account.addOrGet("tier", FieldType.nullable(new ArrowType.Utf8()), VarCharVector.class);
+            StructVector manager =
+                    account.addOrGet(
+                            "manager",
+                            FieldType.nullable(ArrowType.Struct.INSTANCE),
+                            StructVector.class);
+            VarCharVector region =
+                    manager.addOrGet("region", FieldType.nullable(new ArrowType.Utf8()), VarCharVector.class);
+
+            status.allocateNew();
+            tier.allocateNew();
+            region.allocateNew();
+
+            account.setIndexDefined(0);
+            manager.setIndexDefined(0);
+            status.set(0, "enabled".getBytes());
+            tier.set(0, "gold".getBytes());
+            region.set(0, "amer".getBytes());
+
+            status.setValueCount(1);
+            tier.setValueCount(1);
+            region.setValueCount(1);
+            manager.setValueCount(1);
+            account.setValueCount(1);
+
+            VectorSchemaRoot root =
+                    new VectorSchemaRoot(List.of(account.getField()), List.of(account), 1);
+            org.apache.spark.sql.types.StructType requiredSchema =
+                    new org.apache.spark.sql.types.StructType()
+                            .add(
+                                    "account",
+                                    new org.apache.spark.sql.types.StructType()
+                                            .add(
+                                                    "manager",
+                                                    new org.apache.spark.sql.types.StructType()
+                                                            .add("region", "string")));
+
+            try (DalObscuraPartitionReader reader =
+                    new DalObscuraPartitionReader(
+                            new FakeClient(root),
+                            new DalObscuraInputPartition(
+                                    new DalObscuraPlannedPartition("ticket-a"),
+                                    new DalObscuraConnectorOptions(
+                                            "grpc+tcp://localhost:8815",
+                                            "analytics",
+                                            "default.users",
+                                            "token-123"),
+                                    requiredSchema))) {
+                assertTrue(reader.next());
+                ColumnarBatch batch = reader.get();
+                UTF8String value = batch.column(0).getStruct(0).getStruct(0, 1).getUTF8String(0);
+                assertEquals("amer", value.toString());
+            }
+        }
+    }
+
     private static final class FakeClient implements DalObscuraReadClient {
         private final VectorSchemaRoot root;
 
         private FakeClient(VectorSchemaRoot root) {
             this.root = root;
+        }
+
+        @Override
+        public org.apache.arrow.vector.types.pojo.Schema fetchSchema(
+                String catalog, String target, String authToken) {
+            throw new UnsupportedOperationException();
         }
 
         @Override

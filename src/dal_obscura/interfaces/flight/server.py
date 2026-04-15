@@ -5,6 +5,7 @@ import logging
 import pyarrow.flight as flight
 
 from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
+from dal_obscura.application.use_cases.get_schema import GetSchemaUseCase
 from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
 from dal_obscura.interfaces.flight.contracts import (
     REQUEST_HEADERS_MIDDLEWARE_KEY,
@@ -12,7 +13,7 @@ from dal_obscura.interfaces.flight.contracts import (
     headers_from_context,
     parse_descriptor,
 )
-from dal_obscura.interfaces.flight.streaming import make_stream
+from dal_obscura.interfaces.flight.streaming import make_stream, normalize_schema_for_flight
 from dal_obscura.observability import get_resident_memory_bytes
 
 
@@ -22,6 +23,7 @@ class DataAccessFlightService(flight.FlightServerBase):
     def __init__(
         self,
         location: str,
+        get_schema_use_case: GetSchemaUseCase,
         plan_access_use_case: PlanAccessUseCase,
         fetch_stream_use_case: FetchStreamUseCase,
     ) -> None:
@@ -29,9 +31,38 @@ class DataAccessFlightService(flight.FlightServerBase):
             location,
             middleware={REQUEST_HEADERS_MIDDLEWARE_KEY: RequestHeadersMiddlewareFactory()},
         )
+        self._get_schema_use_case = get_schema_use_case
         self._plan_access_use_case = plan_access_use_case
         self._fetch_stream_use_case = fetch_stream_use_case
         self._logger = logging.getLogger(self.__class__.__name__)
+
+    def get_schema(
+        self, context: flight.ServerCallContext, descriptor: flight.FlightDescriptor
+    ) -> flight.SchemaResult:
+        """Returns the caller-visible masked schema without minting read tickets."""
+        headers = headers_from_context(context)
+        request = parse_descriptor(descriptor)
+        try:
+            result = self._get_schema_use_case.execute(request, headers)
+        except PermissionError as exc:
+            self._logger.warning(
+                "auth_or_authz_failed", extra=self._log_extra(target=request.target)
+            )
+            raise flight.FlightUnauthorizedError("Unauthorized") from exc
+        except ValueError as exc:
+            raise flight.FlightInternalError(str(exc)) from exc
+
+        self._logger.info(
+            "schema_request",
+            extra=self._log_extra(
+                target=result.target,
+                catalog=result.catalog,
+                principal=result.principal_id,
+                columns=result.columns,
+                policy_version=result.policy_version,
+            ),
+        )
+        return flight.SchemaResult(normalize_schema_for_flight(result.output_schema))
 
     def get_flight_info(
         self, context: flight.ServerCallContext, descriptor: flight.FlightDescriptor
@@ -65,7 +96,9 @@ class DataAccessFlightService(flight.FlightServerBase):
             flight.FlightEndpoint(flight.Ticket(token.encode("utf-8")), [])
             for token in result.ticket_tokens
         ]
-        return flight.FlightInfo(result.output_schema, descriptor, endpoints, -1, -1)
+        return flight.FlightInfo(
+            normalize_schema_for_flight(result.output_schema), descriptor, endpoints, -1, -1
+        )
 
     def do_get(
         self, context: flight.ServerCallContext, ticket: flight.Ticket

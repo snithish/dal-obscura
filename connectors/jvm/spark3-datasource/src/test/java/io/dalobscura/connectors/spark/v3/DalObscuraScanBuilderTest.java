@@ -46,10 +46,9 @@ class DalObscuraScanBuilderTest {
 
         assertEquals(1, fullSchema.fields().length);
         assertEquals("id", fullSchema.fields()[0].name());
-        assertEquals(List.of("*"), client.planRequests().get(0).columns());
-        assertEquals(Optional.empty(), client.planRequests().get(0).rowFilter());
-        assertEquals(List.of("id"), client.planRequests().get(1).columns());
-        assertEquals(Optional.of("region = 'us'"), client.planRequests().get(1).rowFilter());
+        assertEquals(1, client.schemaRequestCount());
+        assertEquals(List.of("id"), client.planRequests().get(0).columns());
+        assertEquals(Optional.of("region = 'us'"), client.planRequests().get(0).rowFilter());
         assertEquals(2, partitions.length);
     }
 
@@ -76,7 +75,7 @@ class DalObscuraScanBuilderTest {
     }
 
     @Test
-    void plansNestedProjectedColumnsAsDottedPaths() {
+    void plansNestedProjectedColumnsAsTopLevelStructs() {
         RecordingClient client = new RecordingClient();
         StructType fullSchema =
                 new StructType()
@@ -105,11 +104,44 @@ class DalObscuraScanBuilderTest {
 
         builder.build();
 
-        assertEquals(List.of("user.address.zip"), client.planRequests().get(0).columns());
+        assertEquals(List.of("user"), client.planRequests().get(0).columns());
+    }
+
+    @Test
+    void fallsBackToTheFirstVisibleColumnWhenSparkPrunesAllColumns() {
+        RecordingClient client = new RecordingClient();
+        StructType fullSchema = new StructType().add("id", "long").add("region", "string");
+        DalObscuraScanBuilder builder =
+                new DalObscuraScanBuilder(
+                        new DalObscuraConnectorOptions(
+                                "grpc+tcp://localhost:8815",
+                                "analytics",
+                                "default.users",
+                                "token-123"),
+                        () -> client,
+                        fullSchema);
+
+        builder.pruneColumns(new StructType());
+
+        builder.build();
+
+        assertEquals(List.of("id"), client.planRequests().get(0).columns());
     }
 
     private static final class RecordingClient implements DalObscuraReadClient {
         private final ArrayList<DalObscuraPlanRequest> planRequests = new ArrayList<>();
+        private int schemaRequestCount;
+
+        @Override
+        public Schema fetchSchema(String catalog, String target, String authToken) {
+            schemaRequestCount += 1;
+            return new Schema(
+                    List.of(
+                            new Field(
+                                    "id",
+                                    FieldType.nullable(new ArrowType.Int(64, true)),
+                                    null)));
+        }
 
         @Override
         public DalObscuraPlannedRead plan(DalObscuraPlanRequest request, String authToken) {
@@ -139,6 +171,10 @@ class DalObscuraScanBuilderTest {
 
         List<DalObscuraPlanRequest> planRequests() {
             return planRequests;
+        }
+
+        int schemaRequestCount() {
+            return schemaRequestCount;
         }
     }
 }

@@ -66,6 +66,62 @@ def test_parse_descriptor_rejects_invalid_row_filter_syntax():
         parse_descriptor(descriptor)
 
 
+def test_get_schema_returns_masked_authorized_schema(tmp_path):
+    schema = pa.schema(
+        [
+            pa.field("id", pa.int64()),
+            pa.field("email", pa.string()),
+            pa.field("region", pa.string()),
+        ]
+    )
+    batch = pa.record_batch(
+        [
+            pa.array([1, 2], type=pa.int64()),
+            pa.array(["alpha@example.com", "beta@example.com"], type=pa.string()),
+            pa.array(["us", "eu"], type=pa.string()),
+        ],
+        schema=schema,
+    )
+    table_format = StubTableFormat(
+        catalog_name="analytics",
+        table_name="test.table",
+        format="stub_format",
+        schema=schema,
+        batches=(batch,),
+    )
+
+    policy_path = tmp_path / "policy.yaml"
+    policy_path.write_text(
+        _catalog_policy(
+            """
+      "test.table":
+        rules:
+          - principals: ["user1"]
+            columns: ["id", "email"]
+            masks:
+              email:
+                type: "redact"
+                value: "[hidden]"
+"""
+        )
+    )
+    server = build_flight_service(table_format=table_format, policy_path=policy_path)
+    with running_flight_client(server) as client:
+        descriptor = command_descriptor(
+            {
+                "catalog": "analytics",
+                "target": "test.table",
+                "columns": ["*"],
+            }
+        )
+        options = flight_call_options("user1")
+
+        result = client.get_schema(descriptor, options=options)
+
+        assert result.schema.names == ["id", "email"]
+        assert result.schema.field("email").type == pa.string()
+
+
 def test_streaming_contract_emits_multiple_batches(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "dal_obscura.infrastructure.adapters.duckdb_transform._DUCKDB_ARROW_OUTPUT_BATCH_SIZE",
@@ -276,6 +332,91 @@ def test_flight_streaming_masks_list_of_struct_fields(tmp_path):
         assert preferences_field.type.value_field.type.field("theme").type == pa.string()
         preferences = table.column("metadata").to_pylist()[0]["preferences"]
         assert [item["theme"] for item in preferences] == ["[hidden]", "[hidden]"]
+
+
+def test_flight_normalizes_large_list_schema_for_clients(tmp_path):
+    metadata_type = pa.struct(
+        [
+            pa.field(
+                "preferences",
+                pa.large_list(
+                    pa.field(
+                        "item",
+                        pa.struct(
+                            [
+                                pa.field("name", pa.string()),
+                                pa.field("theme", pa.string()),
+                            ]
+                        ),
+                    )
+                ),
+            )
+        ]
+    )
+    schema = pa.schema(
+        [
+            pa.field("id", pa.int64()),
+            pa.field("metadata", metadata_type),
+        ]
+    )
+    batch = pa.record_batch(
+        [
+            pa.array([1], type=pa.int64()),
+            pa.array(
+                [
+                    {
+                        "preferences": [
+                            {"name": "web", "theme": "dark"},
+                            {"name": "mobile", "theme": "light"},
+                        ]
+                    }
+                ],
+                type=metadata_type,
+            ),
+        ],
+        schema=schema,
+    )
+    table_format = StubTableFormat(
+        catalog_name="analytics",
+        table_name="test.table",
+        format="stub_format",
+        schema=schema,
+        batches=(batch,),
+    )
+
+    policy_path = tmp_path / "policy.yaml"
+    policy_path.write_text(
+        _catalog_policy(
+            """
+      "test.table":
+        rules:
+          - principals: ["user1"]
+            columns: ["id", "metadata"]
+"""
+        )
+    )
+    server = build_flight_service(table_format=table_format, policy_path=policy_path)
+    descriptor = command_descriptor(
+        {
+            "catalog": "analytics",
+            "target": "test.table",
+            "columns": ["id", "metadata"],
+        }
+    )
+
+    with running_flight_client(server) as client:
+        options = flight_call_options("user1")
+        schema_result = client.get_schema(descriptor, options=options)
+        info = client.get_flight_info(descriptor, options=options)
+        table = client.do_get(info.endpoints[0].ticket, options=options).read_all()
+
+    schema_preferences = schema_result.schema.field("metadata").type.field("preferences")
+    info_preferences = info.schema.field("metadata").type.field("preferences")
+
+    assert pa.types.is_list(schema_preferences.type)
+    assert pa.types.is_list(info_preferences.type)
+    assert table.column("metadata").type.field("preferences").type == schema_preferences.type
+    assert table.column("metadata").to_pylist()[0]["preferences"][0]["theme"] == "dark"
 
 
 def test_flight_streaming_combines_policy_and_requested_row_filters(tmp_path):

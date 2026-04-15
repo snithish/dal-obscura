@@ -76,7 +76,7 @@ def test_build_connector_fixture_uses_iceberg_sql_catalog(tmp_path: Path):
     assert Path(tmp_path / "spark_catalog.db").is_file()
     assert Path(tmp_path / "warehouse").is_dir()
     assert table.metadata.format_version == 2
-    assert [field.name for field in table.spec().fields] == ["region"]
+    assert [field.name for field in table.spec().fields] == ["region", "market"]
 
 
 def test_build_connector_fixture_emits_exact_heavyweight_metadata(tmp_path: Path):

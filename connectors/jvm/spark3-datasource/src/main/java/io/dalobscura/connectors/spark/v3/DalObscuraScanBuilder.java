@@ -54,7 +54,7 @@ public final class DalObscuraScanBuilder
 
     @Override
     public Scan build() {
-        List<String> columns = projectedColumns(requiredSchema, fullSchema);
+        List<String> columns = plannedColumns(requiredSchema, fullSchema);
         try (DalObscuraReadClient client = clientFactory.create()) {
             DalObscuraPlannedRead plannedRead =
                     client.plan(
@@ -68,14 +68,20 @@ public final class DalObscuraScanBuilder
         }
     }
 
-    private static List<String> projectedColumns(
+    private static List<String> plannedColumns(
             StructType requiredSchema, StructType fullSchema) {
         List<String> projected = new ArrayList<>();
         for (StructField field : requiredSchema.fields()) {
             StructField fullField = fullSchema.apply(field.name());
             collectProjectedColumns(field, fullField, field.name(), projected);
         }
-        return projected;
+        if (!projected.isEmpty()) {
+            return projected;
+        }
+        if (fullSchema.fields().length == 0) {
+            throw new IllegalStateException("dal-obscura schema must expose at least one column");
+        }
+        return List.of(fullSchema.fields()[0].name());
     }
 
     private static void collectProjectedColumns(
@@ -86,20 +92,7 @@ public final class DalObscuraScanBuilder
         DataType requiredType = requiredField.dataType();
         DataType fullType = fullField.dataType();
         if (requiredType instanceof StructType && fullType instanceof StructType) {
-            StructType requiredStruct = (StructType) requiredType;
-            StructType fullStruct = (StructType) fullType;
-            if (requiredStruct.equals(fullStruct)) {
-                projected.add(path);
-                return;
-            }
-            for (StructField nestedField : requiredStruct.fields()) {
-                StructField fullNestedField = fullStruct.apply(nestedField.name());
-                collectProjectedColumns(
-                        nestedField,
-                        fullNestedField,
-                        path + "." + nestedField.name(),
-                        projected);
-            }
+            projected.add(path);
             return;
         }
         projected.add(path);

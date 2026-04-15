@@ -83,4 +83,38 @@ class ArrowToSparkSchemaMapperTest {
 
         assertEquals(DataTypes.StringType, result.fields()[0].dataType());
     }
+
+    @Test
+    void mapsArrowMapsToSparkMaps() {
+        Schema schema =
+                new Schema(
+                        List.of(
+                                new Field(
+                                        "attributes",
+                                        FieldType.nullable(new ArrowType.Map(false)),
+                                        List.of(
+                                                new Field(
+                                                        "entries",
+                                                        FieldType.notNullable(
+                                                                new ArrowType.Struct()),
+                                                        List.of(
+                                                                new Field(
+                                                                        "key",
+                                                                        FieldType.notNullable(
+                                                                                new ArrowType
+                                                                                        .Utf8()),
+                                                                        null),
+                                                                new Field(
+                                                                        "value",
+                                                                        FieldType.nullable(
+                                                                                new ArrowType
+                                                                                        .Utf8()),
+                                                                        null)))))));
+
+        StructType result = mapper.toStructType(schema);
+
+        assertEquals(
+                DataTypes.createMapType(DataTypes.StringType, DataTypes.StringType, true),
+                result.fields()[0].dataType());
+    }
 }

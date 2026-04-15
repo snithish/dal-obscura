@@ -1,5 +1,7 @@
 package io.dalobscura.connectors.spark.v3;
 
+import java.sql.Date;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -128,6 +130,12 @@ public final class SparkFilterSqlTranslator {
         if (value instanceof String) {
             String s = (String) value;
             return "'" + s.replace("'", "''") + "'";
+        }
+        if (value instanceof Timestamp) {
+            return "TIMESTAMP '" + value + "'";
+        }
+        if (value instanceof Date) {
+            return "DATE '" + value + "'";
         }
         return String.valueOf(value);
     }

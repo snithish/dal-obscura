@@ -14,6 +14,7 @@ import pyarrow as pa
 import pyarrow.flight as flight
 
 from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
+from dal_obscura.application.use_cases.get_schema import GetSchemaUseCase
 from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
 from dal_obscura.domain.catalog.ports import TableFormat
 from dal_obscura.domain.query_planning.models import PlanRequest
@@ -136,6 +137,12 @@ def build_flight_service(
     masking = DefaultMaskingAdapter()
     row_transform = DuckDBRowTransformAdapter(masking)
     ticket_codec = HmacTicketCodecAdapter(ticket_secret)
+    get_schema = GetSchemaUseCase(
+        identity=identity,
+        authorizer=authorizer,
+        catalog_registry=cast(Any, resolved_registry),
+        masking=masking,
+    )
     plan_access = PlanAccessUseCase(
         identity=identity,
         authorizer=authorizer,
@@ -154,6 +161,7 @@ def build_flight_service(
     )
     return DataAccessFlightService(
         location="grpc+tcp://0.0.0.0:0",
+        get_schema_use_case=get_schema,
         plan_access_use_case=plan_access,
         fetch_stream_use_case=fetch_stream,
     )

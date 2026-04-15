@@ -1,11 +1,7 @@
 package io.dalobscura.connectors.spark.v3;
 
-import io.dalobscura.connectors.client.DalObscuraPlanRequest;
-import io.dalobscura.connectors.client.DalObscuraPlannedRead;
 import io.dalobscura.connectors.client.DalObscuraReadClient;
 import io.dalobscura.connectors.client.DalObscuraReadClientFactory;
-import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import org.apache.spark.sql.connector.catalog.SupportsRead;
 import org.apache.spark.sql.connector.catalog.Table;
@@ -35,15 +31,10 @@ public final class DalObscuraTable implements Table, SupportsRead {
     public StructType schema() {
         if (schema == null) {
             try (DalObscuraReadClient client = clientFactory.create()) {
-                DalObscuraPlannedRead plannedRead =
-                        client.plan(
-                                new DalObscuraPlanRequest(
-                                        options.catalog(),
-                                        options.target(),
-                                        List.of("*"),
-                                        Optional.empty()),
-                                options.authToken());
-                schema = schemaMapper.toStructType(plannedRead.schema());
+                schema =
+                        schemaMapper.toStructType(
+                                client.fetchSchema(
+                                        options.catalog(), options.target(), options.authToken()));
             }
         }
         return schema;

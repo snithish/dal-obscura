@@ -1,9 +1,10 @@
 package io.dalobscura.connectors.spark.v3;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.sql.Timestamp;
 import org.apache.spark.sql.sources.And;
 import org.apache.spark.sql.sources.EqualTo;
 import org.apache.spark.sql.sources.Filter;
@@ -104,6 +105,19 @@ class SparkFilterSqlTranslatorTest {
 
         assertEquals(
                 "((region = 'us') OR (region = 'eu')) AND active = true",
+                translation.pushedSql().orElseThrow());
+        assertArrayEquals(new Filter[0], translation.residualFilters());
+    }
+
+    @Test
+    void rendersTimestampLiteralsAsSqlTimestampLiterals() {
+        Timestamp timestamp = Timestamp.valueOf("2024-01-01 12:16:00");
+
+        SparkFilterTranslation translation =
+                translator.translate(new Filter[] {new EqualTo("created_at", timestamp)});
+
+        assertEquals(
+                "created_at = TIMESTAMP '2024-01-01 12:16:00.0'",
                 translation.pushedSql().orElseThrow());
         assertArrayEquals(new Filter[0], translation.residualFilters());
     }

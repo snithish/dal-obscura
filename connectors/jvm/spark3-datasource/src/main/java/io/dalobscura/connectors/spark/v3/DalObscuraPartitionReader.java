@@ -8,13 +8,14 @@ import org.apache.spark.sql.vectorized.ColumnarBatch;
 public final class DalObscuraPartitionReader implements PartitionReader<ColumnarBatch> {
     private final DalObscuraReadClient client;
     private final DalObscuraTicketStream stream;
-    private final ArrowColumnarBatchAdapter adapter = new ArrowColumnarBatchAdapter();
+    private final ArrowColumnarBatchAdapter adapter;
     private ColumnarBatch currentBatch;
 
     public DalObscuraPartitionReader(
             DalObscuraReadClient client, DalObscuraInputPartition partition) {
         this.client = client;
         this.stream = client.openStream(partition.plannedPartition(), partition.options().authToken());
+        this.adapter = new ArrowColumnarBatchAdapter(partition.requiredSchema());
     }
 
     @Override
@@ -38,6 +39,7 @@ public final class DalObscuraPartitionReader implements PartitionReader<Columnar
             currentBatch.close();
             currentBatch = null;
         }
+        adapter.close();
         stream.close();
         client.close();
     }
