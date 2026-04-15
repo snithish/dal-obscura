@@ -34,6 +34,22 @@ uv sync
 uv run dal-obscura --help
 ```
 
+## Connectors
+
+Connector implementations live under `connectors/`.
+
+- `connectors/jvm/dal-obscura-client-java`: engine-agnostic Java Flight client
+- `connectors/jvm/spark3-datasource`: Spark 3.x DataSource V2 reader
+- `connectors/jvm/integration-tests-jvm`: end-to-end Spark connector coverage
+
+Build and verify the JVM connector workspace with:
+
+```bash
+mvn -f connectors/jvm/pom.xml verify
+```
+
+See `connectors/README.md` for the Spark datasource contract and option names.
+
 ## Policy Example
 
 ```yaml

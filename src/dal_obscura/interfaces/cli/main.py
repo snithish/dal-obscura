@@ -4,6 +4,7 @@ import argparse
 import logging
 
 from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
+from dal_obscura.application.use_cases.get_schema import GetSchemaUseCase
 from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
 from dal_obscura.infrastructure.adapters.app_config import load_app_config
 from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
@@ -52,6 +53,12 @@ def main() -> None:
     row_transform = DuckDBRowTransformAdapter(masking)
     ticket_codec = HmacTicketCodecAdapter(app_config.ticket.secret)
 
+    get_schema = GetSchemaUseCase(
+        identity=identity,
+        authorizer=authorizer,
+        catalog_registry=catalog_registry,
+        masking=masking,
+    )
     plan_access = PlanAccessUseCase(
         identity=identity,
         authorizer=authorizer,
@@ -70,6 +77,7 @@ def main() -> None:
     )
     server = DataAccessFlightService(
         location=app_config.location,
+        get_schema_use_case=get_schema,
         plan_access_use_case=plan_access,
         fetch_stream_use_case=fetch_stream,
     )
