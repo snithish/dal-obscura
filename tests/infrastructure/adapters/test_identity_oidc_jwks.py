@@ -120,3 +120,86 @@ def test_rejects_missing_subject_claim():
 
     with pytest.raises(PermissionError, match="Missing subject"):
         provider.authenticate({"authorization": f"Bearer {token}"})
+
+
+def test_extracts_groups_roles_and_scalar_attributes_from_configured_claims():
+    private_key, jwk = _rsa_key_pair("kid-1")
+    provider = OidcJwksIdentityProvider(
+        issuer=ISSUER,
+        audience=AUDIENCE,
+        jwks_url="https://keycloak.example.test/certs",
+        group_claims=["groups", "realm_access.roles", "resource_access.dal-obscura.roles"],
+        attribute_claims={"tenant": "tenant", "clearance": "custom.clearance"},
+        jwks_fetcher=lambda _url: {"keys": [jwk]},
+    )
+    token = _token(
+        private_key,
+        kid="kid-1",
+        extra_claims={
+            "groups": ["/analytics", "finance"],
+            "realm_access": {"roles": ["analyst"]},
+            "resource_access": {"dal-obscura": {"roles": ["reader"]}},
+            "tenant": "acme",
+            "custom": {"clearance": "high"},
+        },
+    )
+
+    principal = provider.authenticate({"authorization": f"Bearer {token}"})
+
+    assert principal.groups == ["/analytics", "finance", "analyst", "reader"]
+    assert principal.attributes == {"tenant": "acme", "clearance": "high"}
+
+
+def test_ignores_missing_optional_group_and_attribute_claims():
+    private_key, jwk = _rsa_key_pair("kid-1")
+    provider = OidcJwksIdentityProvider(
+        issuer=ISSUER,
+        audience=AUDIENCE,
+        jwks_url="https://keycloak.example.test/certs",
+        group_claims=["groups", "realm_access.roles"],
+        attribute_claims={"tenant": "tenant"},
+        jwks_fetcher=lambda _url: {"keys": [jwk]},
+    )
+    token = _token(private_key, kid="kid-1")
+
+    principal = provider.authenticate({"authorization": f"Bearer {token}"})
+
+    assert principal.groups == []
+    assert principal.attributes == {}
+
+
+def test_rejects_non_scalar_attribute_claim_values():
+    private_key, jwk = _rsa_key_pair("kid-1")
+    provider = OidcJwksIdentityProvider(
+        issuer=ISSUER,
+        audience=AUDIENCE,
+        jwks_url="https://keycloak.example.test/certs",
+        attribute_claims={"tenant": "tenant"},
+        jwks_fetcher=lambda _url: {"keys": [jwk]},
+    )
+    token = _token(private_key, kid="kid-1", extra_claims={"tenant": ["acme"]})
+
+    with pytest.raises(PermissionError, match="Invalid attribute claim"):
+        provider.authenticate({"authorization": f"Bearer {token}"})
+
+
+def test_refreshes_jwks_once_when_token_references_new_kid():
+    old_private_key, old_jwk = _rsa_key_pair("old-kid")
+    new_private_key, new_jwk = _rsa_key_pair("new-kid")
+    responses = [{"keys": [old_jwk]}, {"keys": [old_jwk, new_jwk]}]
+
+    def fetcher(_url: str):
+        return responses.pop(0)
+
+    provider = OidcJwksIdentityProvider(
+        issuer=ISSUER,
+        audience=AUDIENCE,
+        jwks_url="https://keycloak.example.test/certs",
+        jwks_fetcher=fetcher,
+    )
+    old_token = _token(old_private_key, kid="old-kid", subject="old-user")
+    new_token = _token(new_private_key, kid="new-kid", subject="new-user")
+
+    assert provider.authenticate({"authorization": f"Bearer {old_token}"}).id == "old-user"
+    assert provider.authenticate({"authorization": f"Bearer {new_token}"}).id == "new-user"
+    assert responses == []
