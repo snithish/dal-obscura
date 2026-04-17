@@ -20,7 +20,24 @@ class AuthConfig:
 class DefaultIdentityAdapter:
     """Authenticates callers using bearer JWTs from the Authorization header."""
 
-    def __init__(self, config: AuthConfig) -> None:
+    def __init__(
+        self,
+        config: AuthConfig | None = None,
+        *,
+        jwt_secret: str | None = None,
+        jwt_issuer: str | None = None,
+        jwt_audience: str | None = None,
+    ) -> None:
+        if config is not None and jwt_secret is not None:
+            raise ValueError("Pass either config or jwt_secret, not both")
+        if config is None:
+            if not jwt_secret:
+                raise ValueError("jwt_secret is required")
+            config = AuthConfig(
+                jwt_secret=jwt_secret,
+                jwt_issuer=jwt_issuer,
+                jwt_audience=jwt_audience,
+            )
         self._config = config
 
     def authenticate(self, headers: Mapping[str, str]) -> Principal:

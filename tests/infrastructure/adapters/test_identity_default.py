@@ -23,3 +23,11 @@ def test_auth_rejects_non_bearer_authorization_header():
 
     with pytest.raises(PermissionError):
         DefaultIdentityAdapter(config).authenticate({"authorization": f"Token {token}"})
+
+
+def test_default_identity_adapter_accepts_provider_style_constructor_kwargs():
+    adapter = DefaultIdentityAdapter(jwt_secret=JWT_SECRET)
+
+    result = adapter.authenticate({"authorization": _bearer_token("provider-user")})
+
+    assert result.id == "provider-user"

@@ -12,10 +12,6 @@ from dal_obscura.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
 )
-from dal_obscura.infrastructure.adapters.identity_default import (
-    AuthConfig,
-    DefaultIdentityAdapter,
-)
 from dal_obscura.infrastructure.adapters.policy_file_authorizer import PolicyFileAuthorizer
 from dal_obscura.infrastructure.adapters.service_config import load_catalog_config
 from dal_obscura.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
@@ -39,13 +35,7 @@ def main() -> None:
 
     # The CLI is the composition root for the hexagonal application. Everything
     # below is pure wiring so the use cases can stay free of transport details.
-    identity = DefaultIdentityAdapter(
-        AuthConfig(
-            jwt_secret=app_config.auth.jwt_secret,
-            jwt_issuer=app_config.auth.jwt_issuer,
-            jwt_audience=app_config.auth.jwt_audience,
-        )
-    )
+    identity = app_config.auth.identity_provider
     authorizer = PolicyFileAuthorizer(app_config.policy_file)
     service_config = load_catalog_config(app_config.catalog_file)
     catalog_registry = DynamicCatalogRegistry(service_config)
