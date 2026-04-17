@@ -117,14 +117,49 @@ ticket:
   secret:
     key: DAL_OBSCURA_TICKET_SECRET
 auth:
-  jwt_secret:
-    key: DAL_OBSCURA_JWT_SECRET
-  jwt_issuer: null
-  jwt_audience: null
+  module: dal_obscura.infrastructure.adapters.identity_default.DefaultIdentityAdapter
+  args:
+    jwt_secret:
+      key: DAL_OBSCURA_JWT_SECRET
+    jwt_issuer: null
+    jwt_audience: null
 logging:
   level: INFO
   json: true
 ```
+
+### Authentication Providers
+
+`auth.module` names a Python class that implements `IdentityPort`:
+
+```python
+def authenticate(self, headers: Mapping[str, str]) -> Principal:
+    ...
+```
+
+The service ships with the shared-secret JWT provider shown above and an
+OIDC/JWKS provider for Keycloak-compatible access tokens:
+
+```yaml
+auth:
+  module: dal_obscura.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider
+  args:
+    issuer: https://keycloak.example.com/realms/acme
+    audience: dal-obscura
+    subject_claim: sub
+    group_claims:
+      - groups
+      - realm_access.roles
+      - resource_access.dal-obscura.roles
+    attribute_claims:
+      tenant: tenant
+      clearance: clearance
+```
+
+The OIDC/JWKS provider validates access tokens locally with the issuer JWKS. It
+does not call Keycloak for each request. Keycloak roles, groups, and user
+attributes must be present in the access token through protocol mappers or client
+scopes before `dal-obscura` can use them in policy matching.
 
 ## Development
 

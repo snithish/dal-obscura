@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 import pyarrow as pa
 
@@ -63,9 +63,7 @@ class GetSchemaUseCase:
         visible_columns = _visible_columns(requested_columns, decision)
         _authorize_requested_row_filter(requested_row_filter, decision)
 
-        output_schema = self._masking.masked_schema(
-            base_schema, visible_columns, decision.masks
-        )
+        output_schema = self._masking.masked_schema(base_schema, visible_columns, decision.masks)
         return GetSchemaResult(
             output_schema=output_schema,
             target=request.target,

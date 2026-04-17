@@ -13,6 +13,7 @@ from dal_obscura.infrastructure.adapters.identity_default import (
     AuthConfig,
     DefaultIdentityAdapter,
 )
+from dal_obscura.infrastructure.adapters.identity_oidc_jwks import OidcJwksIdentityProvider
 from dal_obscura.infrastructure.adapters.policy_file_authorizer import (
     PolicyFileAuthorizer,
     load_policy_config,
@@ -46,6 +47,7 @@ __all__ = [
     "EnvSecretProvider",
     "HmacTicketCodecAdapter",
     "IcebergTableFormat",
+    "OidcJwksIdentityProvider",
     "PathConfig",
     "PolicyFileAuthorizer",
     "SchemaInferenceOptions",
