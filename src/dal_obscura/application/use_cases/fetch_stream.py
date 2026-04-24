@@ -34,7 +34,7 @@ class DecodedScan:
     """Scan instructions restored from a ticket's serialized payload."""
 
     read_payload: bytes
-    row_filter: RowFilter | None
+    full_row_filter: RowFilter | None
     masks: dict[str, MaskRule]
 
 
@@ -77,7 +77,7 @@ class FetchStreamUseCase:
         original_schema, batches = task.table_format.execute(task.partition)
 
         result_batches = self._row_transform.apply_filters_and_masks_stream(
-            batches, payload.columns, scan.row_filter, scan.masks
+            batches, payload.columns, scan.full_row_filter, scan.masks
         )
 
         output_schema = self._masking.masked_schema(original_schema, payload.columns, scan.masks)
@@ -116,7 +116,7 @@ def _decode_scan(scan_info: Mapping[str, object]) -> DecodedScan:
 
     return DecodedScan(
         read_payload=base64.b64decode(str(read_payload).encode("utf-8")),
-        row_filter=_optional_row_filter(scan_info.get("row_filter")),
+        full_row_filter=_optional_row_filter(scan_info.get("full_row_filter")),
         masks=parsed_masks,
     )
 

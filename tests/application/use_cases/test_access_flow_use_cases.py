@@ -20,10 +20,10 @@ AUTHORIZATION_HEADER = {"authorization": "Bearer jwt-token"}
 
 
 def _scan_payload() -> ScanPayload:
-    return {"read_payload": "payload", "row_filter": None, "masks": {}}
+    return {"read_payload": "payload", "full_row_filter": None, "masks": {}}
 
 
-def test_ticket_payload_from_dict_keeps_string_row_filter():
+def test_ticket_payload_from_dict_keeps_string_full_row_filter():
     payload = TicketPayload.from_dict(
         {
             "catalog": "catalog1",
@@ -31,7 +31,7 @@ def test_ticket_payload_from_dict_keeps_string_row_filter():
             "columns": ["id"],
             "scan": {
                 "read_payload": "payload",
-                "row_filter": "LOWER(region) = 'us'",
+                "full_row_filter": "LOWER(region) = 'us'",
                 "masks": {},
             },
             "policy_version": 100,
@@ -41,10 +41,10 @@ def test_ticket_payload_from_dict_keeps_string_row_filter():
         }
     )
 
-    assert payload.scan["row_filter"] == "LOWER(region) = 'us'"
+    assert payload.scan["full_row_filter"] == "LOWER(region) = 'us'"
 
 
-def test_ticket_payload_from_dict_rejects_non_string_row_filter():
+def test_ticket_payload_from_dict_rejects_non_string_full_row_filter():
     payload = TicketPayload.from_dict(
         {
             "catalog": "catalog1",
@@ -52,7 +52,7 @@ def test_ticket_payload_from_dict_rejects_non_string_row_filter():
             "columns": ["id"],
             "scan": {
                 "read_payload": "payload",
-                "row_filter": {"type": "comparison"},
+                "full_row_filter": {"type": "comparison"},
                 "masks": {},
             },
             "policy_version": 100,
@@ -62,7 +62,7 @@ def test_ticket_payload_from_dict_rejects_non_string_row_filter():
         }
     )
 
-    assert payload.scan["row_filter"] is None
+    assert payload.scan["full_row_filter"] is None
 
 
 @dataclass(frozen=True)
@@ -315,8 +315,8 @@ def test_plan_access_expands_wildcard_columns():
     )
 
     assert authorizer.last_requested_columns == ["id", "region"]
-    assert ticket_codec.signed_payloads[0].scan["row_filter"] == "region = 'us'"
-    assert ticket_codec.signed_payloads[0].scan["row_filter"] is not None
+    assert ticket_codec.signed_payloads[0].scan["full_row_filter"] == "region = 'us'"
+    assert ticket_codec.signed_payloads[0].scan["full_row_filter"] is not None
 
 
 def test_plan_access_accepts_nested_requested_columns():
@@ -700,7 +700,7 @@ def test_plan_access_combines_policy_and_requested_row_filters_before_ticketing(
         AUTHORIZATION_HEADER,
     )
 
-    payload_filter = ticket_codec.signed_payloads[0].scan["row_filter"]
+    payload_filter = ticket_codec.signed_payloads[0].scan["full_row_filter"]
     assert payload_filter is not None
     assert (
         row_filter_to_sql(deserialize_row_filter(payload_filter))
@@ -822,7 +822,7 @@ def test_fetch_stream_policy_version_mismatch():
         columns=["id", "region"],
         scan={
             "read_payload": _encode_scan_task(table_format, schema),
-            "row_filter": None,
+            "full_row_filter": None,
             "masks": {},
         },
         policy_version=100,
@@ -850,7 +850,7 @@ def test_fetch_stream_principal_mismatch():
         columns=["id", "region"],
         scan={
             "read_payload": _encode_scan_task(table_format, schema),
-            "row_filter": None,
+            "full_row_filter": None,
             "masks": {},
         },
         policy_version=100,
@@ -876,7 +876,7 @@ def test_fetch_stream_rejects_invalid_scan_payloads():
         (
             {
                 "read_payload": "",
-                "row_filter": None,
+                "full_row_filter": None,
                 "masks": {},
             },
             "Missing read payload",
@@ -884,7 +884,7 @@ def test_fetch_stream_rejects_invalid_scan_payloads():
         (
             {
                 "read_payload": _encode_scan_task(table_format, schema),
-                "row_filter": None,
+                "full_row_filter": None,
                 "masks": {"region": "not-an-object"},
             },
             "Invalid mask payload",
@@ -892,7 +892,7 @@ def test_fetch_stream_rejects_invalid_scan_payloads():
         (
             {
                 "read_payload": _encode_scan_task(table_format, schema),
-                "row_filter": None,
+                "full_row_filter": None,
                 "masks": {"region": {"value": "***"}},
             },
             "Invalid mask payload",
@@ -900,7 +900,7 @@ def test_fetch_stream_rejects_invalid_scan_payloads():
         (
             {
                 "read_payload": _encode_scan_task(table_format, schema),
-                "row_filter": {"type": "comparison", "field": "region"},
+                "full_row_filter": {"type": "comparison", "field": "region"},
                 "masks": {},
             },
             "Invalid row filter payload",
@@ -940,7 +940,7 @@ def test_fetch_stream_rejects_legacy_partition_payload():
             "read_payload": base64.b64encode(pickle.dumps(StubInputPartition(b"payload"))).decode(
                 "utf-8"
             ),
-            "row_filter": None,
+            "full_row_filter": None,
             "masks": {},
         },
         policy_version=100,

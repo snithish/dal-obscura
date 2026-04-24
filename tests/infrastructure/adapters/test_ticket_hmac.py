@@ -9,7 +9,7 @@ from dal_obscura.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapt
 
 
 def _scan_payload():
-    return {"read_payload": "payload", "row_filter": None, "masks": {}}
+    return {"read_payload": "payload", "full_row_filter": None, "masks": {}}
 
 
 def test_ticket_sign_and_verify():

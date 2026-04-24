@@ -111,7 +111,7 @@ class PlanAccessUseCase:
                 columns=execution_projection.visible_columns,
                 scan={
                     "read_payload": base64.b64encode(pickle.dumps(task)).decode("utf-8"),
-                    "row_filter": None
+                    "full_row_filter": None
                     if plan.residual_row_filter is None
                     else serialize_row_filter(plan.residual_row_filter),
                     "masks": {

@@ -12,7 +12,7 @@ class MaskPayload(TypedDict):
 
 class ScanPayload(TypedDict):
     read_payload: str
-    row_filter: str | None
+    full_row_filter: str | None
     masks: dict[str, MaskPayload]
 
 
@@ -88,13 +88,13 @@ def _coerce_columns(raw: object) -> list[str]:
 
 def _coerce_scan_payload(raw: object) -> ScanPayload:
     if not isinstance(raw, Mapping):
-        return {"read_payload": "", "row_filter": None, "masks": {}}
+        return {"read_payload": "", "full_row_filter": None, "masks": {}}
     raw_mapping = cast(Mapping[str, object], raw)
     read_payload = raw_mapping.get("read_payload")
-    row_filter = raw_mapping.get("row_filter")
+    full_row_filter = raw_mapping.get("full_row_filter")
     return {
         "read_payload": "" if read_payload is None else str(read_payload),
-        "row_filter": _coerce_row_filter(row_filter),
+        "full_row_filter": _coerce_row_filter(full_row_filter),
         "masks": _coerce_masks(raw_mapping.get("masks")),
     }
 
