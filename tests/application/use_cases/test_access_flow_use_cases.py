@@ -15,6 +15,11 @@ from dal_obscura.domain.catalog.ports import TableFormat
 from dal_obscura.domain.query_planning.models import PlanRequest
 from dal_obscura.domain.table_format.ports import InputPartition, Plan, ScanTask
 from dal_obscura.domain.ticket_delivery.models import ScanPayload, TicketPayload
+from dal_obscura.infrastructure.adapters.duckdb_transform import (
+    DefaultMaskingAdapter,
+    DuckDBRowTransformAdapter,
+)
+from dal_obscura.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
 
 AUTHORIZATION_HEADER = {"authorization": "Bearer jwt-token"}
 
@@ -131,6 +136,42 @@ class TrackingTableFormat(TableFormat):
         return self.schema, iter(())
 
 
+@dataclass(frozen=True, kw_only=True)
+class PretendPushdownTableFormat(TableFormat):
+    schema: pa.Schema
+    batches: tuple[pa.RecordBatch, ...]
+    backend_pushdown_sql: str | None = None
+    residual_sql: str | None = None
+
+    def get_schema(self) -> pa.Schema:
+        return self.schema
+
+    def plan(self, request: PlanRequest, max_tickets: int) -> Plan:
+        del max_tickets
+        return Plan(
+            schema=self.schema,
+            tasks=[
+                ScanTask(
+                    table_format=self,
+                    schema=self.schema,
+                    partition=StubInputPartition(payload=b"payload"),
+                )
+            ],
+            full_row_filter=request.row_filter,
+            backend_pushdown_row_filter=None
+            if self.backend_pushdown_sql is None
+            else deserialize_row_filter(self.backend_pushdown_sql),
+            residual_row_filter=None
+            if self.residual_sql is None
+            else deserialize_row_filter(self.residual_sql),
+        )
+
+    def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
+        if not isinstance(partition, StubInputPartition):
+            raise TypeError("PretendPushdownTableFormat requires a StubInputPartition")
+        return self.schema, iter(self.batches)
+
+
 class FakeIdentity:
     def __init__(self, principal: Principal | None) -> None:
         self._principal = principal
@@ -191,6 +232,31 @@ class FakeTicketCodec:
 class FakeRowTransform:
     def apply_filters_and_masks_stream(self, batches, columns, row_filter, masks):
         return batches
+
+
+def _build_end_to_end_access_flow(table_format: TableFormat, decision: AccessDecision):
+    ticket_codec = HmacTicketCodecAdapter("secret")
+    masking = DefaultMaskingAdapter()
+    authorizer = FakeAuthorizer(decision=decision, current_version=decision.policy_version)
+    catalog_registry = FakeCatalogRegistry(table_format)
+    principal = Principal(id="user1", groups=[], attributes={})
+    plan_access = PlanAccessUseCase(
+        identity=FakeIdentity(principal=principal),
+        authorizer=authorizer,
+        catalog_registry=cast(Any, catalog_registry),
+        masking=masking,
+        ticket_codec=ticket_codec,
+        ticket_ttl_seconds=300,
+        max_tickets=1,
+    )
+    fetch_stream = FetchStreamUseCase(
+        identity=FakeIdentity(principal=principal),
+        authorizer=authorizer,
+        masking=masking,
+        row_transform=DuckDBRowTransformAdapter(masking),
+        ticket_codec=ticket_codec,
+    )
+    return plan_access, fetch_stream
 
 
 def _build_use_case_dependencies():
@@ -711,6 +777,105 @@ def test_plan_access_combines_policy_and_requested_row_filters_before_ticketing(
         == "active = TRUE AND region = 'us'"
     )
     assert planned_columns == [["id", "active", "region"]]
+
+
+def test_fetch_stream_reapplies_fully_pushed_row_filter_after_backend_execution():
+    schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
+    batches = (
+        pa.record_batch(
+            [
+                pa.array([1, 2], type=pa.int64()),
+                pa.array(["us", "eu"], type=pa.string()),
+            ],
+            schema=schema,
+        ),
+    )
+    table_format = PretendPushdownTableFormat(
+        catalog_name="catalog1",
+        table_name="users",
+        format="pretend_pushdown",
+        schema=schema,
+        batches=batches,
+        backend_pushdown_sql="region = 'us'",
+        residual_sql=None,
+    )
+    decision = AccessDecision(
+        allowed_columns=["id", "region"],
+        masks={},
+        row_filter=None,
+        policy_version=100,
+    )
+    plan_access, fetch_stream = _build_end_to_end_access_flow(table_format, decision)
+
+    plan_result = plan_access.execute(
+        PlanRequest(
+            catalog="catalog1",
+            target="users",
+            columns=["id"],
+            row_filter=deserialize_row_filter("region = 'us'"),
+        ),
+        AUTHORIZATION_HEADER,
+    )
+    fetch_result = fetch_stream.execute(plan_result.ticket_tokens[0], AUTHORIZATION_HEADER)
+    table = pa.Table.from_batches(
+        list(fetch_result.result_batches), schema=fetch_result.output_schema
+    )
+
+    assert table.schema.names == ["id"]
+    assert table.column("id").to_pylist() == [1]
+
+
+def test_fetch_stream_reapplies_full_policy_and_requested_filter_after_partial_pushdown():
+    schema = pa.schema(
+        [
+            pa.field("id", pa.int64()),
+            pa.field("region", pa.string()),
+            pa.field("status", pa.string()),
+        ]
+    )
+    batches = (
+        pa.record_batch(
+            [
+                pa.array([1, 2, 3], type=pa.int64()),
+                pa.array(["us", "eu", "us"], type=pa.string()),
+                pa.array(["active", "active", "inactive"], type=pa.string()),
+            ],
+            schema=schema,
+        ),
+    )
+    table_format = PretendPushdownTableFormat(
+        catalog_name="catalog1",
+        table_name="users",
+        format="pretend_pushdown",
+        schema=schema,
+        batches=batches,
+        backend_pushdown_sql="region = 'us'",
+        residual_sql="LOWER(status) = 'active'",
+    )
+    decision = AccessDecision(
+        allowed_columns=["id", "region", "status"],
+        masks={},
+        row_filter="LOWER(status) = 'active'",
+        policy_version=100,
+    )
+    plan_access, fetch_stream = _build_end_to_end_access_flow(table_format, decision)
+
+    plan_result = plan_access.execute(
+        PlanRequest(
+            catalog="catalog1",
+            target="users",
+            columns=["id"],
+            row_filter=deserialize_row_filter("region = 'us'"),
+        ),
+        AUTHORIZATION_HEADER,
+    )
+    fetch_result = fetch_stream.execute(plan_result.ticket_tokens[0], AUTHORIZATION_HEADER)
+    table = pa.Table.from_batches(
+        list(fetch_result.result_batches), schema=fetch_result.output_schema
+    )
+
+    assert table.schema.names == ["id"]
+    assert table.column("id").to_pylist() == [1]
 
 
 def test_plan_access_revalidates_requested_row_filter_against_base_schema():

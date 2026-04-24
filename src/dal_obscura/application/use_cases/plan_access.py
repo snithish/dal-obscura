@@ -112,8 +112,8 @@ class PlanAccessUseCase:
                 scan={
                     "read_payload": base64.b64encode(pickle.dumps(task)).decode("utf-8"),
                     "full_row_filter": None
-                    if plan.residual_row_filter is None
-                    else serialize_row_filter(plan.residual_row_filter),
+                    if plan.full_row_filter is None
+                    else serialize_row_filter(plan.full_row_filter),
                     "masks": {
                         key: {"type": value.type, "value": value.value}
                         for key, value in decision.masks.items()
