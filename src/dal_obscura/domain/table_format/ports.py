@@ -28,4 +28,6 @@ class Plan:
 
     schema: pa.Schema
     tasks: list[ScanTask]
+    full_row_filter: RowFilter | None = None
+    backend_pushdown_row_filter: RowFilter | None = None
     residual_row_filter: RowFilter | None = None

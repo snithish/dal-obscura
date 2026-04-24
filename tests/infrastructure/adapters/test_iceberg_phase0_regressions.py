@@ -109,7 +109,11 @@ def test_iceberg_plan_pushes_down_simple_row_filter_as_sql_string(monkeypatch):
     partition = plan.tasks[0].partition
     assert isinstance(partition, IcebergInputPartition)
     assert isinstance(table.planned_row_filter, EqualTo)
-    assert partition.pushdown_row_filter == "region = 'us'"
+    assert partition.backend_pushdown_row_filter == "region = 'us'"
+    assert plan.full_row_filter is not None
+    assert row_filter_to_sql(plan.full_row_filter) == "region = 'us'"
+    assert plan.backend_pushdown_row_filter is not None
+    assert row_filter_to_sql(plan.backend_pushdown_row_filter) == "region = 'us'"
     assert plan.residual_row_filter is None
 
 
@@ -141,7 +145,11 @@ def test_iceberg_plan_splits_function_filter_into_pushdown_and_residual(monkeypa
 
     partition = plan.tasks[0].partition
     assert isinstance(partition, IcebergInputPartition)
-    assert partition.pushdown_row_filter == "active = TRUE"
+    assert partition.backend_pushdown_row_filter == "active = TRUE"
+    assert plan.full_row_filter is not None
+    assert row_filter_to_sql(plan.full_row_filter) == "LOWER(region) = 'us' AND active = TRUE"
+    assert plan.backend_pushdown_row_filter is not None
+    assert row_filter_to_sql(plan.backend_pushdown_row_filter) == "active = TRUE"
     assert plan.residual_row_filter is not None
     assert row_filter_to_sql(plan.residual_row_filter) == "LOWER(region) = 'us'"
 
@@ -169,7 +177,10 @@ def test_iceberg_plan_keeps_computed_expression_fully_residual(monkeypatch):
 
     partition = plan.tasks[0].partition
     assert isinstance(partition, IcebergInputPartition)
-    assert partition.pushdown_row_filter is None
+    assert partition.backend_pushdown_row_filter is None
+    assert plan.full_row_filter is not None
+    assert row_filter_to_sql(plan.full_row_filter) == "id + 1 > 5"
+    assert plan.backend_pushdown_row_filter is None
     assert plan.residual_row_filter is not None
     assert row_filter_to_sql(plan.residual_row_filter) == "id + 1 > 5"
 
@@ -200,7 +211,14 @@ def test_iceberg_plan_splits_combined_filters_with_safe_and_residual_clauses(mon
 
     partition = plan.tasks[0].partition
     assert isinstance(partition, IcebergInputPartition)
-    assert partition.pushdown_row_filter == "id > 1 AND region = 'us'"
+    assert partition.backend_pushdown_row_filter == "id > 1 AND region = 'us'"
+    assert plan.full_row_filter is not None
+    assert (
+        row_filter_to_sql(plan.full_row_filter)
+        == "id > 1 AND region = 'us' AND LOWER(region) = 'us'"
+    )
+    assert plan.backend_pushdown_row_filter is not None
+    assert row_filter_to_sql(plan.backend_pushdown_row_filter) == "id > 1 AND region = 'us'"
     assert plan.residual_row_filter is not None
     assert row_filter_to_sql(plan.residual_row_filter) == "LOWER(region) = 'us'"
 
@@ -233,12 +251,13 @@ def test_iceberg_execute_deserializes_sql_string_pushdown_filter(monkeypatch):
     partition = IcebergInputPartition(
         columns=["id"],
         tasks=[pickle.dumps(object())],
-        pushdown_row_filter="region = 'us'",
+        backend_pushdown_row_filter="region = 'us'",
     )
 
     table_format.execute(partition)
 
     assert isinstance(captured["row_filter"], EqualTo)
     assert (
-        row_filter_to_sql(deserialize_row_filter(partition.pushdown_row_filter)) == "region = 'us'"
+        row_filter_to_sql(deserialize_row_filter(partition.backend_pushdown_row_filter))
+        == "region = 'us'"
     )

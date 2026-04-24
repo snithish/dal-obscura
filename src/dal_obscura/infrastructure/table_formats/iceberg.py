@@ -43,7 +43,7 @@ class IcebergInputPartition(InputPartition):
 
     columns: list[str]
     tasks: list[bytes]
-    pushdown_row_filter: str | None = None
+    backend_pushdown_row_filter: str | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -95,14 +95,20 @@ class IcebergTableFormat(TableFormat):
                 partition=IcebergInputPartition(
                     columns=list(column_tuple),
                     tasks=[pickle.dumps(task) for task in group],
-                    pushdown_row_filter=None
+                    backend_pushdown_row_filter=None
                     if pushdown_row_filter is None
                     else serialize_row_filter(pushdown_row_filter),
                 ),
             )
             for group in groups
         ]
-        return Plan(schema=base_schema, tasks=tasks, residual_row_filter=residual_row_filter)
+        return Plan(
+            schema=base_schema,
+            tasks=tasks,
+            full_row_filter=request.row_filter,
+            backend_pushdown_row_filter=pushdown_row_filter,
+            residual_row_filter=residual_row_filter,
+        )
 
     def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
         """Executes the pre-planned Iceberg file tasks stored in the ticket."""
@@ -114,8 +120,8 @@ class IcebergTableFormat(TableFormat):
         file_tasks = [pickle.loads(task) for task in partition.tasks]
         pushdown_row_filter = (
             None
-            if partition.pushdown_row_filter is None
-            else deserialize_row_filter(partition.pushdown_row_filter)
+            if partition.backend_pushdown_row_filter is None
+            else deserialize_row_filter(partition.backend_pushdown_row_filter)
         )
 
         projected_schema = table.schema()

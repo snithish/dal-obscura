@@ -89,6 +89,8 @@ class StubTableFormat(TableFormat):
                     partition=StubInputPartition(payload=b"payload"),
                 )
             ],
+            full_row_filter=request.row_filter,
+            backend_pushdown_row_filter=None,
             residual_row_filter=request.row_filter,
         )
 
@@ -118,6 +120,8 @@ class TrackingTableFormat(TableFormat):
                     partition=StubInputPartition(payload=b"payload"),
                 )
             ],
+            full_row_filter=request.row_filter,
+            backend_pushdown_row_filter=None,
             residual_row_filter=request.row_filter,
         )
 
