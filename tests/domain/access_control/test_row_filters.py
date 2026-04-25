@@ -121,7 +121,10 @@ def test_parse_row_filter_rejects_subqueries_and_table_functions(payload):
         ("region = 'us' OR id = 1", "region = 'us' OR id = 1"),
         ("region IN ('us', 'eu')", "region IN ('us', 'eu')"),
         ("active IS NOT NULL", "NOT active IS NULL"),
-        ("COALESCE(user.address.zip, 0) > 10000", "COALESCE(user.address.zip, 0) > 10000"),
+        (
+            "COALESCE(user.address.zip, 0) > 10000",
+            'COALESCE("user".address.zip, 0) > 10000',
+        ),
         ("id + 1 > 5", "id + 1 > 5"),
     ],
 )

@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import cast
 
 import pyarrow as pa
-from sqlglot import exp, parse_one
+from sqlglot import exp, parse
 from sqlglot.errors import ParseError
 
 
@@ -77,26 +77,115 @@ def deserialize_row_filter(payload: object) -> RowFilter:
 
 
 def _build_row_filter(expression: exp.Expr) -> RowFilter:
+    _validate_filter_root(expression)
+    _validate_filter_shape(expression)
     normalized_sql = expression.sql(dialect="duckdb")
-    normalized_expression = cast(exp.Expr, parse_one(normalized_sql, dialect="duckdb"))
+    normalized_expression = cast(exp.Expr, _parse_filter_expression(normalized_sql))
+    _validate_filter_shape(normalized_expression)
     return RowFilter(sql=normalized_sql, expression=normalized_expression)
 
 
 def _parse_filter_expression(expression: str) -> exp.Expr:
     try:
-        parsed = parse_one(expression, dialect="duckdb")
+        parsed_expressions = [
+            item for item in parse(expression, dialect="duckdb") if item is not None
+        ]
     except ParseError as exc:
         raise ValueError(f"Invalid row filter syntax: {exc}") from exc
 
-    if parsed is None:
-        raise ValueError("Invalid row filter syntax")
+    if len(parsed_expressions) != 1:
+        raise ValueError("Row filter must contain a single DuckDB expression")
 
-    return cast(exp.Expr, parsed)
+    return cast(exp.Expr, parsed_expressions[0])
 
 
 def _validate_filter_root(expression: exp.Expr) -> None:
     if isinstance(expression, exp.Query):
         raise ValueError("Row filter must be a DuckDB expression, not a query statement")
+
+
+_COMPARISON_TYPES = (exp.EQ, exp.NEQ, exp.GT, exp.GTE, exp.LT, exp.LTE)
+_ARITHMETIC_TYPES = (exp.Add, exp.Sub, exp.Mul, exp.Div, exp.Mod)
+
+
+def _validate_filter_shape(expression: exp.Expr) -> None:
+    expression = _strip_parens(expression)
+
+    if isinstance(expression, exp.Column):
+        return
+
+    if isinstance(expression, (exp.And, exp.Or)):
+        _validate_filter_shape(cast(exp.Expr, expression.this))
+        _validate_filter_shape(cast(exp.Expr, expression.expression))
+        return
+
+    if isinstance(expression, exp.Not):
+        _validate_filter_shape(cast(exp.Expr, expression.this))
+        return
+
+    if isinstance(expression, _COMPARISON_TYPES):
+        _validate_scalar_expression(cast(exp.Expr, expression.this))
+        _validate_scalar_expression(cast(exp.Expr, expression.expression))
+        return
+
+    if isinstance(expression, exp.In):
+        if expression.args.get("query") is not None:
+            raise _unsupported_filter_expression(expression)
+        _validate_scalar_expression(cast(exp.Expr, expression.this))
+        for item in expression.expressions:
+            _validate_scalar_expression(cast(exp.Expr, item))
+        return
+
+    if isinstance(expression, exp.Is):
+        _validate_scalar_expression(cast(exp.Expr, expression.this))
+        if not isinstance(_strip_parens(cast(exp.Expr, expression.expression)), exp.Null):
+            raise _unsupported_filter_expression(expression)
+        return
+
+    raise _unsupported_filter_expression(expression)
+
+
+def _validate_scalar_expression(expression: exp.Expr) -> None:
+    expression = _strip_parens(expression)
+
+    if isinstance(expression, (exp.Column, exp.Literal, exp.Boolean, exp.Null)):
+        return
+
+    if isinstance(expression, _ARITHMETIC_TYPES):
+        _validate_scalar_expression(cast(exp.Expr, expression.this))
+        _validate_scalar_expression(cast(exp.Expr, expression.expression))
+        return
+
+    if isinstance(expression, exp.Neg):
+        _validate_scalar_expression(cast(exp.Expr, expression.this))
+        return
+
+    if isinstance(expression, exp.Lower):
+        _validate_single_scalar_argument(expression)
+        return
+
+    if isinstance(expression, exp.Coalesce):
+        _validate_scalar_expression(cast(exp.Expr, expression.this))
+        for item in expression.expressions:
+            _validate_scalar_expression(cast(exp.Expr, item))
+        return
+
+    if isinstance(expression, exp.Cast):
+        _validate_scalar_expression(cast(exp.Expr, expression.this))
+        return
+
+    raise _unsupported_filter_expression(expression)
+
+
+def _validate_single_scalar_argument(expression: exp.Expr) -> None:
+    argument = expression.this
+    if not isinstance(argument, exp.Expr):
+        raise _unsupported_filter_expression(expression)
+    _validate_scalar_expression(argument)
+
+
+def _unsupported_filter_expression(expression: exp.Expr) -> ValueError:
+    return ValueError("Unsupported row filter expression: " + expression.sql(dialect="duckdb"))
 
 
 def _validate_column_references(expression: exp.Expr, schema: pa.Schema) -> None:
@@ -130,3 +219,9 @@ def _schema_has_path(schema: pa.Schema, column: str) -> bool:
             return False
 
     return True
+
+
+def _strip_parens(node: exp.Expr) -> exp.Expr:
+    while isinstance(node, exp.Paren):
+        node = cast(exp.Expr, node.this)
+    return node
