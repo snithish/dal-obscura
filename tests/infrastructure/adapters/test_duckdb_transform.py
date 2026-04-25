@@ -333,7 +333,7 @@ def test_duckdb_transform_uses_single_arrow_stream_query(monkeypatch):
             self.closed += 1
 
     fake_connection = FakeConnection()
-    monkeypatch.setattr(duckdb_transform.duckdb, "connect", lambda: fake_connection)
+    monkeypatch.setattr(duckdb_transform.duckdb, "connect", lambda **_kwargs: fake_connection)
     adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
     input_batches = [
         pa.record_batch([pa.array([1, 2])], names=["id"]),
@@ -361,6 +361,54 @@ def test_duckdb_transform_uses_single_arrow_stream_query(monkeypatch):
     assert fake_connection.closed == 1
 
 
+def test_duckdb_transform_disables_external_access(monkeypatch):
+    result_batch = pa.record_batch([pa.array([1])], names=["id"])
+    captured_configs: list[dict[str, object]] = []
+
+    class FakeRelation:
+        def query(self, table_name: str, query: str):
+            del table_name, query
+            return self
+
+        def to_arrow_reader(self, batch_size: int):
+            del batch_size
+            return iter([result_batch])
+
+    class FakeConnection:
+        def from_arrow(self, reader: pa.RecordBatchReader):
+            del reader
+            return FakeRelation()
+
+        def close(self) -> None:
+            return None
+
+    def fake_connect(**kwargs):
+        captured_configs.append(kwargs)
+        return FakeConnection()
+
+    monkeypatch.setattr(duckdb_transform.duckdb, "connect", fake_connect)
+    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
+
+    list(
+        adapter.apply_filters_and_masks_stream(
+            [pa.record_batch([pa.array([1], type=pa.int64())], names=["id"])],
+            ["id"],
+            None,
+            {},
+        )
+    )
+
+    assert captured_configs == [
+        {
+            "config": {
+                "enable_external_access": "false",
+                "autoload_known_extensions": "false",
+                "autoinstall_known_extensions": "false",
+            }
+        }
+    ]
+
+
 def test_duckdb_transform_closes_connection_when_consumer_stops_early(monkeypatch):
     result_batches = [
         pa.record_batch([pa.array([1, 2])], names=["id"]),
@@ -385,7 +433,7 @@ def test_duckdb_transform_closes_connection_when_consumer_stops_early(monkeypatc
             self.closed += 1
 
     fake_connection = FakeConnection()
-    monkeypatch.setattr(duckdb_transform.duckdb, "connect", lambda: fake_connection)
+    monkeypatch.setattr(duckdb_transform.duckdb, "connect", lambda **_kwargs: fake_connection)
     adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
     stream = adapter.apply_filters_and_masks_stream(
         [pa.record_batch([pa.array([1, 2, 3, 4])], names=["id"])],
@@ -406,7 +454,7 @@ def test_duckdb_transform_closes_connection_when_consumer_stops_early(monkeypatc
 def test_duckdb_transform_returns_empty_iterator_without_connecting(monkeypatch):
     connect_calls = 0
 
-    def fake_connect():
+    def fake_connect(**_kwargs):
         nonlocal connect_calls
         connect_calls += 1
         raise AssertionError("connect should not be called for empty input")
@@ -480,7 +528,7 @@ def test_duckdb_transform_uses_canonical_sql_for_function_filters(monkeypatch):
             return None
 
     fake_connection = FakeConnection()
-    monkeypatch.setattr(duckdb_transform.duckdb, "connect", lambda: fake_connection)
+    monkeypatch.setattr(duckdb_transform.duckdb, "connect", lambda **_kwargs: fake_connection)
     adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
     input_batch = pa.record_batch(
         [pa.array([1], type=pa.int64()), pa.array(["us"], type=pa.string())],

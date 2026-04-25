@@ -39,7 +39,7 @@ def combine_row_filters(*row_filters: RowFilter | None) -> RowFilter | None:
     expression = active_filters[0].expression.copy()
     for row_filter in active_filters[1:]:
         expression = exp.and_(expression, row_filter.expression.copy())
-    return _build_row_filter(cast(exp.Expr, expression))
+    return _build_row_filter(expression)
 
 
 def row_filter_to_sql(row_filter: RowFilter) -> str:
@@ -80,7 +80,7 @@ def _build_row_filter(expression: exp.Expr) -> RowFilter:
     _validate_filter_root(expression)
     _validate_filter_shape(expression)
     normalized_sql = expression.sql(dialect="duckdb")
-    normalized_expression = cast(exp.Expr, _parse_filter_expression(normalized_sql))
+    normalized_expression = _parse_filter_expression(normalized_sql)
     _validate_filter_shape(normalized_expression)
     return RowFilter(sql=normalized_sql, expression=normalized_expression)
 
@@ -96,7 +96,7 @@ def _parse_filter_expression(expression: str) -> exp.Expr:
     if len(parsed_expressions) != 1:
         raise ValueError("Row filter must contain a single DuckDB expression")
 
-    return cast(exp.Expr, parsed_expressions[0])
+    return parsed_expressions[0]
 
 
 def _validate_filter_root(expression: exp.Expr) -> None:

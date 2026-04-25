@@ -12,6 +12,11 @@ from dal_obscura.domain.access_control.filters import RowFilter, row_filter_to_s
 from dal_obscura.domain.access_control.models import MaskRule
 
 _DUCKDB_ARROW_OUTPUT_BATCH_SIZE = 8_192
+_DUCKDB_TRANSFORM_CONFIG: dict[str, str | bool | int | float | list[str]] = {
+    "enable_external_access": "false",
+    "autoload_known_extensions": "false",
+    "autoinstall_known_extensions": "false",
+}
 
 
 class DefaultMaskingAdapter:
@@ -84,7 +89,7 @@ def _stream_query_results(
     """Executes the generated SQL over the incoming Arrow reader."""
     # DuckDB 1.5.0 removes the Python-side per-batch loop here, but the input side
     # does not appear observably lazy enough to assert callback-order streaming.
-    con = duckdb.connect()
+    con = duckdb.connect(config=_DUCKDB_TRANSFORM_CONFIG.copy())
     try:
         result_reader = (
             con.from_arrow(reader)
