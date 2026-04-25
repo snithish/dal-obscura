@@ -192,6 +192,12 @@ Use the JSON output as the before/after artifact for any planner, filter, maskin
 - `tests/benchmarks/test_masking_row_filter_benchmarks.py`: row-filter and masking throughput baselines.
 - `tests/benchmarks/test_iceberg_multifile_benchmark.py`: large multi-file Iceberg execution baseline.
 
+Security-focused checks:
+
+```bash
+uv run pytest tests/domain/access_control/test_row_filters.py tests/interfaces/flight/test_service_streaming.py::test_parse_descriptor_rejects_unsafe_row_filter_sql tests/infrastructure/adapters/test_duckdb_transform.py -q
+```
+
 ## Pre-commit hooks
 
 After `uv sync --dev`, install the hooks with `uv run pre-commit install`. The configured hooks run `uv run ruff format` and `uv run ruff check` (each passed the staged python files), plus `uv run ty check` and `uv run pytest --maxfail=1 --disable-warnings` on every commit to guard formatting, linting, typing, and a quick smoke test. Re-run them manually with `uv run pre-commit run --all-files` if needed.
@@ -200,7 +206,10 @@ After `uv sync --dev`, install the hooks with `uv run pre-commit install`. The c
 - Mask expressions are executed in DuckDB SQL.
 - Supported mask types include `null`, `redact`, `hash`, `default`, `email`, and `keep_last`.
 - `hash`, `redact`, `email`, and `keep_last` expose masked values as Arrow `string`; `default` exposes the Arrow type DuckDB infers for the configured literal, while `null` preserves the original field type.
-- Row filters are validated against the Arrow schema before planning and currently support comparisons, `AND`/`OR`, `IN`, and `IS NULL`/`IS NOT NULL`.
+- Row filters are parsed with SQLGlot using the DuckDB dialect, must contain exactly one expression, and are validated against a small allowlist before execution.
+- Supported row-filter shapes are boolean columns, comparisons, `AND`/`OR`/`NOT`, scalar arithmetic inside comparisons, `IN` with scalar literal lists, `IS NULL`/`IS NOT NULL`, `LOWER(...)`, `COALESCE(...)`, and `CAST(...)`.
+- Row filters reject SQL statements, multi-statement input, subqueries, table functions such as `read_csv(...)`, extension commands, `COPY`, `ATTACH`, DDL, and DML.
+- DuckDB row-transform execution runs over Arrow batches with external access and extension auto-loading disabled.
 - Iceberg planning pushes down a safe subset of validated row filters for top-level fields, but DuckDB re-applies the full effective filter during fetch so backend pushdown remains an optimization rather than the final enforcement point.
 - Nested field masks use DuckDB `struct_update`, and list-of-struct masks use `list_transform` plus `struct_update`.
 
