@@ -221,6 +221,30 @@ def test_parse_descriptor_rejects_invalid_row_filter_syntax():
         parse_descriptor(descriptor)
 
 
+@pytest.mark.parametrize(
+    "row_filter",
+    [
+        "region = 'us'; DROP TABLE input",
+        "COPY input TO '/tmp/leak.csv'",
+        "EXISTS(SELECT 1)",
+        "id IN (SELECT 1)",
+        "read_csv('/etc/passwd')",
+    ],
+)
+def test_parse_descriptor_rejects_unsafe_row_filter_sql(row_filter):
+    descriptor = command_descriptor(
+        {
+            "catalog": "analytics",
+            "target": "test.table",
+            "columns": ["id"],
+            "row_filter": row_filter,
+        }
+    )
+
+    with pytest.raises(ValueError, match=r"row filter|Row filter|Unsupported"):
+        parse_descriptor(descriptor)
+
+
 def test_get_schema_returns_masked_authorized_schema(tmp_path):
     schema = pa.schema(
         [
