@@ -27,6 +27,63 @@ def test_mask_select_list_basic():
     assert "'***'" in selection.select_list[1]
 
 
+def test_duckdb_transform_quotes_projection_identifiers_with_special_characters():
+    schema = pa.schema(
+        [
+            pa.field("id + 1", pa.int64()),
+            pa.field('bad"name', pa.int64()),
+            pa.field("x; SELECT 1", pa.int64()),
+        ]
+    )
+
+    query = duckdb_transform._build_query(
+        schema,
+        ["id + 1", 'bad"name', "x; SELECT 1"],
+        None,
+        {},
+        DefaultMaskingAdapter(),
+    )
+
+    assert query == (
+        'SELECT "id + 1" AS "id + 1", '
+        '"bad""name" AS "bad""name", '
+        '"x; SELECT 1" AS "x; SELECT 1" FROM input'
+    )
+
+
+def test_duckdb_transform_executes_projection_for_quoted_identifier():
+    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
+    input_batch = pa.record_batch(
+        [pa.array([7, 8], type=pa.int64())],
+        names=["x; SELECT 1"],
+    )
+
+    result_batches = list(
+        adapter.apply_filters_and_masks_stream(
+            [input_batch],
+            ["x; SELECT 1"],
+            None,
+            {},
+        )
+    )
+
+    result = pa.Table.from_batches(result_batches)
+    assert result.schema.names == ["x; SELECT 1"]
+    assert result.column("x; SELECT 1").to_pylist() == [7, 8]
+
+
+def test_duckdb_transform_quotes_masked_column_identifiers():
+    schema = pa.schema([pa.field('bad"name', pa.string())])
+
+    selection = DefaultMaskingAdapter().apply(
+        schema,
+        ['bad"name'],
+        {'bad"name': MaskRule(type="hash")},
+    )
+
+    assert selection.select_list == ['sha256(CAST("bad""name" AS VARCHAR)) AS "bad""name"']
+
+
 def test_nested_mask_expression():
     schema = pa.schema(
         [
@@ -49,7 +106,7 @@ def test_nested_mask_expression():
         {"user.address.zip": MaskRule(type="hash")},
     )
     assert selection.select_list == [
-        'sha256(CAST(user.address.zip AS VARCHAR)) AS "user.address.zip"'
+        'sha256(CAST("user"."address"."zip" AS VARCHAR)) AS "user.address.zip"'
     ]
 
 
@@ -74,7 +131,7 @@ def test_nested_struct_selection_applies_descendant_masks():
         ["user.address"],
         {"user.address.zip": MaskRule(type="hash")},
     )
-    assert 'struct_update(user.address, "zip"' in selection.select_list[0]
+    assert 'struct_update("user"."address", "zip"' in selection.select_list[0]
 
 
 def test_masked_schema_updates_nested_field_types():
@@ -166,7 +223,7 @@ def test_keep_last_mask_renders_masking_expression():
         {"account_id": MaskRule(type="keep_last", value=4)},
     )
 
-    assert "right(CAST(account_id AS VARCHAR), 4)" in selection.select_list[0]
+    assert 'right(CAST("account_id" AS VARCHAR), 4)' in selection.select_list[0]
     assert "repeat('*'" in selection.select_list[0]
 
 
@@ -296,7 +353,7 @@ def test_duckdb_transform_uses_single_arrow_stream_query(monkeypatch):
     assert result[0].equals(result_batch)
     assert len(fake_connection.from_arrow_calls) == 1
     assert fake_connection.relation.query_calls == [
-        ("input", 'SELECT id AS "id" FROM input WHERE id > 1')
+        ("input", 'SELECT "id" AS "id" FROM input WHERE id > 1')
     ]
     assert fake_connection.relation.batch_size == duckdb_transform._DUCKDB_ARROW_OUTPUT_BATCH_SIZE
     assert fake_connection.register_calls == 0
@@ -440,7 +497,7 @@ def test_duckdb_transform_uses_canonical_sql_for_function_filters(monkeypatch):
     )
 
     assert fake_connection.relation.query_calls == [
-        ("input", "SELECT id AS \"id\" FROM input WHERE LOWER(region) = 'us'")
+        ("input", 'SELECT "id" AS "id" FROM input WHERE LOWER(region) = \'us\'')
     ]
 
 

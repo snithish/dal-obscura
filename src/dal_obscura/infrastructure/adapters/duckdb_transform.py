@@ -111,6 +111,14 @@ def _build_query(
     return query
 
 
+def _quote_identifier(identifier: str) -> str:
+    return '"' + identifier.replace('"', '""') + '"'
+
+
+def _column_reference(path: str) -> str:
+    return ".".join(_quote_identifier(part) for part in path.split("."))
+
+
 def _build_select_list(
     base_schema: pa.Schema,
     columns: Iterable[str],
@@ -122,28 +130,28 @@ def _build_select_list(
 
     for column in columns:
         if column in masks:
-            expr = _mask_expression(column, masks[column])
-            select_list.append(f'{expr} AS "{column}"')
+            expr = _mask_expression(_column_reference(column), masks[column])
+            select_list.append(f"{expr} AS {_quote_identifier(column)}")
             masked_columns.append(column)
             continue
 
         nested_masks = {k: v for k, v in masks.items() if _is_descendant_path(k, column)}
         if nested_masks:
             expr = _apply_nested_masks(
-                column,
+                _column_reference(column),
                 column,
                 _field_for_path(base_schema, column).type,
                 masks,
             )
             masked_columns.extend(sorted(nested_masks))
-            select_list.append(f'{expr} AS "{column}"')
+            select_list.append(f"{expr} AS {_quote_identifier(column)}")
         else:
-            select_list.append(f'{column} AS "{column}"')
+            select_list.append(f"{_column_reference(column)} AS {_quote_identifier(column)}")
 
     return MaskedSelection(select_list=select_list, masked_columns=masked_columns)
 
 
-def _mask_expression(column: str, mask: MaskRule) -> str:
+def _mask_expression(expr: str, mask: MaskRule) -> str:
     """Returns the DuckDB SQL fragment for a single mask rule."""
     mask_type = mask.type.lower()
     if mask_type == "null":
@@ -151,13 +159,13 @@ def _mask_expression(column: str, mask: MaskRule) -> str:
     if mask_type == "redact":
         return _sql_literal(str(mask.value or "***"))
     if mask_type == "hash":
-        return f"sha256(CAST({column} AS VARCHAR))"
+        return f"sha256(CAST({expr} AS VARCHAR))"
     if mask_type == "email":
-        return f"regexp_replace(CAST({column} AS VARCHAR), '(^.).*(@.*$)', '\\1***\\2')"
+        return f"regexp_replace(CAST({expr} AS VARCHAR), '(^.).*(@.*$)', '\\1***\\2')"
     if mask_type == "keep_last":
         if not isinstance(mask.value, int) or mask.value < 0:
             raise ValueError("keep_last mask requires a non-negative integer value")
-        text_column = f"CAST({column} AS VARCHAR)"
+        text_column = f"CAST({expr} AS VARCHAR)"
         keep = mask.value
         return (
             "CASE "
@@ -198,13 +206,15 @@ def _apply_nested_masks(
             if not _has_mask_for_path(child_path, masks):
                 continue
             child_expr = _apply_nested_masks(
-                f"({updated_expr}).{child.name}",
+                f"({updated_expr}).{_quote_identifier(child.name)}",
                 child_path,
                 child.type,
                 masks,
                 item_var=item_var,
             )
-            updated_expr = f'struct_update({updated_expr}, "{child.name}" := {child_expr})'
+            updated_expr = (
+                f"struct_update({updated_expr}, {_quote_identifier(child.name)} := {child_expr})"
+            )
         return updated_expr
 
     if pa.types.is_list(data_type) or pa.types.is_large_list(data_type):
