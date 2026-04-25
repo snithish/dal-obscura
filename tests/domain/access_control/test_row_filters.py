@@ -70,3 +70,62 @@ def test_row_filter_serialization_round_trips_as_sql_string():
 def test_row_filter_deserialization_rejects_non_string_payload():
     with pytest.raises(ValueError, match="Invalid row filter payload"):
         deserialize_row_filter({"type": "comparison"})
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        "region = 'us'; DROP TABLE input",
+        "region = 'us'; SELECT 1",
+        "region = 'us'; COPY (SELECT 1) TO '/tmp/leak.csv'",
+    ],
+)
+def test_parse_row_filter_rejects_multiple_statements(payload):
+    with pytest.raises(ValueError, match="single DuckDB expression"):
+        parse_row_filter(payload, _schema())
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        "COPY input TO '/tmp/leak.csv'",
+        "ATTACH 'tenant.duckdb' AS tenant",
+        "INSTALL httpfs",
+        "LOAD httpfs",
+        "CREATE TABLE stolen AS SELECT 1",
+        "DROP TABLE input",
+    ],
+)
+def test_parse_row_filter_rejects_non_filter_statements(payload):
+    with pytest.raises(ValueError, match="Unsupported row filter expression"):
+        parse_row_filter(payload, _schema())
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        "EXISTS(SELECT 1)",
+        "id IN (SELECT 1)",
+        "read_csv('/etc/passwd')",
+        "region = (SELECT 'us')",
+    ],
+)
+def test_parse_row_filter_rejects_subqueries_and_table_functions(payload):
+    with pytest.raises(ValueError, match="Unsupported row filter expression"):
+        parse_row_filter(payload, _schema())
+
+
+@pytest.mark.parametrize(
+    "payload, expected",
+    [
+        ("region = 'us' OR id = 1", "region = 'us' OR id = 1"),
+        ("region IN ('us', 'eu')", "region IN ('us', 'eu')"),
+        ("active IS NOT NULL", "NOT active IS NULL"),
+        ("COALESCE(user.address.zip, 0) > 10000", "COALESCE(user.address.zip, 0) > 10000"),
+        ("id + 1 > 5", "id + 1 > 5"),
+    ],
+)
+def test_parse_row_filter_keeps_supported_filter_subset(payload, expected):
+    row_filter = parse_row_filter(payload, _schema())
+
+    assert row_filter_to_sql(row_filter) == expected
