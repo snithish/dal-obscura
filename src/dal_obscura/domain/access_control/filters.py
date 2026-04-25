@@ -11,7 +11,7 @@ from sqlglot.errors import ParseError
 @dataclass(frozen=True)
 class RowFilter:
     sql: str
-    expression: exp.Expression = field(repr=False, compare=False)
+    expression: exp.Expr = field(repr=False, compare=False)
 
 
 def parse_row_filter(expression: str, schema: pa.Schema) -> RowFilter:
@@ -39,7 +39,7 @@ def combine_row_filters(*row_filters: RowFilter | None) -> RowFilter | None:
     expression = active_filters[0].expression.copy()
     for row_filter in active_filters[1:]:
         expression = exp.and_(expression, row_filter.expression.copy())
-    return _build_row_filter(cast(exp.Expression, expression))
+    return _build_row_filter(cast(exp.Expr, expression))
 
 
 def row_filter_to_sql(row_filter: RowFilter) -> str:
@@ -76,13 +76,13 @@ def deserialize_row_filter(payload: object) -> RowFilter:
     return _build_row_filter(parsed)
 
 
-def _build_row_filter(expression: exp.Expression) -> RowFilter:
+def _build_row_filter(expression: exp.Expr) -> RowFilter:
     normalized_sql = expression.sql(dialect="duckdb")
-    normalized_expression = cast(exp.Expression, parse_one(normalized_sql, dialect="duckdb"))
+    normalized_expression = cast(exp.Expr, parse_one(normalized_sql, dialect="duckdb"))
     return RowFilter(sql=normalized_sql, expression=normalized_expression)
 
 
-def _parse_filter_expression(expression: str) -> exp.Expression:
+def _parse_filter_expression(expression: str) -> exp.Expr:
     try:
         parsed = parse_one(expression, dialect="duckdb")
     except ParseError as exc:
@@ -91,15 +91,15 @@ def _parse_filter_expression(expression: str) -> exp.Expression:
     if parsed is None:
         raise ValueError("Invalid row filter syntax")
 
-    return cast(exp.Expression, parsed)
+    return cast(exp.Expr, parsed)
 
 
-def _validate_filter_root(expression: exp.Expression) -> None:
+def _validate_filter_root(expression: exp.Expr) -> None:
     if isinstance(expression, exp.Query):
         raise ValueError("Row filter must be a DuckDB expression, not a query statement")
 
 
-def _validate_column_references(expression: exp.Expression, schema: pa.Schema) -> None:
+def _validate_column_references(expression: exp.Expr, schema: pa.Schema) -> None:
     for column in expression.find_all(exp.Column):
         path = _column_path(column)
         if not _schema_has_path(schema, path):

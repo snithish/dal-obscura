@@ -178,14 +178,14 @@ def _split_row_filter(row_filter: RowFilter | None) -> tuple[RowFilter | None, R
     return _row_filter_from_clauses(pushdown_clauses), _row_filter_from_clauses(residual_clauses)
 
 
-def _flatten_and_clauses(expression: exp.Expression) -> list[exp.Expression]:
+def _flatten_and_clauses(expression: exp.Expr) -> list[exp.Expr]:
     expression = _strip_parens(expression)
     if isinstance(expression, exp.And):
         return _flatten_and_clauses(expression.this) + _flatten_and_clauses(expression.expression)
     return [expression.copy()]
 
 
-def _row_filter_from_clauses(clauses: list[exp.Expression]) -> RowFilter | None:
+def _row_filter_from_clauses(clauses: list[exp.Expr]) -> RowFilter | None:
     if not clauses:
         return None
 
@@ -195,7 +195,7 @@ def _row_filter_from_clauses(clauses: list[exp.Expression]) -> RowFilter | None:
     return deserialize_row_filter(expression.sql(dialect="duckdb"))
 
 
-def _is_pushdown_safe(expression: exp.Expression) -> bool:
+def _is_pushdown_safe(expression: exp.Expr) -> bool:
     expression = _strip_parens(expression)
 
     if isinstance(expression, (exp.And, exp.Or)):
@@ -222,16 +222,16 @@ def _is_pushdown_safe(expression: exp.Expression) -> bool:
     return False
 
 
-def _is_top_level_column(node: exp.Expression) -> bool:
+def _is_top_level_column(node: exp.Expr) -> bool:
     return isinstance(node, exp.Column) and len(node.parts) == 1
 
 
-def _is_scalar_literal(node: exp.Expression) -> bool:
+def _is_scalar_literal(node: exp.Expr) -> bool:
     node = _strip_parens(node)
     return isinstance(node, (exp.Boolean, exp.Literal, exp.Null))
 
 
-def _strip_parens(node: exp.Expression) -> exp.Expression:
+def _strip_parens(node: exp.Expr) -> exp.Expr:
     while isinstance(node, exp.Paren):
         node = node.this
     return node
@@ -243,7 +243,7 @@ def _compile_row_filter(row_filter: RowFilter | None) -> BooleanExpression:
     return _compile_expression(row_filter.expression)
 
 
-def _compile_expression(expression: exp.Expression) -> BooleanExpression:
+def _compile_expression(expression: exp.Expr) -> BooleanExpression:
     expression = _strip_parens(expression)
 
     if isinstance(expression, exp.And):
@@ -320,7 +320,7 @@ def _compile_expression(expression: exp.Expression) -> BooleanExpression:
     raise ValueError(f"Unsupported Iceberg pushdown expression: {expression.sql(dialect='duckdb')}")
 
 
-def _column_name(node: exp.Expression) -> str:
+def _column_name(node: exp.Expr) -> str:
     if not _is_top_level_column(node):
         raise ValueError("Iceberg pushdown requires top-level column references")
 
@@ -328,7 +328,7 @@ def _column_name(node: exp.Expression) -> str:
     return column.name
 
 
-def _literal_value(node: exp.Expression) -> object:
+def _literal_value(node: exp.Expr) -> object:
     node = _strip_parens(node)
 
     if isinstance(node, exp.Boolean):
