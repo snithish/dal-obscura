@@ -14,6 +14,7 @@ This repo implements a data access layer for Iceberg tables and file-backed data
 uv venv
 uv sync
 uv run dal-obscura --help
+uv run dal-obscura --app-config app.yaml
 ```
 
 ## Tests
@@ -23,6 +24,29 @@ uv run pytest
 uv run ruff check .
 uv run ruff format .
 uv run ty check
+```
+
+### Focused Checks
+```bash
+uv run pytest tests/domain/access_control/test_row_filters.py tests/interfaces/flight/test_service_streaming.py::test_parse_descriptor_rejects_unsafe_row_filter_sql tests/infrastructure/adapters/test_duckdb_transform.py -q
+```
+
+### Benchmarks
+```bash
+uv run pytest tests/benchmarks --benchmark-only
+uv run pytest tests/benchmarks/test_masking_row_filter_benchmarks.py --benchmark-only --benchmark-json .benchmarks/row-filter-mask.json
+uv run pytest tests/benchmarks/test_iceberg_multifile_benchmark.py --benchmark-only --benchmark-json .benchmarks/iceberg-multifile.json
+```
+
+### Pre-commit
+```bash
+uv run pre-commit install
+uv run pre-commit run --all-files
+```
+
+### JVM Connectors
+```bash
+mvn -f connectors/jvm/pom.xml verify
 ```
 
 ## Architecture (Current)
@@ -74,6 +98,7 @@ uv run ty check
 - Add a new mask type: update `_mask_expression` and any schema adjustments, plus tests.
 - Change ticket payloads: update `TicketPayload`, `HmacTicketCodecAdapter`, both use cases, and tests.
 - Tune fan-out: adjust `--max-tickets` for ticket planning.
+- Validate planner/masking/filter execution changes against the benchmark JSON baselines in `.benchmarks/`.
 
 ## New Rules (Self-Guidance)
 - Keep domain and application layers free of transport concerns (no Flight types in use cases).
