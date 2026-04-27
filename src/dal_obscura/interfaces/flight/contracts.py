@@ -114,4 +114,4 @@ def _safe_context_value(context: flight.ServerCallContext, method_name: str) -> 
         return ""
     if value is None:
         return ""
-    return str(value)
+    return _decode_header_value(value)

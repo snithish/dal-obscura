@@ -24,6 +24,14 @@ class DummyContext:
         return "ipv4:127.0.0.1:50000"
 
 
+class BytesPeerContext(DummyContext):
+    def peer_identity(self):
+        return b"spiffe://cluster/ns/default/sa/spark"
+
+    def peer(self):
+        return b"ipv4:127.0.0.1:50000"
+
+
 @dataclass
 class RecordingGetSchemaUseCase:
     auth_request: AuthenticationRequest | None = None
@@ -50,6 +58,15 @@ def test_authentication_request_from_context_includes_headers_and_peer_metadata(
     assert request.peer_identity == "spiffe://cluster/ns/default/sa/spark"
     assert request.peer == "ipv4:127.0.0.1:50000"
     assert request.method == "get_flight_info"
+
+
+def test_authentication_request_from_context_decodes_byte_peer_metadata():
+    context = BytesPeerContext(headers=[(b"authorization", b"Bearer token-1")])
+
+    request = authentication_request_from_context(context, method="get_flight_info")
+
+    assert request.peer_identity == "spiffe://cluster/ns/default/sa/spark"
+    assert request.peer == "ipv4:127.0.0.1:50000"
 
 
 def test_flight_service_passes_authentication_request_to_use_case():
