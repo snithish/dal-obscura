@@ -1,10 +1,9 @@
-from dal_obscura.application.ports.identity import (
-    AuthenticationRequest,
-    coerce_authentication_request,
-)
+from collections.abc import Mapping
+
+from dal_obscura.application.ports.identity import AuthenticationRequest
 
 
-def test_authentication_request_behaves_like_headers_mapping():
+def test_authentication_request_normalizes_headers_and_exposes_explicit_header_lookup():
     request = AuthenticationRequest(
         headers={"Authorization": "Bearer token-1", "X-Api-Key": "secret-1"},
         peer_identity="spiffe://cluster/ns/default/sa/spark",
@@ -12,9 +11,10 @@ def test_authentication_request_behaves_like_headers_mapping():
         method="get_flight_info",
     )
 
-    assert request["authorization"] == "Bearer token-1"
-    assert request.get("x-api-key") == "secret-1"
-    assert dict(request.items()) == {
+    assert not isinstance(request, Mapping)
+    assert request.header("authorization") == "Bearer token-1"
+    assert request.header("x-api-key") == "secret-1"
+    assert request.headers == {
         "authorization": "Bearer token-1",
         "x-api-key": "secret-1",
     }
@@ -23,30 +23,7 @@ def test_authentication_request_behaves_like_headers_mapping():
     assert request.method == "get_flight_info"
 
 
-def test_coerce_authentication_request_preserves_existing_context_when_not_overridden():
-    original = AuthenticationRequest(
-        headers={"authorization": "Bearer token-1"},
-        peer_identity="client-cert-subject",
-        peer="ipv4:127.0.0.1:50000",
-        method="do_get",
-    )
+def test_authentication_request_returns_none_for_missing_header():
+    request = AuthenticationRequest()
 
-    coerced = coerce_authentication_request(original)
-
-    assert coerced is original
-    assert coerced.peer_identity == "client-cert-subject"
-    assert coerced.method == "do_get"
-
-
-def test_coerce_authentication_request_wraps_plain_headers():
-    request = coerce_authentication_request(
-        {"authorization": "Bearer token-1"},
-        peer_identity="peer-subject",
-        peer="peer-address",
-        method="get_schema",
-    )
-
-    assert request.get("authorization") == "Bearer token-1"
-    assert request.peer_identity == "peer-subject"
-    assert request.peer == "peer-address"
-    assert request.method == "get_schema"
+    assert request.header("authorization") is None

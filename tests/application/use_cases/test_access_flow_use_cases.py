@@ -7,7 +7,7 @@ from typing import Any, cast
 import pyarrow as pa
 import pytest
 
-from dal_obscura.application.ports.identity import AuthenticationInput
+from dal_obscura.application.ports.identity import AuthenticationRequest
 from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
 from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
 from dal_obscura.domain.access_control.filters import deserialize_row_filter, row_filter_to_sql
@@ -22,7 +22,7 @@ from dal_obscura.infrastructure.adapters.duckdb_transform import (
 )
 from dal_obscura.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
 
-AUTHORIZATION_HEADER = {"authorization": "Bearer jwt-token"}
+AUTHORIZATION_HEADER = AuthenticationRequest(headers={"authorization": "Bearer jwt-token"})
 
 
 def _scan_payload() -> ScanPayload:
@@ -177,7 +177,7 @@ class FakeIdentity:
     def __init__(self, principal: Principal | None) -> None:
         self._principal = principal
 
-    def authenticate(self, request: AuthenticationInput) -> Principal:
+    def authenticate(self, request: AuthenticationRequest) -> Principal:
         del request
         if self._principal is None:
             raise PermissionError("Unauthorized")
@@ -321,7 +321,10 @@ def test_plan_access_auth_failure():
     )
 
     with pytest.raises(PermissionError):
-        use_case.execute(PlanRequest(catalog="catalog1", target="users", columns=["id"]), {})
+        use_case.execute(
+            PlanRequest(catalog="catalog1", target="users", columns=["id"]),
+            AuthenticationRequest(),
+        )
 
 
 def test_plan_access_authz_failure():

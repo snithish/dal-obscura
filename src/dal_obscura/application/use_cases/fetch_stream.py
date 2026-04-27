@@ -8,7 +8,7 @@ from typing import cast
 import pyarrow as pa
 
 from dal_obscura.application.ports.authorization import AuthorizationPort
-from dal_obscura.application.ports.identity import AuthenticationInput, IdentityPort
+from dal_obscura.application.ports.identity import AuthenticationRequest, IdentityPort
 from dal_obscura.application.ports.masking import MaskingPort
 from dal_obscura.application.ports.row_transform import RowTransformPort
 from dal_obscura.application.ports.ticket_codec import TicketCodecPort
@@ -55,7 +55,7 @@ class FetchStreamUseCase:
         self._row_transform = row_transform
         self._ticket_codec = ticket_codec
 
-    def execute(self, ticket: str, auth_request: AuthenticationInput) -> FetchStreamResult:
+    def execute(self, ticket: str, auth_request: AuthenticationRequest) -> FetchStreamResult:
         """Executes the second half of the Flight flow for a previously planned ticket."""
         payload = self._ticket_codec.verify(ticket)
         principal = self._identity.authenticate(auth_request)

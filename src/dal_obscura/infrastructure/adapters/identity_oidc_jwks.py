@@ -8,10 +8,7 @@ from urllib.request import urlopen
 
 import jwt
 
-from dal_obscura.application.ports.identity import (
-    AuthenticationInput,
-    coerce_authentication_request,
-)
+from dal_obscura.application.ports.identity import AuthenticationRequest
 from dal_obscura.domain.access_control.models import Principal
 
 JsonObject = Mapping[str, Any]
@@ -60,8 +57,8 @@ class OidcJwksIdentityProvider:
         )
         self._jwks = _JwksCache(resolved_jwks_url, jwks_fetcher or _fetch_json)
 
-    def authenticate(self, request: AuthenticationInput) -> Principal:
-        token = _parse_bearer(coerce_authentication_request(request).get("authorization"))
+    def authenticate(self, request: AuthenticationRequest) -> Principal:
+        token = _parse_bearer(request.header("authorization"))
         if not token:
             raise PermissionError("Missing token")
         payload = self._decode(token)

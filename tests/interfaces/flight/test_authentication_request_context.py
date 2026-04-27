@@ -46,7 +46,7 @@ def test_authentication_request_from_context_includes_headers_and_peer_metadata(
 
     request = authentication_request_from_context(context, method="get_flight_info")
 
-    assert request.get("authorization") == "Bearer token-1"
+    assert request.header("authorization") == "Bearer token-1"
     assert request.peer_identity == "spiffe://cluster/ns/default/sa/spark"
     assert request.peer == "ipv4:127.0.0.1:50000"
     assert request.method == "get_flight_info"
@@ -72,6 +72,6 @@ def test_flight_service_passes_authentication_request_to_use_case():
 
     auth_request = get_schema.auth_request
     assert auth_request is not None
-    assert auth_request.get("authorization") == "Bearer token-1"
+    assert auth_request.header("authorization") == "Bearer token-1"
     assert auth_request.peer_identity == "spiffe://cluster/ns/default/sa/spark"
     assert auth_request.method == "get_schema"

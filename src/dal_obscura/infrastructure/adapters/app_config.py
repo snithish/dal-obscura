@@ -234,7 +234,7 @@ def _load_identity_provider_from_module(module_path: str, args: dict[str, Any]) 
         raise ValueError(f"Failed to instantiate auth provider {module_path!r}: {exc}") from exc
     authenticate = getattr(identity_provider, "authenticate", None)
     if not callable(authenticate):
-        raise ValueError(f"Auth provider {module_path!r} must define authenticate(headers)")
+        raise ValueError(f"Auth provider {module_path!r} must define authenticate(request)")
     return cast(IdentityPort, identity_provider)
 
 

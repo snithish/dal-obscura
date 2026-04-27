@@ -5,14 +5,15 @@ import textwrap
 import jwt
 import pytest
 
+from dal_obscura.application.ports.identity import AuthenticationRequest
 from dal_obscura.infrastructure.adapters.app_config import load_app_config
 
 JWT_SECRET = "test-jwt-secret-32-characters-long"
 
 
-def _authorization_header(secret: str, subject: str = "user1") -> dict[str, str]:
+def _authorization_header(secret: str, subject: str = "user1") -> AuthenticationRequest:
     token = jwt.encode({"sub": subject}, secret, algorithm="HS256")
-    return {"authorization": f"Bearer {token}"}
+    return AuthenticationRequest(headers={"authorization": f"Bearer {token}"})
 
 
 def test_load_app_config_resolves_relative_catalog_and_policy_paths(tmp_path, monkeypatch):
@@ -213,7 +214,7 @@ def test_load_app_config_loads_module_auth_provider_and_resolves_secret_args(tmp
     config = load_app_config(app_path)
 
     provider = config.auth.identity_provider
-    assert provider.authenticate({}).id == "provider-user"
+    assert provider.authenticate(AuthenticationRequest()).id == "provider-user"
     assert provider.kwargs == {
         "issuer": "https://issuer.example.test",
         "nested": {"secret": "resolved-auth-secret"},

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import pyarrow as pa
 
 from dal_obscura.application.ports.authorization import AuthorizationPort
-from dal_obscura.application.ports.identity import AuthenticationInput, IdentityPort
+from dal_obscura.application.ports.identity import AuthenticationRequest, IdentityPort
 from dal_obscura.application.ports.masking import MaskingPort
 from dal_obscura.application.ports.ticket_codec import TicketCodecPort
 from dal_obscura.domain.access_control.filters import (
@@ -66,7 +66,9 @@ class PlanAccessUseCase:
         self._now = now or _epoch_seconds
         self._nonce_factory = nonce_factory or _nonce
 
-    def execute(self, request: PlanRequest, auth_request: AuthenticationInput) -> PlanAccessResult:
+    def execute(
+        self, request: PlanRequest, auth_request: AuthenticationRequest
+    ) -> PlanAccessResult:
         """Builds a plan for the requested dataset and returns one signed ticket per task."""
         principal = self._identity.authenticate(auth_request)
 

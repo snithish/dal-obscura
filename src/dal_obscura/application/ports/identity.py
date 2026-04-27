@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -8,15 +7,10 @@ from dal_obscura.domain.access_control.models import Principal
 
 
 @dataclass(frozen=True)
-class AuthenticationRequest(Mapping[str, str]):
-    """Credential-bearing request context passed to identity providers.
+class AuthenticationRequest:
+    """Credential-bearing request context passed to identity providers."""
 
-    The class behaves like a normalized header mapping for backwards
-    compatibility with existing providers while exposing transport metadata for
-    mTLS and gateway-aware authentication.
-    """
-
-    headers: Mapping[str, str] = field(default_factory=dict)
+    headers: dict[str, str] = field(default_factory=dict)
     peer_identity: str = ""
     peer: str = ""
     method: str = ""
@@ -32,17 +26,8 @@ class AuthenticationRequest(Mapping[str, str]):
             },
         )
 
-    def __getitem__(self, key: str) -> str:
-        return self.headers[str(key).lower()]
-
-    def __iter__(self) -> Iterator[str]:
-        return iter(self.headers)
-
-    def __len__(self) -> int:
-        return len(self.headers)
-
-
-AuthenticationInput = AuthenticationRequest | Mapping[str, str]
+    def header(self, name: str) -> str | None:
+        return self.headers.get(str(name).lower())
 
 
 class AuthenticationError(PermissionError):
@@ -64,29 +49,4 @@ class AuthenticationUnavailableError(AuthenticationError):
 class IdentityPort(Protocol):
     """Authenticates a caller from normalized request context."""
 
-    def authenticate(self, request: AuthenticationInput) -> Principal: ...
-
-
-def coerce_authentication_request(
-    request: AuthenticationInput,
-    *,
-    peer_identity: str = "",
-    peer: str = "",
-    method: str = "",
-) -> AuthenticationRequest:
-    """Returns an `AuthenticationRequest` while preserving existing context."""
-    if isinstance(request, AuthenticationRequest):
-        if not peer_identity and not peer and not method:
-            return request
-        return AuthenticationRequest(
-            headers=request.headers,
-            peer_identity=peer_identity or request.peer_identity,
-            peer=peer or request.peer,
-            method=method or request.method,
-        )
-    return AuthenticationRequest(
-        headers=request,
-        peer_identity=peer_identity,
-        peer=peer,
-        method=method,
-    )
+    def authenticate(self, request: AuthenticationRequest) -> Principal: ...
