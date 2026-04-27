@@ -26,9 +26,16 @@ class DataAccessFlightService(flight.FlightServerBase):
         get_schema_use_case: GetSchemaUseCase,
         plan_access_use_case: PlanAccessUseCase,
         fetch_stream_use_case: FetchStreamUseCase,
+        *,
+        tls_certificates: list[flight.CertKeyPair] | None = None,
+        verify_client: bool = False,
+        root_certificates: bytes | None = None,
     ) -> None:
         super().__init__(
             location,
+            tls_certificates=tls_certificates,
+            verify_client=verify_client,
+            root_certificates=root_certificates,
             middleware={REQUEST_HEADERS_MIDDLEWARE_KEY: RequestHeadersMiddlewareFactory()},
         )
         self._get_schema_use_case = get_schema_use_case

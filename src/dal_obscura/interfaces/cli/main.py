@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import argparse
 import logging
+from typing import TypedDict
+
+import pyarrow.flight as flight
 
 from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
 from dal_obscura.application.use_cases.get_schema import GetSchemaUseCase
@@ -19,6 +22,28 @@ from dal_obscura.interfaces.flight.server import DataAccessFlightService
 from dal_obscura.logging_config import LoggingConfig, setup_logging
 
 LOGGER = logging.getLogger(__name__)
+
+
+class _FlightTlsKwargs(TypedDict, total=False):
+    tls_certificates: list[flight.CertKeyPair]
+    verify_client: bool
+    root_certificates: bytes | None
+
+
+def _flight_tls_kwargs(app_config) -> _FlightTlsKwargs:
+    tls = app_config.transport.tls
+    if tls is None:
+        return {}
+    return {
+        "tls_certificates": [
+            flight.CertKeyPair(
+                cert=tls.cert.encode("utf-8"),
+                key=tls.key.encode("utf-8"),
+            )
+        ],
+        "verify_client": tls.verify_client,
+        "root_certificates": None if tls.client_ca is None else tls.client_ca.encode("utf-8"),
+    }
 
 
 def main() -> None:
@@ -70,5 +95,6 @@ def main() -> None:
         get_schema_use_case=get_schema,
         plan_access_use_case=plan_access,
         fetch_stream_use_case=fetch_stream,
+        **_flight_tls_kwargs(app_config),
     )
     server.serve()

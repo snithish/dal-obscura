@@ -2,6 +2,8 @@ from dal_obscura.infrastructure.adapters.app_config import (
     AppAuthConfig,
     AppConfig,
     AppTicketConfig,
+    AppTlsConfig,
+    AppTransportConfig,
     load_app_config,
 )
 from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
@@ -15,6 +17,7 @@ from dal_obscura.infrastructure.adapters.identity_default import (
     AuthConfig,
     DefaultIdentityAdapter,
 )
+from dal_obscura.infrastructure.adapters.identity_mtls import MtlsIdentityProvider
 from dal_obscura.infrastructure.adapters.identity_oidc_jwks import OidcJwksIdentityProvider
 from dal_obscura.infrastructure.adapters.policy_file_authorizer import (
     PolicyFileAuthorizer,
@@ -40,6 +43,8 @@ __all__ = [
     "AppAuthConfig",
     "AppConfig",
     "AppTicketConfig",
+    "AppTlsConfig",
+    "AppTransportConfig",
     "AuthConfig",
     "CatalogConfig",
     "CatalogTargetConfig",
@@ -51,6 +56,7 @@ __all__ = [
     "EnvSecretProvider",
     "HmacTicketCodecAdapter",
     "IcebergTableFormat",
+    "MtlsIdentityProvider",
     "OidcJwksIdentityProvider",
     "PathConfig",
     "PolicyFileAuthorizer",

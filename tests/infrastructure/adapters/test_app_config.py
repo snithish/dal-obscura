@@ -299,6 +299,54 @@ def test_load_app_config_resolves_api_key_provider_secrets(tmp_path, monkeypatch
     assert principal.attributes == {"tenant": "acme"}
 
 
+def test_load_app_config_resolves_transport_tls_secrets(tmp_path, monkeypatch):
+    app_path = tmp_path / "app.yaml"
+    server_cert = "-----BEGIN CERTIFICATE-----\\nserver\\n-----END CERTIFICATE-----"
+    server_key = "-----BEGIN PRIVATE KEY-----\\nkey\\n-----END PRIVATE KEY-----"
+    client_ca = "-----BEGIN CERTIFICATE-----\\nca\\n-----END CERTIFICATE-----"
+    monkeypatch.setenv("DAL_OBSCURA_TICKET_SECRET", "ticket-secret")
+    monkeypatch.setenv("DAL_OBSCURA_JWT_SECRET", JWT_SECRET)
+    monkeypatch.setenv("SERVER_CERT", server_cert)
+    monkeypatch.setenv("SERVER_KEY", server_key)
+    monkeypatch.setenv("CLIENT_CA", client_ca)
+    app_path.write_text(
+        textwrap.dedent(
+            """
+            secret_provider:
+              module: dal_obscura.infrastructure.adapters.secret_providers.EnvSecretProvider
+              args: {}
+            ticket:
+              ttl_seconds: 900
+              max_tickets: 64
+              secret:
+                key: DAL_OBSCURA_TICKET_SECRET
+            auth:
+              jwt_secret:
+                key: DAL_OBSCURA_JWT_SECRET
+            transport:
+              tls:
+                cert:
+                  key: SERVER_CERT
+                key:
+                  key: SERVER_KEY
+                client_ca:
+                  key: CLIENT_CA
+                verify_client: true
+            """
+        )
+    )
+
+    config = load_app_config(app_path)
+
+    tls = config.transport.tls
+    assert tls is not None
+    assert tls.cert.startswith("-----BEGIN CERTIFICATE-----")
+    assert tls.key.startswith("-----BEGIN PRIVATE KEY-----")
+    assert tls.client_ca is not None
+    assert tls.client_ca.startswith("-----BEGIN CERTIFICATE-----")
+    assert tls.verify_client is True
+
+
 def test_load_app_config_rejects_auth_provider_without_authenticate(tmp_path, monkeypatch):
     app_path = tmp_path / "app.yaml"
     monkeypatch.setenv("DAL_OBSCURA_TICKET_SECRET", "ticket-secret")

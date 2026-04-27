@@ -43,6 +43,17 @@ class _TicketInputConfig(_StrictModel):
     secret: _SecretKeyRef
 
 
+class _TlsInputConfig(_StrictModel):
+    cert: _SecretKeyRef
+    key: _SecretKeyRef
+    client_ca: _SecretKeyRef | None = None
+    verify_client: bool = False
+
+
+class _TransportInputConfig(_StrictModel):
+    tls: _TlsInputConfig | None = None
+
+
 class _AuthProviderInputConfig(_StrictModel):
     module: str = Field(min_length=1)
     args: dict[str, Any] = Field(default_factory=dict)
@@ -85,6 +96,17 @@ class AppTicketConfig(_StrictModel):
     secret: str = Field(min_length=1)
 
 
+class AppTlsConfig(_StrictModel):
+    cert: str
+    key: str
+    client_ca: str | None = None
+    verify_client: bool = False
+
+
+class AppTransportConfig(_StrictModel):
+    tls: AppTlsConfig | None = None
+
+
 class AppAuthConfig(_StrictModel):
     identity_provider: Any
 
@@ -97,6 +119,7 @@ class AppConfig(_StrictModel):
     policy_file: Path
     ticket: AppTicketConfig
     auth: AppAuthConfig
+    transport: AppTransportConfig
     logging: LoggingConfig
 
 
@@ -114,6 +137,7 @@ def load_app_config(path: str | Path) -> AppConfig:
     try:
         provider_config = _SecretProviderConfig.model_validate(_require_key(raw, "secret_provider"))
         ticket_input = _TicketInputConfig.model_validate(_require_key(raw, "ticket"))
+        transport_input = _TransportInputConfig.model_validate(raw.get("transport", {}))
         logging = LoggingConfig.model_validate(raw.get("logging", {}))
     except ValidationError as exc:
         raise ValueError(f"Invalid app config: {exc}") from exc
@@ -125,6 +149,7 @@ def load_app_config(path: str | Path) -> AppConfig:
     policy_file = _resolve_relative_path(base_dir, policy_file_raw)
 
     ticket_secret = _resolve_secret(provider, ticket_input.secret.key, "ticket.secret")
+    transport = _load_transport_config(transport_input, provider)
 
     return AppConfig.model_validate(
         {
@@ -137,6 +162,7 @@ def load_app_config(path: str | Path) -> AppConfig:
                 "secret": ticket_secret,
             },
             "auth": {"identity_provider": auth_provider},
+            "transport": transport.model_dump(),
             "logging": logging.model_dump(by_alias=True),
         }
     )
@@ -161,6 +187,7 @@ _ALLOWED_TOP_LEVEL_KEYS = {
     "secret_provider",
     "ticket",
     "auth",
+    "transport",
     "logging",
 }
 
@@ -242,6 +269,27 @@ def _load_identity_provider(raw_auth: object, provider: SecretProvider) -> Ident
             jwt_secret=jwt_secret,
             jwt_issuer=legacy.jwt_issuer,
             jwt_audience=legacy.jwt_audience,
+        )
+    )
+
+
+def _load_transport_config(
+    config: _TransportInputConfig,
+    provider: SecretProvider,
+) -> AppTransportConfig:
+    if config.tls is None:
+        return AppTransportConfig()
+    client_ca = (
+        None
+        if config.tls.client_ca is None
+        else _resolve_secret(provider, config.tls.client_ca.key, "transport.tls.client_ca")
+    )
+    return AppTransportConfig(
+        tls=AppTlsConfig(
+            cert=_resolve_secret(provider, config.tls.cert.key, "transport.tls.cert"),
+            key=_resolve_secret(provider, config.tls.key.key, "transport.tls.key"),
+            client_ca=client_ca,
+            verify_client=config.tls.verify_client,
         )
     )
 
