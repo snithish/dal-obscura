@@ -207,6 +207,37 @@ def test_parse_descriptor_accepts_optional_row_filter():
     assert request.row_filter.sql == "region = 'us'"
 
 
+def test_parse_descriptor_accepts_protocol_version_one():
+    descriptor = command_descriptor(
+        {
+            "protocol_version": 1,
+            "catalog": "analytics",
+            "target": "test.table",
+            "columns": ["id"],
+        }
+    )
+
+    request = parse_descriptor(descriptor)
+
+    assert request.catalog == "analytics"
+    assert request.target == "test.table"
+    assert request.columns == ["id"]
+
+
+def test_parse_descriptor_rejects_unsupported_protocol_version():
+    descriptor = command_descriptor(
+        {
+            "protocol_version": 99,
+            "catalog": "analytics",
+            "target": "test.table",
+            "columns": ["id"],
+        }
+    )
+
+    with pytest.raises(ValueError, match="Unsupported Flight protocol version: 99"):
+        parse_descriptor(descriptor)
+
+
 def test_parse_descriptor_rejects_invalid_row_filter_syntax():
     descriptor = command_descriptor(
         {

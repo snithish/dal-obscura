@@ -19,6 +19,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <junit.version>5.10.2</junit.version>
     <spark.version>3.5.6</spark.version>
+    <spark.scala.binary.version>2.12</spark.scala.binary.version>
     <arrow.version>15.0.2</arrow.version>
     <jackson.version>2.15.2</jackson.version>
     <spark.module.jvmArgs>-XX:+IgnoreUnrecognizedVMOptions --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.net=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.util.concurrent=ALL-UNNAMED --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED --add-opens=java.base/jdk.internal.ref=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/sun.nio.cs=ALL-UNNAMED --add-opens=java.base/sun.security.action=ALL-UNNAMED --add-opens=java.base/sun.util.calendar=ALL-UNNAMED --add-opens=java.security.jgss/sun.security.krb5=ALL-UNNAMED -Djdk.reflect.useDirectMethodHandle=false</spark.module.jvmArgs>
@@ -29,7 +30,7 @@
     <dependencies>
       <dependency>
         <groupId>org.apache.spark</groupId>
-        <artifactId>spark-sql_2.12</artifactId>
+        <artifactId>spark-sql_${spark.scala.binary.version}</artifactId>
         <version>${spark.version}</version>
       </dependency>
       <dependency>
@@ -75,4 +76,26 @@
       </plugins>
     </pluginManagement>
   </build>
+
+  <profiles>
+    <profile>
+      <id>spark-3.5</id>
+      <activation>
+        <activeByDefault>true</activeByDefault>
+      </activation>
+      <properties>
+        <maven.compiler.release>11</maven.compiler.release>
+        <spark.version>3.5.6</spark.version>
+        <spark.scala.binary.version>2.12</spark.scala.binary.version>
+      </properties>
+    </profile>
+    <profile>
+      <id>spark-4.0</id>
+      <properties>
+        <maven.compiler.release>17</maven.compiler.release>
+        <spark.version>4.0.2</spark.version>
+        <spark.scala.binary.version>2.13</spark.scala.binary.version>
+      </properties>
+    </profile>
+  </profiles>
 </project>

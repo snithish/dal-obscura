@@ -22,15 +22,20 @@ import org.apache.spark.sql.sources.Or;
 public final class SparkFilterSqlTranslator {
     public SparkFilterTranslation translate(Filter[] filters) {
         List<String> pushed = new ArrayList<>();
+        List<Filter> pushedFilters = new ArrayList<>();
         List<Filter> residual = new ArrayList<>();
         for (Filter filter : filters) {
             TranslationPiece piece = translateFilter(filter);
             piece.pushed().ifPresent(pushed::add);
+            pushedFilters.addAll(piece.pushedFilters());
             residual.addAll(piece.residual());
         }
 
         Optional<String> pushedSql = joinConjuncts(pushed);
-        return new SparkFilterTranslation(pushedSql, residual.toArray(new Filter[0]));
+        return new SparkFilterTranslation(
+                pushedSql,
+                pushedFilters.toArray(new Filter[0]),
+                residual.toArray(new Filter[0]));
     }
 
     private TranslationPiece translateFilter(Filter filter) {
@@ -41,10 +46,21 @@ public final class SparkFilterSqlTranslator {
             List<String> conjuncts = new ArrayList<>();
             left.pushed().ifPresent(conjuncts::add);
             right.pushed().ifPresent(conjuncts::add);
+            List<Filter> pushedFilters = new ArrayList<>();
+            if (left.fullyPushed() && right.fullyPushed()) {
+                pushedFilters.add(filter);
+            } else {
+                pushedFilters.addAll(left.pushedFilters());
+                pushedFilters.addAll(right.pushedFilters());
+            }
             List<Filter> residual = new ArrayList<>();
             residual.addAll(left.residual());
             residual.addAll(right.residual());
-            return new TranslationPiece(joinConjuncts(conjuncts), residual);
+            return new TranslationPiece(
+                    joinConjuncts(conjuncts),
+                    pushedFilters,
+                    residual,
+                    residual.isEmpty() && left.fullyPushed() && right.fullyPushed());
         }
 
         if (filter instanceof Or) {
@@ -57,73 +73,103 @@ public final class SparkFilterSqlTranslator {
                     && right.residual().isEmpty()) {
                 return new TranslationPiece(
                         Optional.of("(" + left.pushed().get() + ") OR (" + right.pushed().get() + ")"),
-                        List.of());
+                        List.of(filter),
+                        List.of(),
+                        true);
             }
-            return new TranslationPiece(Optional.empty(), List.of(filter));
+            return new TranslationPiece(Optional.empty(), List.of(), List.of(filter), false);
         }
 
         if (filter instanceof EqualTo) {
             EqualTo equalTo = (EqualTo) filter;
             return new TranslationPiece(
-                    Optional.of(equalTo.attribute() + " = " + literal(equalTo.value())),
-                    List.of());
+                    Optional.of(attribute(equalTo.attribute()) + " = " + literal(equalTo.value())),
+                    List.of(filter),
+                    List.of(),
+                    true);
         }
 
         if (filter instanceof GreaterThan) {
             GreaterThan gt = (GreaterThan) filter;
             return new TranslationPiece(
-                    Optional.of(gt.attribute() + " > " + literal(gt.value())),
-                    List.of());
+                    Optional.of(attribute(gt.attribute()) + " > " + literal(gt.value())),
+                    List.of(filter),
+                    List.of(),
+                    true);
         }
 
         if (filter instanceof GreaterThanOrEqual) {
             GreaterThanOrEqual gte = (GreaterThanOrEqual) filter;
             return new TranslationPiece(
-                    Optional.of(gte.attribute() + " >= " + literal(gte.value())),
-                    List.of());
+                    Optional.of(attribute(gte.attribute()) + " >= " + literal(gte.value())),
+                    List.of(filter),
+                    List.of(),
+                    true);
         }
 
         if (filter instanceof LessThan) {
             LessThan lt = (LessThan) filter;
             return new TranslationPiece(
-                    Optional.of(lt.attribute() + " < " + literal(lt.value())),
-                    List.of());
+                    Optional.of(attribute(lt.attribute()) + " < " + literal(lt.value())),
+                    List.of(filter),
+                    List.of(),
+                    true);
         }
 
         if (filter instanceof LessThanOrEqual) {
             LessThanOrEqual lte = (LessThanOrEqual) filter;
             return new TranslationPiece(
-                    Optional.of(lte.attribute() + " <= " + literal(lte.value())),
-                    List.of());
+                    Optional.of(attribute(lte.attribute()) + " <= " + literal(lte.value())),
+                    List.of(filter),
+                    List.of(),
+                    true);
         }
 
         if (filter instanceof In) {
             In in = (In) filter;
             if (in.values().length == 0) {
-                return new TranslationPiece(Optional.empty(), List.of(filter));
+                return new TranslationPiece(Optional.empty(), List.of(), List.of(filter), false);
             }
             String values =
                     Arrays.stream(in.values())
                             .map(this::literal)
                             .collect(Collectors.joining(", "));
             return new TranslationPiece(
-                    Optional.of(in.attribute() + " IN (" + values + ")"),
-                    List.of());
+                    Optional.of(attribute(in.attribute()) + " IN (" + values + ")"),
+                    List.of(filter),
+                    List.of(),
+                    true);
         }
 
         if (filter instanceof IsNull) {
             IsNull isNull = (IsNull) filter;
-            return new TranslationPiece(Optional.of(isNull.attribute() + " IS NULL"), List.of());
+            return new TranslationPiece(
+                    Optional.of(attribute(isNull.attribute()) + " IS NULL"),
+                    List.of(filter),
+                    List.of(),
+                    true);
         }
 
         if (filter instanceof IsNotNull) {
             IsNotNull isNotNull = (IsNotNull) filter;
             return new TranslationPiece(
-                    Optional.of(isNotNull.attribute() + " IS NOT NULL"),
-                    List.of());
+                    Optional.of(attribute(isNotNull.attribute()) + " IS NOT NULL"),
+                    List.of(filter),
+                    List.of(),
+                    true);
         }
 
-        return new TranslationPiece(Optional.empty(), List.of(filter));
+        return new TranslationPiece(Optional.empty(), List.of(), List.of(filter), false);
+    }
+
+    private String attribute(String attribute) {
+        return Arrays.stream(attribute.split("\\."))
+                .map(this::quotedIdentifier)
+                .collect(Collectors.joining("."));
+    }
+
+    private String quotedIdentifier(String identifier) {
+        return "\"" + identifier.replace("\"", "\"\"") + "\"";
     }
 
     private String literal(Object value) {
@@ -175,19 +221,35 @@ public final class SparkFilterSqlTranslator {
 
     private static final class TranslationPiece {
         private final Optional<String> pushed;
+        private final List<Filter> pushedFilters;
         private final List<Filter> residual;
+        private final boolean fullyPushed;
 
-        private TranslationPiece(Optional<String> pushed, List<Filter> residual) {
+        private TranslationPiece(
+                Optional<String> pushed,
+                List<Filter> pushedFilters,
+                List<Filter> residual,
+                boolean fullyPushed) {
             this.pushed = pushed;
+            this.pushedFilters = pushedFilters;
             this.residual = residual;
+            this.fullyPushed = fullyPushed;
         }
 
         private Optional<String> pushed() {
             return pushed;
         }
 
+        private List<Filter> pushedFilters() {
+            return pushedFilters;
+        }
+
         private List<Filter> residual() {
             return residual;
+        }
+
+        private boolean fullyPushed() {
+            return fullyPushed;
         }
     }
 }

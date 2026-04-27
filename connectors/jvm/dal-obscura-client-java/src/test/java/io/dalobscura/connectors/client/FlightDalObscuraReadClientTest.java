@@ -27,7 +27,7 @@ class FlightDalObscuraReadClientTest {
         byte[] payload = FlightDalObscuraReadClient.encodePlanCommand(request);
 
         assertEquals(
-                "{\"catalog\":\"analytics\",\"target\":\"default.users\",\"columns\":[\"id\",\"email\"],\"row_filter\":\"region = 'us'\"}",
+                "{\"protocol_version\":1,\"catalog\":\"analytics\",\"target\":\"default.users\",\"columns\":[\"id\",\"email\"],\"row_filter\":\"region = 'us'\"}",
                 new String(payload, StandardCharsets.UTF_8));
     }
 
@@ -44,6 +44,21 @@ class FlightDalObscuraReadClientTest {
         Map<?, ?> decoded = MAPPER.readValue(payload, Map.class);
 
         assertFalse(decoded.containsKey("row_filter"));
+    }
+
+    @Test
+    void includesProtocolVersionInPlanCommands() throws Exception {
+        DalObscuraPlanRequest request =
+                new DalObscuraPlanRequest(
+                        "analytics",
+                        "default.users",
+                        List.of("id"),
+                        Optional.empty());
+
+        byte[] payload = FlightDalObscuraReadClient.encodePlanCommand(request);
+        Map<?, ?> decoded = MAPPER.readValue(payload, Map.class);
+
+        assertEquals(1, decoded.get("protocol_version"));
     }
 
     @Test

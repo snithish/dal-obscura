@@ -26,7 +26,10 @@ class SparkFilterSqlTranslatorTest {
                             new GreaterThan("id", 10)
                         });
 
-        assertEquals("region = 'us' AND id > 10", translation.pushedSql().orElseThrow());
+        assertEquals("\"region\" = 'us' AND \"id\" > 10", translation.pushedSql().orElseThrow());
+        assertArrayEquals(
+                new Filter[] {new EqualTo("region", "us"), new GreaterThan("id", 10)},
+                translation.pushedFilters());
         assertArrayEquals(new Filter[0], translation.residualFilters());
     }
 
@@ -62,7 +65,8 @@ class SparkFilterSqlTranslatorTest {
 
         SparkFilterTranslation translation = translator.translate(new Filter[] {mixedAnd});
 
-        assertEquals("region = 'us'", translation.pushedSql().orElseThrow());
+        assertEquals("\"region\" = 'us'", translation.pushedSql().orElseThrow());
+        assertArrayEquals(new Filter[] {new EqualTo("region", "us")}, translation.pushedFilters());
         assertArrayEquals(new Filter[] {new Not(new EqualTo("region", "eu"))}, translation.residualFilters());
     }
 
@@ -88,8 +92,9 @@ class SparkFilterSqlTranslatorTest {
         SparkFilterTranslation translation = translator.translate(new Filter[] {grouped});
 
         assertEquals(
-                "id = 5 AND ((region = 'us') OR (region = 'eu'))",
+                "\"id\" = 5 AND ((\"region\" = 'us') OR (\"region\" = 'eu'))",
                 translation.pushedSql().orElseThrow());
+        assertArrayEquals(new Filter[] {grouped}, translation.pushedFilters());
         assertArrayEquals(new Filter[0], translation.residualFilters());
     }
 
@@ -104,8 +109,9 @@ class SparkFilterSqlTranslatorTest {
                 translator.translate(new Filter[] {disjunction, new EqualTo("active", true)});
 
         assertEquals(
-                "((region = 'us') OR (region = 'eu')) AND active = true",
+                "((\"region\" = 'us') OR (\"region\" = 'eu')) AND \"active\" = true",
                 translation.pushedSql().orElseThrow());
+        assertArrayEquals(new Filter[] {disjunction, new EqualTo("active", true)}, translation.pushedFilters());
         assertArrayEquals(new Filter[0], translation.residualFilters());
     }
 
@@ -117,8 +123,22 @@ class SparkFilterSqlTranslatorTest {
                 translator.translate(new Filter[] {new EqualTo("created_at", timestamp)});
 
         assertEquals(
-                "created_at = TIMESTAMP '2024-01-01 12:16:00.0'",
+                "\"created_at\" = TIMESTAMP '2024-01-01 12:16:00.0'",
                 translation.pushedSql().orElseThrow());
+        assertArrayEquals(new Filter[0], translation.residualFilters());
+    }
+
+    @Test
+    void quotesEachAttributePathSegment() {
+        SparkFilterTranslation translation =
+                translator.translate(new Filter[] {new EqualTo("account.manager.region", "amer")});
+
+        assertEquals(
+                "\"account\".\"manager\".\"region\" = 'amer'",
+                translation.pushedSql().orElseThrow());
+        assertArrayEquals(
+                new Filter[] {new EqualTo("account.manager.region", "amer")},
+                translation.pushedFilters());
         assertArrayEquals(new Filter[0], translation.residualFilters());
     }
 }

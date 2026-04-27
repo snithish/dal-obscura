@@ -9,6 +9,7 @@ from dal_obscura.domain.access_control.filters import RowFilter, deserialize_row
 from dal_obscura.domain.query_planning.models import PlanRequest
 
 REQUEST_HEADERS_MIDDLEWARE_KEY = "request_headers"
+SUPPORTED_PROTOCOL_VERSION = 1
 
 
 class RequestHeadersMiddleware(flight.ServerMiddleware):
@@ -57,6 +58,7 @@ def parse_descriptor(descriptor: flight.FlightDescriptor) -> PlanRequest:
     if descriptor.command:
         raw = descriptor.command.decode("utf-8")
         data = json.loads(raw)
+        _validate_protocol_version(data.get("protocol_version", SUPPORTED_PROTOCOL_VERSION))
         return PlanRequest(
             catalog=str(data["catalog"]) if data.get("catalog") else None,
             target=str(data["target"]),
@@ -64,6 +66,11 @@ def parse_descriptor(descriptor: flight.FlightDescriptor) -> PlanRequest:
             row_filter=_optional_descriptor_row_filter(data.get("row_filter")),
         )
     raise ValueError("Invalid Flight descriptor")
+
+
+def _validate_protocol_version(value: object) -> None:
+    if value != SUPPORTED_PROTOCOL_VERSION:
+        raise ValueError(f"Unsupported Flight protocol version: {value}")
 
 
 def _optional_descriptor_row_filter(value: object) -> RowFilter | None:

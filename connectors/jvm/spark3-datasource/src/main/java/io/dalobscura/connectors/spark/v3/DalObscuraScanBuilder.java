@@ -24,7 +24,7 @@ public final class DalObscuraScanBuilder
     private final StructType fullSchema;
     private StructType requiredSchema;
     private SparkFilterTranslation translation =
-            new SparkFilterTranslation(Optional.empty(), new Filter[0]);
+            new SparkFilterTranslation(Optional.empty(), new Filter[0], new Filter[0]);
 
     public DalObscuraScanBuilder(
             DalObscuraConnectorOptions options,
@@ -49,7 +49,7 @@ public final class DalObscuraScanBuilder
 
     @Override
     public Filter[] pushedFilters() {
-        return new Filter[0];
+        return translation.pushedFilters();
     }
 
     @Override
