@@ -12,7 +12,6 @@ from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
 from pyiceberg.types import LongType, NestedField, StringType
 
-
 RUNTIME_DIR = Path(os.environ.get("RUNTIME_DIR", "/workspace/runtime"))
 CATALOG = "example_catalog"
 TARGET = "default.users"
@@ -23,7 +22,9 @@ DEFAULT_JWT = "dal_obscura.infrastructure.adapters.identity_default.DefaultIdent
 OIDC = "dal_obscura.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider"
 API_KEY = "dal_obscura.infrastructure.adapters.identity_api_key.ApiKeyIdentityProvider"
 MTLS = "dal_obscura.infrastructure.adapters.identity_mtls.MtlsIdentityProvider"
-TRUSTED = "dal_obscura.infrastructure.adapters.identity_trusted_headers.TrustedHeaderIdentityProvider"
+TRUSTED = (
+    "dal_obscura.infrastructure.adapters.identity_trusted_headers.TrustedHeaderIdentityProvider"
+)
 
 SPIFFE_CLIENT_ID = "spiffe://example.org/ns/default/sa/dal-obscura-client"
 
