@@ -260,6 +260,45 @@ def test_load_app_config_loads_auth_provider_chain(tmp_path, monkeypatch):
     assert provider.providers[0].kwargs == {"nested": {"secret": "resolved-auth-secret"}}
 
 
+def test_load_app_config_resolves_api_key_provider_secrets(tmp_path, monkeypatch):
+    app_path = tmp_path / "app.yaml"
+    monkeypatch.setenv("DAL_OBSCURA_TICKET_SECRET", "ticket-secret")
+    monkeypatch.setenv("SPARK_API_KEY", "api-secret-1")
+    app_path.write_text(
+        textwrap.dedent(
+            """
+            secret_provider:
+              module: dal_obscura.infrastructure.adapters.secret_providers.EnvSecretProvider
+              args: {}
+            ticket:
+              ttl_seconds: 900
+              max_tickets: 64
+              secret:
+                key: DAL_OBSCURA_TICKET_SECRET
+            auth:
+              module: dal_obscura.infrastructure.adapters.identity_api_key.ApiKeyIdentityProvider
+              args:
+                keys:
+                  - id: spark-prod
+                    secret:
+                      key: SPARK_API_KEY
+                    groups: ["spark"]
+                    attributes:
+                      tenant: acme
+            """
+        )
+    )
+
+    config = load_app_config(app_path)
+    principal = config.auth.identity_provider.authenticate(
+        AuthenticationRequest(headers={"x-api-key": "api-secret-1"})
+    )
+
+    assert principal.id == "spark-prod"
+    assert principal.groups == ["spark"]
+    assert principal.attributes == {"tenant": "acme"}
+
+
 def test_load_app_config_rejects_auth_provider_without_authenticate(tmp_path, monkeypatch):
     app_path = tmp_path / "app.yaml"
     monkeypatch.setenv("DAL_OBSCURA_TICKET_SECRET", "ticket-secret")

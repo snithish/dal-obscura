@@ -9,6 +9,7 @@ from dal_obscura.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
 )
+from dal_obscura.infrastructure.adapters.identity_api_key import ApiKeyIdentityProvider
 from dal_obscura.infrastructure.adapters.identity_composite import CompositeIdentityProvider
 from dal_obscura.infrastructure.adapters.identity_default import (
     AuthConfig,
@@ -35,6 +36,7 @@ from dal_obscura.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapt
 from dal_obscura.infrastructure.table_formats.iceberg import IcebergTableFormat
 
 __all__ = [
+    "ApiKeyIdentityProvider",
     "AppAuthConfig",
     "AppConfig",
     "AppTicketConfig",
