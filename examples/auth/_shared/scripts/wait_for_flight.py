@@ -23,9 +23,16 @@ def main() -> None:
             client = _client(uri, mode)
             client.get_schema(descriptor, options=_options(mode))
             return
-        except flight.FlightUnauthorizedError:
+        except (flight.FlightUnauthenticatedError, flight.FlightUnauthorizedError):
             return
+        except flight.FlightError as exc:
+            if _is_auth_failure(exc):
+                return
+            last_error = exc
+            time.sleep(1)
         except Exception as exc:
+            if _is_auth_failure(exc):
+                return
             last_error = exc
             time.sleep(1)
     raise SystemExit(f"Flight server was not ready: {last_error}")
@@ -56,6 +63,11 @@ def _options(mode: str) -> flight.FlightCallOptions:
     if mode in {"mtls", "mtls-spiffe"}:
         return flight.FlightCallOptions()
     return flight.FlightCallOptions(headers=[])
+
+
+def _is_auth_failure(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "unauthorized" in message or "unauthenticated" in message
 
 
 if __name__ == "__main__":

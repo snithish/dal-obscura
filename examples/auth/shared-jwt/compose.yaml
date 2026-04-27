@@ -1,0 +1,61 @@
+name: dal-obscura-auth-shared-jwt
+services:
+  setup:
+    build:
+      context: ../../..
+      dockerfile: examples/auth/_shared/Dockerfile
+    environment:
+      EXAMPLE_AUTH_MODE: shared-jwt
+      DAL_OBSCURA_TICKET_SECRET: ticket-secret-32-characters-long
+      DAL_OBSCURA_JWT_SECRET: jwt-secret-at-least-32-characters-long
+    volumes:
+      - runtime:/workspace/runtime
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        rm -f /workspace/runtime/setup.done
+        /workspace/.venv/bin/python examples/auth/_shared/scripts/build_fixture.py
+        touch /workspace/runtime/setup.done
+        tail -f /dev/null
+    healthcheck:
+      test: ["CMD", "test", "-f", "/workspace/runtime/setup.done"]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+  dal-obscura:
+    build:
+      context: ../../..
+      dockerfile: examples/auth/_shared/Dockerfile
+    depends_on:
+      setup:
+        condition: service_healthy
+    environment:
+      DAL_OBSCURA_TICKET_SECRET: ticket-secret-32-characters-long
+      DAL_OBSCURA_JWT_SECRET: jwt-secret-at-least-32-characters-long
+    volumes:
+      - runtime:/workspace/runtime
+    command: ["/workspace/.venv/bin/dal-obscura", "--app-config", "/workspace/runtime/app.yaml"]
+  client:
+    build:
+      context: ../../..
+      dockerfile: examples/auth/_shared/Dockerfile
+    depends_on:
+      dal-obscura:
+        condition: service_started
+    environment:
+      EXAMPLE_AUTH_MODE: shared-jwt
+      FLIGHT_URI: grpc+tcp://dal-obscura:8815
+      DAL_OBSCURA_JWT_SECRET: jwt-secret-at-least-32-characters-long
+    volumes:
+      - runtime:/workspace/runtime
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        /workspace/.venv/bin/python examples/auth/_shared/scripts/wait_for_flight.py
+        /workspace/.venv/bin/python examples/auth/_shared/scripts/flight_client.py
+volumes:
+  runtime:

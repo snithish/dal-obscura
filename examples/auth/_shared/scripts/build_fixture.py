@@ -27,6 +27,7 @@ TRUSTED = (
 )
 
 SPIFFE_CLIENT_ID = "spiffe://example.org/ns/default/sa/dal-obscura-client"
+LOCAL_MTLS_CLIENT_ID = "urn:dal-obscura:example-client"
 
 
 def main() -> None:
@@ -182,9 +183,10 @@ def _auth_config(mode: str) -> dict[str, Any]:
             "args": {
                 "identities": [
                     {
-                        "peer_identity": "example-client",
+                        "peer_identity": LOCAL_MTLS_CLIENT_ID,
                         "id": PRINCIPAL,
                         "groups": ["compose-example"],
+                        "attributes": {"client_id": LOCAL_MTLS_CLIENT_ID},
                     }
                 ]
             },

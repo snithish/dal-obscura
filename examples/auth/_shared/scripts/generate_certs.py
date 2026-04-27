@@ -30,8 +30,22 @@ def main() -> None:
     )
     _write_key(CERT_DIR / "ca.key", ca_key)
     _write_cert(CERT_DIR / "ca.crt", ca_cert)
-    _issue_leaf("dal-obscura", CERT_DIR / "server.key", CERT_DIR / "server.crt", ca_key, ca_cert)
-    _issue_leaf("example-client", CERT_DIR / "client.key", CERT_DIR / "client.crt", ca_key, ca_cert)
+    _issue_leaf(
+        "dal-obscura",
+        CERT_DIR / "server.key",
+        CERT_DIR / "server.crt",
+        ca_key,
+        ca_cert,
+        dns_names=["dal-obscura"],
+    )
+    _issue_leaf(
+        "example-client",
+        CERT_DIR / "client.key",
+        CERT_DIR / "client.crt",
+        ca_key,
+        ca_cert,
+        uri_names=["urn:dal-obscura:example-client"],
+    )
 
 
 def _issue_leaf(
@@ -40,9 +54,15 @@ def _issue_leaf(
     cert_path: Path,
     ca_key: rsa.RSAPrivateKey,
     ca_cert: x509.Certificate,
+    dns_names: list[str] | None = None,
+    uri_names: list[str] | None = None,
 ) -> None:
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
+    alt_names: list[x509.GeneralName] = [
+        *(x509.DNSName(name) for name in dns_names or []),
+        *(x509.UniformResourceIdentifier(name) for name in uri_names or []),
+    ]
     cert = (
         x509.CertificateBuilder()
         .subject_name(name)
@@ -51,7 +71,7 @@ def _issue_leaf(
         .serial_number(x509.random_serial_number())
         .not_valid_before(dt.datetime.now(UTC) - dt.timedelta(minutes=1))
         .not_valid_after(dt.datetime.now(UTC) + dt.timedelta(days=2))
-        .add_extension(x509.SubjectAlternativeName([x509.DNSName(common_name)]), critical=False)
+        .add_extension(x509.SubjectAlternativeName(alt_names), critical=False)
         .sign(ca_key, hashes.SHA256())
     )
     _write_key(key_path, key)

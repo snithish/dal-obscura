@@ -1,0 +1,13 @@
+.git
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.ty
+.venv
+__pycache__
+*.py[cod]
+.DS_Store
+dist
+build
+target
+*.egg-info
