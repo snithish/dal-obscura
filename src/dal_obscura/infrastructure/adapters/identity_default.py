@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 
 import jwt
 
+from dal_obscura.application.ports.identity import (
+    AuthenticationInput,
+    coerce_authentication_request,
+)
 from dal_obscura.domain.access_control.models import Principal
 
 
@@ -40,9 +43,9 @@ class DefaultIdentityAdapter:
             )
         self._config = config
 
-    def authenticate(self, headers: Mapping[str, str]) -> Principal:
+    def authenticate(self, request: AuthenticationInput) -> Principal:
         """Authenticates the request and returns the resolved principal."""
-        token = _parse_bearer(headers.get("authorization"))
+        token = _parse_bearer(coerce_authentication_request(request).get("authorization"))
         if not token:
             raise PermissionError("Missing token")
 

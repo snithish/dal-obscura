@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 
 import pyarrow as pa
 
 from dal_obscura.application.ports.authorization import AuthorizationPort
-from dal_obscura.application.ports.identity import IdentityPort
+from dal_obscura.application.ports.identity import AuthenticationInput, IdentityPort
 from dal_obscura.application.ports.masking import MaskingPort
 from dal_obscura.application.use_cases.plan_access import (
     _authorize_requested_row_filter,
@@ -44,8 +43,8 @@ class GetSchemaUseCase:
         self._catalog_registry = catalog_registry
         self._masking = masking
 
-    def execute(self, request: PlanRequest, headers: Mapping[str, str]) -> GetSchemaResult:
-        principal = self._identity.authenticate(headers)
+    def execute(self, request: PlanRequest, auth_request: AuthenticationInput) -> GetSchemaResult:
+        principal = self._identity.authenticate(auth_request)
 
         table_format = self._catalog_registry.describe(request.catalog, request.target)
         base_schema = table_format.get_schema()

@@ -7,6 +7,7 @@ from typing import Any, cast
 import pyarrow as pa
 import pytest
 
+from dal_obscura.application.ports.identity import AuthenticationInput
 from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
 from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
 from dal_obscura.domain.access_control.filters import deserialize_row_filter, row_filter_to_sql
@@ -176,7 +177,8 @@ class FakeIdentity:
     def __init__(self, principal: Principal | None) -> None:
         self._principal = principal
 
-    def authenticate(self, headers):
+    def authenticate(self, request: AuthenticationInput) -> Principal:
+        del request
         if self._principal is None:
             raise PermissionError("Unauthorized")
         return self._principal
