@@ -1,0 +1,78 @@
+name: dal-obscura-auth-trusted-headers
+services:
+  setup:
+    build:
+      context: ../../..
+      dockerfile: examples/auth/_shared/Dockerfile
+    environment:
+      EXAMPLE_AUTH_MODE: trusted-headers
+      DAL_OBSCURA_TICKET_SECRET: ticket-secret-32-characters-long
+    volumes:
+      - runtime:/workspace/runtime
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        rm -f /workspace/runtime/setup.done
+        /workspace/.venv/bin/python examples/auth/_shared/scripts/build_fixture.py
+        touch /workspace/runtime/setup.done
+        tail -f /dev/null
+    healthcheck:
+      test: ["CMD", "test", "-f", "/workspace/runtime/setup.done"]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+  dal-obscura:
+    build:
+      context: ../../..
+      dockerfile: examples/auth/_shared/Dockerfile
+    depends_on:
+      setup:
+        condition: service_healthy
+    environment:
+      DAL_OBSCURA_TICKET_SECRET: ticket-secret-32-characters-long
+      DAL_OBSCURA_PROXY_SECRET: proxy-secret-32-characters-long
+    volumes:
+      - runtime:/workspace/runtime
+    command: ["/workspace/.venv/bin/dal-obscura", "--app-config", "/workspace/runtime/app.yaml"]
+  gateway:
+    build:
+      context: ../../..
+      dockerfile: examples/auth/_shared/Dockerfile
+    depends_on:
+      dal-obscura:
+        condition: service_started
+    environment:
+      BACKEND_FLIGHT_URI: grpc://dal-obscura:8815
+      GATEWAY_LOCATION: grpc://0.0.0.0:8816
+      DAL_OBSCURA_PROXY_SECRET: proxy-secret-32-characters-long
+      TRUSTED_HEADER_SUBJECT: example-user
+      TRUSTED_HEADER_GROUPS: compose-example
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        /workspace/.venv/bin/python examples/auth/_shared/scripts/trusted_gateway.py
+  client:
+    build:
+      context: ../../..
+      dockerfile: examples/auth/_shared/Dockerfile
+    depends_on:
+      gateway:
+        condition: service_started
+    environment:
+      EXAMPLE_AUTH_MODE: trusted-headers
+      FLIGHT_URI: grpc://gateway:8816
+    volumes:
+      - runtime:/workspace/runtime
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        /workspace/.venv/bin/python examples/auth/_shared/scripts/wait_for_flight.py
+        /workspace/.venv/bin/python examples/auth/_shared/scripts/flight_client.py
+volumes:
+  runtime:
