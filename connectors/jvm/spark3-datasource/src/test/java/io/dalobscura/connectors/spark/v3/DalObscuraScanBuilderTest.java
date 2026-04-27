@@ -40,7 +40,8 @@ class DalObscuraScanBuilderTest {
         DalObscuraScanBuilder builder =
                 (DalObscuraScanBuilder) table.newScanBuilder(new CaseInsensitiveStringMap(Map.of()));
         builder.pruneColumns(new StructType().add("id", "long"));
-        builder.pushFilters(new org.apache.spark.sql.sources.Filter[] {new EqualTo("region", "us")});
+        org.apache.spark.sql.sources.Filter[] residual =
+                builder.pushFilters(new org.apache.spark.sql.sources.Filter[] {new EqualTo("region", "us")});
 
         InputPartition[] partitions = builder.build().toBatch().planInputPartitions();
 
@@ -48,7 +49,9 @@ class DalObscuraScanBuilderTest {
         assertEquals("id", fullSchema.fields()[0].name());
         assertEquals(1, client.schemaRequestCount());
         assertEquals(List.of("id"), client.planRequests().get(0).columns());
-        assertEquals(Optional.of("region = 'us'"), client.planRequests().get(0).rowFilter());
+        assertEquals(Optional.of("\"region\" = 'us'"), client.planRequests().get(0).rowFilter());
+        assertEquals(0, residual.length);
+        assertEquals(new EqualTo("region", "us"), builder.pushedFilters()[0]);
         assertEquals(2, partitions.length);
     }
 

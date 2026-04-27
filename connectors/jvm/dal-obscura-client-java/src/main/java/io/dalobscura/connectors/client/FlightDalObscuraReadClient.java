@@ -22,6 +22,7 @@ import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.pojo.Schema;
 
 public final class FlightDalObscuraReadClient implements DalObscuraReadClient {
+    public static final int PROTOCOL_VERSION = 1;
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
@@ -88,6 +89,7 @@ public final class FlightDalObscuraReadClient implements DalObscuraReadClient {
     static byte[] encodePlanCommand(DalObscuraPlanRequest request) {
         try {
             LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
+            payload.put("protocol_version", PROTOCOL_VERSION);
             payload.put("catalog", request.catalog());
             payload.put("target", request.target());
             payload.put("columns", request.columns());
