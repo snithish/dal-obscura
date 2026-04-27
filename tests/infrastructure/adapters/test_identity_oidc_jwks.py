@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -209,3 +210,33 @@ def test_refreshes_jwks_once_when_token_references_new_kid():
     assert provider.authenticate(_auth_request(old_token)).id == "old-user"
     assert provider.authenticate(_auth_request(new_token)).id == "new-user"
     assert responses == []
+
+
+def test_oidc_provider_accepts_inline_jwks_without_network_fetch():
+    private_key, jwk = _rsa_key_pair("kid-inline")
+    provider = OidcJwksIdentityProvider(
+        issuer=ISSUER,
+        audience=AUDIENCE,
+        jwks={"keys": [jwk]},
+    )
+    token = _token(private_key, kid="kid-inline", subject="inline-user")
+
+    principal = provider.authenticate(_auth_request(token))
+
+    assert principal.id == "inline-user"
+
+
+def test_oidc_provider_accepts_jwks_file_without_discovery(tmp_path):
+    private_key, jwk = _rsa_key_pair("kid-file")
+    jwks_path = tmp_path / "jwks.json"
+    jwks_path.write_text(json.dumps({"keys": [jwk]}))
+    provider = OidcJwksIdentityProvider(
+        issuer=ISSUER,
+        audience=AUDIENCE,
+        jwks_file=str(jwks_path),
+    )
+    token = _token(private_key, kid="kid-file", subject="file-user")
+
+    principal = provider.authenticate(_auth_request(token))
+
+    assert principal.id == "file-user"
