@@ -225,6 +225,23 @@ transport:
 Set `verify_client: true` and `client_ca` when you want client certificates
 available to `MtlsIdentityProvider`.
 
+### Runnable Auth Examples
+
+`examples/auth/` contains Docker Compose examples for every built-in
+authentication approach:
+
+- shared JWT
+- Keycloak OIDC
+- API key
+- local mTLS
+- SPIFFE/SPIRE mTLS
+- trusted headers through a real Flight gateway
+- composite provider chains
+
+Each example starts a real `dal-obscura` server, authenticates a real client, and
+executes a real Flight read without external services. See
+`examples/auth/README.md` for commands and caveats.
+
 ## Development
 
 ```bash
