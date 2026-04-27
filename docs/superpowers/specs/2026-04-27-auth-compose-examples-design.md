@@ -15,6 +15,8 @@ The examples live under `examples/auth/`:
 - `keycloak-oidc`: real Keycloak OIDC issuer with `OidcJwksIdentityProvider`.
 - `api-key`: static service account API key with `ApiKeyIdentityProvider`.
 - `mtls`: client certificate identity with `MtlsIdentityProvider`.
+- `mtls-spiffe`: real SPIRE server/agent issuing X.509-SVIDs, with
+  `MtlsIdentityProvider` mapping the verified SPIFFE URI identity.
 - `trusted-headers`: real gateway/proxy asserting identity headers with
   `TrustedHeaderIdentityProvider`.
 - `composite-provider`: one server using `CompositeIdentityProvider` to accept multiple
@@ -70,10 +72,10 @@ read path are real.
   trusted identity headers before forwarding requests to `dal-obscura`.
 - `keycloak/realm.json`: importable Keycloak realm for the OIDC example.
 
-The shared fixture code should reuse the structure from
-`tests/support/build_connector_fixture.py` where practical, but it should be shaped as
-example code rather than a test-only script. The generated policy grants the principal
-used by each mechanism enough access to prove the read path succeeds.
+The shared fixture code should reuse the same catalog and policy shape as the existing
+connector fixture builder where practical, but it should be shaped as example code. The
+generated policy grants the principal used by each mechanism enough access to prove the
+read path succeeds.
 
 ## Authentication Flows
 
@@ -119,6 +121,23 @@ from the verified peer identity.
 This demonstrates transport-bound service identity for service mesh or internal PKI
 deployments.
 
+### mTLS With SPIFFE
+
+Compose starts a real SPIRE server and SPIRE agent. The example registers workload
+entries for the `dal-obscura` server and the client, fetches X.509-SVID material through
+the SPIRE Workload API, and starts `dal-obscura` with mTLS enabled. The client presents
+its SPIFFE SVID, and `MtlsIdentityProvider` maps the verified peer identity:
+
+```text
+spiffe://example.org/ns/default/sa/dal-obscura-client
+```
+
+to the example principal.
+
+This demonstrates deployments that already use SPIFFE/SPIRE or a SPIFFE-compatible
+workload identity plane, while still using the same mTLS identity provider inside
+`dal-obscura`.
+
 ### Trusted Headers
 
 Compose starts a real proxy/gateway container in front of `dal-obscura`. The gateway
@@ -156,7 +175,8 @@ Examples with support services add:
 
 - `keycloak` for OIDC.
 - `gateway` for trusted headers.
-- `certs` or setup-integrated cert generation for mTLS.
+- `certs` or setup-integrated cert generation for local-PKI mTLS.
+- `spire-server` and `spire-agent` for SPIFFE mTLS.
 
 The standard command is:
 
@@ -194,29 +214,23 @@ The client scripts should fail loudly when:
 The setup scripts should fail loudly when required environment variables are missing or
 when generated files cannot be written.
 
-## Testing And Verification
+## Verification
 
-The implementation should include lightweight tests for shared Python helper functions
-where they can run quickly without Docker. Full end-to-end verification is the Compose
-command for each example:
+Per user direction, the implementation should not add automated tests for these
+examples. Verification is the Compose command for each example:
 
 ```bash
 docker compose -f examples/auth/shared-jwt/compose.yaml up --build --abort-on-container-exit --exit-code-from client
 docker compose -f examples/auth/keycloak-oidc/compose.yaml up --build --abort-on-container-exit --exit-code-from client
 docker compose -f examples/auth/api-key/compose.yaml up --build --abort-on-container-exit --exit-code-from client
 docker compose -f examples/auth/mtls/compose.yaml up --build --abort-on-container-exit --exit-code-from client
+docker compose -f examples/auth/mtls-spiffe/compose.yaml up --build --abort-on-container-exit --exit-code-from client
 docker compose -f examples/auth/trusted-headers/compose.yaml up --build --abort-on-container-exit --exit-code-from client
 docker compose -f examples/auth/composite-provider/compose.yaml up --build --abort-on-container-exit --exit-code-from client
 ```
 
-The normal repository verification should also continue to pass:
-
-```bash
-uv run pytest
-uv run ruff check .
-uv run ty check
-mvn -f connectors/jvm/pom.xml verify
-```
+Run `uv run ruff check examples/auth/_shared/scripts` after adding shared Python helper
+scripts so syntax and style mistakes are caught without introducing example tests.
 
 ## Security Notes
 
@@ -232,6 +246,8 @@ Production caveats to call out:
 - Static JWKS is useful offline but shifts key rotation to operators.
 - mTLS security depends on CA protection, certificate lifecycle, and client identity
   verification.
+- SPIFFE mTLS security depends on SPIRE server/agent lifecycle, workload registration,
+  trust-domain governance, and SVID rotation.
 - Trusted headers are safe only when direct backend access is blocked and only the
   trusted gateway can set identity headers.
 - Composite provider order matters because missing credentials fall through while
