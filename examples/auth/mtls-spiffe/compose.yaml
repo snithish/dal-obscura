@@ -1,0 +1,161 @@
+name: dal-obscura-auth-mtls-spiffe
+services:
+  spire-server:
+    image: ghcr.io/spiffe/spire-server:1.14.5
+    volumes:
+      - spire-server:/run/spire/server
+      - ../_shared/spire/server.conf:/opt/spire/conf/server/server.conf:ro
+    command: ["run", "-config", "/opt/spire/conf/server/server.conf"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "/opt/spire/bin/spire-server",
+          "healthcheck",
+          "-socketPath",
+          "/run/spire/server/private/api.sock",
+        ]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+  spire-bootstrap:
+    build:
+      context: ../../..
+      dockerfile: examples/auth/_shared/Dockerfile
+    depends_on:
+      spire-server:
+        condition: service_healthy
+    volumes:
+      - spire-server:/run/spire/server
+      - spire-shared:/run/spire/shared
+      - ../_shared/scripts/register_spiffe_entries.sh:/opt/spire/register_spiffe_entries.sh:ro
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        rm -f /run/spire/shared/entries.done
+        sh /opt/spire/register_spiffe_entries.sh
+        tail -f /dev/null
+    healthcheck:
+      test: ["CMD", "test", "-f", "/run/spire/shared/entries.done"]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+  spire-agent:
+    build:
+      context: ../../..
+      dockerfile: examples/auth/_shared/Dockerfile
+    depends_on:
+      spire-bootstrap:
+        condition: service_healthy
+    volumes:
+      - spire-agent:/run/spire/agent
+      - spire-shared:/run/spire/shared
+      - ../_shared/spire/agent.conf:/opt/spire/conf/agent/agent.conf:ro
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        /usr/local/bin/spire-agent run \
+          -config /opt/spire/conf/agent/agent.conf \
+          -joinTokenFile /run/spire/shared/join-token &
+        agent_pid=$$!
+        for _ in $$(seq 1 60); do
+          if [ -S /run/spire/agent/public/api.sock ]; then
+            chmod 777 /run/spire/agent/public/api.sock
+            wait "$$agent_pid"
+            exit $$?
+          fi
+          sleep 1
+        done
+        echo "SPIRE agent socket was not created" >&2
+        exit 1
+    healthcheck:
+      test: ["CMD", "test", "-S", "/run/spire/agent/public/api.sock"]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+  setup:
+    build:
+      context: ../../..
+      dockerfile: examples/auth/_shared/Dockerfile
+    environment:
+      EXAMPLE_AUTH_MODE: mtls-spiffe
+      DAL_OBSCURA_TICKET_SECRET: ticket-secret-32-characters-long
+    volumes:
+      - runtime:/workspace/runtime
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        rm -f /workspace/runtime/setup.done
+        /workspace/.venv/bin/python examples/auth/_shared/scripts/build_fixture.py
+        touch /workspace/runtime/setup.done
+        tail -f /dev/null
+    healthcheck:
+      test: ["CMD", "test", "-f", "/workspace/runtime/setup.done"]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+  dal-obscura:
+    build:
+      context: ../../..
+      dockerfile: examples/auth/_shared/Dockerfile
+    depends_on:
+      setup:
+        condition: service_healthy
+      spire-agent:
+        condition: service_healthy
+    environment:
+      DAL_OBSCURA_TICKET_SECRET: ticket-secret-32-characters-long
+      SPIFFE_ENDPOINT_SOCKET: unix:///run/spire/agent/public/api.sock
+    pid: "service:spire-agent"
+    user: "1001:1001"
+    volumes:
+      - runtime:/workspace/runtime
+      - spire-agent:/run/spire/agent
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        examples/auth/_shared/scripts/fetch_spiffe_svid.sh /tmp/spiffe-svid
+        export SERVER_CERT="$$(cat /tmp/spiffe-svid/svid.0.pem)"
+        export SERVER_KEY="$$(cat /tmp/spiffe-svid/svid.0.key)"
+        export CLIENT_CA="$$(cat /tmp/spiffe-svid/bundle.0.pem)"
+        /workspace/.venv/bin/dal-obscura --app-config /workspace/runtime/app.yaml
+  client:
+    build:
+      context: ../../..
+      dockerfile: examples/auth/_shared/Dockerfile
+    depends_on:
+      dal-obscura:
+        condition: service_started
+      spire-agent:
+        condition: service_healthy
+    environment:
+      EXAMPLE_AUTH_MODE: mtls-spiffe
+      FLIGHT_URI: grpc+tls://dal-obscura:8815
+      SPIFFE_ENDPOINT_SOCKET: unix:///run/spire/agent/public/api.sock
+      SPIFFE_SVID_DIR: /tmp/spiffe-svid
+    pid: "service:spire-agent"
+    user: "1002:1002"
+    volumes:
+      - runtime:/workspace/runtime
+      - spire-agent:/run/spire/agent
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        examples/auth/_shared/scripts/fetch_spiffe_svid.sh /tmp/spiffe-svid
+        /workspace/.venv/bin/python examples/auth/_shared/scripts/wait_for_flight.py
+        /workspace/.venv/bin/python examples/auth/_shared/scripts/flight_client.py
+volumes:
+  runtime:
+  spire-server:
+  spire-agent:
+  spire-shared:
