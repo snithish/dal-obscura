@@ -19,6 +19,9 @@ from dal_obscura.infrastructure.adapters.identity_default import (
 )
 from dal_obscura.infrastructure.adapters.identity_mtls import MtlsIdentityProvider
 from dal_obscura.infrastructure.adapters.identity_oidc_jwks import OidcJwksIdentityProvider
+from dal_obscura.infrastructure.adapters.identity_trusted_headers import (
+    TrustedHeaderIdentityProvider,
+)
 from dal_obscura.infrastructure.adapters.policy_file_authorizer import (
     PolicyFileAuthorizer,
     load_policy_config,
@@ -63,6 +66,7 @@ __all__ = [
     "SchemaInferenceOptions",
     "SecretProvider",
     "ServiceConfig",
+    "TrustedHeaderIdentityProvider",
     "load_app_config",
     "load_catalog_config",
     "load_policy_config",
