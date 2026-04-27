@@ -127,7 +127,19 @@ class SparkReadIT {
     }
 
     @Test
-    void failsClearlyWhenTheTokenIsMissing() throws Exception {
+    void readsUsingExplicitAuthorizationHeaderOption() throws Exception {
+        try (SparkFixture fixture = SparkFixture.create("spark-auth-header-it")) {
+            long matchingRows =
+                    fixture.readWithAuthorizationHeader()
+                            .filter("market = 'enterprise'")
+                            .count();
+
+            assertEquals(countPolicyVisibleEnterpriseRows(fixture.bundle().expectedRowCount()), matchingRows);
+        }
+    }
+
+    @Test
+    void failsClearlyWhenNoAuthHeadersAreProvided() throws Exception {
         try (SparkFixture fixture = SparkFixture.create("spark-auth-it")) {
             Exception error =
                     assertThrows(
@@ -135,7 +147,9 @@ class SparkReadIT {
                             () -> fixture.readWithoutToken().count());
 
             String message = error.getMessage() == null ? "" : error.getMessage();
-            assertTrue(message.contains("Missing required option: dal.auth.token"));
+            assertTrue(
+                    message.contains("Unauthorized") || message.contains("UNAUTHENTICATED"),
+                    "expected server-side auth failure but got: " + message);
         }
     }
 
@@ -196,6 +210,10 @@ class SparkReadIT {
             return reader(true).load();
         }
 
+        Dataset<Row> readWithAuthorizationHeader() {
+            return readerWithAuthorizationHeader().load();
+        }
+
         Dataset<Row> readWithoutToken() {
             return reader(false).load();
         }
@@ -211,6 +229,15 @@ class SparkReadIT {
                 reader = reader.option("dal.auth.token", bundle.userToken());
             }
             return reader;
+        }
+
+        private DataFrameReader readerWithAuthorizationHeader() {
+            return spark.read()
+                    .format("dal_obscura")
+                    .option("dal.uri", server.uri())
+                    .option("dal.catalog", bundle.catalog())
+                    .option("dal.target", bundle.target())
+                    .option("dal.auth.header.authorization", "Bearer " + bundle.userToken());
         }
 
         @Override

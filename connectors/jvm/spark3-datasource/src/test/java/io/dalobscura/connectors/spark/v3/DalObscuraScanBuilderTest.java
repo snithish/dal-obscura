@@ -2,6 +2,7 @@ package io.dalobscura.connectors.spark.v3;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import io.dalobscura.connectors.client.DalObscuraAuth;
 import io.dalobscura.connectors.client.DalObscuraPlanRequest;
 import io.dalobscura.connectors.client.DalObscuraPlannedPartition;
 import io.dalobscura.connectors.client.DalObscuraPlannedRead;
@@ -27,13 +28,11 @@ class DalObscuraScanBuilderTest {
     @Test
     void plansWildcardSchemaThenPlansProjectedTicketRead() {
         RecordingClient client = new RecordingClient();
+        DalObscuraAuth auth = new DalObscuraAuth(Map.of("x-api-key", "secret-1"));
         DalObscuraTable table =
                 new DalObscuraTable(
                         new DalObscuraConnectorOptions(
-                                "grpc+tcp://localhost:8815",
-                                "analytics",
-                                "default.users",
-                                "token-123"),
+                                "grpc+tcp://localhost:8815", "analytics", "default.users", auth),
                         () -> client);
 
         StructType fullSchema = table.schema();
@@ -47,8 +46,10 @@ class DalObscuraScanBuilderTest {
         assertEquals(1, fullSchema.fields().length);
         assertEquals("id", fullSchema.fields()[0].name());
         assertEquals(1, client.schemaRequestCount());
+        assertEquals("secret-1", client.schemaAuths().get(0).header("x-api-key"));
         assertEquals(List.of("id"), client.planRequests().get(0).columns());
         assertEquals(Optional.of("region = 'us'"), client.planRequests().get(0).rowFilter());
+        assertEquals("secret-1", client.planAuths().get(0).header("x-api-key"));
         assertEquals(2, partitions.length);
     }
 
@@ -61,7 +62,7 @@ class DalObscuraScanBuilderTest {
                                 "grpc+tcp://localhost:8815",
                                 "analytics",
                                 "default.users",
-                                "token-123"),
+                                DalObscuraAuth.bearerToken("token-123")),
                         () -> client);
 
         DalObscuraScanBuilder builder =
@@ -92,7 +93,7 @@ class DalObscuraScanBuilderTest {
                                 "grpc+tcp://localhost:8815",
                                 "analytics",
                                 "default.users",
-                                "token-123"),
+                                DalObscuraAuth.bearerToken("token-123")),
                         () -> client,
                         fullSchema);
 
@@ -117,7 +118,7 @@ class DalObscuraScanBuilderTest {
                                 "grpc+tcp://localhost:8815",
                                 "analytics",
                                 "default.users",
-                                "token-123"),
+                                DalObscuraAuth.bearerToken("token-123")),
                         () -> client,
                         fullSchema);
 
@@ -130,11 +131,14 @@ class DalObscuraScanBuilderTest {
 
     private static final class RecordingClient implements DalObscuraReadClient {
         private final ArrayList<DalObscuraPlanRequest> planRequests = new ArrayList<>();
+        private final ArrayList<DalObscuraAuth> planAuths = new ArrayList<>();
+        private final ArrayList<DalObscuraAuth> schemaAuths = new ArrayList<>();
         private int schemaRequestCount;
 
         @Override
-        public Schema fetchSchema(String catalog, String target, String authToken) {
+        public Schema fetchSchema(String catalog, String target, DalObscuraAuth auth) {
             schemaRequestCount += 1;
+            schemaAuths.add(auth);
             return new Schema(
                     List.of(
                             new Field(
@@ -144,8 +148,9 @@ class DalObscuraScanBuilderTest {
         }
 
         @Override
-        public DalObscuraPlannedRead plan(DalObscuraPlanRequest request, String authToken) {
+        public DalObscuraPlannedRead plan(DalObscuraPlanRequest request, DalObscuraAuth auth) {
             planRequests.add(request);
+            planAuths.add(auth);
             Schema schema =
                     new Schema(
                             List.of(
@@ -162,7 +167,7 @@ class DalObscuraScanBuilderTest {
 
         @Override
         public DalObscuraTicketStream openStream(
-                DalObscuraPlannedPartition partition, String authToken) {
+                DalObscuraPlannedPartition partition, DalObscuraAuth auth) {
             throw new UnsupportedOperationException();
         }
 
@@ -171,6 +176,14 @@ class DalObscuraScanBuilderTest {
 
         List<DalObscuraPlanRequest> planRequests() {
             return planRequests;
+        }
+
+        List<DalObscuraAuth> planAuths() {
+            return planAuths;
+        }
+
+        List<DalObscuraAuth> schemaAuths() {
+            return schemaAuths;
         }
 
         int schemaRequestCount() {
