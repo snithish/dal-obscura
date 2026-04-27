@@ -8,7 +8,11 @@ from urllib.request import urlopen
 
 import jwt
 
-from dal_obscura.application.ports.identity import AuthenticationRequest
+from dal_obscura.application.ports.identity import (
+    AuthenticationRequest,
+    InvalidCredentialsError,
+    MissingCredentialsError,
+)
 from dal_obscura.domain.access_control.models import Principal
 
 JsonObject = Mapping[str, Any]
@@ -60,11 +64,11 @@ class OidcJwksIdentityProvider:
     def authenticate(self, request: AuthenticationRequest) -> Principal:
         token = _parse_bearer(request.header("authorization"))
         if not token:
-            raise PermissionError("Missing token")
+            raise MissingCredentialsError("Missing token")
         payload = self._decode(token)
         subject = _string_claim(payload, self._config.subject_claim)
         if not subject:
-            raise PermissionError("Missing subject")
+            raise InvalidCredentialsError("Missing subject")
         return Principal(
             id=subject,
             groups=_groups_from_claims(payload, self._config.group_claims),
@@ -84,9 +88,9 @@ class OidcJwksIdentityProvider:
                 options={"verify_aud": self._config.audience is not None},
             )
         except jwt.PyJWTError as exc:
-            raise PermissionError("Invalid token") from exc
+            raise InvalidCredentialsError("Invalid token") from exc
         if not isinstance(payload, Mapping):
-            raise PermissionError("Invalid token")
+            raise InvalidCredentialsError("Invalid token")
         return payload
 
 

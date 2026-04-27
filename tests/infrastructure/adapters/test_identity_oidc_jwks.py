@@ -8,7 +8,7 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from jwt.utils import base64url_encode
 
-from dal_obscura.application.ports.identity import AuthenticationRequest
+from dal_obscura.application.ports.identity import AuthenticationRequest, MissingCredentialsError
 from dal_obscura.infrastructure.adapters.identity_oidc_jwks import OidcJwksIdentityProvider
 
 ISSUER = "https://keycloak.example.test/realms/acme"
@@ -88,7 +88,7 @@ def test_rejects_missing_bearer_token():
     _private_key, jwk = _rsa_key_pair("kid-1")
     provider = _provider(jwk)
 
-    with pytest.raises(PermissionError, match="Missing token"):
+    with pytest.raises(MissingCredentialsError, match="Missing token"):
         provider.authenticate(AuthenticationRequest())
 
 

@@ -4,7 +4,11 @@ from dataclasses import dataclass
 
 import jwt
 
-from dal_obscura.application.ports.identity import AuthenticationRequest
+from dal_obscura.application.ports.identity import (
+    AuthenticationRequest,
+    InvalidCredentialsError,
+    MissingCredentialsError,
+)
 from dal_obscura.domain.access_control.models import Principal
 
 
@@ -44,13 +48,13 @@ class DefaultIdentityAdapter:
         """Authenticates the request and returns the resolved principal."""
         token = _parse_bearer(request.header("authorization"))
         if not token:
-            raise PermissionError("Missing token")
+            raise MissingCredentialsError("Missing token")
 
         jwt_principal = _decode_jwt(token, self._config)
         if jwt_principal:
             return jwt_principal
 
-        raise PermissionError("Invalid token")
+        raise InvalidCredentialsError("Invalid token")
 
 
 def _parse_bearer(header: str | None) -> str | None:

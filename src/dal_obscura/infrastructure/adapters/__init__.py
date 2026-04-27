@@ -9,6 +9,7 @@ from dal_obscura.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
 )
+from dal_obscura.infrastructure.adapters.identity_composite import CompositeIdentityProvider
 from dal_obscura.infrastructure.adapters.identity_default import (
     AuthConfig,
     DefaultIdentityAdapter,
@@ -40,6 +41,7 @@ __all__ = [
     "AuthConfig",
     "CatalogConfig",
     "CatalogTargetConfig",
+    "CompositeIdentityProvider",
     "DefaultIdentityAdapter",
     "DefaultMaskingAdapter",
     "DuckDBRowTransformAdapter",

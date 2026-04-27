@@ -1,7 +1,7 @@
 import jwt
 import pytest
 
-from dal_obscura.application.ports.identity import AuthenticationRequest
+from dal_obscura.application.ports.identity import AuthenticationRequest, MissingCredentialsError
 from dal_obscura.infrastructure.adapters.identity_default import AuthConfig, DefaultIdentityAdapter
 
 JWT_SECRET = "test-jwt-secret-32-characters-long"
@@ -24,7 +24,7 @@ def test_auth_rejects_non_bearer_authorization_header():
     config = AuthConfig(jwt_secret=JWT_SECRET)
     token = jwt.encode({"sub": "user1"}, JWT_SECRET, algorithm="HS256")
 
-    with pytest.raises(PermissionError):
+    with pytest.raises(MissingCredentialsError, match="Missing token"):
         DefaultIdentityAdapter(config).authenticate(
             AuthenticationRequest(headers={"authorization": f"Token {token}"})
         )

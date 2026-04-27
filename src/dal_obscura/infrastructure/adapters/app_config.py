@@ -9,6 +9,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from dal_obscura.application.ports.identity import IdentityPort
+from dal_obscura.infrastructure.adapters.identity_composite import CompositeIdentityProvider
 from dal_obscura.infrastructure.adapters.identity_default import AuthConfig, DefaultIdentityAdapter
 from dal_obscura.infrastructure.adapters.secret_providers import SecretProvider
 
@@ -53,6 +54,10 @@ class _AuthProviderInputConfig(_StrictModel):
         if "." not in module:
             raise ValueError("Auth provider module must be a fully qualified class path")
         return module
+
+
+class _AuthProviderChainInputConfig(_StrictModel):
+    providers: list[_AuthProviderInputConfig] = Field(min_length=1)
 
 
 class _LegacyAuthInputConfig(_StrictModel):
@@ -203,6 +208,22 @@ def _load_identity_provider(raw_auth: object, provider: SecretProvider) -> Ident
     """Loads the configured identity provider, including legacy JWT config."""
     if not isinstance(raw_auth, Mapping):
         raise ValueError("Invalid app config: field 'auth' must be an object")
+    if "providers" in raw_auth:
+        try:
+            chain_config = _AuthProviderChainInputConfig.model_validate(raw_auth)
+        except ValidationError as exc:
+            raise ValueError(f"Invalid app config: {exc}") from exc
+        providers = [
+            _load_identity_provider_from_module(
+                item.module,
+                cast(
+                    dict[str, Any],
+                    _resolve_secret_refs(provider, item.args, "auth.providers"),
+                ),
+            )
+            for item in chain_config.providers
+        ]
+        return CompositeIdentityProvider(providers)
     if "module" in raw_auth:
         try:
             auth_config = _AuthProviderInputConfig.model_validate(raw_auth)
