@@ -151,7 +151,12 @@ class _JwksCache:
             kid = str(item.get("kid") or "")
             if not kid:
                 continue
-            refreshed[kid] = jwt.PyJWK.from_dict(dict(item)).key
+            if item.get("use") not in (None, "sig"):
+                continue
+            try:
+                refreshed[kid] = jwt.PyJWK.from_dict(dict(item)).key
+            except jwt.PyJWTError:
+                continue
         self._keys_by_kid = refreshed
 
 

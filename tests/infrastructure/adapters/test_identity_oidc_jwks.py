@@ -85,6 +85,22 @@ def test_valid_keycloak_like_access_token_authenticates():
     assert principal.attributes == {}
 
 
+def test_ignores_non_signing_jwks_entries():
+    private_key, jwk = _rsa_key_pair("signing-kid")
+    encryption_jwk = {**jwk, "kid": "encryption-kid", "use": "enc", "alg": "RSA-OAEP"}
+    provider = OidcJwksIdentityProvider(
+        issuer=ISSUER,
+        audience=AUDIENCE,
+        jwks_url="https://keycloak.example.test/certs",
+        jwks_fetcher=lambda _url: {"keys": [encryption_jwk, jwk]},
+    )
+    token = _token(private_key, kid="signing-kid", subject="user-123")
+
+    principal = provider.authenticate(_auth_request(token))
+
+    assert principal.id == "user-123"
+
+
 def test_rejects_missing_bearer_token():
     _private_key, jwk = _rsa_key_pair("kid-1")
     provider = _provider(jwk)
