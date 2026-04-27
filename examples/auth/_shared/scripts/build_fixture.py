@@ -161,6 +161,9 @@ def _auth_config(mode: str) -> dict[str, Any]:
             "args": {
                 "issuer": "http://keycloak:8080/realms/dal-obscura",
                 "audience": "dal-obscura",
+                "jwks_url": (
+                    "http://keycloak:8080/realms/dal-obscura/protocol/openid-connect/certs"
+                ),
                 "subject_claim": "preferred_username",
             },
         }

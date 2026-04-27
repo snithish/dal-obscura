@@ -1,0 +1,70 @@
+name: dal-obscura-auth-keycloak-oidc
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    command: ["start-dev", "--import-realm", "--http-port=8080", "--hostname-strict=false"]
+    volumes:
+      - ../_shared/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+  setup:
+    build:
+      context: ../../..
+      dockerfile: examples/auth/_shared/Dockerfile
+    environment:
+      EXAMPLE_AUTH_MODE: keycloak-oidc
+      DAL_OBSCURA_TICKET_SECRET: ticket-secret-32-characters-long
+    volumes:
+      - runtime:/workspace/runtime
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        rm -f /workspace/runtime/setup.done
+        /workspace/.venv/bin/python examples/auth/_shared/scripts/build_fixture.py
+        touch /workspace/runtime/setup.done
+        tail -f /dev/null
+    healthcheck:
+      test: ["CMD", "test", "-f", "/workspace/runtime/setup.done"]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+  dal-obscura:
+    build:
+      context: ../../..
+      dockerfile: examples/auth/_shared/Dockerfile
+    depends_on:
+      setup:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    environment:
+      DAL_OBSCURA_TICKET_SECRET: ticket-secret-32-characters-long
+    volumes:
+      - runtime:/workspace/runtime
+    command: ["/workspace/.venv/bin/dal-obscura", "--app-config", "/workspace/runtime/app.yaml"]
+  client:
+    build:
+      context: ../../..
+      dockerfile: examples/auth/_shared/Dockerfile
+    depends_on:
+      dal-obscura:
+        condition: service_started
+      keycloak:
+        condition: service_started
+    environment:
+      EXAMPLE_AUTH_MODE: keycloak-oidc
+      FLIGHT_URI: grpc+tcp://dal-obscura:8815
+    volumes:
+      - runtime:/workspace/runtime
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        /workspace/.venv/bin/python examples/auth/_shared/scripts/wait_for_flight.py
+        /workspace/.venv/bin/python examples/auth/_shared/scripts/flight_client.py
+volumes:
+  runtime:
