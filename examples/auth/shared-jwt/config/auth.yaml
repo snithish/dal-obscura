@@ -1,0 +1,5 @@
+auth:
+  module: dal_obscura.infrastructure.adapters.identity_default.DefaultIdentityAdapter
+  args:
+    jwt_secret:
+      key: DAL_OBSCURA_JWT_SECRET

@@ -1,9 +1,9 @@
 # Authentication Examples
 
-These examples run `dal-obscura` with real authentication mechanisms inside Docker
-Compose. Each directory has its own `compose.yaml` and can be run independently.
-No external identity service, certificate authority, gateway, or data service is
-required.
+These examples run `dal-obscura` with real authentication mechanisms inside
+Docker Compose. Each directory has its own `compose.yaml`, builds the reusable
+root server image, and can run without any external identity service,
+certificate authority, gateway, or data service.
 
 ## Examples
 
@@ -20,7 +20,9 @@ required.
 Run from an example directory:
 
 ```bash
-docker compose up --build --abort-on-container-exit --exit-code-from client
+docker compose up --build -d --wait
+docker compose logs client
+docker compose exec client dal-obscura-example-read --target default.users
 ```
 
 Clean up from that directory:
@@ -28,6 +30,10 @@ Clean up from that directory:
 ```bash
 docker compose down --volumes
 ```
+
+The startup read happens automatically inside the `client` container. That
+container stays running so you can issue more reads with `docker compose exec`
+instead of restarting the whole stack.
 
 ## What Each Example Does
 
@@ -38,8 +44,8 @@ Every example starts from the same shape:
 2. `dal-obscura` starts the real Flight service from that generated config.
 3. Optional infrastructure services start when the mechanism needs them, such as
    Keycloak, SPIRE, or a trusted Flight gateway.
-4. `client` obtains or presents the selected credential, calls `get_flight_info`,
-   calls `do_get`, validates the returned schema and rows, then exits `0`.
+4. `client` obtains or presents the selected credential, performs a startup read,
+   marks itself healthy, and then stays available for interactive reads.
 
 The sample policy grants `example-user` access to `default.users`, with a row
 filter that returns two rows. A successful run prints:
@@ -47,6 +53,26 @@ filter that returns two rows. A successful run prints:
 ```text
 <example-name>: authenticated as example-user and read 2 rows
 ```
+
+## Customizing Data
+
+Each example directory owns its runtime inputs:
+
+- `fixture/fixture.yaml`: catalog, tables, rows, and policy rules
+- `config/auth.yaml`: auth provider wiring
+- `config/transport.yaml`: transport TLS settings when that example needs them
+
+To add your own table or rows, edit `fixture/fixture.yaml` and recreate the
+stack:
+
+```bash
+docker compose down --volumes
+docker compose up --build -d --wait
+```
+
+The fixture format supports multiple tables, primitive scalar fields, inline
+rows, and optional CSV-backed rows. The shared setup container rebuilds the
+runtime catalog from those files on every fresh start.
 
 ## Caveats
 

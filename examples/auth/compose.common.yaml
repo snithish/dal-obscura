@@ -1,0 +1,58 @@
+services:
+  setup:
+    build:
+      context: ../..
+      dockerfile: examples/auth/_shared/Dockerfile
+    environment:
+      EXAMPLE_ROOT: /workspace/example
+      FIXTURE_FILE: /workspace/example/fixture/fixture.yaml
+      AUTH_CONFIG_FILE: /workspace/example/config/auth.yaml
+      TRANSPORT_CONFIG_FILE: /workspace/example/config/transport.yaml
+    volumes:
+      - runtime:/workspace/runtime
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        rm -f /workspace/runtime/setup.done
+        /workspace/.venv/bin/python examples/auth/_shared/scripts/build_runtime.py
+        touch /workspace/runtime/setup.done
+        tail -f /dev/null
+    healthcheck:
+      test: ["CMD", "test", "-f", "/workspace/runtime/setup.done"]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+
+  dal-obscura:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    depends_on:
+      setup:
+        condition: service_healthy
+    volumes:
+      - runtime:/workspace/runtime
+    command: ["--app-config", "/workspace/runtime/app.yaml"]
+
+  client:
+    build:
+      context: ../..
+      dockerfile: examples/auth/_shared/Dockerfile
+    depends_on:
+      dal-obscura:
+        condition: service_started
+    volumes:
+      - runtime:/workspace/runtime
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        /workspace/.venv/bin/python examples/auth/_shared/scripts/client_session.py
+    healthcheck:
+      test: ["CMD", "test", "-f", "/workspace/runtime/client.ready"]
+      interval: 1s
+      timeout: 3s
+      retries: 60

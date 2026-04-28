@@ -1,40 +1,28 @@
 name: dal-obscura-auth-mtls
 services:
   setup:
-    build:
-      context: ../../..
-      dockerfile: examples/auth/_shared/Dockerfile
-    environment:
-      EXAMPLE_AUTH_MODE: mtls
-      DAL_OBSCURA_TICKET_SECRET: ticket-secret-32-characters-long
+    extends:
+      file: ../compose.common.yaml
+      service: setup
     volumes:
-      - runtime:/workspace/runtime
+      - .:/workspace/example:ro
     command:
       - sh
       - -c
       - |
         set -e
         rm -f /workspace/runtime/setup.done
-        /workspace/.venv/bin/python examples/auth/_shared/scripts/generate_certs.py
-        /workspace/.venv/bin/python examples/auth/_shared/scripts/build_fixture.py
+        /workspace/.venv/bin/python /workspace/example/scripts/generate_certs.py
+        /workspace/.venv/bin/python examples/auth/_shared/scripts/build_runtime.py
         touch /workspace/runtime/setup.done
         tail -f /dev/null
-    healthcheck:
-      test: ["CMD", "test", "-f", "/workspace/runtime/setup.done"]
-      interval: 1s
-      timeout: 3s
-      retries: 60
   dal-obscura:
-    build:
-      context: ../../..
-      dockerfile: examples/auth/_shared/Dockerfile
-    depends_on:
-      setup:
-        condition: service_healthy
+    extends:
+      file: ../compose.common.yaml
+      service: dal-obscura
     environment:
       DAL_OBSCURA_TICKET_SECRET: ticket-secret-32-characters-long
-    volumes:
-      - runtime:/workspace/runtime
+    entrypoint: []
     command:
       - sh
       - -c
@@ -45,23 +33,13 @@ services:
         export CLIENT_CA="$$(cat /workspace/runtime/certs/ca.crt)"
         /workspace/.venv/bin/dal-obscura --app-config /workspace/runtime/app.yaml
   client:
-    build:
-      context: ../../..
-      dockerfile: examples/auth/_shared/Dockerfile
-    depends_on:
-      dal-obscura:
-        condition: service_started
+    extends:
+      file: ../compose.common.yaml
+      service: client
     environment:
-      EXAMPLE_AUTH_MODE: mtls
+      AUTH_FLOW: mtls
       FLIGHT_URI: grpc+tls://dal-obscura:8815
-    volumes:
-      - runtime:/workspace/runtime
-    command:
-      - sh
-      - -c
-      - |
-        set -e
-        /workspace/.venv/bin/python examples/auth/_shared/scripts/wait_for_flight.py
-        /workspace/.venv/bin/python examples/auth/_shared/scripts/flight_client.py
+      CLIENT_CERT_DIR: /workspace/runtime/certs
+      STARTUP_EXPECT_ROWS: "2"
 volumes:
   runtime:

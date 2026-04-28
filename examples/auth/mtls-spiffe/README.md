@@ -9,16 +9,19 @@ URI to `example-user`.
 - `spire-server`: real SPIRE server with a local self-signed authority.
 - `spire-bootstrap`: generates a join token and registers workload entries.
 - `spire-agent`: real SPIRE agent exposing the Workload API.
-- `setup`: creates the table, policy, and mTLS app config.
+- `setup`: creates the table, policy, and mTLS app config from
+  `fixture/fixture.yaml`, `config/auth.yaml`, and `config/transport.yaml`.
 - `dal-obscura`: fetches its server X.509-SVID and starts with TLS client
   verification enabled.
-- `client`: fetches its client X.509-SVID, presents it over Flight TLS, and
-  reads the table.
+- `client`: fetches its client X.509-SVID, performs the startup read over
+  Flight TLS, and then stays running for interactive reads.
 
 ## Run
 
 ```bash
-docker compose up --build --abort-on-container-exit --exit-code-from client
+docker compose up --build -d --wait
+docker compose logs client
+docker compose exec client dal-obscura-example-read --target default.users
 docker compose down --volumes
 ```
 

@@ -6,17 +6,21 @@ forwarding calls to the backend.
 
 ## Services
 
-- `setup`: creates the table, policy, and trusted-header provider config.
+- `setup`: creates the table, policy, and trusted-header provider config from
+  `fixture/fixture.yaml` and `config/auth.yaml`.
 - `dal-obscura`: trusts identity headers only when the proxy shared secret
   header is present and valid.
 - `gateway`: forwards `get_schema`, `get_flight_info`, and `do_get` to the
   backend with the trusted headers injected.
-- `client`: connects to the gateway and performs the Flight read.
+- `client`: connects to the gateway, performs the startup read, and then stays
+  running for interactive reads.
 
 ## Run
 
 ```bash
-docker compose up --build --abort-on-container-exit --exit-code-from client
+docker compose up --build -d --wait
+docker compose logs client
+docker compose exec client dal-obscura-example-read --target default.users
 docker compose down --volumes
 ```
 

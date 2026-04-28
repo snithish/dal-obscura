@@ -1,0 +1,10 @@
+location: grpc+tls://0.0.0.0:8815
+transport:
+  tls:
+    cert:
+      key: SERVER_CERT
+    key:
+      key: SERVER_KEY
+    client_ca:
+      key: CLIENT_CA
+    verify_client: true

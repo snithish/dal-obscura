@@ -7,34 +7,17 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
     command: ["start-dev", "--import-realm", "--http-port=8080", "--hostname-strict=false"]
     volumes:
-      - ../_shared/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+      - ./keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
   setup:
-    build:
-      context: ../../..
-      dockerfile: examples/auth/_shared/Dockerfile
-    environment:
-      EXAMPLE_AUTH_MODE: keycloak-oidc
-      DAL_OBSCURA_TICKET_SECRET: ticket-secret-32-characters-long
+    extends:
+      file: ../compose.common.yaml
+      service: setup
     volumes:
-      - runtime:/workspace/runtime
-    command:
-      - sh
-      - -c
-      - |
-        set -e
-        rm -f /workspace/runtime/setup.done
-        /workspace/.venv/bin/python examples/auth/_shared/scripts/build_fixture.py
-        touch /workspace/runtime/setup.done
-        tail -f /dev/null
-    healthcheck:
-      test: ["CMD", "test", "-f", "/workspace/runtime/setup.done"]
-      interval: 1s
-      timeout: 3s
-      retries: 60
+      - .:/workspace/example:ro
   dal-obscura:
-    build:
-      context: ../../..
-      dockerfile: examples/auth/_shared/Dockerfile
+    extends:
+      file: ../compose.common.yaml
+      service: dal-obscura
     depends_on:
       setup:
         condition: service_healthy
@@ -42,29 +25,23 @@ services:
         condition: service_started
     environment:
       DAL_OBSCURA_TICKET_SECRET: ticket-secret-32-characters-long
-    volumes:
-      - runtime:/workspace/runtime
-    command: ["/workspace/.venv/bin/dal-obscura", "--app-config", "/workspace/runtime/app.yaml"]
   client:
-    build:
-      context: ../../..
-      dockerfile: examples/auth/_shared/Dockerfile
+    extends:
+      file: ../compose.common.yaml
+      service: client
     depends_on:
       dal-obscura:
         condition: service_started
       keycloak:
         condition: service_started
     environment:
-      EXAMPLE_AUTH_MODE: keycloak-oidc
+      AUTH_FLOW: keycloak-oidc
       FLIGHT_URI: grpc+tcp://dal-obscura:8815
-    volumes:
-      - runtime:/workspace/runtime
-    command:
-      - sh
-      - -c
-      - |
-        set -e
-        /workspace/.venv/bin/python examples/auth/_shared/scripts/wait_for_flight.py
-        /workspace/.venv/bin/python examples/auth/_shared/scripts/flight_client.py
+      OIDC_TOKEN_URL: http://keycloak:8080/realms/dal-obscura/protocol/openid-connect/token
+      OIDC_CLIENT_ID: dal-obscura-client
+      OIDC_CLIENT_SECRET: dal-obscura-client-secret
+      OIDC_USERNAME: example-user
+      OIDC_PASSWORD: example-password
+      STARTUP_EXPECT_ROWS: "2"
 volumes:
   runtime:

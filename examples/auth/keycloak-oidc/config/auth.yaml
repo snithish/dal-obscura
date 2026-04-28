@@ -1,0 +1,7 @@
+auth:
+  module: dal_obscura.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider
+  args:
+    issuer: http://keycloak:8080/realms/dal-obscura
+    audience: dal-obscura
+    jwks_url: http://keycloak:8080/realms/dal-obscura/protocol/openid-connect/certs
+    subject_claim: preferred_username

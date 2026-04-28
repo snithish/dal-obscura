@@ -5,15 +5,19 @@ The provider chain accepts both API key and shared JWT credentials.
 
 ## Services
 
-- `setup`: creates a config with two auth providers in order: API key, then JWT.
+- `setup`: creates a config with two auth providers in order: API key, then
+  JWT, using `fixture/fixture.yaml` and `config/auth.yaml`.
 - `dal-obscura`: authenticates each request by trying the provider chain.
-- `client`: performs one successful read with `x-api-key`, then another with a
-  signed JWT.
+- `client`: performs one startup read with `x-api-key`, another with a signed
+  JWT, then stays running for interactive reads.
 
 ## Run
 
 ```bash
-docker compose up --build --abort-on-container-exit --exit-code-from client
+docker compose up --build -d --wait
+docker compose logs client
+docker compose exec client dal-obscura-example-read --target default.users --credential api-key
+docker compose exec client dal-obscura-example-read --target default.users --credential jwt
 docker compose down --volumes
 ```
 

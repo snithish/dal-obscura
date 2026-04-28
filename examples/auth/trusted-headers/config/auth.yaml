@@ -1,0 +1,5 @@
+auth:
+  module: dal_obscura.infrastructure.adapters.identity_trusted_headers.TrustedHeaderIdentityProvider
+  args:
+    shared_secret:
+      key: DAL_OBSCURA_PROXY_SECRET

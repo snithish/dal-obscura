@@ -5,16 +5,19 @@ an HS256 bearer JWT signed with a shared secret.
 
 ## Services
 
-- `setup`: creates the Iceberg table, policy, and app config.
+- `setup`: creates the Iceberg table, policy, and app config from
+  `fixture/fixture.yaml` and `config/auth.yaml`.
 - `dal-obscura`: validates `Authorization: Bearer <jwt>` with
   `DAL_OBSCURA_JWT_SECRET`.
-- `client`: signs a JWT for `sub=example-user`, performs a Flight read, and
-  validates the result.
+- `client`: signs a JWT for `sub=example-user`, performs a startup read, then
+  stays running for interactive reads.
 
 ## Run
 
 ```bash
-docker compose up --build --abort-on-container-exit --exit-code-from client
+docker compose up --build -d --wait
+docker compose logs client
+docker compose exec client dal-obscura-example-read --target default.users
 docker compose down --volumes
 ```
 

@@ -5,18 +5,20 @@ This example starts a real Keycloak container and runs `dal-obscura` with
 
 ## Services
 
-- `keycloak`: imports the `dal-obscura` realm from
-  `examples/auth/_shared/keycloak/realm.json`.
-- `setup`: creates the table, policy, and OIDC provider config.
+- `keycloak`: imports the `dal-obscura` realm from `keycloak/realm.json`.
+- `setup`: creates the table, policy, and OIDC provider config from
+  `fixture/fixture.yaml` and `config/auth.yaml`.
 - `dal-obscura`: validates bearer tokens against Keycloak issuer, audience, and
   JWKS.
-- `client`: obtains a real access token from Keycloak with the password grant
-  and uses it for the Flight read.
+- `client`: obtains a real access token from Keycloak with the password grant,
+  performs the startup read, then stays running for interactive reads.
 
 ## Run
 
 ```bash
-docker compose up --build --abort-on-container-exit --exit-code-from client
+docker compose up --build -d --wait
+docker compose logs client
+docker compose exec client dal-obscura-example-read --target default.users
 docker compose down --volumes
 ```
 

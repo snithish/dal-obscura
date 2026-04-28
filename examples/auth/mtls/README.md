@@ -6,15 +6,19 @@ enabled and maps the verified peer identity through `MtlsIdentityProvider`.
 ## Services
 
 - `setup`: generates a local CA, server certificate, client certificate, table,
-  policy, and mTLS app config.
+  policy, and mTLS app config from `fixture/fixture.yaml`, `config/auth.yaml`,
+  and `config/transport.yaml`.
 - `dal-obscura`: starts on `grpc+tls` and requires a client certificate signed by
   the generated CA.
-- `client`: presents the generated client certificate and reads through Flight.
+- `client`: presents the generated client certificate for the startup read, then
+  stays running for interactive reads.
 
 ## Run
 
 ```bash
-docker compose up --build --abort-on-container-exit --exit-code-from client
+docker compose up --build -d --wait
+docker compose logs client
+docker compose exec client dal-obscura-example-read --target default.users
 docker compose down --volumes
 ```
 

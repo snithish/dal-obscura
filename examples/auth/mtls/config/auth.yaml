@@ -1,0 +1,9 @@
+auth:
+  module: dal_obscura.infrastructure.adapters.identity_mtls.MtlsIdentityProvider
+  args:
+    identities:
+      - peer_identity: urn:dal-obscura:example-client
+        id: example-user
+        groups: ["compose-example"]
+        attributes:
+          client_id: urn:dal-obscura:example-client

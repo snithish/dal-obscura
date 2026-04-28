@@ -5,14 +5,18 @@ service credential sent in the `x-api-key` Flight header.
 
 ## Services
 
-- `setup`: creates the table, policy, and API-key provider config.
+- `setup`: creates the table, policy, and API-key provider config from
+  `fixture/fixture.yaml` and `config/auth.yaml`.
 - `dal-obscura`: maps the configured API key to `example-user`.
-- `client`: sends the configured API key and reads through Arrow Flight.
+- `client`: sends the configured API key for the startup read, then stays
+  running for interactive reads.
 
 ## Run
 
 ```bash
-docker compose up --build --abort-on-container-exit --exit-code-from client
+docker compose up --build -d --wait
+docker compose logs client
+docker compose exec client dal-obscura-example-read --target default.users
 docker compose down --volumes
 ```
 

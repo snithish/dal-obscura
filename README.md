@@ -34,6 +34,23 @@ uv sync
 uv run dal-obscura --help
 ```
 
+## Container Image
+
+The repo root [Dockerfile](/Users/nithish/.codex/worktrees/601a/dal-obscura/Dockerfile)
+builds a reusable `dal-obscura` server image. It contains only the server
+runtime and the locked Python dependencies needed to start the Flight service.
+
+Build it locally with:
+
+```bash
+docker build -t dal-obscura:local .
+```
+
+The runnable auth examples under
+[examples/auth](/Users/nithish/.codex/worktrees/601a/dal-obscura/examples/auth/README.md)
+reuse that image and keep provider-specific infrastructure in each example
+directory.
+
 ## Connectors
 
 Connector implementations live under `connectors/`.
@@ -237,6 +254,12 @@ authentication approach:
 - SPIFFE/SPIRE mTLS
 - trusted headers through a real Flight gateway
 - composite provider chains
+
+Each example is self-contained, starts the real auth backend for that flow, and
+leaves a client container running so you can issue more reads with
+`docker compose exec`. See
+[examples/auth/README.md](/Users/nithish/.codex/worktrees/601a/dal-obscura/examples/auth/README.md)
+for the shared run pattern and per-provider caveats.
 
 Each example starts a real `dal-obscura` server, authenticates a real client, and
 executes a real Flight read without external services. See
