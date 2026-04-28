@@ -29,6 +29,7 @@ uv run ty check
 ### Focused Checks
 ```bash
 uv run pytest tests/domain/access_control/test_row_filters.py tests/interfaces/flight/test_service_streaming.py::test_parse_descriptor_rejects_unsafe_row_filter_sql tests/infrastructure/adapters/test_duckdb_transform.py -q
+uv run pytest tests/test_e2e_smoke.py
 ```
 
 ### Benchmarks
@@ -36,6 +37,7 @@ uv run pytest tests/domain/access_control/test_row_filters.py tests/interfaces/f
 uv run pytest tests/benchmarks --benchmark-only
 uv run pytest tests/benchmarks/test_masking_row_filter_benchmarks.py --benchmark-only --benchmark-json .benchmarks/row-filter-mask.json
 uv run pytest tests/benchmarks/test_iceberg_multifile_benchmark.py --benchmark-only --benchmark-json .benchmarks/iceberg-multifile.json
+uv run pytest tests/benchmarks/test_ticket_to_response_benchmark.py --benchmark-only
 ```
 
 ### Pre-commit
