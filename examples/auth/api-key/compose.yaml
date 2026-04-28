@@ -1,0 +1,26 @@
+name: dal-obscura-auth-api-key
+services:
+  setup:
+    extends:
+      file: ../compose.common.yaml
+      service: setup
+    volumes:
+      - .:/workspace/example:ro
+  dal-obscura:
+    extends:
+      file: ../compose.common.yaml
+      service: dal-obscura
+    environment:
+      DAL_OBSCURA_TICKET_SECRET: ticket-secret-32-characters-long
+      DAL_OBSCURA_API_KEY: example-api-key
+  client:
+    extends:
+      file: ../compose.common.yaml
+      service: client
+    environment:
+      AUTH_FLOW: api-key
+      FLIGHT_URI: grpc+tcp://dal-obscura:8815
+      DAL_OBSCURA_API_KEY: example-api-key
+      STARTUP_EXPECT_ROWS: "2"
+volumes:
+  runtime:

@@ -1,0 +1,8 @@
+auth:
+  module: dal_obscura.infrastructure.adapters.identity_api_key.ApiKeyIdentityProvider
+  args:
+    keys:
+      - id: example-user
+        secret:
+          key: DAL_OBSCURA_API_KEY
+        groups: ["compose-example"]

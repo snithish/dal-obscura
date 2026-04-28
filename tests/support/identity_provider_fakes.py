@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
-
+from dal_obscura.application.ports.identity import AuthenticationRequest
 from dal_obscura.domain.access_control.models import Principal
 
 
@@ -9,7 +8,8 @@ class RecordingIdentityProvider:
     def __init__(self, **kwargs: object) -> None:
         self.kwargs = kwargs
 
-    def authenticate(self, headers: Mapping[str, str]) -> Principal:
+    def authenticate(self, request: AuthenticationRequest) -> Principal:
+        del request
         return Principal(id="provider-user", groups=[], attributes={})
 
 

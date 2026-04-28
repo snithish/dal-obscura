@@ -5,14 +5,15 @@ import textwrap
 import jwt
 import pytest
 
+from dal_obscura.application.ports.identity import AuthenticationRequest
 from dal_obscura.infrastructure.adapters.app_config import load_app_config
 
 JWT_SECRET = "test-jwt-secret-32-characters-long"
 
 
-def _authorization_header(secret: str, subject: str = "user1") -> dict[str, str]:
+def _authorization_header(secret: str, subject: str = "user1") -> AuthenticationRequest:
     token = jwt.encode({"sub": subject}, secret, algorithm="HS256")
-    return {"authorization": f"Bearer {token}"}
+    return AuthenticationRequest(headers={"authorization": f"Bearer {token}"})
 
 
 def test_load_app_config_resolves_relative_catalog_and_policy_paths(tmp_path, monkeypatch):
@@ -213,12 +214,137 @@ def test_load_app_config_loads_module_auth_provider_and_resolves_secret_args(tmp
     config = load_app_config(app_path)
 
     provider = config.auth.identity_provider
-    assert provider.authenticate({}).id == "provider-user"
+    assert provider.authenticate(AuthenticationRequest()).id == "provider-user"
     assert provider.kwargs == {
         "issuer": "https://issuer.example.test",
         "nested": {"secret": "resolved-auth-secret"},
         "claim_paths": ["groups", "realm_access.roles"],
     }
+
+
+def test_load_app_config_loads_auth_provider_chain(tmp_path, monkeypatch):
+    app_path = tmp_path / "app.yaml"
+    monkeypatch.setenv("DAL_OBSCURA_TICKET_SECRET", "ticket-secret")
+    monkeypatch.setenv("AUTH_PROVIDER_SECRET", "resolved-auth-secret")
+    app_path.write_text(
+        textwrap.dedent(
+            """
+            secret_provider:
+              module: dal_obscura.infrastructure.adapters.secret_providers.EnvSecretProvider
+              args: {}
+            ticket:
+              ttl_seconds: 900
+              max_tickets: 64
+              secret:
+                key: DAL_OBSCURA_TICKET_SECRET
+            auth:
+              providers:
+                - module: tests.support.identity_provider_fakes.RecordingIdentityProvider
+                  args:
+                    nested:
+                      secret:
+                        key: AUTH_PROVIDER_SECRET
+                - module: tests.support.identity_provider_fakes.RecordingIdentityProvider
+                  args:
+                    issuer: https://issuer.example.test
+            """
+        )
+    )
+
+    config = load_app_config(app_path)
+
+    provider = config.auth.identity_provider
+    principal = provider.authenticate(AuthenticationRequest())
+    assert principal.id == "provider-user"
+    assert len(provider.providers) == 2
+    assert provider.providers[0].kwargs == {"nested": {"secret": "resolved-auth-secret"}}
+
+
+def test_load_app_config_resolves_api_key_provider_secrets(tmp_path, monkeypatch):
+    app_path = tmp_path / "app.yaml"
+    monkeypatch.setenv("DAL_OBSCURA_TICKET_SECRET", "ticket-secret")
+    monkeypatch.setenv("SPARK_API_KEY", "api-secret-1")
+    app_path.write_text(
+        textwrap.dedent(
+            """
+            secret_provider:
+              module: dal_obscura.infrastructure.adapters.secret_providers.EnvSecretProvider
+              args: {}
+            ticket:
+              ttl_seconds: 900
+              max_tickets: 64
+              secret:
+                key: DAL_OBSCURA_TICKET_SECRET
+            auth:
+              module: dal_obscura.infrastructure.adapters.identity_api_key.ApiKeyIdentityProvider
+              args:
+                keys:
+                  - id: spark-prod
+                    secret:
+                      key: SPARK_API_KEY
+                    groups: ["spark"]
+                    attributes:
+                      tenant: acme
+            """
+        )
+    )
+
+    config = load_app_config(app_path)
+    principal = config.auth.identity_provider.authenticate(
+        AuthenticationRequest(headers={"x-api-key": "api-secret-1"})
+    )
+
+    assert principal.id == "spark-prod"
+    assert principal.groups == ["spark"]
+    assert principal.attributes == {"tenant": "acme"}
+
+
+def test_load_app_config_resolves_transport_tls_secrets(tmp_path, monkeypatch):
+    app_path = tmp_path / "app.yaml"
+    server_cert = "-----BEGIN CERTIFICATE-----\\nserver\\n-----END CERTIFICATE-----"
+    server_key = "-----BEGIN PRIVATE KEY-----\\nkey\\n-----END PRIVATE KEY-----"
+    client_ca = "-----BEGIN CERTIFICATE-----\\nca\\n-----END CERTIFICATE-----"
+    monkeypatch.setenv("DAL_OBSCURA_TICKET_SECRET", "ticket-secret")
+    monkeypatch.setenv("DAL_OBSCURA_JWT_SECRET", JWT_SECRET)
+    monkeypatch.setenv("SERVER_CERT", server_cert)
+    monkeypatch.setenv("SERVER_KEY", server_key)
+    monkeypatch.setenv("CLIENT_CA", client_ca)
+    app_path.write_text(
+        textwrap.dedent(
+            """
+            secret_provider:
+              module: dal_obscura.infrastructure.adapters.secret_providers.EnvSecretProvider
+              args: {}
+            ticket:
+              ttl_seconds: 900
+              max_tickets: 64
+              secret:
+                key: DAL_OBSCURA_TICKET_SECRET
+            auth:
+              jwt_secret:
+                key: DAL_OBSCURA_JWT_SECRET
+            transport:
+              tls:
+                cert:
+                  key: SERVER_CERT
+                key:
+                  key: SERVER_KEY
+                client_ca:
+                  key: CLIENT_CA
+                verify_client: true
+            """
+        )
+    )
+
+    config = load_app_config(app_path)
+
+    tls = config.transport.tls
+    assert tls is not None
+    assert tls.cert.startswith("-----BEGIN CERTIFICATE-----")
+    assert tls.key.startswith("-----BEGIN PRIVATE KEY-----")
+    assert tls.client_ca is not None
+    assert tls.client_ca.startswith("-----BEGIN CERTIFICATE-----")
+    assert tls.verify_client is True
 
 
 def test_load_app_config_rejects_auth_provider_without_authenticate(tmp_path, monkeypatch):

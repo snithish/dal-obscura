@@ -1,0 +1,45 @@
+name: dal-obscura-auth-mtls
+services:
+  setup:
+    extends:
+      file: ../compose.common.yaml
+      service: setup
+    volumes:
+      - .:/workspace/example:ro
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        rm -f /workspace/runtime/setup.done
+        /workspace/.venv/bin/python /workspace/example/scripts/generate_certs.py
+        /workspace/.venv/bin/python examples/auth/_shared/scripts/build_runtime.py
+        touch /workspace/runtime/setup.done
+        tail -f /dev/null
+  dal-obscura:
+    extends:
+      file: ../compose.common.yaml
+      service: dal-obscura
+    environment:
+      DAL_OBSCURA_TICKET_SECRET: ticket-secret-32-characters-long
+    entrypoint: []
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        export SERVER_CERT="$$(cat /workspace/runtime/certs/server.crt)"
+        export SERVER_KEY="$$(cat /workspace/runtime/certs/server.key)"
+        export CLIENT_CA="$$(cat /workspace/runtime/certs/ca.crt)"
+        /workspace/.venv/bin/dal-obscura --app-config /workspace/runtime/app.yaml
+  client:
+    extends:
+      file: ../compose.common.yaml
+      service: client
+    environment:
+      AUTH_FLOW: mtls
+      FLIGHT_URI: grpc+tls://dal-obscura:8815
+      CLIENT_CERT_DIR: /workspace/runtime/certs
+      STARTUP_EXPECT_ROWS: "2"
+volumes:
+  runtime:

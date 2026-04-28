@@ -1,18 +1,19 @@
 package io.dalobscura.connectors.spark.v3;
 
+import io.dalobscura.connectors.client.DalObscuraAuth;
 import java.io.Serializable;
 
 public final class DalObscuraConnectorOptions implements Serializable {
     private final String uri;
     private final String catalog;
     private final String target;
-    private final String authToken;
+    private final DalObscuraAuth auth;
 
-    public DalObscuraConnectorOptions(String uri, String catalog, String target, String authToken) {
+    public DalObscuraConnectorOptions(String uri, String catalog, String target, DalObscuraAuth auth) {
         this.uri = uri;
         this.catalog = catalog;
         this.target = target;
-        this.authToken = authToken;
+        this.auth = auth;
     }
 
     public String uri() {
@@ -27,7 +28,7 @@ public final class DalObscuraConnectorOptions implements Serializable {
         return target;
     }
 
-    public String authToken() {
-        return authToken;
+    public DalObscuraAuth auth() {
+        return auth;
     }
 }

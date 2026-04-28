@@ -1,0 +1,46 @@
+{
+  "realm": "dal-obscura",
+  "enabled": true,
+  "clients": [
+    {
+      "clientId": "dal-obscura-client",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "dal-obscura-client-secret",
+      "directAccessGrantsEnabled": true,
+      "protocol": "openid-connect",
+      "defaultClientScopes": ["web-origins", "acr", "profile", "roles"],
+      "protocolMappers": [
+        {
+          "name": "dal-obscura-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "dal-obscura",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "example-user",
+      "enabled": true,
+      "firstName": "Example",
+      "lastName": "User",
+      "email": "example-user@example.com",
+      "emailVerified": true,
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "example-password",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

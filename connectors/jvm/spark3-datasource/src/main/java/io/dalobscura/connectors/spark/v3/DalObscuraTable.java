@@ -34,7 +34,7 @@ public final class DalObscuraTable implements Table, SupportsRead {
                 schema =
                         schemaMapper.toStructType(
                                 client.fetchSchema(
-                                        options.catalog(), options.target(), options.authToken()));
+                                        options.catalog(), options.target(), options.auth()));
             }
         }
         return schema;

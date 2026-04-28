@@ -3,12 +3,19 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, cast
+from pathlib import Path
+from typing import Any
 from urllib.request import urlopen
 
 import jwt
 
+from dal_obscura.application.ports.identity import (
+    AuthenticationRequest,
+    InvalidCredentialsError,
+    MissingCredentialsError,
+)
 from dal_obscura.domain.access_control.models import Principal
+from dal_obscura.infrastructure.adapters.identity_claims import PrincipalClaimMapper
 
 JsonObject = Mapping[str, Any]
 JsonFetcher = Callable[[str], JsonObject]
@@ -35,6 +42,8 @@ class OidcJwksIdentityProvider:
         issuer: str,
         audience: str | Sequence[str] | None = None,
         jwks_url: str | None = None,
+        jwks: JsonObject | None = None,
+        jwks_file: str | None = None,
         algorithms: Sequence[str] | None = None,
         subject_claim: str = "sub",
         group_claims: Sequence[str] | None = None,
@@ -43,7 +52,11 @@ class OidcJwksIdentityProvider:
         jwks_fetcher: JsonFetcher | None = None,
     ) -> None:
         normalized_issuer = issuer.rstrip("/")
-        resolved_jwks_url = jwks_url or _discover_jwks_url(normalized_issuer, jwks_fetcher)
+        static_jwks = _load_static_jwks(jwks, jwks_file)
+        if static_jwks is not None:
+            resolved_jwks_url = jwks_url or ""
+        else:
+            resolved_jwks_url = jwks_url or _discover_jwks_url(normalized_issuer, jwks_fetcher)
         self._config = OidcJwksConfig(
             issuer=normalized_issuer,
             audience=audience,
@@ -54,21 +67,23 @@ class OidcJwksIdentityProvider:
             attribute_claims=dict(attribute_claims or {}),
             leeway_seconds=leeway_seconds,
         )
-        self._jwks = _JwksCache(resolved_jwks_url, jwks_fetcher or _fetch_json)
-
-    def authenticate(self, headers: Mapping[str, str]) -> Principal:
-        token = _parse_bearer(headers.get("authorization"))
-        if not token:
-            raise PermissionError("Missing token")
-        payload = self._decode(token)
-        subject = _string_claim(payload, self._config.subject_claim)
-        if not subject:
-            raise PermissionError("Missing subject")
-        return Principal(
-            id=subject,
-            groups=_groups_from_claims(payload, self._config.group_claims),
-            attributes=_attributes_from_claims(payload, self._config.attribute_claims),
+        self._jwks = _JwksCache(
+            resolved_jwks_url,
+            jwks_fetcher or _fetch_json,
+            static_jwks=static_jwks,
         )
+        self._mapper = PrincipalClaimMapper(
+            subject_claim=subject_claim,
+            group_claims=group_claims,
+            attribute_claims=attribute_claims,
+        )
+
+    def authenticate(self, request: AuthenticationRequest) -> Principal:
+        token = _parse_bearer(request.header("authorization"))
+        if not token:
+            raise MissingCredentialsError("Missing token")
+        payload = self._decode(token)
+        return self._mapper.map_claims(payload)
 
     def _decode(self, token: str) -> JsonObject:
         try:
@@ -83,27 +98,36 @@ class OidcJwksIdentityProvider:
                 options={"verify_aud": self._config.audience is not None},
             )
         except jwt.PyJWTError as exc:
-            raise PermissionError("Invalid token") from exc
+            raise InvalidCredentialsError("Invalid token") from exc
         if not isinstance(payload, Mapping):
-            raise PermissionError("Invalid token")
+            raise InvalidCredentialsError("Invalid token")
         return payload
 
 
 class _JwksCache:
-    def __init__(self, jwks_url: str, fetcher: JsonFetcher) -> None:
+    def __init__(
+        self,
+        jwks_url: str,
+        fetcher: JsonFetcher,
+        *,
+        static_jwks: JsonObject | None = None,
+    ) -> None:
         self._jwks_url = jwks_url
         self._fetcher = fetcher
+        self._static_jwks = static_jwks
         self._keys_by_kid: dict[str, Any] = {}
+        if static_jwks is not None:
+            self._refresh_from_jwks(static_jwks)
 
     def key_for_token(self, token: str) -> Any:
         header = jwt.get_unverified_header(token)
         kid = str(header.get("kid") or "")
         if not kid:
             raise jwt.InvalidTokenError("JWT header is missing kid")
-        if kid not in self._keys_by_kid:
+        if kid not in self._keys_by_kid and self._static_jwks is None:
             self._refresh()
         key = self._keys_by_kid.get(kid)
-        if key is None:
+        if key is None and self._static_jwks is None:
             self._refresh()
             key = self._keys_by_kid.get(kid)
         if key is None:
@@ -111,7 +135,12 @@ class _JwksCache:
         return key
 
     def _refresh(self) -> None:
+        if not self._jwks_url:
+            raise jwt.InvalidTokenError("JWKS URL is not configured")
         jwks = self._fetcher(self._jwks_url)
+        self._refresh_from_jwks(jwks)
+
+    def _refresh_from_jwks(self, jwks: JsonObject) -> None:
         keys = jwks.get("keys")
         if not isinstance(keys, list):
             raise jwt.InvalidTokenError("JWKS response does not contain keys")
@@ -122,7 +151,12 @@ class _JwksCache:
             kid = str(item.get("kid") or "")
             if not kid:
                 continue
-            refreshed[kid] = jwt.PyJWK.from_dict(dict(item)).key
+            if item.get("use") not in (None, "sig"):
+                continue
+            try:
+                refreshed[kid] = jwt.PyJWK.from_dict(dict(item)).key
+            except jwt.PyJWTError:
+                continue
         self._keys_by_kid = refreshed
 
 
@@ -138,72 +172,17 @@ def _parse_bearer(header: str | None) -> str | None:
     return token or None
 
 
-def _string_claim(payload: JsonObject, path: str) -> str:
-    value = _value_at_path(payload, path)
-    if value is None:
-        return ""
-    if isinstance(value, Mapping | list):
-        return ""
-    return str(value).strip()
-
-
-def _groups_from_claims(payload: JsonObject, claim_paths: Sequence[str]) -> list[str]:
-    groups: list[str] = []
-    seen: set[str] = set()
-    for path in claim_paths:
-        for group in _flatten_group_values(_value_at_path(payload, path)):
-            normalized = str(group).strip()
-            if normalized and normalized not in seen:
-                seen.add(normalized)
-                groups.append(normalized)
-    return groups
-
-
-def _attributes_from_claims(payload: JsonObject, claim_paths: Mapping[str, str]) -> dict[str, str]:
-    attributes: dict[str, str] = {}
-    for attribute_name, path in claim_paths.items():
-        value = _value_at_path(payload, path)
-        if value is None:
-            continue
-        if isinstance(value, Mapping | list):
-            raise PermissionError("Invalid attribute claim")
-        normalized = str(value).strip()
-        if normalized:
-            attributes[str(attribute_name)] = normalized
-    return attributes
-
-
-def _flatten_group_values(value: object) -> list[str]:
-    if value is None:
-        return []
-    if isinstance(value, str):
-        return [value]
-    if isinstance(value, Mapping):
-        groups: list[str] = []
-        for nested in value.values():
-            groups.extend(_flatten_group_values(nested))
-        return groups
-    if isinstance(value, list):
-        groups: list[str] = []
-        for item in value:
-            groups.extend(_flatten_group_values(item))
-        return groups
-    return [str(value)]
-
-
-def _value_at_path(payload: JsonObject, path: str) -> object:
-    current: object = payload
-    for raw_part in path.split("."):
-        part = raw_part.strip()
-        if not part:
-            return None
-        if not isinstance(current, Mapping):
-            return None
-        mapping = cast(Mapping[object, object], current)
-        if part not in mapping:
-            return None
-        current = mapping[part]
-    return current
+def _load_static_jwks(jwks: JsonObject | None, jwks_file: str | None) -> JsonObject | None:
+    if jwks is not None and jwks_file is not None:
+        raise ValueError("Pass either jwks or jwks_file, not both")
+    if jwks is not None:
+        return jwks
+    if jwks_file is None:
+        return None
+    payload = json.loads(Path(jwks_file).read_text())
+    if not isinstance(payload, Mapping):
+        raise ValueError("JWKS file must contain a JSON object")
+    return payload
 
 
 def _discover_jwks_url(issuer: str, fetcher: JsonFetcher | None) -> str:

@@ -10,7 +10,7 @@ from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
 from dal_obscura.interfaces.flight.contracts import (
     REQUEST_HEADERS_MIDDLEWARE_KEY,
     RequestHeadersMiddlewareFactory,
-    headers_from_context,
+    authentication_request_from_context,
     parse_descriptor,
 )
 from dal_obscura.interfaces.flight.streaming import make_stream, normalize_schema_for_flight
@@ -26,9 +26,16 @@ class DataAccessFlightService(flight.FlightServerBase):
         get_schema_use_case: GetSchemaUseCase,
         plan_access_use_case: PlanAccessUseCase,
         fetch_stream_use_case: FetchStreamUseCase,
+        *,
+        tls_certificates: list[flight.CertKeyPair] | None = None,
+        verify_client: bool = False,
+        root_certificates: bytes | None = None,
     ) -> None:
         super().__init__(
             location,
+            tls_certificates=tls_certificates,
+            verify_client=verify_client,
+            root_certificates=root_certificates,
             middleware={REQUEST_HEADERS_MIDDLEWARE_KEY: RequestHeadersMiddlewareFactory()},
         )
         self._get_schema_use_case = get_schema_use_case
@@ -40,10 +47,10 @@ class DataAccessFlightService(flight.FlightServerBase):
         self, context: flight.ServerCallContext, descriptor: flight.FlightDescriptor
     ) -> flight.SchemaResult:
         """Returns the caller-visible masked schema without minting read tickets."""
-        headers = headers_from_context(context)
+        auth_request = authentication_request_from_context(context, method="get_schema")
         request = parse_descriptor(descriptor)
         try:
-            result = self._get_schema_use_case.execute(request, headers)
+            result = self._get_schema_use_case.execute(request, auth_request)
         except PermissionError as exc:
             self._logger.warning(
                 "auth_or_authz_failed", extra=self._log_extra(target=request.target)
@@ -68,10 +75,10 @@ class DataAccessFlightService(flight.FlightServerBase):
         self, context: flight.ServerCallContext, descriptor: flight.FlightDescriptor
     ) -> flight.FlightInfo:
         """Plans a dataset read and returns one endpoint per signed ticket."""
-        headers = headers_from_context(context)
+        auth_request = authentication_request_from_context(context, method="get_flight_info")
         request = parse_descriptor(descriptor)
         try:
-            result = self._plan_access_use_case.execute(request, headers)
+            result = self._plan_access_use_case.execute(request, auth_request)
         except PermissionError as exc:
             self._logger.warning(
                 "auth_or_authz_failed", extra=self._log_extra(target=request.target)
@@ -104,10 +111,10 @@ class DataAccessFlightService(flight.FlightServerBase):
         self, context: flight.ServerCallContext, ticket: flight.Ticket
     ) -> flight.RecordBatchStream:
         """Executes a previously planned read and streams the masked result batches."""
-        headers = headers_from_context(context)
+        auth_request = authentication_request_from_context(context, method="do_get")
         token = ticket.ticket.decode("utf-8")
         try:
-            result = self._fetch_stream_use_case.execute(token, headers)
+            result = self._fetch_stream_use_case.execute(token, auth_request)
         except PermissionError as exc:
             self._logger.warning("unauthorized", extra=self._log_extra())
             raise flight.FlightUnauthorizedError("Unauthorized") from exc

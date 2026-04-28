@@ -3,13 +3,13 @@ from __future__ import annotations
 import base64
 import os
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import pyarrow as pa
 
 from dal_obscura.application.ports.authorization import AuthorizationPort
-from dal_obscura.application.ports.identity import IdentityPort
+from dal_obscura.application.ports.identity import AuthenticationRequest, IdentityPort
 from dal_obscura.application.ports.masking import MaskingPort
 from dal_obscura.application.ports.ticket_codec import TicketCodecPort
 from dal_obscura.domain.access_control.filters import (
@@ -66,9 +66,11 @@ class PlanAccessUseCase:
         self._now = now or _epoch_seconds
         self._nonce_factory = nonce_factory or _nonce
 
-    def execute(self, request: PlanRequest, headers: Mapping[str, str]) -> PlanAccessResult:
+    def execute(
+        self, request: PlanRequest, auth_request: AuthenticationRequest
+    ) -> PlanAccessResult:
         """Builds a plan for the requested dataset and returns one signed ticket per task."""
-        principal = self._identity.authenticate(headers)
+        principal = self._identity.authenticate(auth_request)
 
         # Phase 1: Discovery via Catalog
         table_format = self._catalog_registry.describe(request.catalog, request.target)

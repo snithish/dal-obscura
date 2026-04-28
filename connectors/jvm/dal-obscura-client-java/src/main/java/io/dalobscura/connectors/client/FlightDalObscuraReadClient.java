@@ -5,8 +5,10 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import org.apache.arrow.flight.CallOption;
 import org.apache.arrow.flight.FlightCallHeaders;
 import org.apache.arrow.flight.FlightClient;
 import org.apache.arrow.flight.FlightDescriptor;
@@ -33,23 +35,23 @@ public final class FlightDalObscuraReadClient implements DalObscuraReadClient {
     }
 
     @Override
-    public Schema fetchSchema(String catalog, String target, String authToken) {
+    public Schema fetchSchema(String catalog, String target, DalObscuraAuth auth) {
         return client.getSchema(
                         FlightDescriptor.command(
                                 encodePlanCommand(
                                         new DalObscuraPlanRequest(
                                                 catalog, target, List.of("*"), Optional.empty()))),
-                        headerOption(authToken))
+                        callOptions(auth))
                 .getSchema();
     }
 
     @Override
-    public DalObscuraPlannedRead plan(DalObscuraPlanRequest request, String authToken) {
+    public DalObscuraPlannedRead plan(DalObscuraPlanRequest request, DalObscuraAuth auth) {
         byte[] command = encodePlanCommand(request);
         FlightInfo info =
                 client.getInfo(
                         FlightDescriptor.command(command),
-                        headerOption(authToken));
+                        callOptions(auth));
 
         List<DalObscuraPlannedPartition> partitions =
                 info.getEndpoints().stream()
@@ -59,11 +61,11 @@ public final class FlightDalObscuraReadClient implements DalObscuraReadClient {
     }
 
     @Override
-    public DalObscuraTicketStream openStream(DalObscuraPlannedPartition partition, String authToken) {
+    public DalObscuraTicketStream openStream(DalObscuraPlannedPartition partition, DalObscuraAuth auth) {
         final FlightStream stream =
                 client.getStream(
                         new Ticket(partition.ticket().getBytes(StandardCharsets.UTF_8)),
-                        headerOption(authToken));
+                        callOptions(auth));
         return new DalObscuraTicketStream() {
             @Override
             public boolean next() {
@@ -102,14 +104,19 @@ public final class FlightDalObscuraReadClient implements DalObscuraReadClient {
         }
     }
 
-    static String authorizationHeaderValue(String authToken) {
-        return "Bearer " + authToken;
+    static FlightCallHeaders flightHeaders(DalObscuraAuth auth) {
+        FlightCallHeaders headers = new FlightCallHeaders();
+        for (Map.Entry<String, String> entry : auth.headers().entrySet()) {
+            headers.insert(entry.getKey(), entry.getValue());
+        }
+        return headers;
     }
 
-    static HeaderCallOption headerOption(String authToken) {
-        FlightCallHeaders headers = new FlightCallHeaders();
-        headers.insert("authorization", authorizationHeaderValue(authToken));
-        return new HeaderCallOption(headers);
+    private static CallOption[] callOptions(DalObscuraAuth auth) {
+        if (auth.isEmpty()) {
+            return new CallOption[0];
+        }
+        return new CallOption[] {new HeaderCallOption(flightHeaders(auth))};
     }
 
     static Location locationFor(String uri) {

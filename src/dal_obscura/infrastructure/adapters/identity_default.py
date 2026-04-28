@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 
 import jwt
 
+from dal_obscura.application.ports.identity import (
+    AuthenticationRequest,
+    InvalidCredentialsError,
+    MissingCredentialsError,
+)
 from dal_obscura.domain.access_control.models import Principal
 
 
@@ -40,17 +44,17 @@ class DefaultIdentityAdapter:
             )
         self._config = config
 
-    def authenticate(self, headers: Mapping[str, str]) -> Principal:
+    def authenticate(self, request: AuthenticationRequest) -> Principal:
         """Authenticates the request and returns the resolved principal."""
-        token = _parse_bearer(headers.get("authorization"))
+        token = _parse_bearer(request.header("authorization"))
         if not token:
-            raise PermissionError("Missing token")
+            raise MissingCredentialsError("Missing token")
 
         jwt_principal = _decode_jwt(token, self._config)
         if jwt_principal:
             return jwt_principal
 
-        raise PermissionError("Invalid token")
+        raise InvalidCredentialsError("Invalid token")
 
 
 def _parse_bearer(header: str | None) -> str | None:

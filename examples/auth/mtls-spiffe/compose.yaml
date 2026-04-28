@@ -1,0 +1,220 @@
+name: dal-obscura-auth-mtls-spiffe
+services:
+  spire-server:
+    image: ghcr.io/spiffe/spire-server:1.14.5
+    volumes:
+      - spire-server:/run/spire/server
+      - ./spire/server.conf:/opt/spire/conf/server/server.conf:ro
+    command: ["run", "-config", "/opt/spire/conf/server/server.conf"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "/opt/spire/bin/spire-server",
+          "healthcheck",
+          "-socketPath",
+          "/run/spire/server/private/api.sock",
+        ]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+  spire-bootstrap:
+    build:
+      context: ../../..
+      dockerfile: examples/auth/mtls-spiffe/Dockerfile.tools
+    depends_on:
+      spire-server:
+        condition: service_healthy
+    volumes:
+      - spire-server:/run/spire/server
+      - spire-shared:/run/spire/shared
+      - .:/workspace/example:ro
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        rm -f /run/spire/shared/entries.done
+        sh /workspace/example/scripts/register_spiffe_entries.sh
+        tail -f /dev/null
+    healthcheck:
+      test: ["CMD", "test", "-f", "/run/spire/shared/entries.done"]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+  spire-agent:
+    build:
+      context: ../../..
+      dockerfile: examples/auth/mtls-spiffe/Dockerfile.tools
+    depends_on:
+      spire-bootstrap:
+        condition: service_healthy
+    volumes:
+      - spire-agent:/run/spire/agent
+      - spire-shared:/run/spire/shared
+      - ./spire/agent.conf:/opt/spire/conf/agent/agent.conf:ro
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        /usr/local/bin/spire-agent run \
+          -config /opt/spire/conf/agent/agent.conf \
+          -joinTokenFile /run/spire/shared/join-token &
+        agent_pid=$$!
+        for _ in $$(seq 1 60); do
+          if [ -S /run/spire/agent/public/api.sock ]; then
+            chmod 777 /run/spire/agent/public/api.sock
+            wait "$$agent_pid"
+            exit $$?
+          fi
+          sleep 1
+        done
+        echo "SPIRE agent socket was not created" >&2
+        exit 1
+    healthcheck:
+      test: ["CMD", "test", "-S", "/run/spire/agent/public/api.sock"]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+  svid-volumes:
+    build:
+      context: ../../..
+      dockerfile: examples/auth/mtls-spiffe/Dockerfile.tools
+    volumes:
+      - server-svid:/workspace/server-svid
+      - client-svid:/workspace/client-svid
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        chown -R 1001:1001 /workspace/server-svid
+        chown -R 1002:1002 /workspace/client-svid
+        touch /workspace/server-svid/.volume-ready
+        touch /workspace/client-svid/.volume-ready
+        tail -f /dev/null
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "test -f /workspace/server-svid/.volume-ready && test -f /workspace/client-svid/.volume-ready",
+        ]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+  setup:
+    extends:
+      file: ../compose.common.yaml
+      service: setup
+    volumes:
+      - .:/workspace/example:ro
+  server-svid:
+    build:
+      context: ../../..
+      dockerfile: examples/auth/mtls-spiffe/Dockerfile.tools
+    depends_on:
+      spire-agent:
+        condition: service_healthy
+      svid-volumes:
+        condition: service_healthy
+    environment:
+      SPIFFE_ENDPOINT_SOCKET: unix:///run/spire/agent/public/api.sock
+    pid: "service:spire-agent"
+    user: "1001:1001"
+    volumes:
+      - spire-agent:/run/spire/agent
+      - server-svid:/workspace/server-svid
+      - .:/workspace/example:ro
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        rm -f /workspace/server-svid/ready
+        sh /workspace/example/scripts/fetch_spiffe_svid.sh /workspace/server-svid
+        touch /workspace/server-svid/ready
+        tail -f /dev/null
+    healthcheck:
+      test: ["CMD", "test", "-f", "/workspace/server-svid/ready"]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+  client-svid:
+    build:
+      context: ../../..
+      dockerfile: examples/auth/mtls-spiffe/Dockerfile.tools
+    depends_on:
+      spire-agent:
+        condition: service_healthy
+      svid-volumes:
+        condition: service_healthy
+    environment:
+      SPIFFE_ENDPOINT_SOCKET: unix:///run/spire/agent/public/api.sock
+    pid: "service:spire-agent"
+    user: "1002:1002"
+    volumes:
+      - spire-agent:/run/spire/agent
+      - client-svid:/workspace/client-svid
+      - .:/workspace/example:ro
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        rm -f /workspace/client-svid/ready
+        sh /workspace/example/scripts/fetch_spiffe_svid.sh /workspace/client-svid
+        touch /workspace/client-svid/ready
+        tail -f /dev/null
+    healthcheck:
+      test: ["CMD", "test", "-f", "/workspace/client-svid/ready"]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+  dal-obscura:
+    extends:
+      file: ../compose.common.yaml
+      service: dal-obscura
+    depends_on:
+      setup:
+        condition: service_healthy
+      server-svid:
+        condition: service_healthy
+    environment:
+      DAL_OBSCURA_TICKET_SECRET: ticket-secret-32-characters-long
+    volumes:
+      - server-svid:/workspace/server-svid:ro
+    user: "1001:1001"
+    entrypoint: []
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        export SERVER_CERT="$$(cat /workspace/server-svid/svid.0.pem)"
+        export SERVER_KEY="$$(cat /workspace/server-svid/svid.0.key)"
+        export CLIENT_CA="$$(cat /workspace/server-svid/bundle.0.pem)"
+        /workspace/.venv/bin/dal-obscura --app-config /workspace/runtime/app.yaml
+  client:
+    extends:
+      file: ../compose.common.yaml
+      service: client
+    depends_on:
+      dal-obscura:
+        condition: service_started
+      client-svid:
+        condition: service_healthy
+    environment:
+      AUTH_FLOW: mtls-spiffe
+      FLIGHT_URI: grpc+tls://dal-obscura:8815
+      SPIFFE_SVID_DIR: /workspace/client-svid
+      STARTUP_EXPECT_ROWS: "2"
+    volumes:
+      - client-svid:/workspace/client-svid:ro
+volumes:
+  runtime:
+  spire-server:
+  spire-agent:
+  spire-shared:
+  server-svid:
+  client-svid:

@@ -3,6 +3,7 @@ package io.dalobscura.connectors.spark.v3;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.dalobscura.connectors.client.DalObscuraAuth;
 import io.dalobscura.connectors.client.DalObscuraPlanRequest;
 import io.dalobscura.connectors.client.DalObscuraPlannedPartition;
 import io.dalobscura.connectors.client.DalObscuraPlannedRead;
@@ -33,23 +34,25 @@ class DalObscuraPartitionReaderTest {
 
             VectorSchemaRoot root =
                     new VectorSchemaRoot(List.of(id.getField()), List.of(id), 2);
+            FakeClient client = new FakeClient(root);
 
             try (DalObscuraPartitionReader reader =
                     new DalObscuraPartitionReader(
-                            new FakeClient(root),
+                            client,
                             new DalObscuraInputPartition(
                                     new DalObscuraPlannedPartition("ticket-a"),
                                     new DalObscuraConnectorOptions(
                                             "grpc+tcp://localhost:8815",
                                             "analytics",
                                             "default.users",
-                                            "token-123"),
+                                            new DalObscuraAuth(java.util.Map.of("x-api-key", "secret-1"))),
                                     new org.apache.spark.sql.types.StructType().add("id", "long")))) {
                 assertTrue(reader.next());
                 ColumnarBatch batch = reader.get();
                 assertEquals(2, batch.numRows());
                 assertEquals(1L, batch.column(0).getLong(0));
                 assertEquals(2L, batch.column(0).getLong(1));
+                assertEquals("secret-1", client.lastStreamAuth().header("x-api-key"));
             }
         }
     }
@@ -107,7 +110,7 @@ class DalObscuraPartitionReaderTest {
                                             "grpc+tcp://localhost:8815",
                                             "analytics",
                                             "default.users",
-                                            "token-123"),
+                                            DalObscuraAuth.bearerToken("token-123")),
                                     requiredSchema))) {
                 assertTrue(reader.next());
                 ColumnarBatch batch = reader.get();
@@ -119,6 +122,7 @@ class DalObscuraPartitionReaderTest {
 
     private static final class FakeClient implements DalObscuraReadClient {
         private final VectorSchemaRoot root;
+        private DalObscuraAuth lastStreamAuth;
 
         private FakeClient(VectorSchemaRoot root) {
             this.root = root;
@@ -126,18 +130,19 @@ class DalObscuraPartitionReaderTest {
 
         @Override
         public org.apache.arrow.vector.types.pojo.Schema fetchSchema(
-                String catalog, String target, String authToken) {
+                String catalog, String target, DalObscuraAuth auth) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public DalObscuraPlannedRead plan(DalObscuraPlanRequest request, String authToken) {
+        public DalObscuraPlannedRead plan(DalObscuraPlanRequest request, DalObscuraAuth auth) {
             throw new UnsupportedOperationException();
         }
 
         @Override
         public DalObscuraTicketStream openStream(
-                DalObscuraPlannedPartition partition, String authToken) {
+                DalObscuraPlannedPartition partition, DalObscuraAuth auth) {
+            lastStreamAuth = auth;
             return new DalObscuraTicketStream() {
                 private boolean consumed;
 
@@ -160,5 +165,9 @@ class DalObscuraPartitionReaderTest {
 
         @Override
         public void close() {}
+
+        DalObscuraAuth lastStreamAuth() {
+            return lastStreamAuth;
+        }
     }
 }

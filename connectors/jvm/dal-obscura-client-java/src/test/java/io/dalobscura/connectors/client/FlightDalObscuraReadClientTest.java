@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.apache.arrow.flight.FlightCallHeaders;
 import org.junit.jupiter.api.Test;
 
 class FlightDalObscuraReadClientTest {
@@ -62,10 +63,23 @@ class FlightDalObscuraReadClientTest {
     }
 
     @Test
-    void buildsAuthorizationHeaderValueForPlanAndFetch() {
-        String headerValue = FlightDalObscuraReadClient.authorizationHeaderValue("token-123");
+    void buildsBearerAuthorizationHeadersFromTokenConvenience() {
+        DalObscuraAuth auth = DalObscuraAuth.bearerToken("token-123");
 
-        assertEquals("Bearer token-123", headerValue);
+        assertEquals(Map.of("authorization", "Bearer token-123"), auth.headers());
+    }
+
+    @Test
+    void buildsFlightHeadersFromGenericAuthHeaders() {
+        FlightCallHeaders headers =
+                FlightDalObscuraReadClient.flightHeaders(
+                        new DalObscuraAuth(
+                                Map.of(
+                                        "Authorization", "Bearer token-123",
+                                        "X-Api-Key", "secret-1")));
+
+        assertEquals("Bearer token-123", headers.get("authorization"));
+        assertEquals("secret-1", headers.get("x-api-key"));
     }
 
     @Test

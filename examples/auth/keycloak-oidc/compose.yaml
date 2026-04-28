@@ -1,0 +1,47 @@
+name: dal-obscura-auth-keycloak-oidc
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    command: ["start-dev", "--import-realm", "--http-port=8080", "--hostname-strict=false"]
+    volumes:
+      - ./keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+  setup:
+    extends:
+      file: ../compose.common.yaml
+      service: setup
+    volumes:
+      - .:/workspace/example:ro
+  dal-obscura:
+    extends:
+      file: ../compose.common.yaml
+      service: dal-obscura
+    depends_on:
+      setup:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    environment:
+      DAL_OBSCURA_TICKET_SECRET: ticket-secret-32-characters-long
+  client:
+    extends:
+      file: ../compose.common.yaml
+      service: client
+    depends_on:
+      dal-obscura:
+        condition: service_started
+      keycloak:
+        condition: service_started
+    environment:
+      AUTH_FLOW: keycloak-oidc
+      FLIGHT_URI: grpc+tcp://dal-obscura:8815
+      OIDC_TOKEN_URL: http://keycloak:8080/realms/dal-obscura/protocol/openid-connect/token
+      OIDC_CLIENT_ID: dal-obscura-client
+      OIDC_CLIENT_SECRET: dal-obscura-client-secret
+      OIDC_USERNAME: example-user
+      OIDC_PASSWORD: example-password
+      STARTUP_EXPECT_ROWS: "2"
+volumes:
+  runtime:

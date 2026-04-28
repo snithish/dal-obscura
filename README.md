@@ -17,7 +17,7 @@ Data access layer with Arrow Flight, Iceberg, masking, and row filters.
   - `ports`: hexagonal contracts (`IdentityPort`, `AuthorizationPort`, backend, masking, ticket, row transform).
   - `use_cases`: `PlanAccessUseCase` and `FetchStreamUseCase`.
 - `infrastructure/adapters/`
-  - default identity, policy-file authorizer, Iceberg backend, DuckDB masking/row transform, HMAC ticket codec.
+  - JWT/OIDC/API-key/mTLS/trusted-header identity providers, policy-file authorizer, Iceberg backend, DuckDB masking/row transform, HMAC ticket codec.
 - `interfaces/`
   - `flight`: Arrow Flight transport adapter.
   - `cli`: composition root and runtime wiring.
@@ -33,6 +33,23 @@ uv venv
 uv sync
 uv run dal-obscura --help
 ```
+
+## Container Image
+
+The repo root [Dockerfile](/Users/nithish/.codex/worktrees/601a/dal-obscura/Dockerfile)
+builds a reusable `dal-obscura` server image. It contains only the server
+runtime and the locked Python dependencies needed to start the Flight service.
+
+Build it locally with:
+
+```bash
+docker build -t dal-obscura:local .
+```
+
+The runnable auth examples under
+[examples/auth](/Users/nithish/.codex/worktrees/601a/dal-obscura/examples/auth/README.md)
+reuse that image and keep provider-specific infrastructure in each example
+directory.
 
 ## Connectors
 
@@ -82,7 +99,9 @@ uv run dal-obscura \
   --app-config app.yaml
 ```
 
-Clients must send JWTs as `Authorization: Bearer <token>` headers on both `get_flight_info` and `do_get`.
+Clients authenticate through whichever provider chain is configured. Header-based
+providers inspect Flight headers on both `get_flight_info` and `do_get`, while
+mTLS providers can authenticate from the verified Flight peer identity alone.
 
 Clients may include an optional `row_filter` in the `get_flight_info` command payload:
 
@@ -133,12 +152,25 @@ logging:
 `auth.module` names a Python class that implements `IdentityPort`:
 
 ```python
-def authenticate(self, headers: Mapping[str, str]) -> Principal:
+def authenticate(self, request: AuthenticationRequest) -> Principal:
     ...
 ```
 
-The service ships with the shared-secret JWT provider shown above and an
-OIDC/JWKS provider for Keycloak-compatible access tokens:
+`AuthenticationRequest` carries normalized headers plus transport metadata such
+as `peer_identity`, `peer`, and the current Flight method. That lets one
+deployment authenticate with bearer tokens, API keys, mTLS identities, trusted
+gateway headers, or a chain of multiple providers without changing the use
+cases.
+
+The service ships with these built-in provider adapters:
+
+- `identity_default.DefaultIdentityAdapter`: shared-secret bearer JWT validation.
+- `identity_oidc_jwks.OidcJwksIdentityProvider`: OIDC issuer/audience validation with discovered or static JWKS.
+- `identity_api_key.ApiKeyIdentityProvider`: static API keys from any configured header.
+- `identity_mtls.MtlsIdentityProvider`: authenticated peer identity from Flight/mTLS.
+- `identity_trusted_headers.TrustedHeaderIdentityProvider`: identities asserted by a trusted proxy or gateway.
+
+Single-provider config still works:
 
 ```yaml
 auth:
@@ -156,10 +188,82 @@ auth:
       clearance: clearance
 ```
 
-The OIDC/JWKS provider validates access tokens locally with the issuer JWKS. It
-does not call Keycloak for each request. Keycloak roles, groups, and user
-attributes must be present in the access token through protocol mappers or client
-scopes before `dal-obscura` can use them in policy matching.
+The OIDC/JWKS provider validates access tokens locally. It can discover the
+issuer JWKS automatically, or you can pin static keys with `jwks` or
+`jwks_file` for offline and on-prem deployments.
+
+Multi-provider chains let one deployment accept several credential families:
+
+```yaml
+auth:
+  providers:
+    - module: dal_obscura.infrastructure.adapters.identity_mtls.MtlsIdentityProvider
+      args:
+        identities:
+          - peer_identity: spiffe://cluster.local/ns/analytics/sa/spark
+            id: spark-job
+            groups: ["spark"]
+    - module: dal_obscura.infrastructure.adapters.identity_api_key.ApiKeyIdentityProvider
+      args:
+        header: x-api-key
+        keys:
+          - id: batch-job
+            secret:
+              key: BATCH_API_KEY
+            groups: ["batch"]
+            attributes:
+              tenant: acme
+    - module: dal_obscura.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider
+      args:
+        issuer: https://keycloak.example.com/realms/acme
+        audience: dal-obscura
+```
+
+Providers run in order. Missing credentials fall through to the next provider;
+invalid credentials stop the chain and reject the request.
+
+### Transport TLS
+
+Flight server TLS is configured separately from authentication so you can run
+plain bearer-token, mTLS, or mixed deployments:
+
+```yaml
+transport:
+  tls:
+    cert:
+      key: SERVER_CERT
+    key:
+      key: SERVER_KEY
+    client_ca:
+      key: CLIENT_CA
+    verify_client: true
+```
+
+Set `verify_client: true` and `client_ca` when you want client certificates
+available to `MtlsIdentityProvider`.
+
+### Runnable Auth Examples
+
+`examples/auth/` contains Docker Compose examples for every built-in
+authentication approach:
+
+- shared JWT
+- Keycloak OIDC
+- API key
+- local mTLS
+- SPIFFE/SPIRE mTLS
+- trusted headers through a real Flight gateway
+- composite provider chains
+
+Each example is self-contained, starts the real auth backend for that flow, and
+leaves a client container running so you can issue more reads with
+`docker compose exec`. See
+[examples/auth/README.md](/Users/nithish/.codex/worktrees/601a/dal-obscura/examples/auth/README.md)
+for the shared run pattern and per-provider caveats.
+
+Each example starts a real `dal-obscura` server, authenticates a real client, and
+executes a real Flight read without external services. See
+`examples/auth/README.md` for commands and caveats.
 
 ## Development
 

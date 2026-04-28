@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -8,6 +9,7 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from jwt.utils import base64url_encode
 
+from dal_obscura.application.ports.identity import AuthenticationRequest, MissingCredentialsError
 from dal_obscura.infrastructure.adapters.identity_oidc_jwks import OidcJwksIdentityProvider
 
 ISSUER = "https://keycloak.example.test/realms/acme"
@@ -66,24 +68,45 @@ def _provider(jwk: dict[str, Any]) -> OidcJwksIdentityProvider:
     )
 
 
+def _auth_request(token: str | None = None) -> AuthenticationRequest:
+    headers = {} if token is None else {"authorization": f"Bearer {token}"}
+    return AuthenticationRequest(headers=headers)
+
+
 def test_valid_keycloak_like_access_token_authenticates():
     private_key, jwk = _rsa_key_pair("kid-1")
     provider = _provider(jwk)
     token = _token(private_key, kid="kid-1", subject="user-123")
 
-    principal = provider.authenticate({"authorization": f"Bearer {token}"})
+    principal = provider.authenticate(_auth_request(token))
 
     assert principal.id == "user-123"
     assert principal.groups == []
     assert principal.attributes == {}
 
 
+def test_ignores_non_signing_jwks_entries():
+    private_key, jwk = _rsa_key_pair("signing-kid")
+    encryption_jwk = {**jwk, "kid": "encryption-kid", "use": "enc", "alg": "RSA-OAEP"}
+    provider = OidcJwksIdentityProvider(
+        issuer=ISSUER,
+        audience=AUDIENCE,
+        jwks_url="https://keycloak.example.test/certs",
+        jwks_fetcher=lambda _url: {"keys": [encryption_jwk, jwk]},
+    )
+    token = _token(private_key, kid="signing-kid", subject="user-123")
+
+    principal = provider.authenticate(_auth_request(token))
+
+    assert principal.id == "user-123"
+
+
 def test_rejects_missing_bearer_token():
     _private_key, jwk = _rsa_key_pair("kid-1")
     provider = _provider(jwk)
 
-    with pytest.raises(PermissionError, match="Missing token"):
-        provider.authenticate({})
+    with pytest.raises(MissingCredentialsError, match="Missing token"):
+        provider.authenticate(AuthenticationRequest())
 
 
 def test_rejects_wrong_issuer():
@@ -92,7 +115,7 @@ def test_rejects_wrong_issuer():
     token = _token(private_key, kid="kid-1", issuer="https://wrong.example.test/realm")
 
     with pytest.raises(PermissionError, match="Invalid token"):
-        provider.authenticate({"authorization": f"Bearer {token}"})
+        provider.authenticate(_auth_request(token))
 
 
 def test_rejects_wrong_audience():
@@ -101,7 +124,7 @@ def test_rejects_wrong_audience():
     token = _token(private_key, kid="kid-1", audience="wrong-audience")
 
     with pytest.raises(PermissionError, match="Invalid token"):
-        provider.authenticate({"authorization": f"Bearer {token}"})
+        provider.authenticate(_auth_request(token))
 
 
 def test_rejects_expired_token():
@@ -110,7 +133,7 @@ def test_rejects_expired_token():
     token = _token(private_key, kid="kid-1", expires_delta=timedelta(seconds=-1))
 
     with pytest.raises(PermissionError, match="Invalid token"):
-        provider.authenticate({"authorization": f"Bearer {token}"})
+        provider.authenticate(_auth_request(token))
 
 
 def test_rejects_missing_subject_claim():
@@ -119,7 +142,7 @@ def test_rejects_missing_subject_claim():
     token = _token(private_key, kid="kid-1", subject=None)
 
     with pytest.raises(PermissionError, match="Missing subject"):
-        provider.authenticate({"authorization": f"Bearer {token}"})
+        provider.authenticate(_auth_request(token))
 
 
 def test_extracts_groups_roles_and_scalar_attributes_from_configured_claims():
@@ -144,7 +167,7 @@ def test_extracts_groups_roles_and_scalar_attributes_from_configured_claims():
         },
     )
 
-    principal = provider.authenticate({"authorization": f"Bearer {token}"})
+    principal = provider.authenticate(_auth_request(token))
 
     assert principal.groups == ["/analytics", "finance", "analyst", "reader"]
     assert principal.attributes == {"tenant": "acme", "clearance": "high"}
@@ -162,7 +185,7 @@ def test_ignores_missing_optional_group_and_attribute_claims():
     )
     token = _token(private_key, kid="kid-1")
 
-    principal = provider.authenticate({"authorization": f"Bearer {token}"})
+    principal = provider.authenticate(_auth_request(token))
 
     assert principal.groups == []
     assert principal.attributes == {}
@@ -180,7 +203,7 @@ def test_rejects_non_scalar_attribute_claim_values():
     token = _token(private_key, kid="kid-1", extra_claims={"tenant": ["acme"]})
 
     with pytest.raises(PermissionError, match="Invalid attribute claim"):
-        provider.authenticate({"authorization": f"Bearer {token}"})
+        provider.authenticate(_auth_request(token))
 
 
 def test_refreshes_jwks_once_when_token_references_new_kid():
@@ -200,6 +223,36 @@ def test_refreshes_jwks_once_when_token_references_new_kid():
     old_token = _token(old_private_key, kid="old-kid", subject="old-user")
     new_token = _token(new_private_key, kid="new-kid", subject="new-user")
 
-    assert provider.authenticate({"authorization": f"Bearer {old_token}"}).id == "old-user"
-    assert provider.authenticate({"authorization": f"Bearer {new_token}"}).id == "new-user"
+    assert provider.authenticate(_auth_request(old_token)).id == "old-user"
+    assert provider.authenticate(_auth_request(new_token)).id == "new-user"
     assert responses == []
+
+
+def test_oidc_provider_accepts_inline_jwks_without_network_fetch():
+    private_key, jwk = _rsa_key_pair("kid-inline")
+    provider = OidcJwksIdentityProvider(
+        issuer=ISSUER,
+        audience=AUDIENCE,
+        jwks={"keys": [jwk]},
+    )
+    token = _token(private_key, kid="kid-inline", subject="inline-user")
+
+    principal = provider.authenticate(_auth_request(token))
+
+    assert principal.id == "inline-user"
+
+
+def test_oidc_provider_accepts_jwks_file_without_discovery(tmp_path):
+    private_key, jwk = _rsa_key_pair("kid-file")
+    jwks_path = tmp_path / "jwks.json"
+    jwks_path.write_text(json.dumps({"keys": [jwk]}))
+    provider = OidcJwksIdentityProvider(
+        issuer=ISSUER,
+        audience=AUDIENCE,
+        jwks_file=str(jwks_path),
+    )
+    token = _token(private_key, kid="kid-file", subject="file-user")
+
+    principal = provider.authenticate(_auth_request(token))
+
+    assert principal.id == "file-user"

@@ -1,0 +1,15 @@
+FROM ghcr.io/spiffe/spire-agent:1.14.5 AS spire-agent
+FROM ghcr.io/spiffe/spire-server:1.14.5 AS spire-server
+
+FROM debian:bookworm-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 1001 spiffe-server \
+    && useradd --uid 1001 --gid 1001 --home-dir /home/spiffe-server --create-home spiffe-server \
+    && groupadd --gid 1002 spiffe-client \
+    && useradd --uid 1002 --gid 1002 --home-dir /home/spiffe-client --create-home spiffe-client
+
+COPY --from=spire-agent /opt/spire/bin/spire-agent /usr/local/bin/spire-agent
+COPY --from=spire-server /opt/spire/bin/spire-server /usr/local/bin/spire-server

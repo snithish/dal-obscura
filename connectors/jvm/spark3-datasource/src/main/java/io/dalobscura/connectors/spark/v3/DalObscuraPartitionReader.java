@@ -14,7 +14,7 @@ public final class DalObscuraPartitionReader implements PartitionReader<Columnar
     public DalObscuraPartitionReader(
             DalObscuraReadClient client, DalObscuraInputPartition partition) {
         this.client = client;
-        this.stream = client.openStream(partition.plannedPartition(), partition.options().authToken());
+        this.stream = client.openStream(partition.plannedPartition(), partition.options().auth());
         this.adapter = new ArrowColumnarBatchAdapter(partition.requiredSchema());
     }
 

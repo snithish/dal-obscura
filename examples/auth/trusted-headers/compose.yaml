@@ -1,0 +1,51 @@
+name: dal-obscura-auth-trusted-headers
+services:
+  setup:
+    extends:
+      file: ../compose.common.yaml
+      service: setup
+    volumes:
+      - .:/workspace/example:ro
+  dal-obscura:
+    extends:
+      file: ../compose.common.yaml
+      service: dal-obscura
+    environment:
+      DAL_OBSCURA_TICKET_SECRET: ticket-secret-32-characters-long
+      DAL_OBSCURA_PROXY_SECRET: proxy-secret-32-characters-long
+  gateway:
+    build:
+      context: ../../..
+      dockerfile: examples/auth/_shared/Dockerfile
+    depends_on:
+      dal-obscura:
+        condition: service_started
+    environment:
+      BACKEND_FLIGHT_URI: grpc://dal-obscura:8815
+      GATEWAY_LOCATION: grpc://0.0.0.0:8816
+      DAL_OBSCURA_PROXY_SECRET: proxy-secret-32-characters-long
+      TRUSTED_HEADER_SUBJECT: example-user
+      TRUSTED_HEADER_GROUPS: compose-example
+    volumes:
+      - .:/workspace/example:ro
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        /workspace/.venv/bin/python /workspace/example/gateway/trusted_gateway.py
+  client:
+    extends:
+      file: ../compose.common.yaml
+      service: client
+    depends_on:
+      dal-obscura:
+        condition: service_started
+      gateway:
+        condition: service_started
+    environment:
+      AUTH_FLOW: trusted-headers
+      FLIGHT_URI: grpc://gateway:8816
+      STARTUP_EXPECT_ROWS: "2"
+volumes:
+  runtime:

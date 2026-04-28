@@ -63,7 +63,7 @@ public final class DalObscuraScanBuilder
                                     options.target(),
                                     columns,
                                     translation.pushedSql()),
-                            options.authToken());
+                            options.auth());
             return new DalObscuraBatch(options, clientFactory, requiredSchema, plannedRead);
         }
     }

@@ -1,0 +1,26 @@
+name: dal-obscura-auth-shared-jwt
+services:
+  setup:
+    extends:
+      file: ../compose.common.yaml
+      service: setup
+    volumes:
+      - .:/workspace/example:ro
+  dal-obscura:
+    extends:
+      file: ../compose.common.yaml
+      service: dal-obscura
+    environment:
+      DAL_OBSCURA_TICKET_SECRET: ticket-secret-32-characters-long
+      DAL_OBSCURA_JWT_SECRET: jwt-secret-at-least-32-characters-long
+  client:
+    extends:
+      file: ../compose.common.yaml
+      service: client
+    environment:
+      AUTH_FLOW: shared-jwt
+      FLIGHT_URI: grpc+tcp://dal-obscura:8815
+      DAL_OBSCURA_JWT_SECRET: jwt-secret-at-least-32-characters-long
+      STARTUP_EXPECT_ROWS: "2"
+volumes:
+  runtime:

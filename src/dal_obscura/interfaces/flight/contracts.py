@@ -5,6 +5,7 @@ from collections.abc import Mapping
 
 import pyarrow.flight as flight
 
+from dal_obscura.application.ports.identity import AuthenticationRequest
 from dal_obscura.domain.access_control.filters import RowFilter, deserialize_row_filter
 from dal_obscura.domain.query_planning.models import PlanRequest
 
@@ -43,6 +44,20 @@ def headers_from_context(context: flight.ServerCallContext) -> dict[str, str]:
         return normalize_headers(context.headers)
     except Exception:
         return {}
+
+
+def authentication_request_from_context(
+    context: flight.ServerCallContext,
+    *,
+    method: str,
+) -> AuthenticationRequest:
+    """Builds a transport-neutral auth request from Flight call context."""
+    return AuthenticationRequest(
+        headers=headers_from_context(context),
+        peer_identity=_safe_context_value(context, "peer_identity"),
+        peer=_safe_context_value(context, "peer"),
+        method=method,
+    )
 
 
 def normalize_headers(headers: Mapping[object, object]) -> dict[str, str]:
@@ -94,3 +109,16 @@ def _coerce_header_value(value: object) -> object:
             return ""
         return value[-1]
     return value
+
+
+def _safe_context_value(context: flight.ServerCallContext, method_name: str) -> str:
+    method = getattr(context, method_name, None)
+    if not callable(method):
+        return ""
+    try:
+        value = method()
+    except Exception:
+        return ""
+    if value is None:
+        return ""
+    return _decode_header_value(value)
