@@ -5,10 +5,10 @@ import pyarrow as pa
 import pyarrow.flight as flight
 import pytest
 
-from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
-from dal_obscura.infrastructure.adapters.service_config import (
+from dal_obscura.infrastructure.adapters.catalog_registry import (
     CatalogConfig,
     CatalogTargetConfig,
+    DynamicCatalogRegistry,
     ServiceConfig,
 )
 from tests.support.flight import (

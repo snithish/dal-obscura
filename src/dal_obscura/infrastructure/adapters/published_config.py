@@ -24,10 +24,10 @@ from dal_obscura.domain.access_control.models import (
 )
 from dal_obscura.domain.access_control.policy_resolution import resolve_access
 from dal_obscura.domain.catalog.ports import TableFormat
-from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
-from dal_obscura.infrastructure.adapters.service_config import (
+from dal_obscura.infrastructure.adapters.catalog_registry import (
     CatalogConfig,
     CatalogTargetConfig,
+    DynamicCatalogRegistry,
     ServiceConfig,
 )
 

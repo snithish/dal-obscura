@@ -27,9 +27,12 @@ from pyiceberg.types import (
     TimestampType,
 )
 
-from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
+from dal_obscura.infrastructure.adapters.catalog_registry import (
+    CatalogConfig,
+    DynamicCatalogRegistry,
+    ServiceConfig,
+)
 from dal_obscura.infrastructure.adapters.duckdb_transform import _DUCKDB_ARROW_OUTPUT_BATCH_SIZE
-from dal_obscura.infrastructure.adapters.service_config import CatalogConfig, ServiceConfig
 from tests.support.flight import (
     StubTableFormat,
     build_flight_service,
