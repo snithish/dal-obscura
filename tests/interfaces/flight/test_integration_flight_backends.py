@@ -1,11 +1,16 @@
 from pathlib import Path
+from typing import Any, cast
 
 import pyarrow as pa
 import pyarrow.flight as flight
 import pytest
 
 from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
-from dal_obscura.infrastructure.adapters.service_config import load_catalog_config
+from dal_obscura.infrastructure.adapters.service_config import (
+    CatalogConfig,
+    CatalogTargetConfig,
+    ServiceConfig,
+)
 from tests.support.flight import (
     build_flight_service,
     command_descriptor,
@@ -15,7 +20,7 @@ from tests.support.flight import (
     read_table,
     running_flight_client,
 )
-from tests.support.iceberg import create_iceberg_table, write_yaml_files
+from tests.support.iceberg import create_iceberg_table, iceberg_sql_catalog_options
 
 
 def _allow_rule(
@@ -36,15 +41,73 @@ def _allow_rule(
     return rule
 
 
-def _build_registries(service_config_path: Path):
-    service_config = load_catalog_config(service_config_path)
+def _build_registry(
+    catalogs: dict[str, CatalogConfig],
+) -> DynamicCatalogRegistry:
+    return DynamicCatalogRegistry(ServiceConfig(catalogs=catalogs, paths=()))
+
+
+def _build_registry_from_config(service_config: ServiceConfig) -> DynamicCatalogRegistry:
     return DynamicCatalogRegistry(service_config)
+
+
+def build_service_config(
+    tmp_path: Path,
+    *,
+    service_config: dict[str, object],
+    policy: dict[str, object],
+) -> tuple[ServiceConfig, None]:
+    del tmp_path, policy
+    catalogs_raw = service_config.get("catalogs", {})
+    if not isinstance(catalogs_raw, dict):
+        raise TypeError("catalogs must be an object")
+    catalogs: dict[str, CatalogConfig] = {}
+    for name, raw in catalogs_raw.items():
+        if not isinstance(name, str) or not isinstance(raw, dict):
+            continue
+        raw_config = cast(dict[str, Any], raw)
+        options = raw_config.get("options", {})
+        targets_raw = raw_config.get("targets", {})
+        targets: dict[str, CatalogTargetConfig] = {}
+        if isinstance(targets_raw, dict):
+            for target_name, target_raw in targets_raw.items():
+                if isinstance(target_name, str) and isinstance(target_raw, dict):
+                    targets[target_name] = CatalogTargetConfig(
+                        backend=None
+                        if target_raw.get("backend") is None
+                        else str(target_raw.get("backend")),
+                        table=None
+                        if target_raw.get("table") is None
+                        else str(target_raw.get("table")),
+                    )
+        catalogs[name] = CatalogConfig(
+            name=name,
+            module=str(raw_config["module"]),
+            options=dict(options) if isinstance(options, dict) else {},
+            targets=targets,
+        )
+    return ServiceConfig(catalogs=catalogs, paths=()), None
+
+
+def _iceberg_catalog(
+    tmp_path: Path,
+    name: str,
+    warehouse_name: str,
+    *,
+    targets: dict[str, CatalogTargetConfig] | None = None,
+) -> CatalogConfig:
+    return CatalogConfig(
+        name=name,
+        module="dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+        options=iceberg_sql_catalog_options(tmp_path, name, warehouse_name),
+        targets=targets or {},
+    )
 
 
 def test_flight_plan_and_get_with_iceberg_multi_catalog(tmp_path):
     table_id_one = create_iceberg_table(tmp_path, "ice_one", "warehouse-one", [1, 2, 3, 4])
     table_id_two = create_iceberg_table(tmp_path, "ice_two", "warehouse-two", [10, 11, 12, 13])
-    service_config_path, _policy_path = write_yaml_files(
+    service_config, _policy_path = build_service_config(
         tmp_path,
         service_config={
             "catalogs": {
@@ -99,7 +162,7 @@ def test_flight_plan_and_get_with_iceberg_multi_catalog(tmp_path):
         },
     )
 
-    catalog_registry = _build_registries(service_config_path)
+    catalog_registry = _build_registry_from_config(service_config)
     server = build_flight_service(
         catalog_registry=catalog_registry,
         policy_rules_by_dataset={
@@ -139,7 +202,7 @@ def test_flight_plan_and_get_with_static_catalog_alias(tmp_path):
         [1, 2, 3, 4],
         identifier="analytics.users",
     )
-    service_config_path, _policy_path = write_yaml_files(
+    service_config, _policy_path = build_service_config(
         tmp_path,
         service_config={
             "catalogs": {
@@ -187,7 +250,7 @@ def test_flight_plan_and_get_with_static_catalog_alias(tmp_path):
         },
     )
 
-    catalog_registry = _build_registries(service_config_path)
+    catalog_registry = _build_registry_from_config(service_config)
     server = build_flight_service(
         catalog_registry=catalog_registry,
         policy_rules_by_dataset={
@@ -220,7 +283,7 @@ def test_flight_plan_and_get_with_static_catalog_alias(tmp_path):
 
 def test_flight_plan_and_get_with_iceberg_requested_row_filter_on_unprojected_column(tmp_path):
     table_id = create_iceberg_table(tmp_path, "ice_one", "warehouse-one", [1, 2, 3, 4])
-    service_config_path, _policy_path = write_yaml_files(
+    service_config, _policy_path = build_service_config(
         tmp_path,
         service_config={
             "catalogs": {
@@ -255,7 +318,7 @@ def test_flight_plan_and_get_with_iceberg_requested_row_filter_on_unprojected_co
     )
 
     server = build_flight_service(
-        catalog_registry=_build_registries(service_config_path),
+        catalog_registry=_build_registry_from_config(service_config),
         policy_rules=[
             {
                 "principals": ["user1"],
@@ -297,7 +360,7 @@ def test_flight_plan_and_get_with_multiple_static_alias_targets(tmp_path):
         [10, 11, 12, 13],
         identifier="analytics.events",
     )
-    service_config_path, _policy_path = write_yaml_files(
+    service_config, _policy_path = build_service_config(
         tmp_path,
         service_config={
             "catalogs": {
@@ -343,7 +406,7 @@ def test_flight_plan_and_get_with_multiple_static_alias_targets(tmp_path):
         },
     )
 
-    catalog_registry = _build_registries(service_config_path)
+    catalog_registry = _build_registry_from_config(service_config)
     server = build_flight_service(
         catalog_registry=catalog_registry,
         policy_rules_by_dataset={
@@ -376,7 +439,7 @@ def test_flight_plan_and_get_with_multiple_static_alias_targets(tmp_path):
 
 def test_flight_plan_rejects_direct_target_without_catalog(tmp_path):
     create_iceberg_table(tmp_path, "ice_one", "warehouse-one", [1, 2, 3, 4])
-    service_config_path, _policy_path = write_yaml_files(
+    service_config, _policy_path = build_service_config(
         tmp_path,
         service_config={
             "catalogs": {
@@ -409,7 +472,7 @@ def test_flight_plan_rejects_direct_target_without_catalog(tmp_path):
         },
     )
 
-    catalog_registry = _build_registries(service_config_path)
+    catalog_registry = _build_registry_from_config(service_config)
     server = build_flight_service(
         catalog_registry=catalog_registry,
         policy_rules=[
@@ -439,7 +502,7 @@ def test_flight_plan_and_get_with_iceberg_multi_file_large(tmp_path):
             list(range(100_001, 200_001)),
         ],
     )
-    service_config_path, _policy_path = write_yaml_files(
+    service_config, _policy_path = build_service_config(
         tmp_path,
         service_config={
             "catalogs": {
@@ -474,7 +537,7 @@ def test_flight_plan_and_get_with_iceberg_multi_file_large(tmp_path):
         },
     )
 
-    catalog_registry = _build_registries(service_config_path)
+    catalog_registry = _build_registry_from_config(service_config)
     server = build_flight_service(
         catalog_registry=catalog_registry,
         policy_rules=[
@@ -515,7 +578,7 @@ def test_hot_reload_does_not_break_iceberg_catalog_registry(tmp_path):
         [10, 11, 12, 13, 14, 15],
         identifier="analytics.users_v2",
     )
-    service_config_path, _policy_path = write_yaml_files(
+    service_config, _policy_path = build_service_config(
         tmp_path,
         service_config={
             "catalogs": {
@@ -552,7 +615,7 @@ def test_hot_reload_does_not_break_iceberg_catalog_registry(tmp_path):
         },
     )
 
-    catalog_registry = _build_registries(service_config_path)
+    catalog_registry = _build_registry_from_config(service_config)
     server = build_flight_service(
         catalog_registry=catalog_registry,
         policy_rules=[
@@ -572,7 +635,6 @@ def test_hot_reload_does_not_break_iceberg_catalog_registry(tmp_path):
         old_table = read_table(client, old_info, options)
         old_ticket = old_info.endpoints[0].ticket
 
-        service_config = load_catalog_config(service_config_path)
         updated_catalogs = dict(service_config.catalogs)
         updated_target = updated_catalogs["shared"].targets["users_alias"]
         updated_catalogs["shared"] = type(updated_catalogs["shared"])(

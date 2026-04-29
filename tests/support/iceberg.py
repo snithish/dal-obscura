@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any
 
 import pyarrow as pa
-import yaml
 from pyiceberg.catalog import load_catalog
 from pyiceberg.partitioning import PartitionSpec
 from pyiceberg.schema import Schema
@@ -97,14 +96,13 @@ def create_iceberg_table(
     return identifier
 
 
-def write_yaml_files(
+def iceberg_sql_catalog_options(
     tmp_path: Path,
-    *,
-    service_config: dict[str, object],
-    policy: dict[str, object],
-) -> tuple[Path, Path]:
-    service_config_path = tmp_path / "service.yaml"
-    policy_path = tmp_path / "policy.yaml"
-    service_config_path.write_text(yaml.safe_dump(service_config, sort_keys=False))
-    policy_path.write_text(yaml.safe_dump(policy, sort_keys=False))
-    return service_config_path, policy_path
+    catalog_name: str,
+    warehouse_name: str,
+) -> dict[str, object]:
+    return {
+        "type": "sql",
+        "uri": f"sqlite:///{tmp_path / f'{catalog_name}.db'}",
+        "warehouse": str(tmp_path / warehouse_name),
+    }
