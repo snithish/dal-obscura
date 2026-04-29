@@ -26,6 +26,11 @@ from dal_obscura.infrastructure.adapters.policy_file_authorizer import (
     PolicyFileAuthorizer,
     load_policy_config,
 )
+from dal_obscura.infrastructure.adapters.published_config import (
+    PublishedConfigAuthorizer,
+    PublishedConfigCatalogRegistry,
+    PublishedConfigStore,
+)
 from dal_obscura.infrastructure.adapters.secret_providers import (
     EnvSecretProvider,
     SecretProvider,
@@ -63,6 +68,9 @@ __all__ = [
     "OidcJwksIdentityProvider",
     "PathConfig",
     "PolicyFileAuthorizer",
+    "PublishedConfigAuthorizer",
+    "PublishedConfigCatalogRegistry",
+    "PublishedConfigStore",
     "SchemaInferenceOptions",
     "SecretProvider",
     "ServiceConfig",
