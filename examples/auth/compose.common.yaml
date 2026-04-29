@@ -5,9 +5,6 @@ services:
       dockerfile: examples/auth/_shared/Dockerfile
     environment:
       EXAMPLE_ROOT: /workspace/example
-      FIXTURE_FILE: /workspace/example/fixture/fixture.yaml
-      AUTH_CONFIG_FILE: /workspace/example/config/auth.yaml
-      TRANSPORT_CONFIG_FILE: /workspace/example/config/transport.yaml
     volumes:
       - runtime:/workspace/runtime
     command:
@@ -34,7 +31,13 @@ services:
         condition: service_healthy
     volumes:
       - runtime:/workspace/runtime
-    command: ["--app-config", "/workspace/runtime/app.yaml"]
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        . /workspace/runtime/data-plane.env
+        /workspace/.venv/bin/dal-obscura
 
   client:
     build:
@@ -50,6 +53,7 @@ services:
       - -c
       - |
         set -e
+        . /workspace/runtime/data-plane.env
         /workspace/.venv/bin/python examples/auth/_shared/scripts/client_session.py
     healthcheck:
       test: ["CMD", "test", "-f", "/workspace/runtime/client.ready"]

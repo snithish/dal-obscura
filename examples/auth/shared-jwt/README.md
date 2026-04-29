@@ -5,8 +5,8 @@ an HS256 bearer JWT signed with a shared secret.
 
 ## Services
 
-- `setup`: creates the Iceberg table, policy, and app config from
-  `fixture/fixture.yaml` and `config/auth.yaml`.
+- `setup`: creates the Iceberg table, provisions the JWT provider and policy
+  through the control-plane API, then publishes the data-plane snapshot.
 - `dal-obscura`: validates `Authorization: Bearer <jwt>` with
   `DAL_OBSCURA_JWT_SECRET`.
 - `client`: signs a JWT for `sub=example-user`, performs a startup read, then

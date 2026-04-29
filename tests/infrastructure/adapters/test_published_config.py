@@ -44,6 +44,23 @@ def test_published_authorizer_resolves_policy_from_active_asset(db_session: Sess
     assert decision.policy_version == 123
 
 
+def test_published_authorizer_accepts_tenant_slug_attribute(db_session: Session):
+    cell_id = uuid4()
+    tenant_id = uuid4()
+    _publish_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
+    authorizer = PublishedConfigAuthorizer(PublishedConfigStore(db_session, cell_id=cell_id))
+
+    decision = authorizer.authorize(
+        principal=Principal(id="user1", groups=[], attributes={"tenant_id": f"tenant-{tenant_id}"}),
+        target="default.users",
+        catalog="analytics",
+        requested_columns=["id"],
+    )
+
+    assert decision.allowed_columns == ["id"]
+    assert decision.policy_version == 123
+
+
 def test_published_store_uses_last_good_asset_after_transient_failure(
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,

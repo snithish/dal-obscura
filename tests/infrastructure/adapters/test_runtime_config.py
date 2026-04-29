@@ -19,6 +19,23 @@ def test_runtime_config_reads_required_database_and_cell(monkeypatch: pytest.Mon
     assert config.ticket_secret == "ticket-secret"
 
 
+def test_runtime_config_reads_tls_environment(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
+    monkeypatch.setenv("DAL_OBSCURA_CELL_ID", "00000000-0000-0000-0000-000000000001")
+    monkeypatch.setenv("DAL_OBSCURA_TICKET_SECRET", "ticket-secret")
+    monkeypatch.setenv("DAL_OBSCURA_TLS_CERT", "server-cert")
+    monkeypatch.setenv("DAL_OBSCURA_TLS_KEY", "server-key")
+    monkeypatch.setenv("DAL_OBSCURA_TLS_CLIENT_CA", "client-ca")
+    monkeypatch.setenv("DAL_OBSCURA_TLS_VERIFY_CLIENT", "true")
+
+    config = load_data_plane_runtime_config()
+
+    assert config.tls_cert == "server-cert"
+    assert config.tls_key == "server-key"
+    assert config.tls_client_ca == "client-ca"
+    assert config.tls_verify_client is True
+
+
 def test_runtime_config_rejects_missing_database_url(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("DAL_OBSCURA_DATABASE_URL", raising=False)
     monkeypatch.setenv("DAL_OBSCURA_CELL_ID", "00000000-0000-0000-0000-000000000001")

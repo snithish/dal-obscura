@@ -39,9 +39,11 @@ instead of restarting the whole stack.
 
 Every example starts from the same shape:
 
-1. `setup` creates a SQLite-backed Iceberg catalog, a small table, a policy file,
-   and an auth-specific `app.yaml` in a named Docker volume.
-2. `dal-obscura` starts the real Flight service from that generated config.
+1. `setup` creates a SQLite-backed Iceberg catalog, provisions the FastAPI
+   control-plane API into `control-plane.db`, publishes the config snapshot, and
+   writes data-plane environment settings into the named Docker volume.
+2. `dal-obscura` starts the real Flight service from the published database
+   state.
 3. Optional infrastructure services start when the mechanism needs them, such as
    Keycloak, SPIRE, or a trusted Flight gateway.
 4. `client` obtains or presents the selected credential, performs a startup read,
@@ -56,13 +58,9 @@ filter that returns two rows. A successful run prints:
 
 ## Customizing Data
 
-Each example directory owns its runtime inputs:
-
-- `fixture/fixture.yaml`: catalog, tables, rows, and policy rules
-- `config/auth.yaml`: auth provider wiring
-- `config/transport.yaml`: transport TLS settings when that example needs them
-
-To add your own table or rows, edit `fixture/fixture.yaml` and recreate the
+The shared setup script contains the small sample dataset, policy, and auth
+provider provisioning payloads used by these examples. To change the sample
+table, edit `examples/auth/_shared/scripts/build_runtime.py` and recreate the
 stack:
 
 ```bash
@@ -70,13 +68,12 @@ docker compose down --volumes
 docker compose up --build -d --wait
 ```
 
-The fixture format supports multiple tables, primitive scalar fields, inline
-rows, and optional CSV-backed rows. The shared setup container rebuilds the
-runtime catalog from those files on every fresh start.
+The setup container rebuilds the local catalog and republishes control-plane
+state on every fresh start.
 
 ## Caveats
 
-These examples are local developer fixtures. They use fixed demo secrets,
+These examples are local developer environments. They use fixed demo secrets,
 development-mode Keycloak, short-lived generated data, and disposable Docker
 volumes. Treat them as runnable integration references, not production
 deployment manifests.

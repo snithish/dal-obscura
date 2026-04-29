@@ -6,8 +6,8 @@ This example starts a real Keycloak container and runs `dal-obscura` with
 ## Services
 
 - `keycloak`: imports the `dal-obscura` realm from `keycloak/realm.json`.
-- `setup`: creates the table, policy, and OIDC provider config from
-  `fixture/fixture.yaml` and `config/auth.yaml`.
+- `setup`: creates the table, provisions the OIDC provider and policy through
+  the control-plane API, then publishes the data-plane snapshot.
 - `dal-obscura`: validates bearer tokens against Keycloak issuer, audience, and
   JWKS.
 - `client`: obtains a real access token from Keycloak with the password grant,

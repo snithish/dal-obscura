@@ -8,7 +8,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from dal_obscura.control_plane.infrastructure.orm import PublishedCellRuntimeRecord
+from dal_obscura.control_plane.infrastructure.orm import PublishedCellRuntimeRecord, TenantRecord
 from dal_obscura.control_plane.infrastructure.repositories import (
     PublicationStore,
     PublishedAsset,
@@ -50,12 +50,13 @@ class PublishedConfigStore:
         self._asset_cache: dict[tuple[UUID, UUID, str, str], PublishedAsset] = {}
         self._last_good_by_target: dict[tuple[UUID, str, str], PublishedAsset] = {}
         self._runtime_cache: dict[UUID, PublishedRuntime] = {}
+        self._tenant_cache: dict[str, UUID] = {}
 
     def active_publication_id(self) -> UUID:
         return self._publication_store.get_active_publication(self._cell_id).publication_id
 
     def get_asset(self, *, tenant_id: str, catalog: str, target: str) -> PublishedAsset:
-        tenant_uuid = UUID(tenant_id)
+        tenant_uuid = self._tenant_uuid(tenant_id)
         target_key = (tenant_uuid, catalog, target)
         try:
             publication_id = self.active_publication_id()
@@ -77,6 +78,23 @@ class PublishedConfigStore:
             if cached is not None:
                 return cached
             raise
+
+    def _tenant_uuid(self, tenant_id: str) -> UUID:
+        cached = self._tenant_cache.get(tenant_id)
+        if cached is not None:
+            return cached
+        try:
+            tenant_uuid = UUID(tenant_id)
+        except ValueError:
+            tenant_uuid = self._tenant_uuid_by_slug(tenant_id)
+        self._tenant_cache[tenant_id] = tenant_uuid
+        return tenant_uuid
+
+    def _tenant_uuid_by_slug(self, slug: str) -> UUID:
+        record = self._session.scalar(select(TenantRecord).where(TenantRecord.slug == slug))
+        if record is None:
+            raise LookupError(f"No tenant with slug {slug!r}")
+        return record.id
 
     def get_runtime(self) -> PublishedRuntime:
         publication_id = self.active_publication_id()

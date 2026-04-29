@@ -5,8 +5,9 @@ Data access layer with Arrow Flight, Iceberg, masking, and row filters.
 ## Highlights
 - Arrow Flight plan/ticket flow with HMAC-signed tickets
 - Iceberg v2/v3 backend (pyiceberg)
+- API-first FastAPI control plane for configuration provisioning
+- RDBMS-backed published configuration consumed by cell-scoped data planes
 - DuckDB-powered row filters and column masks
-- YAML policy-driven authz
 
 ## Architecture
 - `domain/`
@@ -17,10 +18,11 @@ Data access layer with Arrow Flight, Iceberg, masking, and row filters.
   - `ports`: hexagonal contracts (`IdentityPort`, `AuthorizationPort`, backend, masking, ticket, row transform).
   - `use_cases`: `PlanAccessUseCase` and `FetchStreamUseCase`.
 - `infrastructure/adapters/`
-  - JWT/OIDC/API-key/mTLS/trusted-header identity providers, policy-file authorizer, Iceberg backend, DuckDB masking/row transform, HMAC ticket codec.
+  - JWT/OIDC/API-key/mTLS/trusted-header identity providers, published-config authorizer, Iceberg backend, DuckDB masking/row transform, HMAC ticket codec.
 - `interfaces/`
   - `flight`: Arrow Flight transport adapter.
   - `cli`: composition root and runtime wiring.
+  - `control_plane`: FastAPI provisioning and publication API.
 
 ## Requirements
 - Python 3.10+
@@ -36,7 +38,7 @@ uv run dal-obscura --help
 
 ## Container Image
 
-The repo root [Dockerfile](/Users/nithish/.codex/worktrees/601a/dal-obscura/Dockerfile)
+The repo root [Dockerfile](Dockerfile)
 builds a reusable `dal-obscura` server image. It contains only the server
 runtime and the locked Python dependencies needed to start the Flight service.
 
@@ -47,7 +49,7 @@ docker build -t dal-obscura:local .
 ```
 
 The runnable auth examples under
-[examples/auth](/Users/nithish/.codex/worktrees/601a/dal-obscura/examples/auth/README.md)
+[examples/auth](examples/auth/README.md)
 reuse that image and keep provider-specific infrastructure in each example
 directory.
 
@@ -67,36 +69,26 @@ mvn -f connectors/jvm/pom.xml verify
 
 See `connectors/README.md` for the Spark datasource contract and option names.
 
-## Policy Example
-
-```yaml
-version: 1
-datasets:
-  - table: "catalog.db.table"
-    rules:
-      - principals: ["user1", "group:analyst"]
-        columns: ["id", "email", "user.address.zip"]
-        masks:
-          email: { type: "redact", value: "***" }
-          "user.address.zip": { type: "hash" }
-        row_filter: "region = 'us'"
-      - principals: ["group:analyst"]
-        when:
-          tenant: "acme"
-          clearance: ["high", "internal"]
-        columns: ["id", "email"]
-      - principals: ["group:analyst"]
-        when:
-          clearance: "low"
-        effect: deny
-        columns: ["email"]
-```
-
 ## Running
 
+Start the control plane against an RDBMS URL:
+
 ```bash
-uv run dal-obscura \
-  --app-config app.yaml
+export DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:///runtime/control-plane.db
+export DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN=dev-admin
+uv run dal-obscura-control-plane
+```
+
+Provision tenants, cells, catalogs, assets, policy rules, and auth providers
+through the HTTP API, then publish and activate a snapshot. Start each data
+plane cell from the same database without calling the control-plane service:
+
+```bash
+export DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:///runtime/control-plane.db
+export DAL_OBSCURA_CELL_ID=00000000-0000-0000-0000-000000000001
+export DAL_OBSCURA_LOCATION=grpc://0.0.0.0:8815
+export DAL_OBSCURA_TICKET_SECRET=dev-ticket-secret
+uv run dal-obscura
 ```
 
 Clients authenticate through whichever provider chain is configured. Header-based
@@ -121,35 +113,39 @@ combines the engine filter with any policy filter using `AND`, pushes down the
 safe subset during backend planning, and evaluates any unsupported remainder in
 DuckDB during streaming.
 
-`app.yaml` references `catalogs.yaml` and `policies.yaml`, and runtime secrets are loaded via secret references (for example, env vars):
+Runtime secrets are resolved from environment-variable secret references stored
+in published auth-provider arguments. The control plane stores references such
+as `{"key": "DAL_OBSCURA_JWT_SECRET"}`, not secret values.
 
-```yaml
-location: grpc://0.0.0.0:8815
-catalog_file: catalogs.yaml
-policy_file: policies.yaml
-secret_provider:
-  module: dal_obscura.infrastructure.adapters.secret_providers.EnvSecretProvider
-  args: {}
-ticket:
-  ttl_seconds: 900
-  max_tickets: 64
-  secret:
-    key: DAL_OBSCURA_TICKET_SECRET
-auth:
-  module: dal_obscura.infrastructure.adapters.identity_default.DefaultIdentityAdapter
-  args:
-    jwt_secret:
-      key: DAL_OBSCURA_JWT_SECRET
-    jwt_issuer: null
-    jwt_audience: null
-logging:
-  level: INFO
-  json: true
+### Provisioning Flow
+
+```bash
+curl -H "authorization: Bearer $DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN" \
+  -H "content-type: application/json" \
+  -d '{"slug":"default","display_name":"Default"}' \
+  http://localhost:8080/v1/tenants
+
+curl -H "authorization: Bearer $DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN" \
+  -H "content-type: application/json" \
+  -d '{"name":"local","region":"dev"}' \
+  http://localhost:8080/v1/cells
 ```
+
+Then call:
+
+- `PUT /v1/cells/{cell_id}/tenants/{tenant_id}`
+- `PUT /v1/tenants/{tenant_id}/cells/{cell_id}/runtime-settings`
+- `PUT /v1/tenants/{tenant_id}/cells/{cell_id}/catalogs/{name}`
+- `PUT /v1/tenants/{tenant_id}/cells/{cell_id}/assets/{catalog}/{target}`
+- `PUT /v1/assets/{asset_id}/policy-rules`
+- `PUT /v1/cells/{cell_id}/auth-providers`
+- `POST /v1/cells/{cell_id}/publications`
+- `POST /v1/cells/{cell_id}/publications/{publication_id}/activate`
 
 ### Authentication Providers
 
-`auth.module` names a Python class that implements `IdentityPort`:
+Each published auth-provider `module` names a Python class that implements
+`IdentityPort`:
 
 ```python
 def authenticate(self, request: AuthenticationRequest) -> Principal:
@@ -170,77 +166,37 @@ The service ships with these built-in provider adapters:
 - `identity_mtls.MtlsIdentityProvider`: authenticated peer identity from Flight/mTLS.
 - `identity_trusted_headers.TrustedHeaderIdentityProvider`: identities asserted by a trusted proxy or gateway.
 
-Single-provider config still works:
-
-```yaml
-auth:
-  module: dal_obscura.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider
-  args:
-    issuer: https://keycloak.example.com/realms/acme
-    audience: dal-obscura
-    subject_claim: sub
-    group_claims:
-      - groups
-      - realm_access.roles
-      - resource_access.dal-obscura.roles
-    attribute_claims:
-      tenant: tenant
-      clearance: clearance
-```
+Single-provider auth is represented as one published provider record. For
+example, an OIDC provider uses `module:
+dal_obscura.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider`
+with args for `issuer`, `audience`, `subject_claim`, `group_claims`, and
+`attribute_claims`.
 
 The OIDC/JWKS provider validates access tokens locally. It can discover the
 issuer JWKS automatically, or you can pin static keys with `jwks` or
 `jwks_file` for offline and on-prem deployments.
 
-Multi-provider chains let one deployment accept several credential families:
-
-```yaml
-auth:
-  providers:
-    - module: dal_obscura.infrastructure.adapters.identity_mtls.MtlsIdentityProvider
-      args:
-        identities:
-          - peer_identity: spiffe://cluster.local/ns/analytics/sa/spark
-            id: spark-job
-            groups: ["spark"]
-    - module: dal_obscura.infrastructure.adapters.identity_api_key.ApiKeyIdentityProvider
-      args:
-        header: x-api-key
-        keys:
-          - id: batch-job
-            secret:
-              key: BATCH_API_KEY
-            groups: ["batch"]
-            attributes:
-              tenant: acme
-    - module: dal_obscura.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider
-      args:
-        issuer: https://keycloak.example.com/realms/acme
-        audience: dal-obscura
-```
+Multi-provider chains let one deployment accept several credential families by
+publishing several provider records with ascending `ordinal` values.
 
 Providers run in order. Missing credentials fall through to the next provider;
 invalid credentials stop the chain and reject the request.
 
 ### Transport TLS
 
-Flight server TLS is configured separately from authentication so you can run
-plain bearer-token, mTLS, or mixed deployments:
+Flight server TLS is configured with data-plane environment variables so you can
+run plain bearer-token, mTLS, or mixed deployments:
 
-```yaml
-transport:
-  tls:
-    cert:
-      key: SERVER_CERT
-    key:
-      key: SERVER_KEY
-    client_ca:
-      key: CLIENT_CA
-    verify_client: true
+```bash
+export DAL_OBSCURA_LOCATION=grpc+tls://0.0.0.0:8815
+export DAL_OBSCURA_TLS_CERT="$(cat server.crt)"
+export DAL_OBSCURA_TLS_KEY="$(cat server.key)"
+export DAL_OBSCURA_TLS_CLIENT_CA="$(cat ca.crt)"
+export DAL_OBSCURA_TLS_VERIFY_CLIENT=true
 ```
 
-Set `verify_client: true` and `client_ca` when you want client certificates
-available to `MtlsIdentityProvider`.
+Set `DAL_OBSCURA_TLS_VERIFY_CLIENT=true` and `DAL_OBSCURA_TLS_CLIENT_CA` when
+you want client certificates available to `MtlsIdentityProvider`.
 
 ### Runnable Auth Examples
 
@@ -258,12 +214,8 @@ authentication approach:
 Each example is self-contained, starts the real auth backend for that flow, and
 leaves a client container running so you can issue more reads with
 `docker compose exec`. See
-[examples/auth/README.md](/Users/nithish/.codex/worktrees/601a/dal-obscura/examples/auth/README.md)
+[examples/auth/README.md](examples/auth/README.md)
 for the shared run pattern and per-provider caveats.
-
-Each example starts a real `dal-obscura` server, authenticates a real client, and
-executes a real Flight read without external services. See
-`examples/auth/README.md` for commands and caveats.
 
 ## Development
 
@@ -325,4 +277,5 @@ After `uv sync --dev`, install the hooks with `uv run pre-commit install`. The c
 
 ## Logging
 - JSON logs by default.
-- Configure level and JSON output in `app.yaml` under `logging`.
+- Configure level with `DAL_OBSCURA_LOG_LEVEL` and JSON output with
+  `DAL_OBSCURA_JSON_LOGS`.

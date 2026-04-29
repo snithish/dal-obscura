@@ -6,6 +6,8 @@ import os
 from collections.abc import Mapping
 from typing import cast
 
+import pyarrow.flight as flight
+
 from dal_obscura.application.ports.identity import IdentityPort
 from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
 from dal_obscura.application.use_cases.get_schema import GetSchemaUseCase
@@ -76,6 +78,12 @@ def main() -> None:
         get_schema_use_case=get_schema,
         plan_access_use_case=plan_access,
         fetch_stream_use_case=fetch_stream,
+        tls_certificates=_tls_certificates(
+            cert=runtime_config.tls_cert,
+            key=runtime_config.tls_key,
+        ),
+        verify_client=runtime_config.tls_verify_client,
+        root_certificates=_tls_root_certificates(runtime_config.tls_client_ca),
     )
     try:
         server.serve()
@@ -98,6 +106,20 @@ def _identity_from_runtime(runtime: PublishedRuntime) -> IdentityPort:
     if len(providers) == 1:
         return providers[0]
     return CompositeIdentityProvider(providers)
+
+
+def _tls_certificates(cert: str | None, key: str | None) -> list[flight.CertKeyPair] | None:
+    if cert is None and key is None:
+        return None
+    if cert is None or key is None:
+        raise ValueError("DAL_OBSCURA_TLS_CERT and DAL_OBSCURA_TLS_KEY must be set together")
+    return [flight.CertKeyPair(cert.encode("utf-8"), key.encode("utf-8"))]
+
+
+def _tls_root_certificates(client_ca: str | None) -> bytes | None:
+    if client_ca is None:
+        return None
+    return client_ca.encode("utf-8")
 
 
 def _load_identity_provider(raw: dict[str, object]) -> IdentityPort:

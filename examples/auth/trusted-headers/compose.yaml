@@ -4,6 +4,8 @@ services:
     extends:
       file: ../compose.common.yaml
       service: setup
+    environment:
+      AUTH_FLOW: trusted-headers
     volumes:
       - .:/workspace/example:ro
   dal-obscura:

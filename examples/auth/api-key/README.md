@@ -5,8 +5,8 @@ service credential sent in the `x-api-key` Flight header.
 
 ## Services
 
-- `setup`: creates the table, policy, and API-key provider config from
-  `fixture/fixture.yaml` and `config/auth.yaml`.
+- `setup`: creates the table, provisions the API-key provider and policy through
+  the control-plane API, then publishes the data-plane snapshot.
 - `dal-obscura`: maps the configured API key to `example-user`.
 - `client`: sends the configured API key for the startup read, then stays
   running for interactive reads.

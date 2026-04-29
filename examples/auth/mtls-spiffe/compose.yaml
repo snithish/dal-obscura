@@ -107,6 +107,8 @@ services:
     extends:
       file: ../compose.common.yaml
       service: setup
+    environment:
+      AUTH_FLOW: mtls-spiffe
     volumes:
       - .:/workspace/example:ro
   server-svid:
@@ -191,10 +193,15 @@ services:
       - -c
       - |
         set -e
+        . /workspace/runtime/data-plane.env
         export SERVER_CERT="$$(cat /workspace/server-svid/svid.0.pem)"
         export SERVER_KEY="$$(cat /workspace/server-svid/svid.0.key)"
         export CLIENT_CA="$$(cat /workspace/server-svid/bundle.0.pem)"
-        /workspace/.venv/bin/dal-obscura --app-config /workspace/runtime/app.yaml
+        export DAL_OBSCURA_TLS_CERT="$$SERVER_CERT"
+        export DAL_OBSCURA_TLS_KEY="$$SERVER_KEY"
+        export DAL_OBSCURA_TLS_CLIENT_CA="$$CLIENT_CA"
+        export DAL_OBSCURA_TLS_VERIFY_CLIENT=true
+        /workspace/.venv/bin/dal-obscura
   client:
     extends:
       file: ../compose.common.yaml
