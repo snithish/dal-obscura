@@ -35,6 +35,7 @@ test = [
 
 [project.scripts]
 dal-obscura = "dal_obscura.interfaces.cli:main"
+dal-obscura-control-plane = "dal_obscura.control_plane.interfaces.cli:main"
 
 [build-system]
 requires = ["setuptools>=68.0.0", "wheel"]
@@ -50,6 +51,7 @@ dev-dependencies = [
   "pytest-benchmark>=4.0.0",
   "pytest-cov>=4.1.0",
   "ruff>=0.4.8",
+  "httpx>=0.27.0",
   "sqlalchemy>=2.0.0",
   "ty>=0.0.22",
 ]

@@ -87,7 +87,7 @@ class PublicationCompiler:
             target=asset.target,
             backend=asset.backend,
             compiled_config=compiled_config,
-            policy_version=int(_stable_hash(compiled_config["policy"])[:16], 16),
+            policy_version=_stable_int63(compiled_config["policy"]),
         )
 
     def _compile_rule(self, rule: PolicyRuleDraft) -> dict[str, object]:
@@ -122,3 +122,7 @@ def _normalize_row_filter(value: str | None) -> str | None:
 def _stable_hash(value: object) -> str:
     raw = json.dumps(value, sort_keys=True, default=str, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
+
+
+def _stable_int63(value: object) -> int:
+    return int(_stable_hash(value), 16) & ((1 << 63) - 1)

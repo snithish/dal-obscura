@@ -1,15 +1,21 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from typing import Any
 
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 
 def create_engine_from_url(database_url: str) -> Engine:
     """Creates an SQLAlchemy engine with SQLite thread settings for tests/dev."""
-    connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
-    return create_engine(database_url, future=True, connect_args=connect_args)
+    if database_url.startswith("sqlite"):
+        kwargs: dict[str, Any] = {"connect_args": {"check_same_thread": False}}
+        if database_url.endswith(":memory:"):
+            kwargs["poolclass"] = StaticPool
+        return create_engine(database_url, future=True, **kwargs)
+    return create_engine(database_url, future=True)
 
 
 def session_factory(engine: Engine) -> sessionmaker[Session]:
