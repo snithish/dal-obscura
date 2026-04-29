@@ -9,8 +9,8 @@ URI to `example-user`.
 - `spire-server`: real SPIRE server with a local self-signed authority.
 - `spire-bootstrap`: generates a join token and registers workload entries.
 - `spire-agent`: real SPIRE agent exposing the Workload API.
-- `setup`: creates the table, policy, and mTLS app config from
-  `fixture/fixture.yaml`, `config/auth.yaml`, and `config/transport.yaml`.
+- `setup`: creates the table, provisions the mTLS identity mapping and policy
+  through the control-plane API, then publishes the data-plane snapshot.
 - `dal-obscura`: fetches its server X.509-SVID and starts with TLS client
   verification enabled.
 - `client`: fetches its client X.509-SVID, performs the startup read over

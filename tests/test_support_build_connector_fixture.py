@@ -5,10 +5,18 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any, cast
+from uuid import UUID
 
 import pyarrow as pa
-import yaml
 from pyiceberg.catalog import load_catalog
+from sqlalchemy import select
+
+from dal_obscura.control_plane.infrastructure.db import create_engine_from_url, session_factory
+from dal_obscura.control_plane.infrastructure.orm import (
+    ActivePublicationRecord,
+    PolicyRuleRecord,
+    PublishedAssetRecord,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FIXED_DUMMY_PORT = 31337
@@ -32,21 +40,22 @@ def _run_fixture_builder(tmp_path: Path) -> dict[str, Any]:
     return cast(dict[str, Any], json.loads(completed.stdout))
 
 
-def _load_fixture_table(metadata: dict[str, Any]):
-    catalog_path = Path(cast(str, metadata["catalog_path"]))
-    catalog_config = yaml.safe_load(catalog_path.read_text())
-    catalog_entry = catalog_config["catalogs"][metadata["catalog"]]
+def _load_fixture_table(tmp_path: Path, metadata: dict[str, Any]):
     return load_catalog(
         cast(str, metadata["catalog"]),
-        type=catalog_entry["options"]["type"],
-        uri=catalog_entry["options"]["uri"],
-        warehouse=catalog_entry["options"]["warehouse"],
+        type="sql",
+        uri=f"sqlite:///{tmp_path / 'spark_catalog.db'}",
+        warehouse=str(tmp_path / "warehouse"),
     ).load_table(cast(str, metadata["target"]))
 
 
-def _load_sorted_projection(metadata: dict[str, Any], columns: list[str]) -> pa.Table:
+def _load_sorted_projection(
+    tmp_path: Path,
+    metadata: dict[str, Any],
+    columns: list[str],
+) -> pa.Table:
     return (
-        _load_fixture_table(metadata)
+        _load_fixture_table(tmp_path, metadata)
         .scan()
         .to_arrow()
         .select(columns)
@@ -56,38 +65,36 @@ def _load_sorted_projection(metadata: dict[str, Any], columns: list[str]) -> pa.
 
 def test_build_connector_fixture_uses_iceberg_sql_catalog(tmp_path: Path):
     metadata = _run_fixture_builder(tmp_path)
-    app_path = Path(cast(str, metadata["app_path"]))
-    app_config = yaml.safe_load(app_path.read_text())
-    catalog_path = Path(cast(str, metadata["catalog_path"]))
-    catalog_config = yaml.safe_load(catalog_path.read_text())
-    catalog_entry = catalog_config["catalogs"][metadata["catalog"]]
-    table = _load_fixture_table(metadata)
+    table = _load_fixture_table(tmp_path, metadata)
 
     assert cast(str, metadata["uri"]) == f"grpc+tcp://localhost:{FIXED_DUMMY_PORT}"
-    assert app_config["catalog_file"] == str(catalog_path)
-    assert catalog_entry["module"] == (
-        "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog"
+    assert (
+        cast(str, metadata["database_url"]) == f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
     )
-    assert catalog_entry["options"] == {
-        "type": "sql",
-        "uri": f"sqlite:///{tmp_path / 'spark_catalog.db'}",
-        "warehouse": str(tmp_path / "warehouse"),
-    }
+    assert UUID(cast(str, metadata["cell_id"]))
     assert Path(tmp_path / "spark_catalog.db").is_file()
+    assert Path(tmp_path / "control-plane.db").is_file()
     assert Path(tmp_path / "warehouse").is_dir()
+    assert not Path(tmp_path / "app.yaml").exists()
+    assert not Path(tmp_path / "catalogs.yaml").exists()
+    assert not Path(tmp_path / "policies.yaml").exists()
     assert table.metadata.format_version == 2
     assert [field.name for field in table.spec().fields] == ["region", "market"]
 
 
 def test_build_connector_fixture_emits_exact_heavyweight_metadata(tmp_path: Path):
     metadata = _run_fixture_builder(tmp_path)
-    table = _load_sorted_projection(metadata, ["id", "region", "market", "active", "score"])
+    table = _load_sorted_projection(
+        tmp_path, metadata, ["id", "region", "market", "active", "score"]
+    )
 
     assert metadata["catalog"] == "spark_catalog"
     assert metadata["target"] == "default.complex_users"
-    assert Path(metadata["app_path"]).is_file()
-    assert Path(cast(str, metadata["catalog_path"])).is_file()
-    assert Path(cast(str, metadata["policy_path"])).is_file()
+    assert "app_path" not in metadata
+    assert "catalog_path" not in metadata
+    assert "policy_path" not in metadata
+    assert Path(cast(str, metadata["database_url"]).removeprefix("sqlite+pysqlite:///")).is_file()
+    assert UUID(cast(str, metadata["cell_id"]))
     assert metadata["user_token"]
 
     expected = metadata["expected"]
@@ -169,20 +176,35 @@ def test_build_connector_fixture_emits_exact_heavyweight_metadata(tmp_path: Path
     }
 
 
-def test_build_connector_fixture_writes_expected_policy_and_paths(tmp_path: Path):
+def test_build_connector_fixture_publishes_expected_policy_and_runtime(tmp_path: Path):
     metadata = _run_fixture_builder(tmp_path)
-    table = _load_sorted_projection(metadata, ["id", "region", "email"])
+    table = _load_sorted_projection(tmp_path, metadata, ["id", "region", "email"])
 
-    app_path = Path(metadata["app_path"])
-    app_config = yaml.safe_load(app_path.read_text())
-    policy_path = Path(app_config["policy_file"])
-    policy = yaml.safe_load(policy_path.read_text())
-    target_policy = policy["catalogs"][metadata["catalog"]]["targets"][metadata["target"]]
-    rules = target_policy["rules"]
+    engine = create_engine_from_url(cast(str, metadata["database_url"]))
+    with session_factory(engine)() as session:
+        active = session.get(ActivePublicationRecord, UUID(cast(str, metadata["cell_id"])))
+        assert active is not None
+        published = session.scalar(
+            select(PublishedAssetRecord).where(
+                PublishedAssetRecord.publication_id == active.publication_id,
+                PublishedAssetRecord.catalog == metadata["catalog"],
+                PublishedAssetRecord.target == metadata["target"],
+            )
+        )
+        assert published is not None
+        target_config = published.compiled_config_json["target"]
+        rules = published.compiled_config_json["policy"]["rules"]
+        authoring_rules = session.scalars(
+            select(PolicyRuleRecord).order_by(PolicyRuleRecord.ordinal)
+        ).all()
 
-    assert app_config["catalog_file"] == str(tmp_path / "catalogs.yaml")
-    assert policy_path == tmp_path / "policies.yaml"
+    assert target_config == {
+        "backend": "iceberg",
+        "table": "default.complex_users",
+        "options": {},
+    }
     assert len(rules) >= 2
+    assert [rule.ordinal for rule in authoring_rules] == [10, 20]
 
     mask_types = {mask["type"] for rule in rules for mask in rule.get("masks", {}).values()}
     assert mask_types == {"null", "redact", "hash", "default", "email", "keep_last"}

@@ -1,9 +1,0 @@
-auth:
-  module: dal_obscura.infrastructure.adapters.identity_mtls.MtlsIdentityProvider
-  args:
-    identities:
-      - peer_identity: spiffe://example.org/ns/default/sa/dal-obscura-client
-        id: example-user
-        groups: ["compose-example", "spiffe"]
-        attributes:
-          spiffe_id: spiffe://example.org/ns/default/sa/dal-obscura-client

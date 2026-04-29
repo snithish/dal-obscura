@@ -27,6 +27,7 @@ class TicketPayload:
     principal_id: str
     expires_at: int
     nonce: str
+    tenant_id: str = "default"
     catalog: str | None = None
 
     def to_dict(self) -> dict[str, object]:
@@ -39,6 +40,7 @@ class TicketPayload:
             "principal_id": self.principal_id,
             "expires_at": self.expires_at,
             "nonce": self.nonce,
+            "tenant_id": self.tenant_id,
         }
         if self.catalog is not None:
             payload["catalog"] = self.catalog
@@ -55,6 +57,7 @@ class TicketPayload:
             principal_id=str(payload.get("principal_id", "")),
             expires_at=_coerce_int(payload.get("expires_at")),
             nonce=str(payload.get("nonce", "")),
+            tenant_id=str(payload.get("tenant_id", "default") or "default"),
             catalog=_coerce_optional_str(payload.get("catalog")),
         )
 

@@ -9,24 +9,18 @@ from tests.support.flight import (
 )
 
 
-def _policy(target: str) -> str:
-    return f"""
-version: 1
-catalogs:
-  analytics:
-    targets:
-      "{target}":
-        rules:
-          - principals: ["user1"]
-            columns: ["id", "email", "region"]
-            masks:
-              email:
-                type: "redact"
-                value: "[hidden]"
-"""
+def _policy_rules() -> list[dict[str, object]]:
+    return [
+        {
+            "principals": ["user1"],
+            "columns": ["id", "email", "region"],
+            "masks": {"email": {"type": "redact", "value": "[hidden]"}},
+            "effect": "allow",
+        }
+    ]
 
 
-def test_python_sdk_reads_authorized_arrow_table(tmp_path):
+def test_python_sdk_reads_authorized_arrow_table():
     schema = pa.schema(
         [
             pa.field("id", pa.int64()),
@@ -49,9 +43,7 @@ def test_python_sdk_reads_authorized_arrow_table(tmp_path):
         schema=schema,
         batches=(batch,),
     )
-    policy_path = tmp_path / "policy.yaml"
-    policy_path.write_text(_policy("test.table"))
-    server = build_flight_service(table_format=table_format, policy_path=policy_path)
+    server = build_flight_service(table_format=table_format, policy_rules=_policy_rules())
 
     with running_flight_client(server) as flight_client:
         sdk = DalObscuraClient.from_flight_client(
@@ -71,7 +63,7 @@ def test_python_sdk_reads_authorized_arrow_table(tmp_path):
     assert result.column("email").to_pylist() == ["[hidden]", "[hidden]"]
 
 
-def test_duckdb_reader_exposes_sdk_results_as_relation(tmp_path):
+def test_duckdb_reader_exposes_sdk_results_as_relation():
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     batch = pa.record_batch(
         [
@@ -87,9 +79,7 @@ def test_duckdb_reader_exposes_sdk_results_as_relation(tmp_path):
         schema=schema,
         batches=(batch,),
     )
-    policy_path = tmp_path / "policy.yaml"
-    policy_path.write_text(_policy("test.table"))
-    server = build_flight_service(table_format=table_format, policy_path=policy_path)
+    server = build_flight_service(table_format=table_format, policy_rules=_policy_rules())
 
     with running_flight_client(server) as flight_client:
         sdk = DalObscuraClient.from_flight_client(

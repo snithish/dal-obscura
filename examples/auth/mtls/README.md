@@ -6,8 +6,8 @@ enabled and maps the verified peer identity through `MtlsIdentityProvider`.
 ## Services
 
 - `setup`: generates a local CA, server certificate, client certificate, table,
-  policy, and mTLS app config from `fixture/fixture.yaml`, `config/auth.yaml`,
-  and `config/transport.yaml`.
+  then provisions the mTLS identity mapping and policy through the control-plane
+  API.
 - `dal-obscura`: starts on `grpc+tls` and requires a client certificate signed by
   the generated CA.
 - `client`: presents the generated client certificate for the startup read, then

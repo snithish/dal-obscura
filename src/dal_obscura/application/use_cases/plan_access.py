@@ -9,6 +9,7 @@ from dataclasses import dataclass
 import pyarrow as pa
 
 from dal_obscura.application.ports.authorization import AuthorizationPort
+from dal_obscura.application.ports.catalog import CatalogRegistryPort
 from dal_obscura.application.ports.identity import AuthenticationRequest, IdentityPort
 from dal_obscura.application.ports.masking import MaskingPort
 from dal_obscura.application.ports.ticket_codec import TicketCodecPort
@@ -23,7 +24,6 @@ from dal_obscura.domain.access_control.filters import (
 from dal_obscura.domain.access_control.models import AccessDecision
 from dal_obscura.domain.query_planning.models import ExecutionProjection, PlanRequest
 from dal_obscura.domain.ticket_delivery.models import TicketPayload
-from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
 
 
 @dataclass(frozen=True)
@@ -48,7 +48,7 @@ class PlanAccessUseCase:
         self,
         identity: IdentityPort,
         authorizer: AuthorizationPort,
-        catalog_registry: DynamicCatalogRegistry,
+        catalog_registry: CatalogRegistryPort,
         masking: MaskingPort,
         ticket_codec: TicketCodecPort,
         ticket_ttl_seconds: int,
@@ -71,9 +71,14 @@ class PlanAccessUseCase:
     ) -> PlanAccessResult:
         """Builds a plan for the requested dataset and returns one signed ticket per task."""
         principal = self._identity.authenticate(auth_request)
+        tenant_id = _tenant_id(principal)
 
         # Phase 1: Discovery via Catalog
-        table_format = self._catalog_registry.describe(request.catalog, request.target)
+        table_format = self._catalog_registry.describe(
+            request.catalog,
+            request.target,
+            tenant_id=tenant_id,
+        )
         base_schema = table_format.get_schema()
 
         requested_columns = _expand_requested_columns(base_schema, request.columns)
@@ -125,6 +130,7 @@ class PlanAccessUseCase:
                 principal_id=principal.id,
                 expires_at=self._now() + self._ticket_ttl_seconds,
                 nonce=self._nonce_factory(),
+                tenant_id=tenant_id,
             )
             ticket_tokens.append(self._ticket_codec.sign_payload(payload))
 
@@ -271,6 +277,12 @@ def _validate_requested_row_filter(
 
 def _epoch_seconds() -> int:
     return int(time.time())
+
+
+def _tenant_id(principal) -> str:
+    return str(
+        principal.attributes.get("tenant_id") or principal.attributes.get("tenant") or "default"
+    )
 
 
 def _nonce() -> str:

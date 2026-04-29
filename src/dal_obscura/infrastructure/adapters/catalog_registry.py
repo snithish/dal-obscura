@@ -2,15 +2,40 @@ from __future__ import annotations
 
 import importlib
 import threading
+from dataclasses import dataclass, field
 from typing import Any
 
 from dal_obscura.domain.catalog.ports import CatalogPlugin, TableFormat
-from dal_obscura.infrastructure.adapters.service_config import (
-    CatalogConfig,
-    CatalogTargetConfig,
-    ServiceConfig,
-)
 from dal_obscura.infrastructure.table_formats.iceberg import IcebergTableFormat
+
+
+@dataclass(frozen=True)
+class CatalogTargetConfig:
+    """Per-target override inside a catalog definition."""
+
+    backend: str | None = None
+    table: str | None = None
+    format: str | None = None
+    paths: tuple[str, ...] = ()
+    options: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class CatalogConfig:
+    """One named catalog plus any target-specific overrides."""
+
+    name: str
+    module: str
+    options: dict[str, Any]
+    targets: dict[str, CatalogTargetConfig]
+
+
+@dataclass(frozen=True)
+class ServiceConfig:
+    """Published catalog configuration installed in a data-plane registry."""
+
+    catalogs: dict[str, CatalogConfig]
+    paths: tuple[object, ...] = ()
 
 
 class DynamicCatalogRegistry:
@@ -46,15 +71,22 @@ class DynamicCatalogRegistry:
                 raise ValueError(f"Unknown catalog: {catalog_name}")
         return implementation.get_table(target)
 
-    def describe(self, catalog: str | None, target: str) -> TableFormat:
+    def describe(
+        self,
+        catalog: str | None,
+        target: str,
+        *,
+        tenant_id: str = "default",
+    ) -> TableFormat:
         """Describes a target by asking the requested catalog implementation."""
+        del tenant_id
         if catalog is None:
             raise ValueError("Catalog name is required to resolve a target")
         return self.describe_catalog(catalog, target)
 
 
 class IcebergCatalog:
-    """Catalog resolver for SQL-style catalogs configured in the service YAML."""
+    """Catalog resolver for SQL-style Iceberg catalogs."""
 
     def __init__(self, name: str, options: dict[str, Any], targets: dict[str, CatalogTargetConfig]):
         self._name = name
@@ -79,7 +111,7 @@ class IcebergCatalog:
 
 
 class StaticCatalog:
-    """Catalog resolver for catalogs that require explicit target mappings in YAML."""
+    """Catalog resolver for catalogs that require explicit target mappings."""
 
     def __init__(self, name: str, options: dict[str, Any], targets: dict[str, CatalogTargetConfig]):
         self._name = name

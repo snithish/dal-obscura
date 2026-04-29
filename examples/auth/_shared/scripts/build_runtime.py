@@ -1,25 +1,27 @@
 from __future__ import annotations
 
-import csv
 import json
 import os
+import shlex
 from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
 import pyarrow as pa
-import yaml
+from fastapi.testclient import TestClient
 from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
 from pyiceberg.types import BooleanType, DoubleType, IntegerType, LongType, NestedField, StringType
 
+from dal_obscura.control_plane.infrastructure.db import create_engine_from_url, session_factory
+from dal_obscura.control_plane.infrastructure.orm import Base
+from dal_obscura.control_plane.interfaces.api import create_app
+
 RUNTIME_DIR = Path(os.environ.get("RUNTIME_DIR", "/workspace/runtime"))
-EXAMPLE_ROOT = Path(os.environ.get("EXAMPLE_ROOT", "/workspace/example"))
-FIXTURE_FILE = Path(os.environ.get("FIXTURE_FILE", EXAMPLE_ROOT / "fixture" / "fixture.yaml"))
-AUTH_CONFIG_FILE = Path(os.environ.get("AUTH_CONFIG_FILE", EXAMPLE_ROOT / "config" / "auth.yaml"))
-TRANSPORT_CONFIG_FILE = Path(
-    os.environ.get("TRANSPORT_CONFIG_FILE", EXAMPLE_ROOT / "config" / "transport.yaml")
-)
+ADMIN_TOKEN = "local-example-admin"
+CATALOG_NAME = "example_catalog"
+TENANT_SLUG = "default"
+TABLE_TARGET = "default.users"
 
 TYPE_BUILDERS: dict[str, tuple[type, pa.DataType]] = {
     "string": (StringType, pa.string()),
@@ -28,10 +30,41 @@ TYPE_BUILDERS: dict[str, tuple[type, pa.DataType]] = {
     "double": (DoubleType, pa.float64()),
     "boolean": (BooleanType, pa.bool_()),
 }
+FIXTURE: dict[str, Any] = {
+    "catalog": CATALOG_NAME,
+    "tables": [
+        {
+            "target": TABLE_TARGET,
+            "schema": [
+                {"name": "id", "type": "long", "required": True},
+                {"name": "email", "type": "string"},
+                {"name": "region", "type": "string"},
+            ],
+            "rows": [
+                {"id": 1, "email": "alice@example.com", "region": "us"},
+                {"id": 2, "email": "bob@example.com", "region": "eu"},
+                {"id": 3, "email": "carol@example.com", "region": "us"},
+            ],
+        }
+    ],
+    "policies": [
+        {
+            "target": TABLE_TARGET,
+            "rules": [
+                {
+                    "principals": ["example-user"],
+                    "columns": ["id", "email", "region"],
+                    "row_filter": "region = 'us'",
+                }
+            ],
+        }
+    ],
+}
 
 
 def main() -> None:
-    fixture = _load_yaml(FIXTURE_FILE, "Fixture")
+    fixture = FIXTURE
+    auth_flow = os.environ["AUTH_FLOW"]
     catalog_name = str(_require_key(fixture, "catalog")).strip()
     if not catalog_name:
         raise ValueError("Fixture catalog must be non-empty")
@@ -39,10 +72,17 @@ def main() -> None:
     tables = _read_tables(fixture)
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     _create_tables(catalog_name, tables)
-    _write_catalog_config(catalog_name)
-    _write_policy_config(catalog_name, fixture, tables)
-    _write_app_config()
-    print(json.dumps({"catalog": catalog_name, "tables": [table["target"] for table in tables]}))
+    cell_id = _provision_control_plane(catalog_name, fixture, tables, auth_flow)
+    _write_data_plane_env(cell_id, auth_flow)
+    print(
+        json.dumps(
+            {
+                "catalog": catalog_name,
+                "tables": [table["target"] for table in tables],
+                "cell_id": cell_id,
+            }
+        )
+    )
 
 
 def _read_tables(fixture: dict[str, Any]) -> list[dict[str, Any]]:
@@ -52,7 +92,7 @@ def _read_tables(fixture: dict[str, Any]) -> list[dict[str, Any]]:
     tables: list[dict[str, Any]] = []
     for raw_table in raw_tables:
         if not isinstance(raw_table, dict):
-            raise ValueError("Each fixture table must be a YAML object")
+            raise ValueError("Each fixture table must be an object")
         target = str(_require_key(raw_table, "target")).strip()
         if not target:
             raise ValueError("Fixture table target must be non-empty")
@@ -74,16 +114,12 @@ def _table_rows(table: dict[str, Any], target: str) -> list[dict[str, Any]]:
         normalized_rows: list[dict[str, Any]] = []
         for row in rows:
             if not isinstance(row, dict):
-                raise ValueError(f"Fixture table {target!r} rows must be YAML objects")
+                raise ValueError(f"Fixture table {target!r} rows must be objects")
             normalized_rows.append(dict(row))
         return normalized_rows
-    if not csv_path:
-        return []
-    csv_file = EXAMPLE_ROOT / str(csv_path)
-    if not csv_file.exists():
-        raise FileNotFoundError(csv_file)
-    with csv_file.open(newline="", encoding="utf-8") as handle:
-        return [dict(row) for row in csv.DictReader(handle)]
+    if csv_path:
+        raise ValueError("CSV-backed example fixtures are not supported")
+    return []
 
 
 def _create_tables(catalog_name: str, tables: list[dict[str, Any]]) -> None:
@@ -122,7 +158,7 @@ def _schemas(fields: list[dict[str, Any]], target: str) -> tuple[Schema, pa.Sche
     arrow_fields: list[pa.Field] = []
     for index, raw_field in enumerate(fields, start=1):
         if not isinstance(raw_field, dict):
-            raise ValueError(f"Fixture table {target!r} schema entries must be YAML objects")
+            raise ValueError(f"Fixture table {target!r} schema entries must be objects")
         name = str(_require_key(raw_field, "name")).strip()
         type_name = str(_require_key(raw_field, "type")).strip().lower()
         required = bool(raw_field.get("required", False))
@@ -183,103 +219,278 @@ def _cast_value(type_name: str, value: Any) -> Any:
     raise ValueError(f"Unsupported fixture type {type_name!r}")
 
 
-def _write_catalog_config(catalog_name: str) -> None:
-    _write_yaml(
-        RUNTIME_DIR / "catalogs.yaml",
-        {
-            "catalogs": {
-                catalog_name: {
-                    "module": "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
-                    "options": {
-                        "type": "sql",
-                        "uri": f"sqlite:///{RUNTIME_DIR / f'{catalog_name}.db'}",
-                        "warehouse": str(RUNTIME_DIR / "warehouse"),
-                    },
-                }
-            }
-        },
-    )
-
-
-def _write_policy_config(
-    catalog_name: str,
+def _read_policies(
     fixture: dict[str, Any],
     tables: list[dict[str, Any]],
-) -> None:
-    policies: dict[str, dict[str, Any]] = {}
+) -> list[dict[str, Any]]:
+    policies: list[dict[str, Any]] = []
     raw_policies = fixture.get("policies", [])
     if raw_policies:
         if not isinstance(raw_policies, list):
             raise ValueError("Fixture policies must be a list")
         for raw_policy in raw_policies:
             if not isinstance(raw_policy, dict):
-                raise ValueError("Fixture policies must contain YAML objects")
+                raise ValueError("Fixture policies must contain objects")
             target = str(_require_key(raw_policy, "target")).strip()
             rules = raw_policy.get("rules")
             if not isinstance(rules, list) or not rules:
                 raise ValueError(f"Fixture policy {target!r} must define a non-empty rules list")
-            policies[target] = {"rules": rules}
+            policies.append({"target": target, "rules": rules})
     else:
         for table in tables:
             rules = []
             for rule in table.get("rules", []):
                 if not isinstance(rule, dict):
-                    raise ValueError(
-                        f"Fixture table {table['target']!r} rules must be YAML objects"
-                    )
+                    raise ValueError(f"Fixture table {table['target']!r} rules must be objects")
                 rules.append(rule)
             if rules:
-                policies[str(table["target"])] = {"rules": rules}
+                policies.append({"target": str(table["target"]), "rules": rules})
     if not policies:
         raise ValueError("Fixture must define policies or per-table rules")
-    _write_yaml(
-        RUNTIME_DIR / "policies.yaml",
-        {"version": 1, "catalogs": {catalog_name: {"targets": policies}}},
+    return policies
+
+
+def _provision_control_plane(
+    catalog_name: str,
+    fixture: dict[str, Any],
+    tables: list[dict[str, Any]],
+    auth_flow: str,
+) -> str:
+    database_path = RUNTIME_DIR / "control-plane.db"
+    database_path.unlink(missing_ok=True)
+    database_url = f"sqlite+pysqlite:///{database_path}"
+    engine = create_engine_from_url(database_url)
+    Base.metadata.create_all(engine)
+    client = TestClient(create_app(session_factory(engine), admin_token=ADMIN_TOKEN))
+    headers = {"authorization": f"Bearer {ADMIN_TOKEN}"}
+
+    tenant = _request(
+        client,
+        "post",
+        "/v1/tenants",
+        headers,
+        {"slug": TENANT_SLUG, "display_name": "Default Example Tenant"},
     )
+    cell = _request(
+        client,
+        "post",
+        "/v1/cells",
+        headers,
+        {"name": "local-example", "region": "local"},
+    )
+    tenant_id = str(tenant["id"])
+    cell_id = str(cell["id"])
+    _request(
+        client,
+        "put",
+        f"/v1/cells/{cell_id}/tenants/{tenant_id}",
+        headers,
+        {"shard_key": TENANT_SLUG},
+    )
+    _request(
+        client,
+        "put",
+        f"/v1/tenants/{tenant_id}/cells/{cell_id}/runtime-settings",
+        headers,
+        {"ticket_ttl_seconds": 900, "max_tickets": 64, "path_rules": []},
+    )
+    _request(
+        client,
+        "put",
+        f"/v1/tenants/{tenant_id}/cells/{cell_id}/catalogs/{catalog_name}",
+        headers,
+        {
+            "module": "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+            "options": {
+                "type": "sql",
+                "uri": f"sqlite:///{RUNTIME_DIR / f'{catalog_name}.db'}",
+                "warehouse": str(RUNTIME_DIR / "warehouse"),
+            },
+        },
+    )
+    policies = {policy["target"]: policy["rules"] for policy in _read_policies(fixture, tables)}
+    for table in tables:
+        target = str(table["target"])
+        asset = _request(
+            client,
+            "put",
+            f"/v1/tenants/{tenant_id}/cells/{cell_id}/assets/{catalog_name}/{target}",
+            headers,
+            {"backend": "iceberg", "table_identifier": target, "options": {}},
+        )
+        _request(
+            client,
+            "put",
+            f"/v1/assets/{asset['id']}/policy-rules",
+            headers,
+            {"rules": _compiled_policy_rules(policies[target])},
+        )
+    _request(
+        client,
+        "put",
+        f"/v1/cells/{cell_id}/auth-providers",
+        headers,
+        {"providers": _auth_providers(auth_flow)},
+    )
+    publication = _request(client, "post", f"/v1/cells/{cell_id}/publications", headers)
+    _request(
+        client,
+        "post",
+        f"/v1/cells/{cell_id}/publications/{publication['publication_id']}/activate",
+        headers,
+    )
+    return cell_id
 
 
-def _write_app_config() -> None:
-    app: dict[str, Any] = {
-        "location": "grpc://0.0.0.0:8815",
-        "catalog_file": str(RUNTIME_DIR / "catalogs.yaml"),
-        "policy_file": str(RUNTIME_DIR / "policies.yaml"),
-        "secret_provider": {
-            "module": "dal_obscura.infrastructure.adapters.secret_providers.EnvSecretProvider",
-            "args": {},
-        },
-        "ticket": {
-            "ttl_seconds": 900,
-            "max_tickets": 64,
-            "secret": {"key": "DAL_OBSCURA_TICKET_SECRET"},
-        },
-        "logging": {"level": "INFO", "json": True},
+def _compiled_policy_rules(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    compiled: list[dict[str, Any]] = []
+    for ordinal, rule in enumerate(rules, start=1):
+        compiled.append(
+            {
+                "ordinal": ordinal * 10,
+                "principals": list(rule["principals"]),
+                "columns": list(rule["columns"]),
+                "effect": str(rule.get("effect", "allow")),
+                "when": dict(rule.get("when", {})),
+                "masks": dict(rule.get("masks", {})),
+                "row_filter": rule.get("row_filter"),
+            }
+        )
+    return compiled
+
+
+def _auth_providers(auth_flow: str) -> list[dict[str, Any]]:
+    if auth_flow == "shared-jwt":
+        return [
+            _provider(
+                "dal_obscura.infrastructure.adapters.identity_default.DefaultIdentityAdapter",
+                {"jwt_secret": {"key": "DAL_OBSCURA_JWT_SECRET"}},
+            )
+        ]
+    if auth_flow == "api-key":
+        return [
+            _provider(
+                "dal_obscura.infrastructure.adapters.identity_api_key.ApiKeyIdentityProvider",
+                {"keys": [_api_key_record()]},
+            )
+        ]
+    if auth_flow == "composite-provider":
+        return [
+            _provider(
+                "dal_obscura.infrastructure.adapters.identity_api_key.ApiKeyIdentityProvider",
+                {"keys": [_api_key_record()]},
+                ordinal=10,
+            ),
+            _provider(
+                "dal_obscura.infrastructure.adapters.identity_default.DefaultIdentityAdapter",
+                {"jwt_secret": {"key": "DAL_OBSCURA_JWT_SECRET"}},
+                ordinal=20,
+            ),
+        ]
+    if auth_flow == "keycloak-oidc":
+        return [
+            _provider(
+                "dal_obscura.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider",
+                {
+                    "issuer": "http://keycloak:8080/realms/dal-obscura",
+                    "audience": "dal-obscura",
+                    "jwks_url": (
+                        "http://keycloak:8080/realms/dal-obscura/protocol/openid-connect/certs"
+                    ),
+                    "subject_claim": "preferred_username",
+                },
+            )
+        ]
+    if auth_flow == "mtls":
+        return [
+            _provider(
+                "dal_obscura.infrastructure.adapters.identity_mtls.MtlsIdentityProvider",
+                {
+                    "identities": [
+                        {
+                            "peer_identity": "urn:dal-obscura:example-client",
+                            "id": "example-user",
+                            "groups": ["compose-example"],
+                            "attributes": {"client_id": "urn:dal-obscura:example-client"},
+                        }
+                    ]
+                },
+            )
+        ]
+    if auth_flow == "mtls-spiffe":
+        return [
+            _provider(
+                "dal_obscura.infrastructure.adapters.identity_mtls.MtlsIdentityProvider",
+                {
+                    "identities": [
+                        {
+                            "peer_identity": "spiffe://example.org/ns/default/sa/dal-obscura-client",
+                            "id": "example-user",
+                            "groups": ["compose-example", "spiffe"],
+                            "attributes": {
+                                "spiffe_id": (
+                                    "spiffe://example.org/ns/default/sa/dal-obscura-client"
+                                )
+                            },
+                        }
+                    ]
+                },
+            )
+        ]
+    if auth_flow == "trusted-headers":
+        return [
+            _provider(
+                "dal_obscura.infrastructure.adapters.identity_trusted_headers.TrustedHeaderIdentityProvider",
+                {"shared_secret": {"key": "DAL_OBSCURA_PROXY_SECRET"}},
+            )
+        ]
+    raise ValueError(f"Unsupported auth example flow {auth_flow!r}")
+
+
+def _provider(
+    module: str,
+    args: dict[str, Any],
+    *,
+    ordinal: int = 10,
+) -> dict[str, Any]:
+    return {"ordinal": ordinal, "module": module, "args": args, "enabled": True}
+
+
+def _api_key_record() -> dict[str, Any]:
+    return {
+        "id": "example-user",
+        "secret": {"key": "DAL_OBSCURA_API_KEY"},
+        "groups": ["compose-example"],
     }
-    auth_config = _load_yaml(AUTH_CONFIG_FILE, "Auth config")
-    _merge_dict(app, auth_config)
-    if TRANSPORT_CONFIG_FILE.exists():
-        _merge_dict(app, _load_yaml(TRANSPORT_CONFIG_FILE, "Transport config"))
-    _write_yaml(RUNTIME_DIR / "app.yaml", app)
 
 
-def _merge_dict(base: dict[str, Any], override: dict[str, Any]) -> None:
-    for key, value in override.items():
-        if isinstance(value, dict) and isinstance(base.get(key), dict):
-            _merge_dict(base[key], value)
-        else:
-            base[key] = value
+def _write_data_plane_env(cell_id: str, auth_flow: str) -> None:
+    location = (
+        "grpc+tls://0.0.0.0:8815" if auth_flow in {"mtls", "mtls-spiffe"} else "grpc://0.0.0.0:8815"
+    )
+    values = {
+        "DAL_OBSCURA_DATABASE_URL": f"sqlite+pysqlite:///{RUNTIME_DIR / 'control-plane.db'}",
+        "DAL_OBSCURA_CELL_ID": cell_id,
+        "DAL_OBSCURA_LOCATION": location,
+        "DAL_OBSCURA_JSON_LOGS": "true",
+    }
+    lines = [f"export {key}={shlex.quote(value)}" for key, value in values.items()]
+    (RUNTIME_DIR / "data-plane.env").write_text("\n".join(lines) + "\n")
 
 
-def _load_yaml(path: Path, label: str) -> dict[str, Any]:
-    if not path.exists():
-        raise FileNotFoundError(path)
-    raw = yaml.safe_load(path.read_text())
-    if not isinstance(raw, dict):
-        raise ValueError(f"{label} must contain a YAML object")
-    return raw
-
-
-def _write_yaml(path: Path, value: dict[str, Any]) -> None:
-    path.write_text(yaml.safe_dump(value, sort_keys=False))
+def _request(
+    client: TestClient,
+    method: str,
+    path: str,
+    headers: dict[str, str],
+    json_body: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    response = client.request(method, path, headers=headers, json=json_body)
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, dict):
+        raise ValueError(f"Control-plane route {path!r} returned a non-object response")
+    return payload
 
 
 def _require_key(raw: dict[str, Any], key: str) -> Any:

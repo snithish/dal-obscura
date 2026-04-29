@@ -12,6 +12,8 @@ services:
     extends:
       file: ../compose.common.yaml
       service: setup
+    environment:
+      AUTH_FLOW: keycloak-oidc
     volumes:
       - .:/workspace/example:ro
   dal-obscura:

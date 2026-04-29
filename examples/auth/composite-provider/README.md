@@ -5,8 +5,8 @@ The provider chain accepts both API key and shared JWT credentials.
 
 ## Services
 
-- `setup`: creates a config with two auth providers in order: API key, then
-  JWT, using `fixture/fixture.yaml` and `config/auth.yaml`.
+- `setup`: provisions two auth providers through the control-plane API in
+  order: API key, then JWT.
 - `dal-obscura`: authenticates each request by trying the provider chain.
 - `client`: performs one startup read with `x-api-key`, another with a signed
   JWT, then stays running for interactive reads.

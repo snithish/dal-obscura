@@ -12,6 +12,7 @@ from dal_obscura.application.ports.identity import AuthenticationRequest, Identi
 from dal_obscura.application.ports.masking import MaskingPort
 from dal_obscura.application.ports.row_transform import RowTransformPort
 from dal_obscura.application.ports.ticket_codec import TicketCodecPort
+from dal_obscura.application.use_cases.plan_access import _tenant_id
 from dal_obscura.domain.access_control.filters import RowFilter, deserialize_row_filter
 from dal_obscura.domain.access_control.models import MaskRule
 from dal_obscura.domain.table_format.ports import ScanTask
@@ -62,7 +63,15 @@ class FetchStreamUseCase:
         if principal.id != payload.principal_id:
             raise PermissionError("Unauthorized")
 
-        current_version = self._authorizer.current_policy_version(payload.target, payload.catalog)
+        tenant_id = _tenant_id(principal)
+        if tenant_id != payload.tenant_id:
+            raise PermissionError("Unauthorized")
+
+        current_version = self._authorizer.current_policy_version(
+            payload.target,
+            payload.catalog,
+            tenant_id=payload.tenant_id,
+        )
         if current_version is not None and payload.policy_version != current_version:
             raise PermissionError("Unauthorized")
 

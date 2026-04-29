@@ -1,22 +1,30 @@
 from __future__ import annotations
 
-import argparse
+import importlib
 import logging
-from typing import TypedDict
+import os
+from collections.abc import Mapping
+from typing import cast
 
 import pyarrow.flight as flight
 
+from dal_obscura.application.ports.identity import IdentityPort
 from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
 from dal_obscura.application.use_cases.get_schema import GetSchemaUseCase
 from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
-from dal_obscura.infrastructure.adapters.app_config import load_app_config
-from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
+from dal_obscura.control_plane.infrastructure.db import create_engine_from_url, session_factory
 from dal_obscura.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
 )
-from dal_obscura.infrastructure.adapters.policy_file_authorizer import PolicyFileAuthorizer
-from dal_obscura.infrastructure.adapters.service_config import load_catalog_config
+from dal_obscura.infrastructure.adapters.identity_composite import CompositeIdentityProvider
+from dal_obscura.infrastructure.adapters.published_config import (
+    PublishedConfigAuthorizer,
+    PublishedConfigCatalogRegistry,
+    PublishedConfigStore,
+    PublishedRuntime,
+)
+from dal_obscura.infrastructure.adapters.runtime_config import load_data_plane_runtime_config
 from dal_obscura.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
 from dal_obscura.interfaces.flight.server import DataAccessFlightService
 from dal_obscura.logging_config import LoggingConfig, setup_logging
@@ -24,49 +32,24 @@ from dal_obscura.logging_config import LoggingConfig, setup_logging
 LOGGER = logging.getLogger(__name__)
 
 
-class _FlightTlsKwargs(TypedDict, total=False):
-    tls_certificates: list[flight.CertKeyPair]
-    verify_client: bool
-    root_certificates: bytes | None
-
-
-def _flight_tls_kwargs(app_config) -> _FlightTlsKwargs:
-    tls = app_config.transport.tls
-    if tls is None:
-        return {}
-    return {
-        "tls_certificates": [
-            flight.CertKeyPair(
-                cert=tls.cert.encode("utf-8"),
-                key=tls.key.encode("utf-8"),
-            )
-        ],
-        "verify_client": tls.verify_client,
-        "root_certificates": None if tls.client_ca is None else tls.client_ca.encode("utf-8"),
-    }
-
-
 def main() -> None:
-    """CLI entry point that wires adapters together and starts the Flight server."""
-    parser = argparse.ArgumentParser(description="dal-obscura Flight service")
-    parser.add_argument("--app-config", required=True)
-    args = parser.parse_args()
+    """CLI entry point that wires the data plane from published control-plane state."""
+    runtime_config = load_data_plane_runtime_config()
+    setup_logging(LoggingConfig(level=runtime_config.log_level, json=runtime_config.json_logs))
+    LOGGER.info("Starting dal-obscura data plane")
 
-    app_config = load_app_config(args.app_config)
-    setup_logging(
-        LoggingConfig(level=app_config.logging.level, json=app_config.logging.json_output)
-    )
-    LOGGER.info("Starting dal-obscura service")
+    engine = create_engine_from_url(runtime_config.database_url)
+    session = session_factory(engine)()
+    config_store = PublishedConfigStore(session, cell_id=runtime_config.cell_id)
+    published_runtime = config_store.get_runtime()
 
-    # The CLI is the composition root for the hexagonal application. Everything
-    # below is pure wiring so the use cases can stay free of transport details.
-    identity = app_config.auth.identity_provider
-    authorizer = PolicyFileAuthorizer(app_config.policy_file)
-    service_config = load_catalog_config(app_config.catalog_file)
-    catalog_registry = DynamicCatalogRegistry(service_config)
+    identity = _identity_from_runtime(published_runtime)
+    authorizer = PublishedConfigAuthorizer(config_store)
+    catalog_registry = PublishedConfigCatalogRegistry(config_store)
     masking = DefaultMaskingAdapter()
     row_transform = DuckDBRowTransformAdapter(masking)
-    ticket_codec = HmacTicketCodecAdapter(app_config.ticket.secret)
+    ticket_codec = HmacTicketCodecAdapter(runtime_config.ticket_secret)
+    ticket_settings = published_runtime.ticket
 
     get_schema = GetSchemaUseCase(
         identity=identity,
@@ -80,8 +63,8 @@ def main() -> None:
         catalog_registry=catalog_registry,
         masking=masking,
         ticket_codec=ticket_codec,
-        ticket_ttl_seconds=app_config.ticket.ttl_seconds,
-        max_tickets=app_config.ticket.max_tickets,
+        ticket_ttl_seconds=int(ticket_settings.get("ttl_seconds", 300)),
+        max_tickets=int(ticket_settings.get("max_tickets", 1)),
     )
     fetch_stream = FetchStreamUseCase(
         identity=identity,
@@ -91,10 +74,94 @@ def main() -> None:
         ticket_codec=ticket_codec,
     )
     server = DataAccessFlightService(
-        location=app_config.location,
+        location=runtime_config.location,
         get_schema_use_case=get_schema,
         plan_access_use_case=plan_access,
         fetch_stream_use_case=fetch_stream,
-        **_flight_tls_kwargs(app_config),
+        tls_certificates=_tls_certificates(
+            cert=runtime_config.tls_cert,
+            key=runtime_config.tls_key,
+        ),
+        verify_client=runtime_config.tls_verify_client,
+        root_certificates=_tls_root_certificates(runtime_config.tls_client_ca),
     )
-    server.serve()
+    try:
+        server.serve()
+    finally:
+        session.close()
+
+
+def _identity_from_runtime(runtime: PublishedRuntime) -> IdentityPort:
+    providers_raw = _provider_records(runtime.auth_chain.get("providers", []))
+    if not providers_raw:
+        raise ValueError("Published runtime auth_chain must define at least one provider")
+
+    providers = [
+        _load_identity_provider(provider)
+        for provider in sorted(providers_raw, key=lambda item: int(item.get("ordinal", 0)))
+        if bool(provider.get("enabled", True))
+    ]
+    if not providers:
+        raise ValueError("Published runtime auth_chain has no enabled providers")
+    if len(providers) == 1:
+        return providers[0]
+    return CompositeIdentityProvider(providers)
+
+
+def _tls_certificates(cert: str | None, key: str | None) -> list[flight.CertKeyPair] | None:
+    if cert is None and key is None:
+        return None
+    if cert is None or key is None:
+        raise ValueError("DAL_OBSCURA_TLS_CERT and DAL_OBSCURA_TLS_KEY must be set together")
+    return [flight.CertKeyPair(cert.encode("utf-8"), key.encode("utf-8"))]
+
+
+def _tls_root_certificates(client_ca: str | None) -> bytes | None:
+    if client_ca is None:
+        return None
+    return client_ca.encode("utf-8")
+
+
+def _load_identity_provider(raw: dict[str, object]) -> IdentityPort:
+    module_path = str(raw["module"])
+    args = cast(dict[str, object], _resolve_secret_refs(raw.get("args", {})))
+    provider_cls = _load_class(module_path)
+    provider = provider_cls(**args)
+    authenticate = getattr(provider, "authenticate", None)
+    if not callable(authenticate):
+        raise ValueError(f"Auth provider {module_path!r} must define authenticate(request)")
+    return cast(IdentityPort, provider)
+
+
+def _load_class(module_path: str) -> type:
+    module_name, class_name = module_path.rsplit(".", 1)
+    module = importlib.import_module(module_name)
+    provider_cls = getattr(module, class_name, None)
+    if not isinstance(provider_cls, type):
+        raise ValueError(f"Auth provider {module_path!r} must be a class")
+    return provider_cls
+
+
+def _resolve_secret_refs(value: object) -> object:
+    if isinstance(value, Mapping):
+        mapping = cast(Mapping[object, object], value)
+        secret_key = mapping.get("key")
+        if set(mapping) == {"key"} and isinstance(secret_key, str):
+            return _resolve_env_secret(secret_key)
+        return {str(key): _resolve_secret_refs(nested) for key, nested in mapping.items()}
+    if isinstance(value, list):
+        return [_resolve_secret_refs(item) for item in value]
+    return value
+
+
+def _resolve_env_secret(key: str) -> str:
+    value = os.getenv(key)
+    if value is None or not value:
+        raise ValueError(f"Secret {key!r} could not be resolved from the environment")
+    return value
+
+
+def _provider_records(value: object) -> list[dict[str, object]]:
+    if not isinstance(value, list):
+        return []
+    return [cast(dict[str, object], item) for item in value if isinstance(item, dict)]

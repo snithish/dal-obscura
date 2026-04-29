@@ -6,8 +6,8 @@ forwarding calls to the backend.
 
 ## Services
 
-- `setup`: creates the table, policy, and trusted-header provider config from
-  `fixture/fixture.yaml` and `config/auth.yaml`.
+- `setup`: creates the table, provisions the trusted-header provider and policy
+  through the control-plane API, then publishes the data-plane snapshot.
 - `dal-obscura`: trusts identity headers only when the proxy shared secret
   header is present and valid.
 - `gateway`: forwards `get_schema`, `get_flight_info`, and `do_get` to the

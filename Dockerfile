@@ -20,5 +20,5 @@ RUN uv sync --extra server --frozen --no-dev
 USER 10001:10001
 EXPOSE 8815
 
-# Mount or bake an app config, then pass --app-config at runtime.
+# Start with DAL_OBSCURA_DATABASE_URL, DAL_OBSCURA_CELL_ID, and ticket/TLS env vars.
 ENTRYPOINT ["/workspace/.venv/bin/dal-obscura"]

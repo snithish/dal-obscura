@@ -7,10 +7,10 @@ import sys
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from uuid import UUID
 
 import jwt
 import pyarrow as pa
-import yaml
 from pyiceberg.partitioning import PartitionField, PartitionSpec
 from pyiceberg.schema import Schema
 from pyiceberg.transforms import IdentityTransform
@@ -35,6 +35,13 @@ if str(REPO_ROOT) not in sys.path:
 
 create_iceberg_table = importlib.import_module("tests.support.iceberg").create_iceberg_table
 
+from dal_obscura.control_plane.application.provisioning import ProvisioningService  # noqa: E402
+from dal_obscura.control_plane.infrastructure.db import (  # noqa: E402
+    create_engine_from_url,
+    session_factory,
+)
+from dal_obscura.control_plane.infrastructure.orm import Base  # noqa: E402
+
 JWT_SECRET = "spark-jwt-secret-32-characters-long"
 TICKET_SECRET = "spark-ticket-secret-32-characters"
 CATALOG_NAME = "spark_catalog"
@@ -45,6 +52,46 @@ APPEND_BATCH_COUNT = 5
 TOTAL_ROWS = ROWS_PER_BATCH * APPEND_BATCH_COUNT
 POLICY_ROW_FILTER = "region = 'us' AND active = true"
 SUPPORTED_MASK_TYPES = ["default", "email", "hash", "keep_last", "null", "redact"]
+ALLOWED_COLUMNS = [
+    "id",
+    "region",
+    "market",
+    "active",
+    "vip",
+    "score",
+    "created_at",
+    "signup_date",
+    "credit_limit",
+    "account_balance",
+    "account_number",
+    "email",
+    "phone",
+    "status",
+    "notes",
+    "nickname",
+    "tags",
+    "attributes",
+    "user",
+    "user.email",
+    "user.address.zip",
+    "user.preferences.theme",
+    "account",
+    "account.manager.region",
+    "devices",
+    "support_ticket",
+    "support_ticket.ticket_id",
+]
+MASKS = {
+    "id": {"type": "hash"},
+    "account_number": {"type": "keep_last", "value": 4},
+    "nickname": {"type": "null"},
+    "notes": {"type": "redact", "value": "[redacted-note]"},
+    "status": {"type": "default", "value": "partner-visible"},
+    "email": {"type": "email"},
+    "user.address.zip": {"type": "hash"},
+    "user.preferences.theme": {"type": "redact", "value": "[hidden-theme]"},
+    "support_ticket.ticket_id": {"type": "hash"},
+}
 
 
 def _arrow_schema() -> pa.Schema:
@@ -470,6 +517,103 @@ def _expected_metadata() -> dict[str, object]:
     }
 
 
+def _provision_control_plane(output_dir: Path, table_id: str) -> tuple[str, str, str]:
+    database_url = f"sqlite+pysqlite:///{output_dir / 'control-plane.db'}"
+    engine = create_engine_from_url(database_url)
+    Base.metadata.create_all(engine)
+
+    with session_factory(engine)() as session:
+        service = ProvisioningService(session)
+        tenant = service.create_tenant(slug="spark-fixture", display_name="Spark Fixture")
+        cell = service.create_cell(name="spark-local", region="local")
+        tenant_id = UUID(tenant["id"])
+        cell_id = UUID(cell["id"])
+        service.assign_tenant(
+            cell_id=cell_id,
+            tenant_id=tenant_id,
+            shard_key="spark-fixture",
+        )
+        service.upsert_runtime_settings(
+            cell_id=cell_id,
+            ttl=900,
+            max_tickets=16,
+            path_rules=[],
+        )
+        service.upsert_catalog(
+            cell_id=cell_id,
+            tenant_id=tenant_id,
+            name=CATALOG_NAME,
+            module="dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+            options={
+                "type": "sql",
+                "uri": f"sqlite:///{output_dir / f'{CATALOG_NAME}.db'}",
+                "warehouse": str(output_dir / WAREHOUSE_NAME),
+            },
+        )
+        asset = service.upsert_asset(
+            cell_id=cell_id,
+            tenant_id=tenant_id,
+            catalog=CATALOG_NAME,
+            target=table_id,
+            backend="iceberg",
+            table_identifier=table_id,
+            options={},
+        )
+        service.replace_policy_rules(
+            asset_id=UUID(asset["id"]),
+            rules=[
+                {
+                    "ordinal": 10,
+                    "principals": ["spark_user"],
+                    "columns": ALLOWED_COLUMNS,
+                    "effect": "allow",
+                    "when": {},
+                    "masks": MASKS,
+                    "row_filter": POLICY_ROW_FILTER,
+                },
+                {
+                    "ordinal": 20,
+                    "principals": ["spark_ops"],
+                    "columns": [
+                        "id",
+                        "region",
+                        "market",
+                        "vip",
+                        "support_ticket",
+                        "account",
+                        "devices",
+                    ],
+                    "effect": "allow",
+                    "when": {},
+                    "masks": {},
+                    "row_filter": "market = 'enterprise'",
+                },
+            ],
+        )
+        service.replace_auth_providers(
+            cell_id=cell_id,
+            providers=[
+                {
+                    "ordinal": 1,
+                    "module": (
+                        "dal_obscura.infrastructure.adapters.identity_default."
+                        "DefaultIdentityAdapter"
+                    ),
+                    "args": {"jwt_secret": {"key": "DAL_OBSCURA_JWT_SECRET"}},
+                    "enabled": True,
+                }
+            ],
+        )
+        publication = service.create_publication(cell_id=cell_id)
+        service.activate_publication(
+            cell_id=cell_id,
+            publication_id=UUID(str(publication["publication_id"])),
+        )
+        session.commit()
+
+    return database_url, cell["id"], tenant["id"]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-dir", required=True)
@@ -488,143 +632,13 @@ def main() -> None:
         append_tables=_append_tables(),
         partition_spec=_partition_spec(),
     )
-    catalog_path = output_dir / "catalogs.yaml"
-    policy_path = output_dir / "policies.yaml"
-    app_path = output_dir / "app.yaml"
+    database_url, cell_id, tenant_id = _provision_control_plane(output_dir, table_id)
 
-    catalog_path.write_text(
-        yaml.safe_dump(
-            {
-                "catalogs": {
-                    CATALOG_NAME: {
-                        "module": (
-                            "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog"
-                        ),
-                        "options": {
-                            "type": "sql",
-                            "uri": f"sqlite:///{output_dir / f'{CATALOG_NAME}.db'}",
-                            "warehouse": str(output_dir / WAREHOUSE_NAME),
-                        },
-                    }
-                }
-            },
-            sort_keys=False,
-        )
+    user_token = jwt.encode(
+        {"sub": "spark_user", "attributes": {"tenant_id": tenant_id}},
+        JWT_SECRET,
+        algorithm="HS256",
     )
-
-    policy_path.write_text(
-        yaml.safe_dump(
-            {
-                "version": 1,
-                "catalogs": {
-                    CATALOG_NAME: {
-                        "targets": {
-                            table_id: {
-                                "rules": [
-                                    {
-                                        "principals": ["spark_user"],
-                                        "columns": [
-                                            "id",
-                                            "region",
-                                            "market",
-                                            "active",
-                                            "vip",
-                                            "score",
-                                            "created_at",
-                                            "signup_date",
-                                            "credit_limit",
-                                            "account_balance",
-                                            "account_number",
-                                            "email",
-                                            "phone",
-                                            "status",
-                                            "notes",
-                                            "nickname",
-                                            "tags",
-                                            "attributes",
-                                            "user",
-                                            "user.email",
-                                            "user.address.zip",
-                                            "user.preferences.theme",
-                                            "account",
-                                            "account.manager.region",
-                                            "devices",
-                                            "support_ticket",
-                                            "support_ticket.ticket_id",
-                                        ],
-                                        "masks": {
-                                            "id": {"type": "hash"},
-                                            "account_number": {
-                                                "type": "keep_last",
-                                                "value": 4,
-                                            },
-                                            "nickname": {"type": "null"},
-                                            "notes": {
-                                                "type": "redact",
-                                                "value": "[redacted-note]",
-                                            },
-                                            "status": {
-                                                "type": "default",
-                                                "value": "partner-visible",
-                                            },
-                                            "email": {"type": "email"},
-                                            "user.address.zip": {"type": "hash"},
-                                            "user.preferences.theme": {
-                                                "type": "redact",
-                                                "value": "[hidden-theme]",
-                                            },
-                                            "support_ticket.ticket_id": {"type": "hash"},
-                                        },
-                                        "row_filter": POLICY_ROW_FILTER,
-                                    },
-                                    {
-                                        "principals": ["spark_ops"],
-                                        "columns": [
-                                            "id",
-                                            "region",
-                                            "market",
-                                            "vip",
-                                            "support_ticket",
-                                            "account",
-                                            "devices",
-                                        ],
-                                        "row_filter": "market = 'enterprise'",
-                                    },
-                                ]
-                            }
-                        }
-                    }
-                },
-            },
-            sort_keys=False,
-        )
-    )
-
-    app_path.write_text(
-        yaml.safe_dump(
-            {
-                "location": f"grpc://0.0.0.0:{args.port}",
-                "catalog_file": str(catalog_path),
-                "policy_file": str(policy_path),
-                "secret_provider": {
-                    "module": (
-                        "dal_obscura.infrastructure.adapters.secret_providers.EnvSecretProvider"
-                    ),
-                    "args": {},
-                },
-                "ticket": {
-                    "ttl_seconds": 900,
-                    "max_tickets": 16,
-                    "secret": {"key": "DAL_OBSCURA_TICKET_SECRET"},
-                },
-                "auth": {"jwt_secret": {"key": "DAL_OBSCURA_JWT_SECRET"}},
-                "logging": {"level": "INFO", "json": True},
-            },
-            sort_keys=False,
-        )
-    )
-
-    user_token = jwt.encode({"sub": "spark_user"}, JWT_SECRET, algorithm="HS256")
 
     print(
         json.dumps(
@@ -632,9 +646,8 @@ def main() -> None:
                 "uri": f"grpc+tcp://localhost:{args.port}",
                 "catalog": CATALOG_NAME,
                 "target": table_id,
-                "app_path": str(app_path),
-                "catalog_path": str(catalog_path),
-                "policy_path": str(policy_path),
+                "database_url": database_url,
+                "cell_id": cell_id,
                 "jwt_secret": JWT_SECRET,
                 "ticket_secret": TICKET_SECRET,
                 "user_token": user_token,

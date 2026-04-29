@@ -5,17 +5,18 @@ from dataclasses import dataclass
 import pyarrow as pa
 
 from dal_obscura.application.ports.authorization import AuthorizationPort
+from dal_obscura.application.ports.catalog import CatalogRegistryPort
 from dal_obscura.application.ports.identity import AuthenticationRequest, IdentityPort
 from dal_obscura.application.ports.masking import MaskingPort
 from dal_obscura.application.use_cases.plan_access import (
     _authorize_requested_row_filter,
     _build_authorization_columns,
     _expand_requested_columns,
+    _tenant_id,
     _validate_requested_row_filter,
     _visible_columns,
 )
 from dal_obscura.domain.query_planning.models import PlanRequest
-from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
 
 
 @dataclass(frozen=True)
@@ -35,7 +36,7 @@ class GetSchemaUseCase:
         self,
         identity: IdentityPort,
         authorizer: AuthorizationPort,
-        catalog_registry: DynamicCatalogRegistry,
+        catalog_registry: CatalogRegistryPort,
         masking: MaskingPort,
     ) -> None:
         self._identity = identity
@@ -45,8 +46,13 @@ class GetSchemaUseCase:
 
     def execute(self, request: PlanRequest, auth_request: AuthenticationRequest) -> GetSchemaResult:
         principal = self._identity.authenticate(auth_request)
+        tenant_id = _tenant_id(principal)
 
-        table_format = self._catalog_registry.describe(request.catalog, request.target)
+        table_format = self._catalog_registry.describe(
+            request.catalog,
+            request.target,
+            tenant_id=tenant_id,
+        )
         base_schema = table_format.get_schema()
 
         requested_columns = _expand_requested_columns(base_schema, request.columns)

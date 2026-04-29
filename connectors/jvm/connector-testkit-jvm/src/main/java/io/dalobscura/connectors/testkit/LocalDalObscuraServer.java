@@ -25,20 +25,18 @@ public final class LocalDalObscuraServer implements AutoCloseable {
     }
 
     public static LocalDalObscuraServer start(FixtureBundle bundle) throws Exception {
-        Path logPath = bundle.appPath().getParent().resolve("dal-obscura.log");
+        Path databasePath = Path.of(URI.create(bundle.databaseUrl()).getPath());
+        Path logPath = databasePath.getParent().resolve("dal-obscura.log");
 
-        ProcessBuilder builder =
-                new ProcessBuilder(
-                        "uv",
-                        "run",
-                        "dal-obscura",
-                        "--app-config",
-                        bundle.appPath().toString());
+        ProcessBuilder builder = new ProcessBuilder("uv", "run", "dal-obscura");
         builder.directory(FixtureBuilderRunner.workspaceRoot().toFile());
         builder.redirectErrorStream(true);
         builder.redirectOutput(logPath.toFile());
 
         Map<String, String> environment = builder.environment();
+        environment.put("DAL_OBSCURA_DATABASE_URL", bundle.databaseUrl());
+        environment.put("DAL_OBSCURA_CELL_ID", bundle.cellId());
+        environment.put("DAL_OBSCURA_LOCATION", flightLocation(bundle.uri()));
         environment.put("DAL_OBSCURA_JWT_SECRET", bundle.jwtSecret());
         environment.put("DAL_OBSCURA_TICKET_SECRET", bundle.ticketSecret());
 
@@ -85,6 +83,11 @@ public final class LocalDalObscuraServer implements AutoCloseable {
         process.destroyForcibly();
         throw new IllegalStateException(
                 "Timed out waiting for dal-obscura to accept connections:\n" + readLog(logPath));
+    }
+
+    private static String flightLocation(String uri) {
+        URI parsed = URI.create(uri);
+        return "grpc://0.0.0.0:" + parsed.getPort();
     }
 
     private static String readLog(Path logPath) throws IOException {
