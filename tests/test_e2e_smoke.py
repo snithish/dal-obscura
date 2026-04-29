@@ -1,14 +1,16 @@
 import json
+import os
 import socket
 import subprocess
+import sys
 import time
 from pathlib import Path
+from uuid import UUID
 
 import jwt
 import pyarrow as pa
 import pyarrow.flight as flight
 import pytest
-import yaml
 from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
 from pyiceberg.types import (
@@ -18,6 +20,10 @@ from pyiceberg.types import (
     StringType,
     StructType,
 )
+
+from dal_obscura.control_plane.application.provisioning import ProvisioningService
+from dal_obscura.control_plane.infrastructure.db import create_engine_from_url, session_factory
+from dal_obscura.control_plane.infrastructure.orm import Base
 
 
 def get_free_port() -> int:
@@ -143,101 +149,104 @@ def iceberg_setup(tmp_path: Path) -> tuple[str, Path]:
 
 
 @pytest.fixture
-def configs(tmp_path: Path, iceberg_setup: tuple[str, Path]) -> tuple[Path, Path]:
+def control_plane_setup(tmp_path: Path, iceberg_setup: tuple[str, Path]) -> dict[str, str]:
     catalog_uri, warehouse = iceberg_setup
+    database_url = f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
+    engine = create_engine_from_url(database_url)
+    Base.metadata.create_all(engine)
 
-    catalog_config = {
-        "catalogs": {
-            "e2e_catalog": {
-                "module": "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
-                "options": {
-                    "type": "sql",
-                    "uri": catalog_uri,
-                    "warehouse": str(warehouse),
-                },
-            }
-        }
-    }
-
-    catalog_path = tmp_path / "catalogs.yaml"
-    with open(catalog_path, "w") as f:
-        yaml.safe_dump(catalog_config, f)
-
-    policy = {
-        "version": 1,
-        "catalogs": {
-            "e2e_catalog": {
-                "targets": {
-                    "default.users": {
-                        "rules": [
-                            {
-                                "principals": ["e2e_user"],
-                                "columns": ["id", "email", "metadata"],
-                            }
-                        ]
-                    }
+    with session_factory(engine)() as session:
+        service = ProvisioningService(session)
+        tenant = service.create_tenant(slug="default", display_name="Default")
+        cell = service.create_cell(name="default", region="local")
+        tenant_id = UUID(tenant["id"])
+        cell_id = UUID(cell["id"])
+        service.assign_tenant(
+            cell_id=cell_id,
+            tenant_id=tenant_id,
+            shard_key="default",
+        )
+        service.upsert_runtime_settings(
+            cell_id=cell_id,
+            ttl=900,
+            max_tickets=64,
+            path_rules=[],
+        )
+        service.upsert_catalog(
+            cell_id=cell_id,
+            tenant_id=tenant_id,
+            name="e2e_catalog",
+            module="dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+            options={
+                "type": "sql",
+                "uri": catalog_uri,
+                "warehouse": str(warehouse),
+            },
+        )
+        asset = service.upsert_asset(
+            cell_id=cell_id,
+            tenant_id=tenant_id,
+            catalog="e2e_catalog",
+            target="default.users",
+            backend="iceberg",
+            table_identifier="default.users",
+            options={},
+        )
+        service.replace_policy_rules(
+            asset_id=UUID(asset["id"]),
+            rules=[
+                {
+                    "ordinal": 10,
+                    "principals": ["e2e_user"],
+                    "columns": ["id", "email", "metadata"],
+                    "effect": "allow",
+                    "when": {},
+                    "masks": {},
+                    "row_filter": None,
                 }
-            }
-        },
-    }
+            ],
+        )
+        service.replace_auth_providers(
+            cell_id=cell_id,
+            providers=[
+                {
+                    "ordinal": 1,
+                    "module": (
+                        "dal_obscura.infrastructure.adapters.identity_default."
+                        "DefaultIdentityAdapter"
+                    ),
+                    "args": {"jwt_secret": {"key": "DAL_OBSCURA_E2E_JWT_SECRET"}},
+                    "enabled": True,
+                }
+            ],
+        )
+        publication = service.create_publication(cell_id=cell_id)
+        service.activate_publication(
+            cell_id=cell_id,
+            publication_id=UUID(str(publication["publication_id"])),
+        )
+        session.commit()
 
-    policy_path = tmp_path / "policies.yaml"
-    with open(policy_path, "w") as f:
-        yaml.safe_dump(policy, f)
-
-    return catalog_path, policy_path
+    return {"database_url": database_url, "cell_id": cell["id"], "tenant_id": tenant["id"]}
 
 
-def test_e2e_flight_server_with_iceberg(configs: tuple[Path, Path]):
-    catalog_path, policy_path = configs
+def test_e2e_flight_server_with_iceberg(control_plane_setup: dict[str, str]):
     port = get_free_port()
     jwt_secret = "e2e-very-secret-key-that-is-long-enough"
     ticket_secret = "e2e-ticket-secret"
     jwt_secret_env = "DAL_OBSCURA_E2E_JWT_SECRET"
-    ticket_secret_env = "DAL_OBSCURA_E2E_TICKET_SECRET"
-    app_path = catalog_path.parent / "app.yaml"
-    app_path.write_text(
-        yaml.safe_dump(
-            {
-                "location": f"grpc://0.0.0.0:{port}",
-                "catalog_file": catalog_path.name,
-                "policy_file": policy_path.name,
-                "secret_provider": {
-                    "module": (
-                        "dal_obscura.infrastructure.adapters.secret_providers.EnvSecretProvider"
-                    ),
-                    "args": {},
-                },
-                "ticket": {
-                    "ttl_seconds": 900,
-                    "max_tickets": 64,
-                    "secret": {"key": ticket_secret_env},
-                },
-                "auth": {
-                    "jwt_secret": {"key": jwt_secret_env},
-                },
-                "logging": {
-                    "level": "INFO",
-                    "json": True,
-                },
-            },
-            sort_keys=False,
-        )
-    )
-
-    import os
-    import sys
 
     env = dict(os.environ)
+    env["DAL_OBSCURA_DATABASE_URL"] = control_plane_setup["database_url"]
+    env["DAL_OBSCURA_CELL_ID"] = control_plane_setup["cell_id"]
+    env["DAL_OBSCURA_LOCATION"] = f"grpc://0.0.0.0:{port}"
+    env["DAL_OBSCURA_TICKET_SECRET"] = ticket_secret
     env[jwt_secret_env] = jwt_secret
-    env[ticket_secret_env] = ticket_secret
 
     cmd = [
         sys.executable,
         "-c",
         "import sys; from dal_obscura.interfaces.cli.main import main; sys.exit(main())",
-        "--app-config",
-        str(app_path),
     ]
 
     if os.environ.get("DEBUG_SERVER") == "1":
@@ -250,8 +259,6 @@ def test_e2e_flight_server_with_iceberg(configs: tuple[Path, Path]):
             "--wait-for-client",
             "-m",
             "dal_obscura.interfaces.cli.main",
-            "--app-config",
-            str(app_path),
         ]
 
     process = subprocess.Popen(
@@ -274,7 +281,14 @@ def test_e2e_flight_server_with_iceberg(configs: tuple[Path, Path]):
         client = flight.FlightClient(f"grpc+tcp://localhost:{port}")
 
         # Authenticate with valid JWT built matching our server expectation
-        token = jwt.encode({"sub": "e2e_user"}, jwt_secret, algorithm="HS256")
+        token = jwt.encode(
+            {
+                "sub": "e2e_user",
+                "attributes": {"tenant_id": control_plane_setup["tenant_id"]},
+            },
+            jwt_secret,
+            algorithm="HS256",
+        )
         options = flight.FlightCallOptions(headers=[(b"authorization", f"Bearer {token}".encode())])
 
         # Query the data

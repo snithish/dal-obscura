@@ -30,6 +30,11 @@ from dal_obscura.infrastructure.adapters.published_config import (
     PublishedConfigAuthorizer,
     PublishedConfigCatalogRegistry,
     PublishedConfigStore,
+    PublishedRuntime,
+)
+from dal_obscura.infrastructure.adapters.runtime_config import (
+    DataPlaneRuntimeConfig,
+    load_data_plane_runtime_config,
 )
 from dal_obscura.infrastructure.adapters.secret_providers import (
     EnvSecretProvider,
@@ -57,6 +62,7 @@ __all__ = [
     "CatalogConfig",
     "CatalogTargetConfig",
     "CompositeIdentityProvider",
+    "DataPlaneRuntimeConfig",
     "DefaultIdentityAdapter",
     "DefaultMaskingAdapter",
     "DuckDBRowTransformAdapter",
@@ -71,11 +77,13 @@ __all__ = [
     "PublishedConfigAuthorizer",
     "PublishedConfigCatalogRegistry",
     "PublishedConfigStore",
+    "PublishedRuntime",
     "SchemaInferenceOptions",
     "SecretProvider",
     "ServiceConfig",
     "TrustedHeaderIdentityProvider",
     "load_app_config",
     "load_catalog_config",
+    "load_data_plane_runtime_config",
     "load_policy_config",
 ]

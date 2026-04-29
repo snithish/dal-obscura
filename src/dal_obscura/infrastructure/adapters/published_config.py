@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Any, Literal, cast
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from dal_obscura.control_plane.infrastructure.orm import PublishedCellRuntimeRecord
 from dal_obscura.control_plane.infrastructure.repositories import (
     PublicationStore,
     PublishedAsset,
@@ -29,14 +32,24 @@ from dal_obscura.infrastructure.adapters.service_config import (
 )
 
 
+@dataclass(frozen=True)
+class PublishedRuntime:
+    publication_id: UUID
+    auth_chain: dict[str, Any]
+    ticket: dict[str, Any]
+    path_rules: list[dict[str, Any]]
+
+
 class PublishedConfigStore:
     """Reads active published configuration for one data-plane cell."""
 
     def __init__(self, session: Session, *, cell_id: UUID) -> None:
+        self._session = session
         self._publication_store = PublicationStore(session)
         self._cell_id = cell_id
         self._asset_cache: dict[tuple[UUID, UUID, str, str], PublishedAsset] = {}
         self._last_good_by_target: dict[tuple[UUID, str, str], PublishedAsset] = {}
+        self._runtime_cache: dict[UUID, PublishedRuntime] = {}
 
     def active_publication_id(self) -> UUID:
         return self._publication_store.get_active_publication(self._cell_id).publication_id
@@ -64,6 +77,27 @@ class PublishedConfigStore:
             if cached is not None:
                 return cached
             raise
+
+    def get_runtime(self) -> PublishedRuntime:
+        publication_id = self.active_publication_id()
+        cached = self._runtime_cache.get(publication_id)
+        if cached is not None:
+            return cached
+        record = self._session.scalar(
+            select(PublishedCellRuntimeRecord).where(
+                PublishedCellRuntimeRecord.publication_id == publication_id
+            )
+        )
+        if record is None:
+            raise LookupError(f"No published runtime for publication {publication_id}")
+        runtime = PublishedRuntime(
+            publication_id=record.publication_id,
+            auth_chain=dict(record.auth_chain_json),
+            ticket=dict(record.ticket_json),
+            path_rules=list(record.path_rules_json),
+        )
+        self._runtime_cache[publication_id] = runtime
+        return runtime
 
 
 class PublishedConfigAuthorizer:
