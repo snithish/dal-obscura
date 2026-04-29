@@ -17,4 +17,10 @@ class AuthorizationPort(Protocol):
         requested_columns: Iterable[str],
     ) -> AccessDecision: ...
 
-    def current_policy_version(self, target: str, catalog: str | None) -> int | None: ...
+    def current_policy_version(
+        self,
+        target: str,
+        catalog: str | None,
+        *,
+        tenant_id: str,
+    ) -> int | None: ...

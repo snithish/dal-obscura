@@ -189,6 +189,7 @@ class FakeAuthorizer:
         self._decision = decision
         self._current_version = current_version
         self.last_requested_columns: list[str] | None = None
+        self.last_current_version_tenant_id: str | None = None
 
     def authorize(self, principal, target, catalog, requested_columns):
         self.last_requested_columns = list(requested_columns)
@@ -196,16 +197,20 @@ class FakeAuthorizer:
             raise PermissionError("Unauthorized")
         return self._decision
 
-    def current_policy_version(self, target, catalog):
+    def current_policy_version(self, target, catalog, *, tenant_id):
+        del target, catalog
+        self.last_current_version_tenant_id = tenant_id
         return self._current_version
 
 
 class FakeCatalogRegistry:
     def __init__(self, table_format: TableFormat) -> None:
         self._table_format = table_format
+        self.last_tenant_id: str | None = None
 
-    def describe(self, catalog: str | None, target: str) -> TableFormat:
+    def describe(self, catalog: str | None, target: str, *, tenant_id: str) -> TableFormat:
         del catalog, target
+        self.last_tenant_id = tenant_id
         return self._table_format
 
 
@@ -218,8 +223,18 @@ class FakeMasking:
 
 
 class FakeTicketCodec:
-    def __init__(self, payload: TicketPayload) -> None:
-        self._payload = payload
+    def __init__(self, payload: TicketPayload | None = None) -> None:
+        self._payload = payload or TicketPayload(
+            catalog="catalog1",
+            target="users",
+            tenant_id="default",
+            columns=["id"],
+            scan=_scan_payload(),
+            policy_version=100,
+            principal_id="user1",
+            expires_at=9999999999,
+            nonce="abc",
+        )
         self.signed_payloads: list[TicketPayload] = []
 
     def sign_payload(self, payload: TicketPayload) -> str:
@@ -292,6 +307,83 @@ def _encode_scan_task(table_format: TableFormat, schema: pa.Schema) -> str:
         partition=StubInputPartition(payload=b"payload"),
     )
     return base64.b64encode(pickle.dumps(task)).decode("utf-8")
+
+
+def test_plan_access_resolves_catalog_with_tenant_from_principal_attributes():
+    schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
+    table_format = TrackingTableFormat(
+        catalog_name="analytics",
+        table_name="default.users",
+        format="fake_format",
+        schema=schema,
+        planned_columns=[],
+    )
+    catalog_registry = FakeCatalogRegistry(table_format)
+    authorizer = FakeAuthorizer(
+        decision=AccessDecision(
+            allowed_columns=["id", "region"],
+            masks={},
+            row_filter=None,
+            policy_version=100,
+        ),
+        current_version=100,
+    )
+    ticket_codec = FakeTicketCodec()
+    use_case = PlanAccessUseCase(
+        identity=FakeIdentity(
+            principal=Principal(id="user1", groups=[], attributes={"tenant_id": "tenant-a"})
+        ),
+        authorizer=authorizer,
+        catalog_registry=cast(Any, catalog_registry),
+        masking=FakeMasking(),
+        ticket_codec=ticket_codec,
+        ticket_ttl_seconds=300,
+        max_tickets=1,
+        now=lambda: 1000,
+        nonce_factory=lambda: "nonce",
+    )
+
+    use_case.execute(
+        PlanRequest(catalog="analytics", target="default.users", columns=["id"]),
+        AUTHORIZATION_HEADER,
+    )
+
+    assert catalog_registry.last_tenant_id == "tenant-a"
+    assert ticket_codec.signed_payloads[0].tenant_id == "tenant-a"
+
+
+def test_fetch_stream_checks_policy_version_for_ticket_tenant():
+    schema, _, table_format = _build_use_case_dependencies()
+    payload = TicketPayload(
+        catalog="analytics",
+        target="default.users",
+        tenant_id="tenant-a",
+        columns=["id"],
+        scan={
+            "read_payload": _encode_scan_task(table_format, schema),
+            "full_row_filter": None,
+            "masks": {},
+        },
+        policy_version=100,
+        principal_id="user1",
+        expires_at=9999999999,
+        nonce="nonce",
+    )
+    authorizer = FakeAuthorizer(decision=None, current_version=101)
+    use_case = FetchStreamUseCase(
+        identity=FakeIdentity(
+            principal=Principal(id="user1", groups=[], attributes={"tenant_id": "tenant-a"})
+        ),
+        authorizer=authorizer,
+        masking=FakeMasking(),
+        row_transform=FakeRowTransform(),
+        ticket_codec=FakeTicketCodec(payload),
+    )
+
+    with pytest.raises(PermissionError):
+        use_case.execute("ticket", AUTHORIZATION_HEADER)
+
+    assert authorizer.last_current_version_tenant_id == "tenant-a"
 
 
 def test_plan_access_auth_failure():

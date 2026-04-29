@@ -73,7 +73,14 @@ class StubCatalogRegistry:
     def __init__(self, table_format: TableFormat) -> None:
         self._table_format = table_format
 
-    def describe(self, catalog: str | None, target: str) -> TableFormat:
+    def describe(
+        self,
+        catalog: str | None,
+        target: str,
+        *,
+        tenant_id: str = "default",
+    ) -> TableFormat:
+        del tenant_id
         del catalog, target
         return self._table_format
 

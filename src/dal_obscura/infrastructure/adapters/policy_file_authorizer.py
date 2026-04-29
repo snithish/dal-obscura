@@ -133,8 +133,15 @@ class PolicyFileAuthorizer:
             policy_version=dataset_version(matched_dataset),
         )
 
-    def current_policy_version(self, target: str, catalog: str | None) -> int | None:
+    def current_policy_version(
+        self,
+        target: str,
+        catalog: str | None,
+        *,
+        tenant_id: str = "default",
+    ) -> int | None:
         """Returns the current dataset version hash used to invalidate old tickets."""
+        del tenant_id
         policy = load_policy_config(self._policy_path)
         matched_dataset = policy.match_dataset(target, catalog)
         if not matched_dataset:

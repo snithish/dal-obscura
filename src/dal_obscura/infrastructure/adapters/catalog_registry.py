@@ -46,8 +46,15 @@ class DynamicCatalogRegistry:
                 raise ValueError(f"Unknown catalog: {catalog_name}")
         return implementation.get_table(target)
 
-    def describe(self, catalog: str | None, target: str) -> TableFormat:
+    def describe(
+        self,
+        catalog: str | None,
+        target: str,
+        *,
+        tenant_id: str = "default",
+    ) -> TableFormat:
         """Describes a target by asking the requested catalog implementation."""
+        del tenant_id
         if catalog is None:
             raise ValueError("Catalog name is required to resolve a target")
         return self.describe_catalog(catalog, target)
