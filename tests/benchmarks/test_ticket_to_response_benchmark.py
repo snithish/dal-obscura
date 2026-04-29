@@ -13,7 +13,6 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.flight as flight
 import pytest
-import yaml
 from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
 from pyiceberg.types import (
@@ -30,7 +29,7 @@ from pyiceberg.types import (
 
 from dal_obscura.infrastructure.adapters.catalog_registry import DynamicCatalogRegistry
 from dal_obscura.infrastructure.adapters.duckdb_transform import _DUCKDB_ARROW_OUTPUT_BATCH_SIZE
-from dal_obscura.infrastructure.adapters.service_config import load_catalog_config
+from dal_obscura.infrastructure.adapters.service_config import CatalogConfig, ServiceConfig
 from tests.support.flight import (
     StubTableFormat,
     build_flight_service,
@@ -336,69 +335,36 @@ def _run_iceberg_stream_scenario(
         batch_count=batch_count,
         rows_per_batch=rows_per_file,
     )
-    service_config_path, policy_path = _write_yaml_files(
-        tmp_path,
-        service_config={
-            "catalogs": {
-                catalog_name: {
-                    "module": (
-                        "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog"
-                    ),
-                    "options": {
-                        "type": "sql",
-                        "uri": catalog_uri,
-                        "warehouse": str(warehouse),
-                    },
-                }
-            }
-        },
-        policy={
-            "version": 1,
-            "catalogs": {
-                catalog_name: {
-                    "targets": {
-                        identifier: {
-                            "rules": [
-                                {
-                                    "principals": ["group:analyst"],
-                                    "columns": [
-                                        "id",
-                                        "region",
-                                        "active",
-                                        "score",
-                                        "created_at",
-                                        "birth_date",
-                                        "account_number",
-                                        "nickname",
-                                        "notes",
-                                        "status",
-                                        "user",
-                                        "account",
-                                        "tags",
-                                    ],
-                                    "masks": {
-                                        "id": {"type": "hash"},
-                                        "account_number": {"type": "keep_last", "value": 4},
-                                        "nickname": {"type": "null"},
-                                        "notes": {
-                                            "type": "redact",
-                                            "value": "[redacted-note]",
-                                        },
-                                        "status": {
-                                            "type": "default",
-                                            "value": "benchmark-default",
-                                        },
-                                        "user.email": {"type": "email"},
-                                        "user.address.zip": {"type": "hash"},
-                                    },
-                                }
-                            ]
-                        }
-                    }
-                }
+    policy_rules: list[dict[str, object]] = [
+        {
+            "principals": ["group:analyst"],
+            "columns": [
+                "id",
+                "region",
+                "active",
+                "score",
+                "created_at",
+                "birth_date",
+                "account_number",
+                "nickname",
+                "notes",
+                "status",
+                "user",
+                "account",
+                "tags",
+            ],
+            "masks": {
+                "id": {"type": "hash"},
+                "account_number": {"type": "keep_last", "value": 4},
+                "nickname": {"type": "null"},
+                "notes": {"type": "redact", "value": "[redacted-note]"},
+                "status": {"type": "default", "value": "benchmark-default"},
+                "user.email": {"type": "email"},
+                "user.address.zip": {"type": "hash"},
             },
-        },
-    )
+            "effect": "allow",
+        }
+    ]
 
     loaded_catalog = load_catalog(
         catalog_name,
@@ -407,10 +373,22 @@ def _run_iceberg_stream_scenario(
         warehouse=str(warehouse),
     )
     planned_file_count = len(list(loaded_catalog.load_table(identifier).scan().plan_files()))
-    catalog_registry = DynamicCatalogRegistry(load_catalog_config(service_config_path))
+    catalog_registry = DynamicCatalogRegistry(
+        ServiceConfig(
+            catalogs={
+                catalog_name: CatalogConfig(
+                    name=catalog_name,
+                    module="dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+                    options={"type": "sql", "uri": catalog_uri, "warehouse": str(warehouse)},
+                    targets={},
+                )
+            },
+            paths=(),
+        )
+    )
     server = build_flight_service(
         catalog_registry=catalog_registry,
-        policy_path=policy_path,
+        policy_rules=policy_rules,
         jwt_secret=JWT_SECRET,
         ticket_secret="benchmark-ticket-secret",
         max_tickets=max_tickets,
@@ -509,19 +487,6 @@ def _create_benchmark_iceberg_table(
     return catalog_uri, warehouse
 
 
-def _write_yaml_files(
-    tmp_path: Path,
-    *,
-    service_config: dict[str, object],
-    policy: dict[str, object],
-) -> tuple[Path, Path]:
-    service_config_path = tmp_path / "service.yaml"
-    policy_path = tmp_path / "policy.yaml"
-    service_config_path.write_text(yaml.safe_dump(service_config, sort_keys=False))
-    policy_path.write_text(yaml.safe_dump(policy, sort_keys=False))
-    return service_config_path, policy_path
-
-
 @pytest.mark.benchmark(group="ticket-to-response", min_rounds=5, max_time=1)
 def test_benchmark_ticket_to_response_complex_schema(tmp_path, benchmark):
     batch_count = 8
@@ -534,35 +499,26 @@ def test_benchmark_ticket_to_response_complex_schema(tmp_path, benchmark):
         schema=batches[0].schema,
         batches=batches,
     )
-    policy_path = tmp_path / "policy.yaml"
-    policy_path.write_text(
-        """
-version: 1
-catalogs:
-  analytics:
-    targets:
-      "bench.table":
-        rules:
-          - principals: ["group:analyst"]
-            columns: ["id", "user", "account"]
-            masks:
-              id:
-                type: "hash"
-              "user.email":
-                type: "redact"
-                value: "[hidden]"
-              "user.address.zip":
-                type: "hash"
-            row_filter: "region = 'us'"
-          - principals: ["user1"]
-            columns: ["id", "user", "account"]
-            masks:
-              "account.status":
-                type: "default"
-                value: "standard"
-            row_filter: "active = true"
-"""
-    )
+    policy_rules: list[dict[str, object]] = [
+        {
+            "principals": ["group:analyst"],
+            "columns": ["id", "user", "account"],
+            "masks": {
+                "id": {"type": "hash"},
+                "user.email": {"type": "redact", "value": "[hidden]"},
+                "user.address.zip": {"type": "hash"},
+            },
+            "row_filter": "region = 'us'",
+            "effect": "allow",
+        },
+        {
+            "principals": ["user1"],
+            "columns": ["id", "user", "account"],
+            "masks": {"account.status": {"type": "default", "value": "standard"}},
+            "row_filter": "active = true",
+            "effect": "allow",
+        },
+    ]
 
     expected_rows = sum(
         value % 2 == 0 and value % 3 != 0 for value in range(batch_count * rows_per_batch)
@@ -570,7 +526,7 @@ catalogs:
 
     server = build_flight_service(
         table_format=table_format,
-        policy_path=policy_path,
+        policy_rules=policy_rules,
         jwt_secret=JWT_SECRET,
         ticket_secret="benchmark-ticket-secret",
     )

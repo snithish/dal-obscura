@@ -18,6 +18,24 @@ from tests.support.flight import (
 from tests.support.iceberg import create_iceberg_table, write_yaml_files
 
 
+def _allow_rule(
+    columns: list[str],
+    *,
+    masks: dict[str, object] | None = None,
+    row_filter: str | None = None,
+) -> dict[str, object]:
+    rule: dict[str, object] = {
+        "principals": ["user1"],
+        "columns": columns,
+        "effect": "allow",
+    }
+    if masks:
+        rule["masks"] = masks
+    if row_filter:
+        rule["row_filter"] = row_filter
+    return rule
+
+
 def _build_registries(service_config_path: Path):
     service_config = load_catalog_config(service_config_path)
     return DynamicCatalogRegistry(service_config)
@@ -26,7 +44,7 @@ def _build_registries(service_config_path: Path):
 def test_flight_plan_and_get_with_iceberg_multi_catalog(tmp_path):
     table_id_one = create_iceberg_table(tmp_path, "ice_one", "warehouse-one", [1, 2, 3, 4])
     table_id_two = create_iceberg_table(tmp_path, "ice_two", "warehouse-two", [10, 11, 12, 13])
-    service_config_path, policy_path = write_yaml_files(
+    service_config_path, _policy_path = write_yaml_files(
         tmp_path,
         service_config={
             "catalogs": {
@@ -84,7 +102,16 @@ def test_flight_plan_and_get_with_iceberg_multi_catalog(tmp_path):
     catalog_registry = _build_registries(service_config_path)
     server = build_flight_service(
         catalog_registry=catalog_registry,
-        policy_path=policy_path,
+        policy_rules_by_dataset={
+            ("ice_one", table_id_one): [
+                _allow_rule(
+                    ["id", "email", "region"],
+                    masks={"id": {"type": "hash"}},
+                    row_filter="region = 'us'",
+                )
+            ],
+            ("ice_two", table_id_two): [_allow_rule(["id", "email", "region"])],
+        },
         max_tickets=4,
     )
     with running_flight_client(server) as client:
@@ -112,7 +139,7 @@ def test_flight_plan_and_get_with_static_catalog_alias(tmp_path):
         [1, 2, 3, 4],
         identifier="analytics.users",
     )
-    service_config_path, policy_path = write_yaml_files(
+    service_config_path, _policy_path = write_yaml_files(
         tmp_path,
         service_config={
             "catalogs": {
@@ -161,7 +188,19 @@ def test_flight_plan_and_get_with_static_catalog_alias(tmp_path):
     )
 
     catalog_registry = _build_registries(service_config_path)
-    server = build_flight_service(catalog_registry=catalog_registry, policy_path=policy_path)
+    server = build_flight_service(
+        catalog_registry=catalog_registry,
+        policy_rules_by_dataset={
+            ("shared", table_id): [_allow_rule(["id", "email", "region"])],
+            ("shared", "users_alias"): [
+                _allow_rule(
+                    ["id", "email", "region"],
+                    masks={"id": {"type": "hash"}},
+                    row_filter="region = 'us'",
+                )
+            ],
+        },
+    )
     with running_flight_client(server) as client:
         direct_info, direct_table = flight_request(
             client,
@@ -181,7 +220,7 @@ def test_flight_plan_and_get_with_static_catalog_alias(tmp_path):
 
 def test_flight_plan_and_get_with_iceberg_requested_row_filter_on_unprojected_column(tmp_path):
     table_id = create_iceberg_table(tmp_path, "ice_one", "warehouse-one", [1, 2, 3, 4])
-    service_config_path, policy_path = write_yaml_files(
+    service_config_path, _policy_path = write_yaml_files(
         tmp_path,
         service_config={
             "catalogs": {
@@ -217,7 +256,14 @@ def test_flight_plan_and_get_with_iceberg_requested_row_filter_on_unprojected_co
 
     server = build_flight_service(
         catalog_registry=_build_registries(service_config_path),
-        policy_path=policy_path,
+        policy_rules=[
+            {
+                "principals": ["user1"],
+                "columns": ["id", "email", "region"],
+                "row_filter": "id > 1",
+                "effect": "allow",
+            }
+        ],
         max_tickets=4,
     )
 
@@ -251,7 +297,7 @@ def test_flight_plan_and_get_with_multiple_static_alias_targets(tmp_path):
         [10, 11, 12, 13],
         identifier="analytics.events",
     )
-    service_config_path, policy_path = write_yaml_files(
+    service_config_path, _policy_path = write_yaml_files(
         tmp_path,
         service_config={
             "catalogs": {
@@ -298,7 +344,15 @@ def test_flight_plan_and_get_with_multiple_static_alias_targets(tmp_path):
     )
 
     catalog_registry = _build_registries(service_config_path)
-    server = build_flight_service(catalog_registry=catalog_registry, policy_path=policy_path)
+    server = build_flight_service(
+        catalog_registry=catalog_registry,
+        policy_rules_by_dataset={
+            ("shared", "users_alias"): [
+                _allow_rule(["id", "email", "region"], row_filter="region = 'us'")
+            ],
+            ("shared", "events_alias"): [_allow_rule(["id", "email", "region"])],
+        },
+    )
     with running_flight_client(server) as client:
         users_info, users_table = flight_request(
             client,
@@ -322,7 +376,7 @@ def test_flight_plan_and_get_with_multiple_static_alias_targets(tmp_path):
 
 def test_flight_plan_rejects_direct_target_without_catalog(tmp_path):
     create_iceberg_table(tmp_path, "ice_one", "warehouse-one", [1, 2, 3, 4])
-    service_config_path, policy_path = write_yaml_files(
+    service_config_path, _policy_path = write_yaml_files(
         tmp_path,
         service_config={
             "catalogs": {
@@ -356,7 +410,16 @@ def test_flight_plan_rejects_direct_target_without_catalog(tmp_path):
     )
 
     catalog_registry = _build_registries(service_config_path)
-    server = build_flight_service(catalog_registry=catalog_registry, policy_path=policy_path)
+    server = build_flight_service(
+        catalog_registry=catalog_registry,
+        policy_rules=[
+            {
+                "principals": ["user1"],
+                "columns": ["id", "email", "region"],
+                "effect": "allow",
+            }
+        ],
+    )
     with running_flight_client(server) as client:
         descriptor = command_descriptor(
             {"target": "default.users", "columns": ["id", "email", "region"]}
@@ -376,7 +439,7 @@ def test_flight_plan_and_get_with_iceberg_multi_file_large(tmp_path):
             list(range(100_001, 200_001)),
         ],
     )
-    service_config_path, policy_path = write_yaml_files(
+    service_config_path, _policy_path = write_yaml_files(
         tmp_path,
         service_config={
             "catalogs": {
@@ -414,7 +477,15 @@ def test_flight_plan_and_get_with_iceberg_multi_file_large(tmp_path):
     catalog_registry = _build_registries(service_config_path)
     server = build_flight_service(
         catalog_registry=catalog_registry,
-        policy_path=policy_path,
+        policy_rules=[
+            {
+                "principals": ["user1"],
+                "columns": ["id", "email", "region"],
+                "masks": {"id": {"type": "hash"}},
+                "row_filter": "region = 'us'",
+                "effect": "allow",
+            }
+        ],
         max_tickets=4,
     )
     with running_flight_client(server) as client:
@@ -444,7 +515,7 @@ def test_hot_reload_does_not_break_iceberg_catalog_registry(tmp_path):
         [10, 11, 12, 13, 14, 15],
         identifier="analytics.users_v2",
     )
-    service_config_path, policy_path = write_yaml_files(
+    service_config_path, _policy_path = write_yaml_files(
         tmp_path,
         service_config={
             "catalogs": {
@@ -482,7 +553,17 @@ def test_hot_reload_does_not_break_iceberg_catalog_registry(tmp_path):
     )
 
     catalog_registry = _build_registries(service_config_path)
-    server = build_flight_service(catalog_registry=catalog_registry, policy_path=policy_path)
+    server = build_flight_service(
+        catalog_registry=catalog_registry,
+        policy_rules=[
+            {
+                "principals": ["user1"],
+                "columns": ["id", "email", "region"],
+                "row_filter": "region = 'us'",
+                "effect": "allow",
+            }
+        ],
+    )
     with running_flight_client(server) as client:
         old_info, options = flight_info(
             client,
