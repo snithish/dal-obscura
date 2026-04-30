@@ -191,7 +191,7 @@ Primary key: `(cell_id, tenant_id)`.
 | `cell_id` | `uuid foreign key -> cells.id` | `0f2b...71` |
 | `tenant_id` | `uuid foreign key -> tenants.id` | `018f...a9` |
 | `name` | `varchar(160) not null` | `analytics` |
-| `module` | `text not null` | `dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog` |
+| `module` | `text not null` | `dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog` |
 | `options_json` | `jsonb not null` | `{"type": "sql", "uri": "sqlite:///..."}` |
 
 Unique key: `(cell_id, tenant_id, name)`.
@@ -234,7 +234,7 @@ Unique key: `(asset_id, ordinal)`.
 | `id` | `uuid primary key` | `10b2...ff` |
 | `cell_id` | `uuid foreign key -> cells.id` | `0f2b...71` |
 | `ordinal` | `integer not null` | `1` |
-| `module` | `text not null` | `dal_obscura.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider` |
+| `module` | `text not null` | `dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider` |
 | `args_json` | `jsonb not null` | `{"issuer": "https://...", "audience": "dal-obscura"}` |
 | `enabled` | `boolean not null` | `true` |
 
@@ -314,7 +314,7 @@ This is the hot data-plane lookup table. Every query should include
   "policy_version": 931287432,
   "compiled_config_json": {
     "catalog": {
-      "module": "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+      "module": "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog",
       "options": {
         "type": "sql",
         "uri": "sqlite:////runtime/spark_catalog.db",

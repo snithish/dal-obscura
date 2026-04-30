@@ -1,6 +1,6 @@
 from collections.abc import Mapping
 
-from dal_obscura.application.ports.identity import AuthenticationRequest
+from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
 
 
 def test_authentication_request_normalizes_headers_and_exposes_explicit_header_lookup():

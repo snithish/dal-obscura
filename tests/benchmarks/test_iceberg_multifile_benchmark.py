@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import pyarrow as pa
 import pytest
 
-from dal_obscura.infrastructure.table_formats.iceberg import (
+from dal_obscura.data_plane.infrastructure.table_formats.iceberg import (
     IcebergInputPartition,
     IcebergTableFormat,
 )
@@ -67,7 +67,7 @@ def test_benchmark_iceberg_multifile_scan_baseline(benchmark, monkeypatch):
         lambda self: _FakeTable(schema_value=schema, metadata=object(), io=object()),
     )
     monkeypatch.setattr(
-        "dal_obscura.infrastructure.table_formats.iceberg.ArrowScan",
+        "dal_obscura.data_plane.infrastructure.table_formats.iceberg.ArrowScan",
         _BatchingArrowScan,
     )
 

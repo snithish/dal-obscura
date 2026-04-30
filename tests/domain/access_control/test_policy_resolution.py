@@ -1,11 +1,11 @@
-from dal_obscura.domain.access_control.models import (
+from dal_obscura.common.access_control.models import (
     AccessRule,
     DatasetPolicy,
     MaskRule,
     Policy,
     Principal,
 )
-from dal_obscura.domain.access_control.policy_resolution import dataset_version, resolve_access
+from dal_obscura.common.access_control.policy_resolution import dataset_version, resolve_access
 
 
 def test_resolve_access_allows_columns():

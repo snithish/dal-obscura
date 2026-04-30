@@ -11,8 +11,8 @@ import pyarrow as pa
 from pyiceberg.catalog import load_catalog
 from sqlalchemy import select
 
-from dal_obscura.control_plane.infrastructure.db import create_engine_from_url, session_factory
-from dal_obscura.control_plane.infrastructure.orm import (
+from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
+from dal_obscura.common.config_store.orm import (
     ActivePublicationRecord,
     PolicyRuleRecord,
     PublishedAssetRecord,

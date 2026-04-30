@@ -35,12 +35,12 @@ if str(REPO_ROOT) not in sys.path:
 
 create_iceberg_table = importlib.import_module("tests.support.iceberg").create_iceberg_table
 
-from dal_obscura.control_plane.application.provisioning import ProvisioningService  # noqa: E402
-from dal_obscura.control_plane.infrastructure.db import (  # noqa: E402
+from dal_obscura.common.config_store.db import (  # noqa: E402
     create_engine_from_url,
     session_factory,
 )
-from dal_obscura.control_plane.infrastructure.orm import Base  # noqa: E402
+from dal_obscura.common.config_store.orm import Base  # noqa: E402
+from dal_obscura.control_plane.application.provisioning import ProvisioningService  # noqa: E402
 
 JWT_SECRET = "spark-jwt-secret-32-characters-long"
 TICKET_SECRET = "spark-ticket-secret-32-characters"
@@ -543,7 +543,7 @@ def _provision_control_plane(output_dir: Path, table_id: str) -> tuple[str, str,
             cell_id=cell_id,
             tenant_id=tenant_id,
             name=CATALOG_NAME,
-            module="dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+            module="dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog",
             options={
                 "type": "sql",
                 "uri": f"sqlite:///{output_dir / f'{CATALOG_NAME}.db'}",
@@ -596,7 +596,7 @@ def _provision_control_plane(output_dir: Path, table_id: str) -> tuple[str, str,
                 {
                     "ordinal": 1,
                     "module": (
-                        "dal_obscura.infrastructure.adapters.identity_default."
+                        "dal_obscura.data_plane.infrastructure.adapters.identity_default."
                         "DefaultIdentityAdapter"
                     ),
                     "args": {"jwt_secret": {"key": "DAL_OBSCURA_JWT_SECRET"}},

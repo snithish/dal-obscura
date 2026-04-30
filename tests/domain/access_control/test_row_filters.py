@@ -1,7 +1,7 @@
 import pyarrow as pa
 import pytest
 
-from dal_obscura.domain.access_control.filters import (
+from dal_obscura.common.access_control.filters import (
     RowFilter,
     deserialize_row_filter,
     extract_row_filter_dependencies,

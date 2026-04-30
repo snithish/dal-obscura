@@ -3,10 +3,10 @@ from typing import Any, cast
 
 import pyarrow as pa
 
-from dal_obscura.application.ports.identity import AuthenticationRequest
-from dal_obscura.application.use_cases.get_schema import GetSchemaResult
-from dal_obscura.interfaces.flight.contracts import authentication_request_from_context
-from dal_obscura.interfaces.flight.server import DataAccessFlightService
+from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
+from dal_obscura.data_plane.application.use_cases.get_schema import GetSchemaResult
+from dal_obscura.data_plane.interfaces.flight.contracts import authentication_request_from_context
+from dal_obscura.data_plane.interfaces.flight.server import DataAccessFlightService
 from tests.support.flight import command_descriptor
 
 

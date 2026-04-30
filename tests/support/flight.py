@@ -14,10 +14,7 @@ import pyarrow as pa
 import pyarrow.flight as flight
 from sqlalchemy.orm import Session
 
-from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
-from dal_obscura.application.use_cases.get_schema import GetSchemaUseCase
-from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
-from dal_obscura.domain.access_control.models import (
+from dal_obscura.common.access_control.models import (
     AccessDecision,
     AccessRule,
     DatasetPolicy,
@@ -26,25 +23,28 @@ from dal_obscura.domain.access_control.models import (
     Principal,
     PrincipalConditionValue,
 )
-from dal_obscura.domain.access_control.policy_resolution import dataset_version, resolve_access
-from dal_obscura.domain.catalog.ports import TableFormat
-from dal_obscura.domain.query_planning.models import PlanRequest
-from dal_obscura.domain.table_format.ports import InputPartition, Plan, ScanTask
-from dal_obscura.infrastructure.adapters.duckdb_transform import (
+from dal_obscura.common.access_control.policy_resolution import dataset_version, resolve_access
+from dal_obscura.common.catalog.ports import TableFormat
+from dal_obscura.common.query_planning.models import PlanRequest
+from dal_obscura.common.table_format.ports import InputPartition, Plan, ScanTask
+from dal_obscura.data_plane.application.use_cases.fetch_stream import FetchStreamUseCase
+from dal_obscura.data_plane.application.use_cases.get_schema import GetSchemaUseCase
+from dal_obscura.data_plane.application.use_cases.plan_access import PlanAccessUseCase
+from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
 )
-from dal_obscura.infrastructure.adapters.identity_default import (
+from dal_obscura.data_plane.infrastructure.adapters.identity_default import (
     AuthConfig,
     DefaultIdentityAdapter,
 )
-from dal_obscura.infrastructure.adapters.published_config import (
+from dal_obscura.data_plane.infrastructure.adapters.published_config import (
     PublishedConfigAuthorizer,
     PublishedConfigCatalogRegistry,
     PublishedConfigStore,
 )
-from dal_obscura.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
-from dal_obscura.interfaces.flight.server import DataAccessFlightService
+from dal_obscura.data_plane.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
+from dal_obscura.data_plane.interfaces.flight.server import DataAccessFlightService
 
 TEST_JWT_SECRET = "test-jwt-secret-32-characters-long"
 

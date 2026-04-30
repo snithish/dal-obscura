@@ -279,7 +279,7 @@ Example:
 
 ```yaml
 auth:
-  module: dal_obscura.infrastructure.adapters.identity_api_key.ApiKeyIdentityProvider
+  module: dal_obscura.data_plane.infrastructure.adapters.identity_api_key.ApiKeyIdentityProvider
   args:
     keys:
       - id: example-user

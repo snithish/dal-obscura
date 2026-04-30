@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dal_obscura.application.ports.identity import AuthenticationRequest
-from dal_obscura.domain.access_control.models import Principal
+from dal_obscura.common.access_control.models import Principal
+from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
 
 
 class RecordingIdentityProvider:

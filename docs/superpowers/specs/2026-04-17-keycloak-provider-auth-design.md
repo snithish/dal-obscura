@@ -51,7 +51,7 @@ provider-owned arguments:
 
 ```yaml
 auth:
-  module: dal_obscura.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider
+  module: dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider
   args:
     issuer: https://keycloak.example.com/realms/acme
     audience: dal-obscura
@@ -73,7 +73,7 @@ ticket and JWT secret references:
 
 ```yaml
 auth:
-  module: dal_obscura.infrastructure.adapters.identity_default.DefaultIdentityAdapter
+  module: dal_obscura.data_plane.infrastructure.adapters.identity_default.DefaultIdentityAdapter
   args:
     jwt_secret:
       key: DAL_OBSCURA_JWT_SECRET
@@ -201,7 +201,7 @@ The preferred documented config should be module-based:
 
 ```yaml
 auth:
-  module: dal_obscura.infrastructure.adapters.identity_default.DefaultIdentityAdapter
+  module: dal_obscura.data_plane.infrastructure.adapters.identity_default.DefaultIdentityAdapter
   args:
     jwt_secret:
       key: DAL_OBSCURA_JWT_SECRET

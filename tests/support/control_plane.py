@@ -9,8 +9,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
-from dal_obscura.control_plane.infrastructure.db import session_factory
+from dal_obscura.common.config_store.db import session_factory
 from dal_obscura.control_plane.interfaces.api import create_app
+
+ICEBERG_CATALOG_MODULE = (
+    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
+)
 
 
 @dataclass(frozen=True)
@@ -69,7 +73,7 @@ def provision_default_published_asset(
         client.put(
             f"/v1/tenants/{tenant['id']}/cells/{cell['id']}/catalogs/{catalog_name}",
             json={
-                "module": "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+                "module": ICEBERG_CATALOG_MODULE,
                 "options": catalog_options,
             },
             headers=headers,

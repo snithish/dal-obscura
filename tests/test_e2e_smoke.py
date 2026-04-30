@@ -21,9 +21,9 @@ from pyiceberg.types import (
     StructType,
 )
 
+from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
+from dal_obscura.common.config_store.orm import Base
 from dal_obscura.control_plane.application.provisioning import ProvisioningService
-from dal_obscura.control_plane.infrastructure.db import create_engine_from_url, session_factory
-from dal_obscura.control_plane.infrastructure.orm import Base
 
 
 def get_free_port() -> int:
@@ -176,7 +176,7 @@ def control_plane_setup(tmp_path: Path, iceberg_setup: tuple[str, Path]) -> dict
             cell_id=cell_id,
             tenant_id=tenant_id,
             name="e2e_catalog",
-            module="dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+            module="dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog",
             options={
                 "type": "sql",
                 "uri": catalog_uri,
@@ -212,7 +212,7 @@ def control_plane_setup(tmp_path: Path, iceberg_setup: tuple[str, Path]) -> dict
                 {
                     "ordinal": 1,
                     "module": (
-                        "dal_obscura.infrastructure.adapters.identity_default."
+                        "dal_obscura.data_plane.infrastructure.adapters.identity_default."
                         "DefaultIdentityAdapter"
                     ),
                     "args": {"jwt_secret": {"key": "DAL_OBSCURA_E2E_JWT_SECRET"}},
@@ -246,7 +246,7 @@ def test_e2e_flight_server_with_iceberg(control_plane_setup: dict[str, str]):
     cmd = [
         sys.executable,
         "-c",
-        "import sys; from dal_obscura.interfaces.cli.main import main; sys.exit(main())",
+        "import sys; from dal_obscura.data_plane.interfaces.cli.main import main; sys.exit(main())",
     ]
 
     if os.environ.get("DEBUG_SERVER") == "1":
@@ -258,7 +258,7 @@ def test_e2e_flight_server_with_iceberg(control_plane_setup: dict[str, str]):
             "0.0.0.0:5678",
             "--wait-for-client",
             "-m",
-            "dal_obscura.interfaces.cli.main",
+            "dal_obscura.data_plane.interfaces.cli.main",
         ]
 
     process = subprocess.Popen(

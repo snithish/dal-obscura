@@ -1,11 +1,11 @@
 import pytest
 
-from dal_obscura.application.ports.identity import (
+from dal_obscura.data_plane.application.ports.identity import (
     AuthenticationRequest,
     InvalidCredentialsError,
     MissingCredentialsError,
 )
-from dal_obscura.infrastructure.adapters.identity_mtls import MtlsIdentityProvider
+from dal_obscura.data_plane.infrastructure.adapters.identity_mtls import MtlsIdentityProvider
 
 
 def test_mtls_provider_maps_peer_identity_to_configured_principal():

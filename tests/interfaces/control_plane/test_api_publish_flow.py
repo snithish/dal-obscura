@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from dal_obscura.control_plane.infrastructure.db import create_engine_from_url, session_factory
-from dal_obscura.control_plane.infrastructure.orm import Base
+from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
+from dal_obscura.common.config_store.orm import Base
 from dal_obscura.control_plane.interfaces.api import create_app
+
+ICEBERG_CATALOG_MODULE = (
+    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
+)
 
 
 def test_api_provisions_and_activates_default_cell_publication():
@@ -37,7 +41,7 @@ def test_api_provisions_and_activates_default_cell_publication():
     catalog = client.put(
         f"/v1/tenants/{tenant['id']}/cells/{cell['id']}/catalogs/analytics",
         json={
-            "module": "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+            "module": ICEBERG_CATALOG_MODULE,
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
         },
         headers=headers,
@@ -71,7 +75,7 @@ def test_api_provisions_and_activates_default_cell_publication():
                 {
                     "ordinal": 1,
                     "module": (
-                        "dal_obscura.infrastructure.adapters.identity_default."
+                        "dal_obscura.data_plane.infrastructure.adapters.identity_default."
                         "DefaultIdentityAdapter"
                     ),
                     "args": {"jwt_secret": {"key": "DAL_OBSCURA_JWT_SECRET"}},

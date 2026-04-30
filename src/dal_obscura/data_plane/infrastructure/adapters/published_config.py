@@ -1,0 +1,307 @@
+from __future__ import annotations
+
+from collections.abc import Iterable
+from dataclasses import dataclass
+from typing import Any, Literal, cast
+from uuid import UUID
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from dal_obscura.common.access_control.models import (
+    AccessDecision,
+    AccessRule,
+    DatasetPolicy,
+    MaskRule,
+    Policy,
+    Principal,
+    PrincipalConditionValue,
+)
+from dal_obscura.common.access_control.policy_resolution import resolve_access
+from dal_obscura.common.catalog.ports import TableFormat
+from dal_obscura.common.config_store.orm import (
+    ActivePublicationRecord,
+    PublishedAssetRecord,
+    PublishedCellRuntimeRecord,
+    TenantRecord,
+)
+from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
+    CatalogConfig,
+    CatalogTargetConfig,
+    DynamicCatalogRegistry,
+    ServiceConfig,
+)
+
+
+@dataclass(frozen=True)
+class PublishedRuntime:
+    publication_id: UUID
+    auth_chain: dict[str, Any]
+    ticket: dict[str, Any]
+    path_rules: list[dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class PublishedAsset:
+    publication_id: UUID
+    tenant_id: UUID
+    catalog: str
+    target: str
+    backend: str
+    compiled_config: dict[str, Any]
+    policy_version: int
+
+
+class PublishedConfigStore:
+    """Reads active published configuration for one data-plane cell."""
+
+    def __init__(self, session: Session, *, cell_id: UUID) -> None:
+        self._session = session
+        self._cell_id = cell_id
+        self._asset_cache: dict[tuple[UUID, UUID, str, str], PublishedAsset] = {}
+        self._last_good_by_target: dict[tuple[UUID, str, str], PublishedAsset] = {}
+        self._runtime_cache: dict[UUID, PublishedRuntime] = {}
+        self._tenant_cache: dict[str, UUID] = {}
+
+    def active_publication_id(self) -> UUID:
+        record = self._session.get(ActivePublicationRecord, self._cell_id)
+        if record is None:
+            raise LookupError(f"No active publication for cell {self._cell_id}")
+        return record.publication_id
+
+    def get_asset(self, *, tenant_id: str, catalog: str, target: str) -> PublishedAsset:
+        tenant_uuid = self._tenant_uuid(tenant_id)
+        target_key = (tenant_uuid, catalog, target)
+        try:
+            publication_id = self.active_publication_id()
+            cache_key = (publication_id, tenant_uuid, catalog, target)
+            cached = self._asset_cache.get(cache_key)
+            if cached is not None:
+                return cached
+            asset = self._published_asset(
+                publication_id=publication_id,
+                tenant_id=tenant_uuid,
+                catalog=catalog,
+                target=target,
+            )
+            self._asset_cache[cache_key] = asset
+            self._last_good_by_target[target_key] = asset
+            return asset
+        except Exception:
+            cached = self._last_good_by_target.get(target_key)
+            if cached is not None:
+                return cached
+            raise
+
+    def _published_asset(
+        self,
+        *,
+        publication_id: UUID,
+        tenant_id: UUID,
+        catalog: str,
+        target: str,
+    ) -> PublishedAsset:
+        record = self._session.scalar(
+            select(PublishedAssetRecord).where(
+                PublishedAssetRecord.publication_id == publication_id,
+                PublishedAssetRecord.tenant_id == tenant_id,
+                PublishedAssetRecord.catalog == catalog,
+                PublishedAssetRecord.target == target,
+            )
+        )
+        if record is None:
+            raise LookupError(f"No published asset for {catalog}/{target}")
+        return PublishedAsset(
+            publication_id=record.publication_id,
+            tenant_id=record.tenant_id,
+            catalog=record.catalog,
+            target=record.target,
+            backend=record.backend,
+            compiled_config=dict(record.compiled_config_json),
+            policy_version=record.policy_version,
+        )
+
+    def _tenant_uuid(self, tenant_id: str) -> UUID:
+        cached = self._tenant_cache.get(tenant_id)
+        if cached is not None:
+            return cached
+        try:
+            tenant_uuid = UUID(tenant_id)
+        except ValueError:
+            tenant_uuid = self._tenant_uuid_by_slug(tenant_id)
+        self._tenant_cache[tenant_id] = tenant_uuid
+        return tenant_uuid
+
+    def _tenant_uuid_by_slug(self, slug: str) -> UUID:
+        record = self._session.scalar(select(TenantRecord).where(TenantRecord.slug == slug))
+        if record is None:
+            raise LookupError(f"No tenant with slug {slug!r}")
+        return record.id
+
+    def get_runtime(self) -> PublishedRuntime:
+        publication_id = self.active_publication_id()
+        cached = self._runtime_cache.get(publication_id)
+        if cached is not None:
+            return cached
+        record = self._session.scalar(
+            select(PublishedCellRuntimeRecord).where(
+                PublishedCellRuntimeRecord.publication_id == publication_id
+            )
+        )
+        if record is None:
+            raise LookupError(f"No published runtime for publication {publication_id}")
+        runtime = PublishedRuntime(
+            publication_id=record.publication_id,
+            auth_chain=dict(record.auth_chain_json),
+            ticket=dict(record.ticket_json),
+            path_rules=list(record.path_rules_json),
+        )
+        self._runtime_cache[publication_id] = runtime
+        return runtime
+
+
+class PublishedConfigAuthorizer:
+    """Authorization adapter backed by published asset policy JSON."""
+
+    def __init__(self, store: PublishedConfigStore) -> None:
+        self._store = store
+
+    def authorize(
+        self,
+        principal: Principal,
+        target: str,
+        catalog: str | None,
+        requested_columns: Iterable[str],
+    ) -> AccessDecision:
+        if catalog is None:
+            raise ValueError("Catalog name is required to authorize published assets")
+        tenant_id = _tenant_id(principal)
+        asset = self._store.get_asset(tenant_id=tenant_id, catalog=catalog, target=target)
+        policy = _policy_from_asset(asset)
+        allowed_columns, masks, row_filter = resolve_access(
+            policy,
+            principal,
+            target,
+            catalog,
+            requested_columns,
+        )
+        return AccessDecision(
+            allowed_columns=allowed_columns,
+            masks=masks,
+            row_filter=row_filter,
+            policy_version=asset.policy_version,
+        )
+
+    def current_policy_version(
+        self,
+        target: str,
+        catalog: str | None,
+        *,
+        tenant_id: str,
+    ) -> int | None:
+        if catalog is None:
+            return None
+        try:
+            return self._store.get_asset(
+                tenant_id=tenant_id,
+                catalog=catalog,
+                target=target,
+            ).policy_version
+        except LookupError:
+            return None
+
+
+class PublishedConfigCatalogRegistry:
+    """Catalog registry that resolves tables from active published asset config."""
+
+    def __init__(self, store: PublishedConfigStore) -> None:
+        self._store = store
+
+    def describe(self, catalog: str | None, target: str, *, tenant_id: str) -> TableFormat:
+        if catalog is None:
+            raise ValueError("Catalog name is required to resolve a target")
+        asset = self._store.get_asset(tenant_id=tenant_id, catalog=catalog, target=target)
+        config = asset.compiled_config
+        catalog_config = _catalog_config_from_asset(asset, config)
+        registry = DynamicCatalogRegistry(
+            ServiceConfig(catalogs={catalog: catalog_config}, paths=())
+        )
+        return registry.describe(catalog, target, tenant_id=tenant_id)
+
+
+def _policy_from_asset(asset: PublishedAsset) -> Policy:
+    rules = [
+        _access_rule_from_json(raw)
+        for raw in _mapping(asset.compiled_config.get("policy")).get("rules", [])
+        if isinstance(raw, dict)
+    ]
+    return Policy(
+        version=asset.policy_version,
+        datasets=[DatasetPolicy(target=asset.target, catalog=asset.catalog, rules=rules)],
+    )
+
+
+def _access_rule_from_json(raw: dict[str, object]) -> AccessRule:
+    masks_raw = _mapping(raw.get("masks"))
+    return AccessRule(
+        principals=[str(item) for item in _list(raw.get("principals"))],
+        columns=[str(item) for item in _list(raw.get("columns"))],
+        masks={
+            name: MaskRule(
+                type=str(_mapping(mask).get("type")),
+                value=_mapping(mask).get("value"),
+            )
+            for name, mask in masks_raw.items()
+            if isinstance(name, str) and isinstance(mask, dict) and _mapping(mask).get("type")
+        },
+        row_filter=_optional_str(raw.get("row_filter")),
+        effect=cast(Literal["allow", "deny"], str(raw.get("effect", "allow"))),
+        when=cast(dict[str, PrincipalConditionValue], _mapping(raw.get("when"))),
+    )
+
+
+def _catalog_config_from_asset(
+    asset: PublishedAsset,
+    compiled_config: dict[str, Any],
+) -> CatalogConfig:
+    catalog_raw = _mapping(compiled_config.get("catalog"))
+    target_raw = _mapping(compiled_config.get("target"))
+    table_identifier = _optional_str(target_raw.get("table")) or asset.target
+    backend = _optional_str(target_raw.get("backend")) or asset.backend
+    return CatalogConfig(
+        name=asset.catalog,
+        module=str(catalog_raw["module"]),
+        options=dict(_mapping(catalog_raw.get("options"))),
+        targets={
+            asset.target: CatalogTargetConfig(
+                backend=backend,
+                table=table_identifier,
+                options=dict(_mapping(target_raw.get("options"))),
+            )
+        },
+    )
+
+
+def _tenant_id(principal: Principal) -> str:
+    return str(
+        principal.attributes.get("tenant_id") or principal.attributes.get("tenant") or "default"
+    )
+
+
+def _mapping(value: object) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return cast(dict[str, Any], value).copy()
+    return {}
+
+
+def _list(value: object) -> list[object]:
+    if isinstance(value, list):
+        return list(cast(list[object], value))
+    return []
+
+
+def _optional_str(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None

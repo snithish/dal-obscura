@@ -4,8 +4,8 @@ import os
 
 import uvicorn
 
-from dal_obscura.control_plane.infrastructure.db import create_engine_from_url, session_factory
-from dal_obscura.control_plane.infrastructure.orm import Base
+from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
+from dal_obscura.common.config_store.orm import Base
 from dal_obscura.control_plane.interfaces.api import create_app
 
 

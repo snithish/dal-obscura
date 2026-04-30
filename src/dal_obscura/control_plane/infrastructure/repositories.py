@@ -7,16 +7,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from dal_obscura.control_plane.domain.models import (
-    AssetDraft,
-    AuthProviderDraft,
-    CatalogDraft,
-    CellRuntimeDraft,
-    CompiledPublication,
-    PolicyRuleDraft,
-    PublishDraft,
-)
-from dal_obscura.control_plane.infrastructure.orm import (
+from dal_obscura.common.config_store.orm import (
     ActivePublicationRecord,
     AssetRecord,
     AuthProviderRecord,
@@ -30,6 +21,15 @@ from dal_obscura.control_plane.infrastructure.orm import (
     PublishedCatalogRecord,
     PublishedCellRuntimeRecord,
     TenantRecord,
+)
+from dal_obscura.control_plane.domain.models import (
+    AssetDraft,
+    AuthProviderDraft,
+    CatalogDraft,
+    CellRuntimeDraft,
+    CompiledPublication,
+    PolicyRuleDraft,
+    PublishDraft,
 )
 
 

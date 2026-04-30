@@ -2,7 +2,7 @@ import pyarrow as pa
 import pyarrow.flight as flight
 import pytest
 
-from dal_obscura.interfaces.flight.contracts import parse_descriptor
+from dal_obscura.data_plane.interfaces.flight.contracts import parse_descriptor
 from tests.support.flight import (
     InMemoryPolicyAuthorizer,
     StubTableFormat,
@@ -291,7 +291,7 @@ def test_get_schema_returns_masked_authorized_schema(tmp_path):
 def test_streaming_contract_emits_multiple_batches(tmp_path, monkeypatch):
     del tmp_path
     monkeypatch.setattr(
-        "dal_obscura.infrastructure.adapters.duckdb_transform._DUCKDB_ARROW_OUTPUT_BATCH_SIZE",
+        "dal_obscura.data_plane.infrastructure.adapters.duckdb_transform._DUCKDB_ARROW_OUTPUT_BATCH_SIZE",
         2,
     )
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
@@ -616,7 +616,7 @@ def test_flight_logs_include_resident_memory(tmp_path, caplog, monkeypatch):
     )
 
     monkeypatch.setattr(
-        "dal_obscura.interfaces.flight.server.get_resident_memory_bytes",
+        "dal_obscura.data_plane.interfaces.flight.server.get_resident_memory_bytes",
         lambda: 4_242,
     )
     server = build_flight_service(

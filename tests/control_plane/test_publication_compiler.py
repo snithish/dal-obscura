@@ -32,7 +32,7 @@ def _draft(row_filter: str = "region = 'us'") -> PublishDraft:
         auth_providers=[
             AuthProviderDraft(
                 ordinal=1,
-                module="dal_obscura.infrastructure.adapters.identity_default.DefaultIdentityAdapter",
+                module="dal_obscura.data_plane.infrastructure.adapters.identity_default.DefaultIdentityAdapter",
                 args={"jwt_secret": {"key": "DAL_OBSCURA_JWT_SECRET"}},
                 enabled=True,
             )
@@ -43,7 +43,7 @@ def _draft(row_filter: str = "region = 'us'") -> PublishDraft:
                 cell_id=cell_id,
                 tenant_id=tenant_id,
                 name="analytics",
-                module="dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+                module="dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog",
                 options={"type": "sql", "uri": "sqlite:///warehouse.db"},
             )
         ],

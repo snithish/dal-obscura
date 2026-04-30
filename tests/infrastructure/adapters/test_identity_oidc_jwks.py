@@ -9,8 +9,13 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from jwt.utils import base64url_encode
 
-from dal_obscura.application.ports.identity import AuthenticationRequest, MissingCredentialsError
-from dal_obscura.infrastructure.adapters.identity_oidc_jwks import OidcJwksIdentityProvider
+from dal_obscura.data_plane.application.ports.identity import (
+    AuthenticationRequest,
+    MissingCredentialsError,
+)
+from dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks import (
+    OidcJwksIdentityProvider,
+)
 
 ISSUER = "https://keycloak.example.test/realms/acme"
 AUDIENCE = "dal-obscura"

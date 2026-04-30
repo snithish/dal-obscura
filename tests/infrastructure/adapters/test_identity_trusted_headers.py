@@ -1,11 +1,11 @@
 import pytest
 
-from dal_obscura.application.ports.identity import (
+from dal_obscura.data_plane.application.ports.identity import (
     AuthenticationRequest,
     InvalidCredentialsError,
     MissingCredentialsError,
 )
-from dal_obscura.infrastructure.adapters.identity_trusted_headers import (
+from dal_obscura.data_plane.infrastructure.adapters.identity_trusted_headers import (
     TrustedHeaderIdentityProvider,
 )
 

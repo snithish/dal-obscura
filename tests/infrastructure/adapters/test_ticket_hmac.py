@@ -4,8 +4,8 @@ from hashlib import sha256
 
 import pytest
 
-from dal_obscura.domain.ticket_delivery.models import TicketPayload
-from dal_obscura.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
+from dal_obscura.common.ticket_delivery.models import TicketPayload
+from dal_obscura.data_plane.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
 
 
 def _scan_payload():

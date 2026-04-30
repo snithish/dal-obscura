@@ -27,12 +27,14 @@ from pyiceberg.types import (
     TimestampType,
 )
 
-from dal_obscura.infrastructure.adapters.catalog_registry import (
+from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     CatalogConfig,
     DynamicCatalogRegistry,
     ServiceConfig,
 )
-from dal_obscura.infrastructure.adapters.duckdb_transform import _DUCKDB_ARROW_OUTPUT_BATCH_SIZE
+from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
+    _DUCKDB_ARROW_OUTPUT_BATCH_SIZE,
+)
 from tests.support.flight import (
     StubTableFormat,
     build_flight_service,
@@ -381,7 +383,7 @@ def _run_iceberg_stream_scenario(
             catalogs={
                 catalog_name: CatalogConfig(
                     name=catalog_name,
-                    module="dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+                    module="dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog",
                     options={"type": "sql", "uri": catalog_uri, "warehouse": str(warehouse)},
                     targets={},
                 )

@@ -5,7 +5,7 @@ import pyarrow as pa
 import pyarrow.flight as flight
 import pytest
 
-from dal_obscura.infrastructure.adapters.catalog_registry import (
+from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     CatalogConfig,
     CatalogTargetConfig,
     DynamicCatalogRegistry,
@@ -21,6 +21,10 @@ from tests.support.flight import (
     running_flight_client,
 )
 from tests.support.iceberg import create_iceberg_table, iceberg_sql_catalog_options
+
+ICEBERG_CATALOG_MODULE = (
+    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
+)
 
 
 def _allow_rule(
@@ -98,7 +102,7 @@ def _iceberg_catalog(
 ) -> CatalogConfig:
     return CatalogConfig(
         name=name,
-        module="dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+        module=ICEBERG_CATALOG_MODULE,
         options=iceberg_sql_catalog_options(tmp_path, name, warehouse_name),
         targets=targets or {},
     )
@@ -112,7 +116,7 @@ def test_flight_plan_and_get_with_iceberg_multi_catalog(tmp_path):
         service_config={
             "catalogs": {
                 "ice_one": {
-                    "module": "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+                    "module": ICEBERG_CATALOG_MODULE,
                     "options": {
                         "type": "sql",
                         "uri": f"sqlite:///{tmp_path / 'ice_one.db'}",
@@ -120,7 +124,7 @@ def test_flight_plan_and_get_with_iceberg_multi_catalog(tmp_path):
                     },
                 },
                 "ice_two": {
-                    "module": "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+                    "module": ICEBERG_CATALOG_MODULE,
                     "options": {
                         "type": "sql",
                         "uri": f"sqlite:///{tmp_path / 'ice_two.db'}",
@@ -207,7 +211,7 @@ def test_flight_plan_and_get_with_static_catalog_alias(tmp_path):
         service_config={
             "catalogs": {
                 "shared": {
-                    "module": "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+                    "module": ICEBERG_CATALOG_MODULE,
                     "options": {
                         "type": "sql",
                         "uri": f"sqlite:///{tmp_path / 'shared.db'}",
@@ -288,7 +292,7 @@ def test_flight_plan_and_get_with_iceberg_requested_row_filter_on_unprojected_co
         service_config={
             "catalogs": {
                 "ice_one": {
-                    "module": "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+                    "module": ICEBERG_CATALOG_MODULE,
                     "options": {
                         "type": "sql",
                         "uri": f"sqlite:///{tmp_path / 'ice_one.db'}",
@@ -365,7 +369,7 @@ def test_flight_plan_and_get_with_multiple_static_alias_targets(tmp_path):
         service_config={
             "catalogs": {
                 "shared": {
-                    "module": "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+                    "module": ICEBERG_CATALOG_MODULE,
                     "options": {
                         "type": "sql",
                         "uri": f"sqlite:///{tmp_path / 'shared.db'}",
@@ -444,7 +448,7 @@ def test_flight_plan_rejects_direct_target_without_catalog(tmp_path):
         service_config={
             "catalogs": {
                 "ice_one": {
-                    "module": "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+                    "module": ICEBERG_CATALOG_MODULE,
                     "options": {
                         "type": "sql",
                         "uri": f"sqlite:///{tmp_path / 'ice_one.db'}",
@@ -507,7 +511,7 @@ def test_flight_plan_and_get_with_iceberg_multi_file_large(tmp_path):
         service_config={
             "catalogs": {
                 "ice_one": {
-                    "module": "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+                    "module": ICEBERG_CATALOG_MODULE,
                     "options": {
                         "type": "sql",
                         "uri": f"sqlite:///{tmp_path / 'ice_one.db'}",
@@ -583,7 +587,7 @@ def test_hot_reload_does_not_break_iceberg_catalog_registry(tmp_path):
         service_config={
             "catalogs": {
                 "shared": {
-                    "module": "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+                    "module": ICEBERG_CATALOG_MODULE,
                     "options": {
                         "type": "sql",
                         "uri": f"sqlite:///{tmp_path / 'shared.db'}",

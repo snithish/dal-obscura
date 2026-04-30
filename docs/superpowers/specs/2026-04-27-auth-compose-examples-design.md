@@ -82,7 +82,7 @@ read path succeeds.
 ### Shared JWT
 
 The setup script writes an app config using
-`dal_obscura.infrastructure.adapters.identity_default.DefaultIdentityAdapter` and a
+`dal_obscura.data_plane.infrastructure.adapters.identity_default.DefaultIdentityAdapter` and a
 secret from `DAL_OBSCURA_JWT_SECRET`. The client signs an HS256 JWT with that secret and
 sends `Authorization: Bearer <token>`.
 
@@ -93,7 +93,7 @@ This demonstrates the simplest standalone bearer-token deployment.
 Compose starts a real Keycloak container with an imported realm, client, user or service
 account, and protocol mappers for the claims needed by the policy. The setup script
 writes an app config using
-`dal_obscura.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider`.
+`dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider`.
 
 The client obtains a real access token from Keycloak through the token endpoint and sends
 it as `Authorization: Bearer <token>`. `dal-obscura` validates the token against the
@@ -104,7 +104,7 @@ This demonstrates the production-style OIDC flow for enterprise and cloud identi
 ### API Key
 
 The setup script writes an app config using
-`dal_obscura.infrastructure.adapters.identity_api_key.ApiKeyIdentityProvider`. The client
+`dal_obscura.data_plane.infrastructure.adapters.identity_api_key.ApiKeyIdentityProvider`. The client
 sends `x-api-key: <secret>`.
 
 This demonstrates machine-to-machine or legacy client access where OIDC is unavailable.
@@ -113,7 +113,7 @@ This demonstrates machine-to-machine or legacy client access where OIDC is unava
 
 The certificate setup script creates a CA, server certificate, and client certificate.
 The app config enables `transport.tls.verify_client: true` and uses
-`dal_obscura.infrastructure.adapters.identity_mtls.MtlsIdentityProvider`.
+`dal_obscura.data_plane.infrastructure.adapters.identity_mtls.MtlsIdentityProvider`.
 
 The client connects over `grpc+tls`, presents the client certificate, and authenticates
 from the verified peer identity.
@@ -148,7 +148,7 @@ forwards Flight RPCs to the backend and injects:
 - optional group and attribute headers
 
 The backend uses
-`dal_obscura.infrastructure.adapters.identity_trusted_headers.TrustedHeaderIdentityProvider`.
+`dal_obscura.data_plane.infrastructure.adapters.identity_trusted_headers.TrustedHeaderIdentityProvider`.
 The client connects to the gateway, not directly to `dal-obscura`.
 
 This demonstrates deployments where authentication is owned by ingress or an enterprise

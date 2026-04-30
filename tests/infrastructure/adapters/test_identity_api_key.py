@@ -1,11 +1,11 @@
 import pytest
 
-from dal_obscura.application.ports.identity import (
+from dal_obscura.data_plane.application.ports.identity import (
     AuthenticationRequest,
     InvalidCredentialsError,
     MissingCredentialsError,
 )
-from dal_obscura.infrastructure.adapters.identity_api_key import ApiKeyIdentityProvider
+from dal_obscura.data_plane.infrastructure.adapters.identity_api_key import ApiKeyIdentityProvider
 
 
 def test_api_key_provider_authenticates_x_api_key_header():

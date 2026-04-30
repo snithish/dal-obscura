@@ -197,11 +197,11 @@ TARGET = "default.users"
 PRINCIPAL = "example-user"
 PORT = 8815
 
-DEFAULT_JWT = "dal_obscura.infrastructure.adapters.identity_default.DefaultIdentityAdapter"
-OIDC = "dal_obscura.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider"
-API_KEY = "dal_obscura.infrastructure.adapters.identity_api_key.ApiKeyIdentityProvider"
-MTLS = "dal_obscura.infrastructure.adapters.identity_mtls.MtlsIdentityProvider"
-TRUSTED = "dal_obscura.infrastructure.adapters.identity_trusted_headers.TrustedHeaderIdentityProvider"
+DEFAULT_JWT = "dal_obscura.data_plane.infrastructure.adapters.identity_default.DefaultIdentityAdapter"
+OIDC = "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider"
+API_KEY = "dal_obscura.data_plane.infrastructure.adapters.identity_api_key.ApiKeyIdentityProvider"
+MTLS = "dal_obscura.data_plane.infrastructure.adapters.identity_mtls.MtlsIdentityProvider"
+TRUSTED = "dal_obscura.data_plane.infrastructure.adapters.identity_trusted_headers.TrustedHeaderIdentityProvider"
 
 SPIFFE_CLIENT_ID = "spiffe://example.org/ns/default/sa/dal-obscura-client"
 
@@ -262,7 +262,7 @@ def _write_catalog_config() -> None:
         {
             "catalogs": {
                 CATALOG: {
-                    "module": "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+                    "module": "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog",
                     "options": {
                         "type": "sql",
                         "uri": f"sqlite:///{RUNTIME_DIR / f'{CATALOG}.db'}",
@@ -304,7 +304,7 @@ def _write_app_config(mode: str) -> None:
         "catalog_file": str(RUNTIME_DIR / "catalogs.yaml"),
         "policy_file": str(RUNTIME_DIR / "policies.yaml"),
         "secret_provider": {
-            "module": "dal_obscura.infrastructure.adapters.secret_providers.EnvSecretProvider",
+            "module": "dal_obscura.data_plane.infrastructure.adapters.secret_providers.EnvSecretProvider",
             "args": {},
         },
         "ticket": {

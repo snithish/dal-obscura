@@ -33,7 +33,7 @@ test = [
 ]
 
 [project.scripts]
-dal-obscura = "dal_obscura.interfaces.cli:main"
+dal-obscura = "dal_obscura.data_plane.interfaces.cli:main"
 dal-obscura-control-plane = "dal_obscura.control_plane.interfaces.cli:main"
 
 [build-system]

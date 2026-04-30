@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from dal_obscura.infrastructure.adapters.runtime_config import load_data_plane_runtime_config
+from dal_obscura.data_plane.infrastructure.adapters.runtime_config import (
+    load_data_plane_runtime_config,
+)
 
 
 def test_runtime_config_reads_required_database_and_cell(monkeypatch: pytest.MonkeyPatch):

@@ -6,13 +6,13 @@ from dataclasses import dataclass
 import pyarrow as pa
 from pyiceberg.expressions import AlwaysTrue, EqualTo
 
-from dal_obscura.domain.access_control.filters import (
+from dal_obscura.common.access_control.filters import (
     deserialize_row_filter,
     parse_row_filter,
     row_filter_to_sql,
 )
-from dal_obscura.domain.query_planning.models import PlanRequest
-from dal_obscura.infrastructure.table_formats.iceberg import (
+from dal_obscura.common.query_planning.models import PlanRequest
+from dal_obscura.data_plane.infrastructure.table_formats.iceberg import (
     IcebergInputPartition,
     IcebergTableFormat,
 )
@@ -244,7 +244,7 @@ def test_iceberg_execute_deserializes_sql_string_pushdown_filter(monkeypatch):
             return iter(())
 
     monkeypatch.setattr(
-        "dal_obscura.infrastructure.table_formats.iceberg.ArrowScan",
+        "dal_obscura.data_plane.infrastructure.table_formats.iceberg.ArrowScan",
         _CapturingArrowScan,
     )
 

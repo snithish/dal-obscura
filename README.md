@@ -168,7 +168,7 @@ The service ships with these built-in provider adapters:
 
 Single-provider auth is represented as one published provider record. For
 example, an OIDC provider uses `module:
-dal_obscura.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider`
+dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider`
 with args for `issuer`, `audience`, `subject_claim`, `group_claims`, and
 `attribute_claims`.
 

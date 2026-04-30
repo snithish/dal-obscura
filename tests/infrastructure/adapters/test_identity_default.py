@@ -1,8 +1,14 @@
 import jwt
 import pytest
 
-from dal_obscura.application.ports.identity import AuthenticationRequest, MissingCredentialsError
-from dal_obscura.infrastructure.adapters.identity_default import AuthConfig, DefaultIdentityAdapter
+from dal_obscura.data_plane.application.ports.identity import (
+    AuthenticationRequest,
+    MissingCredentialsError,
+)
+from dal_obscura.data_plane.infrastructure.adapters.identity_default import (
+    AuthConfig,
+    DefaultIdentityAdapter,
+)
 
 JWT_SECRET = "test-jwt-secret-32-characters-long"
 

@@ -6,13 +6,17 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.orm import Session
 
-from dal_obscura.control_plane.infrastructure.db import create_engine_from_url, session_factory
-from dal_obscura.control_plane.infrastructure.orm import Base
+from dal_obscura.common.access_control.models import Principal
+from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
+from dal_obscura.common.config_store.orm import Base
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
-from dal_obscura.domain.access_control.models import Principal
-from dal_obscura.infrastructure.adapters.published_config import (
+from dal_obscura.data_plane.infrastructure.adapters.published_config import (
     PublishedConfigAuthorizer,
     PublishedConfigStore,
+)
+
+ICEBERG_CATALOG_MODULE = (
+    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )
 
 
@@ -119,7 +123,7 @@ def _publish_asset(
         backend="iceberg",
         compiled_config={
             "catalog": {
-                "module": "dal_obscura.infrastructure.adapters.catalog_registry.IcebergCatalog",
+                "module": ICEBERG_CATALOG_MODULE,
                 "options": {},
             },
             "target": {"backend": "iceberg", "table": "prod.users"},

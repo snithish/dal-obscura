@@ -1,6 +1,6 @@
 import pytest
 
-from dal_obscura.infrastructure.adapters.identity_claims import PrincipalClaimMapper
+from dal_obscura.data_plane.infrastructure.adapters.identity_claims import PrincipalClaimMapper
 
 
 def test_principal_claim_mapper_extracts_subject_groups_and_attributes():

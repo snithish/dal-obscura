@@ -1,9 +1,9 @@
 import pyarrow as pa
 import pytest
 
-from dal_obscura.domain.access_control.filters import parse_row_filter
-from dal_obscura.domain.access_control.models import MaskRule
-from dal_obscura.infrastructure.adapters.duckdb_transform import (
+from dal_obscura.common.access_control.filters import parse_row_filter
+from dal_obscura.common.access_control.models import MaskRule
+from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
 )

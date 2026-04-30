@@ -7,20 +7,20 @@ from typing import Any, cast
 import pyarrow as pa
 import pytest
 
-from dal_obscura.application.ports.identity import AuthenticationRequest
-from dal_obscura.application.use_cases.fetch_stream import FetchStreamUseCase
-from dal_obscura.application.use_cases.plan_access import PlanAccessUseCase
-from dal_obscura.domain.access_control.filters import deserialize_row_filter, row_filter_to_sql
-from dal_obscura.domain.access_control.models import AccessDecision, MaskRule, Principal
-from dal_obscura.domain.catalog.ports import TableFormat
-from dal_obscura.domain.query_planning.models import PlanRequest
-from dal_obscura.domain.table_format.ports import InputPartition, Plan, ScanTask
-from dal_obscura.domain.ticket_delivery.models import ScanPayload, TicketPayload
-from dal_obscura.infrastructure.adapters.duckdb_transform import (
+from dal_obscura.common.access_control.filters import deserialize_row_filter, row_filter_to_sql
+from dal_obscura.common.access_control.models import AccessDecision, MaskRule, Principal
+from dal_obscura.common.catalog.ports import TableFormat
+from dal_obscura.common.query_planning.models import PlanRequest
+from dal_obscura.common.table_format.ports import InputPartition, Plan, ScanTask
+from dal_obscura.common.ticket_delivery.models import ScanPayload, TicketPayload
+from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
+from dal_obscura.data_plane.application.use_cases.fetch_stream import FetchStreamUseCase
+from dal_obscura.data_plane.application.use_cases.plan_access import PlanAccessUseCase
+from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
 )
-from dal_obscura.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
+from dal_obscura.data_plane.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
 
 AUTHORIZATION_HEADER = AuthenticationRequest(headers={"authorization": "Bearer jwt-token"})
 
