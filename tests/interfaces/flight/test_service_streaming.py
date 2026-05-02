@@ -3,6 +3,7 @@ import pyarrow.flight as flight
 import pytest
 
 from dal_obscura.data_plane.interfaces.flight.contracts import parse_descriptor
+from tests.support.arrow import id_region_batch, id_region_schema, metadata_batch, metadata_schema
 from tests.support.flight import (
     InMemoryPolicyAuthorizer,
     StubTableFormat,
@@ -14,30 +15,13 @@ from tests.support.flight import (
     make_jwt,
     running_flight_client,
 )
+from tests.support.policy import allow_rule
+from tests.support.row_filters import FLIGHT_UNSAFE_ROW_FILTER_SMOKE_CASES
 
 
 class DummyContext:
     def __init__(self, headers):
         self.headers = headers
-
-
-def _allow_rule(
-    columns: list[str],
-    *,
-    principals: list[str] | None = None,
-    masks: dict[str, object] | None = None,
-    row_filter: str | None = None,
-) -> dict[str, object]:
-    rule: dict[str, object] = {
-        "principals": principals or ["user1"],
-        "columns": columns,
-        "effect": "allow",
-    }
-    if masks:
-        rule["masks"] = masks
-    if row_filter:
-        rule["row_filter"] = row_filter
-    return rule
 
 
 @pytest.mark.parametrize(
@@ -127,7 +111,7 @@ def test_flight_info_schema_matches_mask_output_types(
     )
 
     del tmp_path
-    policy_rules = [_allow_rule([column_name], masks={column_name: mask_config})]
+    policy_rules = [allow_rule([column_name], masks={column_name: mask_config})]
     server = build_flight_service(
         table_format=table_format,
         policy_rules=policy_rules,
@@ -216,13 +200,7 @@ def test_parse_descriptor_rejects_invalid_row_filter_syntax():
 
 @pytest.mark.parametrize(
     "row_filter",
-    [
-        "region = 'us'; DROP TABLE input",
-        "COPY input TO '/tmp/leak.csv'",
-        "EXISTS(SELECT 1)",
-        "id IN (SELECT 1)",
-        "read_csv('/etc/passwd')",
-    ],
+    FLIGHT_UNSAFE_ROW_FILTER_SMOKE_CASES,
 )
 def test_parse_descriptor_rejects_unsafe_row_filter_sql(row_filter):
     descriptor = command_descriptor(
@@ -266,7 +244,7 @@ def test_get_schema_returns_masked_authorized_schema(tmp_path):
     server = build_flight_service(
         table_format=table_format,
         policy_rules=[
-            _allow_rule(
+            allow_rule(
                 ["id", "email"],
                 masks={"email": {"type": "redact", "value": "[hidden]"}},
             )
@@ -294,9 +272,9 @@ def test_streaming_contract_emits_multiple_batches(tmp_path, monkeypatch):
         "dal_obscura.data_plane.infrastructure.adapters.duckdb_transform._DUCKDB_ARROW_OUTPUT_BATCH_SIZE",
         2,
     )
-    schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
-    batch1 = pa.record_batch([pa.array([1, 2]), pa.array(["us", "eu"])], schema=schema)
-    batch2 = pa.record_batch([pa.array([3, 4]), pa.array(["us", "us"])], schema=schema)
+    schema = id_region_schema()
+    batch1 = id_region_batch([1, 2], ["us", "eu"])
+    batch2 = id_region_batch([3, 4], ["us", "us"])
     table_format = StubTableFormat(
         catalog_name="analytics",
         table_name="test.table",
@@ -307,7 +285,7 @@ def test_streaming_contract_emits_multiple_batches(tmp_path, monkeypatch):
 
     server = build_flight_service(
         table_format=table_format,
-        policy_rules=[_allow_rule(["id", "region"])],
+        policy_rules=[allow_rule(["id", "region"])],
     )
     with running_flight_client(server) as client:
         descriptor = command_descriptor(
@@ -326,7 +304,9 @@ def test_streaming_contract_emits_multiple_batches(tmp_path, monkeypatch):
         assert result.column("id").num_chunks >= 2
 
 
-def test_flight_streaming_supports_nested_projection_with_combined_row_filters(tmp_path):
+def test_flight_streaming_supports_nested_projection_with_policy_and_requested_row_filters(
+    tmp_path,
+):
     user_type = pa.struct(
         [
             pa.field("email", pa.string()),
@@ -373,13 +353,12 @@ def test_flight_streaming_supports_nested_projection_with_combined_row_filters(t
     server = build_flight_service(
         table_format=table_format,
         policy_rules=[
-            _allow_rule(
-                ["id", "user.address.zip"],
+            allow_rule(
+                ["id", "region", "user.address.zip"],
                 principals=["group:analyst"],
                 masks={"user.address.zip": {"type": "hash"}},
-                row_filter="region = 'us'",
             ),
-            _allow_rule(
+            allow_rule(
                 ["user.email"],
                 masks={"user.email": {"type": "redact", "value": "[hidden]"}},
                 row_filter="active = true",
@@ -392,6 +371,7 @@ def test_flight_streaming_supports_nested_projection_with_combined_row_filters(t
                 "catalog": "analytics",
                 "target": "test.table",
                 "columns": ["id", "user.address.zip", "user.email"],
+                "row_filter": "region = 'us'",
             }
         )
         options = flight_call_options("user1", groups=["analyst"])
@@ -409,40 +389,8 @@ def test_flight_streaming_supports_nested_projection_with_combined_row_filters(t
 
 
 def test_flight_streaming_masks_list_of_struct_fields(tmp_path):
-    preference_type = pa.struct(
-        [
-            pa.field("name", pa.string()),
-            pa.field("theme", pa.string()),
-        ]
-    )
-    metadata_type = pa.struct(
-        [
-            pa.field("preferences", pa.list_(preference_type)),
-        ]
-    )
-    schema = pa.schema(
-        [
-            pa.field("id", pa.int64()),
-            pa.field("metadata", metadata_type),
-        ]
-    )
-    batch = pa.record_batch(
-        [
-            pa.array([1], type=pa.int64()),
-            pa.array(
-                [
-                    {
-                        "preferences": [
-                            {"name": "web", "theme": "dark"},
-                            {"name": "mobile", "theme": "light"},
-                        ]
-                    }
-                ],
-                type=metadata_type,
-            ),
-        ],
-        schema=schema,
-    )
+    schema = metadata_schema()
+    batch = metadata_batch()
     table_format = StubTableFormat(
         catalog_name="analytics",
         table_name="test.table",
@@ -455,7 +403,7 @@ def test_flight_streaming_masks_list_of_struct_fields(tmp_path):
     server = build_flight_service(
         table_format=table_format,
         policy_rules=[
-            _allow_rule(
+            allow_rule(
                 ["id", "metadata"],
                 masks={"metadata.preferences.theme": {"type": "redact", "value": "[hidden]"}},
             )
@@ -483,47 +431,8 @@ def test_flight_streaming_masks_list_of_struct_fields(tmp_path):
 
 def test_flight_normalizes_large_list_schema_for_clients(tmp_path):
     del tmp_path
-    metadata_type = pa.struct(
-        [
-            pa.field(
-                "preferences",
-                pa.large_list(
-                    pa.field(
-                        "item",
-                        pa.struct(
-                            [
-                                pa.field("name", pa.string()),
-                                pa.field("theme", pa.string()),
-                            ]
-                        ),
-                    )
-                ),
-            )
-        ]
-    )
-    schema = pa.schema(
-        [
-            pa.field("id", pa.int64()),
-            pa.field("metadata", metadata_type),
-        ]
-    )
-    batch = pa.record_batch(
-        [
-            pa.array([1], type=pa.int64()),
-            pa.array(
-                [
-                    {
-                        "preferences": [
-                            {"name": "web", "theme": "dark"},
-                            {"name": "mobile", "theme": "light"},
-                        ]
-                    }
-                ],
-                type=metadata_type,
-            ),
-        ],
-        schema=schema,
-    )
+    schema = metadata_schema(large_list=True)
+    batch = metadata_batch(large_list=True)
     table_format = StubTableFormat(
         catalog_name="analytics",
         table_name="test.table",
@@ -534,7 +443,7 @@ def test_flight_normalizes_large_list_schema_for_clients(tmp_path):
 
     server = build_flight_service(
         table_format=table_format,
-        policy_rules=[_allow_rule(["id", "metadata"])],
+        policy_rules=[allow_rule(["id", "metadata"])],
     )
     descriptor = command_descriptor(
         {
@@ -559,54 +468,10 @@ def test_flight_normalizes_large_list_schema_for_clients(tmp_path):
     assert table.column("metadata").to_pylist()[0]["preferences"][0]["theme"] == "dark"
 
 
-def test_flight_streaming_combines_policy_and_requested_row_filters(tmp_path):
-    del tmp_path
-    schema = pa.schema(
-        [
-            pa.field("id", pa.int64()),
-            pa.field("region", pa.string()),
-            pa.field("active", pa.bool_()),
-        ]
-    )
-    batch = pa.record_batch(
-        [
-            pa.array([1, 2, 3, 4], type=pa.int64()),
-            pa.array(["us", "us", "eu", "us"], type=pa.string()),
-            pa.array([True, False, True, True], type=pa.bool_()),
-        ],
-        schema=schema,
-    )
-    table_format = StubTableFormat(
-        catalog_name="analytics",
-        table_name="test.table",
-        format="stub_format",
-        schema=schema,
-        batches=(batch,),
-    )
-    server = build_flight_service(
-        table_format=table_format,
-        policy_rules=[_allow_rule(["id", "region", "active"], row_filter="active = true")],
-    )
-
-    with running_flight_client(server) as client:
-        info, table = flight_request(
-            client,
-            {
-                "catalog": "analytics",
-                "target": "test.table",
-                "columns": ["id"],
-                "row_filter": "region = 'us'",
-            },
-        )
-
-    assert info.schema.names == ["id"]
-    assert table.column("id").to_pylist() == [1, 4]
-
-
 def test_flight_logs_include_resident_memory(tmp_path, caplog, monkeypatch):
     del tmp_path
-    schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
-    batch = pa.record_batch([pa.array([1, 2]), pa.array(["us", "eu"])], schema=schema)
+    schema = id_region_schema()
+    batch = id_region_batch([1, 2], ["us", "eu"])
     table_format = StubTableFormat(
         catalog_name="analytics",
         table_name="test.table",
@@ -621,7 +486,7 @@ def test_flight_logs_include_resident_memory(tmp_path, caplog, monkeypatch):
     )
     server = build_flight_service(
         table_format=table_format,
-        policy_rules=[_allow_rule(["id", "region"])],
+        policy_rules=[allow_rule(["id", "region"])],
     )
     descriptor = command_descriptor(
         {
@@ -643,8 +508,8 @@ def test_flight_logs_include_resident_memory(tmp_path, caplog, monkeypatch):
 
 def test_flight_logs_requested_row_filter_presence(tmp_path, caplog):
     del tmp_path
-    schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
-    batch = pa.record_batch([pa.array([1, 2]), pa.array(["us", "eu"])], schema=schema)
+    schema = id_region_schema()
+    batch = id_region_batch([1, 2], ["us", "eu"])
     table_format = StubTableFormat(
         catalog_name="analytics",
         table_name="test.table",
@@ -655,7 +520,7 @@ def test_flight_logs_requested_row_filter_presence(tmp_path, caplog):
 
     server = build_flight_service(
         table_format=table_format,
-        policy_rules=[_allow_rule(["id", "region"])],
+        policy_rules=[allow_rule(["id", "region"])],
     )
     descriptor = command_descriptor(
         {
@@ -677,8 +542,8 @@ def test_flight_logs_requested_row_filter_presence(tmp_path, caplog):
 
 def test_do_get_rejects_principal_mismatch(tmp_path):
     del tmp_path
-    schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
-    batch = pa.record_batch([pa.array([1]), pa.array(["us"])], schema=schema)
+    schema = id_region_schema()
+    batch = id_region_batch([1], ["us"])
     table_format = StubTableFormat(
         catalog_name="analytics",
         table_name="test.table",
@@ -689,7 +554,7 @@ def test_do_get_rejects_principal_mismatch(tmp_path):
 
     server = build_flight_service(
         table_format=table_format,
-        policy_rules=[_allow_rule(["id", "region"])],
+        policy_rules=[allow_rule(["id", "region"])],
     )
     descriptor = command_descriptor(
         {
@@ -708,8 +573,8 @@ def test_do_get_rejects_principal_mismatch(tmp_path):
 
 def test_descriptor_authorization_field_is_not_accepted(tmp_path):
     del tmp_path
-    schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
-    batch = pa.record_batch([pa.array([1]), pa.array(["us"])], schema=schema)
+    schema = id_region_schema()
+    batch = id_region_batch([1], ["us"])
     table_format = StubTableFormat(
         catalog_name="analytics",
         table_name="test.table",
@@ -720,7 +585,7 @@ def test_descriptor_authorization_field_is_not_accepted(tmp_path):
 
     server = build_flight_service(
         table_format=table_format,
-        policy_rules=[_allow_rule(["id", "region"])],
+        policy_rules=[allow_rule(["id", "region"])],
     )
     descriptor = command_descriptor(
         {
@@ -737,8 +602,8 @@ def test_descriptor_authorization_field_is_not_accepted(tmp_path):
 
 def test_policy_version_is_per_dataset(tmp_path):
     del tmp_path
-    schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
-    batch = pa.record_batch([pa.array([1]), pa.array(["us"])], schema=schema)
+    schema = id_region_schema()
+    batch = id_region_batch([1], ["us"])
     table_format = StubTableFormat(
         catalog_name="analytics",
         table_name="test.table",
@@ -750,7 +615,7 @@ def test_policy_version_is_per_dataset(tmp_path):
     authorizer = InMemoryPolicyAuthorizer(
         catalog="analytics",
         target="table_a",
-        rules=[_allow_rule(["id", "region"])],
+        rules=[allow_rule(["id", "region"])],
     )
     server = build_flight_service(table_format=table_format, authorizer=authorizer)
     descriptor = command_descriptor(
@@ -764,19 +629,19 @@ def test_policy_version_is_per_dataset(tmp_path):
     info = server.get_flight_info(plan_context, descriptor)
     ticket = info.endpoints[0].ticket
 
-    authorizer.rules = [_allow_rule(["id", "region"])]
+    authorizer.rules = [allow_rule(["id", "region"])]
     do_get_context = DummyContext(headers=[authorization_header("user1")])
     server.do_get(do_get_context, ticket)
 
-    authorizer.rules = [_allow_rule(["id", "region"], row_filter="region = 'us'")]
+    authorizer.rules = [allow_rule(["id", "region"], row_filter="region = 'us'")]
     with pytest.raises(flight.FlightUnauthorizedError):
         server.do_get(do_get_context, ticket)
 
 
 def test_do_get_requires_authorization_header(tmp_path):
     del tmp_path
-    schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
-    batch = pa.record_batch([pa.array([1]), pa.array(["us"])], schema=schema)
+    schema = id_region_schema()
+    batch = id_region_batch([1], ["us"])
     table_format = StubTableFormat(
         catalog_name="analytics",
         table_name="test.table",
@@ -787,7 +652,7 @@ def test_do_get_requires_authorization_header(tmp_path):
 
     server = build_flight_service(
         table_format=table_format,
-        policy_rules=[_allow_rule(["id", "region"])],
+        policy_rules=[allow_rule(["id", "region"])],
     )
     descriptor = command_descriptor(
         {

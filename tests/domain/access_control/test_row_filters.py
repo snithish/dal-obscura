@@ -9,6 +9,11 @@ from dal_obscura.common.access_control.filters import (
     row_filter_to_sql,
     serialize_row_filter,
 )
+from tests.support.row_filters import (
+    PARSER_MULTIPLE_STATEMENT_ROW_FILTERS,
+    PARSER_NON_FILTER_STATEMENT_ROW_FILTERS,
+    PARSER_UNSAFE_EXPRESSION_ROW_FILTERS,
+)
 
 
 def _schema() -> pa.Schema:
@@ -74,11 +79,7 @@ def test_row_filter_deserialization_rejects_non_string_payload():
 
 @pytest.mark.parametrize(
     "payload",
-    [
-        "region = 'us'; DROP TABLE input",
-        "region = 'us'; SELECT 1",
-        "region = 'us'; COPY (SELECT 1) TO '/tmp/leak.csv'",
-    ],
+    PARSER_MULTIPLE_STATEMENT_ROW_FILTERS,
 )
 def test_parse_row_filter_rejects_multiple_statements(payload):
     with pytest.raises(ValueError, match="single DuckDB expression"):
@@ -87,14 +88,7 @@ def test_parse_row_filter_rejects_multiple_statements(payload):
 
 @pytest.mark.parametrize(
     "payload",
-    [
-        "COPY input TO '/tmp/leak.csv'",
-        "ATTACH 'tenant.duckdb' AS tenant",
-        "INSTALL httpfs",
-        "LOAD httpfs",
-        "CREATE TABLE stolen AS SELECT 1",
-        "DROP TABLE input",
-    ],
+    PARSER_NON_FILTER_STATEMENT_ROW_FILTERS,
 )
 def test_parse_row_filter_rejects_non_filter_statements(payload):
     with pytest.raises(ValueError, match="Unsupported row filter expression"):
@@ -103,12 +97,7 @@ def test_parse_row_filter_rejects_non_filter_statements(payload):
 
 @pytest.mark.parametrize(
     "payload",
-    [
-        "EXISTS(SELECT 1)",
-        "id IN (SELECT 1)",
-        "read_csv('/etc/passwd')",
-        "region = (SELECT 'us')",
-    ],
+    PARSER_UNSAFE_EXPRESSION_ROW_FILTERS,
 )
 def test_parse_row_filter_rejects_subqueries_and_table_functions(payload):
     with pytest.raises(ValueError, match="Unsupported row filter expression"):

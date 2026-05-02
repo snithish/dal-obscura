@@ -1,7 +1,5 @@
 import base64
 import pickle
-from collections.abc import Iterable
-from dataclasses import dataclass
 from typing import Any, cast
 
 import pyarrow as pa
@@ -11,7 +9,6 @@ from dal_obscura.common.access_control.filters import deserialize_row_filter, ro
 from dal_obscura.common.access_control.models import AccessDecision, MaskRule, Principal
 from dal_obscura.common.catalog.ports import TableFormat
 from dal_obscura.common.query_planning.models import PlanRequest
-from dal_obscura.common.table_format.ports import InputPartition, Plan, ScanTask
 from dal_obscura.common.ticket_delivery.models import ScanPayload, TicketPayload
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
 from dal_obscura.data_plane.application.use_cases.fetch_stream import FetchStreamUseCase
@@ -21,12 +18,23 @@ from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
     DuckDBRowTransformAdapter,
 )
 from dal_obscura.data_plane.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
+from tests.support.arrow import id_region_batch, id_region_schema
+from tests.support.use_cases import (
+    FakeAuthorizer,
+    FakeCatalogRegistry,
+    FakeIdentity,
+    FakeMasking,
+    FakeRowTransform,
+    FakeTicketCodec,
+    PretendPushdownTableFormat,
+    StubInputPartition,
+    StubTableFormat,
+    TrackingTableFormat,
+    encode_scan_task,
+    scan_payload,
+)
 
 AUTHORIZATION_HEADER = AuthenticationRequest(headers={"authorization": "Bearer jwt-token"})
-
-
-def _scan_payload() -> ScanPayload:
-    return {"read_payload": "payload", "full_row_filter": None, "masks": {}}
 
 
 def test_ticket_payload_from_dict_keeps_string_full_row_filter():
@@ -71,186 +79,6 @@ def test_ticket_payload_from_dict_rejects_non_string_full_row_filter():
     assert payload.scan["full_row_filter"] is None
 
 
-@dataclass(frozen=True)
-class StubInputPartition(InputPartition):
-    payload: bytes
-
-
-@dataclass(frozen=True, kw_only=True)
-class StubTableFormat(TableFormat):
-    schema: pa.Schema
-    batches: tuple[pa.RecordBatch, ...]
-
-    def get_schema(self) -> pa.Schema:
-        return self.schema
-
-    def plan(self, request: PlanRequest, max_tickets: int) -> Plan:
-        del max_tickets
-        return Plan(
-            schema=self.schema,
-            tasks=[
-                ScanTask(
-                    table_format=self,
-                    schema=self.schema,
-                    partition=StubInputPartition(payload=b"payload"),
-                )
-            ],
-            full_row_filter=request.row_filter,
-            backend_pushdown_row_filter=None,
-            residual_row_filter=request.row_filter,
-        )
-
-    def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
-        if not isinstance(partition, StubInputPartition):
-            raise TypeError("StubTableFormat requires a StubInputPartition")
-        return self.schema, iter(self.batches)
-
-
-@dataclass(frozen=True, kw_only=True)
-class TrackingTableFormat(TableFormat):
-    schema: pa.Schema
-    planned_columns: list[list[str]]
-
-    def get_schema(self) -> pa.Schema:
-        return self.schema
-
-    def plan(self, request: PlanRequest, max_tickets: int) -> Plan:
-        del max_tickets
-        self.planned_columns.append(list(request.columns))
-        return Plan(
-            schema=self.schema,
-            tasks=[
-                ScanTask(
-                    table_format=self,
-                    schema=self.schema,
-                    partition=StubInputPartition(payload=b"payload"),
-                )
-            ],
-            full_row_filter=request.row_filter,
-            backend_pushdown_row_filter=None,
-            residual_row_filter=request.row_filter,
-        )
-
-    def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
-        if not isinstance(partition, StubInputPartition):
-            raise TypeError("TrackingTableFormat requires a StubInputPartition")
-        return self.schema, iter(())
-
-
-@dataclass(frozen=True, kw_only=True)
-class PretendPushdownTableFormat(TableFormat):
-    schema: pa.Schema
-    batches: tuple[pa.RecordBatch, ...]
-    backend_pushdown_sql: str | None = None
-    residual_sql: str | None = None
-
-    def get_schema(self) -> pa.Schema:
-        return self.schema
-
-    def plan(self, request: PlanRequest, max_tickets: int) -> Plan:
-        del max_tickets
-        return Plan(
-            schema=self.schema,
-            tasks=[
-                ScanTask(
-                    table_format=self,
-                    schema=self.schema,
-                    partition=StubInputPartition(payload=b"payload"),
-                )
-            ],
-            full_row_filter=request.row_filter,
-            backend_pushdown_row_filter=None
-            if self.backend_pushdown_sql is None
-            else deserialize_row_filter(self.backend_pushdown_sql),
-            residual_row_filter=None
-            if self.residual_sql is None
-            else deserialize_row_filter(self.residual_sql),
-        )
-
-    def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
-        if not isinstance(partition, StubInputPartition):
-            raise TypeError("PretendPushdownTableFormat requires a StubInputPartition")
-        return self.schema, iter(self.batches)
-
-
-class FakeIdentity:
-    def __init__(self, principal: Principal | None) -> None:
-        self._principal = principal
-
-    def authenticate(self, request: AuthenticationRequest) -> Principal:
-        del request
-        if self._principal is None:
-            raise PermissionError("Unauthorized")
-        return self._principal
-
-
-class FakeAuthorizer:
-    def __init__(self, decision: AccessDecision | None, current_version: int | None = None) -> None:
-        self._decision = decision
-        self._current_version = current_version
-        self.last_requested_columns: list[str] | None = None
-        self.last_current_version_tenant_id: str | None = None
-
-    def authorize(self, principal, target, catalog, requested_columns):
-        self.last_requested_columns = list(requested_columns)
-        if self._decision is None:
-            raise PermissionError("Unauthorized")
-        return self._decision
-
-    def current_policy_version(self, target, catalog, *, tenant_id):
-        del target, catalog
-        self.last_current_version_tenant_id = tenant_id
-        return self._current_version
-
-
-class FakeCatalogRegistry:
-    def __init__(self, table_format: TableFormat) -> None:
-        self._table_format = table_format
-        self.last_tenant_id: str | None = None
-
-    def describe(self, catalog: str | None, target: str, *, tenant_id: str) -> TableFormat:
-        del catalog, target
-        self.last_tenant_id = tenant_id
-        return self._table_format
-
-
-class FakeMasking:
-    def apply(self, base_schema, columns, masks):
-        return None
-
-    def masked_schema(self, base_schema, columns, masks):
-        return base_schema
-
-
-class FakeTicketCodec:
-    def __init__(self, payload: TicketPayload | None = None) -> None:
-        self._payload = payload or TicketPayload(
-            catalog="catalog1",
-            target="users",
-            tenant_id="default",
-            columns=["id"],
-            scan=_scan_payload(),
-            policy_version=100,
-            principal_id="user1",
-            expires_at=9999999999,
-            nonce="abc",
-        )
-        self.signed_payloads: list[TicketPayload] = []
-
-    def sign_payload(self, payload: TicketPayload) -> str:
-        self.signed_payloads.append(payload)
-        return "signed-token"
-
-    def verify(self, token: str) -> TicketPayload:
-        del token
-        return self._payload
-
-
-class FakeRowTransform:
-    def apply_filters_and_masks_stream(self, batches, columns, row_filter, masks):
-        return batches
-
-
 def _build_end_to_end_access_flow(table_format: TableFormat, decision: AccessDecision):
     ticket_codec = HmacTicketCodecAdapter("secret")
     masking = DefaultMaskingAdapter()
@@ -277,13 +105,8 @@ def _build_end_to_end_access_flow(table_format: TableFormat, decision: AccessDec
 
 
 def _build_use_case_dependencies():
-    schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
-    batches = (
-        pa.record_batch(
-            [pa.array([1]), pa.array(["us"])],
-            schema=pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())]),
-        ),
-    )
+    schema = id_region_schema()
+    batches = (id_region_batch([1], ["us"]),)
     decision = AccessDecision(
         allowed_columns=["id", "region"],
         masks={"region": MaskRule(type="redact", value="***")},
@@ -298,15 +121,6 @@ def _build_use_case_dependencies():
         batches=batches,
     )
     return schema, decision, table_format
-
-
-def _encode_scan_task(table_format: TableFormat, schema: pa.Schema) -> str:
-    task = ScanTask(
-        table_format=table_format,
-        schema=schema,
-        partition=StubInputPartition(payload=b"payload"),
-    )
-    return base64.b64encode(pickle.dumps(task)).decode("utf-8")
 
 
 def test_plan_access_resolves_catalog_with_tenant_from_principal_attributes():
@@ -360,7 +174,7 @@ def test_fetch_stream_checks_policy_version_for_ticket_tenant():
         tenant_id="tenant-a",
         columns=["id"],
         scan={
-            "read_payload": _encode_scan_task(table_format, schema),
+            "read_payload": encode_scan_task(table_format, schema),
             "full_row_filter": None,
             "masks": {},
         },
@@ -395,7 +209,7 @@ def test_plan_access_auth_failure():
             catalog="catalog1",
             target="users",
             columns=["id", "region"],
-            scan=_scan_payload(),
+            scan=scan_payload(),
             policy_version=100,
             principal_id="user1",
             expires_at=9999999999,
@@ -427,7 +241,7 @@ def test_plan_access_authz_failure():
             catalog="catalog1",
             target="users",
             columns=["id", "region"],
-            scan=_scan_payload(),
+            scan=scan_payload(),
             policy_version=100,
             principal_id="user1",
             expires_at=9999999999,
@@ -460,7 +274,7 @@ def test_plan_access_expands_wildcard_columns():
             catalog="catalog1",
             target="users",
             columns=["id", "region"],
-            scan=_scan_payload(),
+            scan=scan_payload(),
             policy_version=100,
             principal_id="user1",
             expires_at=9999999999,
@@ -521,7 +335,7 @@ def test_plan_access_accepts_nested_requested_columns():
             catalog="catalog1",
             target="users",
             columns=["user.address.zip"],
-            scan=_scan_payload(),
+            scan=scan_payload(),
             policy_version=100,
             principal_id="user1",
             expires_at=9999999999,
@@ -580,7 +394,7 @@ def test_plan_access_rejects_unknown_requested_columns():
                 catalog="catalog1",
                 target="users",
                 columns=["id"],
-                scan=_scan_payload(),
+                scan=scan_payload(),
                 policy_version=100,
                 principal_id="user1",
                 expires_at=9999999999,
@@ -621,7 +435,7 @@ def test_plan_access_includes_hidden_row_filter_dependency_columns_in_execution_
             catalog="catalog1",
             target="users",
             columns=["id"],
-            scan=_scan_payload(),
+            scan=scan_payload(),
             policy_version=100,
             principal_id="user1",
             expires_at=9999999999,
@@ -678,7 +492,7 @@ def test_plan_access_rejects_requested_row_filter_for_masked_column():
                 catalog="catalog1",
                 target="users",
                 columns=["id"],
-                scan=_scan_payload(),
+                scan=scan_payload(),
                 policy_version=100,
                 principal_id="user1",
                 expires_at=9999999999,
@@ -734,7 +548,7 @@ def test_plan_access_rejects_requested_row_filter_for_non_visible_column():
                 catalog="catalog1",
                 target="users",
                 columns=["id"],
-                scan=_scan_payload(),
+                scan=scan_payload(),
                 policy_version=100,
                 principal_id="user1",
                 expires_at=9999999999,
@@ -787,7 +601,7 @@ def test_plan_access_allows_requested_row_filter_on_visible_unmasked_hidden_depe
                 catalog="catalog1",
                 target="users",
                 columns=["id"],
-                scan=_scan_payload(),
+                scan=scan_payload(),
                 policy_version=100,
                 principal_id="user1",
                 expires_at=9999999999,
@@ -833,7 +647,7 @@ def test_plan_access_combines_policy_and_requested_row_filters_before_ticketing(
             catalog="catalog1",
             target="users",
             columns=["id"],
-            scan=_scan_payload(),
+            scan=scan_payload(),
             policy_version=100,
             principal_id="user1",
             expires_at=9999999999,
@@ -1005,7 +819,7 @@ def test_plan_access_revalidates_requested_row_filter_against_base_schema():
                 catalog="catalog1",
                 target="users",
                 columns=["id"],
-                scan=_scan_payload(),
+                scan=scan_payload(),
                 policy_version=100,
                 principal_id="user1",
                 expires_at=9999999999,
@@ -1060,7 +874,7 @@ def test_plan_access_excludes_denied_requested_columns_from_execution_plan():
                 catalog="catalog1",
                 target="users",
                 columns=["id"],
-                scan=_scan_payload(),
+                scan=scan_payload(),
                 policy_version=100,
                 principal_id="user1",
                 expires_at=9999999999,
@@ -1087,7 +901,7 @@ def test_fetch_stream_policy_version_mismatch():
         target="users",
         columns=["id", "region"],
         scan={
-            "read_payload": _encode_scan_task(table_format, schema),
+            "read_payload": encode_scan_task(table_format, schema),
             "full_row_filter": None,
             "masks": {},
         },
@@ -1115,7 +929,7 @@ def test_fetch_stream_principal_mismatch():
         target="users",
         columns=["id", "region"],
         scan={
-            "read_payload": _encode_scan_task(table_format, schema),
+            "read_payload": encode_scan_task(table_format, schema),
             "full_row_filter": None,
             "masks": {},
         },
@@ -1149,7 +963,7 @@ def test_fetch_stream_rejects_invalid_scan_payloads():
         ),
         (
             {
-                "read_payload": _encode_scan_task(table_format, schema),
+                "read_payload": encode_scan_task(table_format, schema),
                 "full_row_filter": None,
                 "masks": {"region": "not-an-object"},
             },
@@ -1157,7 +971,7 @@ def test_fetch_stream_rejects_invalid_scan_payloads():
         ),
         (
             {
-                "read_payload": _encode_scan_task(table_format, schema),
+                "read_payload": encode_scan_task(table_format, schema),
                 "full_row_filter": None,
                 "masks": {"region": {"value": "***"}},
             },
@@ -1165,7 +979,7 @@ def test_fetch_stream_rejects_invalid_scan_payloads():
         ),
         (
             {
-                "read_payload": _encode_scan_task(table_format, schema),
+                "read_payload": encode_scan_task(table_format, schema),
                 "full_row_filter": {"type": "comparison", "field": "region"},
                 "masks": {},
             },

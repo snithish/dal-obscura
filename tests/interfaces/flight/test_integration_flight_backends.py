@@ -21,28 +21,11 @@ from tests.support.flight import (
     running_flight_client,
 )
 from tests.support.iceberg import create_iceberg_table, iceberg_sql_catalog_options
+from tests.support.policy import allow_rule
 
 ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )
-
-
-def _allow_rule(
-    columns: list[str],
-    *,
-    masks: dict[str, object] | None = None,
-    row_filter: str | None = None,
-) -> dict[str, object]:
-    rule: dict[str, object] = {
-        "principals": ["user1"],
-        "columns": columns,
-        "effect": "allow",
-    }
-    if masks:
-        rule["masks"] = masks
-    if row_filter:
-        rule["row_filter"] = row_filter
-    return rule
 
 
 def _build_registry(
@@ -171,13 +154,13 @@ def test_flight_plan_and_get_with_iceberg_multi_catalog(tmp_path):
         catalog_registry=catalog_registry,
         policy_rules_by_dataset={
             ("ice_one", table_id_one): [
-                _allow_rule(
+                allow_rule(
                     ["id", "email", "region"],
                     masks={"id": {"type": "hash"}},
                     row_filter="region = 'us'",
                 )
             ],
-            ("ice_two", table_id_two): [_allow_rule(["id", "email", "region"])],
+            ("ice_two", table_id_two): [allow_rule(["id", "email", "region"])],
         },
         max_tickets=4,
     )
@@ -258,9 +241,9 @@ def test_flight_plan_and_get_with_static_catalog_alias(tmp_path):
     server = build_flight_service(
         catalog_registry=catalog_registry,
         policy_rules_by_dataset={
-            ("shared", table_id): [_allow_rule(["id", "email", "region"])],
+            ("shared", table_id): [allow_rule(["id", "email", "region"])],
             ("shared", "users_alias"): [
-                _allow_rule(
+                allow_rule(
                     ["id", "email", "region"],
                     masks={"id": {"type": "hash"}},
                     row_filter="region = 'us'",
@@ -415,9 +398,9 @@ def test_flight_plan_and_get_with_multiple_static_alias_targets(tmp_path):
         catalog_registry=catalog_registry,
         policy_rules_by_dataset={
             ("shared", "users_alias"): [
-                _allow_rule(["id", "email", "region"], row_filter="region = 'us'")
+                allow_rule(["id", "email", "region"], row_filter="region = 'us'")
             ],
-            ("shared", "events_alias"): [_allow_rule(["id", "email", "region"])],
+            ("shared", "events_alias"): [allow_rule(["id", "email", "region"])],
         },
     )
     with running_flight_client(server) as client:
