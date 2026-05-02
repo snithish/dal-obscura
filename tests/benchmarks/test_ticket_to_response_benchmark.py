@@ -42,6 +42,7 @@ from tests.support.flight import (
     flight_call_options,
     running_flight_client,
 )
+from tests.support.policy import allow_rule
 
 JWT_SECRET = "benchmark-jwt-secret-32-characters"
 LARGE_BENCHMARK_TOTAL_ROWS = 25_000_000
@@ -53,6 +54,30 @@ LARGE_BENCHMARK_MAX_TICKETS = 4
 # accidental full-result materialization to slip through.
 LARGE_BENCHMARK_RSS_LIMIT_BYTES = 1_900_000_000
 PC = cast(Any, pc)
+COMPLEX_BENCHMARK_COLUMNS = [
+    "id",
+    "region",
+    "active",
+    "score",
+    "created_at",
+    "birth_date",
+    "account_number",
+    "nickname",
+    "notes",
+    "status",
+    "user",
+    "account",
+    "tags",
+]
+COMPLEX_BENCHMARK_MASKS = {
+    "id": {"type": "hash"},
+    "account_number": {"type": "keep_last", "value": 4},
+    "nickname": {"type": "null"},
+    "notes": {"type": "redact", "value": "[redacted-note]"},
+    "status": {"type": "default", "value": "benchmark-default"},
+    "user.email": {"type": "email"},
+    "user.address.zip": {"type": "hash"},
+}
 
 
 def _benchmark_complex_schema() -> pa.Schema:
@@ -340,35 +365,12 @@ def _run_iceberg_stream_scenario(
         batch_count=batch_count,
         rows_per_batch=rows_per_file,
     )
-    policy_rules: list[dict[str, object]] = [
-        {
-            "principals": ["group:analyst"],
-            "columns": [
-                "id",
-                "region",
-                "active",
-                "score",
-                "created_at",
-                "birth_date",
-                "account_number",
-                "nickname",
-                "notes",
-                "status",
-                "user",
-                "account",
-                "tags",
-            ],
-            "masks": {
-                "id": {"type": "hash"},
-                "account_number": {"type": "keep_last", "value": 4},
-                "nickname": {"type": "null"},
-                "notes": {"type": "redact", "value": "[redacted-note]"},
-                "status": {"type": "default", "value": "benchmark-default"},
-                "user.email": {"type": "email"},
-                "user.address.zip": {"type": "hash"},
-            },
-            "effect": "allow",
-        }
+    policy_rules = [
+        allow_rule(
+            COMPLEX_BENCHMARK_COLUMNS,
+            principals=["group:analyst"],
+            masks=cast(dict[str, object], COMPLEX_BENCHMARK_MASKS),
+        )
     ]
 
     loaded_catalog = load_catalog(
@@ -404,21 +406,7 @@ def _run_iceberg_stream_scenario(
             {
                 "catalog": catalog_name,
                 "target": identifier,
-                "columns": [
-                    "id",
-                    "region",
-                    "active",
-                    "score",
-                    "created_at",
-                    "birth_date",
-                    "account_number",
-                    "nickname",
-                    "notes",
-                    "status",
-                    "user",
-                    "account",
-                    "tags",
-                ],
+                "columns": COMPLEX_BENCHMARK_COLUMNS,
             }
         )
         info = client.get_flight_info(descriptor, options=options)
@@ -504,25 +492,22 @@ def test_benchmark_ticket_to_response_complex_schema(tmp_path, benchmark):
         schema=batches[0].schema,
         batches=batches,
     )
-    policy_rules: list[dict[str, object]] = [
-        {
-            "principals": ["group:analyst"],
-            "columns": ["id", "user", "account"],
-            "masks": {
+    policy_rules = [
+        allow_rule(
+            ["id", "user", "account"],
+            principals=["group:analyst"],
+            masks={
                 "id": {"type": "hash"},
                 "user.email": {"type": "redact", "value": "[hidden]"},
                 "user.address.zip": {"type": "hash"},
             },
-            "row_filter": "region = 'us'",
-            "effect": "allow",
-        },
-        {
-            "principals": ["user1"],
-            "columns": ["id", "user", "account"],
-            "masks": {"account.status": {"type": "default", "value": "standard"}},
-            "row_filter": "active = true",
-            "effect": "allow",
-        },
+            row_filter="region = 'us'",
+        ),
+        allow_rule(
+            ["id", "user", "account"],
+            masks={"account.status": {"type": "default", "value": "standard"}},
+            row_filter="active = true",
+        ),
     ]
 
     expected_rows = sum(

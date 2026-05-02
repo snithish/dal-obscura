@@ -1,40 +1,29 @@
-import pyarrow as pa
-
 from dal_obscura.connectors.python_sdk import DalObscuraClient, DuckDBDalObscuraReader
+from tests.support.arrow import id_email_region_batch, id_email_region_schema
 from tests.support.flight import (
     StubTableFormat,
     build_flight_service,
     make_jwt,
     running_flight_client,
 )
+from tests.support.policy import allow_rule
 
 
 def _policy_rules() -> list[dict[str, object]]:
     return [
-        {
-            "principals": ["user1"],
-            "columns": ["id", "email", "region"],
-            "masks": {"email": {"type": "redact", "value": "[hidden]"}},
-            "effect": "allow",
-        }
+        allow_rule(
+            ["id", "email", "region"],
+            masks={"email": {"type": "redact", "value": "[hidden]"}},
+        )
     ]
 
 
 def test_python_sdk_reads_authorized_arrow_table():
-    schema = pa.schema(
-        [
-            pa.field("id", pa.int64()),
-            pa.field("email", pa.string()),
-            pa.field("region", pa.string()),
-        ]
-    )
-    batch = pa.record_batch(
-        [
-            pa.array([1, 2, 3], type=pa.int64()),
-            pa.array(["a@example.com", "b@example.com", "c@example.com"], type=pa.string()),
-            pa.array(["us", "eu", "us"], type=pa.string()),
-        ],
-        schema=schema,
+    schema = id_email_region_schema()
+    batch = id_email_region_batch(
+        [1, 2, 3],
+        ["a@example.com", "b@example.com", "c@example.com"],
+        ["us", "eu", "us"],
     )
     table_format = StubTableFormat(
         catalog_name="analytics",
@@ -64,13 +53,11 @@ def test_python_sdk_reads_authorized_arrow_table():
 
 
 def test_duckdb_reader_exposes_sdk_results_as_relation():
-    schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
-    batch = pa.record_batch(
-        [
-            pa.array([1, 2, 3], type=pa.int64()),
-            pa.array(["us", "eu", "us"], type=pa.string()),
-        ],
-        schema=schema,
+    schema = id_email_region_schema()
+    batch = id_email_region_batch(
+        [1, 2, 3],
+        ["a@example.com", "b@example.com", "c@example.com"],
+        ["us", "eu", "us"],
     )
     table_format = StubTableFormat(
         catalog_name="analytics",

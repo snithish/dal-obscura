@@ -14,6 +14,31 @@ def id_region_batch(ids: list[int], regions: list[str]) -> pa.RecordBatch:
     )
 
 
+def id_email_region_schema() -> pa.Schema:
+    return pa.schema(
+        [
+            pa.field("id", pa.int64()),
+            pa.field("email", pa.string()),
+            pa.field("region", pa.string()),
+        ]
+    )
+
+
+def id_email_region_batch(
+    ids: list[int],
+    emails: list[str],
+    regions: list[str],
+) -> pa.RecordBatch:
+    return pa.record_batch(
+        [
+            pa.array(ids, type=pa.int64()),
+            pa.array(emails, type=pa.string()),
+            pa.array(regions, type=pa.string()),
+        ],
+        schema=id_email_region_schema(),
+    )
+
+
 def nested_user_schema() -> pa.Schema:
     return pa.schema(
         [

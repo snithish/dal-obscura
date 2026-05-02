@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Any, cast
 
 import pyarrow as pa
 import pyarrow.flight as flight
@@ -7,7 +6,6 @@ import pytest
 
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     CatalogConfig,
-    CatalogTargetConfig,
     DynamicCatalogRegistry,
     ServiceConfig,
 )
@@ -20,12 +18,9 @@ from tests.support.flight import (
     read_table,
     running_flight_client,
 )
-from tests.support.iceberg import create_iceberg_table, iceberg_sql_catalog_options
+from tests.support.iceberg import create_iceberg_table
+from tests.support.iceberg_flight import ICEBERG_CATALOG_MODULE, service_config_from_raw
 from tests.support.policy import allow_rule
-
-ICEBERG_CATALOG_MODULE = (
-    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
-)
 
 
 def _build_registry(
@@ -45,50 +40,7 @@ def build_service_config(
     policy: dict[str, object],
 ) -> tuple[ServiceConfig, None]:
     del tmp_path, policy
-    catalogs_raw = service_config.get("catalogs", {})
-    if not isinstance(catalogs_raw, dict):
-        raise TypeError("catalogs must be an object")
-    catalogs: dict[str, CatalogConfig] = {}
-    for name, raw in catalogs_raw.items():
-        if not isinstance(name, str) or not isinstance(raw, dict):
-            continue
-        raw_config = cast(dict[str, Any], raw)
-        options = raw_config.get("options", {})
-        targets_raw = raw_config.get("targets", {})
-        targets: dict[str, CatalogTargetConfig] = {}
-        if isinstance(targets_raw, dict):
-            for target_name, target_raw in targets_raw.items():
-                if isinstance(target_name, str) and isinstance(target_raw, dict):
-                    targets[target_name] = CatalogTargetConfig(
-                        backend=None
-                        if target_raw.get("backend") is None
-                        else str(target_raw.get("backend")),
-                        table=None
-                        if target_raw.get("table") is None
-                        else str(target_raw.get("table")),
-                    )
-        catalogs[name] = CatalogConfig(
-            name=name,
-            module=str(raw_config["module"]),
-            options=dict(options) if isinstance(options, dict) else {},
-            targets=targets,
-        )
-    return ServiceConfig(catalogs=catalogs, paths=()), None
-
-
-def _iceberg_catalog(
-    tmp_path: Path,
-    name: str,
-    warehouse_name: str,
-    *,
-    targets: dict[str, CatalogTargetConfig] | None = None,
-) -> CatalogConfig:
-    return CatalogConfig(
-        name=name,
-        module=ICEBERG_CATALOG_MODULE,
-        options=iceberg_sql_catalog_options(tmp_path, name, warehouse_name),
-        targets=targets or {},
-    )
+    return service_config_from_raw(service_config), None
 
 
 def test_flight_plan_and_get_with_iceberg_multi_catalog(tmp_path):
