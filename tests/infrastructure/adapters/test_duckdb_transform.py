@@ -6,6 +6,7 @@ from collections.abc import Generator
 from typing import cast
 
 import pyarrow as pa
+import pytest
 
 import dal_obscura.data_plane.infrastructure.adapters.duckdb_transform as duckdb_transform
 from dal_obscura.common.access_control.filters import parse_row_filter
@@ -600,6 +601,7 @@ def test_duckdb_transform_applies_list_of_struct_mask():
     assert [item["theme"] for item in preferences] == ["[hidden]", "[hidden]"]
 
 
+@pytest.mark.heavy
 def test_duckdb_transform_memory_is_bounded_in_subprocess():
     script = textwrap.dedent(
         """

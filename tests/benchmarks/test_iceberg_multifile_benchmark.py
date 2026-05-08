@@ -11,6 +11,8 @@ from dal_obscura.data_plane.infrastructure.table_formats.iceberg import (
     IcebergTableFormat,
 )
 
+pytestmark = pytest.mark.heavy
+
 
 @dataclass(frozen=True, kw_only=True)
 class _FakeProjectedSchema:

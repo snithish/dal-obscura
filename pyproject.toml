@@ -43,6 +43,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 addopts = "-q --benchmark-skip"
+markers = [
+  "heavy: tests that are intentionally excluded from the default pre-commit pytest hook",
+]
 
 [tool.uv]
 dev-dependencies = [

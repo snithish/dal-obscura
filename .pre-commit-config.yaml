@@ -19,8 +19,8 @@ repos:
       language: system
       pass_filenames: false
     - id: pytest
-      name: Pytest subset
+      name: Pytest non-heavy
       entry: uv run pytest
       language: system
       pass_filenames: false
-      args: ["--maxfail=1", "--disable-warnings"]
+      args: ["-m", "not heavy", "--maxfail=1", "--disable-warnings"]

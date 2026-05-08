@@ -44,6 +44,8 @@ from tests.support.flight import (
 )
 from tests.support.policy import allow_rule
 
+pytestmark = pytest.mark.heavy
+
 JWT_SECRET = "benchmark-jwt-secret-32-characters"
 LARGE_BENCHMARK_TOTAL_ROWS = 25_000_000
 LARGE_BENCHMARK_ROWS_PER_FILE = 5_000_000
