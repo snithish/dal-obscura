@@ -22,6 +22,8 @@ from tests.support.iceberg import create_iceberg_table
 from tests.support.iceberg_flight import ICEBERG_CATALOG_MODULE, service_config_from_raw
 from tests.support.policy import allow_rule
 
+pytestmark = pytest.mark.heavy
+
 
 def _build_registry(
     catalogs: dict[str, CatalogConfig],

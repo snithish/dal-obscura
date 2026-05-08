@@ -13,6 +13,8 @@ from tests.support.benchmark_data import (
     scalar_masking_batches,
 )
 
+pytestmark = pytest.mark.heavy
+
 
 @pytest.mark.benchmark(group="row-filter-mask")
 def test_benchmark_row_filter_only(benchmark):

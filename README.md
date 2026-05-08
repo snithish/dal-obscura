@@ -256,7 +256,7 @@ uv run pytest tests/domain/access_control/test_row_filters.py tests/interfaces/f
 
 ## Pre-commit hooks
 
-After `uv sync --dev`, install the hooks with `uv run pre-commit install`. The configured hooks run `uv run ruff format` and `uv run ruff check` (each passed the staged python files), plus `uv run ty check` and `uv run pytest --maxfail=1 --disable-warnings` on every commit to guard formatting, linting, typing, and a quick smoke test. Re-run them manually with `uv run pre-commit run --all-files` if needed.
+After `uv sync --dev`, install the hooks with `uv run pre-commit install`. The configured hooks run `uv run ruff format` and `uv run ruff check` (each passed the staged python files), plus `uv run ty check` and `uv run pytest -m "not heavy" --maxfail=1 --disable-warnings` on every commit to guard formatting, linting, typing, and non-heavy tests. Heavy suites are marked with `@pytest.mark.heavy` and remain available through explicit `uv run pytest` or benchmark commands. Re-run the hooks manually with `uv run pre-commit run --all-files` if needed.
 
 ## Notes
 - Mask expressions are executed in DuckDB SQL.

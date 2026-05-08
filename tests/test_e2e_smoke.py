@@ -25,6 +25,8 @@ from dal_obscura.common.config_store.db import create_engine_from_url, session_f
 from dal_obscura.common.config_store.orm import Base
 from dal_obscura.control_plane.application.provisioning import ProvisioningService
 
+pytestmark = pytest.mark.heavy
+
 
 def get_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
