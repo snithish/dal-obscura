@@ -1,5 +1,6 @@
 name: dal-obscura-auth-mtls
 services:
+  # Generates local demo certificates before the shared runtime fixture is published.
   setup:
     extends:
       file: ../compose.common.yaml
@@ -10,35 +11,18 @@ services:
       - .:/workspace/example:ro
     command:
       - sh
-      - -c
-      - |
-        set -e
-        rm -f /workspace/runtime/setup.done
-        /workspace/.venv/bin/python /workspace/example/scripts/generate_certs.py
-        /workspace/.venv/bin/python examples/auth/_shared/scripts/build_runtime.py
-        touch /workspace/runtime/setup.done
-        tail -f /dev/null
+      - examples/auth/_shared/scripts/setup_runtime.sh
+      - /workspace/example/scripts/generate_certs.py
   dal-obscura:
     extends:
       file: ../compose.common.yaml
       service: dal-obscura
     environment:
       DAL_OBSCURA_TICKET_SECRET: ticket-secret-32-characters-long
-    entrypoint: []
-    command:
-      - sh
-      - -c
-      - |
-        set -e
-        . /workspace/runtime/data-plane.env
-        export SERVER_CERT="$$(cat /workspace/runtime/certs/server.crt)"
-        export SERVER_KEY="$$(cat /workspace/runtime/certs/server.key)"
-        export CLIENT_CA="$$(cat /workspace/runtime/certs/ca.crt)"
-        export DAL_OBSCURA_TLS_CERT="$$SERVER_CERT"
-        export DAL_OBSCURA_TLS_KEY="$$SERVER_KEY"
-        export DAL_OBSCURA_TLS_CLIENT_CA="$$CLIENT_CA"
-        export DAL_OBSCURA_TLS_VERIFY_CLIENT=true
-        /workspace/.venv/bin/dal-obscura
+      DAL_OBSCURA_TLS_CERT_FILE: /workspace/runtime/certs/server.crt
+      DAL_OBSCURA_TLS_KEY_FILE: /workspace/runtime/certs/server.key
+      DAL_OBSCURA_TLS_CLIENT_CA_FILE: /workspace/runtime/certs/ca.crt
+      DAL_OBSCURA_TLS_VERIFY_CLIENT: "true"
   client:
     extends:
       file: ../compose.common.yaml

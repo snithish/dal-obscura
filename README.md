@@ -213,7 +213,8 @@ authentication approach:
 
 Each example is self-contained, starts the real auth backend for that flow, and
 leaves a client container running so you can issue more reads with
-`docker compose exec`. See
+`docker compose exec`. You can run examples from their own directories, or use
+`examples/auth/run <example> up|logs|read|down` from the repository root. See
 [examples/auth/README.md](examples/auth/README.md)
 for the shared run pattern and per-provider caveats.
 

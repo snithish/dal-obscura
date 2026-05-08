@@ -466,6 +466,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+examples = [
+    { name = "httpx" },
+]
 server = [
     { name = "grpcio" },
 ]
@@ -495,6 +498,7 @@ requires-dist = [
     { name = "duckdb", specifier = ">=1.0.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "grpcio", marker = "extra == 'server'", specifier = ">=1.62.0" },
+    { name = "httpx", marker = "extra == 'examples'", specifier = ">=0.27.0" },
     { name = "httpx", marker = "extra == 'test'", specifier = ">=0.27.0" },
     { name = "psutil", specifier = ">=5.9.0" },
     { name = "pyarrow", specifier = ">=15.0.0" },
@@ -508,7 +512,7 @@ requires-dist = [
     { name = "sqlglot", specifier = ">=30.2.1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32.0" },
 ]
-provides-extras = ["server", "test"]
+provides-extras = ["examples", "server", "test"]
 
 [package.metadata.requires-dev]
 dev = [

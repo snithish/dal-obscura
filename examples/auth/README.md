@@ -1,53 +1,76 @@
 # Authentication Examples
 
 These examples run `dal-obscura` with real authentication mechanisms inside
-Docker Compose. Each directory has its own `compose.yaml`, builds the reusable
-root server image, and can run without any external identity service,
-certificate authority, gateway, or data service.
+Docker Compose. They are teaching fixtures first: each directory keeps the
+auth-specific wiring visible, while shared setup/client mechanics live in
+`_shared/` and `compose.common.yaml`.
 
-## Examples
+## Choose an Example
 
-- `shared-jwt`: shared-secret HS256 bearer JWT.
-- `keycloak-oidc`: real Keycloak OIDC issuer and JWKS validation.
-- `api-key`: static service API key.
-- `mtls`: local certificate-authority mTLS.
-- `mtls-spiffe`: real SPIRE server and agent issuing SPIFFE X.509-SVIDs.
-- `trusted-headers`: real Flight gateway injecting trusted identity headers.
-- `composite-provider`: one server accepting API key and shared JWT credentials.
+| Example | Start here when you want to see |
+| --- | --- |
+| `api-key` | the smallest service credential flow |
+| `shared-jwt` | HS256 bearer JWT validation with a shared secret |
+| `keycloak-oidc` | OIDC/JWKS validation against a real Keycloak issuer |
+| `trusted-headers` | a trusted Flight gateway injecting identity headers |
+| `mtls` | local client-certificate authentication |
+| `mtls-spiffe` | SPIRE-issued SPIFFE X.509-SVID authentication |
+| `composite-provider` | one server accepting multiple credential families |
 
-## Run Pattern
+For a first read-through, start with `api-key` or `shared-jwt`. The mTLS and
+SPIFFE examples include more infrastructure because they demonstrate certificate
+issuance, trust roots, and workload identities.
 
-Run from an example directory:
+## Run From an Example Directory
+
+Every example can still be run from its own directory:
 
 ```bash
+cd examples/auth/shared-jwt
 docker compose up --build -d --wait
 docker compose logs client
 docker compose exec client dal-obscura-example-read --target default.users
-```
-
-Clean up from that directory:
-
-```bash
 docker compose down --volumes
 ```
 
 The startup read happens automatically inside the `client` container. That
 container stays running so you can issue more reads with `docker compose exec`
-instead of restarting the whole stack.
+instead of restarting the stack.
 
-## What Each Example Does
+## Optional Root Helper
 
-Every example starts from the same shape:
+From the repository root, `examples/auth/run` wraps the same Docker Compose
+commands without changing into each directory:
 
-1. `setup` creates a SQLite-backed Iceberg catalog, provisions the FastAPI
-   control-plane API into `control-plane.db`, publishes the config snapshot, and
-   writes data-plane environment settings into the named Docker volume.
-2. `dal-obscura` starts the real Flight service from the published database
-   state.
-3. Optional infrastructure services start when the mechanism needs them, such as
-   Keycloak, SPIRE, or a trusted Flight gateway.
-4. `client` obtains or presents the selected credential, performs a startup read,
-   marks itself healthy, and then stays available for interactive reads.
+```bash
+examples/auth/run list
+examples/auth/run shared-jwt up
+examples/auth/run shared-jwt logs
+examples/auth/run shared-jwt read --target default.users
+examples/auth/run shared-jwt down
+```
+
+The helper prints the Docker Compose command it runs, so users can copy the
+plain command once they understand the pattern.
+
+## Common Shape
+
+Most examples have the same three service roles:
+
+1. `setup` creates a SQLite-backed Iceberg catalog, provisions the control-plane
+   API into `control-plane.db`, publishes the config snapshot, and writes
+   data-plane environment settings into a Docker volume.
+2. `dal-obscura` starts the real Flight service from that published state.
+3. `client` obtains or presents the selected credential, performs a startup
+   read, marks itself healthy, and then stays available for interactive reads.
+
+Some examples add provider infrastructure:
+
+- `keycloak-oidc` adds `keycloak`.
+- `trusted-headers` adds `gateway`.
+- `mtls` generates local demo certificates during setup.
+- `mtls-spiffe` includes `compose.spire.yaml`, which contains the SPIRE server,
+  agent, bootstrap, and SVID helper services.
 
 The sample policy grants `example-user` access to `default.users`, with a row
 filter that returns two rows. A successful run prints:

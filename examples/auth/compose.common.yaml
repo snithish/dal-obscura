@@ -1,4 +1,5 @@
 services:
+  # Builds the disposable catalog and publishes the example control-plane state.
   setup:
     build:
       context: ../..
@@ -7,38 +8,28 @@ services:
       EXAMPLE_ROOT: /workspace/example
     volumes:
       - runtime:/workspace/runtime
-    command:
-      - sh
-      - -c
-      - |
-        set -e
-        rm -f /workspace/runtime/setup.done
-        /workspace/.venv/bin/python examples/auth/_shared/scripts/build_runtime.py
-        touch /workspace/runtime/setup.done
-        tail -f /dev/null
+    command: ["sh", "examples/auth/_shared/scripts/setup_runtime.sh"]
     healthcheck:
       test: ["CMD", "test", "-f", "/workspace/runtime/setup.done"]
       interval: 1s
       timeout: 3s
       retries: 60
 
+  # Runs the real Flight data plane from the published runtime volume.
   dal-obscura:
     build:
       context: ../..
       dockerfile: Dockerfile
+    entrypoint: []
     depends_on:
       setup:
         condition: service_healthy
     volumes:
       - runtime:/workspace/runtime
-    command:
-      - sh
-      - -c
-      - |
-        set -e
-        . /workspace/runtime/data-plane.env
-        /workspace/.venv/bin/dal-obscura
+      - ./_shared/scripts:/workspace/examples/auth/_shared/scripts:ro
+    command: ["sh", "examples/auth/_shared/scripts/start_data_plane.sh"]
 
+  # Keeps a ready client container available for interactive example reads.
   client:
     build:
       context: ../..
@@ -48,13 +39,7 @@ services:
         condition: service_started
     volumes:
       - runtime:/workspace/runtime
-    command:
-      - sh
-      - -c
-      - |
-        set -e
-        . /workspace/runtime/data-plane.env
-        /workspace/.venv/bin/python examples/auth/_shared/scripts/client_session.py
+    command: ["sh", "examples/auth/_shared/scripts/run_client_session.sh"]
     healthcheck:
       test: ["CMD", "test", "-f", "/workspace/runtime/client.ready"]
       interval: 1s

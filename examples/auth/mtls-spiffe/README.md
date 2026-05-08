@@ -6,6 +6,9 @@ URI to `example-user`.
 
 ## Services
 
+The main `compose.yaml` keeps the dal-obscura runtime visible and includes
+`compose.spire.yaml` for the SPIRE-only infrastructure services.
+
 - `spire-server`: real SPIRE server with a local self-signed authority.
 - `spire-bootstrap`: generates a join token and registers workload entries.
 - `spire-agent`: real SPIRE agent exposing the Workload API.

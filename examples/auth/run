@@ -1,0 +1,84 @@
+#!/usr/bin/env sh
+set -eu
+
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  examples/auth/run list
+  examples/auth/run <example> config [compose-args...]
+  examples/auth/run <example> up [compose-args...]
+  examples/auth/run <example> logs [compose-args...]
+  examples/auth/run <example> read [read-args...]
+  examples/auth/run <example> down [compose-args...]
+
+Examples:
+  examples/auth/run shared-jwt up
+  examples/auth/run shared-jwt logs
+  examples/auth/run shared-jwt read --target default.users
+  examples/auth/run shared-jwt down
+EOF
+}
+
+list_examples() {
+  find "$ROOT" -mindepth 2 -maxdepth 2 -name compose.yaml -print \
+    | sed "s#^$ROOT/##; s#/compose.yaml##" \
+    | sort
+}
+
+if [ "$#" -eq 0 ]; then
+  usage >&2
+  exit 2
+fi
+
+if [ "$1" = "list" ]; then
+  list_examples
+  exit 0
+fi
+
+EXAMPLE="$1"
+shift
+ACTION="${1:-up}"
+if [ "$#" -gt 0 ]; then
+  shift
+fi
+
+EXAMPLE_DIR="$ROOT/$EXAMPLE"
+if [ ! -f "$EXAMPLE_DIR/compose.yaml" ]; then
+  echo "Unknown auth example: $EXAMPLE" >&2
+  echo "Available examples:" >&2
+  list_examples >&2
+  exit 2
+fi
+
+case "$ACTION" in
+  config)
+    set -- config "$@"
+    ;;
+  up)
+    set -- up --build -d --wait "$@"
+    ;;
+  logs)
+    set -- logs client "$@"
+    ;;
+  read)
+    set -- exec client dal-obscura-example-read "$@"
+    ;;
+  down)
+    set -- down --volumes "$@"
+    ;;
+  *)
+    echo "Unknown action: $ACTION" >&2
+    usage >&2
+    exit 2
+    ;;
+esac
+
+cd "$EXAMPLE_DIR"
+printf '+ docker compose'
+for arg in "$@"; do
+  printf ' %s' "$arg"
+done
+printf '\n'
+exec docker compose "$@"
