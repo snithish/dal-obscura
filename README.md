@@ -85,13 +85,15 @@ one-off container tasks.
 CI publishes production images to GitHub Container Registry:
 
 ```bash
+docker pull ghcr.io/<owner>/<repo>:sha-<commit>
 docker pull ghcr.io/<owner>/<repo>:latest
 docker pull ghcr.io/<owner>/<repo>:v1.2.3
 ```
 
-Pushes to `main` publish `latest` and a `sha-<commit>` tag. Pushed Git tags
-matching `v*` or numeric release tags publish matching image tags; semver tags
-such as `v1.2.3` also publish `1.2.3`, `1.2`, and `1`.
+Pushes to `main` publish only a `sha-<commit>` image tag. Pushed Git tags
+matching `v*` or numeric release tags publish the exact tag plus `latest`;
+semver tags such as `v1.2.3` also publish `1.2.3`, `1.2`, and `1`. Published
+images are multi-arch manifests for `linux/amd64` and `linux/arm64`.
 
 The runnable auth examples under
 [examples/auth](examples/auth/README.md)
