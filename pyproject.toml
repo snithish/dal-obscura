@@ -47,8 +47,8 @@ markers = [
   "heavy: tests that are intentionally excluded from the default pre-commit pytest hook",
 ]
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
   "pre-commit>=3.4.0",
   "pytest>=8.0.0",
   "pytest-benchmark>=4.0.0",
