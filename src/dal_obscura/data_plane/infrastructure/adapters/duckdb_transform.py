@@ -89,7 +89,7 @@ def _stream_query_results(
     """Executes the generated SQL over the incoming Arrow reader."""
     # DuckDB 1.5.0 removes the Python-side per-batch loop here, but the input side
     # does not appear observably lazy enough to assert callback-order streaming.
-    con = duckdb.connect(config=_DUCKDB_TRANSFORM_CONFIG.copy())
+    con = _connect()
     try:
         result_reader = (
             con.from_arrow(reader)
@@ -99,6 +99,12 @@ def _stream_query_results(
         yield from result_reader
     finally:
         con.close()
+
+
+def _connect() -> duckdb.DuckDBPyConnection:
+    con = duckdb.connect(config=_DUCKDB_TRANSFORM_CONFIG.copy())
+    con.execute("SET enable_progress_bar = false")
+    return con
 
 
 def _build_query(
@@ -339,7 +345,7 @@ def _default_mask_type(value: object) -> pa.DataType:
 
 @lru_cache(maxsize=128)
 def _duckdb_literal_arrow_type(literal: str) -> pa.DataType:
-    con = duckdb.connect()
+    con = _connect()
     try:
         return con.sql(f"SELECT {literal} AS value").arrow().read_all().schema.field("value").type
     finally:

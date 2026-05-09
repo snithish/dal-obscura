@@ -17,6 +17,26 @@ from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
 )
 
 
+def test_parse_json_payload_from_subprocess_output_ignores_leading_noise():
+    output = '\n100% ████████████ (00:00:02.94 elapsed)\n{"rows": 12}\n'
+
+    assert _parse_json_payload_from_subprocess_output(output) == {"rows": 12}
+
+
+def test_duckdb_transform_connection_disables_progress_bar(monkeypatch: pytest.MonkeyPatch):
+    executed: list[str] = []
+
+    class FakeConnection:
+        def execute(self, query: str) -> None:
+            executed.append(query)
+
+    monkeypatch.setattr(duckdb_transform.duckdb, "connect", lambda **_: FakeConnection())
+
+    duckdb_transform._connect()
+
+    assert executed == ["SET enable_progress_bar = false"]
+
+
 def test_mask_select_list_basic():
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("name", pa.string())])
     selection = DefaultMaskingAdapter().apply(
@@ -320,6 +340,9 @@ def test_duckdb_transform_uses_single_arrow_stream_query(monkeypatch):
             self.unregister_calls = 0
             self.closed = 0
 
+        def execute(self, query: str) -> None:
+            del query
+
         def from_arrow(self, reader: pa.RecordBatchReader):
             self.from_arrow_calls.append(reader)
             return self.relation
@@ -376,6 +399,9 @@ def test_duckdb_transform_disables_external_access(monkeypatch):
             return iter([result_batch])
 
     class FakeConnection:
+        def execute(self, query: str) -> None:
+            del query
+
         def from_arrow(self, reader: pa.RecordBatchReader):
             del reader
             return FakeRelation()
@@ -426,6 +452,9 @@ def test_duckdb_transform_closes_connection_when_consumer_stops_early(monkeypatc
     class FakeConnection:
         def __init__(self) -> None:
             self.closed = 0
+
+        def execute(self, query: str) -> None:
+            del query
 
         def from_arrow(self, reader: pa.RecordBatchReader):
             return FakeRelation()
@@ -520,6 +549,9 @@ def test_duckdb_transform_uses_canonical_sql_for_function_filters(monkeypatch):
     class FakeConnection:
         def __init__(self) -> None:
             self.relation = FakeRelation()
+
+        def execute(self, query: str) -> None:
+            del query
 
         def from_arrow(self, reader: pa.RecordBatchReader):
             del reader
@@ -672,7 +704,7 @@ def test_duckdb_transform_memory_is_bounded_in_subprocess():
             capture_output=True,
             text=True,
         )
-        return json.loads(completed.stdout)
+        return _parse_json_payload_from_subprocess_output(completed.stdout)
 
     rows_per_batch = 50_000
     medium = run_probe(total_batches=32, rows_per_batch=rows_per_batch)
@@ -685,3 +717,11 @@ def test_duckdb_transform_memory_is_bounded_in_subprocess():
     assert large_delta >= medium_delta
     assert large_delta < medium_delta * 6
     assert large_delta < 256 * 1024 * 1024
+
+
+def _parse_json_payload_from_subprocess_output(output: str) -> dict[str, int]:
+    for line in reversed(output.splitlines()):
+        candidate = line.strip()
+        if candidate.startswith("{") and candidate.endswith("}"):
+            return cast(dict[str, int], json.loads(candidate))
+    raise AssertionError(f"subprocess did not emit a JSON object:\n{output}")

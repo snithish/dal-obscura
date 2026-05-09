@@ -78,6 +78,12 @@ jobs:
           java-version: "17"
           cache: maven
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
       - name: Verify JVM workspace
         run: mvn -f connectors/jvm/pom.xml verify
 
