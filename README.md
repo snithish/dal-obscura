@@ -39,14 +39,53 @@ uv run dal-obscura --help
 ## Container Image
 
 The repo root [Dockerfile](Dockerfile)
-builds a reusable `dal-obscura` server image. It contains only the server
-runtime and the locked Python dependencies needed to start the Flight service.
+builds a reusable production `dal-obscura` image for both the data plane and
+control plane. It uses a multi-stage build, installs the locked runtime
+dependency set with `uv`, omits development dependencies and build tooling from
+the final stage, and runs as a non-root user.
 
 Build it locally with:
 
 ```bash
 docker build -t dal-obscura:local .
 ```
+
+Start the data plane, which is the default image command:
+
+```bash
+docker run --rm \
+  -e DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:////runtime/control-plane.db \
+  -e DAL_OBSCURA_CELL_ID=00000000-0000-0000-0000-000000000001 \
+  -e DAL_OBSCURA_LOCATION=grpc://0.0.0.0:8815 \
+  -e DAL_OBSCURA_TICKET_SECRET=dev-ticket-secret \
+  -p 8815:8815 \
+  dal-obscura:local
+```
+
+Start the control plane from the same image by selecting the `control-plane`
+role:
+
+```bash
+docker run --rm \
+  -e DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:////runtime/control-plane.db \
+  -e DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN=dev-admin \
+  -p 8820:8820 \
+  dal-obscura:local control-plane
+```
+
+The entrypoint also accepts direct commands for operational debugging and
+one-off container tasks.
+
+CI publishes production images to GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/<owner>/<repo>:latest
+docker pull ghcr.io/<owner>/<repo>:v1.2.3
+```
+
+Pushes to `main` publish `latest` and a `sha-<commit>` tag. Pushed Git tags
+matching `v*` or numeric release tags publish matching image tags; semver tags
+such as `v1.2.3` also publish `1.2.3`, `1.2`, and `1`.
 
 The runnable auth examples under
 [examples/auth](examples/auth/README.md)
@@ -227,6 +266,11 @@ uv run ruff check .
 uv run ruff format .
 uv run ty check
 ```
+
+GitHub Actions runs the same Python checks, verifies the JVM connector
+workspace with `mvn -f connectors/jvm/pom.xml verify`, builds the production
+Docker image, scans it with Trivy for high and critical vulnerabilities, and
+publishes to GHCR on `main` and release tag pushes.
 
 Benchmark baselines:
 
