@@ -1,5 +1,11 @@
 # dal-obscura
 
+[![CI](https://github.com/snithish/dal-obscura/actions/workflows/ci.yml/badge.svg)](https://github.com/snithish/dal-obscura/actions/workflows/ci.yml)
+[![Container Image](https://img.shields.io/badge/GHCR-dal--obscura-2496ED?logo=docker&logoColor=white)](https://github.com/snithish/dal-obscura/pkgs/container/dal-obscura)
+[![GitHub Release](https://img.shields.io/github/v/release/snithish/dal-obscura)](https://github.com/snithish/dal-obscura/releases)
+[![GitHub Stars](https://img.shields.io/github/stars/snithish/dal-obscura?style=social)](https://github.com/snithish/dal-obscura/stargazers)
+[![License](https://img.shields.io/github/license/snithish/dal-obscura)](https://github.com/snithish/dal-obscura/blob/main/LICENSE)
+
 Data access layer with Arrow Flight, Iceberg, masking, and row filters.
 
 ## Highlights
