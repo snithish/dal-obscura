@@ -4,10 +4,13 @@ services:
     build:
       context: ../..
       dockerfile: examples/auth/_shared/Dockerfile
+      args:
+        DAL_OBSCURA_IMAGE: ${DAL_OBSCURA_IMAGE:-ghcr.io/snithish/dal-obscura:latest}
     environment:
       EXAMPLE_ROOT: /workspace/example
     volumes:
       - runtime:/workspace/runtime
+      - ./_shared/scripts:/workspace/examples/auth/_shared/scripts:ro
     command: ["sh", "examples/auth/_shared/scripts/setup_runtime.sh"]
     healthcheck:
       test: ["CMD", "test", "-f", "/workspace/runtime/setup.done"]
@@ -17,10 +20,7 @@ services:
 
   # Runs the real Flight data plane from the published runtime volume.
   dal-obscura:
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-    entrypoint: []
+    image: ${DAL_OBSCURA_IMAGE:-ghcr.io/snithish/dal-obscura:latest}
     depends_on:
       setup:
         condition: service_healthy
@@ -34,11 +34,14 @@ services:
     build:
       context: ../..
       dockerfile: examples/auth/_shared/Dockerfile
+      args:
+        DAL_OBSCURA_IMAGE: ${DAL_OBSCURA_IMAGE:-ghcr.io/snithish/dal-obscura:latest}
     depends_on:
       dal-obscura:
         condition: service_started
     volumes:
       - runtime:/workspace/runtime
+      - ./_shared/scripts:/workspace/examples/auth/_shared/scripts:ro
     command: ["sh", "examples/auth/_shared/scripts/run_client_session.sh"]
     healthcheck:
       test: ["CMD", "test", "-f", "/workspace/runtime/client.ready"]

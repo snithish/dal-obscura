@@ -5,6 +5,10 @@ Docker Compose. They are teaching fixtures first: each directory keeps the
 auth-specific wiring visible, while shared setup/client mechanics live in
 `_shared/` and `compose.common.yaml`.
 
+The `dal-obscura` service uses the published image
+`ghcr.io/snithish/dal-obscura:latest` by default. Set `DAL_OBSCURA_IMAGE` when
+you want to run the examples against a release tag, SHA tag, or local image.
+
 ## Choose an Example
 
 | Example | Start here when you want to see |
@@ -27,7 +31,7 @@ Every example can still be run from its own directory:
 
 ```bash
 cd examples/auth/shared-jwt
-docker compose up --build -d --wait
+docker compose up -d --wait
 docker compose logs client
 docker compose exec client dal-obscura-example-read --target default.users
 docker compose down --volumes
@@ -60,7 +64,8 @@ Most examples have the same three service roles:
 1. `setup` creates a SQLite-backed Iceberg catalog, provisions the control-plane
    API into `control-plane.db`, publishes the config snapshot, and writes
    data-plane environment settings into a Docker volume.
-2. `dal-obscura` starts the real Flight service from that published state.
+2. `dal-obscura` starts the real Flight service from the published GHCR image
+   and reads that published state.
 3. `client` obtains or presents the selected credential, performs a startup
    read, marks itself healthy, and then stays available for interactive reads.
 
@@ -88,11 +93,16 @@ stack:
 
 ```bash
 docker compose down --volumes
-docker compose up --build -d --wait
+docker compose up -d --wait
 ```
 
 The setup container rebuilds the local catalog and republishes control-plane
 state on every fresh start.
+
+If you change helper image dependencies or Dockerfile instructions, rebuild the
+helper image explicitly with `docker compose build` or
+`examples/auth/run <example> build`. Changes to the mounted shared scripts and
+per-example files are picked up on the next fresh start.
 
 ## Caveats
 

@@ -14,7 +14,7 @@ The provider chain accepts both API key and shared JWT credentials.
 ## Run
 
 ```bash
-docker compose up --build -d --wait
+docker compose up -d --wait
 docker compose logs client
 docker compose exec client dal-obscura-example-read --target default.users --credential api-key
 docker compose exec client dal-obscura-example-read --target default.users --credential jwt

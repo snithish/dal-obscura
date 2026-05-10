@@ -8,12 +8,14 @@ usage() {
 Usage:
   examples/auth/run list
   examples/auth/run <example> config [compose-args...]
+  examples/auth/run <example> build [compose-args...]
   examples/auth/run <example> up [compose-args...]
   examples/auth/run <example> logs [compose-args...]
   examples/auth/run <example> read [read-args...]
   examples/auth/run <example> down [compose-args...]
 
 Examples:
+  examples/auth/run shared-jwt build
   examples/auth/run shared-jwt up
   examples/auth/run shared-jwt logs
   examples/auth/run shared-jwt read --target default.users
@@ -56,8 +58,11 @@ case "$ACTION" in
   config)
     set -- config "$@"
     ;;
+  build)
+    set -- build "$@"
+    ;;
   up)
-    set -- up --build -d --wait "$@"
+    set -- up -d --wait "$@"
     ;;
   logs)
     set -- logs client "$@"

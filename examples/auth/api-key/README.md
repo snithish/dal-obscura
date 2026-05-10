@@ -14,7 +14,7 @@ service credential sent in the `x-api-key` Flight header.
 ## Run
 
 ```bash
-docker compose up --build -d --wait
+docker compose up -d --wait
 docker compose logs client
 docker compose exec client dal-obscura-example-read --target default.users
 docker compose down --volumes

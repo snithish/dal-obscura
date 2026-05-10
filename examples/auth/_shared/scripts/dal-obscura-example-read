@@ -1,4 +1,4 @@
 #!/bin/sh
 set -eu
 
-exec /workspace/.venv/bin/python /workspace/examples/auth/_shared/scripts/flight_client.py "$@"
+exec python /workspace/examples/auth/_shared/scripts/flight_client.py "$@"

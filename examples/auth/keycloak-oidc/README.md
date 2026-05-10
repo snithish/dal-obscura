@@ -16,7 +16,7 @@ This example starts a real Keycloak container and runs `dal-obscura` with
 ## Run
 
 ```bash
-docker compose up --build -d --wait
+docker compose up -d --wait
 docker compose logs client
 docker compose exec client dal-obscura-example-read --target default.users
 docker compose down --volumes

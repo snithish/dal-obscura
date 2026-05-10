@@ -19,6 +19,8 @@ services:
     build:
       context: ../../..
       dockerfile: examples/auth/_shared/Dockerfile
+      args:
+        DAL_OBSCURA_IMAGE: ${DAL_OBSCURA_IMAGE:-ghcr.io/snithish/dal-obscura:latest}
     depends_on:
       dal-obscura:
         condition: service_started
@@ -35,7 +37,7 @@ services:
       - -c
       - |
         set -e
-        /workspace/.venv/bin/python /workspace/example/gateway/trusted_gateway.py
+        python /workspace/example/gateway/trusted_gateway.py
   client:
     extends:
       file: ../compose.common.yaml

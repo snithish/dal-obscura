@@ -15,7 +15,7 @@ an HS256 bearer JWT signed with a shared secret.
 ## Run
 
 ```bash
-docker compose up --build -d --wait
+docker compose up -d --wait
 docker compose logs client
 docker compose exec client dal-obscura-example-read --target default.users
 docker compose down --volumes

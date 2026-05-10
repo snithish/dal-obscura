@@ -5,8 +5,10 @@ This directory contains the reusable pieces that keep the public example
 
 ## Files
 
-- `Dockerfile`: Python runtime used by `setup`, `client`, and small helper
-  services.
+- `Dockerfile`: thin helper image used by `setup`, `client`, and small helper
+  services. It derives from `DAL_OBSCURA_IMAGE`, which defaults to
+  `ghcr.io/snithish/dal-obscura:latest`, and adds only example-only helper
+  dependencies.
 - `scripts/build_runtime.py`: creates the sample Iceberg table, provisions auth
   providers and policy through the control-plane API, publishes the data-plane
   snapshot, and writes `/workspace/runtime/data-plane.env`.

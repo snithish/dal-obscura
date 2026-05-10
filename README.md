@@ -45,15 +45,16 @@ uv run dal-obscura --help
 ## Container Image
 
 The repo root [Dockerfile](Dockerfile)
-builds a reusable production `dal-obscura` image for both the data plane and
-control plane. It uses a multi-stage build, installs the locked runtime
-dependency set with `uv`, omits development dependencies and build tooling from
-the final stage, and runs as a non-root user.
+builds the reusable production `dal-obscura` image for both the data plane and
+control plane. CI publishes it to GitHub Container Registry as
+`ghcr.io/snithish/dal-obscura`. It uses a multi-stage build, installs the
+locked runtime dependency set with `uv`, omits development dependencies and
+build tooling from the final stage, and runs as a non-root user.
 
-Build it locally with:
+Use the published image directly:
 
 ```bash
-docker build -t dal-obscura:local .
+docker pull ghcr.io/snithish/dal-obscura:latest
 ```
 
 Start the data plane, which is the default image command:
@@ -65,7 +66,7 @@ docker run --rm \
   -e DAL_OBSCURA_LOCATION=grpc://0.0.0.0:8815 \
   -e DAL_OBSCURA_TICKET_SECRET=dev-ticket-secret \
   -p 8815:8815 \
-  dal-obscura:local
+  ghcr.io/snithish/dal-obscura:latest
 ```
 
 Start the control plane from the same image by selecting the `control-plane`
@@ -76,18 +77,24 @@ docker run --rm \
   -e DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:////runtime/control-plane.db \
   -e DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN=dev-admin \
   -p 8820:8820 \
-  dal-obscura:local control-plane
+  ghcr.io/snithish/dal-obscura:latest control-plane
 ```
 
 The entrypoint also accepts direct commands for operational debugging and
 one-off container tasks.
 
+To test changes to the Dockerfile itself, build a local image with:
+
+```bash
+docker build -t dal-obscura:local .
+```
+
 CI publishes production images to GitHub Container Registry:
 
 ```bash
-docker pull ghcr.io/<owner>/<repo>:sha-<commit>
-docker pull ghcr.io/<owner>/<repo>:latest
-docker pull ghcr.io/<owner>/<repo>:v1.2.3
+docker pull ghcr.io/snithish/dal-obscura:sha-<commit>
+docker pull ghcr.io/snithish/dal-obscura:latest
+docker pull ghcr.io/snithish/dal-obscura:v1.2.3
 ```
 
 Pushes to `main` publish only a `sha-<commit>` image tag. Pushed Git tags

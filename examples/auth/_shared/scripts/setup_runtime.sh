@@ -6,7 +6,7 @@ rm -f /workspace/runtime/setup.done
 for pre_setup in "$@"; do
   case "$pre_setup" in
     *.py)
-      /workspace/.venv/bin/python "$pre_setup"
+      python "$pre_setup"
       ;;
     *.sh)
       sh "$pre_setup"
@@ -18,6 +18,6 @@ for pre_setup in "$@"; do
   esac
 done
 
-/workspace/.venv/bin/python examples/auth/_shared/scripts/build_runtime.py
+python examples/auth/_shared/scripts/build_runtime.py
 touch /workspace/runtime/setup.done
 tail -f /dev/null

@@ -18,4 +18,4 @@ if [ -n "${DAL_OBSCURA_TLS_CLIENT_CA_FILE:-}" ]; then
   export DAL_OBSCURA_TLS_CLIENT_CA
 fi
 
-exec /workspace/.venv/bin/dal-obscura
+exec dal-obscura
