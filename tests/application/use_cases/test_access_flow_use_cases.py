@@ -11,6 +11,7 @@ from dal_obscura.common.catalog.ports import TableFormat
 from dal_obscura.common.query_planning.models import PlanRequest
 from dal_obscura.common.ticket_delivery.models import ScanPayload, TicketPayload
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
+from dal_obscura.data_plane.application.ports.ticket_store import StoredTicket
 from dal_obscura.data_plane.application.use_cases.fetch_stream import FetchStreamUseCase
 from dal_obscura.data_plane.application.use_cases.plan_access import PlanAccessUseCase
 from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
@@ -104,6 +105,7 @@ def _build_end_to_end_access_flow(table_format: TableFormat, decision: AccessDec
         masking=masking,
         row_transform=DuckDBRowTransformAdapter(masking),
         ticket_codec=ticket_codec,
+        ticket_store=ticket_store,
     )
     return plan_access, fetch_stream
 
@@ -125,6 +127,12 @@ def _build_use_case_dependencies():
         batches=batches,
     )
     return schema, decision, table_format
+
+
+def _ticket_store_with(payload: TicketPayload, *, max_exchanges: int = 1) -> FakeTicketStore:
+    ticket_store = FakeTicketStore()
+    ticket_store.store(payload, max_exchanges=max_exchanges)
+    return ticket_store
 
 
 def test_plan_access_resolves_catalog_with_tenant_from_principal_attributes():
@@ -175,6 +183,7 @@ def test_plan_access_resolves_catalog_with_tenant_from_principal_attributes():
 def test_fetch_stream_checks_policy_version_for_ticket_tenant():
     schema, _, table_format = _build_use_case_dependencies()
     payload = TicketPayload(
+        ticket_id="00000000-0000-0000-0000-000000000001",
         catalog="analytics",
         target="default.users",
         tenant_id="tenant-a",
@@ -190,6 +199,7 @@ def test_fetch_stream_checks_policy_version_for_ticket_tenant():
         nonce="nonce",
     )
     authorizer = FakeAuthorizer(decision=None, current_version=101)
+    ticket_store = _ticket_store_with(payload)
     use_case = FetchStreamUseCase(
         identity=FakeIdentity(
             principal=Principal(id="user1", groups=[], attributes={"tenant_id": "tenant-a"})
@@ -198,12 +208,174 @@ def test_fetch_stream_checks_policy_version_for_ticket_tenant():
         masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
+        ticket_store=ticket_store,
     )
 
     with pytest.raises(PermissionError):
         use_case.execute("ticket", AUTHORIZATION_HEADER)
 
     assert authorizer.last_current_version_tenant_id == "tenant-a"
+
+
+def test_fetch_stream_rejects_legacy_ticket_without_ticket_id_before_decoding(monkeypatch):
+    schema, _, table_format = _build_use_case_dependencies()
+    payload = TicketPayload(
+        catalog="analytics",
+        target="default.users",
+        tenant_id="tenant-a",
+        columns=["id"],
+        scan={
+            "read_payload": encode_scan_task(table_format, schema),
+            "full_row_filter": None,
+            "masks": {},
+        },
+        policy_version=100,
+        principal_id="user1",
+        expires_at=9999999999,
+        nonce="nonce",
+    )
+    ticket_store = FakeTicketStore()
+    monkeypatch.setattr(pickle, "loads", lambda _: pytest.fail("pickle.loads was reached"))
+    use_case = FetchStreamUseCase(
+        identity=FakeIdentity(
+            principal=Principal(id="user1", groups=[], attributes={"tenant_id": "tenant-a"})
+        ),
+        authorizer=FakeAuthorizer(decision=None, current_version=100),
+        masking=FakeMasking(),
+        row_transform=FakeRowTransform(),
+        ticket_codec=FakeTicketCodec(payload),
+        ticket_store=ticket_store,
+        now=lambda: 1000,
+    )
+
+    with pytest.raises(PermissionError):
+        use_case.execute("token", AUTHORIZATION_HEADER)
+
+    assert ticket_store.reserve_calls == []
+
+
+def test_fetch_stream_rejects_missing_db_ticket_before_decoding(monkeypatch):
+    schema, _, table_format = _build_use_case_dependencies()
+    payload = TicketPayload(
+        ticket_id="00000000-0000-0000-0000-000000000001",
+        catalog="analytics",
+        target="default.users",
+        tenant_id="tenant-a",
+        columns=["id"],
+        scan={
+            "read_payload": encode_scan_task(table_format, schema),
+            "full_row_filter": None,
+            "masks": {},
+        },
+        policy_version=100,
+        principal_id="user1",
+        expires_at=9999999999,
+        nonce="nonce",
+    )
+    ticket_store = FakeTicketStore()
+    monkeypatch.setattr(pickle, "loads", lambda _: pytest.fail("pickle.loads was reached"))
+    use_case = FetchStreamUseCase(
+        identity=FakeIdentity(
+            principal=Principal(id="user1", groups=[], attributes={"tenant_id": "tenant-a"})
+        ),
+        authorizer=FakeAuthorizer(decision=None, current_version=100),
+        masking=FakeMasking(),
+        row_transform=FakeRowTransform(),
+        ticket_codec=FakeTicketCodec(payload),
+        ticket_store=ticket_store,
+        now=lambda: 1000,
+    )
+
+    with pytest.raises(PermissionError):
+        use_case.execute("token", AUTHORIZATION_HEADER)
+
+    assert ticket_store.reserve_calls == []
+
+
+def test_fetch_stream_rejects_hash_mismatch_before_reserving_or_decoding(monkeypatch):
+    schema, _, table_format = _build_use_case_dependencies()
+    ticket_id = "00000000-0000-0000-0000-000000000001"
+    signed_payload = TicketPayload(
+        ticket_id=ticket_id,
+        catalog="analytics",
+        target="default.users",
+        tenant_id="tenant-a",
+        columns=["id"],
+        scan={
+            "read_payload": encode_scan_task(table_format, schema),
+            "full_row_filter": None,
+            "masks": {},
+        },
+        policy_version=100,
+        principal_id="user1",
+        expires_at=9999999999,
+        nonce="nonce",
+    )
+    ticket_store = FakeTicketStore()
+    ticket_store.records[ticket_id] = StoredTicket(
+        payload=signed_payload,
+        payload_hash="0" * 64,
+        exchange_count=0,
+        max_exchanges=1,
+        expires_at=signed_payload.expires_at,
+    )
+    monkeypatch.setattr(pickle, "loads", lambda _: pytest.fail("pickle.loads was reached"))
+    use_case = FetchStreamUseCase(
+        identity=FakeIdentity(
+            principal=Principal(id="user1", groups=[], attributes={"tenant_id": "tenant-a"})
+        ),
+        authorizer=FakeAuthorizer(decision=None, current_version=100),
+        masking=FakeMasking(),
+        row_transform=FakeRowTransform(),
+        ticket_codec=FakeTicketCodec(signed_payload),
+        ticket_store=ticket_store,
+        now=lambda: 1000,
+    )
+
+    with pytest.raises(PermissionError):
+        use_case.execute("token", AUTHORIZATION_HEADER)
+
+    assert ticket_store.reserve_calls == []
+
+
+def test_fetch_stream_reserves_exchange_before_scan_execution():
+    schema, _, table_format = _build_use_case_dependencies()
+    ticket_id = "00000000-0000-0000-0000-000000000001"
+    payload = TicketPayload(
+        ticket_id=ticket_id,
+        catalog="analytics",
+        target="default.users",
+        tenant_id="tenant-a",
+        columns=["id"],
+        scan={
+            "read_payload": encode_scan_task(table_format, schema),
+            "full_row_filter": None,
+            "masks": {},
+        },
+        policy_version=100,
+        principal_id="user1",
+        expires_at=9999999999,
+        nonce="nonce",
+    )
+    ticket_store = FakeTicketStore()
+    ticket_store.store(payload, max_exchanges=1)
+    use_case = FetchStreamUseCase(
+        identity=FakeIdentity(
+            principal=Principal(id="user1", groups=[], attributes={"tenant_id": "tenant-a"})
+        ),
+        authorizer=FakeAuthorizer(decision=None, current_version=100),
+        masking=FakeMasking(),
+        row_transform=FakeRowTransform(),
+        ticket_codec=FakeTicketCodec(payload),
+        ticket_store=ticket_store,
+        now=lambda: 1000,
+    )
+
+    first = use_case.execute("token", AUTHORIZATION_HEADER)
+    assert first.columns == ["id"]
+
+    with pytest.raises(PermissionError):
+        use_case.execute("token", AUTHORIZATION_HEADER)
 
 
 def test_plan_access_persists_ticket_with_id_before_returning_signed_token():
@@ -986,6 +1158,7 @@ def test_plan_access_excludes_denied_requested_columns_from_execution_plan():
 def test_fetch_stream_policy_version_mismatch():
     schema, decision, table_format = _build_use_case_dependencies()
     payload = TicketPayload(
+        ticket_id="00000000-0000-0000-0000-000000000001",
         catalog="catalog1",
         target="users",
         columns=["id", "region"],
@@ -999,12 +1172,14 @@ def test_fetch_stream_policy_version_mismatch():
         expires_at=9999999999,
         nonce="abc",
     )
+    ticket_store = _ticket_store_with(payload)
     use_case = FetchStreamUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         authorizer=FakeAuthorizer(decision=decision, current_version=101),
         masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
+        ticket_store=ticket_store,
     )
 
     with pytest.raises(PermissionError):
@@ -1014,6 +1189,7 @@ def test_fetch_stream_policy_version_mismatch():
 def test_fetch_stream_principal_mismatch():
     schema, decision, table_format = _build_use_case_dependencies()
     payload = TicketPayload(
+        ticket_id="00000000-0000-0000-0000-000000000001",
         catalog="catalog1",
         target="users",
         columns=["id", "region"],
@@ -1027,12 +1203,14 @@ def test_fetch_stream_principal_mismatch():
         expires_at=9999999999,
         nonce="abc",
     )
+    ticket_store = _ticket_store_with(payload)
     use_case = FetchStreamUseCase(
         identity=FakeIdentity(principal=Principal(id="user2", groups=[], attributes={})),
         authorizer=FakeAuthorizer(decision=decision, current_version=100),
         masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
+        ticket_store=ticket_store,
     )
 
     with pytest.raises(PermissionError):
@@ -1076,8 +1254,9 @@ def test_fetch_stream_rejects_invalid_scan_payloads():
         ),
     ]
 
-    for scan, error_match in cases:
+    for index, (scan, error_match) in enumerate(cases, start=1):
         payload = TicketPayload(
+            ticket_id=f"00000000-0000-0000-0000-{index:012d}",
             catalog="catalog1",
             target="users",
             columns=["id", "region"],
@@ -1087,12 +1266,14 @@ def test_fetch_stream_rejects_invalid_scan_payloads():
             expires_at=9999999999,
             nonce="abc",
         )
+        ticket_store = _ticket_store_with(payload)
         use_case = FetchStreamUseCase(
             identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
             authorizer=FakeAuthorizer(decision=decision, current_version=100),
             masking=FakeMasking(),
             row_transform=FakeRowTransform(),
             ticket_codec=FakeTicketCodec(payload),
+            ticket_store=ticket_store,
         )
 
         with pytest.raises(ValueError, match=error_match):
@@ -1102,6 +1283,7 @@ def test_fetch_stream_rejects_invalid_scan_payloads():
 def test_fetch_stream_rejects_legacy_partition_payload():
     _, decision, _ = _build_use_case_dependencies()
     payload = TicketPayload(
+        ticket_id="00000000-0000-0000-0000-000000000001",
         catalog="catalog1",
         target="users",
         columns=["id", "region"],
@@ -1117,12 +1299,14 @@ def test_fetch_stream_rejects_legacy_partition_payload():
         expires_at=9999999999,
         nonce="abc",
     )
+    ticket_store = _ticket_store_with(payload)
     use_case = FetchStreamUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         authorizer=FakeAuthorizer(decision=decision, current_version=100),
         masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
+        ticket_store=ticket_store,
     )
 
     with pytest.raises(ValueError, match="Invalid read payload"):

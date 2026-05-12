@@ -282,6 +282,7 @@ def build_flight_service(
         masking=masking,
         row_transform=row_transform,
         ticket_codec=ticket_codec,
+        ticket_store=ticket_store,
     )
     return DataAccessFlightService(
         location="grpc+tcp://0.0.0.0:0",

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import base64
-from collections.abc import Iterable, Mapping
+import hmac
+import time
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import cast
 
@@ -10,11 +12,13 @@ import pyarrow as pa
 from dal_obscura.common.access_control.filters import RowFilter, deserialize_row_filter
 from dal_obscura.common.access_control.models import MaskRule
 from dal_obscura.common.table_format.ports import ScanTask
+from dal_obscura.common.ticket_delivery.models import ticket_payload_hash
 from dal_obscura.data_plane.application.ports.authorization import AuthorizationPort
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest, IdentityPort
 from dal_obscura.data_plane.application.ports.masking import MaskingPort
 from dal_obscura.data_plane.application.ports.row_transform import RowTransformPort
 from dal_obscura.data_plane.application.ports.ticket_codec import TicketCodecPort
+from dal_obscura.data_plane.application.ports.ticket_store import TicketStorePort
 from dal_obscura.data_plane.application.use_cases.plan_access import _tenant_id
 
 
@@ -49,23 +53,47 @@ class FetchStreamUseCase:
         masking: MaskingPort,
         row_transform: RowTransformPort,
         ticket_codec: TicketCodecPort,
+        ticket_store: TicketStorePort,
+        now: Callable[[], int] | None = None,
     ) -> None:
         self._identity = identity
         self._authorizer = authorizer
         self._masking = masking
         self._row_transform = row_transform
         self._ticket_codec = ticket_codec
+        self._ticket_store = ticket_store
+        self._now = now or _epoch_seconds
 
     def execute(self, ticket: str, auth_request: AuthenticationRequest) -> FetchStreamResult:
         """Executes the second half of the Flight flow for a previously planned ticket."""
-        payload = self._ticket_codec.verify(ticket)
+        client_payload = self._ticket_codec.verify(ticket)
+        if client_payload.ticket_id is None:
+            raise PermissionError("Unauthorized")
+
         principal = self._identity.authenticate(auth_request)
+
+        try:
+            stored = self._ticket_store.load(client_payload.ticket_id)
+        except (LookupError, PermissionError) as exc:
+            raise PermissionError("Unauthorized") from exc
+
+        if not hmac.compare_digest(ticket_payload_hash(client_payload), stored.payload_hash):
+            raise PermissionError("Unauthorized")
+
+        payload = stored.payload
         if principal.id != payload.principal_id:
             raise PermissionError("Unauthorized")
 
         tenant_id = _tenant_id(principal)
         if tenant_id != payload.tenant_id:
             raise PermissionError("Unauthorized")
+
+        now = self._now()
+        try:
+            self._ticket_store.reserve_exchange(client_payload.ticket_id, now=now)
+        except PermissionError:
+            self._ticket_store.cleanup_expired_and_exhausted(now=now)
+            raise
 
         current_version = self._authorizer.current_policy_version(
             payload.target,
@@ -135,3 +163,7 @@ def _optional_row_filter(value: object) -> RowFilter | None:
     if value is None:
         return None
     return deserialize_row_filter(value)
+
+
+def _epoch_seconds() -> int:
+    return int(time.time())

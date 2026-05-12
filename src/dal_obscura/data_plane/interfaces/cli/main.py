@@ -83,6 +83,7 @@ def main() -> None:
         masking=masking,
         row_transform=row_transform,
         ticket_codec=ticket_codec,
+        ticket_store=ticket_store,
     )
     server = DataAccessFlightService(
         location=runtime_config.location,
