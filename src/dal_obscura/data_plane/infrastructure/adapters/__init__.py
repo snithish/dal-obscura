@@ -38,6 +38,9 @@ from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
     SecretProvider,
 )
 from dal_obscura.data_plane.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
+from dal_obscura.data_plane.infrastructure.adapters.ticket_store_sqlalchemy import (
+    SqlAlchemyTicketStore,
+)
 from dal_obscura.data_plane.infrastructure.table_formats.iceberg import IcebergTableFormat
 
 __all__ = [
@@ -62,6 +65,7 @@ __all__ = [
     "PublishedRuntime",
     "SecretProvider",
     "ServiceConfig",
+    "SqlAlchemyTicketStore",
     "TrustedHeaderIdentityProvider",
     "load_data_plane_runtime_config",
 ]

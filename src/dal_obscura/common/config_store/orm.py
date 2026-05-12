@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import JSON
 
@@ -171,3 +171,29 @@ class PublishedAssetRecord(Base):
     backend: Mapped[str] = mapped_column(String(48), nullable=False)
     compiled_config_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     policy_version: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class DataPlaneTicketRecord(Base):
+    __tablename__ = "data_plane_tickets"
+    __table_args__ = (
+        Index("ix_data_plane_tickets_cell_ticket", "cell_id", "ticket_id"),
+        Index("ix_data_plane_tickets_cell_expires", "cell_id", "expires_at"),
+    )
+
+    ticket_id: Mapped[UUID] = mapped_column(primary_key=True)
+    cell_id: Mapped[UUID] = mapped_column(ForeignKey("cells.id"), nullable=False)
+    tenant_id: Mapped[str] = mapped_column(Text, nullable=False)
+    catalog: Mapped[str | None] = mapped_column(Text, nullable=True)
+    target: Mapped[str] = mapped_column(Text, nullable=False)
+    principal_id: Mapped[str] = mapped_column(Text, nullable=False)
+    policy_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    expires_at: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_exchanges: Mapped[int] = mapped_column(Integer, nullable=False)
+    exchange_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_exchanged_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
