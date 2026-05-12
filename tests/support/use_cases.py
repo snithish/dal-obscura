@@ -12,8 +12,13 @@ from dal_obscura.common.access_control.models import AccessDecision, Principal
 from dal_obscura.common.catalog.ports import TableFormat
 from dal_obscura.common.query_planning.models import PlanRequest
 from dal_obscura.common.table_format.ports import InputPartition, Plan, ScanTask
-from dal_obscura.common.ticket_delivery.models import ScanPayload, TicketPayload
+from dal_obscura.common.ticket_delivery.models import (
+    ScanPayload,
+    TicketPayload,
+    ticket_payload_hash,
+)
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
+from dal_obscura.data_plane.application.ports.ticket_store import StoredTicket
 
 
 def scan_payload() -> ScanPayload:
@@ -195,6 +200,55 @@ class FakeTicketCodec:
     def verify(self, token: str) -> TicketPayload:
         del token
         return self._payload
+
+
+class FakeTicketStore:
+    def __init__(self) -> None:
+        self.stored: list[tuple[TicketPayload, int]] = []
+        self.records: dict[str, StoredTicket] = {}
+        self.cleanup_calls: list[int] = []
+        self.reserve_calls: list[str] = []
+        self.fail_store = False
+
+    def store(self, payload: TicketPayload, *, max_exchanges: int) -> None:
+        if self.fail_store:
+            raise RuntimeError("store failed")
+        if payload.ticket_id is None:
+            raise AssertionError("ticket_id is required")
+        self.stored.append((payload, max_exchanges))
+        self.records[payload.ticket_id] = StoredTicket(
+            payload=payload,
+            payload_hash=ticket_payload_hash(payload),
+            exchange_count=0,
+            max_exchanges=max_exchanges,
+            expires_at=payload.expires_at,
+        )
+
+    def load(self, ticket_id: str) -> StoredTicket:
+        try:
+            return self.records[ticket_id]
+        except KeyError as exc:
+            raise LookupError("Ticket not found") from exc
+
+    def reserve_exchange(self, ticket_id: str, *, now: int) -> StoredTicket:
+        del now
+        self.reserve_calls.append(ticket_id)
+        stored = self.load(ticket_id)
+        if stored.exchange_count >= stored.max_exchanges:
+            raise PermissionError("Ticket expired or exhausted")
+        updated = StoredTicket(
+            payload=stored.payload,
+            payload_hash=stored.payload_hash,
+            exchange_count=stored.exchange_count + 1,
+            max_exchanges=stored.max_exchanges,
+            expires_at=stored.expires_at,
+        )
+        self.records[ticket_id] = updated
+        return updated
+
+    def cleanup_expired_and_exhausted(self, *, now: int) -> int:
+        self.cleanup_calls.append(now)
+        return 0
 
 
 class FakeRowTransform:

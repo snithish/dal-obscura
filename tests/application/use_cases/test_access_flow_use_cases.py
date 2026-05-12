@@ -26,6 +26,7 @@ from tests.support.use_cases import (
     FakeMasking,
     FakeRowTransform,
     FakeTicketCodec,
+    FakeTicketStore,
     PretendPushdownTableFormat,
     StubInputPartition,
     StubTableFormat,
@@ -81,6 +82,7 @@ def test_ticket_payload_from_dict_rejects_non_string_full_row_filter():
 
 def _build_end_to_end_access_flow(table_format: TableFormat, decision: AccessDecision):
     ticket_codec = HmacTicketCodecAdapter("secret")
+    ticket_store = FakeTicketStore()
     masking = DefaultMaskingAdapter()
     authorizer = FakeAuthorizer(decision=decision, current_version=decision.policy_version)
     catalog_registry = FakeCatalogRegistry(table_format)
@@ -91,8 +93,10 @@ def _build_end_to_end_access_flow(table_format: TableFormat, decision: AccessDec
         catalog_registry=cast(Any, catalog_registry),
         masking=masking,
         ticket_codec=ticket_codec,
+        ticket_store=ticket_store,
         ticket_ttl_seconds=300,
         max_tickets=1,
+        max_ticket_exchanges=1,
     )
     fetch_stream = FetchStreamUseCase(
         identity=FakeIdentity(principal=principal),
@@ -151,8 +155,10 @@ def test_plan_access_resolves_catalog_with_tenant_from_principal_attributes():
         catalog_registry=cast(Any, catalog_registry),
         masking=FakeMasking(),
         ticket_codec=ticket_codec,
+        ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
         max_tickets=1,
+        max_ticket_exchanges=1,
         now=lambda: 1000,
         nonce_factory=lambda: "nonce",
     )
@@ -200,6 +206,65 @@ def test_fetch_stream_checks_policy_version_for_ticket_tenant():
     assert authorizer.last_current_version_tenant_id == "tenant-a"
 
 
+def test_plan_access_persists_ticket_with_id_before_returning_signed_token():
+    _schema, decision, table_format = _build_use_case_dependencies()
+    ticket_codec = FakeTicketCodec()
+    ticket_store = FakeTicketStore()
+    use_case = PlanAccessUseCase(
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+        authorizer=FakeAuthorizer(decision=decision),
+        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        masking=FakeMasking(),
+        ticket_codec=ticket_codec,
+        ticket_store=ticket_store,
+        ticket_ttl_seconds=300,
+        max_tickets=1,
+        max_ticket_exchanges=2,
+        now=lambda: 1000,
+        nonce_factory=lambda: "nonce",
+        ticket_id_factory=lambda: "00000000-0000-0000-0000-000000000001",
+    )
+
+    result = use_case.execute(
+        PlanRequest(catalog="catalog1", target="users", columns=["id"]),
+        AUTHORIZATION_HEADER,
+    )
+
+    assert result.ticket_tokens == ["signed-token"]
+    assert ticket_codec.signed_payloads[0].ticket_id == ("00000000-0000-0000-0000-000000000001")
+    assert ticket_store.stored[0][0] == ticket_codec.signed_payloads[0]
+    assert ticket_store.stored[0][1] == 2
+
+
+def test_plan_access_does_not_sign_ticket_when_persistence_fails():
+    _schema, decision, table_format = _build_use_case_dependencies()
+    ticket_codec = FakeTicketCodec()
+    ticket_store = FakeTicketStore()
+    ticket_store.fail_store = True
+    use_case = PlanAccessUseCase(
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+        authorizer=FakeAuthorizer(decision=decision),
+        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        masking=FakeMasking(),
+        ticket_codec=ticket_codec,
+        ticket_store=ticket_store,
+        ticket_ttl_seconds=300,
+        max_tickets=1,
+        max_ticket_exchanges=1,
+        now=lambda: 1000,
+        nonce_factory=lambda: "nonce",
+        ticket_id_factory=lambda: "00000000-0000-0000-0000-000000000001",
+    )
+
+    with pytest.raises(RuntimeError, match="store failed"):
+        use_case.execute(
+            PlanRequest(catalog="catalog1", target="users", columns=["id"]),
+            AUTHORIZATION_HEADER,
+        )
+
+    assert ticket_codec.signed_payloads == []
+
+
 def test_plan_access_auth_failure():
     _schema, decision, table_format = _build_use_case_dependencies()
     catalog_registry = FakeCatalogRegistry(table_format)
@@ -222,8 +287,10 @@ def test_plan_access_auth_failure():
         catalog_registry=cast(Any, catalog_registry),
         masking=FakeMasking(),
         ticket_codec=ticket_codec,
+        ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
         max_tickets=1,
+        max_ticket_exchanges=1,
     )
 
     with pytest.raises(PermissionError):
@@ -254,8 +321,10 @@ def test_plan_access_authz_failure():
         catalog_registry=cast(Any, catalog_registry),
         masking=FakeMasking(),
         ticket_codec=ticket_codec,
+        ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
         max_tickets=1,
+        max_ticket_exchanges=1,
     )
 
     with pytest.raises(PermissionError):
@@ -287,8 +356,10 @@ def test_plan_access_expands_wildcard_columns():
         catalog_registry=cast(Any, catalog_registry),
         masking=FakeMasking(),
         ticket_codec=ticket_codec,
+        ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
         max_tickets=1,
+        max_ticket_exchanges=1,
     )
     use_case.execute(
         PlanRequest(catalog="catalog1", target="users", columns=["*"]),
@@ -348,8 +419,10 @@ def test_plan_access_accepts_nested_requested_columns():
         catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         masking=FakeMasking(),
         ticket_codec=ticket_codec,
+        ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
         max_tickets=1,
+        max_ticket_exchanges=1,
     )
 
     use_case.execute(
@@ -401,8 +474,10 @@ def test_plan_access_rejects_unknown_requested_columns():
                 nonce="abc",
             )
         ),
+        ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
         max_tickets=1,
+        max_ticket_exchanges=1,
     )
 
     for requested_columns in (["missing"], ["id.value"], ["user.missing"]):
@@ -448,8 +523,10 @@ def test_plan_access_includes_hidden_row_filter_dependency_columns_in_execution_
         catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         masking=FakeMasking(),
         ticket_codec=ticket_codec,
+        ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
         max_tickets=1,
+        max_ticket_exchanges=1,
     )
 
     result = use_case.execute(
@@ -499,8 +576,10 @@ def test_plan_access_rejects_requested_row_filter_for_masked_column():
                 nonce="abc",
             )
         ),
+        ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
         max_tickets=1,
+        max_ticket_exchanges=1,
     )
 
     with pytest.raises(
@@ -555,8 +634,10 @@ def test_plan_access_rejects_requested_row_filter_for_non_visible_column():
                 nonce="abc",
             )
         ),
+        ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
         max_tickets=1,
+        max_ticket_exchanges=1,
     )
 
     with pytest.raises(
@@ -608,8 +689,10 @@ def test_plan_access_allows_requested_row_filter_on_visible_unmasked_hidden_depe
                 nonce="abc",
             )
         ),
+        ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
         max_tickets=1,
+        max_ticket_exchanges=1,
     )
 
     result = use_case.execute(
@@ -667,8 +750,10 @@ def test_plan_access_combines_policy_and_requested_row_filters_before_ticketing(
         catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         masking=FakeMasking(),
         ticket_codec=ticket_codec,
+        ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
         max_tickets=1,
+        max_ticket_exchanges=1,
     )
 
     use_case.execute(
@@ -826,8 +911,10 @@ def test_plan_access_revalidates_requested_row_filter_against_base_schema():
                 nonce="abc",
             )
         ),
+        ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
         max_tickets=1,
+        max_ticket_exchanges=1,
     )
 
     with pytest.raises(ValueError, match="Unknown column in row filter: missing"):
@@ -881,8 +968,10 @@ def test_plan_access_excludes_denied_requested_columns_from_execution_plan():
                 nonce="abc",
             )
         ),
+        ticket_store=FakeTicketStore(),
         ticket_ttl_seconds=300,
         max_tickets=1,
+        max_ticket_exchanges=1,
     )
 
     result = use_case.execute(

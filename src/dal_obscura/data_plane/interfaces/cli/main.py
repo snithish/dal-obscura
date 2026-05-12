@@ -30,6 +30,9 @@ from dal_obscura.data_plane.infrastructure.adapters.runtime_config import (
     load_data_plane_runtime_config,
 )
 from dal_obscura.data_plane.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
+from dal_obscura.data_plane.infrastructure.adapters.ticket_store_sqlalchemy import (
+    SqlAlchemyTicketStore,
+)
 from dal_obscura.data_plane.interfaces.flight.server import DataAccessFlightService
 from dal_obscura.logging_config import LoggingConfig, setup_logging
 
@@ -43,7 +46,8 @@ def main() -> None:
     LOGGER.info("Starting dal-obscura data plane")
 
     engine = create_engine_from_url(runtime_config.database_url)
-    session = session_factory(engine)()
+    session_maker = session_factory(engine)
+    session = session_maker()
     config_store = PublishedConfigStore(session, cell_id=runtime_config.cell_id)
     published_runtime = config_store.get_runtime()
 
@@ -53,6 +57,7 @@ def main() -> None:
     masking = DefaultMaskingAdapter()
     row_transform = DuckDBRowTransformAdapter(masking)
     ticket_codec = HmacTicketCodecAdapter(runtime_config.ticket_secret)
+    ticket_store = SqlAlchemyTicketStore(session_maker, cell_id=runtime_config.cell_id)
     ticket_settings = published_runtime.ticket
 
     get_schema = GetSchemaUseCase(
@@ -67,8 +72,10 @@ def main() -> None:
         catalog_registry=catalog_registry,
         masking=masking,
         ticket_codec=ticket_codec,
+        ticket_store=ticket_store,
         ticket_ttl_seconds=int(ticket_settings.get("ttl_seconds", 300)),
         max_tickets=int(ticket_settings.get("max_tickets", 1)),
+        max_ticket_exchanges=int(ticket_settings.get("max_exchanges", 1)),
     )
     fetch_stream = FetchStreamUseCase(
         identity=identity,

@@ -5,6 +5,7 @@ import os
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from uuid import uuid4
 
 import pyarrow as pa
 
@@ -24,6 +25,7 @@ from dal_obscura.data_plane.application.ports.catalog import CatalogRegistryPort
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest, IdentityPort
 from dal_obscura.data_plane.application.ports.masking import MaskingPort
 from dal_obscura.data_plane.application.ports.ticket_codec import TicketCodecPort
+from dal_obscura.data_plane.application.ports.ticket_store import TicketStorePort
 
 
 @dataclass(frozen=True)
@@ -51,20 +53,26 @@ class PlanAccessUseCase:
         catalog_registry: CatalogRegistryPort,
         masking: MaskingPort,
         ticket_codec: TicketCodecPort,
+        ticket_store: TicketStorePort,
         ticket_ttl_seconds: int,
         max_tickets: int,
+        max_ticket_exchanges: int,
         now: Callable[[], int] | None = None,
         nonce_factory: Callable[[], str] | None = None,
+        ticket_id_factory: Callable[[], str] | None = None,
     ) -> None:
         self._identity = identity
         self._authorizer = authorizer
         self._catalog_registry = catalog_registry
         self._masking = masking
         self._ticket_codec = ticket_codec
+        self._ticket_store = ticket_store
         self._ticket_ttl_seconds = ticket_ttl_seconds
         self._max_tickets = max_tickets
+        self._max_ticket_exchanges = max_ticket_exchanges
         self._now = now or _epoch_seconds
         self._nonce_factory = nonce_factory or _nonce
+        self._ticket_id_factory = ticket_id_factory or _ticket_id
 
     def execute(
         self, request: PlanRequest, auth_request: AuthenticationRequest
@@ -106,6 +114,8 @@ class PlanAccessUseCase:
         )
         plan = table_format.plan(execution_request, self._max_tickets)
 
+        now = self._now()
+        self._ticket_store.cleanup_expired_and_exhausted(now=now)
         ticket_tokens: list[str] = []
         for task in plan.tasks:
             # Each ticket carries enough context to re-validate authz later without
@@ -113,6 +123,7 @@ class PlanAccessUseCase:
             import pickle
 
             payload = TicketPayload(
+                ticket_id=self._ticket_id_factory(),
                 catalog=request.catalog,
                 target=request.target,
                 columns=execution_projection.visible_columns,
@@ -128,10 +139,11 @@ class PlanAccessUseCase:
                 },
                 policy_version=decision.policy_version,
                 principal_id=principal.id,
-                expires_at=self._now() + self._ticket_ttl_seconds,
+                expires_at=now + self._ticket_ttl_seconds,
                 nonce=self._nonce_factory(),
                 tenant_id=tenant_id,
             )
+            self._ticket_store.store(payload, max_exchanges=self._max_ticket_exchanges)
             ticket_tokens.append(self._ticket_codec.sign_payload(payload))
 
         output_schema = self._masking.masked_schema(
@@ -287,3 +299,7 @@ def _tenant_id(principal) -> str:
 
 def _nonce() -> str:
     return base64.urlsafe_b64encode(os.urandom(12)).decode("utf-8")
+
+
+def _ticket_id() -> str:
+    return str(uuid4())

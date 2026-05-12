@@ -45,6 +45,7 @@ from dal_obscura.data_plane.infrastructure.adapters.published_config import (
 )
 from dal_obscura.data_plane.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
 from dal_obscura.data_plane.interfaces.flight.server import DataAccessFlightService
+from tests.support.use_cases import FakeTicketStore
 
 TEST_JWT_SECRET = "test-jwt-secret-32-characters-long"
 
@@ -228,6 +229,7 @@ def build_flight_service(
     ticket_secret: str = "secret",
     ticket_ttl_seconds: int = 300,
     max_tickets: int = 1,
+    max_ticket_exchanges: int = 1,
 ) -> DataAccessFlightService:
     published_config_requested = db_session is not None or cell_id is not None
     if published_config_requested and (db_session is None or cell_id is None):
@@ -256,6 +258,7 @@ def build_flight_service(
     masking = DefaultMaskingAdapter()
     row_transform = DuckDBRowTransformAdapter(masking)
     ticket_codec = HmacTicketCodecAdapter(ticket_secret)
+    ticket_store = FakeTicketStore()
     get_schema = GetSchemaUseCase(
         identity=identity,
         authorizer=resolved_authorizer,
@@ -268,8 +271,10 @@ def build_flight_service(
         catalog_registry=cast(Any, resolved_registry),
         masking=masking,
         ticket_codec=ticket_codec,
+        ticket_store=ticket_store,
         ticket_ttl_seconds=ticket_ttl_seconds,
         max_tickets=max_tickets,
+        max_ticket_exchanges=max_ticket_exchanges,
     )
     fetch_stream = FetchStreamUseCase(
         identity=identity,
