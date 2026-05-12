@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en" data-api-root="/v1">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>dal-obscura control plane</title>
+    <link rel="stylesheet" href="/ui/static/styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Resource sections">
+        <div class="brand">
+          <span class="brand-mark">do</span>
+          <span>dal-obscura</span>
+        </div>
+        <nav class="nav-list" id="section-nav">
+          <button type="button" class="nav-item is-active" data-section="tenants">Tenants</button>
+          <button type="button" class="nav-item" data-section="cells">Cells</button>
+          <button type="button" class="nav-item" data-section="assignments">Assignments</button>
+          <button type="button" class="nav-item" data-section="runtime">Runtime</button>
+          <button type="button" class="nav-item" data-section="catalogs">Catalogs</button>
+          <button type="button" class="nav-item" data-section="assets">Assets</button>
+          <button type="button" class="nav-item" data-section="policies">Policies</button>
+          <button type="button" class="nav-item" data-section="auth">Auth</button>
+          <button type="button" class="nav-item" data-section="publications">Publications</button>
+        </nav>
+      </aside>
+      <main class="main-panel">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Control plane</p>
+            <h1 id="section-title">Tenants</h1>
+          </div>
+          <form id="token-form" class="token-form">
+            <label for="admin-token">Admin token</label>
+            <input id="admin-token" name="admin-token" type="password" autocomplete="off">
+            <button type="submit">Use token</button>
+          </form>
+        </header>
+        <section id="toast-region" class="toast-region" aria-live="polite"></section>
+        <section id="content-region" class="content-region" aria-live="polite">
+          <div class="empty-state">
+            <h2>Connect to the API</h2>
+            <p>Enter the control-plane admin token, then choose a resource section.</p>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/ui/static/app.js"></script>
+  </body>
+</html>

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.application.provisioning import ProvisioningService
+from dal_obscura.control_plane.interfaces.ui import install_ui
 
 
 class _StrictModel(BaseModel):
@@ -58,6 +59,7 @@ class AuthProvidersRequest(_StrictModel):
 
 def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> FastAPI:  # noqa: C901
     app = FastAPI(title="dal-obscura control plane")
+    install_ui(app)
 
     def require_admin(authorization: str = Header(default="")) -> None:
         expected = f"Bearer {admin_token}"
