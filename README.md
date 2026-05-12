@@ -133,6 +133,17 @@ export DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN=dev-admin
 uv run dal-obscura-control-plane
 ```
 
+Open the operator dashboard from the same control-plane process:
+
+```bash
+open http://localhost:8820/ui
+```
+
+The dashboard shell is served by the control plane, but all state reads and
+writes go through the protected `/v1` API. Enter
+`DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN` in the browser when prompted. The token
+is not rendered into the HTML shell by the service.
+
 Provision tenants, cells, catalogs, assets, policy rules, and auth providers
 through the HTTP API, then publish and activate a snapshot. Start each data
 plane cell from the same database without calling the control-plane service:
