@@ -74,6 +74,9 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
             except ValidationFailure as exc:
                 session.rollback()
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
+            except LookupError as exc:
+                session.rollback()
+                raise HTTPException(status_code=404, detail=str(exc)) from exc
             except Exception:
                 session.rollback()
                 raise
@@ -89,6 +92,30 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
     @app.get("/v1/cell-tenant-assignments", dependencies=[Depends(require_admin)])
     def list_cell_tenant_assignments() -> object:
         return with_service(lambda service: service.list_cell_tenant_assignments())
+
+    @app.get("/v1/cells/{cell_id}/runtime-settings", dependencies=[Depends(require_admin)])
+    def get_runtime_settings(cell_id: UUID) -> object:
+        return with_service(lambda service: service.get_runtime_settings(cell_id))
+
+    @app.get("/v1/cells/{cell_id}/catalogs", dependencies=[Depends(require_admin)])
+    def list_catalogs(cell_id: UUID) -> object:
+        return with_service(lambda service: service.list_catalogs(cell_id))
+
+    @app.get("/v1/cells/{cell_id}/assets", dependencies=[Depends(require_admin)])
+    def list_assets(cell_id: UUID) -> object:
+        return with_service(lambda service: service.list_assets(cell_id))
+
+    @app.get("/v1/assets/{asset_id}/policy-rules", dependencies=[Depends(require_admin)])
+    def list_policy_rules(asset_id: UUID) -> object:
+        return with_service(lambda service: service.list_policy_rules(asset_id))
+
+    @app.get("/v1/cells/{cell_id}/auth-providers", dependencies=[Depends(require_admin)])
+    def list_auth_providers(cell_id: UUID) -> object:
+        return with_service(lambda service: service.list_auth_providers(cell_id))
+
+    @app.get("/v1/cells/{cell_id}/draft", dependencies=[Depends(require_admin)])
+    def get_cell_draft(cell_id: UUID) -> object:
+        return with_service(lambda service: service.get_cell_draft(cell_id))
 
     @app.post("/v1/tenants", dependencies=[Depends(require_admin)])
     def create_tenant(request: TenantRequest) -> object:

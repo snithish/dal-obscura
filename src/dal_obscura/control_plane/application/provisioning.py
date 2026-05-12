@@ -35,6 +35,24 @@ class ProvisioningService:
     def list_cell_tenant_assignments(self) -> list[dict[str, str]]:
         return self._store.list_cell_tenant_assignments()
 
+    def get_runtime_settings(self, cell_id: UUID) -> dict[str, object] | None:
+        return self._store.get_runtime_settings(cell_id)
+
+    def list_catalogs(self, cell_id: UUID) -> list[dict[str, object]]:
+        return self._store.list_catalogs(cell_id)
+
+    def list_assets(self, cell_id: UUID) -> list[dict[str, object]]:
+        return self._store.list_assets(cell_id)
+
+    def list_policy_rules(self, asset_id: UUID) -> list[dict[str, object]]:
+        return self._store.list_policy_rules(asset_id)
+
+    def list_auth_providers(self, cell_id: UUID) -> list[dict[str, object]]:
+        return self._store.list_auth_providers(cell_id)
+
+    def get_cell_draft(self, cell_id: UUID) -> dict[str, object]:
+        return self._store.get_cell_draft(cell_id)
+
     def assign_tenant(self, cell_id: UUID, tenant_id: UUID, shard_key: str) -> None:
         self._store.assign_tenant_to_cell(
             cell_id=cell_id,

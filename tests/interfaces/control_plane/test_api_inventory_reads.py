@@ -73,3 +73,146 @@ def test_lists_tenants_cells_and_assignments_after_writes():
             "shard_key": "default",
         }
     ]
+
+
+ICEBERG_CATALOG_MODULE = (
+    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
+)
+DEFAULT_AUTH_MODULE = (
+    "dal_obscura.data_plane.infrastructure.adapters.identity_default.DefaultIdentityAdapter"
+)
+
+
+def _provision_draft(client: TestClient) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
+    tenant, cell = _create_tenant_and_cell(client)
+    client.put(
+        f"/v1/tenants/{tenant['id']}/cells/{cell['id']}/runtime-settings",
+        json={
+            "ticket_ttl_seconds": 900,
+            "max_tickets": 64,
+            "max_ticket_exchanges": 2,
+            "path_rules": [{"glob": "s3://warehouse/*", "allow": True}],
+        },
+        headers=ADMIN_HEADERS,
+    )
+    client.put(
+        f"/v1/tenants/{tenant['id']}/cells/{cell['id']}/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+    asset = client.put(
+        f"/v1/tenants/{tenant['id']}/cells/{cell['id']}/assets/analytics/default.users",
+        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {"snapshot": 1}},
+        headers=ADMIN_HEADERS,
+    ).json()
+    client.put(
+        f"/v1/assets/{asset['id']}/policy-rules",
+        json={
+            "rules": [
+                {
+                    "ordinal": 10,
+                    "effect": "allow",
+                    "principals": ["user1"],
+                    "when": {"tenant": "default"},
+                    "columns": ["id", "email"],
+                    "masks": {"email": {"type": "email"}},
+                    "row_filter": "region = 'us'",
+                }
+            ]
+        },
+        headers=ADMIN_HEADERS,
+    )
+    client.put(
+        f"/v1/cells/{cell['id']}/auth-providers",
+        json={
+            "providers": [
+                {
+                    "ordinal": 1,
+                    "module": DEFAULT_AUTH_MODULE,
+                    "args": {"jwt_secret": {"key": "DAL_OBSCURA_JWT_SECRET"}},
+                    "enabled": True,
+                }
+            ]
+        },
+        headers=ADMIN_HEADERS,
+    )
+    return tenant, cell, asset
+
+
+def test_reads_cell_draft_resources_after_writes():
+    client = _client()
+    tenant, cell, asset = _provision_draft(client)
+
+    runtime = client.get(
+        f"/v1/cells/{cell['id']}/runtime-settings",
+        headers=ADMIN_HEADERS,
+    ).json()
+    catalogs = client.get(f"/v1/cells/{cell['id']}/catalogs", headers=ADMIN_HEADERS).json()
+    assets = client.get(f"/v1/cells/{cell['id']}/assets", headers=ADMIN_HEADERS).json()
+    rules = client.get(f"/v1/assets/{asset['id']}/policy-rules", headers=ADMIN_HEADERS).json()
+    auth = client.get(f"/v1/cells/{cell['id']}/auth-providers", headers=ADMIN_HEADERS).json()
+    draft = client.get(f"/v1/cells/{cell['id']}/draft", headers=ADMIN_HEADERS).json()
+
+    assert runtime == {
+        "cell_id": cell["id"],
+        "ticket_ttl_seconds": 900,
+        "max_tickets": 64,
+        "max_ticket_exchanges": 2,
+        "path_rules": [{"glob": "s3://warehouse/*", "allow": True}],
+    }
+    assert catalogs[0]["tenant_id"] == tenant["id"]
+    assert catalogs[0]["name"] == "analytics"
+    assert catalogs[0]["module"] == ICEBERG_CATALOG_MODULE
+    assert catalogs[0]["options"] == {"type": "sql", "uri": "sqlite:///catalog.db"}
+    assert assets[0]["id"] == asset["id"]
+    assert assets[0]["catalog"] == "analytics"
+    assert assets[0]["target"] == "default.users"
+    assert assets[0]["options"] == {"snapshot": 1}
+    assert rules == [
+        {
+            "id": rules[0]["id"],
+            "asset_id": asset["id"],
+            "ordinal": 10,
+            "effect": "allow",
+            "principals": ["user1"],
+            "when": {"tenant": "default"},
+            "columns": ["id", "email"],
+            "masks": {"email": {"type": "email"}},
+            "row_filter": "region = 'us'",
+        }
+    ]
+    assert auth == [
+        {
+            "id": auth[0]["id"],
+            "cell_id": cell["id"],
+            "ordinal": 1,
+            "module": DEFAULT_AUTH_MODULE,
+            "args": {"jwt_secret": {"key": "DAL_OBSCURA_JWT_SECRET"}},
+            "enabled": True,
+        }
+    ]
+    assert draft["cell"] == {
+        "id": cell["id"],
+        "name": "default",
+        "region": "local",
+        "status": "active",
+    }
+    assert draft["runtime_settings"] == runtime
+    assert draft["catalogs"] == catalogs
+    assert draft["assets"][0]["policy_rules"] == rules
+    assert draft["auth_providers"] == auth
+
+
+def test_unknown_cell_draft_returns_404():
+    client = _client()
+
+    response = client.get(
+        "/v1/cells/00000000-0000-0000-0000-000000000001/draft",
+        headers=ADMIN_HEADERS,
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "No cell 00000000-0000-0000-0000-000000000001"

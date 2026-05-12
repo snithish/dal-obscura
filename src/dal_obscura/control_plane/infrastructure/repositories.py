@@ -332,6 +332,126 @@ class PublicationStore:
             policy_version=record.policy_version,
         )
 
+    def get_cell(self, cell_id: UUID) -> dict[str, str]:
+        record = self._session.get(CellRecord, cell_id)
+        if record is None:
+            raise LookupError(f"No cell {cell_id}")
+        return {
+            "id": str(record.id),
+            "name": record.name,
+            "region": record.region,
+            "status": record.status,
+        }
+
+    def get_runtime_settings(self, cell_id: UUID) -> dict[str, object] | None:
+        record = self._session.get(CellRuntimeSettingsRecord, cell_id)
+        if record is None:
+            return None
+        return {
+            "cell_id": str(record.cell_id),
+            "ticket_ttl_seconds": record.ticket_ttl_seconds,
+            "max_tickets": record.max_tickets,
+            "max_ticket_exchanges": record.max_ticket_exchanges,
+            "path_rules": list(record.path_rules_json),
+        }
+
+    def list_catalogs(self, cell_id: UUID) -> list[dict[str, object]]:
+        return [
+            {
+                "id": str(record.id),
+                "cell_id": str(record.cell_id),
+                "tenant_id": str(record.tenant_id),
+                "name": record.name,
+                "module": record.module,
+                "options": dict(record.options_json),
+            }
+            for record in self._session.scalars(
+                select(CatalogRecord)
+                .where(CatalogRecord.cell_id == cell_id)
+                .order_by(CatalogRecord.name)
+            )
+        ]
+
+    def list_assets(self, cell_id: UUID) -> list[dict[str, object]]:
+        catalog_records = list(
+            self._session.scalars(select(CatalogRecord).where(CatalogRecord.cell_id == cell_id))
+        )
+        catalog_by_id = {record.id: record for record in catalog_records}
+        assets = []
+        for record in self._session.scalars(
+            select(AssetRecord).where(AssetRecord.cell_id == cell_id).order_by(AssetRecord.target)
+        ):
+            catalog = catalog_by_id[record.catalog_id]
+            assets.append(
+                {
+                    "id": str(record.id),
+                    "cell_id": str(record.cell_id),
+                    "tenant_id": str(record.tenant_id),
+                    "catalog_id": str(record.catalog_id),
+                    "catalog": catalog.name,
+                    "target": record.target,
+                    "backend": record.backend,
+                    "table_identifier": record.table_identifier,
+                    "options": dict(record.options_json),
+                }
+            )
+        return assets
+
+    def list_policy_rules(self, asset_id: UUID) -> list[dict[str, object]]:
+        return [
+            {
+                "id": str(record.id),
+                "asset_id": str(record.asset_id),
+                "ordinal": record.ordinal,
+                "effect": record.effect,
+                "principals": list(record.principals_json),
+                "when": dict(record.when_json),
+                "columns": list(record.columns_json),
+                "masks": dict(record.masks_json),
+                "row_filter": record.row_filter_sql,
+            }
+            for record in self._session.scalars(
+                select(PolicyRuleRecord)
+                .where(PolicyRuleRecord.asset_id == asset_id)
+                .order_by(PolicyRuleRecord.ordinal)
+            )
+        ]
+
+    def list_auth_providers(self, cell_id: UUID) -> list[dict[str, object]]:
+        return [
+            {
+                "id": str(record.id),
+                "cell_id": str(record.cell_id),
+                "ordinal": record.ordinal,
+                "module": record.module,
+                "args": dict(record.args_json),
+                "enabled": record.enabled,
+            }
+            for record in self._session.scalars(
+                select(AuthProviderRecord)
+                .where(AuthProviderRecord.cell_id == cell_id)
+                .order_by(AuthProviderRecord.ordinal)
+            )
+        ]
+
+    def get_cell_draft(self, cell_id: UUID) -> dict[str, object]:
+        cell = self.get_cell(cell_id)
+        assignments = [
+            item for item in self.list_cell_tenant_assignments() if item["cell_id"] == str(cell_id)
+        ]
+        assets = []
+        for asset in self.list_assets(cell_id):
+            rules = self.list_policy_rules(UUID(str(asset["id"])))
+            assets.append({**asset, "policy_rules": rules})
+        return {
+            "cell": cell,
+            "assignments": assignments,
+            "runtime_settings": self.get_runtime_settings(cell_id),
+            "catalogs": self.list_catalogs(cell_id),
+            "assets": assets,
+            "auth_providers": self.list_auth_providers(cell_id),
+        }
+
     def load_publish_draft(self, cell_id: UUID) -> PublishDraft:
         runtime_record = self._session.get(CellRuntimeSettingsRecord, cell_id)
         if runtime_record is None:
