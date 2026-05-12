@@ -216,3 +216,57 @@ def test_unknown_cell_draft_returns_404():
 
     assert response.status_code == 404
     assert response.json()["detail"] == "No cell 00000000-0000-0000-0000-000000000001"
+
+
+def test_reads_publications_and_active_publication():
+    client = _client()
+    _, cell, _ = _provision_draft(client)
+
+    assert (
+        client.get(
+            f"/v1/cells/{cell['id']}/active-publication",
+            headers=ADMIN_HEADERS,
+        ).status_code
+        == 404
+    )
+
+    publication = client.post(
+        f"/v1/cells/{cell['id']}/publications",
+        headers=ADMIN_HEADERS,
+    ).json()
+    publications_before_activation = client.get(
+        f"/v1/cells/{cell['id']}/publications",
+        headers=ADMIN_HEADERS,
+    ).json()
+
+    assert publications_before_activation == [
+        {
+            "id": publication["publication_id"],
+            "cell_id": cell["id"],
+            "schema_version": 1,
+            "status": "published",
+            "manifest_hash": publication["manifest_hash"],
+            "active": False,
+        }
+    ]
+
+    client.post(
+        f"/v1/cells/{cell['id']}/publications/{publication['publication_id']}/activate",
+        headers=ADMIN_HEADERS,
+    )
+    active = client.get(
+        f"/v1/cells/{cell['id']}/active-publication",
+        headers=ADMIN_HEADERS,
+    ).json()
+    publications_after_activation = client.get(
+        f"/v1/cells/{cell['id']}/publications",
+        headers=ADMIN_HEADERS,
+    ).json()
+
+    assert active == {
+        "cell_id": cell["id"],
+        "publication_id": publication["publication_id"],
+        "manifest_hash": publication["manifest_hash"],
+        "status": "published",
+    }
+    assert publications_after_activation[0]["active"] is True

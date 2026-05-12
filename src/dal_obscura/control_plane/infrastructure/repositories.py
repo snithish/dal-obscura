@@ -452,6 +452,39 @@ class PublicationStore:
             "auth_providers": self.list_auth_providers(cell_id),
         }
 
+    def list_publications(self, cell_id: UUID) -> list[dict[str, object]]:
+        active = self._session.get(ActivePublicationRecord, cell_id)
+        active_publication_id = active.publication_id if active is not None else None
+        return [
+            {
+                "id": str(record.id),
+                "cell_id": str(record.cell_id),
+                "schema_version": record.schema_version,
+                "status": record.status,
+                "manifest_hash": record.manifest_hash,
+                "active": record.id == active_publication_id,
+            }
+            for record in self._session.scalars(
+                select(ConfigPublicationRecord)
+                .where(ConfigPublicationRecord.cell_id == cell_id)
+                .order_by(ConfigPublicationRecord.created_at)
+            )
+        ]
+
+    def get_active_publication_summary(self, cell_id: UUID) -> dict[str, str]:
+        active = self._session.get(ActivePublicationRecord, cell_id)
+        if active is None:
+            raise LookupError(f"No active publication for cell {cell_id}")
+        publication = self._session.get(ConfigPublicationRecord, active.publication_id)
+        if publication is None:
+            raise LookupError(f"No publication {active.publication_id}")
+        return {
+            "cell_id": str(active.cell_id),
+            "publication_id": str(active.publication_id),
+            "manifest_hash": publication.manifest_hash,
+            "status": publication.status,
+        }
+
     def load_publish_draft(self, cell_id: UUID) -> PublishDraft:
         runtime_record = self._session.get(CellRuntimeSettingsRecord, cell_id)
         if runtime_record is None:

@@ -53,6 +53,12 @@ class ProvisioningService:
     def get_cell_draft(self, cell_id: UUID) -> dict[str, object]:
         return self._store.get_cell_draft(cell_id)
 
+    def list_publications(self, cell_id: UUID) -> list[dict[str, object]]:
+        return self._store.list_publications(cell_id)
+
+    def get_active_publication_summary(self, cell_id: UUID) -> dict[str, str]:
+        return self._store.get_active_publication_summary(cell_id)
+
     def assign_tenant(self, cell_id: UUID, tenant_id: UUID, shard_key: str) -> None:
         self._store.assign_tenant_to_cell(
             cell_id=cell_id,

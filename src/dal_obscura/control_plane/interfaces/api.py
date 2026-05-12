@@ -117,6 +117,14 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
     def get_cell_draft(cell_id: UUID) -> object:
         return with_service(lambda service: service.get_cell_draft(cell_id))
 
+    @app.get("/v1/cells/{cell_id}/publications", dependencies=[Depends(require_admin)])
+    def list_publications(cell_id: UUID) -> object:
+        return with_service(lambda service: service.list_publications(cell_id))
+
+    @app.get("/v1/cells/{cell_id}/active-publication", dependencies=[Depends(require_admin)])
+    def get_active_publication_summary(cell_id: UUID) -> object:
+        return with_service(lambda service: service.get_active_publication_summary(cell_id))
+
     @app.post("/v1/tenants", dependencies=[Depends(require_admin)])
     def create_tenant(request: TenantRequest) -> object:
         return with_service(
