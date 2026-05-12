@@ -7,7 +7,10 @@ import time
 from binascii import Error as BinasciiError
 from hashlib import sha256
 
-from dal_obscura.common.ticket_delivery.models import TicketPayload
+from dal_obscura.common.ticket_delivery.models import (
+    TicketPayload,
+    canonical_ticket_payload_bytes,
+)
 
 
 class HmacTicketCodecAdapter:
@@ -20,7 +23,7 @@ class HmacTicketCodecAdapter:
 
     def sign_payload(self, payload: TicketPayload) -> str:
         """Produces a compact `payload.signature` token for transport."""
-        raw = json.dumps(payload.to_dict(), separators=(",", ":"), sort_keys=True).encode("utf-8")
+        raw = canonical_ticket_payload_bytes(payload)
         signature = hmac.new(self._secret, raw, sha256).hexdigest()
         encoded_payload = base64.urlsafe_b64encode(raw).decode("utf-8")
         return f"{encoded_payload}.{signature}"

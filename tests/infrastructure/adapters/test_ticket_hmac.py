@@ -15,6 +15,7 @@ def _scan_payload():
 def test_ticket_sign_and_verify():
     codec = HmacTicketCodecAdapter("secret")
     payload = TicketPayload(
+        ticket_id="00000000-0000-0000-0000-000000000001",
         catalog="catalog1",
         target="catalog.db.table",
         columns=["id"],
@@ -26,6 +27,7 @@ def test_ticket_sign_and_verify():
     )
     ticket = codec.sign_payload(payload)
     verified = codec.verify(ticket)
+    assert verified.ticket_id == payload.ticket_id
     assert verified.catalog == payload.catalog
     assert verified.target == payload.target
     assert verified.columns == payload.columns

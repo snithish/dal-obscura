@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TypedDict, cast
@@ -29,6 +31,7 @@ class TicketPayload:
     nonce: str
     tenant_id: str = "default"
     catalog: str | None = None
+    ticket_id: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         """Produces a JSON-friendly representation used by the ticket codec."""
@@ -44,6 +47,8 @@ class TicketPayload:
         }
         if self.catalog is not None:
             payload["catalog"] = self.catalog
+        if self.ticket_id is not None:
+            payload["ticket_id"] = self.ticket_id
         return payload
 
     @classmethod
@@ -59,6 +64,7 @@ class TicketPayload:
             nonce=str(payload.get("nonce", "")),
             tenant_id=str(payload.get("tenant_id", "default") or "default"),
             catalog=_coerce_optional_str(payload.get("catalog")),
+            ticket_id=_coerce_optional_str(payload.get("ticket_id")),
         )
 
 
@@ -124,3 +130,15 @@ def _coerce_row_filter(raw: object) -> str | None:
     if not isinstance(raw, str) or not raw:
         return None
     return raw
+
+
+def canonical_ticket_payload_bytes(payload: TicketPayload) -> bytes:
+    return json.dumps(
+        payload.to_dict(),
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def ticket_payload_hash(payload: TicketPayload) -> str:
+    return hashlib.sha256(canonical_ticket_payload_bytes(payload)).hexdigest()
