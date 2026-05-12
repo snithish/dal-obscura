@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
-from dal_obscura.common.config_store.orm import Base
+from dal_obscura.common.config_store.orm import Base, PublishedCellRuntimeRecord
 from dal_obscura.control_plane.interfaces.api import create_app
 
 ICEBERG_CATALOG_MODULE = (
@@ -35,7 +38,12 @@ def test_api_provisions_and_activates_default_cell_publication():
     )
     client.put(
         f"/v1/tenants/{tenant['id']}/cells/{cell['id']}/runtime-settings",
-        json={"ticket_ttl_seconds": 900, "max_tickets": 64, "path_rules": []},
+        json={
+            "ticket_ttl_seconds": 900,
+            "max_tickets": 64,
+            "max_ticket_exchanges": 2,
+            "path_rules": [],
+        },
         headers=headers,
     )
     catalog = client.put(
@@ -95,3 +103,13 @@ def test_api_provisions_and_activates_default_cell_publication():
     assert catalog["name"] == "analytics"
     assert activated["publication_id"] == published["publication_id"]
     assert published["asset_count"] == 1
+
+    session_maker = session_factory(engine)
+    with session_maker() as db_session:
+        runtime = db_session.scalar(
+            select(PublishedCellRuntimeRecord).where(
+                PublishedCellRuntimeRecord.publication_id == UUID(published["publication_id"])
+            )
+        )
+    assert runtime is not None
+    assert runtime.ticket_json["max_exchanges"] == 2

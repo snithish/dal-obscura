@@ -295,7 +295,12 @@ def _provision_control_plane(
         "put",
         f"/v1/tenants/{tenant_id}/cells/{cell_id}/runtime-settings",
         headers,
-        {"ticket_ttl_seconds": 900, "max_tickets": 64, "path_rules": []},
+        {
+            "ticket_ttl_seconds": 900,
+            "max_tickets": 64,
+            "max_ticket_exchanges": 1,
+            "path_rules": [],
+        },
     )
     _request(
         client,

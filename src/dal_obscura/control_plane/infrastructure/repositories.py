@@ -76,6 +76,7 @@ class PublicationStore:
         cell_id: UUID,
         ticket_ttl_seconds: int,
         max_tickets: int,
+        max_ticket_exchanges: int,
         path_rules: list[dict[str, Any]],
     ) -> None:
         existing = self._session.get(CellRuntimeSettingsRecord, cell_id)
@@ -85,12 +86,14 @@ class PublicationStore:
                     cell_id=cell_id,
                     ticket_ttl_seconds=ticket_ttl_seconds,
                     max_tickets=max_tickets,
+                    max_ticket_exchanges=max_ticket_exchanges,
                     path_rules_json=path_rules,
                 )
             )
         else:
             existing.ticket_ttl_seconds = ticket_ttl_seconds
             existing.max_tickets = max_tickets
+            existing.max_ticket_exchanges = max_ticket_exchanges
             existing.path_rules_json = path_rules
         self._session.flush()
 
@@ -373,6 +376,7 @@ class PublicationStore:
             runtime=CellRuntimeDraft(
                 ticket_ttl_seconds=runtime_record.ticket_ttl_seconds,
                 max_tickets=runtime_record.max_tickets,
+                max_ticket_exchanges=runtime_record.max_ticket_exchanges,
                 path_rules=list(runtime_record.path_rules_json),
             ),
             auth_providers=auth_providers,

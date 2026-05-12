@@ -65,7 +65,12 @@ def provision_default_published_asset(
     _checked_json(
         client.put(
             f"/v1/tenants/{tenant['id']}/cells/{cell['id']}/runtime-settings",
-            json={"ticket_ttl_seconds": 900, "max_tickets": 64, "path_rules": []},
+            json={
+                "ticket_ttl_seconds": 900,
+                "max_tickets": 64,
+                "max_ticket_exchanges": 1,
+                "path_rules": [],
+            },
             headers=headers,
         )
     )

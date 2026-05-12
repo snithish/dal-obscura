@@ -51,6 +51,7 @@ class CellRuntimeSettingsRecord(Base):
     cell_id: Mapped[UUID] = mapped_column(ForeignKey("cells.id"), primary_key=True)
     ticket_ttl_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
     max_tickets: Mapped[int] = mapped_column(Integer, nullable=False)
+    max_ticket_exchanges: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     path_rules_json: Mapped[list[dict[str, Any]]] = mapped_column(
         JSON, nullable=False, default=list
     )

@@ -49,6 +49,7 @@ class PublicationCompiler:
             ticket={
                 "ttl_seconds": draft.runtime.ticket_ttl_seconds,
                 "max_tickets": draft.runtime.max_tickets,
+                "max_exchanges": draft.runtime.max_ticket_exchanges,
             },
             path_rules=list(draft.runtime.path_rules),
         )

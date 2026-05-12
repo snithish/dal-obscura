@@ -52,6 +52,7 @@ class AuthProviderDraft:
 class CellRuntimeDraft:
     ticket_ttl_seconds: int
     max_tickets: int
+    max_ticket_exchanges: int
     path_rules: list[dict[str, Any]]
 
 

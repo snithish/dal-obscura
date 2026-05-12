@@ -33,6 +33,7 @@ class CellTenantRequest(_StrictModel):
 class RuntimeSettingsRequest(_StrictModel):
     ticket_ttl_seconds: int = Field(gt=0)
     max_tickets: int = Field(gt=0)
+    max_ticket_exchanges: int = Field(gt=0)
     path_rules: list[dict[str, Any]] = Field(default_factory=list)
 
 
@@ -117,6 +118,7 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
                 cell_id=cell_id,
                 ttl=request.ticket_ttl_seconds,
                 max_tickets=request.max_tickets,
+                max_ticket_exchanges=request.max_ticket_exchanges,
                 path_rules=request.path_rules,
             )
         ) or {"cell_id": str(cell_id)}

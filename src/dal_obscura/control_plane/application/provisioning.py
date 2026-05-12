@@ -38,12 +38,14 @@ class ProvisioningService:
         cell_id: UUID,
         ttl: int,
         max_tickets: int,
+        max_ticket_exchanges: int,
         path_rules: list[dict[str, Any]],
     ) -> None:
         self._store.upsert_runtime_settings(
             cell_id=cell_id,
             ticket_ttl_seconds=ttl,
             max_tickets=max_tickets,
+            max_ticket_exchanges=max_ticket_exchanges,
             path_rules=path_rules,
         )
 
