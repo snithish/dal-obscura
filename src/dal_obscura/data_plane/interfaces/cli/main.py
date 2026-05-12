@@ -8,7 +8,11 @@ from typing import cast
 
 import pyarrow.flight as flight
 
-from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
+from dal_obscura.common.config_store.db import (
+    create_engine_from_url,
+    ensure_config_store_schema,
+    session_factory,
+)
 from dal_obscura.data_plane.application.ports.identity import IdentityPort
 from dal_obscura.data_plane.application.use_cases.fetch_stream import FetchStreamUseCase
 from dal_obscura.data_plane.application.use_cases.get_schema import GetSchemaUseCase
@@ -46,6 +50,7 @@ def main() -> None:
     LOGGER.info("Starting dal-obscura data plane")
 
     engine = create_engine_from_url(runtime_config.database_url)
+    ensure_config_store_schema(engine)
     session_maker = session_factory(engine)
     session = session_maker()
     config_store = PublishedConfigStore(session, cell_id=runtime_config.cell_id)
