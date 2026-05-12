@@ -423,6 +423,7 @@ def test_flight_plan_rejects_direct_target_without_catalog(tmp_path):
                 "effect": "allow",
             }
         ],
+        max_ticket_exchanges=2,
     )
     with running_flight_client(server) as client:
         descriptor = command_descriptor(

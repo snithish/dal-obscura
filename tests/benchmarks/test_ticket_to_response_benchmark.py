@@ -521,6 +521,7 @@ def test_benchmark_ticket_to_response_complex_schema(tmp_path, benchmark):
         policy_rules=policy_rules,
         jwt_secret=JWT_SECRET,
         ticket_secret="benchmark-ticket-secret",
+        max_ticket_exchanges=10_000,
     )
     with running_flight_client(server) as client:
         options = flight_call_options("user1", groups=["analyst"], jwt_secret=JWT_SECRET)

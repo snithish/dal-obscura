@@ -617,7 +617,11 @@ def test_policy_version_is_per_dataset(tmp_path):
         target="table_a",
         rules=[allow_rule(["id", "region"])],
     )
-    server = build_flight_service(table_format=table_format, authorizer=authorizer)
+    server = build_flight_service(
+        table_format=table_format,
+        authorizer=authorizer,
+        max_ticket_exchanges=2,
+    )
     descriptor = command_descriptor(
         {
             "catalog": "analytics",

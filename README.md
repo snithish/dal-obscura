@@ -9,7 +9,7 @@
 Data access layer with Arrow Flight, Iceberg, masking, and row filters.
 
 ## Highlights
-- Arrow Flight plan/ticket flow with HMAC-signed tickets
+- Arrow Flight plan/ticket flow with HMAC-signed, DB-backed tickets
 - Iceberg v2/v3 backend (pyiceberg)
 - API-first FastAPI control plane for configuration provisioning
 - RDBMS-backed published configuration consumed by cell-scoped data planes
@@ -196,6 +196,10 @@ Then call:
 - `POST /v1/cells/{cell_id}/publications`
 - `POST /v1/cells/{cell_id}/publications/{publication_id}/activate`
 
+Runtime ticket settings include `ticket_ttl_seconds`, `max_tickets`, and
+`max_ticket_exchanges`. `max_ticket_exchanges` limits how many successful
+`do_get` exchanges a planned ticket can reserve before it is rejected.
+
 ### Authentication Providers
 
 Each published auth-provider `module` names a Python class that implements
@@ -333,7 +337,7 @@ After `uv sync --dev`, install the hooks with `uv run pre-commit install`. The c
 - Iceberg pushdown is currently conservative: mixed `AND` predicates split, but nested-field predicates and unsupported shapes remain residual-only.
 - ABAC conditions currently support exact principal-attribute matches and membership in an explicit allowed-value list.
 - Collection masking currently targets list-of-struct paths and does not yet support arbitrary scalar lists or deeper heterogeneous container rewrites.
-- Tickets still serialize Python scan tasks directly, which keeps the transport format tied to Python internals.
+- Tickets still persist Python scan tasks for execution, which keeps the payload format tied to Python internals.
 
 ## Logging
 - JSON logs by default.
