@@ -26,6 +26,15 @@ class ProvisioningService:
         self._store.create_cell(cell_id=cell_id, name=name, region=region)
         return {"id": str(cell_id), "name": name, "region": region}
 
+    def list_tenants(self) -> list[dict[str, str]]:
+        return self._store.list_tenants()
+
+    def list_cells(self) -> list[dict[str, str]]:
+        return self._store.list_cells()
+
+    def list_cell_tenant_assignments(self) -> list[dict[str, str]]:
+        return self._store.list_cell_tenant_assignments()
+
     def assign_tenant(self, cell_id: UUID, tenant_id: UUID, shard_key: str) -> None:
         self._store.assign_tenant_to_cell(
             cell_id=cell_id,

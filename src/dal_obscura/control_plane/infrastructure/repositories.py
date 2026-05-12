@@ -64,6 +64,43 @@ class PublicationStore:
         )
         self._session.flush()
 
+    def list_tenants(self) -> list[dict[str, str]]:
+        return [
+            {
+                "id": str(record.id),
+                "slug": record.slug,
+                "display_name": record.display_name,
+                "status": record.status,
+            }
+            for record in self._session.scalars(select(TenantRecord).order_by(TenantRecord.slug))
+        ]
+
+    def list_cells(self) -> list[dict[str, str]]:
+        return [
+            {
+                "id": str(record.id),
+                "name": record.name,
+                "region": record.region,
+                "status": record.status,
+            }
+            for record in self._session.scalars(select(CellRecord).order_by(CellRecord.name))
+        ]
+
+    def list_cell_tenant_assignments(self) -> list[dict[str, str]]:
+        return [
+            {
+                "cell_id": str(record.cell_id),
+                "tenant_id": str(record.tenant_id),
+                "shard_key": record.shard_key,
+            }
+            for record in self._session.scalars(
+                select(CellTenantRecord).order_by(
+                    CellTenantRecord.cell_id,
+                    CellTenantRecord.tenant_id,
+                )
+            )
+        ]
+
     def assign_tenant_to_cell(self, *, cell_id: UUID, tenant_id: UUID, shard_key: str) -> None:
         self._session.add(
             CellTenantRecord(cell_id=cell_id, tenant_id=tenant_id, shard_key=shard_key)

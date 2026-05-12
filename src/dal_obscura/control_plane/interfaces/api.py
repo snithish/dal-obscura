@@ -78,6 +78,18 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
                 session.rollback()
                 raise
 
+    @app.get("/v1/tenants", dependencies=[Depends(require_admin)])
+    def list_tenants() -> object:
+        return with_service(lambda service: service.list_tenants())
+
+    @app.get("/v1/cells", dependencies=[Depends(require_admin)])
+    def list_cells() -> object:
+        return with_service(lambda service: service.list_cells())
+
+    @app.get("/v1/cell-tenant-assignments", dependencies=[Depends(require_admin)])
+    def list_cell_tenant_assignments() -> object:
+        return with_service(lambda service: service.list_cell_tenant_assignments())
+
     @app.post("/v1/tenants", dependencies=[Depends(require_admin)])
     def create_tenant(request: TenantRequest) -> object:
         return with_service(
