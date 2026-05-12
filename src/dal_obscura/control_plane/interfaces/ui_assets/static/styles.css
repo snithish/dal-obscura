@@ -213,3 +213,35 @@ h1 {
     flex-direction: column;
   }
 }
+
+.drawer {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  max-width: 760px;
+  padding: 0;
+  width: min(760px, calc(100vw - 32px));
+}
+
+.drawer::backdrop {
+  background: rgba(17, 24, 32, 0.38);
+}
+
+.drawer-form {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.drawer-header,
+.drawer-footer {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.json-field {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  min-height: 360px;
+  resize: vertical;
+  width: 100%;
+}

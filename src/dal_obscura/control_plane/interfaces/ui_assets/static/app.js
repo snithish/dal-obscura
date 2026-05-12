@@ -11,6 +11,18 @@ const tokenInput = document.querySelector("#admin-token");
 const nav = document.querySelector("#section-nav");
 const toasts = document.querySelector("#toast-region");
 
+const sectionConfig = {
+  tenants: { list: "/tenants", context: [] },
+  cells: { list: "/cells", context: [] },
+  assignments: { list: "/cell-tenant-assignments", context: [] },
+  runtime: { list: "/cells/{cell_id}/runtime-settings", context: ["cell_id"] },
+  catalogs: { list: "/cells/{cell_id}/catalogs", context: ["cell_id"] },
+  assets: { list: "/cells/{cell_id}/assets", context: ["cell_id"] },
+  policies: { list: "/assets/{asset_id}/policy-rules", context: ["asset_id"] },
+  auth: { list: "/cells/{cell_id}/auth-providers", context: ["cell_id"] },
+  publications: { list: "/cells/{cell_id}/publications", context: ["cell_id"] },
+};
+
 if (state.token) {
   tokenInput.value = state.token;
 }
@@ -35,7 +47,8 @@ nav.addEventListener("click", (event) => {
 });
 
 async function apiGet(path) {
-  const response = await fetch(`${apiRoot}${path}`, {
+  const resolvedPath = path;
+  const response = await fetch(`${apiRoot}${resolvedPath}`, {
     headers: { Authorization: `Bearer ${state.token}` },
   });
   if (!response.ok) {
@@ -49,12 +62,12 @@ async function loadSection(section) {
     renderEmpty("Connect to the API", "Enter the control-plane admin token first.");
     return;
   }
-  const path = sectionPath(section);
-  if (!path) {
-    renderEmpty("Choose context", "This section needs a selected cell or asset.");
-    return;
-  }
   try {
+    const path = sectionPath(section);
+    if (!path) {
+      renderEmpty("Choose context", "This section needs a selected cell or asset.");
+      return;
+    }
     const data = await apiGet(path);
     renderTable(section, Array.isArray(data) ? data : [data]);
   } catch (error) {
@@ -63,12 +76,19 @@ async function loadSection(section) {
 }
 
 function sectionPath(section) {
-  const paths = {
-    tenants: "/tenants",
-    cells: "/cells",
-    assignments: "/cell-tenant-assignments",
-  };
-  return paths[section] || null;
+  const config = sectionConfig[section];
+  if (!config) return null;
+  return resolvePath(config.list);
+}
+
+function resolvePath(path) {
+  return path.replace(/\{([^}]+)\}/g, (_match, key) => {
+    const value = window.prompt(`Enter ${key}`);
+    if (!value) {
+      throw new Error(`Missing ${key}`);
+    }
+    return encodeURIComponent(value);
+  });
 }
 
 function renderTable(section, rows) {
@@ -100,6 +120,37 @@ function renderTable(section, rows) {
       row.hidden = !row.textContent.toLowerCase().includes(query);
     });
   });
+}
+
+function renderJsonDrawer(titleText, submitLabel, initialValue, onSubmit) {
+  const drawer = document.createElement("dialog");
+  drawer.className = "drawer";
+  drawer.innerHTML = `
+    <form method="dialog" class="drawer-form">
+      <header class="drawer-header">
+        <h2>${escapeHtml(titleText)}</h2>
+        <button type="button" data-close>Close</button>
+      </header>
+      <textarea class="json-field" rows="18">${escapeHtml(JSON.stringify(initialValue, null, 2))}</textarea>
+      <footer class="drawer-footer">
+        <button class="primary-action" type="submit">${escapeHtml(submitLabel)}</button>
+      </footer>
+    </form>
+  `;
+  drawer.querySelector("[data-close]").addEventListener("click", () => drawer.close());
+  drawer.querySelector("form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      const payload = JSON.parse(drawer.querySelector(".json-field").value);
+      await onSubmit(payload);
+      drawer.close();
+    } catch (error) {
+      showToast(error.message);
+    }
+  });
+  document.body.append(drawer);
+  drawer.showModal();
+  drawer.addEventListener("close", () => drawer.remove());
 }
 
 function renderRow(columns, row) {
