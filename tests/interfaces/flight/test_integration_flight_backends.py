@@ -568,6 +568,7 @@ def test_hot_reload_does_not_break_iceberg_catalog_registry(tmp_path):
                 "effect": "allow",
             }
         ],
+        max_ticket_exchanges=2,
     )
     with running_flight_client(server) as client:
         old_info, options = flight_info(

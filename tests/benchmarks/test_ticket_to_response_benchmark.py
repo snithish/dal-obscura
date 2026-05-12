@@ -401,6 +401,7 @@ def _run_iceberg_stream_scenario(
         jwt_secret=JWT_SECRET,
         ticket_secret="benchmark-ticket-secret",
         max_tickets=max_tickets,
+        max_ticket_exchanges=2,
     )
     with running_flight_client(server) as client:
         options = flight_call_options("user1", groups=["analyst"], jwt_secret=JWT_SECRET)
