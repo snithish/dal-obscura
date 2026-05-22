@@ -38,6 +38,27 @@ def test_runtime_config_reads_tls_environment(monkeypatch: pytest.MonkeyPatch):
     assert config.tls_verify_client is True
 
 
+def test_runtime_config_reads_module_based_secret_provider(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
+    monkeypatch.setenv("DAL_OBSCURA_CELL_ID", "00000000-0000-0000-0000-000000000001")
+    monkeypatch.setenv("DAL_OBSCURA_TICKET_SECRET", "ticket-secret")
+    monkeypatch.setenv(
+        "DAL_OBSCURA_SECRET_PROVIDER_MODULE",
+        "tests.support.secret_provider_fakes.FakeSecretProvider",
+    )
+    monkeypatch.setenv("DAL_OBSCURA_SECRET_PROVIDER_CONFIG", '{"prefix":"local"}')
+    monkeypatch.setenv(
+        "DAL_OBSCURA_SECRET_PROVIDER_SECRETS",
+        '{"token":{"env":"DAL_OBSCURA_PROVIDER_TOKEN"}}',
+    )
+
+    config = load_data_plane_runtime_config()
+
+    assert config.secret_provider.module == "tests.support.secret_provider_fakes.FakeSecretProvider"
+    assert config.secret_provider.config == {"prefix": "local"}
+    assert config.secret_provider.secrets == {"token": {"env": "DAL_OBSCURA_PROVIDER_TOKEN"}}
+
+
 def test_runtime_config_rejects_missing_database_url(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("DAL_OBSCURA_DATABASE_URL", raising=False)
     monkeypatch.setenv("DAL_OBSCURA_CELL_ID", "00000000-0000-0000-0000-000000000001")

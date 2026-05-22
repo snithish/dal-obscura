@@ -132,7 +132,7 @@ def _provision_draft(client: TestClient) -> tuple[dict[str, str], dict[str, str]
                 {
                     "ordinal": 1,
                     "module": DEFAULT_AUTH_MODULE,
-                    "args": {"jwt_secret": {"key": "DAL_OBSCURA_JWT_SECRET"}},
+                    "args": {"jwt_secret": {"secret": "DAL_OBSCURA_JWT_SECRET"}},
                     "enabled": True,
                 }
             ]
@@ -190,7 +190,7 @@ def test_reads_cell_draft_resources_after_writes():
             "cell_id": cell["id"],
             "ordinal": 1,
             "module": DEFAULT_AUTH_MODULE,
-            "args": {"jwt_secret": {"key": "DAL_OBSCURA_JWT_SECRET"}},
+            "args": {"jwt_secret": {"secret": "DAL_OBSCURA_JWT_SECRET"}},
             "enabled": True,
         }
     ]

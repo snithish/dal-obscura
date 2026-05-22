@@ -218,7 +218,7 @@ def control_plane_setup(tmp_path: Path, iceberg_setup: tuple[str, Path]) -> dict
                         "dal_obscura.data_plane.infrastructure.adapters.identity_default."
                         "DefaultIdentityAdapter"
                     ),
-                    "args": {"jwt_secret": {"key": "DAL_OBSCURA_E2E_JWT_SECRET"}},
+                    "args": {"jwt_secret": {"secret": "DAL_OBSCURA_E2E_JWT_SECRET"}},
                     "enabled": True,
                 }
             ],

@@ -600,7 +600,7 @@ def _provision_control_plane(output_dir: Path, table_id: str) -> tuple[str, str,
                         "dal_obscura.data_plane.infrastructure.adapters.identity_default."
                         "DefaultIdentityAdapter"
                     ),
-                    "args": {"jwt_secret": {"key": "DAL_OBSCURA_JWT_SECRET"}},
+                    "args": {"jwt_secret": {"secret": "DAL_OBSCURA_JWT_SECRET"}},
                     "enabled": True,
                 }
             ],

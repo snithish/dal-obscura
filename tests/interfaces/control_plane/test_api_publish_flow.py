@@ -86,7 +86,7 @@ def test_api_provisions_and_activates_default_cell_publication():
                         "dal_obscura.data_plane.infrastructure.adapters.identity_default."
                         "DefaultIdentityAdapter"
                     ),
-                    "args": {"jwt_secret": {"key": "DAL_OBSCURA_JWT_SECRET"}},
+                    "args": {"jwt_secret": {"secret": "DAL_OBSCURA_JWT_SECRET"}},
                     "enabled": True,
                 }
             ]

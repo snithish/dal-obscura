@@ -178,9 +178,11 @@ combines the engine filter with any policy filter using `AND`, pushes down the
 safe subset during backend planning, and evaluates any unsupported remainder in
 DuckDB during streaming.
 
-Runtime secrets are resolved from environment-variable secret references stored
-in published auth-provider arguments. The control plane stores references such
-as `{"key": "DAL_OBSCURA_JWT_SECRET"}`, not secret values.
+Runtime secrets are resolved through the explicitly configured secret provider
+module from references stored in published auth-provider arguments. The default
+provider resolves references such as `{"secret": "DAL_OBSCURA_JWT_SECRET"}`
+from environment variables; the control plane stores references, not secret
+values.
 
 ### Provisioning Flow
 

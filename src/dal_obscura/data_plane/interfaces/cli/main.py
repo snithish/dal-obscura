@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import importlib
 import logging
-import os
-from collections.abc import Mapping
 from typing import cast
 
 import pyarrow.flight as flight
@@ -33,6 +31,12 @@ from dal_obscura.data_plane.infrastructure.adapters.published_config import (
 from dal_obscura.data_plane.infrastructure.adapters.runtime_config import (
     load_data_plane_runtime_config,
 )
+from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
+    SecretProvider,
+    SecretProviderContext,
+    load_secret_provider,
+    resolve_secret_refs,
+)
 from dal_obscura.data_plane.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
 from dal_obscura.data_plane.infrastructure.adapters.ticket_store_sqlalchemy import (
     SqlAlchemyTicketStore,
@@ -55,10 +59,17 @@ def main() -> None:
     session = session_maker()
     config_store = PublishedConfigStore(session, cell_id=runtime_config.cell_id)
     published_runtime = config_store.get_runtime()
+    secret_provider = load_secret_provider(
+        runtime_config.secret_provider,
+        context=SecretProviderContext(
+            database_url=runtime_config.database_url,
+            cell_id=runtime_config.cell_id,
+        ),
+    )
 
-    identity = _identity_from_runtime(published_runtime)
+    identity = _identity_from_runtime(published_runtime, secret_provider=secret_provider)
     authorizer = PublishedConfigAuthorizer(config_store)
-    catalog_registry = PublishedConfigCatalogRegistry(config_store)
+    catalog_registry = PublishedConfigCatalogRegistry(config_store, secret_provider=secret_provider)
     masking = DefaultMaskingAdapter()
     row_transform = DuckDBRowTransformAdapter(masking)
     ticket_codec = HmacTicketCodecAdapter(runtime_config.ticket_secret)
@@ -108,13 +119,17 @@ def main() -> None:
         session.close()
 
 
-def _identity_from_runtime(runtime: PublishedRuntime) -> IdentityPort:
+def _identity_from_runtime(
+    runtime: PublishedRuntime,
+    *,
+    secret_provider: SecretProvider,
+) -> IdentityPort:
     providers_raw = _provider_records(runtime.auth_chain.get("providers", []))
     if not providers_raw:
         raise ValueError("Published runtime auth_chain must define at least one provider")
 
     providers = [
-        _load_identity_provider(provider)
+        _load_identity_provider(provider, secret_provider=secret_provider)
         for provider in sorted(providers_raw, key=lambda item: int(item.get("ordinal", 0)))
         if bool(provider.get("enabled", True))
     ]
@@ -139,9 +154,16 @@ def _tls_root_certificates(client_ca: str | None) -> bytes | None:
     return client_ca.encode("utf-8")
 
 
-def _load_identity_provider(raw: dict[str, object]) -> IdentityPort:
+def _load_identity_provider(
+    raw: dict[str, object],
+    *,
+    secret_provider: SecretProvider,
+) -> IdentityPort:
     module_path = str(raw["module"])
-    args = cast(dict[str, object], _resolve_secret_refs(raw.get("args", {})))
+    args = cast(
+        dict[str, object],
+        resolve_secret_refs(raw.get("args", {}), provider=secret_provider),
+    )
     provider_cls = _load_class(module_path)
     provider = provider_cls(**args)
     authenticate = getattr(provider, "authenticate", None)
@@ -157,25 +179,6 @@ def _load_class(module_path: str) -> type:
     if not isinstance(provider_cls, type):
         raise ValueError(f"Auth provider {module_path!r} must be a class")
     return provider_cls
-
-
-def _resolve_secret_refs(value: object) -> object:
-    if isinstance(value, Mapping):
-        mapping = cast(Mapping[object, object], value)
-        secret_key = mapping.get("key")
-        if set(mapping) == {"key"} and isinstance(secret_key, str):
-            return _resolve_env_secret(secret_key)
-        return {str(key): _resolve_secret_refs(nested) for key, nested in mapping.items()}
-    if isinstance(value, list):
-        return [_resolve_secret_refs(item) for item in value]
-    return value
-
-
-def _resolve_env_secret(key: str) -> str:
-    value = os.getenv(key)
-    if value is None or not value:
-        raise ValueError(f"Secret {key!r} could not be resolved from the environment")
-    return value
 
 
 def _provider_records(value: object) -> list[dict[str, object]]:
