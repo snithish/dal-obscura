@@ -1,16 +1,23 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session, sessionmaker
 
 from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.application.provisioning import ProvisioningService
-from dal_obscura.control_plane.interfaces.ui import install_ui
+from dal_obscura.control_plane.interfaces.ui import (
+    htmx_response,
+    install_ui,
+    render_assets_partial,
+    render_catalogs_partial,
+    render_policy_rules_partial,
+    render_runtime_settings_partial,
+)
 
 
 class _StrictModel(BaseModel):
@@ -83,6 +90,9 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
                 session.rollback()
                 raise
 
+    def wants_html(request: Request) -> bool:
+        return request.headers.get("HX-Request") == "true"
+
     @app.get("/v1/tenants", dependencies=[Depends(require_admin)])
     def list_tenants() -> object:
         return with_service(lambda service: service.list_tenants())
@@ -96,20 +106,33 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
         return with_service(lambda service: service.list_cell_tenant_assignments())
 
     @app.get("/v1/cells/{cell_id}/runtime-settings", dependencies=[Depends(require_admin)])
-    def get_runtime_settings(cell_id: UUID) -> object:
-        return with_service(lambda service: service.get_runtime_settings(cell_id))
+    def get_runtime_settings(cell_id: UUID, request: Request) -> object:
+        result = with_service(lambda service: service.get_runtime_settings(cell_id))
+        if wants_html(request):
+            runtime = cast(dict[str, object] | None, result)
+            return htmx_response(render_runtime_settings_partial(runtime))
+        return result
 
     @app.get("/v1/cells/{cell_id}/catalogs", dependencies=[Depends(require_admin)])
-    def list_catalogs(cell_id: UUID) -> object:
-        return with_service(lambda service: service.list_catalogs(cell_id))
+    def list_catalogs(cell_id: UUID, request: Request) -> object:
+        result = with_service(lambda service: service.list_catalogs(cell_id))
+        if wants_html(request):
+            return htmx_response(render_catalogs_partial(cast(list[dict[str, object]], result)))
+        return result
 
     @app.get("/v1/cells/{cell_id}/assets", dependencies=[Depends(require_admin)])
-    def list_assets(cell_id: UUID) -> object:
-        return with_service(lambda service: service.list_assets(cell_id))
+    def list_assets(cell_id: UUID, request: Request) -> object:
+        result = with_service(lambda service: service.list_assets(cell_id))
+        if wants_html(request):
+            return htmx_response(render_assets_partial(cast(list[dict[str, object]], result)))
+        return result
 
     @app.get("/v1/assets/{asset_id}/policy-rules", dependencies=[Depends(require_admin)])
-    def list_policy_rules(asset_id: UUID) -> object:
-        return with_service(lambda service: service.list_policy_rules(asset_id))
+    def list_policy_rules(asset_id: UUID, request: Request) -> object:
+        result = with_service(lambda service: service.list_policy_rules(asset_id))
+        if wants_html(request):
+            return htmx_response(render_policy_rules_partial(cast(list[dict[str, object]], result)))
+        return result
 
     @app.get("/v1/cells/{cell_id}/auth-providers", dependencies=[Depends(require_admin)])
     def list_auth_providers(cell_id: UUID) -> object:

@@ -8,28 +8,42 @@
   </head>
   <body>
     <div class="app-shell">
-      <aside class="sidebar" aria-label="Resource sections">
+      <aside class="sidebar" aria-label="Primary navigation">
         <div class="brand">
           <span class="brand-mark">do</span>
-          <span>dal-obscura</span>
+          <span>
+            <strong>dal-obscura</strong>
+            <small>control plane</small>
+          </span>
         </div>
-        <nav class="nav-list" id="section-nav">
-          <button type="button" class="nav-item is-active" data-section="tenants">Tenants</button>
-          <button type="button" class="nav-item" data-section="cells">Cells</button>
-          <button type="button" class="nav-item" data-section="assignments">Assignments</button>
-          <button type="button" class="nav-item" data-section="runtime">Runtime</button>
-          <button type="button" class="nav-item" data-section="catalogs">Catalogs</button>
-          <button type="button" class="nav-item" data-section="assets">Assets</button>
-          <button type="button" class="nav-item" data-section="policies">Policies</button>
-          <button type="button" class="nav-item" data-section="auth">Auth</button>
-          <button type="button" class="nav-item" data-section="publications">Publications</button>
+        <nav class="nav-list">
+          <button type="button" class="nav-item is-active" data-panel="global-admin">
+            <span>Fleet Admin</span>
+            <small>Global setup</small>
+          </button>
+          <button type="button" class="nav-item" data-panel="policy-workspace">
+            <span>Policy Center</span>
+            <small>Tenant workspace</small>
+          </button>
+          <button type="button" class="nav-item" data-panel="catalogs">
+            <span>Catalogs</span>
+            <small>Sources</small>
+          </button>
+          <button type="button" class="nav-item" data-panel="policy-editor">
+            <span>Rule Editor</span>
+            <small>Policy detail</small>
+          </button>
+          <button type="button" class="nav-item" data-panel="refresh-catalog">
+            <span>Refresh Tables</span>
+            <small>Catalog scan</small>
+          </button>
         </nav>
       </aside>
       <main class="main-panel">
         <header class="topbar">
           <div>
-            <p class="eyebrow">Control plane</p>
-            <h1 id="section-title">Tenants</h1>
+            <p class="eyebrow">Tenant-scoped policy operations</p>
+            <h1>Policy Center</h1>
           </div>
           <form id="token-form" class="token-form">
             <label for="admin-token">Admin token</label>
@@ -38,14 +52,70 @@
           </form>
         </header>
         <section id="toast-region" class="toast-region" aria-live="polite"></section>
-        <section id="content-region" class="content-region" aria-live="polite">
-          <div class="empty-state">
-            <h2>Connect to the API</h2>
-            <p>Enter the control-plane admin token, then choose a resource section.</p>
+        <section id="global-admin" class="content-region panel is-active">
+          <section class="view-header">
+            <p class="eyebrow">Global setup</p>
+            <h2>Tenants &amp; Cells</h2>
+            <p>Create who exists, where they can run, and how tenancy maps to runtime cells.</p>
+          </section>
+          <div class="grid two">
+            <div hx-get="/v1/tenants" hx-trigger="load, token-ready from:body" hx-target="this"></div>
+            <div hx-get="/v1/cells" hx-trigger="load, token-ready from:body" hx-target="this"></div>
           </div>
+          <div hx-get="/v1/cell-tenant-assignments" hx-trigger="load, token-ready from:body" hx-target="this"></div>
+        </section>
+        <section id="policy-workspace" class="content-region panel">
+          <section class="view-header">
+            <p class="eyebrow">Tenant workspace</p>
+            <h2>Policy Center</h2>
+            <p>Pick tenant and cell context, then load governed assets and policies.</p>
+          </section>
+          <div class="context-bar">
+            <label><small>Cell id</small><input data-context-key="cell_id" placeholder="cell UUID"></label>
+            <label><small>Asset id</small><input data-context-key="asset_id" placeholder="asset UUID"></label>
+            <button type="button" class="primary-action" data-refresh-context>Load workspace</button>
+          </div>
+          <div id="asset-workspace" data-route-template="/v1/cells/{cell_id}/assets" hx-target="this"></div>
+        </section>
+        <section id="catalogs" class="content-region panel">
+          <section class="view-header">
+            <p class="eyebrow">Tenant workspace</p>
+            <h2>Catalogs</h2>
+            <p>Connect sources, refresh tables, and choose which assets enter policy review.</p>
+          </section>
+          <div id="catalog-workspace" data-route-template="/v1/cells/{cell_id}/catalogs" hx-target="this"></div>
+        </section>
+        <section id="add-catalog" class="content-region panel">
+          <section class="view-header">
+            <p class="eyebrow">Catalogs / analytics</p>
+            <h2>Add Catalog</h2>
+            <p>Catalogs are tenant and cell scoped. Assets are discovered after refresh.</p>
+          </section>
+          <section class="card">
+            <header><h3>Connection options</h3></header>
+            <div class="card-body">
+              <p class="section-copy">Use the catalog save route after entering tenant, cell, and catalog name.</p>
+            </div>
+          </section>
+        </section>
+        <section id="policy-editor" class="content-region panel">
+          <div id="policy-rule-workspace" data-route-template="/v1/assets/{asset_id}/policy-rules" hx-target="this"></div>
+        </section>
+        <section id="refresh-catalog" class="content-region panel">
+          <section class="view-header">
+            <p class="eyebrow">Catalogs / analytics</p>
+            <h2>Refresh Tables</h2>
+            <p>Preview source changes. Publishing still controls what the data plane serves.</p>
+          </section>
+          <section class="card">
+            <header><h3>Scan status</h3></header>
+            <div class="card-body"><p class="section-copy">Completed 11:42 · 8 tables scanned · 0 connection errors</p></div>
+            <footer class="card-footer"><button type="button" class="primary-action">Refresh tables</button></footer>
+          </section>
         </section>
       </main>
     </div>
+    <script src="/ui/static/vendor/htmx/2.0.4/htmx.min.js"></script>
     <script type="module" src="/ui/static/app.js"></script>
   </body>
 </html>
