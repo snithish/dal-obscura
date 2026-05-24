@@ -26,6 +26,53 @@ class ProvisioningService:
         self._store.create_cell(cell_id=cell_id, name=name, region=region)
         return {"id": str(cell_id), "name": name, "region": region}
 
+    def create_cell_for_tenant(
+        self,
+        tenant_id: UUID,
+        name: str,
+        region: str,
+        shard_key: str,
+    ) -> dict[str, str]:
+        cell = self.create_cell(name=name, region=region)
+        self.assign_tenant(UUID(cell["id"]), tenant_id, shard_key)
+        return cell
+
+    def list_tenants(self) -> list[dict[str, str]]:
+        return self._store.list_tenants()
+
+    def list_cells(self) -> list[dict[str, str]]:
+        return self._store.list_cells()
+
+    def list_cells_for_tenant(self, tenant_id: UUID) -> list[dict[str, str]]:
+        return self._store.list_cells_for_tenant(tenant_id)
+
+    def list_cell_tenant_assignments(self) -> list[dict[str, str]]:
+        return self._store.list_cell_tenant_assignments()
+
+    def get_runtime_settings(self, cell_id: UUID) -> dict[str, object] | None:
+        return self._store.get_runtime_settings(cell_id)
+
+    def list_catalogs(self, cell_id: UUID) -> list[dict[str, object]]:
+        return self._store.list_catalogs(cell_id)
+
+    def list_assets(self, cell_id: UUID) -> list[dict[str, object]]:
+        return self._store.list_assets(cell_id)
+
+    def list_policy_rules(self, asset_id: UUID) -> list[dict[str, object]]:
+        return self._store.list_policy_rules(asset_id)
+
+    def list_auth_providers(self, cell_id: UUID) -> list[dict[str, object]]:
+        return self._store.list_auth_providers(cell_id)
+
+    def get_cell_draft(self, cell_id: UUID) -> dict[str, object]:
+        return self._store.get_cell_draft(cell_id)
+
+    def list_publications(self, cell_id: UUID) -> list[dict[str, object]]:
+        return self._store.list_publications(cell_id)
+
+    def get_active_publication_summary(self, cell_id: UUID) -> dict[str, str]:
+        return self._store.get_active_publication_summary(cell_id)
+
     def assign_tenant(self, cell_id: UUID, tenant_id: UUID, shard_key: str) -> None:
         self._store.assign_tenant_to_cell(
             cell_id=cell_id,

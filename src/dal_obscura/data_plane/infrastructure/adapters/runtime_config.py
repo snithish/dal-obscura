@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from uuid import UUID
+
+from dal_obscura.data_plane.infrastructure.adapters.secret_providers import SecretProviderConfig
 
 
 @dataclass(frozen=True)
@@ -17,6 +20,7 @@ class DataPlaneRuntimeConfig:
     tls_key: str | None = None
     tls_client_ca: str | None = None
     tls_verify_client: bool = False
+    secret_provider: SecretProviderConfig = field(default_factory=SecretProviderConfig)
 
 
 def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
@@ -38,6 +42,7 @@ def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
         tls_key=_optional_env("DAL_OBSCURA_TLS_KEY"),
         tls_client_ca=_optional_env("DAL_OBSCURA_TLS_CLIENT_CA"),
         tls_verify_client=tls_verify_client,
+        secret_provider=_secret_provider_config(),
     )
 
 
@@ -59,3 +64,24 @@ def _bool_env(value: str | None) -> bool:
     if value is None:
         return False
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _secret_provider_config() -> SecretProviderConfig:
+    return SecretProviderConfig(
+        module=os.getenv(
+            "DAL_OBSCURA_SECRET_PROVIDER_MODULE",
+            SecretProviderConfig().module,
+        ).strip(),
+        config=_json_object_env("DAL_OBSCURA_SECRET_PROVIDER_CONFIG"),
+        secrets=_json_object_env("DAL_OBSCURA_SECRET_PROVIDER_SECRETS"),
+    )
+
+
+def _json_object_env(name: str) -> dict[str, object]:
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return {}
+    value = json.loads(raw)
+    if not isinstance(value, dict):
+        raise ValueError(f"{name} must be a JSON object")
+    return {str(key): item for key, item in value.items()}

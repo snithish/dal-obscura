@@ -133,6 +133,17 @@ export DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN=dev-admin
 uv run dal-obscura-control-plane
 ```
 
+Open the operator dashboard from the same control-plane process:
+
+```bash
+open http://localhost:8820/ui
+```
+
+The dashboard shell is served by the control plane, but all state reads and
+writes go through the protected `/v1` API. Enter
+`DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN` in the browser when prompted. The token
+is not rendered into the HTML shell by the service.
+
 Provision tenants, cells, catalogs, assets, policy rules, and auth providers
 through the HTTP API, then publish and activate a snapshot. Start each data
 plane cell from the same database without calling the control-plane service:
@@ -167,9 +178,11 @@ combines the engine filter with any policy filter using `AND`, pushes down the
 safe subset during backend planning, and evaluates any unsupported remainder in
 DuckDB during streaming.
 
-Runtime secrets are resolved from environment-variable secret references stored
-in published auth-provider arguments. The control plane stores references such
-as `{"key": "DAL_OBSCURA_JWT_SECRET"}`, not secret values.
+Runtime secrets are resolved through the explicitly configured secret provider
+module from references stored in published auth-provider arguments. The default
+provider resolves references such as `{"secret": "DAL_OBSCURA_JWT_SECRET"}`
+from environment variables; the control plane stores references, not secret
+values.
 
 ### Provisioning Flow
 

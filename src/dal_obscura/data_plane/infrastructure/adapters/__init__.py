@@ -36,6 +36,10 @@ from dal_obscura.data_plane.infrastructure.adapters.runtime_config import (
 from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
     EnvSecretProvider,
     SecretProvider,
+    SecretProviderConfig,
+    SecretProviderContext,
+    load_secret_provider,
+    resolve_secret_refs,
 )
 from dal_obscura.data_plane.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
 from dal_obscura.data_plane.infrastructure.adapters.ticket_store_sqlalchemy import (
@@ -64,8 +68,12 @@ __all__ = [
     "PublishedConfigStore",
     "PublishedRuntime",
     "SecretProvider",
+    "SecretProviderConfig",
+    "SecretProviderContext",
     "ServiceConfig",
     "SqlAlchemyTicketStore",
     "TrustedHeaderIdentityProvider",
     "load_data_plane_runtime_config",
+    "load_secret_provider",
+    "resolve_secret_refs",
 ]

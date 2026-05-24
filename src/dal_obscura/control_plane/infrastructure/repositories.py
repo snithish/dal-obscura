@@ -64,6 +64,60 @@ class PublicationStore:
         )
         self._session.flush()
 
+    def list_tenants(self) -> list[dict[str, str]]:
+        return [
+            {
+                "id": str(record.id),
+                "slug": record.slug,
+                "display_name": record.display_name,
+                "status": record.status,
+            }
+            for record in self._session.scalars(select(TenantRecord).order_by(TenantRecord.slug))
+        ]
+
+    def list_cells(self) -> list[dict[str, str]]:
+        return [
+            {
+                "id": str(record.id),
+                "name": record.name,
+                "region": record.region,
+                "status": record.status,
+            }
+            for record in self._session.scalars(select(CellRecord).order_by(CellRecord.name))
+        ]
+
+    def list_cells_for_tenant(self, tenant_id: UUID) -> list[dict[str, str]]:
+        return [
+            {
+                "id": str(cell.id),
+                "name": cell.name,
+                "region": cell.region,
+                "status": cell.status,
+                "shard_key": assignment.shard_key,
+            }
+            for cell, assignment in self._session.execute(
+                select(CellRecord, CellTenantRecord)
+                .join(CellTenantRecord, CellTenantRecord.cell_id == CellRecord.id)
+                .where(CellTenantRecord.tenant_id == tenant_id)
+                .order_by(CellRecord.name)
+            )
+        ]
+
+    def list_cell_tenant_assignments(self) -> list[dict[str, str]]:
+        return [
+            {
+                "cell_id": str(record.cell_id),
+                "tenant_id": str(record.tenant_id),
+                "shard_key": record.shard_key,
+            }
+            for record in self._session.scalars(
+                select(CellTenantRecord).order_by(
+                    CellTenantRecord.cell_id,
+                    CellTenantRecord.tenant_id,
+                )
+            )
+        ]
+
     def assign_tenant_to_cell(self, *, cell_id: UUID, tenant_id: UUID, shard_key: str) -> None:
         self._session.add(
             CellTenantRecord(cell_id=cell_id, tenant_id=tenant_id, shard_key=shard_key)
@@ -294,6 +348,159 @@ class PublicationStore:
             compiled_config=dict(record.compiled_config_json),
             policy_version=record.policy_version,
         )
+
+    def get_cell(self, cell_id: UUID) -> dict[str, str]:
+        record = self._session.get(CellRecord, cell_id)
+        if record is None:
+            raise LookupError(f"No cell {cell_id}")
+        return {
+            "id": str(record.id),
+            "name": record.name,
+            "region": record.region,
+            "status": record.status,
+        }
+
+    def get_runtime_settings(self, cell_id: UUID) -> dict[str, object] | None:
+        record = self._session.get(CellRuntimeSettingsRecord, cell_id)
+        if record is None:
+            return None
+        return {
+            "cell_id": str(record.cell_id),
+            "ticket_ttl_seconds": record.ticket_ttl_seconds,
+            "max_tickets": record.max_tickets,
+            "max_ticket_exchanges": record.max_ticket_exchanges,
+            "path_rules": list(record.path_rules_json),
+        }
+
+    def list_catalogs(self, cell_id: UUID) -> list[dict[str, object]]:
+        return [
+            {
+                "id": str(record.id),
+                "cell_id": str(record.cell_id),
+                "tenant_id": str(record.tenant_id),
+                "name": record.name,
+                "module": record.module,
+                "options": dict(record.options_json),
+            }
+            for record in self._session.scalars(
+                select(CatalogRecord)
+                .where(CatalogRecord.cell_id == cell_id)
+                .order_by(CatalogRecord.name)
+            )
+        ]
+
+    def list_assets(self, cell_id: UUID) -> list[dict[str, object]]:
+        catalog_records = list(
+            self._session.scalars(select(CatalogRecord).where(CatalogRecord.cell_id == cell_id))
+        )
+        catalog_by_id = {record.id: record for record in catalog_records}
+        assets = []
+        for record in self._session.scalars(
+            select(AssetRecord).where(AssetRecord.cell_id == cell_id).order_by(AssetRecord.target)
+        ):
+            catalog = catalog_by_id[record.catalog_id]
+            assets.append(
+                {
+                    "id": str(record.id),
+                    "cell_id": str(record.cell_id),
+                    "tenant_id": str(record.tenant_id),
+                    "catalog_id": str(record.catalog_id),
+                    "catalog": catalog.name,
+                    "target": record.target,
+                    "backend": record.backend,
+                    "table_identifier": record.table_identifier,
+                    "options": dict(record.options_json),
+                }
+            )
+        return assets
+
+    def list_policy_rules(self, asset_id: UUID) -> list[dict[str, object]]:
+        return [
+            {
+                "id": str(record.id),
+                "asset_id": str(record.asset_id),
+                "ordinal": record.ordinal,
+                "effect": record.effect,
+                "principals": list(record.principals_json),
+                "when": dict(record.when_json),
+                "columns": list(record.columns_json),
+                "masks": dict(record.masks_json),
+                "row_filter": record.row_filter_sql,
+            }
+            for record in self._session.scalars(
+                select(PolicyRuleRecord)
+                .where(PolicyRuleRecord.asset_id == asset_id)
+                .order_by(PolicyRuleRecord.ordinal)
+            )
+        ]
+
+    def list_auth_providers(self, cell_id: UUID) -> list[dict[str, object]]:
+        return [
+            {
+                "id": str(record.id),
+                "cell_id": str(record.cell_id),
+                "ordinal": record.ordinal,
+                "module": record.module,
+                "args": dict(record.args_json),
+                "enabled": record.enabled,
+            }
+            for record in self._session.scalars(
+                select(AuthProviderRecord)
+                .where(AuthProviderRecord.cell_id == cell_id)
+                .order_by(AuthProviderRecord.ordinal)
+            )
+        ]
+
+    def get_cell_draft(self, cell_id: UUID) -> dict[str, object]:
+        cell = self.get_cell(cell_id)
+        assignments = [
+            item for item in self.list_cell_tenant_assignments() if item["cell_id"] == str(cell_id)
+        ]
+        assets = []
+        for asset in self.list_assets(cell_id):
+            rules = self.list_policy_rules(UUID(str(asset["id"])))
+            assets.append({**asset, "policy_rules": rules})
+        return {
+            "cell": cell,
+            "assignments": assignments,
+            "runtime_settings": self.get_runtime_settings(cell_id),
+            "catalogs": self.list_catalogs(cell_id),
+            "assets": assets,
+            "auth_providers": self.list_auth_providers(cell_id),
+        }
+
+    def list_publications(self, cell_id: UUID) -> list[dict[str, object]]:
+        active = self._session.get(ActivePublicationRecord, cell_id)
+        active_publication_id = active.publication_id if active is not None else None
+        return [
+            {
+                "id": str(record.id),
+                "cell_id": str(record.cell_id),
+                "schema_version": record.schema_version,
+                "status": record.status,
+                "manifest_hash": record.manifest_hash,
+                "active": record.id == active_publication_id,
+            }
+            for record in self._session.scalars(
+                select(ConfigPublicationRecord)
+                .where(ConfigPublicationRecord.cell_id == cell_id)
+                .order_by(ConfigPublicationRecord.created_at)
+            )
+        ]
+
+    def get_active_publication_summary(self, cell_id: UUID) -> dict[str, str]:
+        active = self._session.get(ActivePublicationRecord, cell_id)
+        if active is None:
+            raise LookupError(f"No active publication for cell {cell_id}")
+        publication = self._session.get(ConfigPublicationRecord, active.publication_id)
+        if publication is None:
+            raise LookupError(f"No publication {active.publication_id}")
+        return {
+            "cell_id": str(active.cell_id),
+            "publication_id": str(active.publication_id),
+            "manifest_hash": publication.manifest_hash,
+            "status": publication.status,
+        }
 
     def load_publish_draft(self, cell_id: UUID) -> PublishDraft:
         runtime_record = self._session.get(CellRuntimeSettingsRecord, cell_id)

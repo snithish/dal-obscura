@@ -31,6 +31,10 @@ from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     DynamicCatalogRegistry,
     ServiceConfig,
 )
+from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
+    SecretProvider,
+    resolve_secret_refs,
+)
 
 
 @dataclass(frozen=True)
@@ -214,14 +218,25 @@ class PublishedConfigAuthorizer:
 class PublishedConfigCatalogRegistry:
     """Catalog registry that resolves tables from active published asset config."""
 
-    def __init__(self, store: PublishedConfigStore) -> None:
+    def __init__(
+        self,
+        store: PublishedConfigStore,
+        *,
+        secret_provider: SecretProvider | None = None,
+    ) -> None:
         self._store = store
+        self._secret_provider = secret_provider
 
     def describe(self, catalog: str | None, target: str, *, tenant_id: str) -> TableFormat:
         if catalog is None:
             raise ValueError("Catalog name is required to resolve a target")
         asset = self._store.get_asset(tenant_id=tenant_id, catalog=catalog, target=target)
         config = asset.compiled_config
+        if self._secret_provider is not None:
+            config = cast(
+                dict[str, Any],
+                resolve_secret_refs(config, provider=self._secret_provider),
+            )
         catalog_config = _catalog_config_from_asset(asset, config)
         registry = DynamicCatalogRegistry(
             ServiceConfig(catalogs={catalog: catalog_config}, paths=())
