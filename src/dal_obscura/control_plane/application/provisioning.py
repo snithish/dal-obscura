@@ -26,11 +26,25 @@ class ProvisioningService:
         self._store.create_cell(cell_id=cell_id, name=name, region=region)
         return {"id": str(cell_id), "name": name, "region": region}
 
+    def create_cell_for_tenant(
+        self,
+        tenant_id: UUID,
+        name: str,
+        region: str,
+        shard_key: str,
+    ) -> dict[str, str]:
+        cell = self.create_cell(name=name, region=region)
+        self.assign_tenant(UUID(cell["id"]), tenant_id, shard_key)
+        return cell
+
     def list_tenants(self) -> list[dict[str, str]]:
         return self._store.list_tenants()
 
     def list_cells(self) -> list[dict[str, str]]:
         return self._store.list_cells()
+
+    def list_cells_for_tenant(self, tenant_id: UUID) -> list[dict[str, str]]:
+        return self._store.list_cells_for_tenant(tenant_id)
 
     def list_cell_tenant_assignments(self) -> list[dict[str, str]]:
         return self._store.list_cell_tenant_assignments()

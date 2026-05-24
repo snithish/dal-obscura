@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>dal-obscura control plane</title>
-    <link rel="stylesheet" href="/ui/static/styles.css">
+    <link rel="stylesheet" href="/ui/static/styles.css?v=6">
   </head>
   <body>
     <div class="app-shell">
@@ -21,21 +21,21 @@
             <span>Fleet Admin</span>
             <small>Global setup</small>
           </button>
-          <button type="button" class="nav-item" data-panel="policy-workspace">
-            <span>Policy Center</span>
+          <button type="button" class="nav-item is-locked" data-panel="policy-workspace" data-requires-context title="Select a tenant and cell to unlock this section" aria-disabled="true">
+            <span><span class="lock-icon" aria-hidden="true">🔒</span>Policy Center</span>
             <small>Tenant workspace</small>
           </button>
-          <button type="button" class="nav-item" data-panel="catalogs">
-            <span>Catalogs</span>
+          <button type="button" class="nav-item is-locked" data-panel="catalogs" data-requires-context title="Select a tenant and cell to unlock this section" aria-disabled="true">
+            <span><span class="lock-icon" aria-hidden="true">🔒</span>Catalogs</span>
             <small>Sources</small>
           </button>
-          <button type="button" class="nav-item" data-panel="policy-editor">
-            <span>Rule Editor</span>
+          <button type="button" class="nav-item is-locked" data-panel="policy-editor" data-requires-context title="Select a tenant and cell to unlock this section" aria-disabled="true">
+            <span><span class="lock-icon" aria-hidden="true">🔒</span>Rule Editor</span>
             <small>Policy detail</small>
           </button>
-          <button type="button" class="nav-item" data-panel="refresh-catalog">
-            <span>Refresh Tables</span>
-            <small>Catalog scan</small>
+          <button type="button" class="nav-item is-locked" data-panel="jobs" data-requires-context title="Select a tenant and cell to unlock this section" aria-disabled="true">
+            <span><span class="lock-icon" aria-hidden="true">🔒</span>Jobs</span>
+            <small>Background work</small>
           </button>
         </nav>
       </aside>
@@ -56,12 +56,99 @@
           <section class="view-header">
             <p class="eyebrow">Global setup</p>
             <h2>Tenants &amp; Cells</h2>
-            <p>Create who exists, where they can run, and how tenancy maps to runtime cells.</p>
+            <p>Create or select one tenant and one cell to unlock the configuration workspace.</p>
+          </section>
+          <section class="setup-stepper" aria-label="Setup progress">
+            <div class="setup-step is-active" data-step="tenant">
+              <strong>1</strong>
+              <span>Select tenant</span>
+              <small data-context-summary="tenant_id">No tenant selected</small>
+            </div>
+            <div class="setup-step" data-step="cell">
+              <strong>2</strong>
+              <span>Select cell</span>
+              <small data-context-summary="cell_id">No cell selected</small>
+            </div>
+            <div class="setup-step" data-step="workspace">
+              <strong>3</strong>
+              <span>Configure policies</span>
+              <small>Unlocks after tenant and cell are selected</small>
+            </div>
           </section>
           <div class="grid two">
-            <div hx-get="/v1/tenants" hx-trigger="load, token-ready from:body" hx-target="this"></div>
-            <div hx-get="/v1/cells" hx-trigger="load, token-ready from:body" hx-target="this"></div>
+            <section class="card">
+              <header><h3>Tenant</h3></header>
+              <form
+                class="resource-form"
+                hx-post="/v1/tenants"
+                hx-trigger="submit"
+                hx-target="#tenants-list"
+                hx-swap="innerHTML"
+              >
+                <label>
+                  <span>Tenant slug</span>
+                  <input name="slug" type="text" autocomplete="organization" placeholder="acme" required>
+                </label>
+                <label>
+                  <span>Display name</span>
+                  <input name="display_name" type="text" autocomplete="organization-title" placeholder="Acme Analytics" required>
+                </label>
+                <button type="submit" class="primary-action">Create tenant</button>
+                <p class="form-hint">After creation, select the tenant from the table below.</p>
+              </form>
+            </section>
+            <section class="card" id="cell-create-card" data-needs-tenant>
+              <header><h3>Cell</h3></header>
+              <form
+                id="cell-form"
+                class="resource-form"
+                data-post-template="/v1/tenants/{tenant_id}/cells"
+                hx-trigger="submit"
+                hx-target="#cells-list"
+                hx-swap="innerHTML"
+              >
+                <label>
+                  <span>Cell name</span>
+                  <input name="name" type="text" autocomplete="off" placeholder="local-dev" required>
+                </label>
+                <label>
+                  <span>Region</span>
+                  <input name="region" type="text" autocomplete="off" placeholder="local" required>
+                </label>
+                <input name="shard_key" type="hidden" value="default">
+                <button type="submit" class="primary-action">Create cell</button>
+                <p class="form-hint">Select a tenant first. New cells are assigned to the selected tenant.</p>
+              </form>
+            </section>
           </div>
+          <div class="grid two">
+            <div id="tenants-list" hx-get="/v1/tenants" hx-trigger="load, token-ready from:body" hx-target="this"></div>
+            <div id="cells-list" data-list-template="/v1/tenants/{tenant_id}/cells">
+              <section class="card"><header><h3>Cells</h3></header><div class="card-body"><p class="section-copy">Select a tenant to load cells assigned to it.</p></div></section>
+            </div>
+          </div>
+          <section class="card" id="cell-assignment-card" data-needs-tenant>
+            <header><h3>Assign existing cell</h3></header>
+            <form
+              id="cell-assignment-form"
+              class="resource-form inline-form"
+              data-post-template="/v1/tenants/{tenant_id}/cell-assignments"
+              hx-trigger="submit"
+              hx-target="#cells-list"
+              hx-swap="innerHTML"
+            >
+              <label>
+                <span>Existing cell id</span>
+                <input name="cell_id" type="text" autocomplete="off" placeholder="cell UUID" required>
+              </label>
+              <label>
+                <span>Shard key</span>
+                <input name="shard_key" type="text" value="default" required>
+              </label>
+              <button type="submit" class="primary-action">Assign cell</button>
+            </form>
+            <p class="form-hint">Use this when a cell already exists but has not been assigned to the selected tenant.</p>
+          </section>
           <div hx-get="/v1/cell-tenant-assignments" hx-trigger="load, token-ready from:body" hx-target="this"></div>
         </section>
         <section id="policy-workspace" class="content-region panel">
@@ -71,8 +158,9 @@
             <p>Pick tenant and cell context, then load governed assets and policies.</p>
           </section>
           <div class="context-bar">
-            <label><small>Cell id</small><input data-context-key="cell_id" placeholder="cell UUID"></label>
-            <label><small>Asset id</small><input data-context-key="asset_id" placeholder="asset UUID"></label>
+            <label><small>Tenant</small><input data-context-key="tenant_id" placeholder="Select from Fleet Admin"></label>
+            <label><small>Cell</small><input data-context-key="cell_id" placeholder="Select from Fleet Admin"></label>
+            <label><small>Asset</small><input data-context-key="asset_id" placeholder="asset UUID"></label>
             <button type="button" class="primary-action" data-refresh-context>Load workspace</button>
           </div>
           <div id="asset-workspace" data-route-template="/v1/cells/{cell_id}/assets" hx-target="this"></div>
@@ -83,39 +171,83 @@
             <h2>Catalogs</h2>
             <p>Connect sources, refresh tables, and choose which assets enter policy review.</p>
           </section>
+          <section class="locked-panel" data-context-lock>
+            <strong>Select a tenant and cell first</strong>
+            <p>Use Fleet Admin to choose the tenant and runtime cell. Catalog configuration will load after that context is set.</p>
+            <button type="button" class="primary-action" data-panel="global-admin">Go to Fleet Admin</button>
+          </section>
           <div id="catalog-workspace" data-route-template="/v1/cells/{cell_id}/catalogs" hx-target="this"></div>
         </section>
         <section id="add-catalog" class="content-region panel">
           <section class="view-header">
-            <p class="eyebrow">Catalogs / analytics</p>
+            <p class="eyebrow">Tenant workspace</p>
             <h2>Add Catalog</h2>
-            <p>Catalogs are tenant and cell scoped. Assets are discovered after refresh.</p>
+            <p>Catalogs are saved in the selected tenant and cell context.</p>
+          </section>
+          <section class="locked-panel" data-context-lock>
+            <strong>Select a tenant and cell first</strong>
+            <p>Catalogs cannot be created until the workspace context is selected.</p>
+            <button type="button" class="primary-action" data-panel="global-admin">Go to Fleet Admin</button>
           </section>
           <section class="card">
             <header><h3>Connection options</h3></header>
-            <div class="card-body">
-              <p class="section-copy">Use the catalog save route after entering tenant, cell, and catalog name.</p>
-            </div>
+            <form
+              id="catalog-form"
+              class="resource-form"
+              data-put-template="/v1/tenants/{tenant_id}/cells/{cell_id}/catalogs/{catalog_name}"
+              hx-trigger="submit"
+              hx-target="#catalog-workspace"
+              hx-swap="innerHTML"
+            >
+              <label>
+                <span>Catalog name</span>
+                <input name="catalog_name" type="text" autocomplete="off" placeholder="analytics" required>
+              </label>
+              <label>
+                <span>Catalog module</span>
+                <input name="module" type="text" value="dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog" required>
+              </label>
+              <label>
+                <span>Options JSON</span>
+                <textarea name="options" class="json-field compact-json" spellcheck="false">{"type":"sql","uri":"sqlite:///catalog.db"}</textarea>
+              </label>
+              <div class="form-actions">
+                <button type="submit" class="primary-action">Save catalog</button>
+                <button type="button" class="secondary-action" data-panel="catalogs">Back to catalogs</button>
+              </div>
+            </form>
           </section>
         </section>
         <section id="policy-editor" class="content-region panel">
           <div id="policy-rule-workspace" data-route-template="/v1/assets/{asset_id}/policy-rules" hx-target="this"></div>
         </section>
-        <section id="refresh-catalog" class="content-region panel">
+        <section id="jobs" class="content-region panel">
           <section class="view-header">
-            <p class="eyebrow">Catalogs / analytics</p>
-            <h2>Refresh Tables</h2>
-            <p>Preview source changes. Publishing still controls what the data plane serves.</p>
+            <p class="eyebrow">Tenant workspace</p>
+            <h2>Background Jobs</h2>
+            <p>Run longer catalog and policy operations without blocking configuration work.</p>
+          </section>
+          <section class="locked-panel" data-context-lock>
+            <strong>Select a tenant and cell first</strong>
+            <p>Background jobs run in a tenant and cell context.</p>
+            <button type="button" class="primary-action" data-panel="global-admin">Go to Fleet Admin</button>
           </section>
           <section class="card">
-            <header><h3>Scan status</h3></header>
-            <div class="card-body"><p class="section-copy">Completed 11:42 · 8 tables scanned · 0 connection errors</p></div>
-            <footer class="card-footer"><button type="button" class="primary-action">Refresh tables</button></footer>
+            <header><h3>Available jobs</h3></header>
+            <div class="card-body">
+              <article class="job-row">
+                <span>
+                  <strong>Refresh catalog tables</strong>
+                  <small>Scan connected catalogs and update discovered table metadata.</small>
+                </span>
+                <button type="button" class="primary-action" disabled title="Background job runner is not wired yet">Run job</button>
+              </article>
+            </div>
           </section>
         </section>
       </main>
     </div>
     <script src="/ui/static/vendor/htmx/2.0.4/htmx.min.js"></script>
-    <script type="module" src="/ui/static/app.js"></script>
+    <script type="module" src="/ui/static/app.js?v=6"></script>
   </body>
 </html>

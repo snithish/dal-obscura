@@ -86,6 +86,23 @@ class PublicationStore:
             for record in self._session.scalars(select(CellRecord).order_by(CellRecord.name))
         ]
 
+    def list_cells_for_tenant(self, tenant_id: UUID) -> list[dict[str, str]]:
+        return [
+            {
+                "id": str(cell.id),
+                "name": cell.name,
+                "region": cell.region,
+                "status": cell.status,
+                "shard_key": assignment.shard_key,
+            }
+            for cell, assignment in self._session.execute(
+                select(CellRecord, CellTenantRecord)
+                .join(CellTenantRecord, CellTenantRecord.cell_id == CellRecord.id)
+                .where(CellTenantRecord.tenant_id == tenant_id)
+                .order_by(CellRecord.name)
+            )
+        ]
+
     def list_cell_tenant_assignments(self) -> list[dict[str, str]]:
         return [
             {

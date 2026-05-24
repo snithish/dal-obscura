@@ -87,11 +87,50 @@ def tableSection(title: str, rows: list[dict[str, Any]], *, empty: str) -> str:
         return card(title, f'<p class="section-copy">{escape(empty)}</p>')
     columns = list(rows[0])
     header = "".join(
-        f'<button type="button" data-sort-key="{escape(column)}">{escape(column)}</button>'
+        f'<th><button type="button" data-sort-key="{escape(column)}">{escape(column)}</button></th>'
         for column in columns
     )
     body = "".join(
         "<tr>"
+        + "".join(f"<td>{escape(_format_value(row.get(column)))}</td>" for column in columns)
+        + "</tr>"
+        for row in rows
+    )
+    return card(
+        title,
+        (
+            '<input class="filter-input" type="search" placeholder="Filter rows" '
+            "data-table-filter>"
+            '<div class="table-wrap"><table class="resource-table" data-table>'
+            f"<thead><tr>{header}</tr></thead><tbody>{body}</tbody></table></div>"
+        ),
+    )
+
+
+def selectableTableSection(
+    title: str,
+    rows: list[dict[str, Any]],
+    *,
+    empty: str,
+    context_key: str,
+    label_key: str,
+) -> str:
+    if not rows:
+        return card(title, f'<p class="section-copy">{escape(empty)}</p>')
+    columns = list(rows[0])
+    header = "<th>Selection</th>" + "".join(
+        f'<th><button type="button" data-sort-key="{escape(column)}">{escape(column)}</button></th>'
+        for column in columns
+    )
+    body = "".join(
+        "<tr>"
+        + (
+            '<td><button type="button" class="select-context-button" '
+            f'data-set-context="{escape(context_key)}" '
+            f'data-context-value="{escape(_format_value(row.get("id")))}" '
+            f'data-context-label="{escape(_format_value(row.get(label_key)))}">'
+            f"Select {escape(_format_value(row.get(label_key)))}</button></td>"
+        )
         + "".join(f"<td>{escape(_format_value(row.get(column)))}</td>" for column in columns)
         + "</tr>"
         for row in rows
@@ -119,6 +158,34 @@ def render_runtime_settings_partial(runtime: dict[str, object] | None) -> str:
     return tableSection("Runtime settings", [runtime], empty="No runtime settings.")
 
 
+def render_tenants_partial(tenants: list[dict[str, object]]) -> str:
+    return selectableTableSection(
+        "Tenants",
+        tenants,
+        empty="No tenants created yet.",
+        context_key="tenant_id",
+        label_key="slug",
+    )
+
+
+def render_cells_partial(cells: list[dict[str, object]]) -> str:
+    return selectableTableSection(
+        "Cells",
+        cells,
+        empty="No cells assigned to this tenant yet. Create a cell for this tenant or assign an existing cell.",
+        context_key="cell_id",
+        label_key="name",
+    )
+
+
+def render_cell_tenant_assignments_partial(assignments: list[dict[str, object]]) -> str:
+    return tableSection(
+        "Tenant cell assignments",
+        assignments,
+        empty="No tenant-to-cell assignments created yet.",
+    )
+
+
 def render_catalogs_partial(catalogs: list[dict[str, object]]) -> str:
     rows = "".join(_catalog_card(catalog) for catalog in catalogs)
     return (
@@ -131,12 +198,12 @@ def render_catalogs_partial(catalogs: list[dict[str, object]]) -> str:
                 {
                     "label": "Add catalog",
                     "class": "primary-action",
-                    "route": "/v1/tenants/{tenant_id}/cells/{cell_id}/catalogs/{name}",
+                    "panel": "add-catalog",
                 },
                 {
                     "label": "Refresh tables",
                     "class": "secondary-action",
-                    "route": "/v1/cells/{cell_id}/catalogs",
+                    "panel": "jobs",
                 },
             ]
         )
@@ -216,7 +283,7 @@ def _catalog_card(catalog: dict[str, object]) -> str:
         '<article class="catalog-card">'
         f"<div><h2>{escape(name)}</h2><p>{escape(str(catalog.get('module', 'catalog')))} · {escape(str(options.get('uri', 'configured')))}</p></div>"
         f'<div class="chip-row">{badge("connected", "success")}{badge("last refresh pending", "neutral")}</div>'
-        f"<footer>{actionBar([{'label': 'Refresh tables', 'class': 'primary-action', 'route': '/v1/cells/{cell_id}/catalogs'}, {'label': 'Remove catalog', 'class': 'danger-action', 'route': '/v1/cells/{cell_id}/catalogs'}])}</footer>"
+        f"<footer>{actionBar([{'label': 'Refresh tables', 'class': 'primary-action', 'panel': 'jobs'}, {'label': 'Remove catalog', 'class': 'danger-action', 'disabled': 'true', 'title': 'Catalog delete is not available yet'}])}</footer>"
         "</article>"
     )
 
@@ -247,8 +314,20 @@ def _empty(message: str) -> str:
 
 
 def _attrs(action: dict[str, str]) -> str:
+    attrs = []
     route = action.get("route")
-    return f'data-route-template="{escape(route)}"' if route else ""
+    panel = action.get("panel")
+    title = action.get("title")
+    if route:
+        attrs.append(f'data-route-template="{escape(route)}"')
+    if panel:
+        attrs.append(f'data-panel="{escape(panel)}"')
+    if action.get("disabled") == "true":
+        attrs.append("disabled")
+        attrs.append('aria-disabled="true"')
+    if title:
+        attrs.append(f'title="{escape(title)}"')
+    return " ".join(attrs)
 
 
 def _format_value(value: object) -> str:

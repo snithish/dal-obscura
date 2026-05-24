@@ -75,6 +75,84 @@ def test_lists_tenants_cells_and_assignments_after_writes():
     ]
 
 
+def test_lists_cells_for_one_tenant_only():
+    client = _client()
+    tenant_one, cell_one = _create_tenant_and_cell(client)
+    tenant_two = client.post(
+        "/v1/tenants",
+        json={"slug": "other", "display_name": "Other"},
+        headers=ADMIN_HEADERS,
+    ).json()
+    cell_two = client.post(
+        "/v1/cells",
+        json={"name": "other", "region": "local"},
+        headers=ADMIN_HEADERS,
+    ).json()
+    client.put(
+        f"/v1/cells/{cell_two['id']}/tenants/{tenant_two['id']}",
+        json={"shard_key": "other"},
+        headers=ADMIN_HEADERS,
+    )
+
+    cells = client.get(
+        f"/v1/tenants/{tenant_one['id']}/cells",
+        headers=ADMIN_HEADERS,
+    ).json()
+
+    assert cells == [
+        {
+            "id": cell_one["id"],
+            "name": "default",
+            "region": "local",
+            "status": "active",
+            "shard_key": "default",
+        }
+    ]
+
+
+def test_can_create_cell_directly_for_tenant_from_form_post():
+    client = _client()
+    tenant = client.post(
+        "/v1/tenants",
+        json={"slug": "default", "display_name": "Default"},
+        headers=ADMIN_HEADERS,
+    ).json()
+
+    response = client.post(
+        f"/v1/tenants/{tenant['id']}/cells",
+        data={"name": "tenant-cell", "region": "local", "shard_key": "default"},
+        headers={**ADMIN_HEADERS, "HX-Request": "true"},
+    )
+
+    assert response.status_code == 200
+    assert "tenant-cell" in response.text
+    assert 'data-set-context="cell_id"' in response.text
+
+
+def test_can_assign_existing_cell_to_tenant_from_form_post():
+    client = _client()
+    tenant = client.post(
+        "/v1/tenants",
+        json={"slug": "default", "display_name": "Default"},
+        headers=ADMIN_HEADERS,
+    ).json()
+    cell = client.post(
+        "/v1/cells",
+        json={"name": "existing", "region": "local"},
+        headers=ADMIN_HEADERS,
+    ).json()
+
+    response = client.post(
+        f"/v1/tenants/{tenant['id']}/cell-assignments",
+        data={"cell_id": cell["id"], "shard_key": "default"},
+        headers={**ADMIN_HEADERS, "HX-Request": "true"},
+    )
+
+    assert response.status_code == 200
+    assert "existing" in response.text
+    assert 'data-set-context="cell_id"' in response.text
+
+
 ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )
