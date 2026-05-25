@@ -23,6 +23,50 @@
 }
 
 @layer components {
+  .surface {
+    border-radius: 8px;
+    border: 1px solid theme("colors.border");
+    background: rgb(255 255 255 / 92%);
+    box-shadow: theme("boxShadow.panel");
+  }
+
+  .btn-primary {
+    display: inline-flex;
+    min-height: 40px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: theme("colors.accent");
+    padding: 0 16px;
+    color: white;
+    font-size: 14px;
+    font-weight: 900;
+    text-decoration: none;
+  }
+
+  .btn-primary:hover {
+    background: #106f5b;
+  }
+
+  .btn-secondary {
+    display: inline-flex;
+    min-height: 38px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    border: 1px solid theme("colors.border");
+    background: white;
+    padding: 0 14px;
+    color: theme("colors.ink");
+    font-size: 14px;
+    font-weight: 900;
+    text-decoration: none;
+  }
+
+  .btn-secondary:hover {
+    background: theme("colors.soft");
+  }
+
   .field {
     min-height: 42px;
     width: 100%;
