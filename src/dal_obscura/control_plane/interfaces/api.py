@@ -11,17 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.application.provisioning import ProvisioningService
-from dal_obscura.control_plane.interfaces.ui import (
-    htmx_response,
-    install_ui,
-    render_assets_partial,
-    render_catalogs_partial,
-    render_cell_tenant_assignments_partial,
-    render_cells_partial,
-    render_policy_rules_partial,
-    render_runtime_settings_partial,
-    render_tenants_partial,
-)
+from dal_obscura.control_plane.interfaces.ui import install_ui
 
 
 class _StrictModel(BaseModel):
@@ -103,67 +93,57 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
                 session.rollback()
                 raise
 
-    def wants_html(request: Request) -> bool:
-        return request.headers.get("HX-Request") == "true"
-
     @app.get("/v1/tenants", dependencies=[Depends(require_admin)])
-    def list_tenants(request: Request) -> object:
-        result = with_service(lambda service: service.list_tenants())
-        if wants_html(request):
-            return htmx_response(render_tenants_partial(cast(list[dict[str, object]], result)))
-        return result
+    def list_tenants() -> object:
+        return with_service(lambda service: service.list_tenants())
+
+    @app.get("/v1/workspace/summary", dependencies=[Depends(require_admin)])
+    def get_workspace_summary() -> object:
+        return with_service(lambda service: service.get_workspace_summary())
+
+    @app.get("/v1/catalogs", dependencies=[Depends(require_admin)])
+    def list_workspace_catalogs() -> object:
+        return with_service(lambda service: service.list_workspace_catalogs())
+
+    @app.get("/v1/assets", dependencies=[Depends(require_admin)])
+    def list_workspace_assets() -> object:
+        return with_service(lambda service: service.list_workspace_assets())
 
     @app.get("/v1/cells", dependencies=[Depends(require_admin)])
-    def list_cells(request: Request) -> object:
-        result = with_service(lambda service: service.list_cells())
-        if wants_html(request):
-            return htmx_response(render_cells_partial(cast(list[dict[str, object]], result)))
-        return result
+    def list_cells() -> object:
+        return with_service(lambda service: service.list_cells())
 
     @app.get("/v1/tenants/{tenant_id}/cells", dependencies=[Depends(require_admin)])
-    def list_tenant_cells(tenant_id: UUID, request: Request) -> object:
-        result = with_service(lambda service: service.list_cells_for_tenant(tenant_id))
-        if wants_html(request):
-            return htmx_response(render_cells_partial(cast(list[dict[str, object]], result)))
-        return result
+    def list_tenant_cells(tenant_id: UUID) -> object:
+        return with_service(lambda service: service.list_cells_for_tenant(tenant_id))
 
     @app.get("/v1/cell-tenant-assignments", dependencies=[Depends(require_admin)])
-    def list_cell_tenant_assignments(request: Request) -> object:
-        result = with_service(lambda service: service.list_cell_tenant_assignments())
-        if wants_html(request):
-            return htmx_response(
-                render_cell_tenant_assignments_partial(cast(list[dict[str, object]], result))
-            )
-        return result
+    def list_cell_tenant_assignments() -> object:
+        return with_service(lambda service: service.list_cell_tenant_assignments())
 
     @app.get("/v1/cells/{cell_id}/runtime-settings", dependencies=[Depends(require_admin)])
-    def get_runtime_settings(cell_id: UUID, request: Request) -> object:
-        result = with_service(lambda service: service.get_runtime_settings(cell_id))
-        if wants_html(request):
-            runtime = cast(dict[str, object] | None, result)
-            return htmx_response(render_runtime_settings_partial(runtime))
-        return result
+    def get_runtime_settings(cell_id: UUID) -> object:
+        return with_service(lambda service: service.get_runtime_settings(cell_id))
 
     @app.get("/v1/cells/{cell_id}/catalogs", dependencies=[Depends(require_admin)])
-    def list_catalogs(cell_id: UUID, request: Request) -> object:
-        result = with_service(lambda service: service.list_catalogs(cell_id))
-        if wants_html(request):
-            return htmx_response(render_catalogs_partial(cast(list[dict[str, object]], result)))
-        return result
+    def list_catalogs(cell_id: UUID) -> object:
+        return with_service(lambda service: service.list_catalogs(cell_id))
 
     @app.get("/v1/cells/{cell_id}/assets", dependencies=[Depends(require_admin)])
-    def list_assets(cell_id: UUID, request: Request) -> object:
-        result = with_service(lambda service: service.list_assets(cell_id))
-        if wants_html(request):
-            return htmx_response(render_assets_partial(cast(list[dict[str, object]], result)))
-        return result
+    def list_assets(cell_id: UUID) -> object:
+        return with_service(lambda service: service.list_assets(cell_id))
 
     @app.get("/v1/assets/{asset_id}/policy-rules", dependencies=[Depends(require_admin)])
-    def list_policy_rules(asset_id: UUID, request: Request) -> object:
-        result = with_service(lambda service: service.list_policy_rules(asset_id))
-        if wants_html(request):
-            return htmx_response(render_policy_rules_partial(cast(list[dict[str, object]], result)))
-        return result
+    def list_policy_rules(asset_id: UUID) -> object:
+        return with_service(lambda service: service.list_policy_rules(asset_id))
+
+    @app.get("/v1/assets/{asset_id}", dependencies=[Depends(require_admin)])
+    def get_workspace_asset(asset_id: UUID) -> object:
+        return with_service(lambda service: service.get_workspace_asset(asset_id))
+
+    @app.get("/v1/publications/draft", dependencies=[Depends(require_admin)])
+    def get_workspace_publication_draft() -> object:
+        return with_service(lambda service: service.get_workspace_draft())
 
     @app.get("/v1/cells/{cell_id}/auth-providers", dependencies=[Depends(require_admin)])
     def list_auth_providers(cell_id: UUID) -> object:
@@ -184,32 +164,24 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
     @app.post("/v1/tenants", dependencies=[Depends(require_admin)])
     async def create_tenant(request: Request) -> object:
         payload = TenantRequest.model_validate(await _request_payload(request))
-        result = with_service(
+        return with_service(
             lambda service: service.create_tenant(
                 slug=payload.slug,
                 display_name=payload.display_name,
             )
         )
-        if wants_html(request):
-            tenants = with_service(lambda service: service.list_tenants())
-            return htmx_response(render_tenants_partial(cast(list[dict[str, object]], tenants)))
-        return result
 
     @app.post("/v1/cells", dependencies=[Depends(require_admin)])
     async def create_cell(request: Request) -> object:
         payload = CellRequest.model_validate(await _request_payload(request))
-        result = with_service(
+        return with_service(
             lambda service: service.create_cell(name=payload.name, region=payload.region)
         )
-        if wants_html(request):
-            cells = with_service(lambda service: service.list_cells())
-            return htmx_response(render_cells_partial(cast(list[dict[str, object]], cells)))
-        return result
 
     @app.post("/v1/tenants/{tenant_id}/cells", dependencies=[Depends(require_admin)])
     async def create_tenant_cell(tenant_id: UUID, request: Request) -> object:
         payload = TenantCellRequest.model_validate(await _request_payload(request))
-        result = with_service(
+        return with_service(
             lambda service: service.create_cell_for_tenant(
                 tenant_id=tenant_id,
                 name=payload.name,
@@ -217,10 +189,6 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
                 shard_key=payload.shard_key,
             )
         )
-        if wants_html(request):
-            cells = with_service(lambda service: service.list_cells_for_tenant(tenant_id))
-            return htmx_response(render_cells_partial(cast(list[dict[str, object]], cells)))
-        return result
 
     @app.put("/v1/cells/{cell_id}/tenants/{tenant_id}", dependencies=[Depends(require_admin)])
     def assign_tenant(cell_id: UUID, tenant_id: UUID, request: CellTenantRequest) -> object:
@@ -245,10 +213,7 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
                 shard_key=payload.shard_key,
             )
         )
-        cells = with_service(lambda service: service.list_cells_for_tenant(tenant_id))
-        if wants_html(request):
-            return htmx_response(render_cells_partial(cast(list[dict[str, object]], cells)))
-        return cells
+        return with_service(lambda service: service.list_cells_for_tenant(tenant_id))
 
     @app.put(
         "/v1/tenants/{tenant_id}/cells/{cell_id}/runtime-settings",
@@ -281,7 +246,7 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
         request: Request,
     ) -> object:
         payload = CatalogRequest.model_validate(await _request_payload(request))
-        result = with_service(
+        return with_service(
             lambda service: service.upsert_catalog(
                 cell_id=cell_id,
                 tenant_id=tenant_id,
@@ -290,10 +255,6 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
                 options=payload.options,
             )
         )
-        if wants_html(request):
-            catalogs = with_service(lambda service: service.list_catalogs(cell_id))
-            return htmx_response(render_catalogs_partial(cast(list[dict[str, object]], catalogs)))
-        return result
 
     @app.put(
         "/v1/tenants/{tenant_id}/cells/{cell_id}/assets/{catalog}/{target}",
@@ -337,6 +298,10 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
     def create_publication(cell_id: UUID) -> object:
         return with_service(lambda service: service.create_publication(cell_id))
 
+    @app.post("/v1/publications", dependencies=[Depends(require_admin)])
+    def create_workspace_publication() -> object:
+        return with_service(lambda service: service.create_workspace_publication())
+
     @app.post(
         "/v1/cells/{cell_id}/publications/{publication_id}/activate",
         dependencies=[Depends(require_admin)],
@@ -348,6 +313,13 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
                 publication_id=publication_id,
             )
         )
+
+    @app.post(
+        "/v1/publications/{publication_id}/activate",
+        dependencies=[Depends(require_admin)],
+    )
+    def activate_workspace_publication(publication_id: UUID) -> object:
+        return with_service(lambda service: service.activate_workspace_publication(publication_id))
 
     return app
 

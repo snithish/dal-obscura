@@ -73,6 +73,43 @@ class ProvisioningService:
     def get_active_publication_summary(self, cell_id: UUID) -> dict[str, str]:
         return self._store.get_active_publication_summary(cell_id)
 
+    def get_workspace_summary(self) -> dict[str, object]:
+        context = self._store.get_default_workspace_context()
+        return self._store.get_workspace_summary(context)
+
+    def list_workspace_catalogs(self) -> list[dict[str, object]]:
+        context = self._required_workspace_context()
+        return self._store.list_workspace_catalogs(context)
+
+    def list_workspace_assets(self) -> list[dict[str, object]]:
+        context = self._required_workspace_context()
+        return self._store.list_workspace_assets(context)
+
+    def get_workspace_asset(self, asset_id: UUID) -> dict[str, object]:
+        return self._store.get_workspace_asset(asset_id)
+
+    def get_workspace_draft(self) -> dict[str, object]:
+        context = self._required_workspace_context()
+        return self._store.get_workspace_draft(context)
+
+    def create_workspace_publication(self) -> dict[str, object]:
+        context = self._required_workspace_context()
+        publication = self.create_publication(context.cell_id)
+        return {
+            "publication_id": publication["publication_id"],
+            "asset_count": publication["asset_count"],
+            "catalog_count": publication["catalog_count"],
+            "manifest_hash": publication["manifest_hash"],
+        }
+
+    def activate_workspace_publication(self, publication_id: UUID) -> dict[str, str]:
+        context = self._required_workspace_context()
+        activated = self.activate_publication(
+            cell_id=context.cell_id,
+            publication_id=publication_id,
+        )
+        return {"publication_id": activated["publication_id"]}
+
     def assign_tenant(self, cell_id: UUID, tenant_id: UUID, shard_key: str) -> None:
         self._store.assign_tenant_to_cell(
             cell_id=cell_id,
@@ -153,6 +190,12 @@ class ProvisioningService:
     def activate_publication(self, cell_id: UUID, publication_id: UUID) -> dict[str, str]:
         self._store.activate_publication(cell_id=cell_id, publication_id=publication_id)
         return {"cell_id": str(cell_id), "publication_id": str(publication_id)}
+
+    def _required_workspace_context(self):
+        context = self._store.get_default_workspace_context()
+        if context is None:
+            raise LookupError("No workspace has been configured")
+        return context
 
 
 def _publication_response(publication_id: UUID, compiled: CompiledPublication) -> dict[str, object]:

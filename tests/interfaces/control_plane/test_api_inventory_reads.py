@@ -110,7 +110,7 @@ def test_lists_cells_for_one_tenant_only():
     ]
 
 
-def test_can_create_cell_directly_for_tenant_from_form_post():
+def test_can_create_cell_directly_for_tenant_from_form_post_returns_json():
     client = _client()
     tenant = client.post(
         "/v1/tenants",
@@ -125,11 +125,11 @@ def test_can_create_cell_directly_for_tenant_from_form_post():
     )
 
     assert response.status_code == 200
-    assert "tenant-cell" in response.text
-    assert 'data-set-context="cell_id"' in response.text
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.json()["name"] == "tenant-cell"
 
 
-def test_can_assign_existing_cell_to_tenant_from_form_post():
+def test_can_assign_existing_cell_to_tenant_from_form_post_returns_json():
     client = _client()
     tenant = client.post(
         "/v1/tenants",
@@ -149,8 +149,16 @@ def test_can_assign_existing_cell_to_tenant_from_form_post():
     )
 
     assert response.status_code == 200
-    assert "existing" in response.text
-    assert 'data-set-context="cell_id"' in response.text
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.json() == [
+        {
+            "id": cell["id"],
+            "name": "existing",
+            "region": "local",
+            "status": "active",
+            "shard_key": "default",
+        }
+    ]
 
 
 ICEBERG_CATALOG_MODULE = (

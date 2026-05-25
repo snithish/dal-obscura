@@ -50,6 +50,12 @@ class PublishedAsset:
     policy_version: int
 
 
+@dataclass(frozen=True)
+class WorkspaceContext:
+    cell_id: UUID
+    tenant_id: UUID
+
+
 class PublicationStore:
     def __init__(self, session: Session) -> None:
         self._session = session
@@ -117,6 +123,19 @@ class PublicationStore:
                 )
             )
         ]
+
+    def get_default_workspace_context(self) -> WorkspaceContext | None:
+        row = self._session.execute(
+            select(CellRecord, TenantRecord)
+            .join(CellTenantRecord, CellTenantRecord.cell_id == CellRecord.id)
+            .join(TenantRecord, TenantRecord.id == CellTenantRecord.tenant_id)
+            .order_by(TenantRecord.slug, CellRecord.name)
+            .limit(1)
+        ).first()
+        if row is None:
+            return None
+        cell, tenant = row
+        return WorkspaceContext(cell_id=cell.id, tenant_id=tenant.id)
 
     def assign_tenant_to_cell(self, *, cell_id: UUID, tenant_id: UUID, shard_key: str) -> None:
         self._session.add(
@@ -389,6 +408,35 @@ class PublicationStore:
             )
         ]
 
+    def list_workspace_catalogs(self, context: WorkspaceContext) -> list[dict[str, object]]:
+        assets_by_catalog: dict[UUID, int] = {}
+        for asset in self._session.scalars(
+            select(AssetRecord).where(
+                AssetRecord.cell_id == context.cell_id,
+                AssetRecord.tenant_id == context.tenant_id,
+            )
+        ):
+            assets_by_catalog[asset.catalog_id] = assets_by_catalog.get(asset.catalog_id, 0) + 1
+        return [
+            {
+                "id": str(record.id),
+                "name": record.name,
+                "module": record.module,
+                "options": dict(record.options_json),
+                "status": "configured",
+                "discovered_table_count": 0,
+                "governed_asset_count": assets_by_catalog.get(record.id, 0),
+            }
+            for record in self._session.scalars(
+                select(CatalogRecord)
+                .where(
+                    CatalogRecord.cell_id == context.cell_id,
+                    CatalogRecord.tenant_id == context.tenant_id,
+                )
+                .order_by(CatalogRecord.name)
+            )
+        ]
+
     def list_assets(self, cell_id: UUID) -> list[dict[str, object]]:
         catalog_records = list(
             self._session.scalars(select(CatalogRecord).where(CatalogRecord.cell_id == cell_id))
@@ -413,6 +461,41 @@ class PublicationStore:
                 }
             )
         return assets
+
+    def list_workspace_assets(self, context: WorkspaceContext) -> list[dict[str, object]]:
+        catalog_records = list(
+            self._session.scalars(
+                select(CatalogRecord).where(
+                    CatalogRecord.cell_id == context.cell_id,
+                    CatalogRecord.tenant_id == context.tenant_id,
+                )
+            )
+        )
+        catalog_by_id = {record.id: record for record in catalog_records}
+        return [
+            self._workspace_asset_row(record, catalog_by_id[record.catalog_id])
+            for record in self._session.scalars(
+                select(AssetRecord)
+                .where(
+                    AssetRecord.cell_id == context.cell_id,
+                    AssetRecord.tenant_id == context.tenant_id,
+                )
+                .order_by(AssetRecord.target)
+            )
+        ]
+
+    def get_workspace_asset(self, asset_id: UUID) -> dict[str, object]:
+        record = self._session.get(AssetRecord, asset_id)
+        if record is None:
+            raise LookupError(f"No asset {asset_id}")
+        catalog = self._session.get(CatalogRecord, record.catalog_id)
+        if catalog is None:
+            raise LookupError(f"No catalog {record.catalog_id}")
+        return {
+            **self._workspace_asset_row(record, catalog),
+            "options": dict(record.options_json),
+            "policy_rules": self.list_policy_rules(asset_id),
+        }
 
     def list_policy_rules(self, asset_id: UUID) -> list[dict[str, object]]:
         return [
@@ -487,6 +570,41 @@ class PublicationStore:
                 .order_by(ConfigPublicationRecord.created_at)
             )
         ]
+
+    def get_workspace_summary(self, context: WorkspaceContext | None) -> dict[str, object]:
+        if context is None:
+            return _empty_workspace_summary()
+        catalogs = self.list_workspace_catalogs(context)
+        assets = self.list_workspace_assets(context)
+        missing_policy_count = sum(1 for asset in assets if asset["policy_status"] == "missing")
+        active: dict[str, str] | None
+        try:
+            active_publication = self.get_active_publication_summary(context.cell_id)
+            active = {
+                "publication_id": active_publication["publication_id"],
+                "manifest_hash": active_publication["manifest_hash"],
+                "status": active_publication["status"],
+            }
+        except LookupError:
+            active = None
+        return {
+            "catalog_count": len(catalogs),
+            "asset_count": len(assets),
+            "unowned_asset_count": sum(1 for asset in assets if asset["owner_count"] == 0),
+            "missing_policy_count": missing_policy_count,
+            "draft_change_count": len(assets),
+            "active_publication": active,
+        }
+
+    def get_workspace_draft(self, context: WorkspaceContext) -> dict[str, object]:
+        catalogs = self.list_workspace_catalogs(context)
+        assets = self.list_workspace_assets(context)
+        return {
+            "catalog_count": len(catalogs),
+            "asset_count": len(assets),
+            "catalogs": catalogs,
+            "assets": assets,
+        }
 
     def get_active_publication_summary(self, cell_id: UUID) -> dict[str, str]:
         active = self._session.get(ActivePublicationRecord, cell_id)
@@ -642,3 +760,31 @@ class PublicationStore:
         if catalog is None:
             raise LookupError(f"No catalog {name!r} for tenant {tenant_id}")
         return catalog
+
+    def _workspace_asset_row(
+        self,
+        record: AssetRecord,
+        catalog: CatalogRecord,
+    ) -> dict[str, object]:
+        policy_rules = self.list_policy_rules(record.id)
+        return {
+            "id": str(record.id),
+            "name": record.target,
+            "catalog": catalog.name,
+            "backend": record.backend,
+            "table_identifier": record.table_identifier,
+            "owner_count": 0,
+            "policy_status": "configured" if policy_rules else "missing",
+            "draft_status": "draft",
+        }
+
+
+def _empty_workspace_summary() -> dict[str, object]:
+    return {
+        "catalog_count": 0,
+        "asset_count": 0,
+        "unowned_asset_count": 0,
+        "missing_policy_count": 0,
+        "draft_change_count": 0,
+        "active_publication": None,
+    }

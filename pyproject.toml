@@ -48,7 +48,7 @@ markers = [
 ]
 
 [tool.setuptools.package-data]
-"dal_obscura.control_plane.interfaces" = ["ui_assets/**/*"]
+"dal_obscura.control_plane.interfaces" = ["ui_assets/dist/**/*"]
 
 [dependency-groups]
 dev = [

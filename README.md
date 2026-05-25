@@ -139,10 +139,29 @@ Open the operator dashboard from the same control-plane process:
 open http://localhost:8820/ui
 ```
 
-The dashboard shell is served by the control plane, but all state reads and
-writes go through the protected `/v1` API. Enter
-`DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN` in the browser when prompted. The token
-is not rendered into the HTML shell by the service.
+The dashboard is a React app served by the control plane. All state reads and
+writes go through the protected `/v1` API. The admin token is not rendered into
+the HTML shell by the service.
+
+For frontend development, run the API and Vite dev server separately:
+
+```bash
+uv run dal-obscura-control-plane
+cd ui
+pnpm install
+pnpm dev
+```
+
+Build the packaged dashboard with:
+
+```bash
+cd ui
+pnpm build
+cp -R dist ../src/dal_obscura/control_plane/interfaces/ui_assets/dist
+```
+
+See [docs/frontend.md](docs/frontend.md) for frontend conventions, pnpm
+supply-chain settings, and dependency admission rules.
 
 Provision tenants, cells, catalogs, assets, policy rules, and auth providers
 through the HTTP API, then publish and activate a snapshot. Start each data
