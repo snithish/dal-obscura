@@ -91,6 +91,24 @@ class ProvisioningService:
             "path_rules": settings["path_rules"],
         }
 
+    def list_workspace_auth_providers(self) -> list[dict[str, object]]:
+        context = self._store.get_default_workspace_context()
+        if context is None:
+            return []
+        return [
+            _auth_provider_response(item)
+            for item in self._store.list_auth_providers(context.cell_id)
+        ]
+
+    def list_workspace_publications(self) -> list[dict[str, object]]:
+        context = self._store.get_default_workspace_context()
+        if context is None:
+            return []
+        return [
+            _publication_list_response(item)
+            for item in self._store.list_publications(context.cell_id)
+        ]
+
     def list_workspace_catalogs(self) -> list[dict[str, object]]:
         context = self._store.get_default_workspace_context()
         if context is None:
@@ -245,6 +263,10 @@ class ProvisioningService:
     def replace_auth_providers(self, cell_id: UUID, providers: list[dict[str, Any]]) -> None:
         self._store.replace_auth_providers(cell_id=cell_id, providers=providers)
 
+    def replace_workspace_auth_providers(self, providers: list[dict[str, Any]]) -> None:
+        context = self._store.ensure_default_workspace_context()
+        self.replace_auth_providers(cell_id=context.cell_id, providers=providers)
+
     def create_publication(self, cell_id: UUID) -> dict[str, object]:
         draft = self._store.load_publish_draft(cell_id)
         compiled = PublicationCompiler().compile(draft)
@@ -273,4 +295,24 @@ def _publication_response(publication_id: UUID, compiled: CompiledPublication) -
         "asset_count": len(compiled.assets),
         "catalog_count": len(compiled.catalogs),
         "manifest_hash": compiled.manifest_hash,
+    }
+
+
+def _auth_provider_response(provider: dict[str, object]) -> dict[str, object]:
+    return {
+        "id": provider["id"],
+        "ordinal": provider["ordinal"],
+        "module": provider["module"],
+        "args": provider["args"],
+        "enabled": provider["enabled"],
+    }
+
+
+def _publication_list_response(publication: dict[str, object]) -> dict[str, object]:
+    return {
+        "id": publication["id"],
+        "schema_version": publication["schema_version"],
+        "status": publication["status"],
+        "manifest_hash": publication["manifest_hash"],
+        "active": publication["active"],
     }

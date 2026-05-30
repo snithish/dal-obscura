@@ -46,6 +46,8 @@ def test_workspace_routes_require_admin_token():
     assert client.get("/v1/assets").status_code == 401
     assert client.put("/v1/assets/analytics/default.users", json={}).status_code == 401
     assert client.get("/v1/publications/draft").status_code == 401
+    assert client.get("/v1/settings/auth-providers").status_code == 401
+    assert client.get("/v1/publications").status_code == 401
 
 
 def test_workspace_catalog_upsert_bootstraps_default_workspace():
@@ -205,6 +207,41 @@ def test_workspace_policy_rules_can_be_replaced_from_asset_detail():
     ]
 
 
+def test_workspace_auth_providers_can_be_configured_without_cell_ids():
+    client = _client()
+
+    before_setup = client.get("/v1/settings/auth-providers", headers=ADMIN_HEADERS)
+    put_response = client.put(
+        "/v1/settings/auth-providers",
+        json={
+            "providers": [
+                {
+                    "ordinal": 1,
+                    "module": DEFAULT_AUTH_MODULE,
+                    "args": {"jwt_secret": {"secret": "DAL_OBSCURA_JWT_SECRET"}},
+                    "enabled": True,
+                }
+            ]
+        },
+        headers=ADMIN_HEADERS,
+    )
+    after_setup = client.get("/v1/settings/auth-providers", headers=ADMIN_HEADERS)
+
+    assert before_setup.status_code == 200
+    assert before_setup.json() == []
+    assert put_response.status_code == 200
+    assert after_setup.json() == [
+        {
+            "id": after_setup.json()[0]["id"],
+            "ordinal": 1,
+            "module": DEFAULT_AUTH_MODULE,
+            "args": {"jwt_secret": {"secret": "DAL_OBSCURA_JWT_SECRET"}},
+            "enabled": True,
+        }
+    ]
+    assert "cell" not in _keys_recursive(after_setup.json())
+
+
 def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
     client = _client()
     asset = _provision_draft(client)
@@ -271,18 +308,32 @@ def test_workspace_publish_routes_use_default_runtime_context():
     _provision_draft(client)
 
     draft = client.get("/v1/publications/draft", headers=ADMIN_HEADERS).json()
+    publications_before = client.get("/v1/publications", headers=ADMIN_HEADERS).json()
     publication = client.post("/v1/publications", headers=ADMIN_HEADERS).json()
+    publications_after_publish = client.get("/v1/publications", headers=ADMIN_HEADERS).json()
     activate = client.post(
         f"/v1/publications/{publication['publication_id']}/activate",
         headers=ADMIN_HEADERS,
     ).json()
+    publications_after_activate = client.get("/v1/publications", headers=ADMIN_HEADERS).json()
     summary = client.get("/v1/workspace/summary", headers=ADMIN_HEADERS).json()
 
     assert draft["catalog_count"] == 1
     assert draft["asset_count"] == 1
+    assert publications_before == []
     assert publication["catalog_count"] == 1
     assert publication["asset_count"] == 1
+    assert publications_after_publish == [
+        {
+            "id": publication["publication_id"],
+            "schema_version": 1,
+            "status": "published",
+            "manifest_hash": publication["manifest_hash"],
+            "active": False,
+        }
+    ]
     assert activate["publication_id"] == publication["publication_id"]
+    assert publications_after_activate[0]["active"] is True
     assert summary["active_publication"] == {
         "publication_id": publication["publication_id"],
         "manifest_hash": publication["manifest_hash"],

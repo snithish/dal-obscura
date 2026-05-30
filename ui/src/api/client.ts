@@ -41,3 +41,20 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
   }
   return (await response.json()) as T;
 }
+
+export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
+  const response = await fetch(path, {
+    body: body === undefined ? undefined : JSON.stringify(body),
+    headers: body === undefined
+      ? adminHeaders()
+      : {
+          ...adminHeaders(),
+          "Content-Type": "application/json",
+        },
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw new ApiError(`Request failed: ${path}`, response.status);
+  }
+  return (await response.json()) as T;
+}

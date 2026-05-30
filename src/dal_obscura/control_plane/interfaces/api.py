@@ -109,6 +109,10 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
     def get_workspace_runtime_settings() -> object:
         return with_service(lambda service: service.get_workspace_runtime_settings())
 
+    @app.get("/v1/settings/auth-providers", dependencies=[Depends(require_admin)])
+    def list_workspace_auth_providers() -> object:
+        return with_service(lambda service: service.list_workspace_auth_providers())
+
     @app.get("/v1/assets", dependencies=[Depends(require_admin)])
     def list_workspace_assets() -> object:
         return with_service(lambda service: service.list_workspace_assets())
@@ -148,6 +152,10 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
     @app.get("/v1/publications/draft", dependencies=[Depends(require_admin)])
     def get_workspace_publication_draft() -> object:
         return with_service(lambda service: service.get_workspace_draft())
+
+    @app.get("/v1/publications", dependencies=[Depends(require_admin)])
+    def list_workspace_publications() -> object:
+        return with_service(lambda service: service.list_workspace_publications())
 
     @app.get("/v1/cells/{cell_id}/auth-providers", dependencies=[Depends(require_admin)])
     def list_auth_providers(cell_id: UUID) -> object:
@@ -336,6 +344,14 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
                 providers=request.providers,
             )
         ) or {"cell_id": str(cell_id)}
+
+    @app.put("/v1/settings/auth-providers", dependencies=[Depends(require_admin)])
+    def replace_workspace_auth_providers(request: AuthProvidersRequest) -> object:
+        return with_service(
+            lambda service: service.replace_workspace_auth_providers(
+                providers=request.providers,
+            )
+        ) or {"providers": request.providers}
 
     @app.post("/v1/cells/{cell_id}/publications", dependencies=[Depends(require_admin)])
     def create_publication(cell_id: UUID) -> object:
