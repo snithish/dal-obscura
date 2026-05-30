@@ -42,8 +42,67 @@ def test_workspace_routes_require_admin_token():
 
     assert client.get("/v1/workspace/summary").status_code == 401
     assert client.get("/v1/catalogs").status_code == 401
+    assert client.put("/v1/catalogs/analytics", json={}).status_code == 401
     assert client.get("/v1/assets").status_code == 401
     assert client.get("/v1/publications/draft").status_code == 401
+
+
+def test_workspace_catalog_upsert_bootstraps_default_workspace():
+    client = _client()
+
+    response = client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+    catalogs = client.get("/v1/catalogs", headers=ADMIN_HEADERS).json()
+    summary = client.get("/v1/workspace/summary", headers=ADMIN_HEADERS).json()
+
+    assert response.status_code == 200
+    assert response.json() == {"id": response.json()["id"], "name": "analytics"}
+    assert catalogs == [
+        {
+            "id": response.json()["id"],
+            "name": "analytics",
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+            "status": "configured",
+            "discovered_table_count": 0,
+            "governed_asset_count": 0,
+        }
+    ]
+    assert summary["catalog_count"] == 1
+    assert summary["asset_count"] == 0
+
+
+def test_workspace_runtime_settings_can_be_configured_without_tenant_or_cell_ids():
+    client = _client()
+
+    get_before_setup = client.get("/v1/settings/runtime", headers=ADMIN_HEADERS)
+    put_response = client.put(
+        "/v1/settings/runtime",
+        json={
+            "ticket_ttl_seconds": 1200,
+            "max_tickets": 32,
+            "max_ticket_exchanges": 3,
+            "path_rules": [{"glob": "s3://warehouse/*", "allow": True}],
+        },
+        headers=ADMIN_HEADERS,
+    )
+    get_after_setup = client.get("/v1/settings/runtime", headers=ADMIN_HEADERS)
+
+    assert get_before_setup.status_code == 200
+    assert get_before_setup.json() is None
+    assert put_response.status_code == 200
+    assert get_after_setup.json() == {
+        "ticket_ttl_seconds": 1200,
+        "max_tickets": 32,
+        "max_ticket_exchanges": 3,
+        "path_rules": [{"glob": "s3://warehouse/*", "allow": True}],
+    }
 
 
 def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():

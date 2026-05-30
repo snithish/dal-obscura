@@ -77,12 +77,30 @@ class ProvisioningService:
         context = self._store.get_default_workspace_context()
         return self._store.get_workspace_summary(context)
 
+    def get_workspace_runtime_settings(self) -> dict[str, object] | None:
+        context = self._store.get_default_workspace_context()
+        if context is None:
+            return None
+        settings = self._store.get_runtime_settings(context.cell_id)
+        if settings is None:
+            return None
+        return {
+            "ticket_ttl_seconds": settings["ticket_ttl_seconds"],
+            "max_tickets": settings["max_tickets"],
+            "max_ticket_exchanges": settings["max_ticket_exchanges"],
+            "path_rules": settings["path_rules"],
+        }
+
     def list_workspace_catalogs(self) -> list[dict[str, object]]:
-        context = self._required_workspace_context()
+        context = self._store.get_default_workspace_context()
+        if context is None:
+            return []
         return self._store.list_workspace_catalogs(context)
 
     def list_workspace_assets(self) -> list[dict[str, object]]:
-        context = self._required_workspace_context()
+        context = self._store.get_default_workspace_context()
+        if context is None:
+            return []
         return self._store.list_workspace_assets(context)
 
     def get_workspace_asset(self, asset_id: UUID) -> dict[str, object]:
@@ -133,6 +151,22 @@ class ProvisioningService:
             path_rules=path_rules,
         )
 
+    def upsert_workspace_runtime_settings(
+        self,
+        ttl: int,
+        max_tickets: int,
+        max_ticket_exchanges: int,
+        path_rules: list[dict[str, Any]],
+    ) -> None:
+        context = self._store.ensure_default_workspace_context()
+        self.upsert_runtime_settings(
+            cell_id=context.cell_id,
+            ttl=ttl,
+            max_tickets=max_tickets,
+            max_ticket_exchanges=max_ticket_exchanges,
+            path_rules=path_rules,
+        )
+
     def upsert_catalog(
         self,
         cell_id: UUID,
@@ -149,6 +183,21 @@ class ProvisioningService:
             options=options,
         )
         return {"id": str(catalog_id), "name": name}
+
+    def upsert_workspace_catalog(
+        self,
+        name: str,
+        module: str,
+        options: dict[str, Any],
+    ) -> dict[str, str]:
+        context = self._store.ensure_default_workspace_context()
+        return self.upsert_catalog(
+            cell_id=context.cell_id,
+            tenant_id=context.tenant_id,
+            name=name,
+            module=module,
+            options=options,
+        )
 
     def upsert_asset(
         self,

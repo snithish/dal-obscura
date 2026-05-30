@@ -137,6 +137,35 @@ class PublicationStore:
         cell, tenant = row
         return WorkspaceContext(cell_id=cell.id, tenant_id=tenant.id)
 
+    def ensure_default_workspace_context(self) -> WorkspaceContext:
+        existing = self.get_default_workspace_context()
+        if existing is not None:
+            return existing
+
+        tenant_id = uuid4()
+        cell_id = uuid4()
+        self._session.add(
+            TenantRecord(
+                id=tenant_id,
+                slug="default",
+                display_name="Default workspace",
+                status="active",
+            )
+        )
+        self._session.add(
+            CellRecord(
+                id=cell_id,
+                name="default",
+                region="local",
+                status="active",
+            )
+        )
+        self._session.add(
+            CellTenantRecord(cell_id=cell_id, tenant_id=tenant_id, shard_key="default")
+        )
+        self._session.flush()
+        return WorkspaceContext(cell_id=cell_id, tenant_id=tenant_id)
+
     def assign_tenant_to_cell(self, *, cell_id: UUID, tenant_id: UUID, shard_key: str) -> None:
         self._session.add(
             CellTenantRecord(cell_id=cell_id, tenant_id=tenant_id, shard_key=shard_key)

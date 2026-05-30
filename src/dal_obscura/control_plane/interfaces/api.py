@@ -105,6 +105,10 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
     def list_workspace_catalogs() -> object:
         return with_service(lambda service: service.list_workspace_catalogs())
 
+    @app.get("/v1/settings/runtime", dependencies=[Depends(require_admin)])
+    def get_workspace_runtime_settings() -> object:
+        return with_service(lambda service: service.get_workspace_runtime_settings())
+
     @app.get("/v1/assets", dependencies=[Depends(require_admin)])
     def list_workspace_assets() -> object:
         return with_service(lambda service: service.list_workspace_assets())
@@ -235,6 +239,22 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
             )
         ) or {"cell_id": str(cell_id)}
 
+    @app.put("/v1/settings/runtime", dependencies=[Depends(require_admin)])
+    def upsert_workspace_runtime_settings(request: RuntimeSettingsRequest) -> object:
+        return with_service(
+            lambda service: service.upsert_workspace_runtime_settings(
+                ttl=request.ticket_ttl_seconds,
+                max_tickets=request.max_tickets,
+                max_ticket_exchanges=request.max_ticket_exchanges,
+                path_rules=request.path_rules,
+            )
+        ) or {
+            "ticket_ttl_seconds": request.ticket_ttl_seconds,
+            "max_tickets": request.max_tickets,
+            "max_ticket_exchanges": request.max_ticket_exchanges,
+            "path_rules": request.path_rules,
+        }
+
     @app.put(
         "/v1/tenants/{tenant_id}/cells/{cell_id}/catalogs/{name}",
         dependencies=[Depends(require_admin)],
@@ -250,6 +270,17 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
             lambda service: service.upsert_catalog(
                 cell_id=cell_id,
                 tenant_id=tenant_id,
+                name=name,
+                module=payload.module,
+                options=payload.options,
+            )
+        )
+
+    @app.put("/v1/catalogs/{name}", dependencies=[Depends(require_admin)])
+    async def upsert_workspace_catalog(name: str, request: Request) -> object:
+        payload = CatalogRequest.model_validate(await _request_payload(request))
+        return with_service(
+            lambda service: service.upsert_workspace_catalog(
                 name=name,
                 module=payload.module,
                 options=payload.options,
