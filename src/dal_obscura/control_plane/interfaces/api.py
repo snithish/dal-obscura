@@ -316,6 +316,18 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
             lambda service: service.replace_policy_rules(asset_id=asset_id, rules=request.rules)
         ) or {"asset_id": str(asset_id)}
 
+    @app.put("/v1/assets/{catalog}/{target}", dependencies=[Depends(require_admin)])
+    def upsert_workspace_asset(catalog: str, target: str, request: AssetRequest) -> object:
+        return with_service(
+            lambda service: service.upsert_workspace_asset(
+                catalog=catalog,
+                target=target,
+                backend=request.backend,
+                table_identifier=request.table_identifier,
+                options=request.options,
+            )
+        )
+
     @app.put("/v1/cells/{cell_id}/auth-providers", dependencies=[Depends(require_admin)])
     def replace_auth_providers(cell_id: UUID, request: AuthProvidersRequest) -> object:
         return with_service(

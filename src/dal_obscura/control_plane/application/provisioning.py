@@ -220,6 +220,25 @@ class ProvisioningService:
         )
         return {"id": str(asset_id), "catalog": catalog, "target": target}
 
+    def upsert_workspace_asset(
+        self,
+        catalog: str,
+        target: str,
+        backend: str,
+        table_identifier: str | None,
+        options: dict[str, Any],
+    ) -> dict[str, str]:
+        context = self._required_workspace_context()
+        return self.upsert_asset(
+            cell_id=context.cell_id,
+            tenant_id=context.tenant_id,
+            catalog=catalog,
+            target=target,
+            backend=backend,
+            table_identifier=table_identifier,
+            options=options,
+        )
+
     def replace_policy_rules(self, asset_id: UUID, rules: list[dict[str, Any]]) -> None:
         self._store.replace_policy_rules(asset_id=asset_id, rules=rules)
 

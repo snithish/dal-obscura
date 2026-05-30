@@ -44,6 +44,7 @@ def test_workspace_routes_require_admin_token():
     assert client.get("/v1/catalogs").status_code == 401
     assert client.put("/v1/catalogs/analytics", json={}).status_code == 401
     assert client.get("/v1/assets").status_code == 401
+    assert client.put("/v1/assets/analytics/default.users", json={}).status_code == 401
     assert client.get("/v1/publications/draft").status_code == 401
 
 
@@ -103,6 +104,105 @@ def test_workspace_runtime_settings_can_be_configured_without_tenant_or_cell_ids
         "max_ticket_exchanges": 3,
         "path_rules": [{"glob": "s3://warehouse/*", "allow": True}],
     }
+
+
+def test_workspace_asset_upsert_uses_default_workspace_context():
+    client = _client()
+    client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+
+    response = client.put(
+        "/v1/assets/analytics/default.users",
+        json={
+            "backend": "iceberg",
+            "table_identifier": "prod.users",
+            "options": {"snapshot": 7},
+        },
+        headers=ADMIN_HEADERS,
+    )
+    assets = client.get("/v1/assets", headers=ADMIN_HEADERS).json()
+    detail = client.get(f"/v1/assets/{response.json()['id']}", headers=ADMIN_HEADERS).json()
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": response.json()["id"],
+        "catalog": "analytics",
+        "target": "default.users",
+    }
+    assert assets == [
+        {
+            "id": response.json()["id"],
+            "name": "default.users",
+            "catalog": "analytics",
+            "backend": "iceberg",
+            "table_identifier": "prod.users",
+            "owner_count": 0,
+            "policy_status": "missing",
+            "draft_status": "draft",
+        }
+    ]
+    assert detail["options"] == {"snapshot": 7}
+    assert detail["policy_rules"] == []
+    assert "tenant" not in _keys_recursive({"assets": assets, "detail": detail})
+    assert "cell" not in _keys_recursive({"assets": assets, "detail": detail})
+
+
+def test_workspace_policy_rules_can_be_replaced_from_asset_detail():
+    client = _client()
+    client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+    asset = client.put(
+        "/v1/assets/analytics/default.users",
+        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
+        headers=ADMIN_HEADERS,
+    ).json()
+
+    response = client.put(
+        f"/v1/assets/{asset['id']}/policy-rules",
+        json={
+            "rules": [
+                {
+                    "ordinal": 1,
+                    "effect": "allow",
+                    "principals": ["group:data-stewards"],
+                    "when": {},
+                    "columns": ["id", "email"],
+                    "masks": {"email": {"type": "email"}},
+                    "row_filter": "region = 'us'",
+                }
+            ]
+        },
+        headers=ADMIN_HEADERS,
+    )
+    detail = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
+
+    assert response.status_code == 200
+    assert detail["policy_status"] == "configured"
+    assert detail["policy_rules"] == [
+        {
+            "id": detail["policy_rules"][0]["id"],
+            "asset_id": asset["id"],
+            "ordinal": 1,
+            "effect": "allow",
+            "principals": ["group:data-stewards"],
+            "when": {},
+            "columns": ["id", "email"],
+            "masks": {"email": {"type": "email"}},
+            "row_filter": "region = 'us'",
+        }
+    ]
 
 
 def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
