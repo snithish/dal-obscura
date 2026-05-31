@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
-from dal_obscura.common.config_store.orm import Base
+from dal_obscura.common.config_store.orm import (
+    ActivePublicationRecord,
+    Base,
+    PublishedAssetRecord,
+)
 from dal_obscura.control_plane.interfaces.api import create_app
 
 ADMIN_HEADERS = {"authorization": "Bearer test-admin"}
@@ -575,6 +580,119 @@ def test_workspace_publish_routes_use_default_runtime_context():
     }
     assert summary["runtime_configured"] is True
     assert summary["enabled_auth_provider_count"] == 1
+
+
+def test_policy_publish_versions_one_asset_without_publishing_other_drafts():
+    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    factory = session_factory(engine)
+    client = TestClient(create_app(factory, admin_token="test-admin"))
+    first_asset = _provision_draft(client)
+    client.put(
+        f"/v1/assets/{first_asset['id']}/owners",
+        json={"owners": ["user:owner@example.com"]},
+        headers=ADMIN_HEADERS,
+    )
+    second_asset = client.put(
+        "/v1/assets/analytics/default.accounts",
+        json={
+            "backend": "iceberg",
+            "table_identifier": "prod.accounts",
+            "options": {"snapshot": 1},
+        },
+        headers=ADMIN_HEADERS,
+    ).json()
+    client.put(
+        f"/v1/assets/{second_asset['id']}/owners",
+        json={"owners": ["user:owner@example.com"]},
+        headers=ADMIN_HEADERS,
+    )
+    client.put(
+        f"/v1/assets/{second_asset['id']}/policy-rules",
+        json={
+            "rules": [
+                {
+                    "ordinal": 1,
+                    "principals": ["user:owner@example.com"],
+                    "columns": ["id", "account_id"],
+                    "effect": "allow",
+                    "when": {},
+                    "masks": {},
+                    "row_filter": None,
+                }
+            ]
+        },
+        headers=ADMIN_HEADERS,
+    )
+    initial_response = client.post("/v1/publications", headers=ADMIN_HEADERS)
+    assert initial_response.status_code == 200, initial_response.json()
+    initial = initial_response.json()
+    client.post(f"/v1/publications/{initial['publication_id']}/activate", headers=ADMIN_HEADERS)
+
+    before_versions = _active_policy_versions(factory)
+    client.put(
+        f"/v1/assets/{first_asset['id']}/policy-rules",
+        json={
+            "rules": [
+                {
+                    "ordinal": 1,
+                    "principals": ["user:owner@example.com"],
+                    "columns": ["id", "email"],
+                    "effect": "allow",
+                    "when": {},
+                    "masks": {"email": {"type": "redact", "value": "[redacted]"}},
+                    "row_filter": "id > 10",
+                }
+            ]
+        },
+        headers=ADMIN_HEADERS,
+    )
+    client.put(
+        f"/v1/assets/{second_asset['id']}/policy-rules",
+        json={
+            "rules": [
+                {
+                    "ordinal": 1,
+                    "principals": ["user:owner@example.com"],
+                    "columns": ["id"],
+                    "effect": "allow",
+                    "when": {},
+                    "masks": {},
+                    "row_filter": "id > 99",
+                }
+            ]
+        },
+        headers=ADMIN_HEADERS,
+    )
+
+    response = client.post(
+        f"/v1/assets/{first_asset['id']}/policy-versions",
+        headers=ADMIN_HEADERS,
+    )
+
+    after_versions = _active_policy_versions(factory)
+    assert response.status_code == 200
+    assert response.json()["asset_id"] == first_asset["id"]
+    assert (
+        after_versions[("analytics", "default.users")]
+        != before_versions[("analytics", "default.users")]
+    )
+    assert (
+        after_versions[("analytics", "default.accounts")]
+        == before_versions[("analytics", "default.accounts")]
+    )
+
+
+def _active_policy_versions(factory) -> dict[tuple[str, str], int]:
+    with factory() as session:
+        active = session.scalar(select(ActivePublicationRecord))
+        assert active is not None
+        records = session.scalars(
+            select(PublishedAssetRecord).where(
+                PublishedAssetRecord.publication_id == active.publication_id
+            )
+        )
+        return {(record.catalog, record.target): record.policy_version for record in records}
 
 
 def _provision_draft(client: TestClient) -> dict[str, str]:

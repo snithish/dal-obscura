@@ -44,7 +44,7 @@ class DecodedScan:
 
 
 class FetchStreamUseCase:
-    """Verifies a ticket, re-checks authn/authz freshness, and streams masked rows."""
+    """Verifies a ticket, re-authenticates the caller, and streams masked rows."""
 
     def __init__(
         self,
@@ -94,14 +94,6 @@ class FetchStreamUseCase:
         except PermissionError:
             self._ticket_store.cleanup_expired_and_exhausted(now=now)
             raise
-
-        current_version = self._authorizer.current_policy_version(
-            payload.target,
-            payload.catalog,
-            tenant_id=payload.tenant_id,
-        )
-        if current_version is not None and payload.policy_version != current_version:
-            raise PermissionError("Unauthorized")
 
         scan = _decode_scan(payload.scan)
 

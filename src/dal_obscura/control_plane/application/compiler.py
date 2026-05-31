@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+from uuid import UUID
 
 import sqlglot
 
 from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.domain.models import (
     AssetDraft,
+    CatalogDraft,
     CompiledAsset,
     CompiledCatalog,
     CompiledPublication,
@@ -53,21 +55,44 @@ class PublicationCompiler:
             },
             path_rules=list(draft.runtime.path_rules),
         )
-        manifest_payload = {
-            "cell_id": str(draft.cell_id),
-            "runtime": runtime,
-            "catalogs": compiled_catalogs,
-            "assets": compiled_assets,
-        }
         return CompiledPublication(
             cell_id=draft.cell_id,
             runtime=runtime,
             catalogs=compiled_catalogs,
             assets=compiled_assets,
-            manifest_hash=_stable_hash(manifest_payload),
+            manifest_hash=_publication_hash(
+                cell_id=draft.cell_id,
+                runtime=runtime,
+                catalogs=compiled_catalogs,
+                assets=compiled_assets,
+            ),
         )
 
-    def _compile_asset(self, asset: AssetDraft, catalog) -> CompiledAsset:
+    def compile_asset(self, asset: AssetDraft, catalog: CatalogDraft) -> CompiledAsset:
+        return self._compile_asset(asset, catalog)
+
+    def compile_policy_version(
+        self,
+        *,
+        cell_id: UUID,
+        runtime: CompiledRuntime,
+        catalogs: list[CompiledCatalog],
+        assets: list[CompiledAsset],
+    ) -> CompiledPublication:
+        return CompiledPublication(
+            cell_id=cell_id,
+            runtime=runtime,
+            catalogs=list(catalogs),
+            assets=list(assets),
+            manifest_hash=_publication_hash(
+                cell_id=cell_id,
+                runtime=runtime,
+                catalogs=catalogs,
+                assets=assets,
+            ),
+        )
+
+    def _compile_asset(self, asset: AssetDraft, catalog: CatalogDraft) -> CompiledAsset:
         if asset.backend != "iceberg":
             raise ValidationFailure(f"Unsupported backend {asset.backend!r}")
         rules = [
@@ -127,3 +152,20 @@ def _stable_hash(value: object) -> str:
 
 def _stable_int63(value: object) -> int:
     return int(_stable_hash(value), 16) & ((1 << 63) - 1)
+
+
+def _publication_hash(
+    *,
+    cell_id: UUID,
+    runtime: CompiledRuntime,
+    catalogs: list[CompiledCatalog],
+    assets: list[CompiledAsset],
+) -> str:
+    return _stable_hash(
+        {
+            "cell_id": str(cell_id),
+            "runtime": runtime,
+            "catalogs": catalogs,
+            "assets": assets,
+        }
+    )

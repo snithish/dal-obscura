@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.compiler import PublicationCompiler
 from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
-from dal_obscura.control_plane.domain.models import CompiledPublication
+from dal_obscura.control_plane.domain.models import CompiledCatalog, CompiledPublication
 from dal_obscura.control_plane.infrastructure.catalog_discovery import discover_catalog_tables
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 
@@ -168,6 +168,67 @@ class ProvisioningService:
             "asset_count": publication["asset_count"],
             "catalog_count": publication["catalog_count"],
             "manifest_hash": publication["manifest_hash"],
+        }
+
+    def create_asset_policy_version(
+        self,
+        asset_id: UUID,
+        *,
+        actor: ControlPlaneActor,
+    ) -> dict[str, object]:
+        self._ensure_policy_editor(asset_id, actor)
+        asset, catalog = self._store.load_asset_publish_draft(asset_id)
+        if not asset.rules:
+            raise ValidationFailure("Cannot publish a policy version without policy rules.")
+        compiler = PublicationCompiler()
+        compiled_asset = compiler.compile_asset(asset, catalog)
+        try:
+            active = self._store.load_active_compiled_publication(asset.cell_id)
+        except LookupError:
+            publication = self.create_publication(asset.cell_id)
+            self.activate_publication(
+                cell_id=asset.cell_id,
+                publication_id=UUID(str(publication["publication_id"])),
+            )
+            return {
+                "asset_id": str(asset.id),
+                "publication_id": publication["publication_id"],
+                "policy_version": compiled_asset.policy_version,
+                "manifest_hash": publication["manifest_hash"],
+            }
+
+        replaced = False
+        assets = []
+        for current in active.assets:
+            if (
+                current.tenant_id == compiled_asset.tenant_id
+                and current.catalog == compiled_asset.catalog
+                and current.target == compiled_asset.target
+            ):
+                assets.append(compiled_asset)
+                replaced = True
+            else:
+                assets.append(current)
+        if not replaced:
+            assets.append(compiled_asset)
+        catalogs = _catalogs_with_selected(active.catalogs, catalog)
+        compiled = compiler.compile_policy_version(
+            cell_id=asset.cell_id,
+            runtime=active.runtime,
+            catalogs=catalogs,
+            assets=assets,
+        )
+        publication_id = uuid4()
+        self._store.insert_compiled_publication(
+            publication_id=publication_id,
+            compiled=compiled,
+        )
+        self._store.activate_publication(cell_id=asset.cell_id, publication_id=publication_id)
+        return {
+            "asset_id": str(asset.id),
+            "publication_id": str(publication_id),
+            "policy_version": compiled_asset.policy_version,
+            "manifest_hash": compiled.manifest_hash,
         }
 
     def activate_workspace_publication(self, publication_id: UUID) -> dict[str, str]:
@@ -396,6 +457,20 @@ def _publication_list_response(publication: dict[str, object]) -> dict[str, obje
         "manifest_hash": publication["manifest_hash"],
         "active": publication["active"],
     }
+
+
+def _catalogs_with_selected(active_catalogs, catalog):
+    for active in active_catalogs:
+        if active.tenant_id == catalog.tenant_id and active.catalog == catalog.name:
+            return list(active_catalogs)
+    return [
+        *active_catalogs,
+        CompiledCatalog(
+            tenant_id=catalog.tenant_id,
+            catalog=catalog.name,
+            config={"module": catalog.module, "options": dict(catalog.options)},
+        ),
+    ]
 
 
 def _plural(count: int, singular: str, plural: str) -> str:

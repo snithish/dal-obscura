@@ -180,7 +180,7 @@ def test_plan_access_resolves_catalog_with_tenant_from_principal_attributes():
     assert ticket_codec.signed_payloads[0].tenant_id == "tenant-a"
 
 
-def test_fetch_stream_checks_policy_version_for_ticket_tenant():
+def test_fetch_stream_uses_ticket_policy_version_without_latest_policy_lookup():
     schema, _, table_format = _build_use_case_dependencies()
     payload = TicketPayload(
         ticket_id="00000000-0000-0000-0000-000000000001",
@@ -211,10 +211,10 @@ def test_fetch_stream_checks_policy_version_for_ticket_tenant():
         ticket_store=ticket_store,
     )
 
-    with pytest.raises(PermissionError):
-        use_case.execute("ticket", AUTHORIZATION_HEADER)
+    result = use_case.execute("ticket", AUTHORIZATION_HEADER)
 
-    assert authorizer.last_current_version_tenant_id == "tenant-a"
+    assert result.target == "default.users"
+    assert authorizer.last_current_version_tenant_id is None
 
 
 def test_fetch_stream_rejects_legacy_ticket_without_ticket_id_before_decoding(monkeypatch):
@@ -1155,7 +1155,7 @@ def test_plan_access_excludes_denied_requested_columns_from_execution_plan():
     assert planned_columns == [["id"]]
 
 
-def test_fetch_stream_policy_version_mismatch():
+def test_fetch_stream_allows_ticket_policy_version_after_policy_changes():
     schema, decision, table_format = _build_use_case_dependencies()
     payload = TicketPayload(
         ticket_id="00000000-0000-0000-0000-000000000001",
@@ -1182,8 +1182,9 @@ def test_fetch_stream_policy_version_mismatch():
         ticket_store=ticket_store,
     )
 
-    with pytest.raises(PermissionError):
-        use_case.execute("token", AUTHORIZATION_HEADER)
+    result = use_case.execute("token", AUTHORIZATION_HEADER)
+
+    assert result.target == "users"
 
 
 def test_fetch_stream_principal_mismatch():

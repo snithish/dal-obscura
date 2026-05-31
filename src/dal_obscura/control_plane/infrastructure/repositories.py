@@ -29,7 +29,10 @@ from dal_obscura.control_plane.domain.models import (
     AuthProviderDraft,
     CatalogDraft,
     CellRuntimeDraft,
+    CompiledAsset,
+    CompiledCatalog,
     CompiledPublication,
+    CompiledRuntime,
     PolicyRuleDraft,
     PublishDraft,
 )
@@ -283,6 +286,7 @@ class PublicationStore:
             select(PolicyRuleRecord).where(PolicyRuleRecord.asset_id == asset_id)
         ):
             self._session.delete(record)
+        self._session.flush()
         for raw in rules:
             self._session.add(
                 PolicyRuleRecord(
@@ -830,6 +834,102 @@ class PublicationStore:
             auth_providers=auth_providers,
             catalogs=catalogs,
             assets=assets,
+        )
+
+    def load_asset_publish_draft(self, asset_id: UUID) -> tuple[AssetDraft, CatalogDraft]:
+        asset = self._session.get(AssetRecord, asset_id)
+        if asset is None:
+            raise LookupError(f"No asset {asset_id}")
+        catalog = self._session.get(CatalogRecord, asset.catalog_id)
+        if catalog is None:
+            raise LookupError(f"No catalog {asset.catalog_id}")
+        catalog_draft = CatalogDraft(
+            id=catalog.id,
+            cell_id=catalog.cell_id,
+            tenant_id=catalog.tenant_id,
+            name=catalog.name,
+            module=catalog.module,
+            options=dict(catalog.options_json),
+        )
+        rules = [
+            PolicyRuleDraft(
+                ordinal=rule.ordinal,
+                effect=cast(Literal["allow", "deny"], rule.effect),
+                principals=list(rule.principals_json),
+                when=cast(dict[str, str | list[str]], dict(rule.when_json)),
+                columns=list(rule.columns_json),
+                masks=dict(rule.masks_json),
+                row_filter=rule.row_filter_sql,
+            )
+            for rule in self._session.scalars(
+                select(PolicyRuleRecord)
+                .where(PolicyRuleRecord.asset_id == asset.id)
+                .order_by(PolicyRuleRecord.ordinal)
+            )
+        ]
+        return (
+            AssetDraft(
+                id=asset.id,
+                cell_id=asset.cell_id,
+                tenant_id=asset.tenant_id,
+                catalog_id=asset.catalog_id,
+                catalog_name=catalog.name,
+                target=asset.target,
+                backend=asset.backend,
+                table_identifier=asset.table_identifier,
+                options=dict(asset.options_json),
+                rules=rules,
+            ),
+            catalog_draft,
+        )
+
+    def load_active_compiled_publication(self, cell_id: UUID) -> CompiledPublication:
+        active = self._session.get(ActivePublicationRecord, cell_id)
+        if active is None:
+            raise LookupError(f"No active publication for cell {cell_id}")
+        publication = self._session.get(ConfigPublicationRecord, active.publication_id)
+        if publication is None:
+            raise LookupError(f"No publication {active.publication_id}")
+        runtime = self._session.get(PublishedCellRuntimeRecord, active.publication_id)
+        if runtime is None:
+            raise LookupError(f"No published runtime for publication {active.publication_id}")
+        catalogs = [
+            CompiledCatalog(
+                tenant_id=record.tenant_id,
+                catalog=record.catalog,
+                config=dict(record.config_json),
+            )
+            for record in self._session.scalars(
+                select(PublishedCatalogRecord).where(
+                    PublishedCatalogRecord.publication_id == active.publication_id
+                )
+            )
+        ]
+        assets = [
+            CompiledAsset(
+                tenant_id=record.tenant_id,
+                catalog=record.catalog,
+                target=record.target,
+                backend=record.backend,
+                compiled_config=dict(record.compiled_config_json),
+                policy_version=record.policy_version,
+            )
+            for record in self._session.scalars(
+                select(PublishedAssetRecord).where(
+                    PublishedAssetRecord.publication_id == active.publication_id
+                )
+            )
+        ]
+        return CompiledPublication(
+            cell_id=cell_id,
+            runtime=CompiledRuntime(
+                auth_chain=dict(runtime.auth_chain_json),
+                ticket=dict(runtime.ticket_json),
+                path_rules=list(runtime.path_rules_json),
+            ),
+            catalogs=catalogs,
+            assets=assets,
+            manifest_hash=publication.manifest_hash,
         )
 
     def insert_compiled_publication(

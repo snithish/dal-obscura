@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
-import { apiGet, apiPut } from "../../api/client";
+import { apiGet, apiPost, apiPut } from "../../api/client";
 import {
   defaultRule,
   formToRule,
@@ -49,6 +49,7 @@ export function PoliciesPage() {
   const [previewClaims, setPreviewClaims] = useState<PreviewClaimRow[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
 
   async function refreshAssets() {
     const loadedAssets = await apiGet<Asset[]>("/v1/assets");
@@ -82,8 +83,12 @@ export function PoliciesPage() {
 
   async function submitPolicy(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    await savePolicyRules("Policy saved.");
+  }
+
+  async function savePolicyRules(successMessage: string): Promise<boolean> {
     if (!selectedAssetId) {
-      return;
+      return false;
     }
     setStatus(null);
     setIsSaving(true);
@@ -99,11 +104,35 @@ export function PoliciesPage() {
           withSchemaColumns(ruleToForm(rule), detail.schema_fields),
         ),
       );
-      setStatus("Policy saved.");
+      setStatus(successMessage);
+      return true;
     } catch {
       setStatus("Policy save failed.");
+      return false;
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function publishPolicyVersion() {
+    if (!selectedAssetId) {
+      return;
+    }
+    setIsPublishing(true);
+    try {
+      const saved = await savePolicyRules("Policy saved. Publishing policy version...");
+      if (!saved) {
+        return;
+      }
+      const result = await apiPost<{ policy_version: number }>(
+        `/v1/assets/${selectedAssetId}/policy-versions`,
+      );
+      await refreshAssets();
+      setStatus(`Policy version ${result.policy_version} published for this asset.`);
+    } catch {
+      setStatus("Policy version publish failed.");
+    } finally {
+      setIsPublishing(false);
     }
   }
 
@@ -143,8 +172,8 @@ export function PoliciesPage() {
           <p className="text-xs font-black uppercase tracking-wide text-muted">Work queue</p>
           <h1 className="mt-1 text-3xl font-black">Policies</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-            Review assets that need policy attention and edit the rules published
-            into the data plane.
+            Review assets that need policy attention, edit rules, and publish a
+            new policy version for one asset at a time.
           </p>
         </div>
         <span className="badge">{queue.length} queued</span>
@@ -254,6 +283,14 @@ export function PoliciesPage() {
               <div className="mt-4 flex flex-wrap gap-2">
                 <button className="btn-primary" disabled={isSaving} type="submit">
                   {isSaving ? "Saving..." : "Save policy"}
+                </button>
+                <button
+                  className="btn-secondary"
+                  disabled={isSaving || isPublishing}
+                  type="button"
+                  onClick={() => void publishPolicyVersion()}
+                >
+                  {isPublishing ? "Publishing..." : "Publish policy version"}
                 </button>
                 <button
                   className="btn-secondary"

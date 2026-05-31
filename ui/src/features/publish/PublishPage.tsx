@@ -121,21 +121,23 @@ export function PublishPage() {
     <div className="grid gap-6">
       <header className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <p className="text-xs font-black uppercase tracking-wide text-muted">Release review</p>
-          <h1 className="mt-1 text-3xl font-black">Publish</h1>
+          <p className="text-xs font-black uppercase tracking-wide text-muted">Policy history</p>
+          <h1 className="mt-1 text-3xl font-black">Versions</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-            Review draft configuration, create a publication, and activate the
-            exact manifest the data plane should serve.
+            Track immutable policy versions. Day-to-day publishing happens from
+            the policy editor for the selected asset.
           </p>
         </div>
-        <button
-          className="btn-primary"
-          disabled={!canPublish || isPublishing}
-          onClick={() => setPendingAction("publish")}
-          type="button"
-        >
-          {isPublishing ? "Publishing..." : "Review publish"}
-        </button>
+        {summary?.active_publication ? null : (
+          <button
+            className="btn-secondary"
+            disabled={!canPublish || isPublishing}
+            onClick={() => setPendingAction("publish")}
+            type="button"
+          >
+            {isPublishing ? "Creating..." : "Bootstrap first version"}
+          </button>
+        )}
       </header>
 
       {status ? <div className="alert">{status}</div> : null}
@@ -170,10 +172,31 @@ export function PublishPage() {
 
       <section className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="surface p-5">
-          <h2 className="text-lg font-black">Draft review</h2>
+          <h2 className="text-lg font-black">Current draft state</h2>
           <p className="mt-1 text-sm leading-6 text-muted">
-            These resources will be compiled into the next publication.
+            These resources are available to policy authors. Publishing from the
+            policy editor versions only the selected asset policy.
           </p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="surface-muted p-4">
+              <span className="text-xs font-black uppercase text-muted">
+                Policy versioning
+              </span>
+              <p className="mt-2 text-sm leading-6 text-muted">
+                Every publication snapshots asset policy rules. New Flight tickets
+                use the active version at planning time.
+              </p>
+            </div>
+            <div className="surface-muted p-4">
+              <span className="text-xs font-black uppercase text-muted">
+                Existing tickets
+              </span>
+              <p className="mt-2 text-sm leading-6 text-muted">
+                Issued tickets keep their embedded policy version until they expire
+                or exhaust their exchange limit.
+              </p>
+            </div>
+          </div>
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             <ReviewList
               emptyLabel="No catalogs configured"
@@ -195,9 +218,10 @@ export function PublishPage() {
         </div>
 
         <div className="surface p-5">
-          <h2 className="text-lg font-black">Activation</h2>
+          <h2 className="text-lg font-black">Active policy set</h2>
           <p className="mt-1 text-sm leading-6 text-muted">
-            Activation switches the data plane to a compiled, immutable manifest.
+            The data plane reads from the active policy set. Asset policy publishes
+            create a new active set while carrying unchanged assets forward.
           </p>
           <div className="mt-5 rounded-card border border-border bg-soft p-4">
             <span className="text-xs font-black uppercase tracking-wide text-muted">
@@ -221,7 +245,7 @@ export function PublishPage() {
                 ? "Latest publication active"
                 : isActivating
                   ? "Activating..."
-                  : "Review activation"}
+                  : "Activate selected version"}
             </button>
           ) : null}
         </div>
@@ -232,13 +256,13 @@ export function PublishPage() {
           confirmLabel={isPublishing ? "Publishing..." : "Create publication"}
           disabled={!canPublish || isPublishing}
           eyebrow="Publish confirmation"
-          title="Create immutable publication"
+          title="Create first immutable policy set"
           onCancel={() => setPendingAction(null)}
           onConfirm={publishDraft}
         >
           <p className="text-sm leading-6 text-muted">
-            This compiles the current draft into an immutable manifest. It does not
-            change the active data plane publication until activation.
+            This bootstraps the first active policy set. After that, publish
+            individual asset policy versions from the policy editor.
           </p>
           <div className="mt-4 grid grid-cols-2 gap-3">
             <Metric label="Catalogs" value={draft?.catalog_count ?? 0} />
@@ -256,13 +280,14 @@ export function PublishPage() {
           }
           disabled={latestPublication.active || isActivating}
           eyebrow="Activation confirmation"
-          title="Switch active data plane manifest"
+          title="Switch active policy set"
           onCancel={() => setPendingAction(null)}
           onConfirm={() => activatePublication(latestPublication.id)}
         >
           <p className="text-sm leading-6 text-muted">
-            Activation immediately points clients at this compiled manifest. Review
-            the publication ID and manifest hash before confirming.
+            Activation points new planning requests at this compiled policy set.
+            Tickets already issued against older versions remain bounded by their
+            TTL and exchange limits.
           </p>
           <div className="mt-4 rounded-card border border-border bg-soft p-4">
             <span className="text-xs font-black uppercase tracking-wide text-muted">
@@ -278,7 +303,11 @@ export function PublishPage() {
 
       <section className="surface p-5">
         <h2 className="text-lg font-black">Publication history</h2>
-        <div className="mt-4 overflow-hidden rounded-card border border-border">
+        <p className="mt-1 text-sm leading-6 text-muted">
+          Publication IDs are durable release records. The active row is the version
+          used for newly planned tickets.
+        </p>
+        <div className="table-shell mt-4">
           {publications.length === 0 ? (
             <div className="px-4 py-10 text-center text-sm text-muted">
               No publications created yet.
@@ -296,7 +325,9 @@ export function PublishPage() {
                   </span>
                 </div>
                 <span className="badge">{publication.status}</span>
-                <span className="badge">{publication.active ? "active" : "inactive"}</span>
+                <span className={publication.active ? "badge badge-success" : "badge"}>
+                  {publication.active ? "active" : "inactive"}
+                </span>
               </div>
             ))
           )}
@@ -345,10 +376,16 @@ function ConfirmationPanel({
 }
 
 function Metric({ label, value }: { label: string; value: number | string }) {
+  const valueText = String(value).toLowerCase();
+  const badgeClass =
+    valueText === "missing" || (valueText === "0" && label === "Auth providers")
+      ? "badge badge-warning"
+      : "badge badge-success";
   return (
     <div className="surface p-4">
       <span className="text-xs font-bold text-muted">{label}</span>
-      <strong className="mt-2 block text-3xl font-black">{value}</strong>
+      <strong className="mt-2 block text-2xl font-black">{value}</strong>
+      {typeof value === "string" ? <span className={`${badgeClass} mt-3`}>{value}</span> : null}
     </div>
   );
 }

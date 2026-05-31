@@ -600,7 +600,7 @@ def test_descriptor_authorization_field_is_not_accepted(tmp_path):
         server.get_flight_info(DummyContext(headers=[]), descriptor)
 
 
-def test_policy_version_is_per_dataset(tmp_path):
+def test_ticket_uses_policy_version_it_was_issued_with(tmp_path):
     del tmp_path
     schema = id_region_schema()
     batch = id_region_batch([1], ["us"])
@@ -638,8 +638,7 @@ def test_policy_version_is_per_dataset(tmp_path):
     server.do_get(do_get_context, ticket)
 
     authorizer.rules = [allow_rule(["id", "region"], row_filter="region = 'us'")]
-    with pytest.raises(flight.FlightUnauthorizedError):
-        server.do_get(do_get_context, ticket)
+    server.do_get(do_get_context, ticket)
 
 
 def test_do_get_requires_authorization_header(tmp_path):

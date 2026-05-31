@@ -350,6 +350,15 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
             )
         ) or {"asset_id": str(asset_id)}
 
+    @app.post("/v1/assets/{asset_id}/policy-versions", dependencies=[Depends(require_admin)])
+    def create_asset_policy_version(asset_id: UUID) -> object:
+        return with_service(
+            lambda service: service.create_asset_policy_version(
+                asset_id=asset_id,
+                actor=ControlPlaneActor.for_platform_admin("platform:admin"),
+            )
+        )
+
     @app.put("/v1/assets/{asset_id}/owners", dependencies=[Depends(require_admin)])
     def replace_asset_owners(asset_id: UUID, request: AssetOwnersRequest) -> object:
         owners = with_service(
