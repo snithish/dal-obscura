@@ -1,6 +1,11 @@
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { apiGet, apiPost } from "../../api/client";
+import {
+  activationConfirmationLabel,
+  canPublishDraft,
+  publishBlockers,
+} from "./publishLogic";
 
 type WorkspaceSummary = {
   active_publication: {
@@ -49,6 +54,7 @@ export function PublishPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [publications, setPublications] = useState<Publication[]>([]);
   const [status, setStatus] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<"publish" | "activate" | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isActivating, setIsActivating] = useState(false);
 
@@ -74,6 +80,7 @@ export function PublishPage() {
       const publication = await apiPost<CreatedPublication>("/v1/publications");
       await refresh();
       setStatus(`Publication ${publication.publication_id} created.`);
+      setPendingAction(null);
     } catch {
       setStatus("Publish failed. Check runtime settings, catalogs, assets, and policies.");
     } finally {
@@ -88,6 +95,7 @@ export function PublishPage() {
       await apiPost(`/v1/publications/${publicationId}/activate`);
       await refresh();
       setStatus("Publication activated.");
+      setPendingAction(null);
     } catch {
       setStatus("Activation failed.");
     } finally {
@@ -96,7 +104,14 @@ export function PublishPage() {
   }
 
   const latestPublication = publications[publications.length - 1];
-  const canPublish = Boolean(draft && draft.catalog_count > 0 && draft.asset_count > 0);
+  const readiness = {
+    assetCount: draft?.asset_count ?? 0,
+    catalogCount: draft?.catalog_count ?? 0,
+    missingPolicyCount: summary?.missing_policy_count ?? 0,
+    unownedAssetCount: summary?.unowned_asset_count ?? 0,
+  };
+  const blockers = publishBlockers(readiness);
+  const canPublish = Boolean(draft && canPublishDraft(readiness));
 
   return (
     <div className="grid gap-6">
@@ -109,8 +124,13 @@ export function PublishPage() {
             exact manifest the data plane should serve.
           </p>
         </div>
-        <button className="btn-primary" disabled={!canPublish || isPublishing} onClick={publishDraft} type="button">
-          {isPublishing ? "Publishing..." : "Publish draft"}
+        <button
+          className="btn-primary"
+          disabled={!canPublish || isPublishing}
+          onClick={() => setPendingAction("publish")}
+          type="button"
+        >
+          {isPublishing ? "Publishing..." : "Review publish"}
         </button>
       </header>
 
@@ -122,6 +142,22 @@ export function PublishPage() {
         <Metric label="Missing policy" value={summary?.missing_policy_count ?? 0} />
         <Metric label="Draft changes" value={summary?.draft_change_count ?? 0} />
       </section>
+
+      {blockers.length > 0 ? (
+        <section className="surface border-l-4 border-l-[#c6802b] p-5">
+          <h2 className="text-lg font-black">Publish blockers</h2>
+          <div className="mt-3 grid gap-2">
+            {blockers.map((blocker) => (
+              <div
+                className="rounded-card border border-border bg-soft px-3 py-2 text-sm font-bold text-muted"
+                key={blocker}
+              >
+                {blocker}
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="surface p-5">
@@ -170,17 +206,66 @@ export function PublishPage() {
               className="btn-primary mt-4 w-full"
               disabled={latestPublication.active || isActivating}
               type="button"
-              onClick={() => activatePublication(latestPublication.id)}
+              onClick={() => setPendingAction("activate")}
             >
               {latestPublication.active
                 ? "Latest publication active"
                 : isActivating
                   ? "Activating..."
-                  : "Activate latest publication"}
+                  : "Review activation"}
             </button>
           ) : null}
         </div>
       </section>
+
+      {pendingAction === "publish" ? (
+        <ConfirmationPanel
+          confirmLabel={isPublishing ? "Publishing..." : "Create publication"}
+          disabled={!canPublish || isPublishing}
+          eyebrow="Publish confirmation"
+          title="Create immutable publication"
+          onCancel={() => setPendingAction(null)}
+          onConfirm={publishDraft}
+        >
+          <p className="text-sm leading-6 text-muted">
+            This compiles the current draft into an immutable manifest. It does not
+            change the active data plane publication until activation.
+          </p>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <Metric label="Catalogs" value={draft?.catalog_count ?? 0} />
+            <Metric label="Assets" value={draft?.asset_count ?? 0} />
+          </div>
+        </ConfirmationPanel>
+      ) : null}
+
+      {pendingAction === "activate" && latestPublication ? (
+        <ConfirmationPanel
+          confirmLabel={
+            isActivating
+              ? "Activating..."
+              : activationConfirmationLabel(latestPublication.id)
+          }
+          disabled={latestPublication.active || isActivating}
+          eyebrow="Activation confirmation"
+          title="Switch active data plane manifest"
+          onCancel={() => setPendingAction(null)}
+          onConfirm={() => activatePublication(latestPublication.id)}
+        >
+          <p className="text-sm leading-6 text-muted">
+            Activation immediately points clients at this compiled manifest. Review
+            the publication ID and manifest hash before confirming.
+          </p>
+          <div className="mt-4 rounded-card border border-border bg-soft p-4">
+            <span className="text-xs font-black uppercase tracking-wide text-muted">
+              Publication
+            </span>
+            <strong className="mt-2 block break-all text-sm">{latestPublication.id}</strong>
+            <span className="mt-2 block break-all text-xs text-muted">
+              {latestPublication.manifest_hash}
+            </span>
+          </div>
+        </ConfirmationPanel>
+      ) : null}
 
       <section className="surface p-5">
         <h2 className="text-lg font-black">Publication history</h2>
@@ -209,6 +294,44 @@ export function PublishPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+function ConfirmationPanel({
+  children,
+  confirmLabel,
+  disabled,
+  eyebrow,
+  onCancel,
+  onConfirm,
+  title,
+}: {
+  children: ReactNode;
+  confirmLabel: string;
+  disabled: boolean;
+  eyebrow: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+  title: string;
+}) {
+  return (
+    <section className="surface border-l-4 border-l-accent p-5">
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+        <div>
+          <p className="text-xs font-black uppercase tracking-wide text-muted">{eyebrow}</p>
+          <h2 className="mt-1 text-lg font-black">{title}</h2>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-secondary" type="button" onClick={onCancel}>
+            Cancel
+          </button>
+          <button className="btn-primary" disabled={disabled} type="button" onClick={onConfirm}>
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+      <div className="mt-4">{children}</div>
+    </section>
   );
 }
 
