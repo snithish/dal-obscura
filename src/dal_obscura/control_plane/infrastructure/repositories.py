@@ -517,6 +517,19 @@ class PublicationStore:
             )
         ]
 
+    def get_workspace_catalog(self, context: WorkspaceContext, name: str) -> dict[str, object]:
+        record = self._catalog_by_name(
+            cell_id=context.cell_id,
+            tenant_id=context.tenant_id,
+            name=name,
+        )
+        return {
+            "id": str(record.id),
+            "name": record.name,
+            "module": record.module,
+            "options": dict(record.options_json),
+        }
+
     def list_assets(self, cell_id: UUID) -> list[dict[str, object]]:
         catalog_records = list(
             self._session.scalars(select(CatalogRecord).where(CatalogRecord.cell_id == cell_id))

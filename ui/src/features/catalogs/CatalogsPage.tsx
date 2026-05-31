@@ -3,10 +3,12 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { apiGet, apiPut } from "../../api/client";
 import {
   CATALOG_ADAPTERS,
+  assetPayloadFromDiscoveredTable,
   catalogAdapterLabel,
   catalogPayloadFromForm,
   formFromCatalogOptions,
   type CatalogForm,
+  type DiscoveredCatalogTable,
 } from "./catalogLogic";
 
 type Catalog = {
@@ -16,6 +18,11 @@ type Catalog = {
   options: Record<string, unknown>;
   status: string;
   governed_asset_count: number;
+};
+
+type CatalogDiscovery = {
+  catalog: string;
+  tables: DiscoveredCatalogTable[];
 };
 
 const presets = [
@@ -38,6 +45,8 @@ const presets = [
 
 export function CatalogsPage() {
   const [catalogs, setCatalogs] = useState<Catalog[]>([]);
+  const [discoveredCatalog, setDiscoveredCatalog] = useState<string | null>(null);
+  const [discoveredTables, setDiscoveredTables] = useState<DiscoveredCatalogTable[]>([]);
   const [name, setName] = useState("analytics");
   const [catalogForm, setCatalogForm] = useState<CatalogForm>({
     adapter: "iceberg",
@@ -46,7 +55,10 @@ export function CatalogsPage() {
     warehouse: "",
   });
   const [error, setError] = useState<string | null>(null);
+  const [discoveryStatus, setDiscoveryStatus] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDiscovering, setIsDiscovering] = useState(false);
+  const [promotingTarget, setPromotingTarget] = useState<string | null>(null);
   const configuredCount = useMemo(() => catalogs.length, [catalogs]);
 
   async function refreshCatalogs() {
@@ -68,6 +80,46 @@ export function CatalogsPage() {
       setError("Catalog save failed.");
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function discoverTables(catalogName: string) {
+    setError(null);
+    setDiscoveryStatus(null);
+    setIsDiscovering(true);
+    try {
+      const discovery = await apiGet<CatalogDiscovery>(
+        `/v1/catalogs/${encodeURIComponent(catalogName)}/tables`,
+      );
+      setDiscoveredCatalog(discovery.catalog);
+      setDiscoveredTables(discovery.tables);
+      setDiscoveryStatus(`${discovery.tables.length} tables discovered.`);
+    } catch {
+      setError("Catalog discovery failed.");
+    } finally {
+      setIsDiscovering(false);
+    }
+  }
+
+  async function promoteTable(table: DiscoveredCatalogTable) {
+    if (!discoveredCatalog) {
+      return;
+    }
+    setError(null);
+    setDiscoveryStatus(null);
+    setPromotingTarget(table.target);
+    try {
+      await apiPut(
+        `/v1/assets/${encodeURIComponent(discoveredCatalog)}/${encodeURIComponent(table.target)}`,
+        assetPayloadFromDiscoveredTable(table),
+      );
+      await refreshCatalogs();
+      await discoverTables(discoveredCatalog);
+      setDiscoveryStatus(`${table.name} promoted to governed assets.`);
+    } catch {
+      setError("Table promotion failed.");
+    } finally {
+      setPromotingTarget(null);
     }
   }
 
@@ -139,7 +191,7 @@ export function CatalogsPage() {
             ) : (
               catalogs.map((catalog) => (
                 <div
-                  className="grid grid-cols-1 gap-2 border-b border-border px-4 py-3 last:border-b-0 md:grid-cols-[1fr_110px_120px] md:items-center md:gap-3"
+                  className="grid grid-cols-1 gap-2 border-b border-border px-4 py-3 last:border-b-0 md:grid-cols-[1fr_110px_120px_120px] md:items-center md:gap-3"
                   key={catalog.id}
                 >
                   <div className="min-w-0">
@@ -152,6 +204,14 @@ export function CatalogsPage() {
                   <span className="text-sm font-bold md:text-right">
                     {catalog.governed_asset_count} assets
                   </span>
+                  <button
+                    className="btn-secondary"
+                    disabled={isDiscovering}
+                    type="button"
+                    onClick={() => void discoverTables(catalog.name)}
+                  >
+                    {isDiscovering && discoveredCatalog === catalog.name ? "Scanning..." : "Discover"}
+                  </button>
                 </div>
               ))
             )}
@@ -233,6 +293,58 @@ export function CatalogsPage() {
             {isSaving ? "Saving..." : "Save catalog"}
           </button>
         </form>
+      </section>
+
+      <section className="surface p-5">
+        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+          <div>
+            <h2 className="text-lg font-black">Discovered tables</h2>
+            <p className="mt-1 text-sm text-muted">
+              Scan a connected catalog, then promote tables that need governance.
+            </p>
+          </div>
+          {discoveredCatalog ? (
+            <span className="rounded-full bg-soft px-3 py-1 text-xs font-black text-muted">
+              {discoveredCatalog}
+            </span>
+          ) : null}
+        </div>
+        {discoveryStatus ? <div className="alert mt-4">{discoveryStatus}</div> : null}
+        <div className="mt-5 overflow-hidden rounded-card border border-border">
+          {discoveredTables.length === 0 ? (
+            <div className="grid place-items-center px-4 py-10 text-center">
+              <h3 className="text-base font-black">No discovery results yet</h3>
+              <p className="mt-2 max-w-md text-sm leading-6 text-muted">
+                Use Discover on a connected catalog to fetch its tables.
+              </p>
+            </div>
+          ) : (
+            discoveredTables.map((table) => (
+              <div
+                className="grid grid-cols-1 gap-2 border-b border-border px-4 py-3 last:border-b-0 md:grid-cols-[1fr_120px_130px] md:items-center md:gap-3"
+                key={table.target}
+              >
+                <div className="min-w-0">
+                  <strong className="block truncate text-sm">{table.name}</strong>
+                  <span className="block truncate text-xs text-muted">{table.table_identifier}</span>
+                </div>
+                <span className="badge">{table.governed ? "governed" : table.backend}</span>
+                <button
+                  className="btn-secondary"
+                  disabled={table.governed || promotingTarget === table.target}
+                  type="button"
+                  onClick={() => void promoteTable(table)}
+                >
+                  {table.governed
+                    ? "Promoted"
+                    : promotingTarget === table.target
+                      ? "Promoting..."
+                      : "Promote"}
+                </button>
+              </div>
+            ))
+          )}
+        </div>
       </section>
 
       <section className="surface p-5">

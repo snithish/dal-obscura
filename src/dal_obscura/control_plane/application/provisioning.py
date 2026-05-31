@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
 from dal_obscura.control_plane.application.compiler import PublicationCompiler
 from dal_obscura.control_plane.domain.models import CompiledPublication
+from dal_obscura.control_plane.infrastructure.catalog_discovery import discover_catalog_tables
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 
 
@@ -114,6 +115,35 @@ class ProvisioningService:
         if context is None:
             return []
         return self._store.list_workspace_catalogs(context)
+
+    def discover_workspace_catalog_tables(self, name: str) -> dict[str, object]:
+        context = self._required_workspace_context()
+        catalog = self._store.get_workspace_catalog(context, name)
+        catalog_options = cast(dict[str, Any], catalog["options"])
+        tables = discover_catalog_tables(
+            str(catalog["name"]),
+            str(catalog["module"]),
+            catalog_options,
+        )
+        governed_targets = {
+            value
+            for asset in self._store.list_workspace_assets(context)
+            if asset["catalog"] == catalog["name"]
+            for value in (asset["name"], asset["table_identifier"])
+            if isinstance(value, str) and value
+        }
+        return {
+            "catalog": catalog["name"],
+            "tables": [
+                {
+                    **table,
+                    "target": table["name"],
+                    "governed": table["name"] in governed_targets
+                    or table["table_identifier"] in governed_targets,
+                }
+                for table in tables
+            ],
+        }
 
     def list_workspace_assets(self) -> list[dict[str, object]]:
         context = self._store.get_default_workspace_context()

@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import {
   CATALOG_ADAPTERS,
+  assetPayloadFromDiscoveredTable,
   catalogAdapterLabel,
   catalogPayloadFromForm,
   formFromCatalogOptions,
@@ -43,6 +44,24 @@ describe("catalog adapter form mapping", () => {
       type: "sql",
       uri: "sqlite:///catalog.db",
       warehouse: "",
+    });
+  });
+});
+
+describe("discovered table promotion", () => {
+  test("builds the governed asset payload from a discovered Iceberg table", () => {
+    expect(
+      assetPayloadFromDiscoveredTable({
+        backend: "iceberg",
+        governed: false,
+        name: "prod.orders",
+        table_identifier: "warehouse.prod.orders",
+        target: "prod.orders",
+      }),
+    ).toEqual({
+      backend: "iceberg",
+      options: {},
+      table_identifier: "warehouse.prod.orders",
     });
   });
 });

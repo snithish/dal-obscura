@@ -119,6 +119,10 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
     def list_workspace_catalogs() -> object:
         return with_service(lambda service: service.list_workspace_catalogs())
 
+    @app.get("/v1/catalogs/{name}/tables", dependencies=[Depends(require_admin)])
+    def discover_workspace_catalog_tables(name: str) -> object:
+        return with_service(lambda service: service.discover_workspace_catalog_tables(name))
+
     @app.get("/v1/settings/runtime", dependencies=[Depends(require_admin)])
     def get_workspace_runtime_settings() -> object:
         return with_service(lambda service: service.get_workspace_runtime_settings())

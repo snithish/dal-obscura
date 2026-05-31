@@ -20,10 +20,34 @@ export type CatalogPayload = {
   options: Record<string, unknown>;
 };
 
+export type DiscoveredCatalogTable = {
+  backend: string;
+  governed: boolean;
+  name: string;
+  table_identifier: string;
+  target: string;
+};
+
+export type AssetPromotionPayload = {
+  backend: string;
+  options: Record<string, unknown>;
+  table_identifier: string;
+};
+
 export function catalogPayloadFromForm(form: CatalogForm): CatalogPayload {
   return {
     module: CATALOG_ADAPTERS[form.adapter].module,
     options: catalogOptionsFromForm(form),
+  };
+}
+
+export function assetPayloadFromDiscoveredTable(
+  table: DiscoveredCatalogTable,
+): AssetPromotionPayload {
+  return {
+    backend: table.backend,
+    options: {},
+    table_identifier: table.table_identifier,
   };
 }
 
