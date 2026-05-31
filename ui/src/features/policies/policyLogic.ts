@@ -23,6 +23,11 @@ export type PolicyPreview = {
   visibleColumns: string[];
 };
 
+export type PolicyResponsibility = {
+  label: string;
+  message: string;
+};
+
 export type MaskRow = {
   column: string;
   type: string;
@@ -158,6 +163,20 @@ export function previewPolicy(
     reason: `Rule ${matchedRule.ordinal} matched.`,
     rowFilter: matchedRule.row_filter,
     visibleColumns: expandColumns(matchedRule.columns, schemaColumns),
+  };
+}
+
+export function policyEditorResponsibility(owners: string[]): PolicyResponsibility {
+  if (owners.length === 0) {
+    return {
+      label: "Needs owner",
+      message:
+        "Platform admins can seed this policy, then assign owners before handing off ongoing changes.",
+    };
+  }
+  return {
+    label: "Owner managed",
+    message: `Policy changes are restricted to platform admins and assigned owners: ${owners.join(", ")}.`,
   };
 }
 

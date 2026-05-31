@@ -23,6 +23,7 @@ from pyiceberg.types import (
 
 from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
 from dal_obscura.common.config_store.orm import Base
+from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.provisioning import ProvisioningService
 
 pytestmark = pytest.mark.heavy
@@ -208,6 +209,7 @@ def control_plane_setup(tmp_path: Path, iceberg_setup: tuple[str, Path]) -> dict
                     "row_filter": None,
                 }
             ],
+            actor=ControlPlaneActor.for_platform_admin("test:setup"),
         )
         service.replace_auth_providers(
             cell_id=cell_id,

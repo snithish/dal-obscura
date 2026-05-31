@@ -9,7 +9,8 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session, sessionmaker
 
-from dal_obscura.control_plane.application.errors import ValidationFailure
+from dal_obscura.control_plane.application.access import ControlPlaneActor
+from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control_plane.application.provisioning import ProvisioningService
 from dal_obscura.control_plane.interfaces.ui import install_ui
 
@@ -100,6 +101,9 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
             except ValidationFailure as exc:
                 session.rollback()
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
+            except AuthorizationFailure as exc:
+                session.rollback()
+                raise HTTPException(status_code=403, detail=str(exc)) from exc
             except LookupError as exc:
                 session.rollback()
                 raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -339,7 +343,11 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
     @app.put("/v1/assets/{asset_id}/policy-rules", dependencies=[Depends(require_admin)])
     def replace_policy_rules(asset_id: UUID, request: PolicyRulesRequest) -> object:
         return with_service(
-            lambda service: service.replace_policy_rules(asset_id=asset_id, rules=request.rules)
+            lambda service: service.replace_policy_rules(
+                asset_id=asset_id,
+                rules=request.rules,
+                actor=ControlPlaneActor.for_platform_admin("platform:admin"),
+            )
         ) or {"asset_id": str(asset_id)}
 
     @app.put("/v1/assets/{asset_id}/owners", dependencies=[Depends(require_admin)])

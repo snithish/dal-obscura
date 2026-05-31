@@ -5,6 +5,7 @@ import {
   defaultRule,
   formToRule,
   mergeColumnSelections,
+  policyEditorResponsibility,
   previewPolicy,
   ruleToForm,
   type ColumnSelection,
@@ -114,6 +115,9 @@ export function PoliciesPage() {
     [assets],
   );
   const schemaColumns = selectedAsset?.schema_fields.map((field) => field.name) ?? [];
+  const responsibility = selectedAsset
+    ? policyEditorResponsibility(selectedAsset.owners)
+    : null;
   const preview = useMemo<PolicyPreview>(
     () =>
       previewPolicy(
@@ -212,6 +216,20 @@ export function PoliciesPage() {
                   }
                 />
               </div>
+
+              {responsibility ? (
+                <div className="mt-4 rounded-card border border-border bg-soft p-4">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <strong className="text-sm">{responsibility.label}</strong>
+                    <span className="badge">
+                      {selectedAsset.owners.length > 0
+                        ? `${selectedAsset.owners.length} owner${selectedAsset.owners.length === 1 ? "" : "s"}`
+                        : "admin seeded"}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-muted">{responsibility.message}</p>
+                </div>
+              ) : null}
 
               <div className="mt-5 grid gap-4">
                 {rules.map((rule, index) => (

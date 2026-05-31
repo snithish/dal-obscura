@@ -40,6 +40,7 @@ from dal_obscura.common.config_store.db import (  # noqa: E402
     session_factory,
 )
 from dal_obscura.common.config_store.orm import Base  # noqa: E402
+from dal_obscura.control_plane.application.access import ControlPlaneActor  # noqa: E402
 from dal_obscura.control_plane.application.provisioning import ProvisioningService  # noqa: E402
 
 JWT_SECRET = "spark-jwt-secret-32-characters-long"
@@ -590,6 +591,7 @@ def _provision_control_plane(output_dir: Path, table_id: str) -> tuple[str, str,
                     "row_filter": "market = 'enterprise'",
                 },
             ],
+            actor=ControlPlaneActor.for_platform_admin("fixture:setup"),
         )
         service.replace_auth_providers(
             cell_id=cell_id,

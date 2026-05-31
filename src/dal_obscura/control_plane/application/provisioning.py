@@ -5,7 +5,9 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
+from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.compiler import PublicationCompiler
+from dal_obscura.control_plane.application.errors import AuthorizationFailure
 from dal_obscura.control_plane.domain.models import CompiledPublication
 from dal_obscura.control_plane.infrastructure.catalog_discovery import discover_catalog_tables
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
@@ -287,7 +289,14 @@ class ProvisioningService:
             options=options,
         )
 
-    def replace_policy_rules(self, asset_id: UUID, rules: list[dict[str, Any]]) -> None:
+    def replace_policy_rules(
+        self,
+        asset_id: UUID,
+        rules: list[dict[str, Any]],
+        *,
+        actor: ControlPlaneActor,
+    ) -> None:
+        self._ensure_policy_editor(asset_id, actor)
         self._store.replace_policy_rules(asset_id=asset_id, rules=rules)
 
     def replace_asset_owners(self, asset_id: UUID, owners: list[str]) -> list[str]:
@@ -326,6 +335,14 @@ class ProvisioningService:
         if context is None:
             raise LookupError("No workspace has been configured")
         return context
+
+    def _ensure_policy_editor(self, asset_id: UUID, actor: ControlPlaneActor) -> None:
+        if actor.platform_admin:
+            return
+        owners = set(self._store.list_asset_owners(asset_id))
+        if owners.intersection(actor.owner_principals()):
+            return
+        raise AuthorizationFailure("Only platform admins or asset owners can change policies.")
 
 
 def _publication_response(publication_id: UUID, compiled: CompiledPublication) -> dict[str, object]:

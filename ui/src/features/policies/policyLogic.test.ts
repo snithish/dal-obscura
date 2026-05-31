@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import {
   formToRule,
+  policyEditorResponsibility,
   previewPolicy,
   ruleToForm,
   type PolicyRule,
@@ -101,6 +102,24 @@ describe("policy preview", () => {
       reason: "Rule 1 denied access.",
       rowFilter: null,
       visibleColumns: [],
+    });
+  });
+});
+
+describe("policy editor responsibility", () => {
+  test("explains that policy edits are restricted to assigned owners", () => {
+    expect(policyEditorResponsibility(["user:alice@example.com", "group:data-owners"])).toEqual({
+      label: "Owner managed",
+      message:
+        "Policy changes are restricted to platform admins and assigned owners: user:alice@example.com, group:data-owners.",
+    });
+  });
+
+  test("explains that platform admins must assign owners before handoff", () => {
+    expect(policyEditorResponsibility([])).toEqual({
+      label: "Needs owner",
+      message:
+        "Platform admins can seed this policy, then assign owners before handing off ongoing changes.",
     });
   });
 });
