@@ -15,7 +15,7 @@ type Asset = {
 
 type PolicyRule = {
   ordinal: number;
-  effect: string;
+  effect: "allow" | "deny";
   principals: string[];
   when: Record<string, unknown>;
   columns: string[];
@@ -28,23 +28,41 @@ type AssetDetail = Asset & {
   policy_rules: PolicyRule[];
 };
 
-const emptyPolicy: PolicyRule[] = [
-  {
-    ordinal: 1,
-    effect: "allow",
-    principals: ["group:data-stewards"],
-    when: {},
-    columns: ["*"],
-    masks: {},
-    row_filter: null,
-  },
-];
+type MaskRow = {
+  column: string;
+  type: string;
+};
+
+type ConditionRow = {
+  key: string;
+  value: string;
+};
+
+type PolicyRuleForm = {
+  columnsText: string;
+  conditions: ConditionRow[];
+  effect: "allow" | "deny";
+  masks: MaskRow[];
+  ordinal: number;
+  principalsText: string;
+  rowFilter: string;
+};
+
+const defaultRule: PolicyRuleForm = {
+  columnsText: "*",
+  conditions: [],
+  effect: "allow",
+  masks: [],
+  ordinal: 1,
+  principalsText: "group:data-stewards",
+  rowFilter: "",
+};
 
 export function PoliciesPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [selectedAssetId, setSelectedAssetId] = useState("");
   const [selectedAsset, setSelectedAsset] = useState<AssetDetail | null>(null);
-  const [rulesJson, setRulesJson] = useState(JSON.stringify(emptyPolicy, null, 2));
+  const [rules, setRules] = useState<PolicyRuleForm[]>([defaultRule]);
   const [status, setStatus] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -61,14 +79,16 @@ export function PoliciesPage() {
   useEffect(() => {
     if (!selectedAssetId) {
       setSelectedAsset(null);
-      setRulesJson(JSON.stringify(emptyPolicy, null, 2));
+      setRules([defaultRule]);
       return;
     }
     void apiGet<AssetDetail>(`/v1/assets/${selectedAssetId}`)
       .then((detail) => {
         setSelectedAsset(detail);
-        setRulesJson(
-          JSON.stringify(detail.policy_rules.length > 0 ? detail.policy_rules : emptyPolicy, null, 2),
+        setRules(
+          detail.policy_rules.length > 0
+            ? detail.policy_rules.map(ruleToForm)
+            : [defaultRule],
         );
       })
       .catch(() => setStatus("Could not load asset policy."));
@@ -82,15 +102,16 @@ export function PoliciesPage() {
     setStatus(null);
     setIsSaving(true);
     try {
-      const rules = JSON.parse(rulesJson) as PolicyRule[];
-      await apiPut(`/v1/assets/${selectedAssetId}/policy-rules`, { rules });
+      await apiPut(`/v1/assets/${selectedAssetId}/policy-rules`, {
+        rules: rules.map(formToRule),
+      });
       await refreshAssets();
       const detail = await apiGet<AssetDetail>(`/v1/assets/${selectedAssetId}`);
       setSelectedAsset(detail);
-      setRulesJson(JSON.stringify(detail.policy_rules, null, 2));
+      setRules(detail.policy_rules.map(ruleToForm));
       setStatus("Policy saved.");
-    } catch (caught) {
-      setStatus(caught instanceof SyntaxError ? "Policy rules must be valid JSON." : "Policy save failed.");
+    } catch {
+      setStatus("Policy save failed.");
     } finally {
       setIsSaving(false);
     }
@@ -163,8 +184,8 @@ export function PoliciesPage() {
             <div>
               <h2 className="text-lg font-black">Policy editor</h2>
               <p className="mt-1 text-sm leading-6 text-muted">
-                Rules are stored as ordered allow/deny entries with principals,
-                column visibility, masks, and DuckDB row filters.
+                Build ordered allow/deny rules with principals, columns, masks,
+                optional match conditions, and DuckDB row filters.
               </p>
             </div>
             {selectedAsset ? <span className="badge">{selectedAsset.policy_status}</span> : null}
@@ -173,29 +194,30 @@ export function PoliciesPage() {
           {selectedAsset ? (
             <>
               <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
-                <div className="rounded-card border border-border bg-soft p-3">
-                  <span className="text-xs font-black text-muted">Asset</span>
-                  <strong className="mt-1 block text-sm">{selectedAsset.name}</strong>
-                </div>
-                <div className="rounded-card border border-border bg-soft p-3">
-                  <span className="text-xs font-black text-muted">Catalog</span>
-                  <strong className="mt-1 block text-sm">{selectedAsset.catalog}</strong>
-                </div>
-                <div className="rounded-card border border-border bg-soft p-3">
-                  <span className="text-xs font-black text-muted">Table</span>
-                  <strong className="mt-1 block truncate text-sm">
-                    {selectedAsset.table_identifier || "Not set"}
-                  </strong>
-                </div>
+                <SummaryCard label="Asset" value={selectedAsset.name} />
+                <SummaryCard label="Catalog" value={selectedAsset.catalog} />
+                <SummaryCard label="Table" value={selectedAsset.table_identifier || "Not set"} />
               </div>
-              <label className="mt-5 block text-xs font-black uppercase tracking-wide text-muted">
-                Policy rules JSON
-              </label>
-              <textarea
-                className="field mt-2 min-h-[360px] py-3 font-mono text-xs leading-5"
-                value={rulesJson}
-                onChange={(event) => setRulesJson(event.target.value)}
-              />
+
+              <div className="mt-5 grid gap-4">
+                {rules.map((rule, index) => (
+                  <RuleCard
+                    key={`${rule.ordinal}-${index}`}
+                    rule={rule}
+                    ruleIndex={index}
+                    canRemove={rules.length > 1}
+                    onChange={(patch) => updateRule(index, patch, setRules)}
+                    onRemove={() =>
+                      setRules((current) =>
+                        current
+                          .filter((_, currentIndex) => currentIndex !== index)
+                          .map((item, nextIndex) => ({ ...item, ordinal: nextIndex + 1 })),
+                      )
+                    }
+                  />
+                ))}
+              </div>
+
               <div className="mt-4 flex flex-wrap gap-2">
                 <button className="btn-primary" disabled={isSaving} type="submit">
                   {isSaving ? "Saving..." : "Save policy"}
@@ -203,7 +225,19 @@ export function PoliciesPage() {
                 <button
                   className="btn-secondary"
                   type="button"
-                  onClick={() => setRulesJson(JSON.stringify(emptyPolicy, null, 2))}
+                  onClick={() =>
+                    setRules((current) => [
+                      ...current,
+                      { ...defaultRule, ordinal: current.length + 1 },
+                    ])
+                  }
+                >
+                  Add rule
+                </button>
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => setRules([{ ...defaultRule }])}
                 >
                   Reset template
                 </button>
@@ -218,4 +252,352 @@ export function PoliciesPage() {
       </section>
     </div>
   );
+}
+
+function RuleCard({
+  canRemove,
+  onChange,
+  onRemove,
+  rule,
+  ruleIndex,
+}: {
+  canRemove: boolean;
+  onChange: (patch: Partial<PolicyRuleForm>) => void;
+  onRemove: () => void;
+  rule: PolicyRuleForm;
+  ruleIndex: number;
+}) {
+  return (
+    <article className="rounded-card border border-border bg-white p-4">
+      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+        <div>
+          <span className="text-xs font-black uppercase tracking-wide text-muted">
+            Rule {ruleIndex + 1}
+          </span>
+          <h3 className="mt-1 text-base font-black">{rule.effect === "allow" ? "Allow" : "Deny"} access</h3>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <select
+            className="field min-w-[120px]"
+            value={rule.effect}
+            onChange={(event) => onChange({ effect: event.target.value as "allow" | "deny" })}
+          >
+            <option value="allow">Allow</option>
+            <option value="deny">Deny</option>
+          </select>
+          {canRemove ? (
+            <button className="btn-secondary" type="button" onClick={onRemove}>
+              Remove
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+        <TextListField
+          help="Comma-separated users, groups, or service identities."
+          label="Principals"
+          value={rule.principalsText}
+          onChange={(value) => onChange({ principalsText: value })}
+        />
+        <TextListField
+          help="Use * for all columns, or comma-separate explicit columns."
+          label="Visible columns"
+          value={rule.columnsText}
+          onChange={(value) => onChange({ columnsText: value })}
+        />
+      </div>
+
+      <label className="mt-4 block">
+        <span className="text-xs font-black uppercase tracking-wide text-muted">
+          Row filter SQL
+        </span>
+        <input
+          className="field mt-2"
+          placeholder="region = 'us'"
+          value={rule.rowFilter}
+          onChange={(event) => onChange({ rowFilter: event.target.value })}
+        />
+        <span className="mt-1 block text-xs text-muted">
+          DuckDB SQL expression applied before masking.
+        </span>
+      </label>
+
+      <EditablePairs
+        addLabel="Add condition"
+        emptyLabel="No match conditions"
+        itemLabel="Condition"
+        keyLabel="Claim or attribute"
+        valueLabel="Expected value"
+        rows={rule.conditions}
+        onChange={(conditions) => onChange({ conditions })}
+      />
+
+      <MaskEditor
+        masks={rule.masks}
+        onChange={(masks) => onChange({ masks })}
+      />
+    </article>
+  );
+}
+
+function TextListField({
+  help,
+  label,
+  onChange,
+  value,
+}: {
+  help: string;
+  label: string;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-black uppercase tracking-wide text-muted">{label}</span>
+      <input className="field mt-2" value={value} onChange={(event) => onChange(event.target.value)} />
+      <span className="mt-1 block text-xs text-muted">{help}</span>
+    </label>
+  );
+}
+
+function EditablePairs({
+  addLabel,
+  emptyLabel,
+  itemLabel,
+  keyLabel,
+  onChange,
+  rows,
+  valueLabel,
+}: {
+  addLabel: string;
+  emptyLabel: string;
+  itemLabel: string;
+  keyLabel: string;
+  onChange: (rows: ConditionRow[]) => void;
+  rows: ConditionRow[];
+  valueLabel: string;
+}) {
+  return (
+    <section className="mt-5 rounded-card border border-border bg-soft p-3">
+      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+        <div>
+          <h4 className="text-sm font-black">{itemLabel}s</h4>
+          <p className="mt-1 text-xs text-muted">{emptyLabel} unless one is added.</p>
+        </div>
+        <button
+          className="btn-secondary"
+          type="button"
+          onClick={() => onChange([...rows, { key: "", value: "" }])}
+        >
+          {addLabel}
+        </button>
+      </div>
+      <div className="mt-3 grid gap-3">
+        {rows.length === 0 ? (
+          <div className="rounded-card border border-dashed border-border bg-white p-4 text-sm text-muted">
+            {emptyLabel}
+          </div>
+        ) : (
+          rows.map((row, index) => (
+            <div
+              className="grid grid-cols-1 gap-3 rounded-card border border-border bg-white p-3 md:grid-cols-[1fr_1fr_auto]"
+              key={`${row.key}-${index}`}
+            >
+              <label className="block">
+                <span className="text-xs font-black uppercase tracking-wide text-muted">
+                  {keyLabel}
+                </span>
+                <input
+                  className="field mt-2"
+                  value={row.key}
+                  onChange={(event) =>
+                    onChange(replaceAt(rows, index, { ...row, key: event.target.value }))
+                  }
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-black uppercase tracking-wide text-muted">
+                  {valueLabel}
+                </span>
+                <input
+                  className="field mt-2"
+                  value={row.value}
+                  onChange={(event) =>
+                    onChange(replaceAt(rows, index, { ...row, value: event.target.value }))
+                  }
+                />
+              </label>
+              <button
+                className="btn-secondary self-end"
+                type="button"
+                onClick={() => onChange(rows.filter((_, currentIndex) => currentIndex !== index))}
+              >
+                Remove
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
+
+function MaskEditor({
+  masks,
+  onChange,
+}: {
+  masks: MaskRow[];
+  onChange: (masks: MaskRow[]) => void;
+}) {
+  return (
+    <section className="mt-5 rounded-card border border-border bg-soft p-3">
+      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+        <div>
+          <h4 className="text-sm font-black">Column masks</h4>
+          <p className="mt-1 text-xs text-muted">Mask sensitive columns after row filters run.</p>
+        </div>
+        <button
+          className="btn-secondary"
+          type="button"
+          onClick={() => onChange([...masks, { column: "", type: "email" }])}
+        >
+          Add mask
+        </button>
+      </div>
+      <div className="mt-3 grid gap-3">
+        {masks.length === 0 ? (
+          <div className="rounded-card border border-dashed border-border bg-white p-4 text-sm text-muted">
+            No column masks
+          </div>
+        ) : (
+          masks.map((mask, index) => (
+            <div
+              className="grid grid-cols-1 gap-3 rounded-card border border-border bg-white p-3 md:grid-cols-[1fr_180px_auto]"
+              key={`${mask.column}-${index}`}
+            >
+              <label className="block">
+                <span className="text-xs font-black uppercase tracking-wide text-muted">
+                  Column
+                </span>
+                <input
+                  className="field mt-2"
+                  value={mask.column}
+                  onChange={(event) =>
+                    onChange(replaceAt(masks, index, { ...mask, column: event.target.value }))
+                  }
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-black uppercase tracking-wide text-muted">
+                  Mask type
+                </span>
+                <select
+                  className="field mt-2"
+                  value={mask.type}
+                  onChange={(event) =>
+                    onChange(replaceAt(masks, index, { ...mask, type: event.target.value }))
+                  }
+                >
+                  <option value="email">Email</option>
+                  <option value="hash">Hash</option>
+                  <option value="null">Null</option>
+                  <option value="redact">Redact</option>
+                </select>
+              </label>
+              <button
+                className="btn-secondary self-end"
+                type="button"
+                onClick={() => onChange(masks.filter((_, currentIndex) => currentIndex !== index))}
+              >
+                Remove
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
+
+function SummaryCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-card border border-border bg-soft p-3">
+      <span className="text-xs font-black text-muted">{label}</span>
+      <strong className="mt-1 block truncate text-sm">{value}</strong>
+    </div>
+  );
+}
+
+function updateRule(
+  index: number,
+  patch: Partial<PolicyRuleForm>,
+  setRules: (updater: (current: PolicyRuleForm[]) => PolicyRuleForm[]) => void,
+) {
+  setRules((current) =>
+    current.map((rule, currentIndex) =>
+      currentIndex === index ? { ...rule, ...patch } : rule,
+    ),
+  );
+}
+
+function ruleToForm(rule: PolicyRule): PolicyRuleForm {
+  return {
+    columnsText: rule.columns.join(", "),
+    conditions: Object.entries(rule.when).map(([key, value]) => ({
+      key,
+      value: Array.isArray(value) ? value.join(", ") : String(value),
+    })),
+    effect: rule.effect,
+    masks: Object.entries(rule.masks).map(([column, value]) => ({
+      column,
+      type: maskType(value),
+    })),
+    ordinal: rule.ordinal,
+    principalsText: rule.principals.join(", "),
+    rowFilter: rule.row_filter ?? "",
+  };
+}
+
+function formToRule(rule: PolicyRuleForm): PolicyRule {
+  return {
+    columns: splitList(rule.columnsText),
+    effect: rule.effect,
+    masks: Object.fromEntries(
+      rule.masks
+        .filter((mask) => mask.column.trim())
+        .map((mask) => [mask.column.trim(), { type: mask.type }]),
+    ),
+    ordinal: rule.ordinal,
+    principals: splitList(rule.principalsText),
+    row_filter: rule.rowFilter.trim() || null,
+    when: Object.fromEntries(
+      rule.conditions
+        .filter((condition) => condition.key.trim())
+        .map((condition) => [condition.key.trim(), condition.value.trim()]),
+    ),
+  };
+}
+
+function splitList(value: string): string[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function replaceAt<T>(items: T[], index: number, next: T): T[] {
+  return items.map((item, currentIndex) => (currentIndex === index ? next : item));
+}
+
+function maskType(value: unknown): string {
+  if (
+    value &&
+    typeof value === "object" &&
+    "type" in value &&
+    typeof value.type === "string"
+  ) {
+    return value.type;
+  }
+  return "redact";
 }
