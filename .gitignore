@@ -104,6 +104,7 @@ ipython_config.py
 node_modules/
 ui/node_modules/
 ui/dist/
+.pnpm-store/
 *.tsbuildinfo
 ui/vite.config.js
 ui/vite.config.d.ts

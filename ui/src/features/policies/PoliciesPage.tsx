@@ -1,6 +1,15 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { apiGet, apiPut } from "../../api/client";
+import {
+  defaultRule,
+  formToRule,
+  ruleToForm,
+  type ConditionRow,
+  type MaskRow,
+  type PolicyRule,
+  type PolicyRuleForm,
+} from "./policyLogic";
 
 type Asset = {
   id: string;
@@ -13,49 +22,9 @@ type Asset = {
   draft_status: string;
 };
 
-type PolicyRule = {
-  ordinal: number;
-  effect: "allow" | "deny";
-  principals: string[];
-  when: Record<string, unknown>;
-  columns: string[];
-  masks: Record<string, unknown>;
-  row_filter: string | null;
-};
-
 type AssetDetail = Asset & {
   options: Record<string, unknown>;
   policy_rules: PolicyRule[];
-};
-
-type MaskRow = {
-  column: string;
-  type: string;
-};
-
-type ConditionRow = {
-  key: string;
-  value: string;
-};
-
-type PolicyRuleForm = {
-  columnsText: string;
-  conditions: ConditionRow[];
-  effect: "allow" | "deny";
-  masks: MaskRow[];
-  ordinal: number;
-  principalsText: string;
-  rowFilter: string;
-};
-
-const defaultRule: PolicyRuleForm = {
-  columnsText: "*",
-  conditions: [],
-  effect: "allow",
-  masks: [],
-  ordinal: 1,
-  principalsText: "group:data-stewards",
-  rowFilter: "",
 };
 
 export function PoliciesPage() {
@@ -388,7 +357,7 @@ function EditablePairs({
         <button
           className="btn-secondary"
           type="button"
-          onClick={() => onChange([...rows, { key: "", value: "" }])}
+          onClick={() => onChange([...rows, { key: "", value: "", valueKind: "text" }])}
         >
           {addLabel}
         </button>
@@ -401,7 +370,7 @@ function EditablePairs({
         ) : (
           rows.map((row, index) => (
             <div
-              className="grid grid-cols-1 gap-3 rounded-card border border-border bg-white p-3 md:grid-cols-[1fr_1fr_auto]"
+              className="grid grid-cols-1 gap-3 rounded-card border border-border bg-white p-3 md:grid-cols-[1fr_1fr_140px_auto]"
               key={`${row.key}-${index}`}
             >
               <label className="block">
@@ -427,6 +396,26 @@ function EditablePairs({
                     onChange(replaceAt(rows, index, { ...row, value: event.target.value }))
                   }
                 />
+              </label>
+              <label className="block">
+                <span className="text-xs font-black uppercase tracking-wide text-muted">
+                  Type
+                </span>
+                <select
+                  className="field mt-2"
+                  value={row.valueKind}
+                  onChange={(event) =>
+                    onChange(
+                      replaceAt(rows, index, {
+                        ...row,
+                        valueKind: event.target.value as "text" | "list",
+                      }),
+                    )
+                  }
+                >
+                  <option value="text">Text</option>
+                  <option value="list">List</option>
+                </select>
               </label>
               <button
                 className="btn-secondary self-end"
@@ -541,63 +530,6 @@ function updateRule(
   );
 }
 
-function ruleToForm(rule: PolicyRule): PolicyRuleForm {
-  return {
-    columnsText: rule.columns.join(", "),
-    conditions: Object.entries(rule.when).map(([key, value]) => ({
-      key,
-      value: Array.isArray(value) ? value.join(", ") : String(value),
-    })),
-    effect: rule.effect,
-    masks: Object.entries(rule.masks).map(([column, value]) => ({
-      column,
-      type: maskType(value),
-    })),
-    ordinal: rule.ordinal,
-    principalsText: rule.principals.join(", "),
-    rowFilter: rule.row_filter ?? "",
-  };
-}
-
-function formToRule(rule: PolicyRuleForm): PolicyRule {
-  return {
-    columns: splitList(rule.columnsText),
-    effect: rule.effect,
-    masks: Object.fromEntries(
-      rule.masks
-        .filter((mask) => mask.column.trim())
-        .map((mask) => [mask.column.trim(), { type: mask.type }]),
-    ),
-    ordinal: rule.ordinal,
-    principals: splitList(rule.principalsText),
-    row_filter: rule.rowFilter.trim() || null,
-    when: Object.fromEntries(
-      rule.conditions
-        .filter((condition) => condition.key.trim())
-        .map((condition) => [condition.key.trim(), condition.value.trim()]),
-    ),
-  };
-}
-
-function splitList(value: string): string[] {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
 function replaceAt<T>(items: T[], index: number, next: T): T[] {
   return items.map((item, currentIndex) => (currentIndex === index ? next : item));
-}
-
-function maskType(value: unknown): string {
-  if (
-    value &&
-    typeof value === "object" &&
-    "type" in value &&
-    typeof value.type === "string"
-  ) {
-    return value.type;
-  }
-  return "redact";
 }

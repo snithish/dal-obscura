@@ -2,6 +2,17 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { apiGet, apiPut } from "../../api/client";
+import {
+  assetOptionsFromForm,
+  filterAssets,
+  type Asset,
+  type AssetFilters,
+  type AssetOptionRow,
+} from "./assetLogic";
+
+type Catalog = {
+  name: string;
+};
 
 type WorkspaceSummary = {
   catalog_count: number;
@@ -9,26 +20,6 @@ type WorkspaceSummary = {
   unowned_asset_count: number;
   missing_policy_count: number;
   draft_change_count: number;
-};
-
-type Asset = {
-  id: string;
-  name: string;
-  catalog: string;
-  backend: string;
-  table_identifier: string | null;
-  owner_count: number;
-  policy_status: string;
-  draft_status: string;
-};
-
-type Catalog = {
-  name: string;
-};
-
-type AssetOptionRow = {
-  key: string;
-  value: string;
 };
 
 export function AssetsPage() {
@@ -47,6 +38,12 @@ export function AssetsPage() {
   const [tableIdentifier, setTableIdentifier] = useState("prod.users");
   const [snapshot, setSnapshot] = useState("");
   const [optionRows, setOptionRows] = useState<AssetOptionRow[]>([]);
+  const [filters, setFilters] = useState<AssetFilters>({
+    catalog: "",
+    owner: "",
+    search: "",
+    status: "",
+  });
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -71,10 +68,14 @@ export function AssetsPage() {
     setError(null);
     setIsSaving(true);
     try {
-      const options = assetOptionsFromForm(snapshot, optionRows);
+      const result = assetOptionsFromForm(snapshot, optionRows);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
       await apiPut(`/v1/assets/${encodeURIComponent(catalog)}/${encodeURIComponent(target)}`, {
         backend,
-        options,
+        options: result.options,
         table_identifier: tableIdentifier || null,
       });
       await refreshWorkspace();
@@ -92,6 +93,11 @@ export function AssetsPage() {
     ["Draft changes", summary.draft_change_count, "Ready for publish review"],
   ] as const;
   const catalogOptions = useMemo(() => catalogs.map((item) => item.name), [catalogs]);
+  const filteredAssets = useMemo(() => filterAssets(assets, filters), [assets, filters]);
+  const policyStatuses = useMemo(
+    () => Array.from(new Set(assets.map((asset) => asset.policy_status))).sort(),
+    [assets],
+  );
 
   return (
     <div className="grid gap-6">
@@ -134,15 +140,44 @@ export function AssetsPage() {
         <div className="surface p-4">
         {error ? <div className="alert mb-4">{error}</div> : null}
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(240px,1fr)_180px_180px_180px]">
-          <input className="field" placeholder="Search governed assets" />
-          <select className="field" defaultValue="">
+          <input
+            className="field"
+            placeholder="Search governed assets"
+            value={filters.search}
+            onChange={(event) => setFilters({ ...filters, search: event.target.value })}
+          />
+          <select
+            className="field"
+            value={filters.catalog}
+            onChange={(event) => setFilters({ ...filters, catalog: event.target.value })}
+          >
             <option value="">All catalogs</option>
+            {catalogOptions.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
           </select>
-          <select className="field" defaultValue="">
+          <select
+            className="field"
+            value={filters.owner}
+            onChange={(event) => setFilters({ ...filters, owner: event.target.value })}
+          >
             <option value="">All owners</option>
+            <option value="owned">Owned</option>
+            <option value="unowned">Unowned</option>
           </select>
-          <select className="field" defaultValue="">
+          <select
+            className="field"
+            value={filters.status}
+            onChange={(event) => setFilters({ ...filters, status: event.target.value })}
+          >
             <option value="">All statuses</option>
+            {policyStatuses.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
           </select>
         </div>
         <div className="mt-4 overflow-hidden rounded-card border border-border">
@@ -164,8 +199,22 @@ export function AssetsPage() {
                 Connect catalog
               </Link>
             </div>
+          ) : filteredAssets.length === 0 ? (
+            <div className="grid place-items-center px-4 py-14 text-center">
+              <h2 className="text-lg font-black">No assets match these filters</h2>
+              <p className="mt-2 max-w-md text-sm leading-6 text-muted">
+                Clear one or more filters to return to the full governed asset list.
+              </p>
+              <button
+                className="btn-secondary mt-5"
+                type="button"
+                onClick={() => setFilters({ catalog: "", owner: "", search: "", status: "" })}
+              >
+                Clear filters
+              </button>
+            </div>
           ) : (
-            assets.map((asset) => (
+            filteredAssets.map((asset) => (
               <div
                 className="grid grid-cols-1 gap-2 border-t border-border px-4 py-3 text-sm md:grid-cols-[2fr_1fr_1fr_1fr_1fr] md:items-center"
                 key={asset.id}
@@ -329,32 +378,6 @@ export function AssetsPage() {
       </section>
     </div>
   );
-}
-
-function assetOptionsFromForm(
-  snapshot: string,
-  rows: AssetOptionRow[],
-): Record<string, unknown> {
-  return {
-    ...(snapshot.trim() ? { snapshot: Number(snapshot) } : {}),
-    ...Object.fromEntries(
-      rows
-        .filter((row) => row.key.trim())
-        .map((row) => [row.key.trim(), parseSimpleValue(row.value)]),
-    ),
-  };
-}
-
-function parseSimpleValue(value: string): string | number | boolean {
-  const trimmed = value.trim();
-  if (trimmed === "true") {
-    return true;
-  }
-  if (trimmed === "false") {
-    return false;
-  }
-  const numeric = Number(trimmed);
-  return trimmed !== "" && Number.isFinite(numeric) ? numeric : trimmed;
 }
 
 function replaceAt<T>(items: T[], index: number, next: T): T[] {
