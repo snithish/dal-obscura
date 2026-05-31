@@ -441,9 +441,61 @@ def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
     assert "cell" not in _keys_recursive(summary | {"catalogs": catalogs, "assets": assets})
 
 
-def test_workspace_publish_routes_use_default_runtime_context():
+def test_workspace_publish_rejects_unowned_assets():
     client = _client()
     _provision_draft(client)
+
+    response = client.post("/v1/publications", headers=ADMIN_HEADERS)
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Cannot publish until 1 asset has an assigned owner."}
+
+
+def test_workspace_publish_rejects_assets_without_policy_rules():
+    client = _client()
+    client.put(
+        "/v1/settings/runtime",
+        json={
+            "ticket_ttl_seconds": 900,
+            "max_tickets": 64,
+            "max_ticket_exchanges": 2,
+            "path_rules": [{"glob": "s3://warehouse/*", "allow": True}],
+        },
+        headers=ADMIN_HEADERS,
+    )
+    client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+    asset = client.put(
+        "/v1/assets/analytics/default.users",
+        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
+        headers=ADMIN_HEADERS,
+    ).json()
+    client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["user:alice@example.com"]},
+        headers=ADMIN_HEADERS,
+    )
+
+    response = client.post("/v1/publications", headers=ADMIN_HEADERS)
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Cannot publish until 1 asset has policy rules."}
+
+
+def test_workspace_publish_routes_use_default_runtime_context():
+    client = _client()
+    asset = _provision_draft(client)
+    client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["user:owner@example.com"]},
+        headers=ADMIN_HEADERS,
+    )
 
     draft = client.get("/v1/publications/draft", headers=ADMIN_HEADERS).json()
     publications_before = client.get("/v1/publications", headers=ADMIN_HEADERS).json()

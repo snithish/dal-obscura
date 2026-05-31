@@ -77,6 +77,11 @@ def test_api_provisions_and_activates_default_cell_publication():
         headers=headers,
     )
     client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["user:owner@example.com"]},
+        headers=headers,
+    )
+    client.put(
         f"/v1/cells/{cell['id']}/auth-providers",
         json={
             "providers": [

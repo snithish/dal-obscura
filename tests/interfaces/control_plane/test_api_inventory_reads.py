@@ -212,6 +212,11 @@ def _provision_draft(client: TestClient) -> tuple[dict[str, str], dict[str, str]
         headers=ADMIN_HEADERS,
     )
     client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["user:owner@example.com"]},
+        headers=ADMIN_HEADERS,
+    )
+    client.put(
         f"/v1/cells/{cell['id']}/auth-providers",
         json={
             "providers": [

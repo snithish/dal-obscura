@@ -593,6 +593,10 @@ def _provision_control_plane(output_dir: Path, table_id: str) -> tuple[str, str,
             ],
             actor=ControlPlaneActor.for_platform_admin("fixture:setup"),
         )
+        service.replace_asset_owners(
+            asset_id=UUID(asset["id"]),
+            owners=["user:fixture-owner@example.com"],
+        )
         service.replace_auth_providers(
             cell_id=cell_id,
             providers=[

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.compiler import PublicationCompiler
-from dal_obscura.control_plane.application.errors import AuthorizationFailure
+from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control_plane.domain.models import CompiledPublication
 from dal_obscura.control_plane.infrastructure.catalog_discovery import discover_catalog_tables
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
@@ -318,6 +318,7 @@ class ProvisioningService:
 
     def create_publication(self, cell_id: UUID) -> dict[str, object]:
         draft = self._store.load_publish_draft(cell_id)
+        self._validate_publish_readiness(draft)
         compiled = PublicationCompiler().compile(draft)
         publication_id = uuid4()
         self._store.insert_compiled_publication(
@@ -343,6 +344,26 @@ class ProvisioningService:
         if owners.intersection(actor.owner_principals()):
             return
         raise AuthorizationFailure("Only platform admins or asset owners can change policies.")
+
+    def _validate_publish_readiness(self, draft) -> None:
+        if len(draft.catalogs) == 0:
+            raise ValidationFailure("Cannot publish until at least one catalog is configured.")
+        if len(draft.assets) == 0:
+            raise ValidationFailure("Cannot publish until at least one asset is promoted.")
+        missing_owner_count = sum(
+            1 for asset in draft.assets if not self._store.list_asset_owners(asset.id)
+        )
+        if missing_owner_count:
+            raise ValidationFailure(
+                f"Cannot publish until {missing_owner_count} "
+                f"{_plural(missing_owner_count, 'asset has', 'assets have')} an assigned owner."
+            )
+        missing_policy_count = sum(1 for asset in draft.assets if not asset.rules)
+        if missing_policy_count:
+            raise ValidationFailure(
+                f"Cannot publish until {missing_policy_count} "
+                f"{_plural(missing_policy_count, 'asset has', 'assets have')} policy rules."
+            )
 
 
 def _publication_response(publication_id: UUID, compiled: CompiledPublication) -> dict[str, object]:
@@ -373,3 +394,7 @@ def _publication_list_response(publication: dict[str, object]) -> dict[str, obje
         "manifest_hash": publication["manifest_hash"],
         "active": publication["active"],
     }
+
+
+def _plural(count: int, singular: str, plural: str) -> str:
+    return singular if count == 1 else plural
