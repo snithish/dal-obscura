@@ -26,6 +26,11 @@ type Catalog = {
   name: string;
 };
 
+type AssetOptionRow = {
+  key: string;
+  value: string;
+};
+
 export function AssetsPage() {
   const [summary, setSummary] = useState<WorkspaceSummary>({
     catalog_count: 0,
@@ -40,7 +45,8 @@ export function AssetsPage() {
   const [target, setTarget] = useState("default.users");
   const [backend, setBackend] = useState("iceberg");
   const [tableIdentifier, setTableIdentifier] = useState("prod.users");
-  const [optionsJson, setOptionsJson] = useState("{}");
+  const [snapshot, setSnapshot] = useState("");
+  const [optionRows, setOptionRows] = useState<AssetOptionRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -65,15 +71,15 @@ export function AssetsPage() {
     setError(null);
     setIsSaving(true);
     try {
-      const options = JSON.parse(optionsJson) as Record<string, unknown>;
+      const options = assetOptionsFromForm(snapshot, optionRows);
       await apiPut(`/v1/assets/${encodeURIComponent(catalog)}/${encodeURIComponent(target)}`, {
         backend,
         options,
         table_identifier: tableIdentifier || null,
       });
       await refreshWorkspace();
-    } catch (caught) {
-      setError(caught instanceof SyntaxError ? "Asset options must be valid JSON." : "Asset save failed.");
+    } catch {
+      setError("Asset save failed.");
     } finally {
       setIsSaving(false);
     }
@@ -241,13 +247,77 @@ export function AssetsPage() {
             </label>
           </div>
           <label className="mt-4 block text-xs font-black uppercase tracking-wide text-muted">
-            Asset options JSON
+            Snapshot ID
           </label>
-          <textarea
-            className="field mt-2 min-h-[130px] py-3 font-mono text-xs leading-5"
-            value={optionsJson}
-            onChange={(event) => setOptionsJson(event.target.value)}
+          <input
+            className="field mt-2"
+            inputMode="numeric"
+            placeholder="Optional"
+            value={snapshot}
+            onChange={(event) => setSnapshot(event.target.value)}
           />
+          <section className="mt-4 rounded-card border border-border bg-soft p-3">
+            <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center xl:flex-col xl:items-stretch">
+              <div>
+                <h3 className="text-sm font-black">Additional options</h3>
+                <p className="mt-1 text-xs text-muted">
+                  Add simple key/value options for handlers that need extra parameters.
+                </p>
+              </div>
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => setOptionRows([...optionRows, { key: "", value: "" }])}
+              >
+                Add option
+              </button>
+            </div>
+            <div className="mt-3 grid gap-3">
+              {optionRows.length === 0 ? (
+                <div className="rounded-card border border-dashed border-border bg-white p-4 text-sm text-muted">
+                  No additional options
+                </div>
+              ) : (
+                optionRows.map((row, index) => (
+                  <div className="grid grid-cols-1 gap-3 rounded-card border border-border bg-white p-3" key={`${row.key}-${index}`}>
+                    <label className="block">
+                      <span className="text-xs font-black uppercase tracking-wide text-muted">
+                        Key
+                      </span>
+                      <input
+                        className="field mt-2"
+                        value={row.key}
+                        onChange={(event) =>
+                          setOptionRows(replaceAt(optionRows, index, { ...row, key: event.target.value }))
+                        }
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-black uppercase tracking-wide text-muted">
+                        Value
+                      </span>
+                      <input
+                        className="field mt-2"
+                        value={row.value}
+                        onChange={(event) =>
+                          setOptionRows(replaceAt(optionRows, index, { ...row, value: event.target.value }))
+                        }
+                      />
+                    </label>
+                    <button
+                      className="btn-secondary"
+                      type="button"
+                      onClick={() =>
+                        setOptionRows(optionRows.filter((_, currentIndex) => currentIndex !== index))
+                      }
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
           <button
             className="btn-primary mt-4 w-full"
             disabled={isSaving || catalogOptions.length === 0}
@@ -259,4 +329,34 @@ export function AssetsPage() {
       </section>
     </div>
   );
+}
+
+function assetOptionsFromForm(
+  snapshot: string,
+  rows: AssetOptionRow[],
+): Record<string, unknown> {
+  return {
+    ...(snapshot.trim() ? { snapshot: Number(snapshot) } : {}),
+    ...Object.fromEntries(
+      rows
+        .filter((row) => row.key.trim())
+        .map((row) => [row.key.trim(), parseSimpleValue(row.value)]),
+    ),
+  };
+}
+
+function parseSimpleValue(value: string): string | number | boolean {
+  const trimmed = value.trim();
+  if (trimmed === "true") {
+    return true;
+  }
+  if (trimmed === "false") {
+    return false;
+  }
+  const numeric = Number(trimmed);
+  return trimmed !== "" && Number.isFinite(numeric) ? numeric : trimmed;
+}
+
+function replaceAt<T>(items: T[], index: number, next: T): T[] {
+  return items.map((item, currentIndex) => (currentIndex === index ? next : item));
 }

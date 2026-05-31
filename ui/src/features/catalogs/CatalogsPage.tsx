@@ -14,6 +14,14 @@ type Catalog = {
   governed_asset_count: number;
 };
 
+type CatalogType = "rest" | "sql";
+
+type CatalogForm = {
+  type: CatalogType;
+  uri: string;
+  warehouse: string;
+};
+
 const presets = [
   {
     name: "Iceberg REST",
@@ -36,9 +44,11 @@ export function CatalogsPage() {
   const [catalogs, setCatalogs] = useState<Catalog[]>([]);
   const [name, setName] = useState("analytics");
   const [module, setModule] = useState(ICEBERG_CATALOG_MODULE);
-  const [optionsJson, setOptionsJson] = useState(
-    JSON.stringify(presets[1].options, null, 2),
-  );
+  const [catalogForm, setCatalogForm] = useState<CatalogForm>({
+    type: "sql",
+    uri: "sqlite:///catalog.db",
+    warehouse: "",
+  });
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const configuredCount = useMemo(() => catalogs.length, [catalogs]);
@@ -56,11 +66,11 @@ export function CatalogsPage() {
     setError(null);
     setIsSaving(true);
     try {
-      const options = JSON.parse(optionsJson) as Record<string, unknown>;
+      const options = catalogOptionsFromForm(catalogForm);
       await apiPut(`/v1/catalogs/${encodeURIComponent(name)}`, { module, options });
       await refreshCatalogs();
-    } catch (caught) {
-      setError(caught instanceof SyntaxError ? "Options must be valid JSON." : "Catalog save failed.");
+    } catch {
+      setError("Catalog save failed.");
     } finally {
       setIsSaving(false);
     }
@@ -101,7 +111,7 @@ export function CatalogsPage() {
               type="button"
               onClick={() => {
                 setModule(preset.module);
-                setOptionsJson(JSON.stringify(preset.options, null, 2));
+                setCatalogForm(catalogFormFromOptions(preset.options));
                 document.getElementById("catalog-name")?.focus();
               }}
             >
@@ -176,13 +186,42 @@ export function CatalogsPage() {
             onChange={(event) => setModule(event.target.value)}
           />
           <label className="mt-4 block text-xs font-black uppercase tracking-wide text-muted">
-            Options JSON
+            Catalog type
           </label>
-          <textarea
-            className="field mt-2 min-h-[170px] py-3 font-mono text-xs leading-5"
-            value={optionsJson}
-            onChange={(event) => setOptionsJson(event.target.value)}
+          <select
+            className="field mt-2"
+            value={catalogForm.type}
+            onChange={(event) =>
+              setCatalogForm({ ...catalogForm, type: event.target.value as CatalogType })
+            }
+          >
+            <option value="sql">Iceberg SQL</option>
+            <option value="rest">Iceberg REST</option>
+          </select>
+          <label className="mt-4 block text-xs font-black uppercase tracking-wide text-muted">
+            Catalog URI
+          </label>
+          <input
+            className="field mt-2"
+            placeholder={catalogForm.type === "rest" ? "http://localhost:8181" : "sqlite:///catalog.db"}
+            value={catalogForm.uri}
+            onChange={(event) => setCatalogForm({ ...catalogForm, uri: event.target.value })}
           />
+          {catalogForm.type === "rest" ? (
+            <>
+              <label className="mt-4 block text-xs font-black uppercase tracking-wide text-muted">
+                Warehouse
+              </label>
+              <input
+                className="field mt-2"
+                placeholder="warehouse"
+                value={catalogForm.warehouse}
+                onChange={(event) =>
+                  setCatalogForm({ ...catalogForm, warehouse: event.target.value })
+                }
+              />
+            </>
+          ) : null}
           <button className="btn-primary mt-4 w-full" disabled={isSaving} type="submit">
             {isSaving ? "Saving..." : "Save catalog"}
           </button>
@@ -210,4 +249,20 @@ export function CatalogsPage() {
       </section>
     </div>
   );
+}
+
+function catalogFormFromOptions(options: Record<string, unknown>): CatalogForm {
+  return {
+    type: options.type === "rest" ? "rest" : "sql",
+    uri: typeof options.uri === "string" ? options.uri : "",
+    warehouse: typeof options.warehouse === "string" ? options.warehouse : "",
+  };
+}
+
+function catalogOptionsFromForm(form: CatalogForm): Record<string, unknown> {
+  return {
+    type: form.type,
+    uri: form.uri,
+    ...(form.type === "rest" && form.warehouse ? { warehouse: form.warehouse } : {}),
+  };
 }
