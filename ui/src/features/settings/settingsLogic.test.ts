@@ -4,8 +4,10 @@ import {
   AUTH_PROVIDER_TYPES,
   authProviderFormFromProvider,
   authProviderPayloadFromForm,
+  runtimePayloadFromForm,
   type AuthProvider,
   type AuthProviderForm,
+  type RuntimeSettings,
 } from "./settingsLogic";
 
 describe("auth provider form mapping", () => {
@@ -38,6 +40,44 @@ describe("auth provider form mapping", () => {
       jwtSecretEnv: "DAL_OBSCURA_PLATFORM_JWT_SECRET",
       ordinal: 2,
       providerType: "default-jwt",
+    });
+  });
+});
+
+describe("runtime settings form mapping", () => {
+  test("normalizes path rules and positive ticket limits before saving", () => {
+    const settings: RuntimeSettings = {
+      max_ticket_exchanges: 2,
+      max_tickets: 64,
+      path_rules: [
+        { allow: true, glob: " s3://warehouse/* " },
+        { allow: false, glob: "" },
+      ],
+      ticket_ttl_seconds: 900,
+    };
+
+    expect(runtimePayloadFromForm(settings)).toEqual({
+      ok: true,
+      settings: {
+        max_ticket_exchanges: 2,
+        max_tickets: 64,
+        path_rules: [{ allow: true, glob: "s3://warehouse/*" }],
+        ticket_ttl_seconds: 900,
+      },
+    });
+  });
+
+  test("rejects invalid ticket limits with a specific message", () => {
+    const settings: RuntimeSettings = {
+      max_ticket_exchanges: 2,
+      max_tickets: 0,
+      path_rules: [{ allow: true, glob: "s3://warehouse/*" }],
+      ticket_ttl_seconds: 900,
+    };
+
+    expect(runtimePayloadFromForm(settings)).toEqual({
+      error: "Max tickets must be greater than zero.",
+      ok: false,
     });
   });
 });

@@ -6,20 +6,11 @@ import {
   authProviderFormFromProvider,
   authProviderPayloadFromForm,
   defaultAuthProvider,
+  runtimePayloadFromForm,
   type AuthProvider,
+  type PathRule,
+  type RuntimeSettings,
 } from "./settingsLogic";
-
-type PathRule = {
-  glob: string;
-  allow: boolean;
-};
-
-type RuntimeSettings = {
-  ticket_ttl_seconds: number;
-  max_tickets: number;
-  max_ticket_exchanges: number;
-  path_rules: PathRule[];
-};
 
 const defaults: RuntimeSettings = {
   ticket_ttl_seconds: 900,
@@ -57,7 +48,12 @@ export function SettingsPage() {
     setStatus(null);
     setIsSavingRuntime(true);
     try {
-      const saved = await apiPut<RuntimeSettings>("/v1/settings/runtime", settings);
+      const payload = runtimePayloadFromForm(settings);
+      if (!payload.ok) {
+        setStatus(payload.error);
+        return;
+      }
+      const saved = await apiPut<RuntimeSettings>("/v1/settings/runtime", payload.settings);
       setSettings(saved);
       setStatus("Runtime settings saved.");
     } catch {

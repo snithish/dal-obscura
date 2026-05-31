@@ -7,6 +7,18 @@ export const AUTH_PROVIDER_TYPES = {
 
 export type AuthProviderType = keyof typeof AUTH_PROVIDER_TYPES;
 
+export type PathRule = {
+  glob: string;
+  allow: boolean;
+};
+
+export type RuntimeSettings = {
+  ticket_ttl_seconds: number;
+  max_tickets: number;
+  max_ticket_exchanges: number;
+  path_rules: PathRule[];
+};
+
 export type AuthProvider = {
   id?: string;
   ordinal: number;
@@ -28,6 +40,34 @@ export const defaultAuthProvider: AuthProviderForm = {
   ordinal: 1,
   providerType: "default-jwt",
 };
+
+export type RuntimePayloadResult =
+  | { ok: true; settings: RuntimeSettings }
+  | { ok: false; error: string };
+
+export function runtimePayloadFromForm(settings: RuntimeSettings): RuntimePayloadResult {
+  const numericChecks: Array<[keyof RuntimeSettings, string]> = [
+    ["ticket_ttl_seconds", "Ticket TTL seconds"],
+    ["max_tickets", "Max tickets"],
+    ["max_ticket_exchanges", "Max exchanges"],
+  ];
+  for (const [key, label] of numericChecks) {
+    const value = settings[key];
+    if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+      return { ok: false, error: `${label} must be greater than zero.` };
+    }
+  }
+
+  return {
+    ok: true,
+    settings: {
+      ...settings,
+      path_rules: settings.path_rules
+        .map((rule) => ({ ...rule, glob: rule.glob.trim() }))
+        .filter((rule) => rule.glob.length > 0),
+    },
+  };
+}
 
 export function authProviderPayloadFromForm(form: AuthProviderForm): AuthProvider {
   return {
