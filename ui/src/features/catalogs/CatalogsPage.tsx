@@ -1,9 +1,13 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { apiGet, apiPut } from "../../api/client";
-
-const ICEBERG_CATALOG_MODULE =
-  "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog";
+import {
+  CATALOG_ADAPTERS,
+  catalogAdapterLabel,
+  catalogPayloadFromForm,
+  formFromCatalogOptions,
+  type CatalogForm,
+} from "./catalogLogic";
 
 type Catalog = {
   id: string;
@@ -14,28 +18,20 @@ type Catalog = {
   governed_asset_count: number;
 };
 
-type CatalogType = "rest" | "sql";
-
-type CatalogForm = {
-  type: CatalogType;
-  uri: string;
-  warehouse: string;
-};
-
 const presets = [
   {
+    adapter: "iceberg" as const,
     name: "Iceberg REST",
-    module: ICEBERG_CATALOG_MODULE,
     options: { type: "rest", uri: "http://localhost:8181", warehouse: "warehouse" },
   },
   {
+    adapter: "iceberg" as const,
     name: "Iceberg SQL",
-    module: ICEBERG_CATALOG_MODULE,
     options: { type: "sql", uri: "sqlite:///catalog.db" },
   },
   {
+    adapter: "iceberg" as const,
     name: "Local development",
-    module: ICEBERG_CATALOG_MODULE,
     options: { type: "sql", uri: "sqlite:///local-catalog.db" },
   },
 ];
@@ -43,8 +39,8 @@ const presets = [
 export function CatalogsPage() {
   const [catalogs, setCatalogs] = useState<Catalog[]>([]);
   const [name, setName] = useState("analytics");
-  const [module, setModule] = useState(ICEBERG_CATALOG_MODULE);
   const [catalogForm, setCatalogForm] = useState<CatalogForm>({
+    adapter: "iceberg",
     type: "sql",
     uri: "sqlite:///catalog.db",
     warehouse: "",
@@ -66,8 +62,7 @@ export function CatalogsPage() {
     setError(null);
     setIsSaving(true);
     try {
-      const options = catalogOptionsFromForm(catalogForm);
-      await apiPut(`/v1/catalogs/${encodeURIComponent(name)}`, { module, options });
+      await apiPut(`/v1/catalogs/${encodeURIComponent(name)}`, catalogPayloadFromForm(catalogForm));
       await refreshCatalogs();
     } catch {
       setError("Catalog save failed.");
@@ -110,8 +105,7 @@ export function CatalogsPage() {
               className="btn-secondary mt-4"
               type="button"
               onClick={() => {
-                setModule(preset.module);
-                setCatalogForm(catalogFormFromOptions(preset.options));
+                setCatalogForm({ ...formFromCatalogOptions(preset.options), adapter: preset.adapter });
                 document.getElementById("catalog-name")?.focus();
               }}
             >
@@ -139,7 +133,7 @@ export function CatalogsPage() {
               <div className="grid place-items-center px-4 py-12 text-center">
                 <h3 className="text-base font-black">No catalogs configured yet</h3>
                 <p className="mt-2 max-w-md text-sm leading-6 text-muted">
-                  Choose a preset or enter module details to create the first catalog.
+                  Choose a preset or fill out the connection details to create the first catalog.
                 </p>
               </div>
             ) : (
@@ -150,7 +144,9 @@ export function CatalogsPage() {
                 >
                   <div className="min-w-0">
                     <strong className="block truncate text-sm">{catalog.name}</strong>
-                    <span className="block truncate text-xs text-muted">{catalog.module}</span>
+                    <span className="block truncate text-xs text-muted">
+                      {catalogAdapterLabel(catalog.module)}
+                    </span>
                   </div>
                   <span className="badge">{catalog.status}</span>
                   <span className="text-sm font-bold md:text-right">
@@ -165,7 +161,7 @@ export function CatalogsPage() {
         <form className="surface p-5" onSubmit={submitCatalog}>
           <h2 className="text-lg font-black">Catalog configuration</h2>
           <p className="mt-1 text-sm leading-6 text-muted">
-            Start with a preset, then keep the exact module and options visible.
+            Pick the catalog adapter and provide the connection details for this deployment.
           </p>
           {error ? <div className="alert mt-4">{error}</div> : null}
           <label className="mt-4 block text-xs font-black uppercase tracking-wide text-muted">
@@ -178,13 +174,24 @@ export function CatalogsPage() {
             onChange={(event) => setName(event.target.value)}
           />
           <label className="mt-4 block text-xs font-black uppercase tracking-wide text-muted">
-            Module
+            Catalog adapter
           </label>
-          <input
+          <select
             className="field mt-2"
-            value={module}
-            onChange={(event) => setModule(event.target.value)}
-          />
+            value={catalogForm.adapter}
+            onChange={(event) =>
+              setCatalogForm({
+                ...catalogForm,
+                adapter: event.target.value as keyof typeof CATALOG_ADAPTERS,
+              })
+            }
+          >
+            {Object.entries(CATALOG_ADAPTERS).map(([value, adapter]) => (
+              <option key={value} value={value}>
+                {adapter.label}
+              </option>
+            ))}
+          </select>
           <label className="mt-4 block text-xs font-black uppercase tracking-wide text-muted">
             Catalog type
           </label>
@@ -192,7 +199,7 @@ export function CatalogsPage() {
             className="field mt-2"
             value={catalogForm.type}
             onChange={(event) =>
-              setCatalogForm({ ...catalogForm, type: event.target.value as CatalogType })
+              setCatalogForm({ ...catalogForm, type: event.target.value as CatalogForm["type"] })
             }
           >
             <option value="sql">Iceberg SQL</option>
@@ -249,20 +256,4 @@ export function CatalogsPage() {
       </section>
     </div>
   );
-}
-
-function catalogFormFromOptions(options: Record<string, unknown>): CatalogForm {
-  return {
-    type: options.type === "rest" ? "rest" : "sql",
-    uri: typeof options.uri === "string" ? options.uri : "",
-    warehouse: typeof options.warehouse === "string" ? options.warehouse : "",
-  };
-}
-
-function catalogOptionsFromForm(form: CatalogForm): Record<string, unknown> {
-  return {
-    type: form.type,
-    uri: form.uri,
-    ...(form.type === "rest" && form.warehouse ? { warehouse: form.warehouse } : {}),
-  };
 }

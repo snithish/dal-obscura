@@ -1,6 +1,13 @@
 import { FormEvent, useEffect, useState } from "react";
 
 import { apiGet, apiPut } from "../../api/client";
+import {
+  AUTH_PROVIDER_TYPES,
+  authProviderFormFromProvider,
+  authProviderPayloadFromForm,
+  defaultAuthProvider,
+  type AuthProvider,
+} from "./settingsLogic";
 
 type PathRule = {
   glob: string;
@@ -14,36 +21,11 @@ type RuntimeSettings = {
   path_rules: PathRule[];
 };
 
-type AuthProvider = {
-  id?: string;
-  ordinal: number;
-  module: string;
-  args: Record<string, unknown>;
-  enabled: boolean;
-};
-
-type AuthProviderForm = {
-  enabled: boolean;
-  jwtSecretEnv: string;
-  module: string;
-  ordinal: number;
-};
-
-const DEFAULT_AUTH_MODULE =
-  "dal_obscura.data_plane.infrastructure.adapters.identity_default.DefaultIdentityAdapter";
-
 const defaults: RuntimeSettings = {
   ticket_ttl_seconds: 900,
   max_tickets: 64,
   max_ticket_exchanges: 2,
   path_rules: [{ glob: "s3://warehouse/*", allow: true }],
-};
-
-const defaultAuthProvider: AuthProviderForm = {
-  enabled: true,
-  jwtSecretEnv: "DAL_OBSCURA_JWT_SECRET",
-  module: DEFAULT_AUTH_MODULE,
-  ordinal: 1,
 };
 
 export function SettingsPage() {
@@ -64,12 +46,7 @@ export function SettingsPage() {
         }
         const provider = loadedProviders[0];
         if (provider) {
-          setAuthProvider({
-            enabled: provider.enabled,
-            jwtSecretEnv: readJwtSecretEnv(provider.args),
-            module: provider.module,
-            ordinal: provider.ordinal,
-          });
+          setAuthProvider(authProviderFormFromProvider(provider));
         }
       })
       .catch(() => setStatus("Could not load settings."));
@@ -96,14 +73,7 @@ export function SettingsPage() {
     setIsSavingAuth(true);
     try {
       await apiPut<{ providers: AuthProvider[] }>("/v1/settings/auth-providers", {
-        providers: [
-          {
-            args: { jwt_secret: { secret: authProvider.jwtSecretEnv } },
-            enabled: authProvider.enabled,
-            module: authProvider.module,
-            ordinal: authProvider.ordinal,
-          },
-        ],
+        providers: [authProviderPayloadFromForm(authProvider)],
       });
       setStatus("Authentication provider saved.");
     } catch {
@@ -249,13 +219,24 @@ export function SettingsPage() {
           />
           <label className="block">
             <span className="text-xs font-black uppercase tracking-wide text-muted">
-              Provider module
+              Provider type
             </span>
-            <input
+            <select
               className="field mt-2"
-              value={authProvider.module}
-              onChange={(event) => setAuthProvider({ ...authProvider, module: event.target.value })}
-            />
+              value={authProvider.providerType}
+              onChange={(event) =>
+                setAuthProvider({
+                  ...authProvider,
+                  providerType: event.target.value as keyof typeof AUTH_PROVIDER_TYPES,
+                })
+              }
+            >
+              {Object.entries(AUTH_PROVIDER_TYPES).map(([value, provider]) => (
+                <option key={value} value={value}>
+                  {provider.label}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="block">
             <span className="text-xs font-black uppercase tracking-wide text-muted">
@@ -316,17 +297,4 @@ function NumberField({
       />
     </label>
   );
-}
-
-function readJwtSecretEnv(args: Record<string, unknown>): string {
-  const jwtSecret = args.jwt_secret;
-  if (
-    jwtSecret &&
-    typeof jwtSecret === "object" &&
-    "secret" in jwtSecret &&
-    typeof jwtSecret.secret === "string"
-  ) {
-    return jwtSecret.secret;
-  }
-  return defaultAuthProvider.jwtSecretEnv;
 }
