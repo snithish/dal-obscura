@@ -67,6 +67,16 @@ class AssetOwnersRequest(_StrictModel):
     owners: list[str] = Field(default_factory=list)
 
 
+class AssetSchemaFieldRequest(_StrictModel):
+    name: str = Field(min_length=1)
+    type: str = Field(default="string", min_length=1)
+    nullable: bool = True
+
+
+class AssetSchemaFieldsRequest(_StrictModel):
+    fields: list[AssetSchemaFieldRequest] = Field(default_factory=list)
+
+
 class AuthProvidersRequest(_StrictModel):
     providers: list[dict[str, Any]]
 
@@ -334,6 +344,19 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
             lambda service: service.replace_asset_owners(asset_id=asset_id, owners=request.owners)
         )
         return {"asset_id": str(asset_id), "owners": owners}
+
+    @app.put("/v1/assets/{asset_id}/schema-fields", dependencies=[Depends(require_admin)])
+    def replace_asset_schema_fields(
+        asset_id: UUID,
+        request: AssetSchemaFieldsRequest,
+    ) -> object:
+        fields = with_service(
+            lambda service: service.replace_asset_schema_fields(
+                asset_id=asset_id,
+                fields=[field.model_dump() for field in request.fields],
+            )
+        )
+        return {"asset_id": str(asset_id), "fields": fields}
 
     @app.put("/v1/assets/{catalog}/{target}", dependencies=[Depends(require_admin)])
     def upsert_workspace_asset(catalog: str, target: str, request: AssetRequest) -> object:

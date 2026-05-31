@@ -263,6 +263,13 @@ class ProvisioningService:
     def replace_asset_owners(self, asset_id: UUID, owners: list[str]) -> list[str]:
         return self._store.replace_asset_owners(asset_id=asset_id, owners=owners)
 
+    def replace_asset_schema_fields(
+        self,
+        asset_id: UUID,
+        fields: list[dict[str, Any]],
+    ) -> list[dict[str, object]]:
+        return self._store.replace_asset_schema_fields(asset_id=asset_id, fields=fields)
+
     def replace_auth_providers(self, cell_id: UUID, providers: list[dict[str, Any]]) -> None:
         self._store.replace_auth_providers(cell_id=cell_id, providers=providers)
 

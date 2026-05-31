@@ -93,6 +93,18 @@ class AssetOwnerRecord(Base):
     principal: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+class AssetSchemaFieldRecord(Base):
+    __tablename__ = "asset_schema_fields"
+    __table_args__ = (UniqueConstraint("asset_id", "name"),)
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    asset_id: Mapped[UUID] = mapped_column(ForeignKey("assets.id"), nullable=False, index=True)
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    type: Mapped[str] = mapped_column(String(120), nullable=False)
+    nullable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
 class PolicyRuleRecord(Base):
     __tablename__ = "policy_rules"
     __table_args__ = (UniqueConstraint("asset_id", "ordinal"),)

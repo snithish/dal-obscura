@@ -10,6 +10,14 @@ export type Asset = {
   draft_status: string;
 };
 
+export type SchemaField = {
+  name: string;
+  type: string;
+  nullable: boolean;
+};
+
+export type SchemaFieldRow = SchemaField;
+
 export type AssetOptionRow = {
   key: string;
   value: string;
@@ -41,6 +49,23 @@ export function ownersFromRows(rows: OwnerRow[]): string[] {
     }
   }
   return owners;
+}
+
+export function schemaFieldsFromRows(rows: SchemaFieldRow[]): SchemaField[] {
+  const seen = new Set<string>();
+  const fields: SchemaField[] = [];
+  for (const row of rows) {
+    const name = row.name.trim();
+    if (name && !seen.has(name)) {
+      fields.push({
+        name,
+        type: row.type.trim() || "string",
+        nullable: row.nullable,
+      });
+      seen.add(name);
+    }
+  }
+  return fields;
 }
 
 export function assetOptionsFromForm(

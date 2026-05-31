@@ -6,10 +6,13 @@ import {
   assetOptionsFromForm,
   filterAssets,
   ownersFromRows,
+  schemaFieldsFromRows,
   type Asset,
   type AssetFilters,
   type AssetOptionRow,
   type OwnerRow,
+  type SchemaField,
+  type SchemaFieldRow,
 } from "./assetLogic";
 
 type Catalog = {
@@ -22,6 +25,10 @@ type WorkspaceSummary = {
   unowned_asset_count: number;
   missing_policy_count: number;
   draft_change_count: number;
+};
+
+type AssetDetail = Asset & {
+  schema_fields: SchemaField[];
 };
 
 export function AssetsPage() {
@@ -42,6 +49,7 @@ export function AssetsPage() {
   const [optionRows, setOptionRows] = useState<AssetOptionRow[]>([]);
   const [selectedAssetId, setSelectedAssetId] = useState("");
   const [ownerRows, setOwnerRows] = useState<OwnerRow[]>([]);
+  const [schemaRows, setSchemaRows] = useState<SchemaFieldRow[]>([]);
   const [filters, setFilters] = useState<AssetFilters>({
     catalog: "",
     owner: "",
@@ -51,6 +59,7 @@ export function AssetsPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingOwners, setIsSavingOwners] = useState(false);
+  const [isSavingSchema, setIsSavingSchema] = useState(false);
 
   async function refreshWorkspace() {
     const [loadedSummary, loadedAssets, loadedCatalogs] = await Promise.all([
@@ -111,6 +120,34 @@ export function AssetsPage() {
     }
   }
 
+  async function submitSchema(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedAssetId) {
+      return;
+    }
+    setError(null);
+    setIsSavingSchema(true);
+    try {
+      await apiPut(`/v1/assets/${selectedAssetId}/schema-fields`, {
+        fields: schemaFieldsFromRows(schemaRows),
+      });
+      await refreshSelectedAsset(selectedAssetId);
+    } catch {
+      setError("Schema save failed.");
+    } finally {
+      setIsSavingSchema(false);
+    }
+  }
+
+  async function refreshSelectedAsset(assetId: string) {
+    const detail = await apiGet<AssetDetail>(`/v1/assets/${assetId}`);
+    setSchemaRows(
+      detail.schema_fields.length > 0
+        ? detail.schema_fields
+        : [{ name: "", type: "string", nullable: true }],
+    );
+  }
+
   const stats = [
     ["Total assets", summary.asset_count, "Catalog tables promoted for governance"],
     ["Unowned", summary.unowned_asset_count, "Need an accountable data owner"],
@@ -134,6 +171,9 @@ export function AssetsPage() {
         selectedAsset.owners.length > 0
           ? selectedAsset.owners.map((principal) => ({ principal }))
           : [{ principal: "" }],
+      );
+      void refreshSelectedAsset(selectedAsset.id).catch(() =>
+        setSchemaRows([{ name: "", type: "string", nullable: true }]),
       );
     }
   }, [selectedAsset]);
@@ -360,6 +400,129 @@ export function AssetsPage() {
           ) : (
             <div className="mt-5 rounded-card border border-dashed border-border p-6 text-sm text-muted">
               Select an asset to assign owners.
+            </div>
+          )}
+        </form>
+
+        <form className="surface p-5" onSubmit={submitSchema}>
+          <h2 className="text-lg font-black">Schema fields</h2>
+          <p className="mt-1 text-sm leading-6 text-muted">
+            Define the governed columns used by policy builders and masking controls.
+          </p>
+          {selectedAsset ? (
+            <>
+              <section className="mt-4 rounded-card border border-border bg-soft p-3">
+                <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center xl:flex-col xl:items-stretch">
+                  <div>
+                    <h3 className="text-sm font-black">Columns</h3>
+                    <p className="mt-1 text-xs text-muted">
+                      Add the table columns policy authors should choose from.
+                    </p>
+                  </div>
+                  <button
+                    className="btn-secondary"
+                    type="button"
+                    onClick={() =>
+                      setSchemaRows([...schemaRows, { name: "", type: "string", nullable: true }])
+                    }
+                  >
+                    Add column
+                  </button>
+                </div>
+                <div className="mt-3 grid gap-3">
+                  {schemaRows.map((row, index) => (
+                    <div
+                      className="grid grid-cols-1 gap-3 rounded-card border border-border bg-white p-3 md:grid-cols-[1fr_150px_130px_auto] xl:grid-cols-1"
+                      key={`${row.name}-${index}`}
+                    >
+                      <label className="block">
+                        <span className="text-xs font-black uppercase tracking-wide text-muted">
+                          Column
+                        </span>
+                        <input
+                          className="field mt-2"
+                          placeholder="email"
+                          value={row.name}
+                          onChange={(event) =>
+                            setSchemaRows(
+                              replaceAt(schemaRows, index, {
+                                ...row,
+                                name: event.target.value,
+                              }),
+                            )
+                          }
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs font-black uppercase tracking-wide text-muted">
+                          Type
+                        </span>
+                        <select
+                          className="field mt-2"
+                          value={row.type}
+                          onChange={(event) =>
+                            setSchemaRows(
+                              replaceAt(schemaRows, index, {
+                                ...row,
+                                type: event.target.value,
+                              }),
+                            )
+                          }
+                        >
+                          <option value="string">String</option>
+                          <option value="long">Long</option>
+                          <option value="double">Double</option>
+                          <option value="boolean">Boolean</option>
+                          <option value="timestamp">Timestamp</option>
+                          <option value="date">Date</option>
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="text-xs font-black uppercase tracking-wide text-muted">
+                          Nullability
+                        </span>
+                        <select
+                          className="field mt-2"
+                          value={row.nullable ? "nullable" : "required"}
+                          onChange={(event) =>
+                            setSchemaRows(
+                              replaceAt(schemaRows, index, {
+                                ...row,
+                                nullable: event.target.value === "nullable",
+                              }),
+                            )
+                          }
+                        >
+                          <option value="nullable">Nullable</option>
+                          <option value="required">Required</option>
+                        </select>
+                      </label>
+                      <button
+                        className="btn-secondary self-end"
+                        type="button"
+                        onClick={() =>
+                          setSchemaRows(
+                            schemaRows.length === 1
+                              ? [{ name: "", type: "string", nullable: true }]
+                              : schemaRows.filter(
+                                  (_, currentIndex) => currentIndex !== index,
+                                ),
+                          )
+                        }
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+              <button className="btn-primary mt-4 w-full" disabled={isSavingSchema} type="submit">
+                {isSavingSchema ? "Saving..." : "Save schema"}
+              </button>
+            </>
+          ) : (
+            <div className="mt-5 rounded-card border border-dashed border-border p-6 text-sm text-muted">
+              Select an asset to define schema fields.
             </div>
           )}
         </form>

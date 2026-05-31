@@ -156,6 +156,48 @@ def test_workspace_asset_upsert_uses_default_workspace_context():
     assert "cell" not in _keys_recursive({"assets": assets, "detail": detail})
 
 
+def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail():
+    client = _client()
+    client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+    asset = client.put(
+        "/v1/assets/analytics/default.users",
+        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
+        headers=ADMIN_HEADERS,
+    ).json()
+
+    response = client.put(
+        f"/v1/assets/{asset['id']}/schema-fields",
+        json={
+            "fields": [
+                {"name": "id", "type": "long", "nullable": False},
+                {"name": "email", "type": "string", "nullable": True},
+            ]
+        },
+        headers=ADMIN_HEADERS,
+    )
+    detail = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "asset_id": asset["id"],
+        "fields": [
+            {"name": "id", "type": "long", "nullable": False},
+            {"name": "email", "type": "string", "nullable": True},
+        ],
+    }
+    assert detail["schema_fields"] == [
+        {"name": "id", "type": "long", "nullable": False},
+        {"name": "email", "type": "string", "nullable": True},
+    ]
+
+
 def test_workspace_policy_rules_can_be_replaced_from_asset_detail():
     client = _client()
     client.put(
@@ -324,6 +366,7 @@ def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
     assert asset_detail == {
         **assets[0],
         "options": {"snapshot": 1},
+        "schema_fields": [],
         "policy_rules": [
             {
                 "id": asset_detail["policy_rules"][0]["id"],

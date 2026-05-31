@@ -4,6 +4,7 @@ import {
   assetOptionsFromForm,
   filterAssets,
   ownersFromRows,
+  schemaFieldsFromRows,
   type Asset,
 } from "./assetLogic";
 
@@ -64,6 +65,21 @@ describe("ownersFromRows", () => {
         { principal: "user:alice@example.com" },
       ]),
     ).toEqual(["user:alice@example.com", "group:data-owners"]);
+  });
+});
+
+describe("schemaFieldsFromRows", () => {
+  test("normalizes schema fields without duplicates", () => {
+    expect(
+      schemaFieldsFromRows([
+        { name: " id ", type: "long", nullable: false },
+        { name: "email", type: " ", nullable: true },
+        { name: "id", type: "string", nullable: true },
+      ]),
+    ).toEqual([
+      { name: "id", type: "long", nullable: false },
+      { name: "email", type: "string", nullable: true },
+    ]);
   });
 });
 

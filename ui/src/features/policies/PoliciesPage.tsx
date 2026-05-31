@@ -4,7 +4,9 @@ import { apiGet, apiPut } from "../../api/client";
 import {
   defaultRule,
   formToRule,
+  mergeColumnSelections,
   ruleToForm,
+  type ColumnSelection,
   type ConditionRow,
   type MaskRow,
   type PolicyRule,
@@ -25,6 +27,7 @@ type Asset = {
 
 type AssetDetail = Asset & {
   options: Record<string, unknown>;
+  schema_fields: { name: string; type: string; nullable: boolean }[];
   policy_rules: PolicyRule[];
 };
 
@@ -57,8 +60,10 @@ export function PoliciesPage() {
         setSelectedAsset(detail);
         setRules(
           detail.policy_rules.length > 0
-            ? detail.policy_rules.map(ruleToForm)
-            : [defaultRule],
+            ? detail.policy_rules.map((rule) =>
+                withSchemaColumns(ruleToForm(rule), detail.schema_fields),
+              )
+            : [withSchemaColumns(defaultRule, detail.schema_fields)],
         );
       })
       .catch(() => setStatus("Could not load asset policy."));
@@ -183,6 +188,7 @@ export function PoliciesPage() {
                     rule={rule}
                     ruleIndex={index}
                     canRemove={rules.length > 1}
+                    schemaColumns={selectedAsset.schema_fields.map((field) => field.name)}
                     onChange={(patch) => updateRule(index, patch, setRules)}
                     onRemove={() =>
                       setRules((current) =>
@@ -237,12 +243,14 @@ function RuleCard({
   onRemove,
   rule,
   ruleIndex,
+  schemaColumns,
 }: {
   canRemove: boolean;
   onChange: (patch: Partial<PolicyRuleForm>) => void;
   onRemove: () => void;
   rule: PolicyRuleForm;
   ruleIndex: number;
+  schemaColumns: string[];
 }) {
   return (
     <article className="rounded-card border border-border bg-white p-4">
@@ -277,12 +285,19 @@ function RuleCard({
           value={rule.principalsText}
           onChange={(value) => onChange({ principalsText: value })}
         />
-        <TextListField
-          help="Use * for all columns, or comma-separate explicit columns."
-          label="Visible columns"
-          value={rule.columnsText}
-          onChange={(value) => onChange({ columnsText: value })}
-        />
+        {schemaColumns.length === 0 ? (
+          <TextListField
+            help="Use * for all columns, or comma-separate explicit columns."
+            label="Visible columns"
+            value={rule.columnsText}
+            onChange={(value) => onChange({ columnsText: value })}
+          />
+        ) : (
+          <ColumnSelector
+            selections={rule.columnSelections}
+            onChange={(columnSelections) => onChange({ columnSelections })}
+          />
+        )}
       </div>
 
       <label className="mt-4 block">
@@ -311,6 +326,7 @@ function RuleCard({
       />
 
       <MaskEditor
+        schemaColumns={schemaColumns}
         masks={rule.masks}
         onChange={(masks) => onChange({ masks })}
       />
@@ -443,9 +459,11 @@ function EditablePairs({
 function MaskEditor({
   masks,
   onChange,
+  schemaColumns,
 }: {
   masks: MaskRow[];
   onChange: (masks: MaskRow[]) => void;
+  schemaColumns: string[];
 }) {
   return (
     <section className="mt-5 rounded-card border border-border bg-soft p-3">
@@ -477,13 +495,30 @@ function MaskEditor({
                 <span className="text-xs font-black uppercase tracking-wide text-muted">
                   Column
                 </span>
-                <input
-                  className="field mt-2"
-                  value={mask.column}
-                  onChange={(event) =>
-                    onChange(replaceAt(masks, index, { ...mask, column: event.target.value }))
-                  }
-                />
+                {schemaColumns.length === 0 ? (
+                  <input
+                    className="field mt-2"
+                    value={mask.column}
+                    onChange={(event) =>
+                      onChange(replaceAt(masks, index, { ...mask, column: event.target.value }))
+                    }
+                  />
+                ) : (
+                  <select
+                    className="field mt-2"
+                    value={mask.column}
+                    onChange={(event) =>
+                      onChange(replaceAt(masks, index, { ...mask, column: event.target.value }))
+                    }
+                  >
+                    <option value="">Choose column</option>
+                    {schemaColumns.map((column) => (
+                      <option key={column} value={column}>
+                        {column}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </label>
               <label className="block">
                 <span className="text-xs font-black uppercase tracking-wide text-muted">
@@ -517,6 +552,44 @@ function MaskEditor({
   );
 }
 
+function ColumnSelector({
+  onChange,
+  selections,
+}: {
+  onChange: (selections: ColumnSelection[]) => void;
+  selections: ColumnSelection[];
+}) {
+  return (
+    <section>
+      <span className="text-xs font-black uppercase tracking-wide text-muted">
+        Visible columns
+      </span>
+      <div className="mt-2 grid max-h-48 gap-2 overflow-auto rounded-card border border-border bg-soft p-3">
+        {selections.map((selection, index) => (
+          <label
+            className="flex items-center gap-2 rounded-card bg-white px-3 py-2 text-sm font-bold"
+            key={selection.column}
+          >
+            <input
+              checked={selection.selected}
+              type="checkbox"
+              onChange={(event) =>
+                onChange(
+                  replaceAt(selections, index, {
+                    ...selection,
+                    selected: event.target.checked,
+                  }),
+                )
+              }
+            />
+            <span>{selection.column}</span>
+          </label>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-card border border-border bg-soft p-3">
@@ -540,4 +613,17 @@ function updateRule(
 
 function replaceAt<T>(items: T[], index: number, next: T): T[] {
   return items.map((item, currentIndex) => (currentIndex === index ? next : item));
+}
+
+function withSchemaColumns(
+  rule: PolicyRuleForm,
+  schemaFields: { name: string }[],
+): PolicyRuleForm {
+  return {
+    ...rule,
+    columnSelections: mergeColumnSelections(
+      rule.columnSelections,
+      schemaFields.map((field) => field.name),
+    ),
+  };
 }

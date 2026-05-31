@@ -13,6 +13,11 @@ export type MaskRow = {
   type: string;
 };
 
+export type ColumnSelection = {
+  column: string;
+  selected: boolean;
+};
+
 export type ConditionRow = {
   key: string;
   value: string;
@@ -21,6 +26,7 @@ export type ConditionRow = {
 
 export type PolicyRuleForm = {
   columnsText: string;
+  columnSelections: ColumnSelection[];
   conditions: ConditionRow[];
   effect: "allow" | "deny";
   masks: MaskRow[];
@@ -31,6 +37,7 @@ export type PolicyRuleForm = {
 
 export const defaultRule: PolicyRuleForm = {
   columnsText: "*",
+  columnSelections: [{ column: "*", selected: true }],
   conditions: [],
   effect: "allow",
   masks: [],
@@ -42,6 +49,7 @@ export const defaultRule: PolicyRuleForm = {
 export function ruleToForm(rule: PolicyRule): PolicyRuleForm {
   return {
     columnsText: rule.columns.join(", "),
+    columnSelections: rule.columns.map((column) => ({ column, selected: true })),
     conditions: Object.entries(rule.when).map(([key, value]) => ({
       key,
       value: Array.isArray(value) ? value.join(", ") : String(value),
@@ -60,7 +68,7 @@ export function ruleToForm(rule: PolicyRule): PolicyRuleForm {
 
 export function formToRule(rule: PolicyRuleForm): PolicyRule {
   return {
-    columns: splitList(rule.columnsText),
+    columns: selectedColumns(rule),
     effect: rule.effect,
     masks: Object.fromEntries(
       rule.masks
@@ -79,6 +87,27 @@ export function formToRule(rule: PolicyRuleForm): PolicyRule {
         ]),
     ),
   };
+}
+
+export function mergeColumnSelections(
+  current: ColumnSelection[],
+  schemaColumns: string[],
+): ColumnSelection[] {
+  const selected = new Set(current.filter((item) => item.selected).map((item) => item.column));
+  if (schemaColumns.length === 0) {
+    return current;
+  }
+  return schemaColumns.map((column) => ({
+    column,
+    selected: selected.has("*") || selected.has(column),
+  }));
+}
+
+function selectedColumns(rule: PolicyRuleForm): string[] {
+  const selected = rule.columnSelections
+    .filter((item) => item.selected)
+    .map((item) => item.column);
+  return selected.length > 0 ? selected : splitList(rule.columnsText);
 }
 
 function splitList(value: string): string[] {

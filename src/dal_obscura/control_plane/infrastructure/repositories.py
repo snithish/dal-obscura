@@ -11,6 +11,7 @@ from dal_obscura.common.config_store.orm import (
     ActivePublicationRecord,
     AssetOwnerRecord,
     AssetRecord,
+    AssetSchemaFieldRecord,
     AuthProviderRecord,
     CatalogRecord,
     CellRecord,
@@ -319,6 +320,34 @@ class PublicationStore:
         self._session.flush()
         return normalized
 
+    def replace_asset_schema_fields(
+        self,
+        *,
+        asset_id: UUID,
+        fields: list[dict[str, Any]],
+    ) -> list[dict[str, object]]:
+        asset = self._session.get(AssetRecord, asset_id)
+        if asset is None:
+            raise LookupError(f"No asset {asset_id}")
+        normalized = _normalize_schema_fields(fields)
+        for record in self._session.scalars(
+            select(AssetSchemaFieldRecord).where(AssetSchemaFieldRecord.asset_id == asset_id)
+        ):
+            self._session.delete(record)
+        for ordinal, field in enumerate(normalized, start=1):
+            self._session.add(
+                AssetSchemaFieldRecord(
+                    id=uuid4(),
+                    asset_id=asset_id,
+                    ordinal=ordinal,
+                    name=str(field["name"]),
+                    type=str(field["type"]),
+                    nullable=bool(field["nullable"]),
+                )
+            )
+        self._session.flush()
+        return normalized
+
     def replace_auth_providers(self, *, cell_id: UUID, providers: list[dict[str, Any]]) -> None:
         for record in self._session.scalars(
             select(AuthProviderRecord).where(AuthProviderRecord.cell_id == cell_id)
@@ -545,6 +574,7 @@ class PublicationStore:
         return {
             **self._workspace_asset_row(record, catalog),
             "options": dict(record.options_json),
+            "schema_fields": self.list_asset_schema_fields(asset_id),
             "policy_rules": self.list_policy_rules(asset_id),
         }
 
@@ -555,6 +585,20 @@ class PublicationStore:
                 select(AssetOwnerRecord)
                 .where(AssetOwnerRecord.asset_id == asset_id)
                 .order_by(AssetOwnerRecord.ordinal)
+            )
+        ]
+
+    def list_asset_schema_fields(self, asset_id: UUID) -> list[dict[str, object]]:
+        return [
+            {
+                "name": record.name,
+                "type": record.type,
+                "nullable": record.nullable,
+            }
+            for record in self._session.scalars(
+                select(AssetSchemaFieldRecord)
+                .where(AssetSchemaFieldRecord.asset_id == asset_id)
+                .order_by(AssetSchemaFieldRecord.ordinal)
             )
         ]
 
@@ -861,4 +905,22 @@ def _normalize_principals(principals: list[str]) -> list[str]:
         if value and value not in seen:
             normalized.append(value)
             seen.add(value)
+    return normalized
+
+
+def _normalize_schema_fields(fields: list[dict[str, Any]]) -> list[dict[str, object]]:
+    normalized: list[dict[str, object]] = []
+    seen: set[str] = set()
+    for field in fields:
+        name = str(field.get("name", "")).strip()
+        if not name or name in seen:
+            continue
+        normalized.append(
+            {
+                "name": name,
+                "type": str(field.get("type", "string")).strip() or "string",
+                "nullable": bool(field.get("nullable", True)),
+            }
+        )
+        seen.add(name)
     return normalized

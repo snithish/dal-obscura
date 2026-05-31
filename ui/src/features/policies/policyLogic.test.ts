@@ -16,4 +16,22 @@ describe("policy rule form mapping", () => {
 
     expect(formToRule(ruleToForm(rule))).toEqual(rule);
   });
+
+  test("maps selected column rows to policy columns", () => {
+    const form = ruleToForm({
+      columns: ["id", "email"],
+      effect: "allow",
+      masks: {},
+      ordinal: 1,
+      principals: ["group:finance"],
+      row_filter: null,
+      when: {},
+    });
+
+    expect(form.columnSelections).toEqual([
+      { column: "id", selected: true },
+      { column: "email", selected: true },
+    ]);
+    expect(formToRule(form).columns).toEqual(["id", "email"]);
+  });
 });
