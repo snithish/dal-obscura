@@ -5,9 +5,11 @@ import { apiGet, apiPut } from "../../api/client";
 import {
   assetOptionsFromForm,
   filterAssets,
+  ownersFromRows,
   type Asset,
   type AssetFilters,
   type AssetOptionRow,
+  type OwnerRow,
 } from "./assetLogic";
 
 type Catalog = {
@@ -38,6 +40,8 @@ export function AssetsPage() {
   const [tableIdentifier, setTableIdentifier] = useState("prod.users");
   const [snapshot, setSnapshot] = useState("");
   const [optionRows, setOptionRows] = useState<AssetOptionRow[]>([]);
+  const [selectedAssetId, setSelectedAssetId] = useState("");
+  const [ownerRows, setOwnerRows] = useState<OwnerRow[]>([]);
   const [filters, setFilters] = useState<AssetFilters>({
     catalog: "",
     owner: "",
@@ -46,6 +50,7 @@ export function AssetsPage() {
   });
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSavingOwners, setIsSavingOwners] = useState(false);
 
   async function refreshWorkspace() {
     const [loadedSummary, loadedAssets, loadedCatalogs] = await Promise.all([
@@ -57,6 +62,7 @@ export function AssetsPage() {
     setAssets(loadedAssets);
     setCatalogs(loadedCatalogs);
     setCatalog((current) => current || loadedCatalogs[0]?.name || "");
+    setSelectedAssetId((current) => current || loadedAssets[0]?.id || "");
   }
 
   useEffect(() => {
@@ -86,6 +92,25 @@ export function AssetsPage() {
     }
   }
 
+  async function submitOwners(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedAssetId) {
+      return;
+    }
+    setError(null);
+    setIsSavingOwners(true);
+    try {
+      await apiPut(`/v1/assets/${selectedAssetId}/owners`, {
+        owners: ownersFromRows(ownerRows),
+      });
+      await refreshWorkspace();
+    } catch {
+      setError("Owner save failed.");
+    } finally {
+      setIsSavingOwners(false);
+    }
+  }
+
   const stats = [
     ["Total assets", summary.asset_count, "Catalog tables promoted for governance"],
     ["Unowned", summary.unowned_asset_count, "Need an accountable data owner"],
@@ -94,10 +119,24 @@ export function AssetsPage() {
   ] as const;
   const catalogOptions = useMemo(() => catalogs.map((item) => item.name), [catalogs]);
   const filteredAssets = useMemo(() => filterAssets(assets, filters), [assets, filters]);
+  const selectedAsset = useMemo(
+    () => assets.find((asset) => asset.id === selectedAssetId) ?? null,
+    [assets, selectedAssetId],
+  );
   const policyStatuses = useMemo(
     () => Array.from(new Set(assets.map((asset) => asset.policy_status))).sort(),
     [assets],
   );
+
+  useEffect(() => {
+    if (selectedAsset) {
+      setOwnerRows(
+        selectedAsset.owners.length > 0
+          ? selectedAsset.owners.map((principal) => ({ principal }))
+          : [{ principal: "" }],
+      );
+    }
+  }, [selectedAsset]);
 
   return (
     <div className="grid gap-6">
@@ -215,9 +254,14 @@ export function AssetsPage() {
             </div>
           ) : (
             filteredAssets.map((asset) => (
-              <div
-                className="grid grid-cols-1 gap-2 border-t border-border px-4 py-3 text-sm md:grid-cols-[2fr_1fr_1fr_1fr_1fr] md:items-center"
+              <button
+                className={[
+                  "grid w-full grid-cols-1 gap-2 border-t border-border px-4 py-3 text-left text-sm md:grid-cols-[2fr_1fr_1fr_1fr_1fr] md:items-center",
+                  selectedAssetId === asset.id ? "bg-[#eefaf6]" : "hover:bg-soft",
+                ].join(" ")}
                 key={asset.id}
+                type="button"
+                onClick={() => setSelectedAssetId(asset.id)}
               >
                 <div>
                   <strong className="block">{asset.name}</strong>
@@ -227,14 +271,98 @@ export function AssetsPage() {
                   </span>
                 </div>
                 <span>{asset.catalog}</span>
-                <span>{asset.owner_count || "Unowned"}</span>
+                <span>
+                  {asset.owner_count ? `${asset.owner_count} owner${asset.owner_count === 1 ? "" : "s"}` : "Unowned"}
+                </span>
                 <span className="badge">{asset.policy_status}</span>
                 <span className="badge">{asset.draft_status}</span>
-              </div>
+              </button>
             ))
           )}
         </div>
         </div>
+
+        <div className="grid gap-5">
+        <form className="surface p-5" onSubmit={submitOwners}>
+          <h2 className="text-lg font-black">Asset owners</h2>
+          <p className="mt-1 text-sm leading-6 text-muted">
+            Owners are accountable for policy changes on the selected asset.
+          </p>
+          {selectedAsset ? (
+            <>
+              <div className="mt-4 rounded-card border border-border bg-soft p-3">
+                <span className="text-xs font-black uppercase tracking-wide text-muted">
+                  Selected asset
+                </span>
+                <strong className="mt-1 block text-sm">{selectedAsset.name}</strong>
+                <span className="mt-1 block text-xs text-muted">{selectedAsset.catalog}</span>
+              </div>
+              <section className="mt-4 rounded-card border border-border bg-soft p-3">
+                <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center xl:flex-col xl:items-stretch">
+                  <div>
+                    <h3 className="text-sm font-black">Owner principals</h3>
+                    <p className="mt-1 text-xs text-muted">
+                      Add users, groups, or service principals that can own policy changes.
+                    </p>
+                  </div>
+                  <button
+                    className="btn-secondary"
+                    type="button"
+                    onClick={() => setOwnerRows([...ownerRows, { principal: "" }])}
+                  >
+                    Add owner
+                  </button>
+                </div>
+                <div className="mt-3 grid gap-3">
+                  {ownerRows.map((row, index) => (
+                    <div
+                      className="grid grid-cols-1 gap-3 rounded-card border border-border bg-white p-3 md:grid-cols-[1fr_auto] xl:grid-cols-1"
+                      key={`${row.principal}-${index}`}
+                    >
+                      <label className="block">
+                        <span className="text-xs font-black uppercase tracking-wide text-muted">
+                          Principal
+                        </span>
+                        <input
+                          className="field mt-2"
+                          placeholder="user:alice@example.com"
+                          value={row.principal}
+                          onChange={(event) =>
+                            setOwnerRows(
+                              replaceAt(ownerRows, index, { principal: event.target.value }),
+                            )
+                          }
+                        />
+                      </label>
+                      <button
+                        className="btn-secondary self-end"
+                        type="button"
+                        onClick={() =>
+                          setOwnerRows(
+                            ownerRows.length === 1
+                              ? [{ principal: "" }]
+                              : ownerRows.filter(
+                                  (_, currentIndex) => currentIndex !== index,
+                                ),
+                          )
+                        }
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+              <button className="btn-primary mt-4 w-full" disabled={isSavingOwners} type="submit">
+                {isSavingOwners ? "Saving..." : "Save owners"}
+              </button>
+            </>
+          ) : (
+            <div className="mt-5 rounded-card border border-dashed border-border p-6 text-sm text-muted">
+              Select an asset to assign owners.
+            </div>
+          )}
+        </form>
 
         <form className="surface p-5" onSubmit={submitAsset}>
           <h2 className="text-lg font-black">Promote asset</h2>
@@ -375,6 +503,7 @@ export function AssetsPage() {
             {isSaving ? "Saving..." : "Save asset"}
           </button>
         </form>
+        </div>
       </section>
     </div>
   );

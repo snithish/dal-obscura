@@ -83,6 +83,16 @@ class AssetRecord(Base):
     options_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
 
+class AssetOwnerRecord(Base):
+    __tablename__ = "asset_owners"
+    __table_args__ = (UniqueConstraint("asset_id", "principal"),)
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    asset_id: Mapped[UUID] = mapped_column(ForeignKey("assets.id"), nullable=False, index=True)
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
+    principal: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 class PolicyRuleRecord(Base):
     __tablename__ = "policy_rules"
     __table_args__ = (UniqueConstraint("asset_id", "ordinal"),)

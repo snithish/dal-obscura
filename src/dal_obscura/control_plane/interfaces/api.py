@@ -63,6 +63,10 @@ class PolicyRulesRequest(_StrictModel):
     rules: list[dict[str, Any]]
 
 
+class AssetOwnersRequest(_StrictModel):
+    owners: list[str] = Field(default_factory=list)
+
+
 class AuthProvidersRequest(_StrictModel):
     providers: list[dict[str, Any]]
 
@@ -323,6 +327,13 @@ def create_app(session_maker: sessionmaker[Session], *, admin_token: str) -> Fas
         return with_service(
             lambda service: service.replace_policy_rules(asset_id=asset_id, rules=request.rules)
         ) or {"asset_id": str(asset_id)}
+
+    @app.put("/v1/assets/{asset_id}/owners", dependencies=[Depends(require_admin)])
+    def replace_asset_owners(asset_id: UUID, request: AssetOwnersRequest) -> object:
+        owners = with_service(
+            lambda service: service.replace_asset_owners(asset_id=asset_id, owners=request.owners)
+        )
+        return {"asset_id": str(asset_id), "owners": owners}
 
     @app.put("/v1/assets/{catalog}/{target}", dependencies=[Depends(require_admin)])
     def upsert_workspace_asset(catalog: str, target: str, request: AssetRequest) -> object:

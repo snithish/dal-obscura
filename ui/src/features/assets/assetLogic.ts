@@ -5,6 +5,7 @@ export type Asset = {
   backend: string;
   table_identifier: string | null;
   owner_count: number;
+  owners: string[];
   policy_status: string;
   draft_status: string;
 };
@@ -12,6 +13,10 @@ export type Asset = {
 export type AssetOptionRow = {
   key: string;
   value: string;
+};
+
+export type OwnerRow = {
+  principal: string;
 };
 
 export type AssetFilters = {
@@ -24,6 +29,19 @@ export type AssetFilters = {
 export type AssetOptionsResult =
   | { ok: true; options: Record<string, unknown> }
   | { ok: false; error: string };
+
+export function ownersFromRows(rows: OwnerRow[]): string[] {
+  const seen = new Set<string>();
+  const owners: string[] = [];
+  for (const row of rows) {
+    const owner = row.principal.trim();
+    if (owner && !seen.has(owner)) {
+      owners.push(owner);
+      seen.add(owner);
+    }
+  }
+  return owners;
+}
 
 export function assetOptionsFromForm(
   snapshot: string,

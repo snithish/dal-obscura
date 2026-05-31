@@ -260,6 +260,9 @@ class ProvisioningService:
     def replace_policy_rules(self, asset_id: UUID, rules: list[dict[str, Any]]) -> None:
         self._store.replace_policy_rules(asset_id=asset_id, rules=rules)
 
+    def replace_asset_owners(self, asset_id: UUID, owners: list[str]) -> list[str]:
+        return self._store.replace_asset_owners(asset_id=asset_id, owners=owners)
+
     def replace_auth_providers(self, cell_id: UUID, providers: list[dict[str, Any]]) -> None:
         self._store.replace_auth_providers(cell_id=cell_id, providers=providers)
 

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from dal_obscura.common.config_store.orm import (
     ActivePublicationRecord,
+    AssetOwnerRecord,
     AssetRecord,
     AuthProviderRecord,
     CatalogRecord,
@@ -297,6 +298,27 @@ class PublicationStore:
             )
         self._session.flush()
 
+    def replace_asset_owners(self, *, asset_id: UUID, owners: list[str]) -> list[str]:
+        asset = self._session.get(AssetRecord, asset_id)
+        if asset is None:
+            raise LookupError(f"No asset {asset_id}")
+        normalized = _normalize_principals(owners)
+        for record in self._session.scalars(
+            select(AssetOwnerRecord).where(AssetOwnerRecord.asset_id == asset_id)
+        ):
+            self._session.delete(record)
+        for ordinal, principal in enumerate(normalized, start=1):
+            self._session.add(
+                AssetOwnerRecord(
+                    id=uuid4(),
+                    asset_id=asset_id,
+                    ordinal=ordinal,
+                    principal=principal,
+                )
+            )
+        self._session.flush()
+        return normalized
+
     def replace_auth_providers(self, *, cell_id: UUID, providers: list[dict[str, Any]]) -> None:
         for record in self._session.scalars(
             select(AuthProviderRecord).where(AuthProviderRecord.cell_id == cell_id)
@@ -525,6 +547,16 @@ class PublicationStore:
             "options": dict(record.options_json),
             "policy_rules": self.list_policy_rules(asset_id),
         }
+
+    def list_asset_owners(self, asset_id: UUID) -> list[str]:
+        return [
+            record.principal
+            for record in self._session.scalars(
+                select(AssetOwnerRecord)
+                .where(AssetOwnerRecord.asset_id == asset_id)
+                .order_by(AssetOwnerRecord.ordinal)
+            )
+        ]
 
     def list_policy_rules(self, asset_id: UUID) -> list[dict[str, object]]:
         return [
@@ -796,13 +828,15 @@ class PublicationStore:
         catalog: CatalogRecord,
     ) -> dict[str, object]:
         policy_rules = self.list_policy_rules(record.id)
+        owners = self.list_asset_owners(record.id)
         return {
             "id": str(record.id),
             "name": record.target,
             "catalog": catalog.name,
             "backend": record.backend,
             "table_identifier": record.table_identifier,
-            "owner_count": 0,
+            "owner_count": len(owners),
+            "owners": owners,
             "policy_status": "configured" if policy_rules else "missing",
             "draft_status": "draft",
         }
@@ -817,3 +851,14 @@ def _empty_workspace_summary() -> dict[str, object]:
         "draft_change_count": 0,
         "active_publication": None,
     }
+
+
+def _normalize_principals(principals: list[str]) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for principal in principals:
+        value = principal.strip()
+        if value and value not in seen:
+            normalized.append(value)
+            seen.add(value)
+    return normalized

@@ -18,6 +18,7 @@ type Asset = {
   backend: string;
   table_identifier: string | null;
   owner_count: number;
+  owners: string[];
   policy_status: string;
   draft_status: string;
 };
@@ -165,7 +166,14 @@ export function PoliciesPage() {
               <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
                 <SummaryCard label="Asset" value={selectedAsset.name} />
                 <SummaryCard label="Catalog" value={selectedAsset.catalog} />
-                <SummaryCard label="Table" value={selectedAsset.table_identifier || "Not set"} />
+                <SummaryCard
+                  label="Owners"
+                  value={
+                    selectedAsset.owners.length > 0
+                      ? selectedAsset.owners.join(", ")
+                      : "Unowned"
+                  }
+                />
               </div>
 
               <div className="mt-5 grid gap-4">

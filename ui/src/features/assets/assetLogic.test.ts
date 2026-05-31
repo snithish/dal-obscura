@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import {
   assetOptionsFromForm,
   filterAssets,
+  ownersFromRows,
   type Asset,
 } from "./assetLogic";
 
@@ -14,6 +15,7 @@ const assets: Asset[] = [
     id: "asset-1",
     name: "default.users",
     owner_count: 0,
+    owners: [],
     policy_status: "missing",
     table_identifier: "prod.users",
   },
@@ -24,6 +26,7 @@ const assets: Asset[] = [
     id: "asset-2",
     name: "billing.invoices",
     owner_count: 2,
+    owners: ["user:alice@example.com", "group:finance"],
     policy_status: "configured",
     table_identifier: "prod.invoices",
   },
@@ -49,6 +52,18 @@ describe("assetOptionsFromForm", () => {
       ok: true,
       options: { include_deleted: false, limit: 100, snapshot: 42 },
     });
+  });
+});
+
+describe("ownersFromRows", () => {
+  test("normalizes owner principal rows without duplicates", () => {
+    expect(
+      ownersFromRows([
+        { principal: " user:alice@example.com " },
+        { principal: "group:data-owners" },
+        { principal: "user:alice@example.com" },
+      ]),
+    ).toEqual(["user:alice@example.com", "group:data-owners"]);
   });
 });
 

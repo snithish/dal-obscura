@@ -145,6 +145,7 @@ def test_workspace_asset_upsert_uses_default_workspace_context():
             "backend": "iceberg",
             "table_identifier": "prod.users",
             "owner_count": 0,
+            "owners": [],
             "policy_status": "missing",
             "draft_status": "draft",
         }
@@ -205,6 +206,43 @@ def test_workspace_policy_rules_can_be_replaced_from_asset_detail():
             "row_filter": "region = 'us'",
         }
     ]
+
+
+def test_workspace_asset_owners_can_be_replaced_from_asset_detail():
+    client = _client()
+    client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+    asset = client.put(
+        "/v1/assets/analytics/default.users",
+        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
+        headers=ADMIN_HEADERS,
+    ).json()
+
+    response = client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["user:alice@example.com", "group:data-owners"]},
+        headers=ADMIN_HEADERS,
+    )
+    assets = client.get("/v1/assets", headers=ADMIN_HEADERS).json()
+    detail = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
+    summary = client.get("/v1/workspace/summary", headers=ADMIN_HEADERS).json()
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "asset_id": asset["id"],
+        "owners": ["user:alice@example.com", "group:data-owners"],
+    }
+    assert assets[0]["owner_count"] == 2
+    assert assets[0]["owners"] == ["user:alice@example.com", "group:data-owners"]
+    assert detail["owner_count"] == 2
+    assert detail["owners"] == ["user:alice@example.com", "group:data-owners"]
+    assert summary["unowned_asset_count"] == 0
 
 
 def test_workspace_auth_providers_can_be_configured_without_cell_ids():
@@ -278,6 +316,7 @@ def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
             "backend": "iceberg",
             "table_identifier": "prod.users",
             "owner_count": 0,
+            "owners": [],
             "policy_status": "configured",
             "draft_status": "draft",
         }
