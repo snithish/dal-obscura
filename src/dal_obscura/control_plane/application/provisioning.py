@@ -350,6 +350,8 @@ class ProvisioningService:
             raise ValidationFailure("Cannot publish until at least one catalog is configured.")
         if len(draft.assets) == 0:
             raise ValidationFailure("Cannot publish until at least one asset is promoted.")
+        if not any(provider.enabled for provider in draft.auth_providers):
+            raise ValidationFailure("Cannot publish until at least one auth provider is enabled.")
         missing_owner_count = sum(
             1 for asset in draft.assets if not self._store.list_asset_owners(asset.id)
         )

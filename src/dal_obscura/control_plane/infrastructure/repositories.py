@@ -705,12 +705,17 @@ class PublicationStore:
             }
         except LookupError:
             active = None
+        enabled_auth_provider_count = sum(
+            1 for provider in self.list_auth_providers(context.cell_id) if provider["enabled"]
+        )
         return {
             "catalog_count": len(catalogs),
             "asset_count": len(assets),
             "unowned_asset_count": sum(1 for asset in assets if asset["owner_count"] == 0),
             "missing_policy_count": missing_policy_count,
             "draft_change_count": len(assets),
+            "runtime_configured": self.get_runtime_settings(context.cell_id) is not None,
+            "enabled_auth_provider_count": enabled_auth_provider_count,
             "active_publication": active,
         }
 
@@ -906,6 +911,8 @@ def _empty_workspace_summary() -> dict[str, object]:
         "unowned_asset_count": 0,
         "missing_policy_count": 0,
         "draft_change_count": 0,
+        "runtime_configured": False,
+        "enabled_auth_provider_count": 0,
         "active_publication": None,
     }
 

@@ -1,7 +1,9 @@
 export type DraftReadiness = {
   assetCount: number;
+  authProviderCount: number;
   catalogCount: number;
   missingPolicyCount: number;
+  runtimeConfigured: boolean;
   unownedAssetCount: number;
 };
 
@@ -13,6 +15,12 @@ export function publishBlockers(readiness: DraftReadiness): string[] {
   const blockers: string[] = [];
   if (readiness.catalogCount === 0) {
     blockers.push("Configure at least one catalog.");
+  }
+  if (!readiness.runtimeConfigured) {
+    blockers.push("Configure runtime settings.");
+  }
+  if (readiness.authProviderCount === 0) {
+    blockers.push("Configure at least one enabled auth provider.");
   }
   if (readiness.assetCount === 0) {
     blockers.push("Promote at least one governed asset.");

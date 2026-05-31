@@ -16,7 +16,9 @@ type WorkspaceSummary = {
   asset_count: number;
   catalog_count: number;
   draft_change_count: number;
+  enabled_auth_provider_count: number;
   missing_policy_count: number;
+  runtime_configured: boolean;
   unowned_asset_count: number;
 };
 
@@ -106,8 +108,10 @@ export function PublishPage() {
   const latestPublication = publications[publications.length - 1];
   const readiness = {
     assetCount: draft?.asset_count ?? 0,
+    authProviderCount: summary?.enabled_auth_provider_count ?? 0,
     catalogCount: draft?.catalog_count ?? 0,
     missingPolicyCount: summary?.missing_policy_count ?? 0,
+    runtimeConfigured: summary?.runtime_configured ?? false,
     unownedAssetCount: summary?.unowned_asset_count ?? 0,
   };
   const blockers = publishBlockers(readiness);
@@ -136,9 +140,14 @@ export function PublishPage() {
 
       {status ? <div className="alert">{status}</div> : null}
 
-      <section className="grid grid-cols-1 gap-3 md:grid-cols-4">
+      <section className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Metric label="Catalogs" value={draft?.catalog_count ?? 0} />
         <Metric label="Assets" value={draft?.asset_count ?? 0} />
+        <Metric
+          label="Runtime"
+          value={summary?.runtime_configured ? "Configured" : "Missing"}
+        />
+        <Metric label="Auth providers" value={summary?.enabled_auth_provider_count ?? 0} />
         <Metric label="Missing policy" value={summary?.missing_policy_count ?? 0} />
         <Metric label="Draft changes" value={summary?.draft_change_count ?? 0} />
       </section>
@@ -335,7 +344,7 @@ function ConfirmationPanel({
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
+function Metric({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="surface p-4">
       <span className="text-xs font-bold text-muted">{label}</span>

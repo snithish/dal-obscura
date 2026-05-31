@@ -33,6 +33,8 @@ def test_workspace_summary_is_empty_before_setup():
         "unowned_asset_count": 0,
         "missing_policy_count": 0,
         "draft_change_count": 0,
+        "runtime_configured": False,
+        "enabled_auth_provider_count": 0,
         "active_publication": None,
     }
 
@@ -79,6 +81,8 @@ def test_workspace_catalog_upsert_bootstraps_default_workspace():
     ]
     assert summary["catalog_count"] == 1
     assert summary["asset_count"] == 0
+    assert summary["runtime_configured"] is False
+    assert summary["enabled_auth_provider_count"] == 0
 
 
 def test_workspace_catalog_tables_can_be_discovered_without_runtime_ids(monkeypatch):
@@ -341,6 +345,8 @@ def test_workspace_asset_owners_can_be_replaced_from_asset_detail():
     assert detail["owner_count"] == 2
     assert detail["owners"] == ["user:alice@example.com", "group:data-owners"]
     assert summary["unowned_asset_count"] == 0
+    assert summary["runtime_configured"] is False
+    assert summary["enabled_auth_provider_count"] == 0
 
 
 def test_workspace_auth_providers_can_be_configured_without_cell_ids():
@@ -393,6 +399,8 @@ def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
         "unowned_asset_count": 1,
         "missing_policy_count": 0,
         "draft_change_count": 1,
+        "runtime_configured": True,
+        "enabled_auth_provider_count": 1,
         "active_publication": None,
     }
     assert catalogs == [
@@ -481,11 +489,47 @@ def test_workspace_publish_rejects_assets_without_policy_rules():
         json={"owners": ["user:alice@example.com"]},
         headers=ADMIN_HEADERS,
     )
+    client.put(
+        "/v1/settings/auth-providers",
+        json={
+            "providers": [
+                {
+                    "ordinal": 1,
+                    "module": DEFAULT_AUTH_MODULE,
+                    "args": {"jwt_secret": {"secret": "DAL_OBSCURA_JWT_SECRET"}},
+                    "enabled": True,
+                }
+            ]
+        },
+        headers=ADMIN_HEADERS,
+    )
 
     response = client.post("/v1/publications", headers=ADMIN_HEADERS)
 
     assert response.status_code == 400
     assert response.json() == {"detail": "Cannot publish until 1 asset has policy rules."}
+
+
+def test_workspace_publish_rejects_missing_auth_provider():
+    client = _client()
+    asset = _provision_draft(client)
+    client.put(
+        "/v1/settings/auth-providers",
+        json={"providers": []},
+        headers=ADMIN_HEADERS,
+    )
+    client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["user:owner@example.com"]},
+        headers=ADMIN_HEADERS,
+    )
+
+    response = client.post("/v1/publications", headers=ADMIN_HEADERS)
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "detail": "Cannot publish until at least one auth provider is enabled."
+    }
 
 
 def test_workspace_publish_routes_use_default_runtime_context():
@@ -529,6 +573,8 @@ def test_workspace_publish_routes_use_default_runtime_context():
         "manifest_hash": publication["manifest_hash"],
         "status": "published",
     }
+    assert summary["runtime_configured"] is True
+    assert summary["enabled_auth_provider_count"] == 1
 
 
 def _provision_draft(client: TestClient) -> dict[str, str]:
