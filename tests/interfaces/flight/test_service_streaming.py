@@ -184,6 +184,33 @@ def test_parse_descriptor_rejects_unsupported_protocol_version():
         parse_descriptor(descriptor)
 
 
+@pytest.mark.parametrize(
+    "payload,error",
+    [
+        ([], "Flight descriptor command must be a JSON object"),
+        ({"catalog": "analytics", "columns": ["id"]}, "target is required"),
+        ({"catalog": "analytics", "target": "", "columns": ["id"]}, "target is required"),
+        ({"catalog": "analytics", "target": "test.table", "columns": []}, "columns"),
+        ({"catalog": "analytics", "target": "test.table", "columns": "id"}, "columns"),
+        ({"catalog": "analytics", "target": "test.table", "columns": [1]}, "columns"),
+        (
+            {
+                "catalog": "analytics",
+                "target": "test.table",
+                "columns": ["id"],
+                "row_filter": "x" * 8193,
+            },
+            "row_filter is too long",
+        ),
+    ],
+)
+def test_parse_descriptor_rejects_invalid_request_shapes(payload, error):
+    descriptor = command_descriptor(payload)
+
+    with pytest.raises(ValueError, match=error):
+        parse_descriptor(descriptor)
+
+
 def test_parse_descriptor_rejects_invalid_row_filter_syntax():
     descriptor = command_descriptor(
         {
@@ -600,7 +627,7 @@ def test_descriptor_authorization_field_is_not_accepted(tmp_path):
         server.get_flight_info(DummyContext(headers=[]), descriptor)
 
 
-def test_ticket_uses_policy_version_it_was_issued_with(tmp_path):
+def test_do_get_rejects_ticket_after_policy_version_changes(tmp_path):
     del tmp_path
     schema = id_region_schema()
     batch = id_region_batch([1], ["us"])
@@ -638,7 +665,8 @@ def test_ticket_uses_policy_version_it_was_issued_with(tmp_path):
     server.do_get(do_get_context, ticket)
 
     authorizer.rules = [allow_rule(["id", "region"], row_filter="region = 'us'")]
-    server.do_get(do_get_context, ticket)
+    with pytest.raises(flight.FlightUnauthorizedError):
+        server.do_get(do_get_context, ticket)
 
 
 def test_do_get_requires_authorization_header(tmp_path):

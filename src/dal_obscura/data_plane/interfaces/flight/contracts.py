@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 import pyarrow.flight as flight
 
@@ -11,6 +12,16 @@ from dal_obscura.data_plane.application.ports.identity import AuthenticationRequ
 
 REQUEST_HEADERS_MIDDLEWARE_KEY = "request_headers"
 SUPPORTED_PROTOCOL_VERSION = 1
+MAX_DESCRIPTOR_BYTES = 64 * 1024
+MAX_TARGET_LENGTH = 512
+MAX_COLUMNS = 1024
+MAX_COLUMN_LENGTH = 256
+MAX_ROW_FILTER_LENGTH = 8192
+SECURITY_SENSITIVE_HEADERS = {
+    "authorization",
+    "x-api-key",
+    "x-dal-obscura-proxy-secret",
+}
 
 
 class RequestHeadersMiddleware(flight.ServerMiddleware):
@@ -40,10 +51,8 @@ def headers_from_context(context: flight.ServerCallContext) -> dict[str, str]:
             return dict(middleware.headers)
     except Exception:
         pass
-    try:
-        return normalize_headers(context.headers)
-    except Exception:
-        return {}
+    headers = getattr(context, "headers", {})
+    return normalize_headers(headers)
 
 
 def authentication_request_from_context(
@@ -60,10 +69,14 @@ def authentication_request_from_context(
     )
 
 
-def normalize_headers(headers: Mapping[object, object]) -> dict[str, str]:
+def normalize_headers(
+    headers: Mapping[Any, Any] | Iterable[tuple[Any, Any]],
+) -> dict[str, str]:
     """Lower-cases header names and decodes byte values from Arrow Flight."""
+    items = list(_iter_header_items(headers))
+    _reject_duplicate_security_headers(items)
     normalized: dict[str, str] = {}
-    for key, value in dict(headers).items():
+    for key, value in items:
         normalized[_decode_header_value(key).lower()] = _decode_header_value(value)
     return normalized
 
@@ -71,13 +84,19 @@ def normalize_headers(headers: Mapping[object, object]) -> dict[str, str]:
 def parse_descriptor(descriptor: flight.FlightDescriptor) -> PlanRequest:
     """Parses the JSON command payload used by `get_flight_info` requests."""
     if descriptor.command:
+        if len(descriptor.command) > MAX_DESCRIPTOR_BYTES:
+            raise ValueError("Flight descriptor command is too large")
         raw = descriptor.command.decode("utf-8")
         data = json.loads(raw)
+        if not isinstance(data, dict):
+            raise ValueError("Flight descriptor command must be a JSON object")
         _validate_protocol_version(data.get("protocol_version", SUPPORTED_PROTOCOL_VERSION))
+        target = _required_string(data, "target", max_length=MAX_TARGET_LENGTH)
+        columns = _required_columns(data.get("columns"))
         return PlanRequest(
             catalog=str(data["catalog"]) if data.get("catalog") else None,
-            target=str(data["target"]),
-            columns=list(data["columns"]),
+            target=target,
+            columns=columns,
             row_filter=_optional_descriptor_row_filter(data.get("row_filter")),
         )
     raise ValueError("Invalid Flight descriptor")
@@ -93,7 +112,59 @@ def _optional_descriptor_row_filter(value: object) -> RowFilter | None:
         return None
     if not isinstance(value, str) or not value.strip():
         raise ValueError("Descriptor row_filter must be a non-empty string")
+    if len(value) > MAX_ROW_FILTER_LENGTH:
+        raise ValueError("Descriptor row_filter is too long")
     return deserialize_row_filter(value)
+
+
+def _required_string(
+    data: Mapping[str, Any],
+    name: str,
+    *,
+    max_length: int,
+) -> str:
+    value = data.get(name)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"Descriptor {name} is required")
+    normalized = value.strip()
+    if len(normalized) > max_length:
+        raise ValueError(f"Descriptor {name} is too long")
+    return normalized
+
+
+def _required_columns(raw: object) -> list[str]:
+    if not isinstance(raw, list) or not raw:
+        raise ValueError("Descriptor columns must be a non-empty list of strings")
+    if len(raw) > MAX_COLUMNS:
+        raise ValueError("Descriptor columns list is too long")
+    columns: list[str] = []
+    for item in raw:
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError("Descriptor columns must be a non-empty list of strings")
+        column = item.strip()
+        if len(column) > MAX_COLUMN_LENGTH:
+            raise ValueError("Descriptor column name is too long")
+        columns.append(column)
+    return columns
+
+
+def _reject_duplicate_security_headers(headers: Iterable[tuple[Any, Any]]) -> None:
+    seen: set[str] = set()
+    for raw_key, _value in headers:
+        key = _decode_header_value(raw_key).lower()
+        if key not in SECURITY_SENSITIVE_HEADERS:
+            continue
+        if key in seen:
+            raise ValueError(f"Duplicate security-sensitive header: {key}")
+        seen.add(key)
+
+
+def _iter_header_items(
+    headers: Mapping[Any, Any] | Iterable[tuple[Any, Any]],
+) -> Iterable[tuple[Any, Any]]:
+    if isinstance(headers, Mapping):
+        return list(headers.items())
+    return list(headers)
 
 
 def _decode_header_value(value: object) -> str:

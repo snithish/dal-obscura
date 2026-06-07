@@ -50,17 +50,16 @@ class DataAccessFlightService(flight.FlightServerBase):
         self, context: flight.ServerCallContext, descriptor: flight.FlightDescriptor
     ) -> flight.SchemaResult:
         """Returns the caller-visible masked schema without minting read tickets."""
-        auth_request = authentication_request_from_context(context, method="get_schema")
-        request = parse_descriptor(descriptor)
         try:
+            auth_request = authentication_request_from_context(context, method="get_schema")
+            request = parse_descriptor(descriptor)
             result = self._get_schema_use_case.execute(request, auth_request)
         except PermissionError as exc:
-            self._logger.warning(
-                "auth_or_authz_failed", extra=self._log_extra(target=request.target)
-            )
+            self._logger.warning("auth_or_authz_failed", extra=self._log_extra())
             raise flight.FlightUnauthorizedError("Unauthorized") from exc
         except ValueError as exc:
-            raise flight.FlightInternalError(str(exc)) from exc
+            self._logger.warning("invalid_request", extra=self._log_extra())
+            raise flight.FlightInternalError("Invalid request") from exc
 
         self._logger.info(
             "schema_request",
@@ -78,17 +77,16 @@ class DataAccessFlightService(flight.FlightServerBase):
         self, context: flight.ServerCallContext, descriptor: flight.FlightDescriptor
     ) -> flight.FlightInfo:
         """Plans a dataset read and returns one endpoint per signed ticket."""
-        auth_request = authentication_request_from_context(context, method="get_flight_info")
-        request = parse_descriptor(descriptor)
         try:
+            auth_request = authentication_request_from_context(context, method="get_flight_info")
+            request = parse_descriptor(descriptor)
             result = self._plan_access_use_case.execute(request, auth_request)
         except PermissionError as exc:
-            self._logger.warning(
-                "auth_or_authz_failed", extra=self._log_extra(target=request.target)
-            )
+            self._logger.warning("auth_or_authz_failed", extra=self._log_extra())
             raise flight.FlightUnauthorizedError("Unauthorized") from exc
         except ValueError as exc:
-            raise flight.FlightInternalError(str(exc)) from exc
+            self._logger.warning("invalid_request", extra=self._log_extra())
+            raise flight.FlightInternalError("Invalid request") from exc
 
         self._logger.info(
             "plan_request",
@@ -100,6 +98,11 @@ class DataAccessFlightService(flight.FlightServerBase):
                 policy_version=result.policy_version,
                 requested_row_filter_present=result.requested_row_filter_present,
                 requested_row_filter_dependency_count=result.requested_row_filter_dependency_count,
+                full_row_filter_present=result.full_row_filter_present,
+                backend_pushdown_row_filter_present=result.backend_pushdown_row_filter_present,
+                residual_row_filter_present=result.residual_row_filter_present,
+                visible_column_count=result.visible_column_count,
+                execution_column_count=result.execution_column_count,
             ),
         )
         endpoints = [

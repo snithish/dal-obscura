@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from dal_obscura.common.catalog.ports import CatalogPlugin, TableFormat
+from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 from dal_obscura.data_plane.infrastructure.table_formats.iceberg import IcebergTableFormat
 
 
@@ -28,6 +29,7 @@ class CatalogConfig:
     module: str
     options: dict[str, Any]
     targets: dict[str, CatalogTargetConfig]
+    path_enforcer: PathRuleEnforcer | None = None
 
 
 @dataclass(frozen=True)
@@ -88,10 +90,17 @@ class DynamicCatalogRegistry:
 class IcebergCatalog:
     """Catalog resolver for SQL-style Iceberg catalogs."""
 
-    def __init__(self, name: str, options: dict[str, Any], targets: dict[str, CatalogTargetConfig]):
+    def __init__(
+        self,
+        name: str,
+        options: dict[str, Any],
+        targets: dict[str, CatalogTargetConfig],
+        path_enforcer: PathRuleEnforcer | None = None,
+    ):
         self._name = name
         self.options = options
         self.targets = targets
+        self._path_enforcer = path_enforcer
         self._catalog = _load_iceberg_catalog(name, options)
 
     @property
@@ -107,16 +116,29 @@ class IcebergCatalog:
         if target_config is not None:
             _ensure_iceberg_backend(self.name, target, target_config)
         table_identifier = (target_config.table if target_config else None) or target
-        return _resolve_iceberg_metadata(self._catalog, self.name, target, table_identifier)
+        return _resolve_iceberg_metadata(
+            self._catalog,
+            self.name,
+            target,
+            table_identifier,
+            path_enforcer=self._path_enforcer,
+        )
 
 
 class StaticCatalog:
     """Catalog resolver for catalogs that require explicit target mappings."""
 
-    def __init__(self, name: str, options: dict[str, Any], targets: dict[str, CatalogTargetConfig]):
+    def __init__(
+        self,
+        name: str,
+        options: dict[str, Any],
+        targets: dict[str, CatalogTargetConfig],
+        path_enforcer: PathRuleEnforcer | None = None,
+    ):
         self._name = name
         self.options = options
         self.targets = targets
+        self._path_enforcer = path_enforcer
         self._catalog: Any | None = None
 
     @property
@@ -135,7 +157,13 @@ class StaticCatalog:
         if self._catalog is None:
             self._catalog = _load_iceberg_catalog(self.name, self.options)
         table_identifier = target_config.table or target
-        return _resolve_iceberg_metadata(self._catalog, self.name, target, table_identifier)
+        return _resolve_iceberg_metadata(
+            self._catalog,
+            self.name,
+            target,
+            table_identifier,
+            path_enforcer=self._path_enforcer,
+        )
 
 
 def _resolve_iceberg_metadata(
@@ -143,6 +171,8 @@ def _resolve_iceberg_metadata(
     catalog_name: str,
     requested_target: str,
     table_identifier: str,
+    *,
+    path_enforcer: PathRuleEnforcer | None = None,
 ) -> TableFormat:
     """Contacts the Iceberg catalog to resolve the actual metadata location for a table."""
     try:
@@ -157,6 +187,7 @@ def _resolve_iceberg_metadata(
         table_name=requested_target,
         metadata_location=pyiceberg_table.metadata_location,
         io_options=dict(pyiceberg_table.io.properties),
+        path_enforcer=path_enforcer,
     )
 
 
@@ -204,6 +235,7 @@ def _load_and_instantiate_catalog(catalog_config: CatalogConfig) -> CatalogPlugi
             name=catalog_config.name,
             options=dict(catalog_config.options),
             targets=dict(catalog_config.targets),
+            path_enforcer=catalog_config.path_enforcer,
         )
     except Exception as exc:
         raise ValueError(f"Failed to instantiate catalog {catalog_config.name!r}: {exc}") from exc

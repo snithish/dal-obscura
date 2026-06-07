@@ -41,6 +41,11 @@ class PlanAccessResult:
     catalog: str | None = None
     requested_row_filter_present: bool = False
     requested_row_filter_dependency_count: int = 0
+    full_row_filter_present: bool = False
+    backend_pushdown_row_filter_present: bool = False
+    residual_row_filter_present: bool = False
+    visible_column_count: int = 0
+    execution_column_count: int = 0
 
 
 class PlanAccessUseCase:
@@ -159,6 +164,11 @@ class PlanAccessUseCase:
             catalog=request.catalog,
             requested_row_filter_present=requested_row_filter is not None,
             requested_row_filter_dependency_count=len(requested_filter_dependencies),
+            full_row_filter_present=plan.full_row_filter is not None,
+            backend_pushdown_row_filter_present=plan.backend_pushdown_row_filter is not None,
+            residual_row_filter_present=plan.residual_row_filter is not None,
+            visible_column_count=len(execution_projection.visible_columns),
+            execution_column_count=len(execution_projection.execution_columns),
         )
 
 

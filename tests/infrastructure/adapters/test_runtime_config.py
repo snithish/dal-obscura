@@ -38,6 +38,19 @@ def test_runtime_config_reads_tls_environment(monkeypatch: pytest.MonkeyPatch):
     assert config.tls_verify_client is True
 
 
+def test_runtime_config_does_not_expose_stale_policy_ticket_compatibility(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
+    monkeypatch.setenv("DAL_OBSCURA_CELL_ID", "00000000-0000-0000-0000-000000000001")
+    monkeypatch.setenv("DAL_OBSCURA_TICKET_SECRET", "ticket-secret")
+    monkeypatch.setenv("DAL_OBSCURA_ALLOW_STALE_POLICY_TICKETS", "true")
+
+    config = load_data_plane_runtime_config()
+
+    assert not hasattr(config, "allow_stale_policy_tickets")
+
+
 def test_runtime_config_reads_module_based_secret_provider(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
     monkeypatch.setenv("DAL_OBSCURA_CELL_ID", "00000000-0000-0000-0000-000000000001")

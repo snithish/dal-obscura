@@ -4,8 +4,7 @@ import hashlib
 import json
 from uuid import UUID
 
-import sqlglot
-
+from dal_obscura.common.access_control.filters import deserialize_row_filter
 from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.domain.models import (
     AssetDraft,
@@ -139,7 +138,7 @@ def _normalize_row_filter(value: str | None) -> str | None:
     if not normalized:
         return None
     try:
-        sqlglot.parse_one(normalized, read="duckdb")
+        deserialize_row_filter(normalized)
     except Exception as exc:
         raise ValidationFailure(f"Invalid row_filter SQL: {normalized}") from exc
     return normalized

@@ -180,7 +180,44 @@ def test_plan_access_resolves_catalog_with_tenant_from_principal_attributes():
     assert ticket_codec.signed_payloads[0].tenant_id == "tenant-a"
 
 
-def test_fetch_stream_uses_ticket_policy_version_without_latest_policy_lookup():
+def test_fetch_stream_accepts_matching_current_policy_version():
+    schema, _, table_format = _build_use_case_dependencies()
+    payload = TicketPayload(
+        ticket_id="00000000-0000-0000-0000-000000000001",
+        catalog="analytics",
+        target="default.users",
+        tenant_id="tenant-a",
+        columns=["id"],
+        scan={
+            "read_payload": encode_scan_task(table_format, schema),
+            "full_row_filter": None,
+            "masks": {},
+        },
+        policy_version=100,
+        principal_id="user1",
+        expires_at=9999999999,
+        nonce="nonce",
+    )
+    authorizer = FakeAuthorizer(decision=None, current_version=100)
+    ticket_store = _ticket_store_with(payload)
+    use_case = FetchStreamUseCase(
+        identity=FakeIdentity(
+            principal=Principal(id="user1", groups=[], attributes={"tenant_id": "tenant-a"})
+        ),
+        authorizer=authorizer,
+        masking=FakeMasking(),
+        row_transform=FakeRowTransform(),
+        ticket_codec=FakeTicketCodec(payload),
+        ticket_store=ticket_store,
+    )
+
+    result = use_case.execute("ticket", AUTHORIZATION_HEADER)
+
+    assert result.target == "default.users"
+    assert authorizer.last_current_version_tenant_id == "tenant-a"
+
+
+def test_fetch_stream_rejects_stale_policy_version_before_decoding(monkeypatch):
     schema, _, table_format = _build_use_case_dependencies()
     payload = TicketPayload(
         ticket_id="00000000-0000-0000-0000-000000000001",
@@ -200,6 +237,7 @@ def test_fetch_stream_uses_ticket_policy_version_without_latest_policy_lookup():
     )
     authorizer = FakeAuthorizer(decision=None, current_version=101)
     ticket_store = _ticket_store_with(payload)
+    monkeypatch.setattr(pickle, "loads", lambda _: pytest.fail("pickle.loads was reached"))
     use_case = FetchStreamUseCase(
         identity=FakeIdentity(
             principal=Principal(id="user1", groups=[], attributes={"tenant_id": "tenant-a"})
@@ -209,12 +247,14 @@ def test_fetch_stream_uses_ticket_policy_version_without_latest_policy_lookup():
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
         ticket_store=ticket_store,
+        now=lambda: 1000,
     )
 
-    result = use_case.execute("ticket", AUTHORIZATION_HEADER)
+    with pytest.raises(PermissionError, match="stale policy version"):
+        use_case.execute("ticket", AUTHORIZATION_HEADER)
 
-    assert result.target == "default.users"
-    assert authorizer.last_current_version_tenant_id is None
+    assert authorizer.last_current_version_tenant_id == "tenant-a"
+    assert ticket_store.reserve_calls == []
 
 
 def test_fetch_stream_rejects_legacy_ticket_without_ticket_id_before_decoding(monkeypatch):
@@ -947,6 +987,48 @@ def test_plan_access_combines_policy_and_requested_row_filters_before_ticketing(
     assert planned_columns == [["id", "active", "region"]]
 
 
+def test_plan_access_reports_non_sensitive_filter_and_projection_metrics():
+    schema = pa.schema(
+        [
+            pa.field("id", pa.int64()),
+            pa.field("region", pa.string()),
+            pa.field("status", pa.string()),
+        ]
+    )
+    table_format = PretendPushdownTableFormat(
+        catalog_name="catalog1",
+        table_name="users",
+        format="pretend_pushdown",
+        schema=schema,
+        batches=(),
+        backend_pushdown_sql="region = 'us'",
+        residual_sql="LOWER(status) = 'active'",
+    )
+    decision = AccessDecision(
+        allowed_columns=["id", "region", "status"],
+        masks={},
+        row_filter="LOWER(status) = 'active'",
+        policy_version=100,
+    )
+    plan_access, _fetch_stream = _build_end_to_end_access_flow(table_format, decision)
+
+    result = plan_access.execute(
+        PlanRequest(
+            catalog="catalog1",
+            target="users",
+            columns=["id"],
+            row_filter=deserialize_row_filter("region = 'us'"),
+        ),
+        AUTHORIZATION_HEADER,
+    )
+
+    assert result.full_row_filter_present is True
+    assert result.backend_pushdown_row_filter_present is True
+    assert result.residual_row_filter_present is True
+    assert result.visible_column_count == 1
+    assert result.execution_column_count == 3
+
+
 def test_fetch_stream_reapplies_fully_pushed_row_filter_after_backend_execution():
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     batches = (
@@ -1155,7 +1237,7 @@ def test_plan_access_excludes_denied_requested_columns_from_execution_plan():
     assert planned_columns == [["id"]]
 
 
-def test_fetch_stream_allows_ticket_policy_version_after_policy_changes():
+def test_fetch_stream_rejects_ticket_policy_version_after_policy_changes():
     schema, decision, table_format = _build_use_case_dependencies()
     payload = TicketPayload(
         ticket_id="00000000-0000-0000-0000-000000000001",
@@ -1182,9 +1264,8 @@ def test_fetch_stream_allows_ticket_policy_version_after_policy_changes():
         ticket_store=ticket_store,
     )
 
-    result = use_case.execute("token", AUTHORIZATION_HEADER)
-
-    assert result.target == "users"
+    with pytest.raises(PermissionError, match="stale policy version"):
+        use_case.execute("token", AUTHORIZATION_HEADER)
 
 
 def test_fetch_stream_principal_mismatch():

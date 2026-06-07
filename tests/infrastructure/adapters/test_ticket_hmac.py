@@ -28,14 +28,51 @@ def test_ticket_sign_and_verify():
     ticket = codec.sign_payload(payload)
     verified = codec.verify(ticket)
     assert verified.ticket_id == payload.ticket_id
-    assert verified.catalog == payload.catalog
-    assert verified.target == payload.target
-    assert verified.columns == payload.columns
+    assert verified.expires_at == payload.expires_at
+    assert verified.nonce == payload.nonce
+    assert verified.target == ""
+    assert verified.columns == []
+
+
+def test_signed_ticket_is_opaque_and_does_not_embed_scan_payload():
+    codec = HmacTicketCodecAdapter("secret")
+    payload = TicketPayload(
+        ticket_id="00000000-0000-0000-0000-000000000001",
+        catalog="analytics",
+        target="default.users",
+        columns=["id", "email"],
+        scan={
+            "read_payload": "sensitive-pickled-scan-task",
+            "full_row_filter": "region = 'us'",
+            "masks": {"email": {"type": "email", "value": None}},
+        },
+        policy_version=100,
+        principal_id="user1",
+        expires_at=2**31,
+        nonce="nonce",
+        tenant_id="tenant-a",
+    )
+
+    ticket = codec.sign_payload(payload)
+    encoded_reference = ticket.split(".", 1)[0]
+    decoded_reference = base64.urlsafe_b64decode(encoded_reference.encode("utf-8"))
+
+    assert b"sensitive-pickled-scan-task" not in decoded_reference
+    assert b"default.users" not in decoded_reference
+    assert b"email" not in decoded_reference
+    assert b"region = 'us'" not in decoded_reference
+
+    verified = codec.verify(ticket)
+    assert verified.ticket_id == payload.ticket_id
+    assert verified.expires_at == payload.expires_at
+    assert verified.nonce == payload.nonce
+    assert verified.scan["read_payload"] == ""
 
 
 def test_ticket_expiry():
     codec = HmacTicketCodecAdapter("secret")
     payload = TicketPayload(
+        ticket_id="00000000-0000-0000-0000-000000000001",
         target="t",
         columns=[],
         scan=_scan_payload(),
@@ -52,6 +89,7 @@ def test_ticket_expiry():
 def test_ticket_rejects_tampered_signature():
     codec = HmacTicketCodecAdapter("secret")
     payload = TicketPayload(
+        ticket_id="00000000-0000-0000-0000-000000000001",
         target="t",
         columns=["id"],
         scan=_scan_payload(),

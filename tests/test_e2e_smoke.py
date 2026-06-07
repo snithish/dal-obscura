@@ -211,6 +211,10 @@ def control_plane_setup(tmp_path: Path, iceberg_setup: tuple[str, Path]) -> dict
             ],
             actor=ControlPlaneActor.for_platform_admin("test:setup"),
         )
+        service.replace_asset_owners(
+            asset_id=UUID(asset["id"]),
+            owners=["user:e2e-owner@example.com"],
+        )
         service.replace_auth_providers(
             cell_id=cell_id,
             providers=[

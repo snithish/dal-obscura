@@ -77,16 +77,27 @@ class FetchStreamUseCase:
         except (LookupError, PermissionError) as exc:
             raise PermissionError("Unauthorized") from exc
 
-        if not hmac.compare_digest(ticket_payload_hash(client_payload), stored.payload_hash):
-            raise PermissionError("Unauthorized")
-
         payload = stored.payload
+        if not hmac.compare_digest(ticket_payload_hash(payload), stored.payload_hash):
+            raise PermissionError("Unauthorized")
+        if client_payload.expires_at != payload.expires_at:
+            raise PermissionError("Unauthorized")
+        if not hmac.compare_digest(client_payload.nonce, payload.nonce):
+            raise PermissionError("Unauthorized")
         if principal.id != payload.principal_id:
             raise PermissionError("Unauthorized")
 
         tenant_id = _tenant_id(principal)
         if tenant_id != payload.tenant_id:
             raise PermissionError("Unauthorized")
+
+        current_policy_version = self._authorizer.current_policy_version(
+            payload.target,
+            payload.catalog,
+            tenant_id=tenant_id,
+        )
+        if current_policy_version != payload.policy_version:
+            raise PermissionError("stale policy version")
 
         now = self._now()
         try:

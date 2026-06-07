@@ -232,6 +232,16 @@ Runtime ticket settings include `ticket_ttl_seconds`, `max_tickets`, and
 `max_ticket_exchanges`. `max_ticket_exchanges` limits how many successful
 `do_get` exchanges a planned ticket can reserve before it is rejected.
 
+Flight tickets are opaque HMAC-signed references. The executable scan payload,
+including the pickled internal `ScanTask`, is stored server-side in the
+cell-scoped ticket table and hash-checked before use. Pickle is only trusted for
+that DB-stored internal payload; clients never receive the pickled scan task in
+the Flight ticket.
+
+`do_get` rejects tickets whose stored policy version no longer matches the
+active asset policy version. Stale tickets are invalid even if they have not
+expired and still have remaining exchanges.
+
 ### Authentication Providers
 
 Each published auth-provider `module` names a Python class that implements
@@ -361,15 +371,17 @@ After `uv sync --dev`, install the hooks with `uv run pre-commit install`. The c
 - Row filters are parsed with SQLGlot using the DuckDB dialect, must contain exactly one expression, and are validated against a small allowlist before execution.
 - Supported row-filter shapes are boolean columns, comparisons, `AND`/`OR`/`NOT`, scalar arithmetic inside comparisons, `IN` with scalar literal lists, `IS NULL`/`IS NOT NULL`, `LOWER(...)`, `COALESCE(...)`, and `CAST(...)`.
 - Row filters reject SQL statements, multi-statement input, subqueries, table functions such as `read_csv(...)`, extension commands, `COPY`, `ATTACH`, DDL, and DML.
+- Published policy row filters are validated against the same allowlisted query shape before activation.
 - DuckDB row-transform execution runs over Arrow batches with external access and extension auto-loading disabled.
 - Iceberg planning pushes down a safe subset of validated row filters for top-level fields, but DuckDB re-applies the full effective filter during fetch so backend pushdown remains an optimization rather than the final enforcement point.
+- Published runtime `path_rules` are enforced for Iceberg metadata and planned file paths when rules are configured. Empty path rules preserve local development behavior.
 - Nested field masks use DuckDB `struct_update`, and list-of-struct masks use `list_transform` plus `struct_update`.
 
 ## Current Limitations
 - Iceberg pushdown is currently conservative: mixed `AND` predicates split, but nested-field predicates and unsupported shapes remain residual-only.
 - ABAC conditions currently support exact principal-attribute matches and membership in an explicit allowed-value list.
 - Collection masking currently targets list-of-struct paths and does not yet support arbitrary scalar lists or deeper heterogeneous container rewrites.
-- Tickets still persist Python scan tasks for execution, which keeps the payload format tied to Python internals.
+- Tickets still persist Python scan tasks server-side for execution, which keeps the DB payload format tied to Python internals.
 
 ## Logging
 - JSON logs by default.

@@ -31,6 +31,7 @@ from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     DynamicCatalogRegistry,
     ServiceConfig,
 )
+from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
     SecretProvider,
     resolve_secret_refs,
@@ -237,7 +238,12 @@ class PublishedConfigCatalogRegistry:
                 dict[str, Any],
                 resolve_secret_refs(config, provider=self._secret_provider),
             )
-        catalog_config = _catalog_config_from_asset(asset, config)
+        runtime = self._store.get_runtime()
+        catalog_config = _catalog_config_from_asset(
+            asset,
+            config,
+            path_enforcer=PathRuleEnforcer(runtime.path_rules),
+        )
         registry = DynamicCatalogRegistry(
             ServiceConfig(catalogs={catalog: catalog_config}, paths=())
         )
@@ -278,6 +284,8 @@ def _access_rule_from_json(raw: dict[str, object]) -> AccessRule:
 def _catalog_config_from_asset(
     asset: PublishedAsset,
     compiled_config: dict[str, Any],
+    *,
+    path_enforcer: PathRuleEnforcer | None = None,
 ) -> CatalogConfig:
     catalog_raw = _mapping(compiled_config.get("catalog"))
     target_raw = _mapping(compiled_config.get("target"))
@@ -287,6 +295,7 @@ def _catalog_config_from_asset(
         name=asset.catalog,
         module=str(catalog_raw["module"]),
         options=dict(_mapping(catalog_raw.get("options"))),
+        path_enforcer=path_enforcer,
         targets={
             asset.target: CatalogTargetConfig(
                 backend=backend,

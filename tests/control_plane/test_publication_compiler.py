@@ -14,6 +14,11 @@ from dal_obscura.control_plane.domain.models import (
     PolicyRuleDraft,
     PublishDraft,
 )
+from tests.support.row_filters import (
+    PARSER_MULTIPLE_STATEMENT_ROW_FILTERS,
+    PARSER_NON_FILTER_STATEMENT_ROW_FILTERS,
+    PARSER_UNSAFE_EXPRESSION_ROW_FILTERS,
+)
 
 
 def _draft(row_filter: str = "region = 'us'") -> PublishDraft:
@@ -100,6 +105,20 @@ def test_compiler_changes_policy_version_when_row_filter_changes():
 def test_compiler_rejects_invalid_row_filter_sql():
     with pytest.raises(ValidationFailure, match="Invalid row_filter"):
         PublicationCompiler().compile(_draft(row_filter="region ="))
+
+
+@pytest.mark.parametrize(
+    "row_filter",
+    [
+        *PARSER_MULTIPLE_STATEMENT_ROW_FILTERS,
+        *PARSER_NON_FILTER_STATEMENT_ROW_FILTERS,
+        *PARSER_UNSAFE_EXPRESSION_ROW_FILTERS,
+        "regexp_matches(region, 'us')",
+    ],
+)
+def test_compiler_rejects_unsafe_row_filter_shapes(row_filter):
+    with pytest.raises(ValidationFailure, match="Invalid row_filter"):
+        PublicationCompiler().compile(_draft(row_filter=row_filter))
 
 
 def test_compiler_rejects_masks_on_deny_rules():

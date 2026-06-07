@@ -33,6 +33,7 @@ from dal_obscura.common.access_control.filters import (
 from dal_obscura.common.catalog.ports import TableFormat
 from dal_obscura.common.query_planning.models import PlanRequest
 from dal_obscura.common.table_format.ports import InputPartition, Plan, ScanTask
+from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 
 LOGGER = logging.getLogger(__name__)
 
@@ -53,6 +54,7 @@ class IcebergTableFormat(TableFormat):
     format: str = "iceberg"
     metadata_location: str
     io_options: dict[str, object]
+    path_enforcer: PathRuleEnforcer | None = None
 
     def get_schema(self) -> pa.Schema:
         """Loads the Iceberg table schema used by planning and validation."""
@@ -84,6 +86,7 @@ class IcebergTableFormat(TableFormat):
             scan = pyiceberg_table.scan(row_filter=iceberg_row_filter).select(*column_tuple)
 
         file_tasks = list(scan.plan_files())
+        _check_file_tasks(file_tasks, self.path_enforcer)
         groups = _chunk_by_max_tickets(file_tasks, max_tickets)
         if not groups:
             groups = [[]]
@@ -118,6 +121,7 @@ class IcebergTableFormat(TableFormat):
         table = self._load_table()
         column_tuple = tuple(partition.columns)
         file_tasks = [pickle.loads(task) for task in partition.tasks]
+        _check_file_tasks(file_tasks, self.path_enforcer)
         pushdown_row_filter = (
             None
             if partition.backend_pushdown_row_filter is None
@@ -148,6 +152,7 @@ class IcebergTableFormat(TableFormat):
         Iceberg format versions."""
         from pyiceberg.table import StaticTable
 
+        _check_path(self.metadata_location, self.path_enforcer)
         table = StaticTable.from_metadata(self.metadata_location, properties=self.io_options)
         format_version = int(getattr(table.metadata, "format_version", 1))
         if format_version not in {2, 3}:
@@ -165,6 +170,39 @@ def _chunk_by_max_tickets(tasks: list, max_tickets: int) -> list[list]:
     for index, task in enumerate(tasks):
         groups[index % group_count].append(task)
     return groups
+
+
+def _check_file_tasks(tasks: Iterable[object], enforcer: PathRuleEnforcer | None) -> None:
+    if enforcer is None or not enforcer.enabled:
+        return
+    for task in tasks:
+        path = _file_task_path(task)
+        if path is None:
+            raise PermissionError("Path is not allowed")
+        enforcer.check(path)
+
+
+def _check_path(path: str, enforcer: PathRuleEnforcer | None) -> None:
+    if enforcer is None:
+        return
+    enforcer.check(path)
+
+
+def _file_task_path(task: object) -> str | None:
+    for attribute_path in (
+        ("file", "file_path"),
+        ("data_file", "file_path"),
+        ("file_path",),
+        ("path",),
+    ):
+        value = task
+        for attribute in attribute_path:
+            value = getattr(value, attribute, None)
+            if value is None:
+                break
+        if value is not None:
+            return str(value)
+    return None
 
 
 def _split_row_filter(row_filter: RowFilter | None) -> tuple[RowFilter | None, RowFilter | None]:

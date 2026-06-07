@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 import pyarrow as pa
+import pytest
 
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
 from dal_obscura.data_plane.application.use_cases.get_schema import GetSchemaResult
@@ -67,6 +68,18 @@ def test_authentication_request_from_context_decodes_byte_peer_metadata():
 
     assert request.peer_identity == "spiffe://cluster/ns/default/sa/spark"
     assert request.peer == "ipv4:127.0.0.1:50000"
+
+
+def test_authentication_request_rejects_duplicate_auth_headers():
+    context = DummyContext(
+        headers=[
+            (b"authorization", b"Bearer token-1"),
+            (b"authorization", b"Bearer token-2"),
+        ]
+    )
+
+    with pytest.raises(ValueError, match="Duplicate security-sensitive header: authorization"):
+        authentication_request_from_context(context, method="get_flight_info")
 
 
 def test_flight_service_passes_authentication_request_to_use_case():
