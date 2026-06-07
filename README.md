@@ -6,11 +6,14 @@
 [![GitHub Stars](https://img.shields.io/github/stars/snithish/dal-obscura?style=social)](https://github.com/snithish/dal-obscura/stargazers)
 [![License](https://img.shields.io/github/license/snithish/dal-obscura)](https://github.com/snithish/dal-obscura/blob/main/LICENSE)
 
-Data access layer with Arrow Flight, Iceberg, masking, and row filters.
+Data access layer with Arrow Flight, Iceberg, Delta Lake, Unity Catalog,
+masking, and row filters.
 
 ## Highlights
 - Arrow Flight plan/ticket flow with HMAC-signed, DB-backed tickets
 - Iceberg v2/v3 backend (pyiceberg)
+- Delta Lake backend (delta-rs) and file-backed Parquet/CSV/JSON/ORC/Avro/Text assets
+- Unity Catalog metadata resolution for Delta and file-backed tables
 - API-first FastAPI control plane for configuration provisioning
 - RDBMS-backed published configuration consumed by cell-scoped data planes
 - DuckDB-powered row filters and column masks
@@ -24,7 +27,7 @@ Data access layer with Arrow Flight, Iceberg, masking, and row filters.
   - `ports`: hexagonal contracts (`IdentityPort`, `AuthorizationPort`, backend, masking, ticket, row transform).
   - `use_cases`: `PlanAccessUseCase` and `FetchStreamUseCase`.
 - `infrastructure/adapters/`
-  - JWT/OIDC/API-key/mTLS/trusted-header identity providers, published-config authorizer, Iceberg backend, DuckDB masking/row transform, HMAC ticket codec.
+  - JWT/OIDC/API-key/mTLS/trusted-header identity providers, published-config authorizer, Iceberg/Delta/file backends, Unity Catalog resolver, DuckDB masking/row transform, HMAC ticket codec.
 - `interfaces/`
   - `flight`: Arrow Flight transport adapter.
   - `cli`: composition root and runtime wiring.
@@ -203,6 +206,42 @@ provider resolves references such as `{"secret": "DAL_OBSCURA_JWT_SECRET"}`
 from environment variables; the control plane stores references, not secret
 values.
 
+### Table Backends
+
+Assets can use these read-only backends:
+
+- `iceberg`: Iceberg v2/v3 tables resolved through PyIceberg catalogs.
+- `delta`: Delta Lake tables resolved from a table root path with delta-rs.
+- `parquet`, `csv`, `json`, `orc`: file-backed tables read through PyArrow Dataset.
+- `avro`: Avro object-container files read through fastavro.
+- `text`: line-oriented text files exposed as one string column, default `value`.
+
+Static file and Delta targets can be configured with `table_identifier` pointing
+at the table root or file path and `options.storage_options` carrying object
+store options. Those options can use the same secret-reference pattern as other
+published runtime configuration.
+
+Unity Catalog is configured as a catalog module:
+
+```json
+{
+  "module": "dal_obscura.data_plane.infrastructure.adapters.unity_catalog.UnityCatalog",
+  "options": {
+    "base_url": "https://workspace.example.com",
+    "token": {"secret": "UNITY_CATALOG_TOKEN"},
+    "uc_catalog": "main",
+    "credential_mode": "both",
+    "storage_options": {"AWS_REGION": "us-east-1"}
+  }
+}
+```
+
+`credential_mode` accepts `configured`, `uc_temp`, or `both`. In `both` mode,
+the resolver tries Unity Catalog temporary read credentials first and falls back
+to configured storage options only when credential vending is unavailable. Views,
+materialized views, streaming tables, missing storage locations, and unsupported
+table formats are rejected before tickets are minted.
+
 ### Provisioning Flow
 
 ```bash
@@ -373,7 +412,7 @@ After `uv sync --dev`, install the hooks with `uv run pre-commit install`. The c
 - Row filters reject SQL statements, multi-statement input, subqueries, table functions such as `read_csv(...)`, extension commands, `COPY`, `ATTACH`, DDL, and DML.
 - Published policy row filters are validated against the same allowlisted query shape before activation.
 - DuckDB row-transform execution runs over Arrow batches with external access and extension auto-loading disabled.
-- Iceberg planning pushes down a safe subset of validated row filters for top-level fields, but DuckDB re-applies the full effective filter during fetch so backend pushdown remains an optimization rather than the final enforcement point.
+- Iceberg planning pushes down a safe subset of validated row filters for top-level fields, but DuckDB re-applies the full effective filter during fetch so backend pushdown remains an optimization rather than the final enforcement point. Delta, Unity Catalog, and file-backed reads follow the same rule: backend pushdown is optional and DuckDB remains the final policy enforcement point.
 - Published runtime `path_rules` are enforced for Iceberg metadata and planned file paths when rules are configured. Empty path rules preserve local development behavior.
 - Nested field masks use DuckDB `struct_update`, and list-of-struct masks use `list_transform` plus `struct_update`.
 

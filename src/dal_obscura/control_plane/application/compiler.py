@@ -17,6 +17,10 @@ from dal_obscura.control_plane.domain.models import (
     PublishDraft,
 )
 
+SUPPORTED_BACKENDS = frozenset(
+    {"iceberg", "delta", "parquet", "csv", "json", "orc", "avro", "text"}
+)
+
 
 class PublicationCompiler:
     """Compiles mutable authoring resources into immutable published config rows."""
@@ -92,7 +96,7 @@ class PublicationCompiler:
         )
 
     def _compile_asset(self, asset: AssetDraft, catalog: CatalogDraft) -> CompiledAsset:
-        if asset.backend != "iceberg":
+        if asset.backend not in SUPPORTED_BACKENDS:
             raise ValidationFailure(f"Unsupported backend {asset.backend!r}")
         rules = [
             self._compile_rule(rule) for rule in sorted(asset.rules, key=lambda item: item.ordinal)

@@ -3,10 +3,16 @@ from __future__ import annotations
 import importlib
 import threading
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from dal_obscura.common.catalog.ports import CatalogPlugin, TableFormat
 from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
+from dal_obscura.data_plane.infrastructure.table_formats.delta import DeltaTableFormat
+from dal_obscura.data_plane.infrastructure.table_formats.files import (
+    ArrowDatasetTableFormat,
+    AvroTableFormat,
+    TextTableFormat,
+)
 from dal_obscura.data_plane.infrastructure.table_formats.iceberg import IcebergTableFormat
 
 
@@ -114,7 +120,14 @@ class IcebergCatalog:
         """Resolves an Iceberg target, optionally applying exact target overrides."""
         target_config = self.targets.get(target)
         if target_config is not None:
-            _ensure_iceberg_backend(self.name, target, target_config)
+            backend = _backend_id(target_config)
+            if backend != "iceberg":
+                return _resolve_static_table_format(
+                    self.name,
+                    target,
+                    target_config,
+                    path_enforcer=self._path_enforcer,
+                )
         table_identifier = (target_config.table if target_config else None) or target
         return _resolve_iceberg_metadata(
             self._catalog,
@@ -153,7 +166,14 @@ class StaticCatalog:
         target_config = self.targets.get(target)
         if target_config is None:
             raise ValueError(f"Unknown target {target!r} for catalog {self.name!r}")
-        _ensure_iceberg_backend(self.name, target, target_config)
+        backend = _backend_id(target_config)
+        if backend != "iceberg":
+            return _resolve_static_table_format(
+                self.name,
+                target,
+                target_config,
+                path_enforcer=self._path_enforcer,
+            )
         if self._catalog is None:
             self._catalog = _load_iceberg_catalog(self.name, self.options)
         table_identifier = target_config.table or target
@@ -201,18 +221,66 @@ def _load_iceberg_catalog(catalog_name: str, catalog_options: dict[str, Any]) ->
         raise ValueError(f"Failed to load catalog {catalog_name!r}: {exc}") from exc
 
 
-def _ensure_iceberg_backend(
+def _backend_id(target_config: CatalogTargetConfig) -> str:
+    return (target_config.backend or target_config.format or "iceberg").strip().lower()
+
+
+def _resolve_static_table_format(
     catalog_name: str,
     requested_target: str,
     target_config: CatalogTargetConfig,
-) -> None:
-    """Rejects non-Iceberg target overrides until other backends are implemented."""
-    backend_id = target_config.backend or "iceberg"
-    if backend_id != "iceberg":
-        raise ValueError(
-            f"Unsupported backend {backend_id!r} for target {requested_target!r} in "
-            f"catalog {catalog_name!r}; only 'iceberg' is currently supported"
+    *,
+    path_enforcer: PathRuleEnforcer | None = None,
+) -> TableFormat:
+    backend_id = _backend_id(target_config)
+    table_uri = target_config.table or requested_target
+    options = dict(target_config.options)
+    storage_options = {
+        str(key): str(value)
+        for key, value in _mapping(options.get("storage_options")).items()
+        if value is not None
+    }
+
+    if backend_id == "delta":
+        return DeltaTableFormat(
+            catalog_name=catalog_name,
+            table_name=requested_target,
+            table_uri=table_uri,
+            storage_options=storage_options,
+            path_enforcer=path_enforcer,
         )
+    if backend_id in {"parquet", "csv", "json", "orc"}:
+        dataset_options = dict(options)
+        dataset_options.pop("storage_options", None)
+        return ArrowDatasetTableFormat(
+            catalog_name=catalog_name,
+            table_name=requested_target,
+            uri=table_uri,
+            format=backend_id,
+            options=dataset_options,
+            path_enforcer=path_enforcer,
+        )
+    if backend_id == "avro":
+        return AvroTableFormat(
+            catalog_name=catalog_name,
+            table_name=requested_target,
+            uri=table_uri,
+            options=options,
+            path_enforcer=path_enforcer,
+        )
+    if backend_id == "text":
+        return TextTableFormat(
+            catalog_name=catalog_name,
+            table_name=requested_target,
+            uri=table_uri,
+            column_name=str(options.get("column_name") or "value"),
+            path_enforcer=path_enforcer,
+        )
+
+    raise ValueError(
+        f"Unsupported backend {backend_id!r} for target {requested_target!r} in "
+        f"catalog {catalog_name!r}"
+    )
 
 
 def _load_and_instantiate_catalog(catalog_config: CatalogConfig) -> CatalogPlugin:
@@ -239,3 +307,9 @@ def _load_and_instantiate_catalog(catalog_config: CatalogConfig) -> CatalogPlugi
         )
     except Exception as exc:
         raise ValueError(f"Failed to instantiate catalog {catalog_config.name!r}: {exc}") from exc
+
+
+def _mapping(value: object) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return cast(dict[str, Any], value).copy()
+    return {}

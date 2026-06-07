@@ -3,6 +3,7 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.flight as flight
 import pytest
+from deltalake import write_deltalake
 
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     CatalogConfig,
@@ -133,6 +134,78 @@ def test_flight_plan_and_get_with_iceberg_multi_catalog(tmp_path):
         assert set(table_one.column("region").to_pylist()) == {"us"}
         assert set(table_two.column("region").to_pylist()) == {"eu", "us"}
         assert table_two.num_rows == 4
+
+
+def test_flight_plan_and_get_with_static_delta_target(tmp_path):
+    table_uri = tmp_path / "delta-users"
+    write_deltalake(
+        table_uri,
+        pa.table(
+            {
+                "id": [1, 2, 3, 4],
+                "email": [
+                    "one@example.com",
+                    "two@example.com",
+                    "three@example.com",
+                    "four@example.com",
+                ],
+                "region": ["us", "eu", "us", "eu"],
+            }
+        ),
+    )
+    service_config, _policy_path = build_service_config(
+        tmp_path,
+        service_config={
+            "catalogs": {
+                "delta": {
+                    "module": (
+                        "dal_obscura.data_plane.infrastructure.adapters."
+                        "catalog_registry.StaticCatalog"
+                    ),
+                    "options": {},
+                    "targets": {
+                        "users": {
+                            "backend": "delta",
+                            "table": str(table_uri),
+                        }
+                    },
+                },
+            }
+        },
+        policy={
+            "version": 1,
+            "catalogs": {
+                "delta": {
+                    "targets": {
+                        "users": {
+                            "rules": [
+                                {
+                                    "principals": ["user1"],
+                                    "columns": ["id", "email", "region"],
+                                    "row_filter": "region = 'us'",
+                                }
+                            ]
+                        }
+                    }
+                },
+            },
+        },
+    )
+    server = build_flight_service(
+        catalog_registry=_build_registry_from_config(service_config),
+        policy_rules_by_dataset={
+            ("delta", "users"): [allow_rule(["id", "email", "region"], row_filter="region = 'us'")]
+        },
+    )
+
+    with running_flight_client(server) as client:
+        _info, table = flight_request(
+            client,
+            {"catalog": "delta", "target": "users", "columns": ["id", "email", "region"]},
+        )
+
+    assert table.num_rows == 2
+    assert table.column("id").to_pylist() == [1, 3]
 
 
 def test_flight_plan_and_get_with_static_catalog_alias(tmp_path):

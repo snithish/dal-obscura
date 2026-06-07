@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from dal_obscura.control_plane.infrastructure.catalog_discovery import discover_iceberg_tables
+import httpx
+
+from dal_obscura.control_plane.infrastructure.catalog_discovery import (
+    UNITY_CATALOG_MODULE,
+    discover_catalog_tables,
+    discover_iceberg_tables,
+)
 
 
 class FakeIcebergCatalog:
@@ -27,4 +33,47 @@ def test_iceberg_discovery_lists_tables_across_namespaces():
     assert tables == [
         {"backend": "iceberg", "name": "default.users", "table_identifier": "default.users"},
         {"backend": "iceberg", "name": "prod.orders", "table_identifier": "prod.orders"},
+    ]
+
+
+def test_catalog_discovery_lists_unity_catalog_tables(monkeypatch):
+    real_client = httpx.Client
+
+    def client_factory(**kwargs):
+        del kwargs
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            assert request.url.path == "/api/2.1/unity-catalog/tables"
+            return httpx.Response(
+                200,
+                json={
+                    "tables": [
+                        {
+                            "full_name": "main.default.users",
+                            "data_source_format": "DELTA",
+                        },
+                        {
+                            "full_name": "main.default.events",
+                            "data_source_format": "JSON",
+                        },
+                    ]
+                },
+            )
+
+        return real_client(transport=httpx.MockTransport(handler))
+
+    monkeypatch.setattr(
+        "dal_obscura.control_plane.infrastructure.catalog_discovery.httpx.Client",
+        client_factory,
+    )
+
+    tables = discover_catalog_tables(
+        "uc",
+        UNITY_CATALOG_MODULE,
+        {"base_url": "https://uc.example", "uc_catalog": "main"},
+    )
+
+    assert tables == [
+        {"backend": "json", "name": "default.events", "table_identifier": "default.events"},
+        {"backend": "delta", "name": "default.users", "table_identifier": "default.users"},
     ]

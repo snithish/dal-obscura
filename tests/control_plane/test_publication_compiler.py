@@ -102,6 +102,26 @@ def test_compiler_changes_policy_version_when_row_filter_changes():
     assert first.policy_version != second.policy_version
 
 
+def test_compiler_accepts_delta_backend():
+    draft = _draft()
+    draft.assets[0].backend = "delta"
+    draft.assets[0].table_identifier = "/warehouse/users"
+
+    asset = PublicationCompiler().compile(draft).assets[0]
+
+    assert asset.backend == "delta"
+    assert asset.compiled_config["target"]["backend"] == "delta"
+    assert asset.compiled_config["target"]["table"] == "/warehouse/users"
+
+
+def test_compiler_rejects_unknown_backend():
+    draft = _draft()
+    draft.assets[0].backend = "unknown"
+
+    with pytest.raises(ValidationFailure, match="Unsupported backend 'unknown'"):
+        PublicationCompiler().compile(draft)
+
+
 def test_compiler_rejects_invalid_row_filter_sql():
     with pytest.raises(ValidationFailure, match="Invalid row_filter"):
         PublicationCompiler().compile(_draft(row_filter="region ="))
