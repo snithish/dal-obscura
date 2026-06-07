@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -7,6 +9,7 @@ from dal_obscura.common.config_store.db import create_engine_from_url, session_f
 from dal_obscura.common.config_store.orm import (
     ActivePublicationRecord,
     Base,
+    ConfigPublicationRecord,
     PublishedAssetRecord,
 )
 from dal_obscura.control_plane.interfaces.api import create_app
@@ -582,6 +585,36 @@ def test_workspace_publish_routes_use_default_runtime_context():
     assert summary["enabled_auth_provider_count"] == 1
 
 
+def test_workspace_activate_rejects_publication_from_another_cell():
+    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    factory = session_factory(engine)
+    client = TestClient(create_app(factory, admin_token="test-admin"))
+    default_cell, _ = _provision_named_draft(client, slug="a", cell_name="a", target="a.users")
+    other_cell, other_publication = _provision_named_draft(
+        client,
+        slug="b",
+        cell_name="b",
+        target="b.users",
+    )
+
+    response = client.post(
+        f"/v1/publications/{other_publication['publication_id']}/activate",
+        headers=ADMIN_HEADERS,
+    )
+
+    assert response.status_code == 404
+    with factory() as session:
+        default_active = session.get(ActivePublicationRecord, UUID(default_cell["id"]))
+        other_publication_record = session.get(
+            ConfigPublicationRecord,
+            UUID(str(other_publication["publication_id"])),
+        )
+    assert default_active is None
+    assert other_publication_record is not None
+    assert str(other_publication_record.cell_id) == other_cell["id"]
+
+
 def test_policy_publish_versions_one_asset_without_publishing_other_drafts():
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
     Base.metadata.create_all(engine)
@@ -766,6 +799,92 @@ def _provision_draft(client: TestClient) -> dict[str, str]:
         headers=ADMIN_HEADERS,
     )
     return asset
+
+
+def _provision_named_draft(
+    client: TestClient,
+    *,
+    slug: str,
+    cell_name: str,
+    target: str,
+) -> tuple[dict[str, str], dict[str, object]]:
+    tenant = client.post(
+        "/v1/tenants",
+        json={"slug": slug, "display_name": slug},
+        headers=ADMIN_HEADERS,
+    ).json()
+    cell = client.post(
+        "/v1/cells",
+        json={"name": cell_name, "region": "local"},
+        headers=ADMIN_HEADERS,
+    ).json()
+    client.put(
+        f"/v1/cells/{cell['id']}/tenants/{tenant['id']}",
+        json={"shard_key": "default"},
+        headers=ADMIN_HEADERS,
+    )
+    client.put(
+        f"/v1/tenants/{tenant['id']}/cells/{cell['id']}/runtime-settings",
+        json={
+            "ticket_ttl_seconds": 900,
+            "max_tickets": 64,
+            "max_ticket_exchanges": 2,
+            "path_rules": [{"glob": "s3://warehouse/*", "allow": True}],
+        },
+        headers=ADMIN_HEADERS,
+    )
+    client.put(
+        f"/v1/tenants/{tenant['id']}/cells/{cell['id']}/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+    asset = client.put(
+        f"/v1/tenants/{tenant['id']}/cells/{cell['id']}/assets/analytics/{target}",
+        json={"backend": "iceberg", "table_identifier": target, "options": {"snapshot": 1}},
+        headers=ADMIN_HEADERS,
+    ).json()
+    client.put(
+        f"/v1/assets/{asset['id']}/policy-rules",
+        json={
+            "rules": [
+                {
+                    "ordinal": 1,
+                    "effect": "allow",
+                    "principals": ["user1"],
+                    "when": {"tenant": slug},
+                    "columns": ["id", "email"],
+                    "masks": {"email": {"type": "email"}},
+                    "row_filter": None,
+                }
+            ]
+        },
+        headers=ADMIN_HEADERS,
+    )
+    client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["user:owner@example.com"]},
+        headers=ADMIN_HEADERS,
+    )
+    client.put(
+        f"/v1/cells/{cell['id']}/auth-providers",
+        json={
+            "providers": [
+                {
+                    "ordinal": 1,
+                    "module": DEFAULT_AUTH_MODULE,
+                    "args": {"jwt_secret": {"secret": "DAL_OBSCURA_JWT_SECRET"}},
+                    "enabled": True,
+                }
+            ]
+        },
+        headers=ADMIN_HEADERS,
+    )
+    publication = client.post(f"/v1/cells/{cell['id']}/publications", headers=ADMIN_HEADERS)
+    assert publication.status_code == 200
+    return cell, publication.json()
 
 
 def _keys_recursive(value: object) -> set[str]:

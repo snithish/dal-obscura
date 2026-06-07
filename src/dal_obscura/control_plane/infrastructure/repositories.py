@@ -385,6 +385,9 @@ class PublicationStore:
         self._session.flush()
 
     def activate_publication(self, *, cell_id: UUID, publication_id: UUID) -> None:
+        publication = self._session.get(ConfigPublicationRecord, publication_id)
+        if publication is None or publication.cell_id != cell_id:
+            raise LookupError(f"No publication {publication_id} for cell {cell_id}")
         existing = self._session.get(ActivePublicationRecord, cell_id)
         if existing is None:
             self._session.add(
