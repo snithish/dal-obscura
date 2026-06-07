@@ -122,6 +122,32 @@ def test_compiler_rejects_unknown_backend():
         PublicationCompiler().compile(draft)
 
 
+def test_compiler_accepts_custom_backend_with_provider_module():
+    draft = _draft()
+    draft.assets[0].backend = "postgres"
+    draft.assets[0].table_identifier = "public.users"
+    draft.assets[0].options = {
+        "provider_modules": ["example.PostgresProviderFactory"],
+        "dsn": {"secret": "POSTGRES_DSN"},
+    }
+
+    asset = PublicationCompiler().compile(draft).assets[0]
+
+    assert asset.backend == "postgres"
+    assert asset.compiled_config["target"]["backend"] == "postgres"
+    assert asset.compiled_config["target"]["provider_modules"] == [
+        "example.PostgresProviderFactory"
+    ]
+
+
+def test_compiler_rejects_custom_backend_without_provider_module():
+    draft = _draft()
+    draft.assets[0].backend = "postgres"
+
+    with pytest.raises(ValidationFailure, match="Unsupported backend 'postgres'"):
+        PublicationCompiler().compile(draft)
+
+
 def test_compiler_rejects_invalid_row_filter_sql():
     with pytest.raises(ValidationFailure, match="Invalid row_filter"):
         PublicationCompiler().compile(_draft(row_filter="region ="))

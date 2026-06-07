@@ -8,6 +8,7 @@ This repo implements a data access layer for Iceberg tables and file-backed data
 - Masks and row filters must be expressed as DuckDB SQL expressions.
 - Avoid unnecessary data copies; prefer Arrow + DuckDB zero-copy paths where possible.
 - Follow TDD: add tests and expectations first, get review from user only then start code implementation.
+- TableFormat task planning must create parallelizable scan tasks whenever the backend exposes splittable work, such as files, fragments, partitions, or row groups. If a backend cannot be parallelized, document the reason and performance drawback in the format implementation and user-facing docs.
 
 ## How to Run
 ```bash
@@ -63,24 +64,24 @@ mvn -f connectors/jvm/pom.xml verify
   - `domain/access_control/`: policy models + resolution rules.
   - `domain/query_planning/`: plan request/read spec.
   - `domain/ticket_delivery/`: ticket payload value object.
-  - `domain/catalog/`, `domain/format_handler/`: catalog/format ports.
+  - `domain/catalog/`, `common/table_format/`: catalog descriptor and executable table format ports.
 - **Infrastructure (adapters)**
-  - Catalog + format registries, policy file authorizer, JWT identity, HMAC ticket codec.
-  - Iceberg handler (pyiceberg) and DuckDB file handler.
+  - Catalog + table provider registries, policy file authorizer, JWT identity, HMAC ticket codec.
+  - Iceberg, Delta, and file-backed table formats.
   - DuckDB masking + row-transform implementation.
 
 ### Request Flow
 1. `get_flight_info` -> `PlanAccessUseCase`
    - Authenticate via JWT headers.
-   - Resolve catalog/target -> `ResolvedTable`.
-   - Resolve format handler -> schema + plan tasks.
+   - Resolve catalog/target -> `CatalogTableDescriptor`.
+   - Resolve table provider -> executable `TableFormat` -> schema + parallel scan tasks where possible.
    - Authorize columns/filters/masks via policy.
    - Mint HMAC-signed tickets with policy version and scan payload.
    - Return masked output schema + ticket endpoints.
 2. `do_get` -> `FetchStreamUseCase`
    - Verify ticket signature + expiry.
    - Re-authenticate and confirm principal and policy version.
-   - Execute format handler tasks to stream Arrow batches.
+   - Execute table format scan tasks to stream Arrow batches.
    - Apply row filters + masking via DuckDB and stream results.
 
 ## Repo Map (Key Files)
@@ -94,8 +95,8 @@ mvn -f connectors/jvm/pom.xml verify
 - `tests/`: unit tests
 
 ## Common Tasks
-- Add a new catalog: implement `CatalogPlugin` (see `domain/catalog/ports.py`) and configure it in the service config.
-- Add a new format handler: implement `FormatHandler` and register it in `DynamicFormatRegistry` (entry points or built-in).
+- Add a new catalog: implement `CatalogPlugin.describe_table()` (see `common/catalog/ports.py`) and configure it in the service config.
+- Add a new table provider/format: implement a `TableProviderFactory` plus executable `TableFormat`, then register the factory in `TableProviderRegistry`.
 - Extend policy: update policy parsing/resolution and add tests.
 - Add a new mask type: update `_mask_expression` and any schema adjustments, plus tests.
 - Change ticket payloads: update `TicketPayload`, `HmacTicketCodecAdapter`, both use cases, and tests.
@@ -108,6 +109,7 @@ mvn -f connectors/jvm/pom.xml verify
 - Ticket content is the single source of truth for `do_get`; never trust client replays of `PlanRequest`.
 - Masking changes must update both the DuckDB projection logic and the masked schema logic.
 - Catalog resolution must stay deterministic; never mutate shared config or registry state during requests.
+- Catalog implementations return provider-neutral descriptors; they must not construct executable table formats directly.
 - Avoid pickling arbitrary user input; only serialize trusted, internal task payloads.
 
 ## Style

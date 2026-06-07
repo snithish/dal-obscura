@@ -5,11 +5,7 @@ from typing import Any, cast
 
 import httpx
 
-from dal_obscura.common.catalog.ports import CatalogPlugin, TableFormat
-from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
-    CatalogTargetConfig,
-    _resolve_static_table_format,
-)
+from dal_obscura.common.catalog.ports import CatalogPlugin, CatalogTableDescriptor
 from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 
 
@@ -63,7 +59,7 @@ class UnityCatalog(CatalogPlugin):
         self,
         name: str,
         options: dict[str, Any],
-        targets: dict[str, CatalogTargetConfig],
+        targets: dict[str, object],
         path_enforcer: PathRuleEnforcer | None = None,
         http_client: httpx.Client | None = None,
     ) -> None:
@@ -82,15 +78,11 @@ class UnityCatalog(CatalogPlugin):
     def name(self) -> str:
         return self._name
 
-    def get_table(self, target: str) -> TableFormat:
+    def describe_table(self, target: str) -> CatalogTableDescriptor:
+        """Resolves Unity Catalog table metadata to a provider-neutral descriptor."""
         target_config = self.targets.get(target)
         if target_config is not None:
-            return _resolve_static_table_format(
-                self.name,
-                target,
-                target_config,
-                path_enforcer=self._path_enforcer,
-            )
+            return _descriptor_from_target_config(self.name, target, target_config)
 
         full_name = _full_name(target, self.options.get("uc_catalog"))
         table = _unity_table(self._client.get_table(full_name))
@@ -111,15 +103,13 @@ class UnityCatalog(CatalogPlugin):
                 )
 
         backend = _backend_from_uc_format(table.data_source_format)
-        return _resolve_static_table_format(
-            self.name,
-            target,
-            CatalogTargetConfig(
-                backend=backend,
-                table=storage_location,
-                options={"storage_options": storage_options},
-            ),
-            path_enforcer=self._path_enforcer,
+        return CatalogTableDescriptor(
+            catalog_name=self.name,
+            requested_target=target,
+            provider_id=backend,
+            table_identifier=storage_location,
+            location=storage_location,
+            storage_options=storage_options,
         )
 
 
@@ -171,6 +161,29 @@ def _storage_options_from_temporary_credentials(raw: dict[str, Any]) -> dict[str
     return {}
 
 
+def _descriptor_from_target_config(
+    catalog_name: str,
+    requested_target: str,
+    target_config: object,
+) -> CatalogTableDescriptor:
+    backend = _optional_str(getattr(target_config, "backend", None)) or _optional_str(
+        getattr(target_config, "format", None)
+    )
+    table = _optional_str(getattr(target_config, "table", None)) or requested_target
+    options = _object(getattr(target_config, "options", {}))
+    storage_options = _object(options.pop("storage_options", {}))
+    provider_id = (backend or "iceberg").lower()
+    return CatalogTableDescriptor(
+        catalog_name=catalog_name,
+        requested_target=requested_target,
+        provider_id=provider_id,
+        table_identifier=table,
+        location=table if provider_id in _PATH_PROVIDERS else None,
+        options=options,
+        storage_options=storage_options,
+    )
+
+
 def _object(value: object) -> dict[str, Any]:
     if isinstance(value, dict):
         return cast(dict[str, Any], value).copy()
@@ -182,3 +195,6 @@ def _optional_str(value: object) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+_PATH_PROVIDERS = frozenset({"delta", "parquet", "csv", "json", "orc", "avro", "text"})

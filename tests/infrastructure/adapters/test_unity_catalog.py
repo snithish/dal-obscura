@@ -63,14 +63,15 @@ def test_unity_catalog_resolves_delta_table():
         http_client=httpx.Client(transport=httpx.MockTransport(handler)),
     )
 
-    table = catalog.get_table("default.users")
+    descriptor = catalog.describe_table("default.users")
 
-    assert table.format == "delta"
-    assert table.catalog_name == "uc"
-    assert table.table_name == "default.users"
+    assert descriptor.provider_id == "delta"
+    assert descriptor.catalog_name == "uc"
+    assert descriptor.requested_target == "default.users"
+    assert descriptor.location == "/warehouse/users"
 
 
-def test_unity_catalog_rejects_views_before_creating_table_format():
+def test_unity_catalog_rejects_views_before_returning_descriptor():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
@@ -90,7 +91,7 @@ def test_unity_catalog_rejects_views_before_creating_table_format():
     )
 
     try:
-        catalog.get_table("default.users_view")
+        catalog.describe_table("default.users_view")
     except ValueError as exc:
         assert str(exc) == "Unity Catalog target 'default.users_view' is not a readable table"
     else:
@@ -112,7 +113,8 @@ def test_unity_catalog_static_target_override_can_select_file_backend():
         ),
     )
 
-    table = catalog.get_table("events")
+    descriptor = catalog.describe_table("events")
 
-    assert table.format == "json"
-    assert table.table_name == "events"
+    assert descriptor.provider_id == "json"
+    assert descriptor.requested_target == "events"
+    assert descriptor.location == "/warehouse/events.json"

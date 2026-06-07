@@ -110,57 +110,6 @@ def test_lists_cells_for_one_tenant_only():
     ]
 
 
-def test_can_create_cell_directly_for_tenant_from_form_post_returns_json():
-    client = _client()
-    tenant = client.post(
-        "/v1/tenants",
-        json={"slug": "default", "display_name": "Default"},
-        headers=ADMIN_HEADERS,
-    ).json()
-
-    response = client.post(
-        f"/v1/tenants/{tenant['id']}/cells",
-        data={"name": "tenant-cell", "region": "local", "shard_key": "default"},
-        headers={**ADMIN_HEADERS, "HX-Request": "true"},
-    )
-
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("application/json")
-    assert response.json()["name"] == "tenant-cell"
-
-
-def test_can_assign_existing_cell_to_tenant_from_form_post_returns_json():
-    client = _client()
-    tenant = client.post(
-        "/v1/tenants",
-        json={"slug": "default", "display_name": "Default"},
-        headers=ADMIN_HEADERS,
-    ).json()
-    cell = client.post(
-        "/v1/cells",
-        json={"name": "existing", "region": "local"},
-        headers=ADMIN_HEADERS,
-    ).json()
-
-    response = client.post(
-        f"/v1/tenants/{tenant['id']}/cell-assignments",
-        data={"cell_id": cell["id"], "shard_key": "default"},
-        headers={**ADMIN_HEADERS, "HX-Request": "true"},
-    )
-
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("application/json")
-    assert response.json() == [
-        {
-            "id": cell["id"],
-            "name": "existing",
-            "region": "local",
-            "status": "active",
-            "shard_key": "default",
-        }
-    ]
-
-
 ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )

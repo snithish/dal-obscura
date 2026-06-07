@@ -36,6 +36,7 @@ from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
     SecretProvider,
     resolve_secret_refs,
 )
+from dal_obscura.data_plane.infrastructure.table_providers.registry import TableProviderRegistry
 
 
 @dataclass(frozen=True)
@@ -245,7 +246,10 @@ class PublishedConfigCatalogRegistry:
             path_enforcer=PathRuleEnforcer(runtime.path_rules),
         )
         registry = DynamicCatalogRegistry(
-            ServiceConfig(catalogs={catalog: catalog_config}, paths=())
+            ServiceConfig(catalogs={catalog: catalog_config}, paths=()),
+            table_provider_registry=TableProviderRegistry(
+                factory_modules=_provider_modules(config),
+            ),
         )
         return registry.describe(catalog, target, tenant_id=tenant_id)
 
@@ -291,6 +295,8 @@ def _catalog_config_from_asset(
     target_raw = _mapping(compiled_config.get("target"))
     table_identifier = _optional_str(target_raw.get("table")) or asset.target
     backend = _optional_str(target_raw.get("backend")) or asset.backend
+    target_options = dict(_mapping(target_raw.get("options")))
+    target_options.pop("provider_modules", None)
     return CatalogConfig(
         name=asset.catalog,
         module=str(catalog_raw["module"]),
@@ -300,7 +306,7 @@ def _catalog_config_from_asset(
             asset.target: CatalogTargetConfig(
                 backend=backend,
                 table=table_identifier,
-                options=dict(_mapping(target_raw.get("options"))),
+                options=target_options,
             )
         },
     )
@@ -329,3 +335,13 @@ def _optional_str(value: object) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _provider_modules(compiled_config: dict[str, Any]) -> list[str]:
+    target_raw = _mapping(compiled_config.get("target"))
+    modules = target_raw.get("provider_modules")
+    if modules is None:
+        modules = _mapping(target_raw.get("options")).get("provider_modules")
+    if not isinstance(modules, list):
+        return []
+    return [str(item) for item in modules if str(item).strip()]
