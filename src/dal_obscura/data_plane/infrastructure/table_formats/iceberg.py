@@ -65,7 +65,7 @@ class IcebergTableFormat(TableFormat):
         """Plans file tasks and distributes them across the available tickets."""
         pyiceberg_table = self._load_table()
 
-        column_tuple = tuple(request.columns)
+        column_tuple = tuple(_execution_columns(request.columns))
         base_schema = pyiceberg_table.schema().as_arrow()
         pushdown_row_filter, residual_row_filter = _split_row_filter(request.row_filter)
         LOGGER.debug(
@@ -170,6 +170,18 @@ def _chunk_by_max_tickets(tasks: list, max_tickets: int) -> list[list]:
     for index, task in enumerate(tasks):
         groups[index % group_count].append(task)
     return groups
+
+
+def _execution_columns(columns: Iterable[str]) -> list[str]:
+    selected: list[str] = []
+    seen: set[str] = set()
+    for column in columns:
+        top_level = column.split(".", 1)[0]
+        if top_level in seen:
+            continue
+        seen.add(top_level)
+        selected.append(top_level)
+    return selected
 
 
 def _check_file_tasks(tasks: Iterable[object], enforcer: PathRuleEnforcer | None) -> None:

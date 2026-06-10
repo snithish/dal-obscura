@@ -82,8 +82,12 @@ public final class SparkFilterSqlTranslator {
 
         if (filter instanceof EqualTo) {
             EqualTo equalTo = (EqualTo) filter;
+            Optional<String> literal = literal(equalTo.value());
+            if (literal.isEmpty()) {
+                return new TranslationPiece(Optional.empty(), List.of(), List.of(filter), false);
+            }
             return new TranslationPiece(
-                    Optional.of(attribute(equalTo.attribute()) + " = " + literal(equalTo.value())),
+                    Optional.of(attribute(equalTo.attribute()) + " = " + literal.get()),
                     List.of(filter),
                     List.of(),
                     true);
@@ -91,8 +95,12 @@ public final class SparkFilterSqlTranslator {
 
         if (filter instanceof GreaterThan) {
             GreaterThan gt = (GreaterThan) filter;
+            Optional<String> literal = literal(gt.value());
+            if (literal.isEmpty()) {
+                return new TranslationPiece(Optional.empty(), List.of(), List.of(filter), false);
+            }
             return new TranslationPiece(
-                    Optional.of(attribute(gt.attribute()) + " > " + literal(gt.value())),
+                    Optional.of(attribute(gt.attribute()) + " > " + literal.get()),
                     List.of(filter),
                     List.of(),
                     true);
@@ -100,8 +108,12 @@ public final class SparkFilterSqlTranslator {
 
         if (filter instanceof GreaterThanOrEqual) {
             GreaterThanOrEqual gte = (GreaterThanOrEqual) filter;
+            Optional<String> literal = literal(gte.value());
+            if (literal.isEmpty()) {
+                return new TranslationPiece(Optional.empty(), List.of(), List.of(filter), false);
+            }
             return new TranslationPiece(
-                    Optional.of(attribute(gte.attribute()) + " >= " + literal(gte.value())),
+                    Optional.of(attribute(gte.attribute()) + " >= " + literal.get()),
                     List.of(filter),
                     List.of(),
                     true);
@@ -109,8 +121,12 @@ public final class SparkFilterSqlTranslator {
 
         if (filter instanceof LessThan) {
             LessThan lt = (LessThan) filter;
+            Optional<String> literal = literal(lt.value());
+            if (literal.isEmpty()) {
+                return new TranslationPiece(Optional.empty(), List.of(), List.of(filter), false);
+            }
             return new TranslationPiece(
-                    Optional.of(attribute(lt.attribute()) + " < " + literal(lt.value())),
+                    Optional.of(attribute(lt.attribute()) + " < " + literal.get()),
                     List.of(filter),
                     List.of(),
                     true);
@@ -118,8 +134,12 @@ public final class SparkFilterSqlTranslator {
 
         if (filter instanceof LessThanOrEqual) {
             LessThanOrEqual lte = (LessThanOrEqual) filter;
+            Optional<String> literal = literal(lte.value());
+            if (literal.isEmpty()) {
+                return new TranslationPiece(Optional.empty(), List.of(), List.of(filter), false);
+            }
             return new TranslationPiece(
-                    Optional.of(attribute(lte.attribute()) + " <= " + literal(lte.value())),
+                    Optional.of(attribute(lte.attribute()) + " <= " + literal.get()),
                     List.of(filter),
                     List.of(),
                     true);
@@ -130,12 +150,16 @@ public final class SparkFilterSqlTranslator {
             if (in.values().length == 0) {
                 return new TranslationPiece(Optional.empty(), List.of(), List.of(filter), false);
             }
-            String values =
-                    Arrays.stream(in.values())
-                            .map(this::literal)
-                            .collect(Collectors.joining(", "));
+            List<String> values = new ArrayList<>();
+            for (Object value : in.values()) {
+                Optional<String> literal = literal(value);
+                if (literal.isEmpty()) {
+                    return new TranslationPiece(Optional.empty(), List.of(), List.of(filter), false);
+                }
+                values.add(literal.get());
+            }
             return new TranslationPiece(
-                    Optional.of(attribute(in.attribute()) + " IN (" + values + ")"),
+                    Optional.of(attribute(in.attribute()) + " IN (" + String.join(", ", values) + ")"),
                     List.of(filter),
                     List.of(),
                     true);
@@ -172,18 +196,21 @@ public final class SparkFilterSqlTranslator {
         return "\"" + identifier.replace("\"", "\"\"") + "\"";
     }
 
-    private String literal(Object value) {
+    private Optional<String> literal(Object value) {
         if (value instanceof String) {
             String s = (String) value;
-            return "'" + s.replace("'", "''") + "'";
+            return Optional.of("'" + s.replace("'", "''") + "'");
         }
         if (value instanceof Timestamp) {
-            return "TIMESTAMP '" + value + "'";
+            return Optional.of("TIMESTAMP '" + value + "'");
         }
         if (value instanceof Date) {
-            return "DATE '" + value + "'";
+            return Optional.of("DATE '" + value + "'");
         }
-        return String.valueOf(value);
+        if (value instanceof Boolean || value instanceof Number) {
+            return Optional.of(String.valueOf(value));
+        }
+        return Optional.empty();
     }
 
     private Optional<String> joinConjuncts(List<String> conjuncts) {

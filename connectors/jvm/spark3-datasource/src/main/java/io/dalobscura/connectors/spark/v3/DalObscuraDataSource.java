@@ -23,7 +23,7 @@ public final class DalObscuraDataSource
     @Override
     public Table getTable(
             StructType schema, Transform[] partitioning, Map<String, String> properties) {
-        return tableFor(new CaseInsensitiveStringMap(properties));
+        return tableFor(new CaseInsensitiveStringMap(properties), schema);
     }
 
     @Override
@@ -37,9 +37,13 @@ public final class DalObscuraDataSource
     }
 
     private DalObscuraTable tableFor(CaseInsensitiveStringMap options) {
+        return tableFor(options, null);
+    }
+
+    private DalObscuraTable tableFor(CaseInsensitiveStringMap options, StructType schema) {
         DalObscuraConnectorOptions resolved = resolver.resolve(options);
         DalObscuraReadClientFactory clientFactory =
                 () -> new FlightDalObscuraReadClient(resolved.uri());
-        return new DalObscuraTable(resolved, clientFactory);
+        return new DalObscuraTable(resolved, clientFactory, schema);
     }
 }

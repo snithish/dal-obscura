@@ -79,7 +79,27 @@ class DalObscuraScanBuilderTest {
     }
 
     @Test
-    void plansNestedProjectedColumnsAsTopLevelStructs() {
+    void reusesSparkProvidedSchemaWithoutFetchingItAgain() {
+        RecordingClient client = new RecordingClient();
+        StructType providedSchema = new StructType().add("id", "long");
+        DalObscuraTable table =
+                new DalObscuraTable(
+                        new DalObscuraConnectorOptions(
+                                "grpc+tcp://localhost:8815",
+                                "analytics",
+                                "default.users",
+                                DalObscuraAuth.bearerToken("token-123")),
+                        () -> client,
+                        providedSchema);
+
+        StructType schema = table.schema();
+
+        assertEquals(providedSchema, schema);
+        assertEquals(0, client.schemaRequestCount());
+    }
+
+    @Test
+    void plansNestedProjectedColumnsAsLeafPaths() {
         RecordingClient client = new RecordingClient();
         StructType fullSchema =
                 new StructType()
@@ -108,7 +128,7 @@ class DalObscuraScanBuilderTest {
 
         builder.build();
 
-        assertEquals(List.of("user"), client.planRequests().get(0).columns());
+        assertEquals(List.of("user.address.zip"), client.planRequests().get(0).columns());
     }
 
     @Test

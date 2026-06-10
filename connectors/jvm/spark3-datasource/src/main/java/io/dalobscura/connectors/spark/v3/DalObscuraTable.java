@@ -18,8 +18,16 @@ public final class DalObscuraTable implements Table, SupportsRead {
 
     public DalObscuraTable(
             DalObscuraConnectorOptions options, DalObscuraReadClientFactory clientFactory) {
+        this(options, clientFactory, null);
+    }
+
+    public DalObscuraTable(
+            DalObscuraConnectorOptions options,
+            DalObscuraReadClientFactory clientFactory,
+            StructType schema) {
         this.options = options;
         this.clientFactory = clientFactory;
+        this.schema = schema;
     }
 
     @Override

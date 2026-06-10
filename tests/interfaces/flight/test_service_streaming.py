@@ -406,13 +406,17 @@ def test_flight_streaming_supports_nested_projection_with_policy_and_requested_r
         info = client.get_flight_info(descriptor, options=options)
         table = client.do_get(info.endpoints[0].ticket, options=options).read_all()
 
-        assert info.schema.names == ["id", "user.address.zip", "user.email"]
-        assert info.schema.field("user.address.zip").type == pa.string()
-        assert info.schema.field("user.email").type == pa.string()
+        assert info.schema.names == ["id", "user"]
+        user_field = info.schema.field("user")
+        assert user_field.type.names == ["address", "email"]
+        assert user_field.type.field("address").type.names == ["zip"]
+        assert user_field.type.field("address").type.field("zip").type == pa.string()
+        assert user_field.type.field("email").type == pa.string()
         assert table.num_rows == 2
         assert table.column("id").to_pylist() == [1, 4]
-        assert table.column("user.email").to_pylist() == ["[hidden]", "[hidden]"]
-        assert all(len(value) == 64 for value in table.column("user.address.zip").to_pylist())
+        users = table.column("user").to_pylist()
+        assert [user["email"] for user in users] == ["[hidden]", "[hidden]"]
+        assert all(len(user["address"]["zip"]) == 64 for user in users)
 
 
 def test_flight_streaming_masks_list_of_struct_fields(tmp_path):

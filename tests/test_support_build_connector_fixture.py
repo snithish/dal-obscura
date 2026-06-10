@@ -144,6 +144,7 @@ def test_build_connector_fixture_emits_exact_heavyweight_metadata(tmp_path: Path
             "user.preferences.theme",
             "account.manager.region",
             "support_ticket.ticket_id",
+            "support_ticket.channel",
         ],
     }
     assert expected["sample_values"] == {

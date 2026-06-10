@@ -42,6 +42,7 @@ class DeltaTableFormat(TableFormat):
         table = self._load_table()
         version = table.version()
         schema = self.get_schema()
+        execution_columns = _execution_columns(request.columns)
         arrow_filter = row_filter_to_arrow_expression(request.row_filter)
         dataset = table.to_pyarrow_dataset(schema=schema)
         fragments = list(dataset.get_fragments(filter=arrow_filter))
@@ -52,7 +53,7 @@ class DeltaTableFormat(TableFormat):
                 table_format=self,
                 schema=schema,
                 partition=DeltaInputPartition(
-                    columns=list(request.columns),
+                    columns=execution_columns,
                     paths=[fragment.path for fragment in group],
                     version=version,
                     row_filter_sql=_filter_sql(request.row_filter, arrow_filter),
@@ -138,6 +139,18 @@ def _groups(items: list[Any], max_tickets: int) -> list[list[Any]]:
     return [
         items[index::ticket_count] for index in range(ticket_count) if items[index::ticket_count]
     ]
+
+
+def _execution_columns(columns: Iterable[str]) -> list[str]:
+    selected: list[str] = []
+    seen: set[str] = set()
+    for column in columns:
+        top_level = column.split(".", 1)[0]
+        if top_level in seen:
+            continue
+        seen.add(top_level)
+        selected.append(top_level)
+    return selected
 
 
 def _filter_sql(row_filter: RowFilter | None, arrow_filter: object | None) -> str | None:

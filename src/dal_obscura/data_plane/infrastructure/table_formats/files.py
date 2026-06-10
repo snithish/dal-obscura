@@ -38,6 +38,7 @@ class ArrowDatasetTableFormat(TableFormat):
     def plan(self, request: PlanRequest, max_tickets: int) -> Plan:
         arrow_filter = row_filter_to_arrow_expression(request.row_filter)
         schema = self.get_schema()
+        execution_columns = _execution_columns(request.columns)
         fragments = list(self._dataset().get_fragments(filter=arrow_filter))
         groups = _groups(fragments, max_tickets) or [[]]
         tasks = [
@@ -45,7 +46,7 @@ class ArrowDatasetTableFormat(TableFormat):
                 table_format=self,
                 schema=schema,
                 partition=FileInputPartition(
-                    columns=list(request.columns),
+                    columns=execution_columns,
                     paths=[fragment.path for fragment in group],
                     row_filter_sql=_filter_sql(request.row_filter, arrow_filter),
                 ),
@@ -93,6 +94,7 @@ class AvroTableFormat(TableFormat):
     def plan(self, request: PlanRequest, max_tickets: int) -> Plan:
         arrow_filter = row_filter_to_arrow_expression(request.row_filter)
         schema = self.get_schema()
+        execution_columns = _execution_columns(request.columns)
         paths = _paths(self.uri)
         groups = _groups(paths, max_tickets) or [[]]
         return Plan(
@@ -102,7 +104,7 @@ class AvroTableFormat(TableFormat):
                     table_format=self,
                     schema=schema,
                     partition=FileInputPartition(
-                        columns=list(request.columns),
+                        columns=execution_columns,
                         paths=list(group),
                         row_filter_sql=_filter_sql(request.row_filter, arrow_filter),
                     ),
@@ -145,6 +147,7 @@ class TextTableFormat(TableFormat):
     def plan(self, request: PlanRequest, max_tickets: int) -> Plan:
         arrow_filter = row_filter_to_arrow_expression(request.row_filter)
         schema = self.get_schema()
+        execution_columns = _execution_columns(request.columns)
         paths = _paths(self.uri)
         groups = _groups(paths, max_tickets) or [[]]
         return Plan(
@@ -154,7 +157,7 @@ class TextTableFormat(TableFormat):
                     table_format=self,
                     schema=schema,
                     partition=FileInputPartition(
-                        columns=list(request.columns),
+                        columns=execution_columns,
                         paths=list(group),
                         row_filter_sql=_filter_sql(request.row_filter, arrow_filter),
                     ),
@@ -211,6 +214,18 @@ def _groups(items: list[Any], max_tickets: int) -> list[list[Any]]:
     return [
         items[index::ticket_count] for index in range(ticket_count) if items[index::ticket_count]
     ]
+
+
+def _execution_columns(columns: Iterable[str]) -> list[str]:
+    selected: list[str] = []
+    seen: set[str] = set()
+    for column in columns:
+        top_level = column.split(".", 1)[0]
+        if top_level in seen:
+            continue
+        seen.add(top_level)
+        selected.append(top_level)
+    return selected
 
 
 def _filter_sql(row_filter: RowFilter | None, arrow_filter: ds.Expression | None) -> str | None:

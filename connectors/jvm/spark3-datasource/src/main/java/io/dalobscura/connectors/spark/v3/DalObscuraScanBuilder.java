@@ -92,7 +92,12 @@ public final class DalObscuraScanBuilder
         DataType requiredType = requiredField.dataType();
         DataType fullType = fullField.dataType();
         if (requiredType instanceof StructType && fullType instanceof StructType) {
-            projected.add(path);
+            StructType requiredStruct = (StructType) requiredType;
+            StructType fullStruct = (StructType) fullType;
+            for (StructField child : requiredStruct.fields()) {
+                StructField fullChild = fullStruct.apply(child.name());
+                collectProjectedColumns(child, fullChild, path + "." + child.name(), projected);
+            }
             return;
         }
         projected.add(path);

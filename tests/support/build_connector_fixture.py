@@ -81,6 +81,7 @@ ALLOWED_COLUMNS = [
     "devices",
     "support_ticket",
     "support_ticket.ticket_id",
+    "support_ticket.channel",
 ]
 MASKS = {
     "id": {"type": "hash"},
@@ -496,6 +497,7 @@ def _expected_metadata() -> dict[str, object]:
                 "user.preferences.theme",
                 "account.manager.region",
                 "support_ticket.ticket_id",
+                "support_ticket.channel",
             ],
         },
         "sample_values": {

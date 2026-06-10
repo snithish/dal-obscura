@@ -18,6 +18,7 @@ All connectors use the same read contract:
 - optional command field: `row_filter`, rendered as validated DuckDB SQL
 - auth: `Authorization: Bearer <token>` on schema, plan, and fetch calls
 - result: Arrow schema from `get_schema`/`get_flight_info`, one opaque ticket per endpoint, and Arrow record batches from `do_get`
+- nested entries in `columns`, such as `user.address.zip`, are returned as pruned nested Arrow structs rooted at `user`, not as dotted top-level fields
 
 Missing `protocol_version` is accepted as v1 for compatibility with early clients.
 Unsupported versions are rejected server-side.
