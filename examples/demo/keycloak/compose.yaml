@@ -1,0 +1,110 @@
+name: dal-obscura-keycloak-demo
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    env_file:
+      - .runtime/keycloak.env
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+    command:
+      - start-dev
+      - --import-realm
+      - --http-port=8080
+      - --hostname-strict=false
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./.runtime/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+
+  postgres:
+    image: postgres:17-alpine
+    env_file:
+      - .runtime/postgres.env
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  setup:
+    build:
+      context: ../../..
+      dockerfile: examples/demo/keycloak/Dockerfile.helper
+      args:
+        DAL_OBSCURA_IMAGE: ${DAL_OBSCURA_IMAGE:-ghcr.io/snithish/dal-obscura:latest}
+    env_file:
+      - .runtime/setup.env
+    depends_on:
+      control-plane:
+        condition: service_started
+      keycloak:
+        condition: service_started
+    volumes:
+      - .:/workspace/demo:rw
+    command:
+      - sh
+      - -c
+      - python /workspace/demo/scripts/seed_table.py && python /workspace/demo/scripts/provision_demo.py && touch /workspace/demo/.runtime/setup.done && tail -f /dev/null
+    healthcheck:
+      test: ["CMD", "test", "-f", "/workspace/demo/.runtime/setup.done"]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+
+  control-plane:
+    image: ${DAL_OBSCURA_IMAGE:-ghcr.io/snithish/dal-obscura:latest}
+    depends_on:
+      keycloak:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .runtime/control-plane.env
+    ports:
+      - "127.0.0.1:8820:8820"
+    volumes:
+      - .:/workspace/demo:rw
+    command: ["control-plane"]
+
+  dal-obscura:
+    image: ${DAL_OBSCURA_IMAGE:-ghcr.io/snithish/dal-obscura:latest}
+    depends_on:
+      setup:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8815:8815"
+    volumes:
+      - .:/workspace/demo:rw
+    command:
+      - sh
+      - -c
+      - set -a && . /workspace/demo/.runtime/data-plane.env && set +a && exec dal-obscura-entrypoint data-plane
+
+  client:
+    build:
+      context: ../../..
+      dockerfile: examples/demo/keycloak/Dockerfile.helper
+      args:
+        DAL_OBSCURA_IMAGE: ${DAL_OBSCURA_IMAGE:-ghcr.io/snithish/dal-obscura:latest}
+    depends_on:
+      dal-obscura:
+        condition: service_started
+      keycloak:
+        condition: service_started
+    env_file:
+      - .runtime/client.env
+    volumes:
+      - .:/workspace/demo:rw
+    command: ["tail", "-f", "/dev/null"]
+
+volumes:
+  postgres-data:

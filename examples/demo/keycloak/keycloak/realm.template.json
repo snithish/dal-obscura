@@ -1,0 +1,157 @@
+{
+  "realm": "dal-obscura-demo",
+  "enabled": true,
+  "clients": [
+    {
+      "clientId": "dal-obscura-ui",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://127.0.0.1:8820/ui/auth/callback"],
+      "webOrigins": ["http://127.0.0.1:8820"],
+      "protocol": "openid-connect",
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "defaultClientScopes": ["web-origins", "acr", "profile", "roles"],
+      "protocolMappers": [
+        {
+          "name": "dal-obscura-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "dal-obscura",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "groups",
+            "full.path": "false",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "dal-obscura-cli",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "{{OIDC_CLI_CLIENT_SECRET}}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "protocol": "openid-connect",
+      "defaultClientScopes": ["web-origins", "acr", "profile", "roles"],
+      "protocolMappers": [
+        {
+          "name": "dal-obscura-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "dal-obscura",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "groups",
+            "full.path": "false",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "groups": [
+    {"name": "platform-admins"},
+    {"name": "asset-owners"},
+    {"name": "us-analysts"},
+    {"name": "eu-analysts"},
+    {"name": "data-stewards"}
+  ],
+  "users": [
+    {
+      "username": "demo-admin",
+      "enabled": true,
+      "email": "demo-admin@example.test",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "Admin",
+      "groups": ["platform-admins"],
+      "requiredActions": [],
+      "credentials": [{"type": "password", "value": "{{DEMO_ADMIN_PASSWORD}}", "temporary": false}]
+    },
+    {
+      "username": "asset-owner",
+      "enabled": true,
+      "email": "asset-owner@example.test",
+      "emailVerified": true,
+      "firstName": "Asset",
+      "lastName": "Owner",
+      "groups": ["asset-owners"],
+      "requiredActions": [],
+      "credentials": [{"type": "password", "value": "{{ASSET_OWNER_PASSWORD}}", "temporary": false}]
+    },
+    {
+      "username": "us-analyst",
+      "enabled": true,
+      "email": "us-analyst@example.test",
+      "emailVerified": true,
+      "firstName": "US",
+      "lastName": "Analyst",
+      "groups": ["us-analysts"],
+      "requiredActions": [],
+      "credentials": [{"type": "password", "value": "{{US_ANALYST_PASSWORD}}", "temporary": false}]
+    },
+    {
+      "username": "eu-analyst",
+      "enabled": true,
+      "email": "eu-analyst@example.test",
+      "emailVerified": true,
+      "firstName": "EU",
+      "lastName": "Analyst",
+      "groups": ["eu-analysts"],
+      "requiredActions": [],
+      "credentials": [{"type": "password", "value": "{{EU_ANALYST_PASSWORD}}", "temporary": false}]
+    },
+    {
+      "username": "data-steward",
+      "enabled": true,
+      "email": "data-steward@example.test",
+      "emailVerified": true,
+      "firstName": "Data",
+      "lastName": "Steward",
+      "groups": ["data-stewards"],
+      "requiredActions": [],
+      "credentials": [{"type": "password", "value": "{{DATA_STEWARD_PASSWORD}}", "temporary": false}]
+    },
+    {
+      "username": "blocked-user",
+      "enabled": true,
+      "email": "blocked-user@example.test",
+      "emailVerified": true,
+      "firstName": "Blocked",
+      "lastName": "User",
+      "groups": [],
+      "requiredActions": [],
+      "credentials": [{"type": "password", "value": "{{BLOCKED_USER_PASSWORD}}", "temporary": false}]
+    }
+  ]
+}

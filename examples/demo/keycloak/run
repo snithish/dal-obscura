@@ -1,0 +1,107 @@
+#!/usr/bin/env sh
+set -eu
+
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+COMPOSE_FILE="$ROOT/compose.yaml"
+DEMO_IMAGE="${DAL_OBSCURA_IMAGE:-dal-obscura-demo:local}"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./run up
+  ./run credentials
+  ./run token --as <user>
+  ./run read --as <user> [read-args...]
+  ./run smoke
+  ./run logs [service]
+  ./run down
+  ./run reset
+
+Users:
+  demo-admin, asset-owner, us-analyst, eu-analyst, data-steward, blocked-user
+EOF
+}
+
+prepare() {
+  python3 "$ROOT/scripts/prepare_demo.py"
+}
+
+compose() {
+  DAL_OBSCURA_IMAGE="$DEMO_IMAGE" docker compose -f "$COMPOSE_FILE" "$@"
+}
+
+build_image() {
+  if [ -z "${DAL_OBSCURA_IMAGE:-}" ]; then
+    docker build -t "$DEMO_IMAGE" "$ROOT/../../.."
+  fi
+}
+
+credentials() {
+  prepare >/dev/null
+  printf 'Control plane UI: http://127.0.0.1:8820/ui\n'
+  printf 'Keycloak:         http://127.0.0.1:8080\n'
+  printf 'Flight URI:       grpc+tcp://127.0.0.1:8815\n'
+  printf '\n'
+  sed -n \
+    -e 's/^DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN=/Admin token: /p' \
+    "$ROOT/.runtime/control-plane.env"
+  sed -n \
+    -e 's/^DEMO_ADMIN_PASSWORD=/demo-admin password: /p' \
+    -e 's/^ASSET_OWNER_PASSWORD=/asset-owner password: /p' \
+    -e 's/^US_ANALYST_PASSWORD=/us-analyst password: /p' \
+    -e 's/^EU_ANALYST_PASSWORD=/eu-analyst password: /p' \
+    -e 's/^DATA_STEWARD_PASSWORD=/data-steward password: /p' \
+    -e 's/^BLOCKED_USER_PASSWORD=/blocked-user password: /p' \
+    "$ROOT/.runtime/client.env"
+}
+
+token() {
+  user="asset-owner"
+  if [ "${1:-}" = "--as" ]; then
+    user="${2:-}"
+  fi
+  compose exec client python /workspace/demo/scripts/print_token.py --as "$user"
+}
+
+if [ "$#" -eq 0 ]; then
+  usage >&2
+  exit 2
+fi
+
+action="$1"
+shift || true
+
+case "$action" in
+  up)
+    prepare
+    build_image
+    compose up -d --wait
+    credentials
+    ;;
+  credentials)
+    credentials
+    ;;
+  token)
+    token "$@"
+    ;;
+  read)
+    compose exec client python /workspace/demo/scripts/read_demo.py "$@"
+    ;;
+  smoke)
+    compose exec client python /workspace/demo/scripts/smoke_demo.py
+    ;;
+  logs)
+    compose logs "${1:-control-plane}"
+    ;;
+  down)
+    compose down
+    ;;
+  reset)
+    compose down --volumes --remove-orphans
+    rm -rf "$ROOT/.runtime"
+    ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac

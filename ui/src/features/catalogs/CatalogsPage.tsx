@@ -27,19 +27,27 @@ type CatalogDiscovery = {
 
 const presets = [
   {
+    adapter: "unity" as const,
+    description: "Connect Unity Catalog through its Iceberg REST-compatible endpoint.",
+    name: "Unity Catalog",
+    options: {
+      provider: "unity",
+      type: "rest",
+      uri: "https://workspace.example/api/2.1/unity-catalog/iceberg-rest",
+      warehouse: "main",
+    },
+  },
+  {
     adapter: "iceberg" as const,
+    description: "Connect an Iceberg REST catalog with warehouse credentials.",
     name: "Iceberg REST",
     options: { type: "rest", uri: "http://localhost:8181", warehouse: "warehouse" },
   },
   {
     adapter: "iceberg" as const,
+    description: "Use a SQL-backed PyIceberg catalog for local or simple deployments.",
     name: "Iceberg SQL",
     options: { type: "sql", uri: "sqlite:///catalog.db" },
-  },
-  {
-    adapter: "iceberg" as const,
-    name: "Local development",
-    options: { type: "sql", uri: "sqlite:///local-catalog.db" },
   },
 ];
 
@@ -50,6 +58,8 @@ export function CatalogsPage() {
   const [name, setName] = useState("analytics");
   const [catalogForm, setCatalogForm] = useState<CatalogForm>({
     adapter: "iceberg",
+    extraOptionsJson: "",
+    modulePath: "",
     type: "sql",
     uri: "sqlite:///catalog.db",
     warehouse: "",
@@ -77,7 +87,7 @@ export function CatalogsPage() {
       await apiPut(`/v1/catalogs/${encodeURIComponent(name)}`, catalogPayloadFromForm(catalogForm));
       await refreshCatalogs();
     } catch {
-      setError("Catalog save failed.");
+      setError("Catalog save failed. Check the module path and options.");
     } finally {
       setIsSaving(false);
     }
@@ -130,7 +140,7 @@ export function CatalogsPage() {
         <p className="text-xs font-black uppercase tracking-wide text-muted">Sources</p>
           <h1 className="mt-1 text-4xl font-black">Catalogs</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-            Connect Iceberg catalogs, review discovered tables, and decide which
+            Connect catalogs, review discovered tables, and decide which
             tables enter governance.
           </p>
         </div>
@@ -149,9 +159,7 @@ export function CatalogsPage() {
             <div className="mb-4 h-1.5 w-14 rounded-full bg-accent" />
             <h2 className="text-lg font-black">{preset.name}</h2>
             <p className="mt-2 min-h-[48px] text-sm leading-6 text-muted">
-              {preset.options.type === "rest"
-                ? "Connect a REST catalog with warehouse credentials."
-                : "Use a SQL-backed pyiceberg catalog for local or simple deployments."}
+              {preset.description}
             </p>
             <button
               className="btn-secondary mt-4"
@@ -197,7 +205,7 @@ export function CatalogsPage() {
                   <div className="min-w-0">
                     <strong className="block truncate text-sm">{catalog.name}</strong>
                     <span className="block truncate text-xs text-muted">
-                      {catalogAdapterLabel(catalog.module)}
+                      {catalogAdapterLabel(catalog.module, catalog.options)}
                     </span>
                   </div>
                   <span className="badge">{catalog.status}</span>
@@ -234,7 +242,7 @@ export function CatalogsPage() {
             onChange={(event) => setName(event.target.value)}
           />
           <label className="mt-4 block text-xs font-black uppercase tracking-wide text-muted">
-            Catalog adapter
+            Catalog provider
           </label>
           <select
             className="field mt-2"
@@ -243,6 +251,7 @@ export function CatalogsPage() {
               setCatalogForm({
                 ...catalogForm,
                 adapter: event.target.value as keyof typeof CATALOG_ADAPTERS,
+                type: event.target.value === "unity" ? "rest" : catalogForm.type,
               })
             }
           >
@@ -252,43 +261,89 @@ export function CatalogsPage() {
               </option>
             ))}
           </select>
-          <label className="mt-4 block text-xs font-black uppercase tracking-wide text-muted">
-            Catalog type
-          </label>
-          <select
-            className="field mt-2"
-            value={catalogForm.type}
-            onChange={(event) =>
-              setCatalogForm({ ...catalogForm, type: event.target.value as CatalogForm["type"] })
-            }
-          >
-            <option value="sql">Iceberg SQL</option>
-            <option value="rest">Iceberg REST</option>
-          </select>
-          <label className="mt-4 block text-xs font-black uppercase tracking-wide text-muted">
-            Catalog URI
-          </label>
-          <input
-            className="field mt-2"
-            placeholder={catalogForm.type === "rest" ? "http://localhost:8181" : "sqlite:///catalog.db"}
-            value={catalogForm.uri}
-            onChange={(event) => setCatalogForm({ ...catalogForm, uri: event.target.value })}
-          />
-          {catalogForm.type === "rest" ? (
+          {catalogForm.adapter === "custom" ? (
             <>
               <label className="mt-4 block text-xs font-black uppercase tracking-wide text-muted">
-                Warehouse
+                Module path
               </label>
               <input
                 className="field mt-2"
-                placeholder="warehouse"
-                value={catalogForm.warehouse}
+                placeholder="company.catalogs.UnityCatalog"
+                value={catalogForm.modulePath}
                 onChange={(event) =>
-                  setCatalogForm({ ...catalogForm, warehouse: event.target.value })
+                  setCatalogForm({ ...catalogForm, modulePath: event.target.value })
                 }
               />
             </>
-          ) : null}
+          ) : (
+            <>
+              {catalogForm.adapter === "iceberg" ? (
+                <>
+                  <label className="mt-4 block text-xs font-black uppercase tracking-wide text-muted">
+                    Catalog type
+                  </label>
+                  <select
+                    className="field mt-2"
+                    value={catalogForm.type}
+                    onChange={(event) =>
+                      setCatalogForm({
+                        ...catalogForm,
+                        type: event.target.value as CatalogForm["type"],
+                      })
+                    }
+                  >
+                    <option value="sql">SQL catalog</option>
+                    <option value="rest">REST catalog</option>
+                  </select>
+                </>
+              ) : null}
+              <label className="mt-4 block text-xs font-black uppercase tracking-wide text-muted">
+                {catalogForm.adapter === "unity" ? "Unity REST endpoint" : "Catalog URI"}
+              </label>
+              <input
+                className="field mt-2"
+                placeholder={
+                  catalogForm.adapter === "unity"
+                    ? "https://workspace.example/api/2.1/unity-catalog/iceberg-rest"
+                    : catalogForm.type === "rest"
+                      ? "http://localhost:8181"
+                      : "sqlite:///catalog.db"
+                }
+                value={catalogForm.uri}
+                onChange={(event) => setCatalogForm({ ...catalogForm, uri: event.target.value })}
+              />
+              {(catalogForm.adapter === "unity" || catalogForm.type === "rest") ? (
+                <>
+                  <label className="mt-4 block text-xs font-black uppercase tracking-wide text-muted">
+                    {catalogForm.adapter === "unity" ? "Catalog / warehouse" : "Warehouse"}
+                  </label>
+                  <input
+                    className="field mt-2"
+                    placeholder={catalogForm.adapter === "unity" ? "main" : "warehouse"}
+                    value={catalogForm.warehouse}
+                    onChange={(event) =>
+                      setCatalogForm({ ...catalogForm, warehouse: event.target.value })
+                    }
+                  />
+                </>
+              ) : null}
+            </>
+          )}
+          <label className="mt-4 block text-xs font-black uppercase tracking-wide text-muted">
+            Additional options JSON
+          </label>
+          <textarea
+            className="field mt-2 min-h-[92px] py-2"
+            placeholder={
+              catalogForm.adapter === "unity"
+                ? '{"token":"${UNITY_TOKEN}"}'
+                : '{"credential":"${CATALOG_TOKEN}"}'
+            }
+            value={catalogForm.extraOptionsJson}
+            onChange={(event) =>
+              setCatalogForm({ ...catalogForm, extraOptionsJson: event.target.value })
+            }
+          />
           <button className="btn-primary mt-4 w-full" disabled={isSaving} type="submit">
             {isSaving ? "Saving..." : "Save catalog"}
           </button>

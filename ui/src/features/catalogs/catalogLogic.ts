@@ -3,6 +3,14 @@ export const CATALOG_ADAPTERS = {
     label: "Iceberg catalog",
     module: "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog",
   },
+  unity: {
+    label: "Unity Catalog",
+    module: "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog",
+  },
+  custom: {
+    label: "Custom adapter",
+    module: "",
+  },
 } as const;
 
 export type CatalogAdapter = keyof typeof CATALOG_ADAPTERS;
@@ -10,6 +18,8 @@ export type CatalogType = "rest" | "sql";
 
 export type CatalogForm = {
   adapter: CatalogAdapter;
+  extraOptionsJson: string;
+  modulePath: string;
   type: CatalogType;
   uri: string;
   warehouse: string;
@@ -36,7 +46,7 @@ export type AssetPromotionPayload = {
 
 export function catalogPayloadFromForm(form: CatalogForm): CatalogPayload {
   return {
-    module: CATALOG_ADAPTERS[form.adapter].module,
+    module: catalogModuleFromForm(form),
     options: catalogOptionsFromForm(form),
   };
 }
@@ -51,26 +61,57 @@ export function assetPayloadFromDiscoveredTable(
   };
 }
 
-export function catalogAdapterLabel(module: string): string {
-  return (
-    Object.values(CATALOG_ADAPTERS).find((adapter) => adapter.module === module)?.label ??
-    "Custom adapter"
-  );
+export function catalogAdapterLabel(module: string, options: Record<string, unknown> = {}): string {
+  if (options.provider === "unity" || isUnityUri(options.uri)) {
+    return "Unity Catalog";
+  }
+  if (module === CATALOG_ADAPTERS.iceberg.module) {
+    return "Iceberg catalog";
+  }
+  return "Custom adapter";
 }
 
 export function formFromCatalogOptions(options: Record<string, unknown>): CatalogForm {
   return {
-    adapter: "iceberg",
+    adapter: options.provider === "unity" || isUnityUri(options.uri) ? "unity" : "iceberg",
+    extraOptionsJson: "",
+    modulePath: "",
     type: options.type === "rest" ? "rest" : "sql",
     uri: typeof options.uri === "string" ? options.uri : "",
     warehouse: typeof options.warehouse === "string" ? options.warehouse : "",
   };
 }
 
+function catalogModuleFromForm(form: CatalogForm): string {
+  if (form.adapter === "custom") {
+    return form.modulePath.trim();
+  }
+  return CATALOG_ADAPTERS[form.adapter].module;
+}
+
 function catalogOptionsFromForm(form: CatalogForm): Record<string, unknown> {
+  if (form.adapter === "custom") {
+    return parseExtraOptions(form.extraOptionsJson);
+  }
   return {
+    ...parseExtraOptions(form.extraOptionsJson),
     type: form.type,
     uri: form.uri,
-    ...(form.type === "rest" && form.warehouse ? { warehouse: form.warehouse } : {}),
+    ...(form.warehouse ? { warehouse: form.warehouse } : {}),
   };
+}
+
+function isUnityUri(value: unknown): boolean {
+  return typeof value === "string" && value.toLowerCase().includes("unity-catalog");
+}
+
+function parseExtraOptions(raw: string): Record<string, unknown> {
+  if (!raw.trim()) {
+    return {};
+  }
+  const parsed = JSON.parse(raw) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Catalog options JSON must be an object.");
+  }
+  return parsed as Record<string, unknown>;
 }

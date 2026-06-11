@@ -28,6 +28,12 @@ export type PolicyResponsibility = {
   message: string;
 };
 
+export type SessionActor = {
+  groups: string[];
+  platform_admin: boolean;
+  principal: string;
+};
+
 export type MaskRow = {
   column: string;
   type: string;
@@ -178,6 +184,20 @@ export function policyEditorResponsibility(owners: string[]): PolicyResponsibili
     label: "Owner managed",
     message: `Policy changes are restricted to platform admins and assigned owners: ${owners.join(", ")}.`,
   };
+}
+
+export function canEditPolicy(actor: SessionActor | null, owners: string[]): boolean {
+  if (!actor) {
+    return false;
+  }
+  if (actor.platform_admin) {
+    return true;
+  }
+  const ownerTokens = new Set(owners);
+  if (ownerTokens.has(actor.principal)) {
+    return true;
+  }
+  return actor.groups.some((group) => ownerTokens.has(`group:${group}`));
 }
 
 function selectedColumns(rule: PolicyRuleForm): string[] {

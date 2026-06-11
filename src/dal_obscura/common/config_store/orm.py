@@ -4,7 +4,17 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import JSON
 
@@ -192,7 +202,7 @@ class PublishedAssetRecord(Base):
     target: Mapped[str] = mapped_column(Text, primary_key=True)
     backend: Mapped[str] = mapped_column(String(48), nullable=False)
     compiled_config_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
-    policy_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    policy_version: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
 
 class DataPlaneTicketRecord(Base):
@@ -208,7 +218,7 @@ class DataPlaneTicketRecord(Base):
     catalog: Mapped[str | None] = mapped_column(Text, nullable=True)
     target: Mapped[str] = mapped_column(Text, nullable=False)
     principal_id: Mapped[str] = mapped_column(Text, nullable=False)
-    policy_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    policy_version: Mapped[int] = mapped_column(BigInteger, nullable=False)
     expires_at: Mapped[int] = mapped_column(Integer, nullable=False)
     max_exchanges: Mapped[int] = mapped_column(Integer, nullable=False)
     exchange_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

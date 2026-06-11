@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  canEditPolicy,
   formToRule,
   policyEditorResponsibility,
   previewPolicy,
@@ -121,5 +122,40 @@ describe("policy editor responsibility", () => {
       message:
         "Platform admins can seed this policy, then assign owners before handing off ongoing changes.",
     });
+  });
+});
+
+describe("policy edit permissions", () => {
+  test("allows platform admins to edit any asset policy", () => {
+    expect(
+      canEditPolicy(
+        { principal: "platform:admin", groups: [], platform_admin: true },
+        ["group:data-owners"],
+      ),
+    ).toBe(true);
+  });
+
+  test("allows direct and group asset owners to edit policy", () => {
+    expect(
+      canEditPolicy(
+        { principal: "user:alice@example.com", groups: [], platform_admin: false },
+        ["user:alice@example.com"],
+      ),
+    ).toBe(true);
+    expect(
+      canEditPolicy(
+        { principal: "user:bob@example.com", groups: ["data-owners"], platform_admin: false },
+        ["group:data-owners"],
+      ),
+    ).toBe(true);
+  });
+
+  test("rejects non-owner policy edits", () => {
+    expect(
+      canEditPolicy(
+        { principal: "user:eve@example.com", groups: ["analysts"], platform_admin: false },
+        ["group:data-owners"],
+      ),
+    ).toBe(false);
   });
 });

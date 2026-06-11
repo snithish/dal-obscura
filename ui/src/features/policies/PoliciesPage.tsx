@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { apiGet, apiPost, apiPut } from "../../api/client";
 import {
+  canEditPolicy,
   defaultRule,
   formToRule,
   mergeColumnSelections,
@@ -11,9 +12,10 @@ import {
   type ColumnSelection,
   type ConditionRow,
   type MaskRow,
+  type PolicyPreview,
   type PolicyRule,
   type PolicyRuleForm,
-  type PolicyPreview,
+  type SessionActor,
 } from "./policyLogic";
 
 type Asset = {
@@ -43,6 +45,7 @@ export function PoliciesPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [selectedAssetId, setSelectedAssetId] = useState("");
   const [selectedAsset, setSelectedAsset] = useState<AssetDetail | null>(null);
+  const [session, setSession] = useState<SessionActor | null>(null);
   const [rules, setRules] = useState<PolicyRuleForm[]>([defaultRule]);
   const [previewPrincipal, setPreviewPrincipal] = useState("user:alice@example.com");
   const [previewGroupsText, setPreviewGroupsText] = useState("data-stewards");
@@ -58,7 +61,8 @@ export function PoliciesPage() {
   }
 
   useEffect(() => {
-    void refreshAssets().catch(() => setStatus("Could not load policy queue."));
+    void Promise.all([refreshAssets(), apiGet<SessionActor>("/v1/session").then(setSession)])
+      .catch(() => setStatus("Could not load policy queue."));
   }, []);
 
   useEffect(() => {
@@ -147,6 +151,9 @@ export function PoliciesPage() {
   const responsibility = selectedAsset
     ? policyEditorResponsibility(selectedAsset.owners)
     : null;
+  const canEditSelectedPolicy = selectedAsset
+    ? canEditPolicy(session, selectedAsset.owners)
+    : false;
   const preview = useMemo<PolicyPreview>(
     () =>
       previewPolicy(
@@ -257,6 +264,12 @@ export function PoliciesPage() {
                     </span>
                   </div>
                   <p className="mt-2 text-sm leading-6 text-muted">{responsibility.message}</p>
+                  {!canEditSelectedPolicy ? (
+                    <p className="mt-2 text-sm font-bold text-muted">
+                      You can inspect this policy, but only assigned owners can save rules,
+                      row filters, or policy versions.
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -267,6 +280,7 @@ export function PoliciesPage() {
                     rule={rule}
                     ruleIndex={index}
                     canRemove={rules.length > 1}
+                    editable={canEditSelectedPolicy}
                     schemaColumns={schemaColumns}
                     onChange={(patch) => updateRule(index, patch, setRules)}
                     onRemove={() =>
@@ -281,12 +295,16 @@ export function PoliciesPage() {
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                <button className="btn-primary" disabled={isSaving} type="submit">
+                <button
+                  className="btn-primary"
+                  disabled={isSaving || !canEditSelectedPolicy}
+                  type="submit"
+                >
                   {isSaving ? "Saving..." : "Save policy"}
                 </button>
                 <button
                   className="btn-secondary"
-                  disabled={isSaving || isPublishing}
+                  disabled={isSaving || isPublishing || !canEditSelectedPolicy}
                   type="button"
                   onClick={() => void publishPolicyVersion()}
                 >
@@ -294,6 +312,7 @@ export function PoliciesPage() {
                 </button>
                 <button
                   className="btn-secondary"
+                  disabled={!canEditSelectedPolicy}
                   type="button"
                   onClick={() =>
                     setRules((current) => [
@@ -309,6 +328,7 @@ export function PoliciesPage() {
                 </button>
                 <button
                   className="btn-secondary"
+                  disabled={!canEditSelectedPolicy}
                   type="button"
                   onClick={() =>
                     setRules([withSchemaColumns({ ...defaultRule }, selectedAsset.schema_fields)])
@@ -507,6 +527,7 @@ function PreviewCard({ label, value }: { label: string; value: string }) {
 
 function RuleCard({
   canRemove,
+  editable,
   onChange,
   onRemove,
   rule,
@@ -514,6 +535,7 @@ function RuleCard({
   schemaColumns,
 }: {
   canRemove: boolean;
+  editable: boolean;
   onChange: (patch: Partial<PolicyRuleForm>) => void;
   onRemove: () => void;
   rule: PolicyRuleForm;
@@ -532,6 +554,7 @@ function RuleCard({
         <div className="flex flex-wrap gap-2">
           <select
             className="field min-w-[120px]"
+            disabled={!editable}
             value={rule.effect}
             onChange={(event) => onChange({ effect: event.target.value as "allow" | "deny" })}
           >
@@ -539,7 +562,12 @@ function RuleCard({
             <option value="deny">Deny</option>
           </select>
           {canRemove ? (
-            <button className="btn-secondary" type="button" onClick={onRemove}>
+            <button
+              className="btn-secondary"
+              disabled={!editable}
+              type="button"
+              onClick={onRemove}
+            >
               Remove
             </button>
           ) : null}
@@ -552,6 +580,7 @@ function RuleCard({
           label="Principals"
           value={rule.principalsText}
           onChange={(value) => onChange({ principalsText: value })}
+          disabled={!editable}
         />
         {schemaColumns.length === 0 ? (
           <TextListField
@@ -559,11 +588,13 @@ function RuleCard({
             label="Visible columns"
             value={rule.columnsText}
             onChange={(value) => onChange({ columnsText: value })}
+            disabled={!editable}
           />
         ) : (
           <ColumnSelector
             selections={rule.columnSelections}
             onChange={(columnSelections) => onChange({ columnSelections })}
+            disabled={!editable}
           />
         )}
       </div>
@@ -574,6 +605,7 @@ function RuleCard({
         </span>
         <input
           className="field mt-2"
+          disabled={!editable}
           placeholder="region = 'us'"
           value={rule.rowFilter}
           onChange={(event) => onChange({ rowFilter: event.target.value })}
@@ -591,23 +623,27 @@ function RuleCard({
         valueLabel="Expected value"
         rows={rule.conditions}
         onChange={(conditions) => onChange({ conditions })}
+        disabled={!editable}
       />
 
       <MaskEditor
         schemaColumns={schemaColumns}
         masks={rule.masks}
         onChange={(masks) => onChange({ masks })}
+        disabled={!editable}
       />
     </article>
   );
 }
 
 function TextListField({
+  disabled,
   help,
   label,
   onChange,
   value,
 }: {
+  disabled: boolean;
   help: string;
   label: string;
   onChange: (value: string) => void;
@@ -616,7 +652,12 @@ function TextListField({
   return (
     <label className="block">
       <span className="text-xs font-black uppercase tracking-wide text-muted">{label}</span>
-      <input className="field mt-2" value={value} onChange={(event) => onChange(event.target.value)} />
+      <input
+        className="field mt-2"
+        disabled={disabled}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
       <span className="mt-1 block text-xs text-muted">{help}</span>
     </label>
   );
@@ -624,6 +665,7 @@ function TextListField({
 
 function EditablePairs({
   addLabel,
+  disabled,
   emptyLabel,
   itemLabel,
   keyLabel,
@@ -632,6 +674,7 @@ function EditablePairs({
   valueLabel,
 }: {
   addLabel: string;
+  disabled: boolean;
   emptyLabel: string;
   itemLabel: string;
   keyLabel: string;
@@ -648,6 +691,7 @@ function EditablePairs({
         </div>
         <button
           className="btn-secondary"
+          disabled={disabled}
           type="button"
           onClick={() => onChange([...rows, { key: "", value: "", valueKind: "text" }])}
         >
@@ -671,6 +715,7 @@ function EditablePairs({
                 </span>
                 <input
                   className="field mt-2"
+                  disabled={disabled}
                   value={row.key}
                   onChange={(event) =>
                     onChange(replaceAt(rows, index, { ...row, key: event.target.value }))
@@ -683,6 +728,7 @@ function EditablePairs({
                 </span>
                 <input
                   className="field mt-2"
+                  disabled={disabled}
                   value={row.value}
                   onChange={(event) =>
                     onChange(replaceAt(rows, index, { ...row, value: event.target.value }))
@@ -695,6 +741,7 @@ function EditablePairs({
                 </span>
                 <select
                   className="field mt-2"
+                  disabled={disabled}
                   value={row.valueKind}
                   onChange={(event) =>
                     onChange(
@@ -711,6 +758,7 @@ function EditablePairs({
               </label>
               <button
                 className="btn-secondary self-end"
+                disabled={disabled}
                 type="button"
                 onClick={() => onChange(rows.filter((_, currentIndex) => currentIndex !== index))}
               >
@@ -725,10 +773,12 @@ function EditablePairs({
 }
 
 function MaskEditor({
+  disabled,
   masks,
   onChange,
   schemaColumns,
 }: {
+  disabled: boolean;
   masks: MaskRow[];
   onChange: (masks: MaskRow[]) => void;
   schemaColumns: string[];
@@ -742,6 +792,7 @@ function MaskEditor({
         </div>
         <button
           className="btn-secondary"
+          disabled={disabled}
           type="button"
           onClick={() => onChange([...masks, { column: "", type: "email" }])}
         >
@@ -766,6 +817,7 @@ function MaskEditor({
                 {schemaColumns.length === 0 ? (
                   <input
                     className="field mt-2"
+                    disabled={disabled}
                     value={mask.column}
                     onChange={(event) =>
                       onChange(replaceAt(masks, index, { ...mask, column: event.target.value }))
@@ -774,6 +826,7 @@ function MaskEditor({
                 ) : (
                   <select
                     className="field mt-2"
+                    disabled={disabled}
                     value={mask.column}
                     onChange={(event) =>
                       onChange(replaceAt(masks, index, { ...mask, column: event.target.value }))
@@ -794,6 +847,7 @@ function MaskEditor({
                 </span>
                 <select
                   className="field mt-2"
+                  disabled={disabled}
                   value={mask.type}
                   onChange={(event) =>
                     onChange(replaceAt(masks, index, { ...mask, type: event.target.value }))
@@ -807,6 +861,7 @@ function MaskEditor({
               </label>
               <button
                 className="btn-secondary self-end"
+                disabled={disabled}
                 type="button"
                 onClick={() => onChange(masks.filter((_, currentIndex) => currentIndex !== index))}
               >
@@ -821,9 +876,11 @@ function MaskEditor({
 }
 
 function ColumnSelector({
+  disabled,
   onChange,
   selections,
 }: {
+  disabled: boolean;
   onChange: (selections: ColumnSelection[]) => void;
   selections: ColumnSelection[];
 }) {
@@ -840,6 +897,7 @@ function ColumnSelector({
           >
             <input
               checked={selection.selected}
+              disabled={disabled}
               type="checkbox"
               onChange={(event) =>
                 onChange(

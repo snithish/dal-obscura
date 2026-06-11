@@ -1,0 +1,7 @@
+ARG DAL_OBSCURA_IMAGE=ghcr.io/snithish/dal-obscura:latest
+FROM ${DAL_OBSCURA_IMAGE}
+
+USER root
+WORKDIR /workspace
+
+ENV PYTHONUNBUFFERED=1

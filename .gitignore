@@ -11,6 +11,9 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+!src/dal_obscura/control_plane/interfaces/ui_assets/
+!src/dal_obscura/control_plane/interfaces/ui_assets/dist/
+!src/dal_obscura/control_plane/interfaces/ui_assets/dist/**
 downloads/
 eggs/
 .eggs/
@@ -220,5 +223,5 @@ __marimo__/
 
 
 PRD.md
-docs/
+docs/superpowers/
 .superpowers/

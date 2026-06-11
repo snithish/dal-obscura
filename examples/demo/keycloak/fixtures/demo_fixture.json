@@ -1,0 +1,78 @@
+{
+  "catalog": "retail_demo",
+  "table": {
+    "target": "retail.customer_revenue",
+    "schema": [
+      {"name": "customer_id", "type": "long", "required": true},
+      {"name": "customer_name", "type": "string"},
+      {"name": "email", "type": "string"},
+      {"name": "region", "type": "string"},
+      {"name": "account_owner", "type": "string"},
+      {"name": "annual_revenue", "type": "double"}
+    ],
+    "rows": [
+      {
+        "customer_id": 1001,
+        "customer_name": "Northwind Labs",
+        "email": "alice@northwind.example",
+        "region": "us",
+        "account_owner": "Maya Chen",
+        "annual_revenue": 1250000.0
+      },
+      {
+        "customer_id": 1002,
+        "customer_name": "Contoso Retail",
+        "email": "bob@contoso.example",
+        "region": "us",
+        "account_owner": "Maya Chen",
+        "annual_revenue": 820000.0
+      },
+      {
+        "customer_id": 2001,
+        "customer_name": "Fabrikam GmbH",
+        "email": "carla@fabrikam.example",
+        "region": "eu",
+        "account_owner": "Jonas Weber",
+        "annual_revenue": 1475000.0
+      },
+      {
+        "customer_id": 2002,
+        "customer_name": "Adventure Works EU",
+        "email": "diego@adventure.example",
+        "region": "eu",
+        "account_owner": "Jonas Weber",
+        "annual_revenue": 960000.0
+      }
+    ]
+  },
+  "owners": ["group:asset-owners"],
+  "policies": [
+    {
+      "ordinal": 10,
+      "effect": "allow",
+      "principals": ["group:us-analysts"],
+      "when": {},
+      "columns": ["customer_id", "customer_name", "email", "region", "account_owner", "annual_revenue"],
+      "masks": {"email": {"type": "email"}},
+      "row_filter": "region = 'us'"
+    },
+    {
+      "ordinal": 20,
+      "effect": "allow",
+      "principals": ["group:eu-analysts"],
+      "when": {},
+      "columns": ["customer_id", "customer_name", "email", "region", "account_owner", "annual_revenue"],
+      "masks": {"email": {"type": "email"}},
+      "row_filter": "region = 'eu'"
+    },
+    {
+      "ordinal": 30,
+      "effect": "allow",
+      "principals": ["group:data-stewards", "group:asset-owners"],
+      "when": {},
+      "columns": ["customer_id", "customer_name", "email", "region", "account_owner", "annual_revenue"],
+      "masks": {},
+      "row_filter": null
+    }
+  ]
+}

@@ -1,0 +1,203 @@
+from __future__ import annotations
+
+import json
+import os
+import time
+from pathlib import Path
+from typing import Any, cast
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+DEMO_DIR = Path(os.environ.get("DEMO_DIR", "/workspace/demo"))
+RUNTIME_DIR = DEMO_DIR / ".runtime"
+FIXTURE_FILE = DEMO_DIR / "fixtures" / "demo_fixture.json"
+DATA_PLANE_ENV = RUNTIME_DIR / "data-plane.env"
+CONTROL_PLANE_URL = os.environ.get("CONTROL_PLANE_URL", "http://control-plane:8820")
+ADMIN_TOKEN = os.environ["DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN"]
+ICEBERG_CATALOG_MODULE = (
+    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
+)
+OIDC_AUTH_MODULE = (
+    "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider"
+)
+
+
+def main() -> None:
+    fixture = _read_fixture()
+    _wait_for_control_plane()
+    cell_id = _provision_workspace(fixture)
+    _upsert_env_value(DATA_PLANE_ENV, "DAL_OBSCURA_CELL_ID", cell_id)
+    print(
+        json.dumps(
+            {
+                "catalog": fixture["catalog"],
+                "target": fixture["table"]["target"],
+                "cell_id": cell_id,
+            }
+        )
+    )
+
+
+def _read_fixture() -> dict[str, Any]:
+    fixture = json.loads(FIXTURE_FILE.read_text(encoding="utf-8"))
+    if not isinstance(fixture, dict):
+        raise ValueError("fixture must be a JSON object")
+    return fixture
+
+
+def _wait_for_control_plane() -> None:
+    deadline = time.monotonic() + 90
+    last_error: Exception | None = None
+    while time.monotonic() < deadline:
+        try:
+            _request("GET", "/v1/session")
+            return
+        except Exception as exc:
+            last_error = exc
+            time.sleep(1)
+    raise RuntimeError(f"control plane did not become ready: {last_error}") from last_error
+
+
+def _workspace_cell_id() -> str:
+    cells = _request("GET", "/v1/cells")
+    if not isinstance(cells, list) or not cells:
+        raise RuntimeError("workspace provisioning did not create a cell")
+    rows = cast(list[dict[str, Any]], cells)
+    for row in rows:
+        if row.get("name") == "default":
+            return str(row["id"])
+    return str(rows[0]["id"])
+
+
+def _provision_workspace(fixture: dict[str, Any]) -> str:
+    catalog_name = str(fixture["catalog"])
+    target = str(fixture["table"]["target"])
+    warehouse_path = "/workspace/demo/.runtime/warehouse"
+    catalog_options = {
+        "type": "sql",
+        "uri": f"sqlite:///{RUNTIME_DIR / f'{catalog_name}.db'}",
+        "warehouse": warehouse_path,
+    }
+    _request(
+        "PUT",
+        "/v1/settings/runtime",
+        {
+            "ticket_ttl_seconds": 600,
+            "max_tickets": 16,
+            "max_ticket_exchanges": 1,
+            "path_rules": [{"glob": f"{warehouse_path}/*", "allow": True}],
+        },
+    )
+    cell_id = _workspace_cell_id()
+    _request(
+        "PUT",
+        f"/v1/catalogs/{catalog_name}",
+        {"module": ICEBERG_CATALOG_MODULE, "options": catalog_options},
+    )
+    discovered = _request("GET", f"/v1/catalogs/{catalog_name}/tables")
+    if not isinstance(discovered, dict):
+        raise RuntimeError("catalog discovery returned an unexpected response")
+    discovered_payload = cast(dict[str, Any], discovered)
+    tables = cast(list[dict[str, Any]], discovered_payload.get("tables", []))
+    if target not in {table["target"] for table in tables}:
+        raise RuntimeError(f"catalog discovery did not find {target}")
+    asset = _request(
+        "PUT",
+        f"/v1/assets/{catalog_name}/{target}",
+        {"backend": "iceberg", "table_identifier": target, "options": {}},
+    )
+    if not isinstance(asset, dict):
+        raise RuntimeError("asset upsert returned an unexpected response")
+    asset_payload = cast(dict[str, Any], asset)
+    asset_id = str(asset_payload["id"])
+    _request(
+        "PUT",
+        f"/v1/assets/{asset_id}/schema-fields",
+        {
+            "fields": [
+                {
+                    "name": field["name"],
+                    "type": field["type"],
+                    "nullable": not bool(field.get("required", False)),
+                }
+                for field in fixture["table"]["schema"]
+            ]
+        },
+    )
+    _request("PUT", f"/v1/assets/{asset_id}/owners", {"owners": fixture["owners"]})
+    _request("PUT", f"/v1/assets/{asset_id}/policy-rules", {"rules": fixture["policies"]})
+    _request(
+        "PUT",
+        "/v1/settings/auth-providers",
+        {
+            "providers": [
+                {
+                    "ordinal": 10,
+                    "module": OIDC_AUTH_MODULE,
+                    "args": {
+                        "issuer": "http://127.0.0.1:8080/realms/dal-obscura-demo",
+                        "audience": "dal-obscura",
+                        "jwks_url": (
+                            "http://keycloak:8080/realms/dal-obscura-demo/"
+                            "protocol/openid-connect/certs"
+                        ),
+                        "subject_claim": "preferred_username",
+                        "group_claims": ["groups"],
+                    },
+                    "enabled": True,
+                }
+            ]
+        },
+    )
+    publication = _request("POST", "/v1/publications")
+    if not isinstance(publication, dict):
+        raise RuntimeError("publication response was not a JSON object")
+    publication_payload = cast(dict[str, Any], publication)
+    _request("POST", f"/v1/publications/{publication_payload['publication_id']}/activate")
+    return cell_id
+
+
+def _request(method: str, path: str, body: object | None = None) -> object:
+    data = None if body is None else json.dumps(body).encode("utf-8")
+    headers = {
+        "accept": "application/json",
+        "authorization": f"Bearer {ADMIN_TOKEN}",
+    }
+    if body is not None:
+        headers["content-type"] = "application/json"
+    request = Request(
+        f"{CONTROL_PLANE_URL}{path}",
+        data=data,
+        headers=headers,
+        method=method,
+    )
+    try:
+        with urlopen(request, timeout=10) as response:
+            payload = response.read()
+            return json.loads(payload.decode("utf-8")) if payload else {}
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"{method} {path} failed with {exc.code}: {detail}") from exc
+    except URLError as exc:
+        raise RuntimeError(f"{method} {path} failed: {exc.reason}") from exc
+
+
+def _upsert_env_value(path: Path, key: str, value: str) -> None:
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    prefix = f"{key}="
+    next_line = f"{key}={value}"
+    replaced = False
+    updated: list[str] = []
+    for line in lines:
+        if line.startswith(prefix):
+            updated.append(next_line)
+            replaced = True
+        else:
+            updated.append(line)
+    if not replaced:
+        updated.append(next_line)
+    path.write_text("\n".join(updated) + "\n", encoding="utf-8")
+
+
+if __name__ == "__main__":
+    main()

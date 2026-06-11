@@ -7,19 +7,42 @@ export class ApiError extends Error {
   }
 }
 
-const TOKEN_STORAGE_KEY = "dal-obscura.adminToken";
+let accessToken = "";
 
-function adminHeaders(): HeadersInit {
-  const token = window.localStorage.getItem(TOKEN_STORAGE_KEY) ?? "dev-admin";
+export type SessionActor = {
+  groups: string[];
+  platform_admin: boolean;
+  principal: string;
+};
+
+export function setAccessToken(token: string): void {
+  accessToken = token;
+}
+
+export function getAccessToken(): string {
+  return accessToken;
+}
+
+function apiHeaders(): HeadersInit {
   return {
     Accept: "application/json",
-    Authorization: `Bearer ${token}`,
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
   };
+}
+
+export async function apiGetPublic<T>(path: string): Promise<T> {
+  const response = await fetch(path, {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new ApiError(`Request failed: ${path}`, response.status);
+  }
+  return (await response.json()) as T;
 }
 
 export async function apiGet<T>(path: string): Promise<T> {
   const response = await fetch(path, {
-    headers: adminHeaders(),
+    headers: apiHeaders(),
   });
   if (!response.ok) {
     throw new ApiError(`Request failed: ${path}`, response.status);
@@ -31,7 +54,7 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(path, {
     body: JSON.stringify(body),
     headers: {
-      ...adminHeaders(),
+      ...apiHeaders(),
       "Content-Type": "application/json",
     },
     method: "PUT",
@@ -46,9 +69,9 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(path, {
     body: body === undefined ? undefined : JSON.stringify(body),
     headers: body === undefined
-      ? adminHeaders()
+      ? apiHeaders()
       : {
-          ...adminHeaders(),
+          ...apiHeaders(),
           "Content-Type": "application/json",
         },
     method: "POST",

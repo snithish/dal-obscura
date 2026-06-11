@@ -165,6 +165,7 @@ class PublicationStore:
                 status="active",
             )
         )
+        self._session.flush()
         self._session.add(
             CellTenantRecord(cell_id=cell_id, tenant_id=tenant_id, shard_key="default")
         )
@@ -312,6 +313,7 @@ class PublicationStore:
             select(AssetOwnerRecord).where(AssetOwnerRecord.asset_id == asset_id)
         ):
             self._session.delete(record)
+        self._session.flush()
         for ordinal, principal in enumerate(normalized, start=1):
             self._session.add(
                 AssetOwnerRecord(
@@ -338,6 +340,7 @@ class PublicationStore:
             select(AssetSchemaFieldRecord).where(AssetSchemaFieldRecord.asset_id == asset_id)
         ):
             self._session.delete(record)
+        self._session.flush()
         for ordinal, field in enumerate(normalized, start=1):
             self._session.add(
                 AssetSchemaFieldRecord(
@@ -357,6 +360,7 @@ class PublicationStore:
             select(AuthProviderRecord).where(AuthProviderRecord.cell_id == cell_id)
         ):
             self._session.delete(record)
+        self._session.flush()
         for raw in providers:
             self._session.add(
                 AuthProviderRecord(

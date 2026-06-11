@@ -42,6 +42,13 @@ uv sync
 uv run dal-obscura --help
 ```
 
+## Documentation
+
+Start with [docs/README.md](docs/README.md) for user, asset-owner, operator,
+security, connector, and contributor guides.
+
+For the fastest hands-on path, read [docs/quickstart.md](docs/quickstart.md).
+
 ## Container Image
 
 The repo root [Dockerfile](Dockerfile)
@@ -106,6 +113,11 @@ The runnable auth examples under
 [examples/auth](examples/auth/README.md)
 reuse that image and keep provider-specific infrastructure in each example
 directory.
+
+For an optional local reference environment with Keycloak IAM, the
+control-plane UI, catalog discovery, policy ownership, and authenticated Flight
+reads, see
+[examples/demo/keycloak](examples/demo/keycloak/README.md).
 
 ## Connectors
 

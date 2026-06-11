@@ -250,6 +250,16 @@ def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail():
         },
         headers=ADMIN_HEADERS,
     )
+    second_response = client.put(
+        f"/v1/assets/{asset['id']}/schema-fields",
+        json={
+            "fields": [
+                {"name": "id", "type": "long", "nullable": False},
+                {"name": "email", "type": "string", "nullable": False},
+            ]
+        },
+        headers=ADMIN_HEADERS,
+    )
     detail = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
 
     assert response.status_code == 200
@@ -260,9 +270,10 @@ def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail():
             {"name": "email", "type": "string", "nullable": True},
         ],
     }
+    assert second_response.status_code == 200
     assert detail["schema_fields"] == [
         {"name": "id", "type": "long", "nullable": False},
-        {"name": "email", "type": "string", "nullable": True},
+        {"name": "email", "type": "string", "nullable": False},
     ]
 
 
@@ -339,6 +350,11 @@ def test_workspace_asset_owners_can_be_replaced_from_asset_detail():
         json={"owners": ["user:alice@example.com", "group:data-owners"]},
         headers=ADMIN_HEADERS,
     )
+    second_response = client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["user:alice@example.com"]},
+        headers=ADMIN_HEADERS,
+    )
     assets = client.get("/v1/assets", headers=ADMIN_HEADERS).json()
     detail = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
     summary = client.get("/v1/workspace/summary", headers=ADMIN_HEADERS).json()
@@ -348,10 +364,11 @@ def test_workspace_asset_owners_can_be_replaced_from_asset_detail():
         "asset_id": asset["id"],
         "owners": ["user:alice@example.com", "group:data-owners"],
     }
-    assert assets[0]["owner_count"] == 2
-    assert assets[0]["owners"] == ["user:alice@example.com", "group:data-owners"]
-    assert detail["owner_count"] == 2
-    assert detail["owners"] == ["user:alice@example.com", "group:data-owners"]
+    assert second_response.status_code == 200
+    assert assets[0]["owner_count"] == 1
+    assert assets[0]["owners"] == ["user:alice@example.com"]
+    assert detail["owner_count"] == 1
+    assert detail["owners"] == ["user:alice@example.com"]
     assert summary["unowned_asset_count"] == 0
     assert summary["runtime_configured"] is False
     assert summary["enabled_auth_provider_count"] == 0
