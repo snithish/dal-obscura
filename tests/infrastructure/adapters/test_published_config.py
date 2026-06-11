@@ -1,19 +1,26 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import dataclass
 from uuid import uuid4
 
+import pyarrow as pa
 import pytest
 from sqlalchemy.orm import Session
 
 from dal_obscura.common.access_control.models import Principal
+from dal_obscura.common.catalog.ports import TableFormat
 from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
-from dal_obscura.common.config_store.orm import Base
+from dal_obscura.common.config_store.orm import Base, PublishedCellRuntimeRecord
+from dal_obscura.common.query_planning.models import PlanRequest
+from dal_obscura.common.table_format.ports import InputPartition, Plan, ScanTask
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 from dal_obscura.data_plane.infrastructure.adapters.published_config import (
     PublishedConfigAuthorizer,
+    PublishedConfigCatalogRegistry,
     PublishedConfigStore,
 )
+from dal_obscura.data_plane.infrastructure.table_providers.registry import TableProviderFactory
 
 ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
@@ -94,12 +101,40 @@ def test_published_store_uses_last_good_asset_after_transient_failure(
     assert second == first
 
 
+def test_published_catalog_registry_loads_custom_provider_modules(db_session: Session):
+    cell_id = uuid4()
+    tenant_id = uuid4()
+    _publish_asset(
+        db_session,
+        cell_id=cell_id,
+        tenant_id=tenant_id,
+        policy_version=123,
+        backend="postgres",
+        table="public.users",
+        target_options={
+            "provider_modules": [
+                "tests.infrastructure.adapters.test_published_config.FakePostgresFactory"
+            ],
+            "dsn": "postgresql://example/db",
+        },
+    )
+    registry = PublishedConfigCatalogRegistry(PublishedConfigStore(db_session, cell_id=cell_id))
+
+    table = registry.describe("analytics", "default.users", tenant_id=str(tenant_id))
+
+    assert table.format == "postgres"
+    assert table.table_name == "default.users"
+
+
 def _publish_asset(
     session: Session,
     *,
     cell_id,
     tenant_id,
     policy_version: int,
+    backend: str = "iceberg",
+    table: str = "prod.users",
+    target_options: dict[str, object] | None = None,
 ) -> None:
     publication_id = uuid4()
     store = PublicationStore(session)
@@ -115,18 +150,30 @@ def _publish_asset(
         publication_id=publication_id,
         manifest_hash="b" * 64,
     )
+    session.add(
+        PublishedCellRuntimeRecord(
+            publication_id=publication_id,
+            auth_chain_json={"providers": []},
+            ticket_json={},
+            path_rules_json=[],
+        )
+    )
     store.insert_published_asset(
         publication_id=publication_id,
         tenant_id=tenant_id,
         catalog="analytics",
         target="default.users",
-        backend="iceberg",
+        backend=backend,
         compiled_config={
             "catalog": {
                 "module": ICEBERG_CATALOG_MODULE,
                 "options": {},
             },
-            "target": {"backend": "iceberg", "table": "prod.users"},
+            "target": {
+                "backend": backend,
+                "table": table,
+                "options": dict(target_options or {}),
+            },
             "policy": {
                 "rules": [
                     {
@@ -144,3 +191,41 @@ def _publish_asset(
     )
     store.activate_publication(cell_id=cell_id, publication_id=publication_id)
     session.commit()
+
+
+class FakePostgresFactory(TableProviderFactory):
+    provider_id = "postgres"
+
+    def create(self, descriptor, *, path_enforcer=None):
+        del path_enforcer
+        assert descriptor.location is None
+        assert descriptor.options["dsn"] == "postgresql://example/db"
+        return FakePostgresTableFormat(
+            catalog_name=descriptor.catalog_name,
+            table_name=descriptor.requested_target,
+            format="postgres",
+        )
+
+
+@dataclass(frozen=True, kw_only=True)
+class FakePostgresTableFormat(TableFormat):
+    def get_schema(self) -> pa.Schema:
+        return pa.schema([pa.field("id", pa.int64())])
+
+    def plan(self, request: PlanRequest, max_tickets: int) -> Plan:
+        del request, max_tickets
+        schema = self.get_schema()
+        return Plan(
+            schema=schema,
+            tasks=[
+                ScanTask(
+                    table_format=self,
+                    schema=schema,
+                    partition=InputPartition(),
+                )
+            ],
+        )
+
+    def execute(self, partition: InputPartition):
+        del partition
+        return self.get_schema(), iter(())

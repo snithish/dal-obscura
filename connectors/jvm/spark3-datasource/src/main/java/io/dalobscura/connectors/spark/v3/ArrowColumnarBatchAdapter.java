@@ -31,7 +31,11 @@ public final class ArrowColumnarBatchAdapter implements AutoCloseable {
             StructField field = fields[index];
             FieldVector fieldVector = vectorsByName.get(field.name());
             if (fieldVector == null) {
-                throw new IllegalStateException("Missing Arrow vector for Spark field: " + field.name());
+                throw new IllegalStateException(
+                        "Missing Arrow vector for Spark field: "
+                                + field.name()
+                                + "; available vectors: "
+                                + vectorsByName.keySet());
             }
             vectors[index] =
                     ProjectedColumnVector.project(

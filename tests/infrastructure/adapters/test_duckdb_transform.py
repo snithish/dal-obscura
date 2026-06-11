@@ -126,9 +126,27 @@ def test_nested_mask_expression():
         ["user.address.zip"],
         {"user.address.zip": MaskRule(type="hash")},
     )
-    assert selection.select_list == [
-        'sha256(CAST("user"."address"."zip" AS VARCHAR)) AS "user.address.zip"'
-    ]
+    assert selection.select_list[0].endswith(' AS "user"')
+    assert 'struct_pack("address"' in selection.select_list[0]
+    assert 'struct_pack("zip" := sha256' in selection.select_list[0]
+
+
+def test_nested_projection_mask_bookkeeping_respects_top_level_field():
+    address_type = pa.struct([pa.field("zip", pa.int64())])
+    schema = pa.schema(
+        [
+            pa.field("user", pa.struct([pa.field("address", address_type)])),
+            pa.field("account", pa.struct([pa.field("address", address_type)])),
+        ]
+    )
+
+    selection = DefaultMaskingAdapter().apply(
+        schema,
+        ["user.address.zip"],
+        {"account.address.zip": MaskRule(type="hash")},
+    )
+
+    assert selection.masked_columns == []
 
 
 def test_nested_struct_selection_applies_descendant_masks():
@@ -152,7 +170,7 @@ def test_nested_struct_selection_applies_descendant_masks():
         ["user.address"],
         {"user.address.zip": MaskRule(type="hash")},
     )
-    assert 'struct_update("user"."address", "zip"' in selection.select_list[0]
+    assert 'struct_update(("user")."address", "zip"' in selection.select_list[0]
 
 
 def test_masked_schema_updates_nested_field_types():
@@ -187,7 +205,7 @@ def test_masked_schema_updates_nested_field_types():
     assert address_field.type.field("zip").type == pa.string()
 
 
-def test_masked_schema_exposes_nested_projection_as_dotted_column():
+def test_masked_schema_exposes_nested_projection_as_pruned_struct():
     schema = pa.schema(
         [
             pa.field(
@@ -210,8 +228,10 @@ def test_masked_schema_exposes_nested_projection_as_dotted_column():
         {"user.address.zip": MaskRule(type="hash")},
     )
 
-    assert masked_schema.names == ["user.address.zip"]
-    assert masked_schema.field("user.address.zip").type == pa.string()
+    assert masked_schema.names == ["user"]
+    address_field = masked_schema.field("user").type.field("address")
+    assert address_field.type.names == ["zip"]
+    assert address_field.type.field("zip").type == pa.string()
 
 
 def test_default_mask_renders_literal():

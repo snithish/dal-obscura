@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import pyarrow as pa
@@ -10,6 +10,32 @@ import pyarrow as pa
 if TYPE_CHECKING:
     from dal_obscura.common.query_planning.models import PlanRequest
     from dal_obscura.common.table_format.ports import InputPartition, Plan
+
+
+@dataclass(frozen=True, kw_only=True)
+class CatalogTableDescriptor:
+    """Catalog-resolved metadata used to choose and build an executable provider."""
+
+    catalog_name: str
+    requested_target: str
+    provider_id: str
+    table_identifier: str | None = None
+    location: str | None = None
+    metadata_location: str | None = None
+    options: dict[str, object] = field(default_factory=dict)
+    storage_options: dict[str, object] = field(default_factory=dict)
+    properties: dict[str, object] = field(default_factory=dict)
+    schema: pa.Schema | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
+class CatalogTableListing:
+    """Lightweight table metadata returned by catalog discovery."""
+
+    name: str
+    provider_id: str
+    table_identifier: str | None = None
+    properties: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -42,5 +68,5 @@ class CatalogPlugin(ABC):
         """Name of the catalog registered in the configuration."""
 
     @abstractmethod
-    def get_table(self, target: str) -> TableFormat:
-        """Resolves a target name to a format and its native table object."""
+    def describe_table(self, target: str) -> CatalogTableDescriptor:
+        """Resolves a target name to provider-neutral table metadata."""

@@ -17,6 +17,10 @@ from dal_obscura.control_plane.domain.models import (
     PublishDraft,
 )
 
+SUPPORTED_BACKENDS = frozenset(
+    {"iceberg", "delta", "parquet", "csv", "json", "orc", "avro", "text"}
+)
+
 
 class PublicationCompiler:
     """Compiles mutable authoring resources into immutable published config rows."""
@@ -92,20 +96,26 @@ class PublicationCompiler:
         )
 
     def _compile_asset(self, asset: AssetDraft, catalog: CatalogDraft) -> CompiledAsset:
-        if asset.backend != "iceberg":
+        provider_modules = _provider_modules(asset.options.get("provider_modules"))
+        if asset.backend not in SUPPORTED_BACKENDS and not provider_modules:
             raise ValidationFailure(f"Unsupported backend {asset.backend!r}")
         rules = [
             self._compile_rule(rule) for rule in sorted(asset.rules, key=lambda item: item.ordinal)
         ]
-        compiled_config = {
+        target_options = dict(asset.options)
+        target_options.pop("provider_modules", None)
+        target_config: dict[str, object] = {
+            "backend": asset.backend,
+            "table": asset.table_identifier or asset.target,
+            "options": target_options,
+        }
+        compiled_config: dict[str, object] = {
             "catalog": {"module": catalog.module, "options": dict(catalog.options)},
-            "target": {
-                "backend": asset.backend,
-                "table": asset.table_identifier or asset.target,
-                "options": dict(asset.options),
-            },
+            "target": target_config,
             "policy": {"rules": rules},
         }
+        if provider_modules:
+            target_config["provider_modules"] = provider_modules
         return CompiledAsset(
             tenant_id=asset.tenant_id,
             catalog=asset.catalog_name,
@@ -151,6 +161,12 @@ def _stable_hash(value: object) -> str:
 
 def _stable_int63(value: object) -> int:
     return int(_stable_hash(value), 16) & ((1 << 63) - 1)
+
+
+def _provider_modules(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if str(item).strip()]
 
 
 def _publication_hash(

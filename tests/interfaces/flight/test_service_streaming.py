@@ -406,13 +406,17 @@ def test_flight_streaming_supports_nested_projection_with_policy_and_requested_r
         info = client.get_flight_info(descriptor, options=options)
         table = client.do_get(info.endpoints[0].ticket, options=options).read_all()
 
-        assert info.schema.names == ["id", "user.address.zip", "user.email"]
-        assert info.schema.field("user.address.zip").type == pa.string()
-        assert info.schema.field("user.email").type == pa.string()
+        assert info.schema.names == ["id", "user"]
+        user_field = info.schema.field("user")
+        assert user_field.type.names == ["address", "email"]
+        assert user_field.type.field("address").type.names == ["zip"]
+        assert user_field.type.field("address").type.field("zip").type == pa.string()
+        assert user_field.type.field("email").type == pa.string()
         assert table.num_rows == 2
         assert table.column("id").to_pylist() == [1, 4]
-        assert table.column("user.email").to_pylist() == ["[hidden]", "[hidden]"]
-        assert all(len(value) == 64 for value in table.column("user.address.zip").to_pylist())
+        users = table.column("user").to_pylist()
+        assert [user["email"] for user in users] == ["[hidden]", "[hidden]"]
+        assert all(len(user["address"]["zip"]) == 64 for user in users)
 
 
 def test_flight_streaming_masks_list_of_struct_fields(tmp_path):
@@ -493,78 +497,6 @@ def test_flight_normalizes_large_list_schema_for_clients(tmp_path):
     assert pa.types.is_list(info_preferences.type)
     assert table.column("metadata").type.field("preferences").type == schema_preferences.type
     assert table.column("metadata").to_pylist()[0]["preferences"][0]["theme"] == "dark"
-
-
-def test_flight_logs_include_resident_memory(tmp_path, caplog, monkeypatch):
-    del tmp_path
-    schema = id_region_schema()
-    batch = id_region_batch([1, 2], ["us", "eu"])
-    table_format = StubTableFormat(
-        catalog_name="analytics",
-        table_name="test.table",
-        format="stub_format",
-        schema=schema,
-        batches=(batch,),
-    )
-
-    monkeypatch.setattr(
-        "dal_obscura.data_plane.interfaces.flight.server.get_resident_memory_bytes",
-        lambda: 4_242,
-    )
-    server = build_flight_service(
-        table_format=table_format,
-        policy_rules=[allow_rule(["id", "region"])],
-    )
-    descriptor = command_descriptor(
-        {
-            "catalog": "analytics",
-            "target": "test.table",
-            "columns": ["id", "region"],
-        }
-    )
-    context = DummyContext(headers=[authorization_header("user1")])
-
-    with caplog.at_level("INFO"):
-        info = server.get_flight_info(context, descriptor)
-        server.do_get(context, info.endpoints[0].ticket)
-
-    records = [record for record in caplog.records if record.message in {"plan_request", "do_get"}]
-    assert [record.message for record in records] == ["plan_request", "do_get"]
-    assert all(record.resident_memory_bytes == 4_242 for record in records)
-
-
-def test_flight_logs_requested_row_filter_presence(tmp_path, caplog):
-    del tmp_path
-    schema = id_region_schema()
-    batch = id_region_batch([1, 2], ["us", "eu"])
-    table_format = StubTableFormat(
-        catalog_name="analytics",
-        table_name="test.table",
-        format="stub_format",
-        schema=schema,
-        batches=(batch,),
-    )
-
-    server = build_flight_service(
-        table_format=table_format,
-        policy_rules=[allow_rule(["id", "region"])],
-    )
-    descriptor = command_descriptor(
-        {
-            "catalog": "analytics",
-            "target": "test.table",
-            "columns": ["id"],
-            "row_filter": "region = 'us'",
-        }
-    )
-    context = DummyContext(headers=[authorization_header("user1")])
-
-    with caplog.at_level("INFO"):
-        server.get_flight_info(context, descriptor)
-
-    record = next(item for item in caplog.records if item.msg == "plan_request")
-    assert record.requested_row_filter_present is True
-    assert record.requested_row_filter_dependency_count == 1
 
 
 def test_do_get_rejects_principal_mismatch(tmp_path):

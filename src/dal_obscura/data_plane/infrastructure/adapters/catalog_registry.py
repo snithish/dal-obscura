@@ -3,11 +3,11 @@ from __future__ import annotations
 import importlib
 import threading
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
-from dal_obscura.common.catalog.ports import CatalogPlugin, TableFormat
+from dal_obscura.common.catalog.ports import CatalogPlugin, CatalogTableDescriptor, TableFormat
 from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
-from dal_obscura.data_plane.infrastructure.table_formats.iceberg import IcebergTableFormat
+from dal_obscura.data_plane.infrastructure.table_providers.registry import TableProviderRegistry
 
 
 @dataclass(frozen=True)
@@ -43,9 +43,15 @@ class ServiceConfig:
 class DynamicCatalogRegistry:
     """Stores catalog implementations and resolves dataset requests into tables."""
 
-    def __init__(self, config: ServiceConfig) -> None:
+    def __init__(
+        self,
+        config: ServiceConfig,
+        *,
+        table_provider_registry: TableProviderRegistry | None = None,
+    ) -> None:
         self._lock = threading.RLock()
         self._catalog_implementations: dict[str, CatalogPlugin] = {}
+        self._table_provider_registry = table_provider_registry or TableProviderRegistry()
         self._current_config = config
         self.reload(config)
 
@@ -71,7 +77,9 @@ class DynamicCatalogRegistry:
             implementation = self._catalog_implementations.get(catalog_name)
             if implementation is None:
                 raise ValueError(f"Unknown catalog: {catalog_name}")
-        return implementation.get_table(target)
+        descriptor = implementation.describe_table(target)
+        path_enforcer = _path_enforcer(implementation)
+        return self._table_provider_registry.create(descriptor, path_enforcer=path_enforcer)
 
     def describe(
         self,
@@ -101,27 +109,27 @@ class IcebergCatalog:
         self.options = options
         self.targets = targets
         self._path_enforcer = path_enforcer
-        self._catalog = _load_iceberg_catalog(name, options)
+        self._catalog: Any | None = None
 
     @property
     def name(self) -> str:
         return self._name
 
-    def get_table(
-        self,
-        target: str,
-    ) -> TableFormat:
-        """Resolves an Iceberg target, optionally applying exact target overrides."""
+    def describe_table(self, target: str) -> CatalogTableDescriptor:
+        """Resolves an Iceberg target to provider-neutral metadata."""
         target_config = self.targets.get(target)
         if target_config is not None:
-            _ensure_iceberg_backend(self.name, target, target_config)
+            backend = _backend_id(target_config)
+            if backend != "iceberg":
+                return _descriptor_from_target_config(self.name, target, target_config)
+        if self._catalog is None:
+            self._catalog = _load_iceberg_catalog(self.name, self.options)
         table_identifier = (target_config.table if target_config else None) or target
-        return _resolve_iceberg_metadata(
+        return _resolve_iceberg_descriptor(
             self._catalog,
             self.name,
             target,
             table_identifier,
-            path_enforcer=self._path_enforcer,
         )
 
 
@@ -145,35 +153,31 @@ class StaticCatalog:
     def name(self) -> str:
         return self._name
 
-    def get_table(
-        self,
-        target: str,
-    ) -> TableFormat:
-        """Resolves an explicitly configured target by loading it from the catalog."""
+    def describe_table(self, target: str) -> CatalogTableDescriptor:
+        """Resolves an explicitly configured target to provider-neutral metadata."""
         target_config = self.targets.get(target)
         if target_config is None:
             raise ValueError(f"Unknown target {target!r} for catalog {self.name!r}")
-        _ensure_iceberg_backend(self.name, target, target_config)
+        backend = _backend_id(target_config)
+        if backend != "iceberg":
+            return _descriptor_from_target_config(self.name, target, target_config)
         if self._catalog is None:
             self._catalog = _load_iceberg_catalog(self.name, self.options)
         table_identifier = target_config.table or target
-        return _resolve_iceberg_metadata(
+        return _resolve_iceberg_descriptor(
             self._catalog,
             self.name,
             target,
             table_identifier,
-            path_enforcer=self._path_enforcer,
         )
 
 
-def _resolve_iceberg_metadata(
+def _resolve_iceberg_descriptor(
     catalog: Any,
     catalog_name: str,
     requested_target: str,
     table_identifier: str,
-    *,
-    path_enforcer: PathRuleEnforcer | None = None,
-) -> TableFormat:
+) -> CatalogTableDescriptor:
     """Contacts the Iceberg catalog to resolve the actual metadata location for a table."""
     try:
         pyiceberg_table = catalog.load_table(table_identifier)
@@ -182,12 +186,13 @@ def _resolve_iceberg_metadata(
             f"Failed to load table {table_identifier!r} from catalog {catalog_name!r}: {e}"
         ) from e
 
-    return IcebergTableFormat(
+    return CatalogTableDescriptor(
         catalog_name=catalog_name,
-        table_name=requested_target,
+        requested_target=requested_target,
+        provider_id="iceberg",
+        table_identifier=table_identifier,
         metadata_location=pyiceberg_table.metadata_location,
-        io_options=dict(pyiceberg_table.io.properties),
-        path_enforcer=path_enforcer,
+        storage_options=dict(pyiceberg_table.io.properties),
     )
 
 
@@ -201,18 +206,33 @@ def _load_iceberg_catalog(catalog_name: str, catalog_options: dict[str, Any]) ->
         raise ValueError(f"Failed to load catalog {catalog_name!r}: {exc}") from exc
 
 
-def _ensure_iceberg_backend(
+def _backend_id(target_config: CatalogTargetConfig) -> str:
+    return (target_config.backend or target_config.format or "iceberg").strip().lower()
+
+
+def _descriptor_from_target_config(
     catalog_name: str,
     requested_target: str,
     target_config: CatalogTargetConfig,
-) -> None:
-    """Rejects non-Iceberg target overrides until other backends are implemented."""
-    backend_id = target_config.backend or "iceberg"
-    if backend_id != "iceberg":
-        raise ValueError(
-            f"Unsupported backend {backend_id!r} for target {requested_target!r} in "
-            f"catalog {catalog_name!r}; only 'iceberg' is currently supported"
-        )
+) -> CatalogTableDescriptor:
+    backend_id = _backend_id(target_config)
+    table_uri = target_config.table or requested_target
+    options = dict(target_config.options)
+    storage_options: dict[str, object] = {
+        str(key): str(value)
+        for key, value in _mapping(options.get("storage_options")).items()
+        if value is not None
+    }
+    options.pop("storage_options", None)
+    return CatalogTableDescriptor(
+        catalog_name=catalog_name,
+        requested_target=requested_target,
+        provider_id=backend_id,
+        table_identifier=table_uri,
+        location=table_uri if backend_id in _PATH_PROVIDERS else None,
+        options=options,
+        storage_options=storage_options,
+    )
 
 
 def _load_and_instantiate_catalog(catalog_config: CatalogConfig) -> CatalogPlugin:
@@ -239,3 +259,19 @@ def _load_and_instantiate_catalog(catalog_config: CatalogConfig) -> CatalogPlugi
         )
     except Exception as exc:
         raise ValueError(f"Failed to instantiate catalog {catalog_config.name!r}: {exc}") from exc
+
+
+def _mapping(value: object) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return cast(dict[str, Any], value).copy()
+    return {}
+
+
+_PATH_PROVIDERS = frozenset({"delta", "parquet", "csv", "json", "orc", "avro", "text"})
+
+
+def _path_enforcer(implementation: CatalogPlugin) -> PathRuleEnforcer | None:
+    value = getattr(implementation, "_path_enforcer", None)
+    if isinstance(value, PathRuleEnforcer):
+        return value
+    return None

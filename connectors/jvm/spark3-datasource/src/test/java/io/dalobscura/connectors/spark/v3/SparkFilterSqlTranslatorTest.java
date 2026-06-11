@@ -81,6 +81,17 @@ class SparkFilterSqlTranslatorTest {
     }
 
     @Test
+    void keepsBinaryLiteralsResidualInsteadOfRenderingInvalidSql() {
+        Filter binary = new EqualTo("payload", new byte[] {1, 2, 3});
+
+        SparkFilterTranslation translation = translator.translate(new Filter[] {binary});
+
+        assertTrue(translation.pushedSql().isEmpty());
+        assertArrayEquals(new Filter[0], translation.pushedFilters());
+        assertArrayEquals(new Filter[] {binary}, translation.residualFilters());
+    }
+
+    @Test
     void preservesOrGroupingInsideConjunctions() {
         Filter grouped =
                 new And(
