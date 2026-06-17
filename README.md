@@ -228,10 +228,11 @@ Assets can use these read-only backends:
 - `avro`: Avro object-container files read through fastavro.
 - `text`: line-oriented text files exposed as one string column, default `value`.
 
-Static file and Delta targets can be configured with `table_identifier` pointing
-at the table root or file path and `options.storage_options` carrying object
-store options. Those options can use the same secret-reference pattern as other
-published runtime configuration.
+Delta and file-backed targets must be resolved through a catalog. Static
+catalog entries can carry `table_identifier` values that point at table roots or
+file paths, and `options.storage_options` can carry object-store options. Those
+options can use the same secret-reference pattern as other published runtime
+configuration.
 
 Catalogs and table formats are separate extension points:
 
@@ -319,6 +320,17 @@ Then call:
 Runtime ticket settings include `ticket_ttl_seconds`, `max_tickets`, and
 `max_ticket_exchanges`. `max_ticket_exchanges` limits how many successful
 `do_get` exchanges a planned ticket can reserve before it is rejected.
+
+```json
+{
+  "ticket_ttl_seconds": 900,
+  "max_tickets": 64,
+  "max_ticket_exchanges": 2
+}
+```
+
+Runtime configuration does not accept standalone storage paths. Table discovery
+and physical locations must come from catalog definitions and governed assets.
 
 Flight tickets are opaque HMAC-signed references. The executable scan payload,
 including the pickled internal `ScanTask`, is stored server-side in the
@@ -462,7 +474,8 @@ After `uv sync --dev`, install the hooks with `uv run pre-commit install`. The c
 - Published policy row filters are validated against the same allowlisted query shape before activation.
 - DuckDB row-transform execution runs over Arrow batches with external access and extension auto-loading disabled.
 - Iceberg planning pushes down a safe subset of validated row filters for top-level fields, but DuckDB re-applies the full effective filter during fetch so backend pushdown remains an optimization rather than the final enforcement point. Delta and PyArrow Dataset-backed reads translate simple validated filters into Arrow Dataset expressions for scan planning and execution. Avro and text reads can apply translated filters during task execution, but still report the filter as residual because they read whole files. Unity Catalog participates in metadata resolution; the resolved table provider determines actual pushdown behavior.
-- Published runtime `path_rules` are enforced for Iceberg metadata and planned file paths when rules are configured. Empty path rules preserve local development behavior.
+- Standalone path reads are not a supported discovery path. Catalog definitions
+  resolve physical table locations before tickets are minted.
 - Nested field masks use DuckDB `struct_update`, and list-of-struct masks use `list_transform` plus `struct_update`.
 
 ## Current Limitations

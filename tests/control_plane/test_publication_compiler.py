@@ -33,7 +33,6 @@ def _draft(row_filter: str = "region = 'us'") -> PublishDraft:
             ticket_ttl_seconds=900,
             max_tickets=64,
             max_ticket_exchanges=2,
-            path_rules=[],
         ),
         auth_providers=[
             AuthProviderDraft(

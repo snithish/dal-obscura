@@ -29,7 +29,7 @@ pytestmark = pytest.mark.heavy
 def _build_registry(
     catalogs: dict[str, CatalogConfig],
 ) -> DynamicCatalogRegistry:
-    return DynamicCatalogRegistry(ServiceConfig(catalogs=catalogs, paths=()))
+    return DynamicCatalogRegistry(ServiceConfig(catalogs=catalogs))
 
 
 def _build_registry_from_config(service_config: ServiceConfig) -> DynamicCatalogRegistry:
@@ -668,9 +668,7 @@ def test_hot_reload_does_not_break_iceberg_catalog_registry(tmp_path):
                 ),
             },
         )
-        catalog_registry.reload(
-            type(service_config)(catalogs=updated_catalogs, paths=service_config.paths)
-        )
+        catalog_registry.reload(type(service_config)(catalogs=updated_catalogs))
 
         new_info, new_options = flight_info(
             client,

@@ -159,7 +159,6 @@ def test_workspace_runtime_settings_can_be_configured_without_tenant_or_cell_ids
             "ticket_ttl_seconds": 1200,
             "max_tickets": 32,
             "max_ticket_exchanges": 3,
-            "path_rules": [{"glob": "s3://warehouse/*", "allow": True}],
         },
         headers=ADMIN_HEADERS,
     )
@@ -172,8 +171,24 @@ def test_workspace_runtime_settings_can_be_configured_without_tenant_or_cell_ids
         "ticket_ttl_seconds": 1200,
         "max_tickets": 32,
         "max_ticket_exchanges": 3,
-        "path_rules": [{"glob": "s3://warehouse/*", "allow": True}],
     }
+
+
+def test_workspace_runtime_settings_rejects_path_rules():
+    client = _client()
+
+    response = client.put(
+        "/v1/settings/runtime",
+        json={
+            "ticket_ttl_seconds": 1200,
+            "max_tickets": 32,
+            "max_ticket_exchanges": 3,
+            "path_rules": [{"root": "s3://warehouse"}],
+        },
+        headers=ADMIN_HEADERS,
+    )
+
+    assert response.status_code == 422
 
 
 def test_workspace_asset_upsert_uses_default_workspace_context():
@@ -492,7 +507,6 @@ def test_workspace_publish_rejects_assets_without_policy_rules():
             "ticket_ttl_seconds": 900,
             "max_tickets": 64,
             "max_ticket_exchanges": 2,
-            "path_rules": [{"glob": "s3://warehouse/*", "allow": True}],
         },
         headers=ADMIN_HEADERS,
     )
@@ -767,7 +781,6 @@ def _provision_draft(client: TestClient) -> dict[str, str]:
             "ticket_ttl_seconds": 900,
             "max_tickets": 64,
             "max_ticket_exchanges": 2,
-            "path_rules": [{"glob": "s3://warehouse/*", "allow": True}],
         },
         headers=ADMIN_HEADERS,
     )
@@ -846,7 +859,6 @@ def _provision_named_draft(
             "ticket_ttl_seconds": 900,
             "max_tickets": 64,
             "max_ticket_exchanges": 2,
-            "path_rules": [{"glob": "s3://warehouse/*", "allow": True}],
         },
         headers=ADMIN_HEADERS,
     )

@@ -45,14 +45,10 @@ describe("auth provider form mapping", () => {
 });
 
 describe("runtime settings form mapping", () => {
-  test("normalizes path rules and positive ticket limits before saving", () => {
+  test("keeps valid ticket limits before saving", () => {
     const settings: RuntimeSettings = {
       max_ticket_exchanges: 2,
       max_tickets: 64,
-      path_rules: [
-        { allow: true, glob: " s3://warehouse/* " },
-        { allow: false, glob: "" },
-      ],
       ticket_ttl_seconds: 900,
     };
 
@@ -61,7 +57,6 @@ describe("runtime settings form mapping", () => {
       settings: {
         max_ticket_exchanges: 2,
         max_tickets: 64,
-        path_rules: [{ allow: true, glob: "s3://warehouse/*" }],
         ticket_ttl_seconds: 900,
       },
     });
@@ -71,7 +66,6 @@ describe("runtime settings form mapping", () => {
     const settings: RuntimeSettings = {
       max_ticket_exchanges: 2,
       max_tickets: 0,
-      path_rules: [{ allow: true, glob: "s3://warehouse/*" }],
       ticket_ttl_seconds: 900,
     };
 

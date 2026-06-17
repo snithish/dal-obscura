@@ -53,7 +53,6 @@ class CellRuntimeDraft:
     ticket_ttl_seconds: int
     max_tickets: int
     max_ticket_exchanges: int
-    path_rules: list[dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -70,7 +69,6 @@ class PublishDraft:
 class CompiledRuntime:
     auth_chain: dict[str, Any]
     ticket: dict[str, int]
-    path_rules: list[dict[str, Any]]
 
 
 @dataclass(frozen=True)

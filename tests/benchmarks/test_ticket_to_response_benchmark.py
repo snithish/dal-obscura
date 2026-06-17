@@ -392,7 +392,6 @@ def _run_iceberg_stream_scenario(
                     targets={},
                 )
             },
-            paths=(),
         )
     )
     server = build_flight_service(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from typing import Any
 
 import pyarrow as pa
 
@@ -129,6 +130,19 @@ def test_dynamic_catalog_registry_uses_descriptor_and_provider_registry():
     table = registry.describe("static", "users")
 
     assert table.format == "postgres"
+
+
+def test_dynamic_catalog_registry_rejects_legacy_direct_paths_config():
+    legacy_config: dict[str, Any] = {
+        "catalogs": {},
+        "paths": ("/warehouse/users.parquet",),
+    }
+    try:
+        ServiceConfig(**legacy_config)
+    except TypeError as exc:
+        assert "paths" in str(exc)
+    else:
+        raise AssertionError("expected standalone paths to be rejected")
 
 
 def test_dynamic_catalog_registry_rejects_plugins_without_describe_table():

@@ -7,16 +7,10 @@ export const AUTH_PROVIDER_TYPES = {
 
 export type AuthProviderType = keyof typeof AUTH_PROVIDER_TYPES;
 
-export type PathRule = {
-  glob: string;
-  allow: boolean;
-};
-
 export type RuntimeSettings = {
   ticket_ttl_seconds: number;
   max_tickets: number;
   max_ticket_exchanges: number;
-  path_rules: PathRule[];
 };
 
 export type AuthProvider = {
@@ -60,12 +54,7 @@ export function runtimePayloadFromForm(settings: RuntimeSettings): RuntimePayloa
 
   return {
     ok: true,
-    settings: {
-      ...settings,
-      path_rules: settings.path_rules
-        .map((rule) => ({ ...rule, glob: rule.glob.trim() }))
-        .filter((rule) => rule.glob.length > 0),
-    },
+    settings,
   };
 }
 

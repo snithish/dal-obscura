@@ -295,7 +295,6 @@ def _provision_asset_without_owner(client: TestClient) -> UUID:
             "ticket_ttl_seconds": 900,
             "max_tickets": 64,
             "max_ticket_exchanges": 1,
-            "path_rules": [],
         },
         headers=ADMIN_HEADERS,
     )

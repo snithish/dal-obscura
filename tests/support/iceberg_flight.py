@@ -46,7 +46,7 @@ def service_config_from_raw(raw_service_config: dict[str, object]) -> ServiceCon
             options=_dict(raw_config.get("options")),
             targets=_targets(raw_config.get("targets")),
         )
-    return ServiceConfig(catalogs=catalogs, paths=())
+    return ServiceConfig(catalogs=catalogs)
 
 
 def _targets(raw: object) -> dict[str, CatalogTargetConfig]:

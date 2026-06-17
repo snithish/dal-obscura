@@ -42,7 +42,6 @@ def test_api_provisions_and_activates_default_cell_publication():
             "ticket_ttl_seconds": 900,
             "max_tickets": 64,
             "max_ticket_exchanges": 2,
-            "path_rules": [],
         },
         headers=headers,
     )

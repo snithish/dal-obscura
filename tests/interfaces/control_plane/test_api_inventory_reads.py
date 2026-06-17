@@ -126,7 +126,6 @@ def _provision_draft(client: TestClient) -> tuple[dict[str, str], dict[str, str]
             "ticket_ttl_seconds": 900,
             "max_tickets": 64,
             "max_ticket_exchanges": 2,
-            "path_rules": [{"glob": "s3://warehouse/*", "allow": True}],
         },
         headers=ADMIN_HEADERS,
     )
@@ -201,7 +200,6 @@ def test_reads_cell_draft_resources_after_writes():
         "ticket_ttl_seconds": 900,
         "max_tickets": 64,
         "max_ticket_exchanges": 2,
-        "path_rules": [{"glob": "s3://warehouse/*", "allow": True}],
     }
     assert catalogs[0]["tenant_id"] == tenant["id"]
     assert catalogs[0]["name"] == "analytics"

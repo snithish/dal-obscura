@@ -4,11 +4,13 @@ import { apiGet, apiPost, apiPut } from "../../api/client";
 import {
   canEditPolicy,
   defaultRule,
+  describeRuleForm,
   formToRule,
   mergeColumnSelections,
   policyEditorResponsibility,
   previewPolicy,
   ruleToForm,
+  validateRuleForms,
   type ColumnSelection,
   type ConditionRow,
   type MaskRow,
@@ -92,6 +94,11 @@ export function PoliciesPage() {
 
   async function savePolicyRules(successMessage: string): Promise<boolean> {
     if (!selectedAssetId) {
+      return false;
+    }
+    const validationMessages = validateRuleForms(rules);
+    if (validationMessages.length > 0) {
+      setStatus(validationMessages.join(" "));
       return false;
     }
     setStatus(null);
@@ -542,6 +549,7 @@ function RuleCard({
   ruleIndex: number;
   schemaColumns: string[];
 }) {
+  const description = describeRuleForm(rule, schemaColumns);
   return (
     <article className="rounded-card border border-border bg-white p-4">
       <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
@@ -549,14 +557,28 @@ function RuleCard({
           <span className="text-xs font-black uppercase tracking-wide text-muted">
             Rule {ruleIndex + 1}
           </span>
-          <h3 className="mt-1 text-base font-black">{rule.effect === "allow" ? "Allow" : "Deny"} access</h3>
+          <h3 className="mt-1 text-base font-black">{description.title}</h3>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {description.details.map((detail) => (
+              <span className="badge" key={detail}>
+                {detail}
+              </span>
+            ))}
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <select
             className="field min-w-[120px]"
             disabled={!editable}
             value={rule.effect}
-            onChange={(event) => onChange({ effect: event.target.value as "allow" | "deny" })}
+            onChange={(event) => {
+              const effect = event.target.value as "allow" | "deny";
+              onChange(
+                effect === "deny"
+                  ? { effect, masks: [], rowFilter: "" }
+                  : { effect },
+              );
+            }}
           >
             <option value="allow">Allow</option>
             <option value="deny">Deny</option>
@@ -599,21 +621,23 @@ function RuleCard({
         )}
       </div>
 
-      <label className="mt-4 block">
-        <span className="text-xs font-black uppercase tracking-wide text-muted">
-          Row filter SQL
-        </span>
-        <input
-          className="field mt-2"
-          disabled={!editable}
-          placeholder="region = 'us'"
-          value={rule.rowFilter}
-          onChange={(event) => onChange({ rowFilter: event.target.value })}
-        />
-        <span className="mt-1 block text-xs text-muted">
-          DuckDB SQL expression applied before masking.
-        </span>
-      </label>
+      {rule.effect === "allow" ? (
+        <label className="mt-4 block">
+          <span className="text-xs font-black uppercase tracking-wide text-muted">
+            Row filter SQL
+          </span>
+          <input
+            className="field mt-2"
+            disabled={!editable}
+            placeholder="region = 'us'"
+            value={rule.rowFilter}
+            onChange={(event) => onChange({ rowFilter: event.target.value })}
+          />
+          <span className="mt-1 block text-xs text-muted">
+            DuckDB SQL expression applied before masking.
+          </span>
+        </label>
+      ) : null}
 
       <EditablePairs
         addLabel="Add condition"
@@ -626,12 +650,14 @@ function RuleCard({
         disabled={!editable}
       />
 
-      <MaskEditor
-        schemaColumns={schemaColumns}
-        masks={rule.masks}
-        onChange={(masks) => onChange({ masks })}
-        disabled={!editable}
-      />
+      {rule.effect === "allow" ? (
+        <MaskEditor
+          schemaColumns={schemaColumns}
+          masks={rule.masks}
+          onChange={(masks) => onChange({ masks })}
+          disabled={!editable}
+        />
+      ) : null}
     </article>
   );
 }

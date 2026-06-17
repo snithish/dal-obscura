@@ -17,6 +17,9 @@ ADMIN_TOKEN = os.environ["DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN"]
 ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )
+STATIC_CATALOG_MODULE = (
+    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.StaticCatalog"
+)
 OIDC_AUTH_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider"
 )
@@ -30,8 +33,7 @@ def main() -> None:
     print(
         json.dumps(
             {
-                "catalog": fixture["catalog"],
-                "target": fixture["table"]["target"],
+                "catalogs": [catalog["name"] for catalog in fixture["catalogs"]],
                 "cell_id": cell_id,
             }
         )
@@ -70,14 +72,7 @@ def _workspace_cell_id() -> str:
 
 
 def _provision_workspace(fixture: dict[str, Any]) -> str:
-    catalog_name = str(fixture["catalog"])
-    target = str(fixture["table"]["target"])
     warehouse_path = "/workspace/demo/.runtime/warehouse"
-    catalog_options = {
-        "type": "sql",
-        "uri": f"sqlite:///{RUNTIME_DIR / f'{catalog_name}.db'}",
-        "warehouse": warehouse_path,
-    }
     _request(
         "PUT",
         "/v1/settings/runtime",
@@ -85,47 +80,12 @@ def _provision_workspace(fixture: dict[str, Any]) -> str:
             "ticket_ttl_seconds": 600,
             "max_tickets": 16,
             "max_ticket_exchanges": 1,
-            "path_rules": [{"glob": f"{warehouse_path}/*", "allow": True}],
         },
     )
     cell_id = _workspace_cell_id()
-    _request(
-        "PUT",
-        f"/v1/catalogs/{catalog_name}",
-        {"module": ICEBERG_CATALOG_MODULE, "options": catalog_options},
-    )
-    discovered = _request("GET", f"/v1/catalogs/{catalog_name}/tables")
-    if not isinstance(discovered, dict):
-        raise RuntimeError("catalog discovery returned an unexpected response")
-    discovered_payload = cast(dict[str, Any], discovered)
-    tables = cast(list[dict[str, Any]], discovered_payload.get("tables", []))
-    if target not in {table["target"] for table in tables}:
-        raise RuntimeError(f"catalog discovery did not find {target}")
-    asset = _request(
-        "PUT",
-        f"/v1/assets/{catalog_name}/{target}",
-        {"backend": "iceberg", "table_identifier": target, "options": {}},
-    )
-    if not isinstance(asset, dict):
-        raise RuntimeError("asset upsert returned an unexpected response")
-    asset_payload = cast(dict[str, Any], asset)
-    asset_id = str(asset_payload["id"])
-    _request(
-        "PUT",
-        f"/v1/assets/{asset_id}/schema-fields",
-        {
-            "fields": [
-                {
-                    "name": field["name"],
-                    "type": field["type"],
-                    "nullable": not bool(field.get("required", False)),
-                }
-                for field in fixture["table"]["schema"]
-            ]
-        },
-    )
-    _request("PUT", f"/v1/assets/{asset_id}/owners", {"owners": fixture["owners"]})
-    _request("PUT", f"/v1/assets/{asset_id}/policy-rules", {"rules": fixture["policies"]})
+    _upsert_catalogs(fixture, warehouse_path)
+    for table_fixture in fixture["tables"]:
+        _promote_table(fixture, table_fixture)
     _request(
         "PUT",
         "/v1/settings/auth-providers",
@@ -155,6 +115,81 @@ def _provision_workspace(fixture: dict[str, Any]) -> str:
     publication_payload = cast(dict[str, Any], publication)
     _request("POST", f"/v1/publications/{publication_payload['publication_id']}/activate")
     return cell_id
+
+
+def _upsert_catalogs(fixture: dict[str, Any], warehouse_path: str) -> None:
+    for catalog in fixture["catalogs"]:
+        catalog_name = str(catalog["name"])
+        kind = str(catalog["kind"])
+        if kind == "iceberg_sql":
+            body = {
+                "module": ICEBERG_CATALOG_MODULE,
+                "options": {
+                    "type": "sql",
+                    "uri": f"sqlite:///{RUNTIME_DIR / f'{catalog_name}.db'}",
+                    "warehouse": warehouse_path,
+                },
+            }
+        elif kind == "static":
+            body = {
+                "module": STATIC_CATALOG_MODULE,
+                "options": {
+                    "targets": {
+                        table["target"]: {
+                            "backend": table["backend"],
+                            "table": table["table_path"],
+                        }
+                        for table in fixture["tables"]
+                        if table["catalog"] == catalog_name
+                    }
+                },
+            }
+        else:
+            raise RuntimeError(f"unsupported demo catalog kind {kind!r}")
+        _request("PUT", f"/v1/catalogs/{catalog_name}", body)
+
+
+def _promote_table(fixture: dict[str, Any], table_fixture: dict[str, Any]) -> None:
+    catalog_name = str(table_fixture["catalog"])
+    target = str(table_fixture["target"])
+    discovered = _request("GET", f"/v1/catalogs/{catalog_name}/tables")
+    if not isinstance(discovered, dict):
+        raise RuntimeError("catalog discovery returned an unexpected response")
+    discovered_payload = cast(dict[str, Any], discovered)
+    tables = cast(list[dict[str, Any]], discovered_payload.get("tables", []))
+    discovered_by_target = {str(table["target"]): table for table in tables}
+    if target not in discovered_by_target:
+        raise RuntimeError(f"catalog discovery did not find {target}")
+    table = discovered_by_target[target]
+    asset = _request(
+        "PUT",
+        f"/v1/assets/{catalog_name}/{target}",
+        {
+            "backend": table["backend"],
+            "table_identifier": table["table_identifier"],
+            "options": {},
+        },
+    )
+    if not isinstance(asset, dict):
+        raise RuntimeError("asset upsert returned an unexpected response")
+    asset_payload = cast(dict[str, Any], asset)
+    asset_id = str(asset_payload["id"])
+    _request(
+        "PUT",
+        f"/v1/assets/{asset_id}/schema-fields",
+        {
+            "fields": [
+                {
+                    "name": field["name"],
+                    "type": field["type"],
+                    "nullable": not bool(field.get("required", False)),
+                }
+                for field in table_fixture["schema"]
+            ]
+        },
+    )
+    _request("PUT", f"/v1/assets/{asset_id}/owners", {"owners": fixture["owners"]})
+    _request("PUT", f"/v1/assets/{asset_id}/policy-rules", {"rules": fixture["policies"]})
 
 
 def _request(method: str, path: str, body: object | None = None) -> object:

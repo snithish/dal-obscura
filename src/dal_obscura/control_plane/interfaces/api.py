@@ -53,7 +53,6 @@ class RuntimeSettingsRequest(_StrictModel):
     ticket_ttl_seconds: int = Field(gt=0)
     max_tickets: int = Field(gt=0)
     max_ticket_exchanges: int = Field(gt=0)
-    path_rules: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class CatalogRequest(_StrictModel):
@@ -349,7 +348,6 @@ def create_app(  # noqa: C901
                 ttl=request.ticket_ttl_seconds,
                 max_tickets=request.max_tickets,
                 max_ticket_exchanges=request.max_ticket_exchanges,
-                path_rules=request.path_rules,
             )
         ) or {"cell_id": str(cell_id)}
 
@@ -360,13 +358,11 @@ def create_app(  # noqa: C901
                 ttl=request.ticket_ttl_seconds,
                 max_tickets=request.max_tickets,
                 max_ticket_exchanges=request.max_ticket_exchanges,
-                path_rules=request.path_rules,
             )
         ) or {
             "ticket_ttl_seconds": request.ticket_ttl_seconds,
             "max_tickets": request.max_tickets,
             "max_ticket_exchanges": request.max_ticket_exchanges,
-            "path_rules": request.path_rules,
         }
 
     @app.put(

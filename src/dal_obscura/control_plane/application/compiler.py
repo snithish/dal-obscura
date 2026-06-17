@@ -56,7 +56,6 @@ class PublicationCompiler:
                 "max_tickets": draft.runtime.max_tickets,
                 "max_exchanges": draft.runtime.max_ticket_exchanges,
             },
-            path_rules=list(draft.runtime.path_rules),
         )
         return CompiledPublication(
             cell_id=draft.cell_id,

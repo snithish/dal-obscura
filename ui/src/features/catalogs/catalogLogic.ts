@@ -7,6 +7,10 @@ export const CATALOG_ADAPTERS = {
     label: "Unity Catalog",
     module: "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog",
   },
+  static: {
+    label: "Static Delta/file catalog",
+    module: "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.StaticCatalog",
+  },
   custom: {
     label: "Custom adapter",
     module: "",
@@ -68,6 +72,9 @@ export function catalogAdapterLabel(module: string, options: Record<string, unkn
   if (module === CATALOG_ADAPTERS.iceberg.module) {
     return "Iceberg catalog";
   }
+  if (module === CATALOG_ADAPTERS.static.module) {
+    return "Static Delta/file catalog";
+  }
   return "Custom adapter";
 }
 
@@ -90,7 +97,7 @@ function catalogModuleFromForm(form: CatalogForm): string {
 }
 
 function catalogOptionsFromForm(form: CatalogForm): Record<string, unknown> {
-  if (form.adapter === "custom") {
+  if (form.adapter === "custom" || form.adapter === "static") {
     return parseExtraOptions(form.extraOptionsJson);
   }
   return {

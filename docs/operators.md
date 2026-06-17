@@ -47,6 +47,7 @@ from the configured repository.
 | IAM | Use OIDC/JWKS when possible. |
 | Secrets | Store references in config; keep secret values in the runtime secret provider. |
 | Publishing | Keep policy versions asset-scoped. |
+| Catalogs | Resolve all governed tables through catalogs; do not publish standalone file paths. |
 | UI exposure | Put the UI behind the same IAM posture as the API. |
 
 ## Common Environment Variables

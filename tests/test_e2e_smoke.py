@@ -174,7 +174,6 @@ def control_plane_setup(tmp_path: Path, iceberg_setup: tuple[str, Path]) -> dict
             ttl=900,
             max_tickets=64,
             max_ticket_exchanges=1,
-            path_rules=[],
         )
         service.upsert_catalog(
             cell_id=cell_id,

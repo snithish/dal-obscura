@@ -541,7 +541,6 @@ def _provision_control_plane(output_dir: Path, table_id: str) -> tuple[str, str,
             ttl=900,
             max_tickets=16,
             max_ticket_exchanges=1,
-            path_rules=[],
         )
         service.upsert_catalog(
             cell_id=cell_id,

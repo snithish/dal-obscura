@@ -8,7 +8,6 @@ import {
   defaultAuthProvider,
   runtimePayloadFromForm,
   type AuthProvider,
-  type PathRule,
   type RuntimeSettings,
 } from "./settingsLogic";
 
@@ -16,7 +15,6 @@ const defaults: RuntimeSettings = {
   ticket_ttl_seconds: 900,
   max_tickets: 64,
   max_ticket_exchanges: 2,
-  path_rules: [{ glob: "s3://warehouse/*", allow: true }],
 };
 
 export function SettingsPage() {
@@ -79,30 +77,14 @@ export function SettingsPage() {
     }
   }
 
-  function updatePathRule(index: number, patch: Partial<PathRule>) {
-    setSettings({
-      ...settings,
-      path_rules: settings.path_rules.map((rule, currentIndex) =>
-        currentIndex === index ? { ...rule, ...patch } : rule,
-      ),
-    });
-  }
-
-  function removePathRule(index: number) {
-    setSettings({
-      ...settings,
-      path_rules: settings.path_rules.filter((_, currentIndex) => currentIndex !== index),
-    });
-  }
-
   return (
     <div className="grid gap-5">
       <header>
         <p className="text-xs font-black uppercase tracking-wide text-muted">Operations</p>
         <h1 className="mt-1 text-3xl font-black">Settings</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-          Configure runtime limits, storage path rules, and the control-plane auth
-          provider without editing generated configuration files.
+          Configure runtime ticket limits and the control-plane auth provider without
+          editing generated configuration files.
         </p>
       </header>
 
@@ -112,7 +94,7 @@ export function SettingsPage() {
         <div>
           <h2 className="text-lg font-black">Runtime configuration</h2>
           <p className="mt-2 text-sm leading-6 text-muted">
-            Ticket limits and path rules are validated before publishing changes.
+            Ticket limits are validated before publishing changes.
           </p>
         </div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -132,65 +114,6 @@ export function SettingsPage() {
             onChange={(value) => setSettings({ ...settings, max_ticket_exchanges: value })}
           />
         </div>
-
-        <section>
-          <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-            <div>
-              <h3 className="text-base font-black">Path rules</h3>
-              <p className="mt-1 text-sm text-muted">
-                Define which warehouse paths the data plane may access.
-              </p>
-            </div>
-            <button
-              className="btn-secondary"
-              type="button"
-              onClick={() =>
-                setSettings({
-                  ...settings,
-                  path_rules: [...settings.path_rules, { allow: true, glob: "" }],
-                })
-              }
-            >
-              Add path rule
-            </button>
-          </div>
-          <div className="mt-4 grid gap-3">
-            {settings.path_rules.map((rule, index) => (
-              <div
-                className="grid grid-cols-1 gap-3 rounded-card border border-border bg-soft p-3 md:grid-cols-[1fr_140px_auto] md:items-end"
-                key={`${rule.glob}-${index}`}
-              >
-                <label className="block">
-                  <span className="text-xs font-black uppercase tracking-wide text-muted">
-                    Path glob
-                  </span>
-                  <input
-                    className="field mt-2"
-                    placeholder="s3://warehouse/*"
-                    value={rule.glob}
-                    onChange={(event) => updatePathRule(index, { glob: event.target.value })}
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-black uppercase tracking-wide text-muted">
-                    Decision
-                  </span>
-                  <select
-                    className="field mt-2"
-                    value={rule.allow ? "allow" : "deny"}
-                    onChange={(event) => updatePathRule(index, { allow: event.target.value === "allow" })}
-                  >
-                    <option value="allow">Allow</option>
-                    <option value="deny">Deny</option>
-                  </select>
-                </label>
-                <button className="btn-secondary" type="button" onClick={() => removePathRule(index)}>
-                  Remove
-                </button>
-              </div>
-            ))}
-          </div>
-        </section>
 
         <div>
           <button className="btn-primary" disabled={isSavingRuntime} type="submit">

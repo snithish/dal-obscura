@@ -185,7 +185,6 @@ class PublicationStore:
         ticket_ttl_seconds: int,
         max_tickets: int,
         max_ticket_exchanges: int,
-        path_rules: list[dict[str, Any]],
     ) -> None:
         existing = self._session.get(CellRuntimeSettingsRecord, cell_id)
         if existing is None:
@@ -195,14 +194,14 @@ class PublicationStore:
                     ticket_ttl_seconds=ticket_ttl_seconds,
                     max_tickets=max_tickets,
                     max_ticket_exchanges=max_ticket_exchanges,
-                    path_rules_json=path_rules,
+                    path_rules_json=[],
                 )
             )
         else:
             existing.ticket_ttl_seconds = ticket_ttl_seconds
             existing.max_tickets = max_tickets
             existing.max_ticket_exchanges = max_ticket_exchanges
-            existing.path_rules_json = path_rules
+            existing.path_rules_json = []
         self._session.flush()
 
     def upsert_catalog(
@@ -479,7 +478,6 @@ class PublicationStore:
             "ticket_ttl_seconds": record.ticket_ttl_seconds,
             "max_tickets": record.max_tickets,
             "max_ticket_exchanges": record.max_ticket_exchanges,
-            "path_rules": list(record.path_rules_json),
         }
 
     def list_catalogs(self, cell_id: UUID) -> list[dict[str, object]]:
@@ -836,7 +834,6 @@ class PublicationStore:
                 ticket_ttl_seconds=runtime_record.ticket_ttl_seconds,
                 max_tickets=runtime_record.max_tickets,
                 max_ticket_exchanges=runtime_record.max_ticket_exchanges,
-                path_rules=list(runtime_record.path_rules_json),
             ),
             auth_providers=auth_providers,
             catalogs=catalogs,
@@ -932,7 +929,6 @@ class PublicationStore:
             runtime=CompiledRuntime(
                 auth_chain=dict(runtime.auth_chain_json),
                 ticket=dict(runtime.ticket_json),
-                path_rules=list(runtime.path_rules_json),
             ),
             catalogs=catalogs,
             assets=assets,
@@ -955,7 +951,7 @@ class PublicationStore:
                 publication_id=publication_id,
                 auth_chain_json=compiled.runtime.auth_chain,
                 ticket_json=compiled.runtime.ticket,
-                path_rules_json=compiled.runtime.path_rules,
+                path_rules_json=[],
             )
         )
         for catalog in compiled.catalogs:

@@ -70,6 +70,33 @@ describe("catalog adapter form mapping", () => {
     });
   });
 
+  test("maps the static Delta catalog adapter to configured targets", () => {
+    const form: CatalogForm = {
+      adapter: "static",
+      modulePath: "",
+      type: "sql",
+      uri: "",
+      warehouse: "",
+      extraOptionsJson:
+        '{"targets":{"retail.customer_revenue_delta":{"backend":"delta","table":"/warehouse/delta/customer_revenue"}}}',
+    };
+
+    expect(catalogPayloadFromForm(form)).toEqual({
+      module: CATALOG_ADAPTERS.static.module,
+      options: {
+        targets: {
+          "retail.customer_revenue_delta": {
+            backend: "delta",
+            table: "/warehouse/delta/customer_revenue",
+          },
+        },
+      },
+    });
+    expect(catalogAdapterLabel(CATALOG_ADAPTERS.static.module)).toBe(
+      "Static Delta/file catalog",
+    );
+  });
+
   test("labels known backend module paths without exposing them in the catalog list", () => {
     expect(catalogAdapterLabel(CATALOG_ADAPTERS.iceberg.module, { provider: "unity" })).toBe(
       "Unity Catalog",

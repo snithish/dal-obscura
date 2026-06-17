@@ -69,7 +69,6 @@ def provision_default_published_asset(
                 "ticket_ttl_seconds": 900,
                 "max_tickets": 64,
                 "max_ticket_exchanges": 1,
-                "path_rules": [],
             },
             headers=headers,
         )

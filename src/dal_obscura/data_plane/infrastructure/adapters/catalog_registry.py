@@ -37,7 +37,6 @@ class ServiceConfig:
     """Published catalog configuration installed in a data-plane registry."""
 
     catalogs: dict[str, CatalogConfig]
-    paths: tuple[object, ...] = ()
 
 
 class DynamicCatalogRegistry:

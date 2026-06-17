@@ -91,7 +91,6 @@ class ProvisioningService:
             "ticket_ttl_seconds": settings["ticket_ttl_seconds"],
             "max_tickets": settings["max_tickets"],
             "max_ticket_exchanges": settings["max_ticket_exchanges"],
-            "path_rules": settings["path_rules"],
         }
 
     def list_workspace_auth_providers(self) -> list[dict[str, object]]:
@@ -252,14 +251,12 @@ class ProvisioningService:
         ttl: int,
         max_tickets: int,
         max_ticket_exchanges: int,
-        path_rules: list[dict[str, Any]],
     ) -> None:
         self._store.upsert_runtime_settings(
             cell_id=cell_id,
             ticket_ttl_seconds=ttl,
             max_tickets=max_tickets,
             max_ticket_exchanges=max_ticket_exchanges,
-            path_rules=path_rules,
         )
 
     def upsert_workspace_runtime_settings(
@@ -267,7 +264,6 @@ class ProvisioningService:
         ttl: int,
         max_tickets: int,
         max_ticket_exchanges: int,
-        path_rules: list[dict[str, Any]],
     ) -> None:
         context = self._store.ensure_default_workspace_context()
         self.upsert_runtime_settings(
@@ -275,7 +271,6 @@ class ProvisioningService:
             ttl=ttl,
             max_tickets=max_tickets,
             max_ticket_exchanges=max_ticket_exchanges,
-            path_rules=path_rules,
         )
 
     def upsert_catalog(

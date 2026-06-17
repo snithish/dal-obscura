@@ -8,6 +8,9 @@ import httpx
 ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )
+STATIC_CATALOG_MODULE = (
+    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.StaticCatalog"
+)
 UNITY_CATALOG_MODULE = "dal_obscura.data_plane.infrastructure.adapters.unity_catalog.UnityCatalog"
 
 CatalogTable = dict[str, object]
@@ -22,9 +25,13 @@ def discover_catalog_tables(
 ) -> list[CatalogTable]:
     if module == ICEBERG_CATALOG_MODULE:
         return discover_iceberg_tables(catalog_name, options)
+    if module == STATIC_CATALOG_MODULE:
+        return discover_static_catalog_tables(options)
     if module == UNITY_CATALOG_MODULE:
         return discover_unity_catalog_tables(options)
-    raise ValueError("Catalog discovery currently supports Iceberg and Unity Catalog catalogs.")
+    raise ValueError(
+        "Catalog discovery currently supports Iceberg, static, and Unity Catalog catalogs."
+    )
 
 
 def discover_iceberg_tables(
@@ -71,6 +78,39 @@ def discover_unity_catalog_tables(options: dict[str, Any]) -> list[CatalogTable]
         if isinstance(raw, dict)
     ]
     return sorted(discovered, key=lambda item: str(item["name"]))
+
+
+def discover_static_catalog_tables(options: dict[str, Any]) -> list[CatalogTable]:
+    targets = options.get("targets", {})
+    if isinstance(targets, dict):
+        iterable = targets.items()
+    elif isinstance(targets, list):
+        iterable = (
+            (str(item.get("name") or item.get("target") or ""), item)
+            for item in targets
+            if isinstance(item, dict)
+        )
+    else:
+        iterable = ()
+
+    rows: list[CatalogTable] = []
+    for name, raw in iterable:
+        if not isinstance(raw, dict):
+            continue
+        target_name = str(name).strip()
+        backend = str(raw.get("backend") or raw.get("format") or "").strip().lower()
+        table_identifier = str(
+            raw.get("table") or raw.get("table_identifier") or target_name
+        ).strip()
+        if target_name and backend and table_identifier:
+            rows.append(
+                {
+                    "backend": backend,
+                    "name": target_name,
+                    "table_identifier": table_identifier,
+                }
+            )
+    return sorted(rows, key=lambda item: str(item["name"]))
 
 
 def _walk_namespaces(catalog: Any) -> list[Namespace]:

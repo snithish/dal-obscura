@@ -49,6 +49,19 @@ const presets = [
     name: "Iceberg SQL",
     options: { type: "sql", uri: "sqlite:///catalog.db" },
   },
+  {
+    adapter: "static" as const,
+    description: "Expose local Delta or file-backed tables from explicit target definitions.",
+    name: "Delta path catalog",
+    options: {
+      targets: {
+        "retail.customer_revenue_delta": {
+          backend: "delta",
+          table: "/workspace/demo/.runtime/delta/customer_revenue",
+        },
+      },
+    },
+  },
 ];
 
 export function CatalogsPage() {
@@ -165,7 +178,14 @@ export function CatalogsPage() {
               className="btn-secondary mt-4"
               type="button"
               onClick={() => {
-                setCatalogForm({ ...formFromCatalogOptions(preset.options), adapter: preset.adapter });
+                setCatalogForm({
+                  ...formFromCatalogOptions(preset.options),
+                  adapter: preset.adapter,
+                  extraOptionsJson:
+                    preset.adapter === "static"
+                      ? JSON.stringify(preset.options, null, 2)
+                      : "",
+                });
                 document.getElementById("catalog-name")?.focus();
               }}
             >
@@ -273,9 +293,9 @@ export function CatalogsPage() {
                 onChange={(event) =>
                   setCatalogForm({ ...catalogForm, modulePath: event.target.value })
                 }
-              />
-            </>
-          ) : (
+                />
+              </>
+          ) : catalogForm.adapter !== "static" ? (
             <>
               {catalogForm.adapter === "iceberg" ? (
                 <>
@@ -328,14 +348,16 @@ export function CatalogsPage() {
                 </>
               ) : null}
             </>
-          )}
+          ) : null}
           <label className="mt-4 block text-xs font-black uppercase tracking-wide text-muted">
             Additional options JSON
           </label>
           <textarea
             className="field mt-2 min-h-[92px] py-2"
             placeholder={
-              catalogForm.adapter === "unity"
+              catalogForm.adapter === "static"
+                ? '{"targets":{"retail.customer_revenue_delta":{"backend":"delta","table":"/warehouse/delta/customer_revenue"}}}'
+                : catalogForm.adapter === "unity"
                 ? '{"token":"${UNITY_TOKEN}"}'
                 : '{"credential":"${CATALOG_TOKEN}"}'
             }

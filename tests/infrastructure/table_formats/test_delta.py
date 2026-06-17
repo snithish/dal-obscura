@@ -172,12 +172,7 @@ def test_delta_table_format_enforces_planned_data_file_paths(tmp_path):
         catalog_name="analytics",
         table_name="users",
         table_uri=str(table_uri),
-        path_enforcer=PathRuleEnforcer(
-            [
-                {"glob": str(table_uri), "allow": True},
-                {"glob": str(table_uri / "_delta_log/*"), "allow": True},
-            ]
-        ),
+        path_enforcer=PathRuleEnforcer([{"root": str(table_uri / "_delta_log")}]),
     )
 
     try:

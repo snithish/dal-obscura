@@ -66,6 +66,10 @@ STATIC_VALUES = {
     "OIDC_CLIENT_ID": "dal-obscura-cli",
     "DEMO_CATALOG": "retail_demo",
     "DEMO_TARGET": "retail.customer_revenue",
+    "DEMO_ICEBERG_CATALOG": "retail_demo",
+    "DEMO_ICEBERG_TARGET": "retail.customer_revenue",
+    "DEMO_DELTA_CATALOG": "retail_delta",
+    "DEMO_DELTA_TARGET": "retail.customer_revenue_delta",
 }
 
 
@@ -184,6 +188,10 @@ def _write_env_files(values: dict[str, str]) -> None:
             "OIDC_CLI_CLIENT_SECRET",
             "DEMO_CATALOG",
             "DEMO_TARGET",
+            "DEMO_ICEBERG_CATALOG",
+            "DEMO_ICEBERG_TARGET",
+            "DEMO_DELTA_CATALOG",
+            "DEMO_DELTA_TARGET",
             "DEMO_ADMIN_PASSWORD",
             "ASSET_OWNER_PASSWORD",
             "US_ANALYST_PASSWORD",

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
 import pyarrow as pa
+from deltalake import write_deltalake
 from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
 from pyiceberg.types import DoubleType, LongType, NestedField, StringType
@@ -19,8 +21,15 @@ FIXTURE_FILE = DEMO_DIR / "fixtures" / "demo_fixture.json"
 def main() -> None:
     fixture = _read_fixture()
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
-    _create_iceberg_table(fixture)
-    print(json.dumps({"catalog": fixture["catalog"], "target": fixture["table"]["target"]}))
+    for table_fixture in fixture["tables"]:
+        backend = str(table_fixture["backend"])
+        if backend == "iceberg":
+            _create_iceberg_table(table_fixture)
+        elif backend == "delta":
+            _create_delta_table(table_fixture)
+        else:
+            raise ValueError(f"unsupported demo backend {backend!r}")
+    print(json.dumps({"tables": [table["target"] for table in fixture["tables"]]}))
 
 
 def _read_fixture() -> dict[str, Any]:
@@ -30,9 +39,8 @@ def _read_fixture() -> dict[str, Any]:
     return fixture
 
 
-def _create_iceberg_table(fixture: dict[str, Any]) -> None:
-    table_fixture = fixture["table"]
-    catalog_name = str(fixture["catalog"])
+def _create_iceberg_table(table_fixture: dict[str, Any]) -> None:
+    catalog_name = str(table_fixture["catalog"])
     target = str(table_fixture["target"])
     warehouse = RUNTIME_DIR / "warehouse"
     warehouse.mkdir(parents=True, exist_ok=True)
@@ -55,6 +63,17 @@ def _create_iceberg_table(fixture: dict[str, Any]) -> None:
         properties={"format-version": "2"},
     )
     created.append(pa.Table.from_pylist(table_fixture["rows"], schema=arrow_schema))
+
+
+def _create_delta_table(table_fixture: dict[str, Any]) -> None:
+    table_path = Path(str(table_fixture["table_path"]))
+    if table_path.exists():
+        shutil.rmtree(table_path)
+    _, arrow_schema = _schemas(table_fixture["schema"])
+    write_deltalake(
+        str(table_path),
+        pa.Table.from_pylist(table_fixture["rows"], schema=arrow_schema),
+    )
 
 
 def _schemas(fields: list[dict[str, Any]]) -> tuple[Schema, pa.Schema]:

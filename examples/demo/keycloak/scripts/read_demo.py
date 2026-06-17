@@ -33,13 +33,18 @@ def main() -> None:
         "--columns",
         default="customer_id,customer_name,email,region,annual_revenue",
     )
+    parser.add_argument("--catalog", default=os.environ.get("DEMO_CATALOG", "retail_demo"))
+    parser.add_argument(
+        "--target",
+        default=os.environ.get("DEMO_TARGET", "retail.customer_revenue"),
+    )
     parser.add_argument("--row-filter", default=None)
     args = parser.parse_args()
 
     token = _token(args.username)
     columns = [column.strip() for column in args.columns.split(",") if column.strip()]
     try:
-        table = _read_table(token, columns, args.row_filter)
+        table = _read_table(token, args.catalog, args.target, columns, args.row_filter)
     except Exception as exc:
         if args.username == "blocked-user":
             print("blocked-user: access denied as expected")
@@ -74,11 +79,17 @@ def _token(username: str) -> str:
     return str(payload["access_token"])
 
 
-def _read_table(token: str, columns: list[str], row_filter: str | None):
+def _read_table(
+    token: str,
+    catalog: str,
+    target: str,
+    columns: list[str],
+    row_filter: str | None,
+):
     client = flight.connect(os.environ["FLIGHT_URI"])
     payload: dict[str, object] = {
-        "catalog": os.environ.get("DEMO_CATALOG", "retail_demo"),
-        "target": os.environ.get("DEMO_TARGET", "retail.customer_revenue"),
+        "catalog": catalog,
+        "target": target,
         "columns": columns,
     }
     if row_filter:

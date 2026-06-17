@@ -1,8 +1,9 @@
 # Local Keycloak Demo
 
 This demo runs dal-obscura locally with Keycloak IAM, Postgres-backed
-control-plane state, a seeded Iceberg table, the control-plane UI, and a Flight
-data plane. It is built for sales walkthroughs and hands-on trials on a laptop.
+control-plane state, seeded Iceberg and Delta tables, the control-plane UI, and
+a Flight data plane. It is built for sales walkthroughs and hands-on trials on a
+laptop.
 
 Generated secrets and table files stay under this directory in `.runtime/`.
 Control-plane state is stored in the Compose `postgres-data` volume so policy
@@ -31,12 +32,12 @@ What happens:
    `127.0.0.1:8080`.
 4. The control plane starts on `127.0.0.1:8820` with Postgres config storage,
    Keycloak token validation, and public browser-login configuration for the UI.
-5. The `setup` service creates the Iceberg table metadata and data files from
-   `fixtures/demo_fixture.json`.
+5. The `setup` service creates the Iceberg table metadata, Delta table log, and
+   data files from `fixtures/demo_fixture.json`.
 6. The setup service waits for the control plane and provisions it through the
-   HTTP API. It configures the catalog, calls catalog discovery, confirms
-   `retail.customer_revenue` is discovered, then promotes that discovered table
-   to a governed asset.
+   HTTP API. It configures one Iceberg SQL catalog and one static Delta catalog,
+   calls catalog discovery, confirms both demo tables are discovered, then
+   promotes them to governed assets.
 7. The setup service assigns `group:asset-owners`, installs the demo policies,
    configures OIDC/JWKS auth for the data plane, and publishes the first active
    policy version.
@@ -70,8 +71,8 @@ password. Other users still use Keycloak with the generated passwords.
 
 1. Open `http://127.0.0.1:8820/ui`.
 2. Sign in as `demo-admin` using the password from `./run credentials`.
-3. Open Catalogs and run discovery for `retail_demo`; the table
-   `retail.customer_revenue` should appear as governed.
+3. Open Catalogs and run discovery for `retail_demo` and `retail_delta`; the
+   tables should appear as governed.
 4. Open Assets and inspect owners for `retail.customer_revenue`.
 5. Sign out, sign in as `asset-owner`, then open Policies.
 6. Edit a row filter or mask and publish a policy version.
@@ -85,6 +86,8 @@ Run these from `examples/demo/keycloak`:
 ```bash
 ./run smoke
 ./run read --as us-analyst
+./run read --as us-analyst --catalog retail_demo --target retail.customer_revenue
+./run read --as us-analyst --catalog retail_delta --target retail.customer_revenue_delta
 ./run read --as eu-analyst
 ./run read --as data-steward
 ./run read --as blocked-user
@@ -92,7 +95,8 @@ Run these from `examples/demo/keycloak`:
 
 Expected behavior:
 
-- `./run smoke` runs the expected read checks for the demo personas.
+- `./run smoke` runs the expected read checks for the demo personas against
+  both Iceberg and Delta.
 - `us-analyst` reads two US rows with masked email values.
 - `eu-analyst` reads two EU rows with masked email values.
 - `data-steward` reads all rows with clear email values.

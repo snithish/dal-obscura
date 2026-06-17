@@ -2,10 +2,13 @@ import { describe, expect, test } from "vitest";
 
 import {
   canEditPolicy,
+  defaultRule,
+  describeRuleForm,
   formToRule,
   policyEditorResponsibility,
   previewPolicy,
   ruleToForm,
+  validateRuleForms,
   type PolicyRule,
 } from "./policyLogic";
 
@@ -157,5 +160,47 @@ describe("policy edit permissions", () => {
         ["group:data-owners"],
       ),
     ).toBe(false);
+  });
+});
+
+describe("policy rule authoring support", () => {
+  test("describes allow rules in a readable summary", () => {
+    const form = ruleToForm({
+      columns: ["customer_id", "email"],
+      effect: "allow",
+      masks: { email: { type: "email" } },
+      ordinal: 10,
+      principals: ["group:us-analysts"],
+      row_filter: "region = 'us'",
+      when: { purpose: "support" },
+    });
+
+    expect(describeRuleForm(form, ["customer_id", "email", "region"])).toEqual({
+      title: "Allow group:us-analysts",
+      details: [
+        "2 visible columns",
+        "1 match condition",
+        "row filter: region = 'us'",
+        "1 mask",
+      ],
+    });
+  });
+
+  test("blocks invalid save payloads before the API call", () => {
+    expect(
+      validateRuleForms([
+        {
+          ...defaultRule,
+          principalsText: "",
+          rowFilter: "region = 'us'",
+          masks: [{ column: "email", type: "email" }],
+          effect: "deny",
+        },
+      ]),
+    ).toEqual([
+      "Rule 1 needs at least one principal.",
+      "Rule 1 deny rules cannot include row filters.",
+      "Rule 1 deny rules cannot include masks.",
+    ]);
   });
 });

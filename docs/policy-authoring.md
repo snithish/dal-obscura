@@ -31,6 +31,10 @@ flowchart TD
     masks --> result["Return governed rows"]
 ```
 
+Allow rules can expose columns, add DuckDB row filters, and apply masks. Deny
+rules deny matching projected columns for matching principals and conditions;
+they do not carry row filters or masks.
+
 ## Authoring Checklist
 
 - Start with the asset owner list. Only trusted owners should edit policies.
