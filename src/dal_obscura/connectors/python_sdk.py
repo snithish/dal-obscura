@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Iterable, Iterator
 from urllib.parse import urlparse
 
@@ -8,7 +7,9 @@ import duckdb
 import pyarrow as pa
 import pyarrow.flight as flight
 
-PROTOCOL_VERSION = 1
+from dal_obscura.common.flight_contract import FLIGHT_PROTOCOL_VERSION, encode_plan_command
+
+PROTOCOL_VERSION = FLIGHT_PROTOCOL_VERSION
 
 
 class DalObscuraClient:
@@ -148,15 +149,15 @@ def _descriptor(
     columns: Iterable[str],
     row_filter: str | None,
 ) -> flight.FlightDescriptor:
-    payload: dict[str, object] = {
-        "protocol_version": PROTOCOL_VERSION,
-        "catalog": catalog,
-        "target": target,
-        "columns": list(columns),
-    }
-    if row_filter is not None:
-        payload["row_filter"] = row_filter
-    return flight.FlightDescriptor.for_command(json.dumps(payload).encode("utf-8"))
+    return flight.FlightDescriptor.for_command(
+        encode_plan_command(
+            protocol_version=PROTOCOL_VERSION,
+            catalog=catalog,
+            target=target,
+            columns=list(columns),
+            row_filter=row_filter,
+        )
+    )
 
 
 def _location_for(uri: str) -> flight.Location:

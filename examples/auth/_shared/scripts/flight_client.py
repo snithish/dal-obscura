@@ -11,6 +11,8 @@ from urllib.request import Request, urlopen
 import jwt
 import pyarrow.flight as flight
 
+from dal_obscura.common.flight_contract import encode_plan_command
+
 RUNTIME_DIR = Path(os.environ.get("RUNTIME_DIR", "/workspace/runtime"))
 DEFAULT_CATALOG = "example_catalog"
 DEFAULT_TARGET = "default.users"
@@ -54,10 +56,9 @@ def perform_read(
 ) -> None:
     client = create_client(uri, auth_flow)
     options = _call_options(auth_flow, credential)
-    payload: dict[str, object] = {"catalog": catalog, "target": target, "columns": columns}
-    if row_filter:
-        payload["row_filter"] = row_filter
-    descriptor = flight.FlightDescriptor.for_command(json.dumps(payload))
+    descriptor = flight.FlightDescriptor.for_command(
+        encode_plan_command(catalog=catalog, target=target, columns=columns, row_filter=row_filter)
+    )
     info = client.get_flight_info(descriptor, options=options)
     table = client.do_get(info.endpoints[0].ticket, options=options).read_all()
     if table.num_rows == 0:

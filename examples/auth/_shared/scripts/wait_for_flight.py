@@ -1,23 +1,22 @@
 from __future__ import annotations
 
-import json
 import os
 import time
 
 import flight_client
 import pyarrow.flight as flight
 
+from dal_obscura.common.flight_contract import encode_plan_command
+
 
 def main() -> None:
     uri = os.environ["FLIGHT_URI"]
     flow = os.environ["AUTH_FLOW"]
     descriptor = flight.FlightDescriptor.for_command(
-        json.dumps(
-            {
-                "catalog": os.environ.get("READINESS_CATALOG", flight_client.DEFAULT_CATALOG),
-                "target": os.environ.get("READINESS_TARGET", flight_client.DEFAULT_TARGET),
-                "columns": _columns(),
-            }
+        encode_plan_command(
+            catalog=os.environ.get("READINESS_CATALOG", flight_client.DEFAULT_CATALOG),
+            target=os.environ.get("READINESS_TARGET", flight_client.DEFAULT_TARGET),
+            columns=_columns(),
         )
     )
     deadline = time.monotonic() + 90

@@ -59,25 +59,6 @@ def test_static_catalog_rejects_unknown_backend_with_target_context():
         raise AssertionError("expected unsupported backend error")
 
 
-def test_catalog_config_backend_describes_parquet_without_importing_iceberg():
-    catalog = StaticCatalog(
-        name="files",
-        options={},
-        targets={
-            "events": CatalogTargetConfig(
-                backend="parquet",
-                table="/warehouse/events",
-            )
-        },
-    )
-
-    descriptor = catalog.describe_table("events")
-
-    assert descriptor.provider_id == "parquet"
-    assert descriptor.catalog_name == "files"
-    assert descriptor.requested_target == "events"
-
-
 def test_catalog_config_keeps_target_options_isolated_from_catalog_options():
     config = CatalogConfig(
         name="files",

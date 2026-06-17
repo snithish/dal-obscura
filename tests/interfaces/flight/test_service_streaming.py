@@ -153,7 +153,7 @@ def test_parse_descriptor_accepts_optional_row_filter():
     assert request.row_filter.sql == "region = 'us'"
 
 
-def test_parse_descriptor_accepts_protocol_version_one():
+def test_parse_descriptor_accepts_protobuf_protocol_version_one():
     descriptor = command_descriptor(
         {
             "protocol_version": 1,
@@ -168,6 +168,15 @@ def test_parse_descriptor_accepts_protocol_version_one():
     assert request.catalog == "analytics"
     assert request.target == "test.table"
     assert request.columns == ["id"]
+
+
+def test_parse_descriptor_rejects_json_command_without_fallback():
+    descriptor = flight.FlightDescriptor.for_command(
+        b'{"protocol_version":1,"catalog":"analytics","target":"test.table","columns":["id"]}'
+    )
+
+    with pytest.raises(ValueError, match="Invalid protobuf Flight descriptor command"):
+        parse_descriptor(descriptor)
 
 
 def test_parse_descriptor_rejects_unsupported_protocol_version():
@@ -187,12 +196,9 @@ def test_parse_descriptor_rejects_unsupported_protocol_version():
 @pytest.mark.parametrize(
     "payload,error",
     [
-        ([], "Flight descriptor command must be a JSON object"),
         ({"catalog": "analytics", "columns": ["id"]}, "target is required"),
         ({"catalog": "analytics", "target": "", "columns": ["id"]}, "target is required"),
         ({"catalog": "analytics", "target": "test.table", "columns": []}, "columns"),
-        ({"catalog": "analytics", "target": "test.table", "columns": "id"}, "columns"),
-        ({"catalog": "analytics", "target": "test.table", "columns": [1]}, "columns"),
         (
             {
                 "catalog": "analytics",
@@ -208,6 +214,13 @@ def test_parse_descriptor_rejects_invalid_request_shapes(payload, error):
     descriptor = command_descriptor(payload)
 
     with pytest.raises(ValueError, match=error):
+        parse_descriptor(descriptor)
+
+
+def test_parse_descriptor_rejects_malformed_protobuf_command():
+    descriptor = flight.FlightDescriptor.for_command(bytes([0x1A, 0xFF]))
+
+    with pytest.raises(ValueError, match="Invalid protobuf Flight descriptor command"):
         parse_descriptor(descriptor)
 
 

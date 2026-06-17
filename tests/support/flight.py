@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import threading
 import time
 from collections.abc import Iterable, Iterator
@@ -25,6 +24,7 @@ from dal_obscura.common.access_control.models import (
 )
 from dal_obscura.common.access_control.policy_resolution import dataset_version, resolve_access
 from dal_obscura.common.catalog.ports import TableFormat
+from dal_obscura.common.flight_contract import encode_plan_command_from_mapping
 from dal_obscura.common.query_planning.models import PlanRequest
 from dal_obscura.common.table_format.ports import InputPartition, Plan, ScanTask
 from dal_obscura.data_plane.application.use_cases.fetch_stream import FetchStreamUseCase
@@ -213,7 +213,7 @@ def flight_call_options(
 
 
 def command_descriptor(payload: dict[str, object]) -> flight.FlightDescriptor:
-    return flight.FlightDescriptor.for_command(json.dumps(payload).encode("utf-8"))
+    return flight.FlightDescriptor.for_command(encode_plan_command_from_mapping(payload))
 
 
 def build_flight_service(

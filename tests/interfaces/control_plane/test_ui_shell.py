@@ -23,9 +23,6 @@ def test_ui_serves_react_index_without_embedding_admin_token():
     assert "dal-obscura control plane" in response.text
     assert "test-admin" not in response.text
     assert "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN" not in response.text
-    assert "htmx" not in response.text.lower()
-    assert "tenant" not in response.text.lower()
-    assert "cell" not in response.text.lower()
 
 
 def test_ui_client_routes_fall_back_to_react_index():

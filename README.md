@@ -194,14 +194,17 @@ Clients authenticate through whichever provider chain is configured. Header-base
 providers inspect Flight headers on both `get_flight_info` and `do_get`, while
 mTLS providers can authenticate from the verified Flight peer identity alone.
 
-Clients may include an optional `row_filter` in the `get_flight_info` command payload:
+Clients send `get_schema` and `get_flight_info` requests with a protobuf
+`dal_obscura.flight.v1.PlanRequest` in `FlightDescriptor.command`. The Flight
+surface does not accept JSON command payloads.
 
-```json
-{
-  "catalog": "analytics",
-  "target": "default.users",
-  "columns": ["id", "email"],
-  "row_filter": "region = 'us'"
+```proto
+message PlanRequest {
+  uint32 protocol_version = 1;
+  string catalog = 2;
+  string target = 3;
+  repeated string columns = 4;
+  string row_filter = 5;
 }
 ```
 

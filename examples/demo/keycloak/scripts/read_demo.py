@@ -8,6 +8,8 @@ from urllib.request import Request, urlopen
 
 import pyarrow.flight as flight
 
+from dal_obscura.common.flight_contract import encode_plan_command
+
 USERS = {
     "demo-admin": "DEMO_ADMIN_PASSWORD",
     "asset-owner": "ASSET_OWNER_PASSWORD",
@@ -87,16 +89,16 @@ def _read_table(
     row_filter: str | None,
 ):
     client = flight.connect(os.environ["FLIGHT_URI"])
-    payload: dict[str, object] = {
-        "catalog": catalog,
-        "target": target,
-        "columns": columns,
-    }
-    if row_filter:
-        payload["row_filter"] = row_filter
     options = flight.FlightCallOptions(headers=[(b"authorization", f"Bearer {token}".encode())])
     info = client.get_flight_info(
-        flight.FlightDescriptor.for_command(json.dumps(payload)),
+        flight.FlightDescriptor.for_command(
+            encode_plan_command(
+                catalog=catalog,
+                target=target,
+                columns=columns,
+                row_filter=row_filter,
+            )
+        ),
         options=options,
     )
     return client.do_get(info.endpoints[0].ticket, options=options).read_all()

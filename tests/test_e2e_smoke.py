@@ -1,4 +1,3 @@
-import json
 import os
 import socket
 import subprocess
@@ -23,6 +22,7 @@ from pyiceberg.types import (
 
 from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
 from dal_obscura.common.config_store.orm import Base
+from dal_obscura.common.flight_contract import encode_plan_command
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.provisioning import ProvisioningService
 
@@ -301,13 +301,11 @@ def test_e2e_flight_server_with_iceberg(control_plane_setup: dict[str, str]):
 
         # Query the data
         descriptor = flight.FlightDescriptor.for_command(
-            json.dumps(
-                {
-                    "catalog": "e2e_catalog",
-                    "target": "default.users",
-                    "columns": ["id", "email", "metadata"],
-                }
-            ).encode("utf-8")
+            encode_plan_command(
+                catalog="e2e_catalog",
+                target="default.users",
+                columns=["id", "email", "metadata"],
+            )
         )
 
         info = client.get_flight_info(descriptor, options=options)

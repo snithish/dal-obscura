@@ -13,15 +13,14 @@ This workspace hosts engine-specific clients that read through `dal-obscura`.
 All connectors use the same read contract:
 
 - transport: Arrow Flight
-- command payload: JSON `FlightDescriptor.command`
+- command payload: protobuf `dal_obscura.flight.v1.PlanRequest` in `FlightDescriptor.command`
 - required command fields: `protocol_version: 1`, `catalog`, `target`, `columns`
 - optional command field: `row_filter`, rendered as validated DuckDB SQL
 - auth: `Authorization: Bearer <token>` on schema, plan, and fetch calls
 - result: Arrow schema from `get_schema`/`get_flight_info`, one opaque ticket per endpoint, and Arrow record batches from `do_get`
 - nested entries in `columns`, such as `user.address.zip`, are returned as pruned nested Arrow structs rooted at `user`, not as dotted top-level fields
 
-Missing `protocol_version` is accepted as v1 for compatibility with early clients.
-Unsupported versions are rejected server-side.
+Missing or unsupported `protocol_version` values are rejected server-side.
 
 ## Spark 3.x Connector
 

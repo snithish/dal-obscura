@@ -1,13 +1,12 @@
 package io.dalobscura.connectors.client;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import io.dalobscura.flight.v1.DalObscuraFlightProto;
 import org.apache.arrow.flight.CallOption;
 import org.apache.arrow.flight.FlightCallHeaders;
 import org.apache.arrow.flight.FlightClient;
@@ -25,7 +24,6 @@ import org.apache.arrow.vector.types.pojo.Schema;
 
 public final class FlightDalObscuraReadClient implements DalObscuraReadClient {
     public static final int PROTOCOL_VERSION = 1;
-    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final BufferAllocator allocator = new RootAllocator(Long.MAX_VALUE);
     private final FlightClient client;
@@ -89,19 +87,18 @@ public final class FlightDalObscuraReadClient implements DalObscuraReadClient {
     }
 
     static byte[] encodePlanCommand(DalObscuraPlanRequest request) {
-        try {
-            LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
-            payload.put("protocol_version", PROTOCOL_VERSION);
-            payload.put("catalog", request.catalog());
-            payload.put("target", request.target());
-            payload.put("columns", request.columns());
-            if (request.rowFilter().isPresent()) {
-                payload.put("row_filter", request.rowFilter().get());
-            }
-            return MAPPER.writeValueAsBytes(payload);
-        } catch (Exception error) {
-            throw new IllegalStateException("Failed to encode plan request", error);
+        DalObscuraFlightProto.PlanRequest.Builder payload =
+                DalObscuraFlightProto.PlanRequest.newBuilder()
+                        .setProtocolVersion(PROTOCOL_VERSION)
+                        .setTarget(request.target())
+                        .addAllColumns(request.columns());
+        if (request.catalog() != null && !request.catalog().isEmpty()) {
+            payload.setCatalog(request.catalog());
         }
+        request.rowFilter()
+                .filter(value -> !value.isEmpty())
+                .ifPresent(payload::setRowFilter);
+        return payload.build().toByteArray();
     }
 
     static FlightCallHeaders flightHeaders(DalObscuraAuth auth) {

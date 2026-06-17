@@ -1,17 +1,20 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Iterable, Mapping
 from typing import Any
 
 import pyarrow.flight as flight
 
 from dal_obscura.common.access_control.filters import RowFilter, deserialize_row_filter
+from dal_obscura.common.flight_contract import (
+    FLIGHT_PROTOCOL_VERSION,
+    decode_plan_command,
+)
 from dal_obscura.common.query_planning.models import PlanRequest
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
 
 REQUEST_HEADERS_MIDDLEWARE_KEY = "request_headers"
-SUPPORTED_PROTOCOL_VERSION = 1
+SUPPORTED_PROTOCOL_VERSION = FLIGHT_PROTOCOL_VERSION
 MAX_DESCRIPTOR_BYTES = 64 * 1024
 MAX_TARGET_LENGTH = 512
 MAX_COLUMNS = 1024
@@ -82,22 +85,19 @@ def normalize_headers(
 
 
 def parse_descriptor(descriptor: flight.FlightDescriptor) -> PlanRequest:
-    """Parses the JSON command payload used by `get_flight_info` requests."""
+    """Parses the protobuf command payload used by Flight read requests."""
     if descriptor.command:
         if len(descriptor.command) > MAX_DESCRIPTOR_BYTES:
             raise ValueError("Flight descriptor command is too large")
-        raw = descriptor.command.decode("utf-8")
-        data = json.loads(raw)
-        if not isinstance(data, dict):
-            raise ValueError("Flight descriptor command must be a JSON object")
-        _validate_protocol_version(data.get("protocol_version", SUPPORTED_PROTOCOL_VERSION))
-        target = _required_string(data, "target", max_length=MAX_TARGET_LENGTH)
-        columns = _required_columns(data.get("columns"))
+        data = decode_plan_command(descriptor.command)
+        _validate_protocol_version(data.protocol_version)
+        target = _required_string(data.target, "target", max_length=MAX_TARGET_LENGTH)
+        columns = _required_columns(list(data.columns))
         return PlanRequest(
-            catalog=str(data["catalog"]) if data.get("catalog") else None,
+            catalog=data.catalog or None,
             target=target,
             columns=columns,
-            row_filter=_optional_descriptor_row_filter(data.get("row_filter")),
+            row_filter=_optional_descriptor_row_filter(data.row_filter or None),
         )
     raise ValueError("Invalid Flight descriptor")
 
@@ -118,12 +118,11 @@ def _optional_descriptor_row_filter(value: object) -> RowFilter | None:
 
 
 def _required_string(
-    data: Mapping[str, Any],
+    value: object,
     name: str,
     *,
     max_length: int,
 ) -> str:
-    value = data.get(name)
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"Descriptor {name} is required")
     normalized = value.strip()
