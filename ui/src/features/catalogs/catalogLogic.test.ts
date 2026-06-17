@@ -35,18 +35,18 @@ describe("catalog adapter form mapping", () => {
       adapter: "unity",
       modulePath: "",
       type: "rest",
-      uri: "https://workspace.example/api/2.1/unity-catalog/iceberg-rest",
+      uri: "https://workspace.example",
       warehouse: "main",
-      extraOptionsJson: '{"token":"${UNITY_TOKEN}"}',
+      extraOptionsJson: '{"token":"${UNITY_TOKEN}","schemas":["default"]}',
     };
 
     expect(catalogPayloadFromForm(form)).toEqual({
       module: CATALOG_ADAPTERS.unity.module,
       options: {
-        type: "rest",
-        uri: "https://workspace.example/api/2.1/unity-catalog/iceberg-rest",
-        warehouse: "main",
+        base_url: "https://workspace.example",
+        schemas: ["default"],
         token: "${UNITY_TOKEN}",
+        uc_catalog: "main",
       },
     });
   });
@@ -70,37 +70,8 @@ describe("catalog adapter form mapping", () => {
     });
   });
 
-  test("maps the static Delta catalog adapter to configured targets", () => {
-    const form: CatalogForm = {
-      adapter: "static",
-      modulePath: "",
-      type: "sql",
-      uri: "",
-      warehouse: "",
-      extraOptionsJson:
-        '{"targets":{"retail.customer_revenue_delta":{"backend":"delta","table":"/warehouse/delta/customer_revenue"}}}',
-    };
-
-    expect(catalogPayloadFromForm(form)).toEqual({
-      module: CATALOG_ADAPTERS.static.module,
-      options: {
-        targets: {
-          "retail.customer_revenue_delta": {
-            backend: "delta",
-            table: "/warehouse/delta/customer_revenue",
-          },
-        },
-      },
-    });
-    expect(catalogAdapterLabel(CATALOG_ADAPTERS.static.module)).toBe(
-      "Static Delta/file catalog",
-    );
-  });
-
   test("labels known backend module paths without exposing them in the catalog list", () => {
-    expect(catalogAdapterLabel(CATALOG_ADAPTERS.iceberg.module, { provider: "unity" })).toBe(
-      "Unity Catalog",
-    );
+    expect(catalogAdapterLabel(CATALOG_ADAPTERS.unity.module)).toBe("Unity Catalog");
     expect(catalogAdapterLabel(CATALOG_ADAPTERS.iceberg.module, { type: "sql" })).toBe(
       "Iceberg catalog",
     );
@@ -119,6 +90,22 @@ describe("catalog adapter form mapping", () => {
       type: "sql",
       uri: "sqlite:///catalog.db",
       warehouse: "",
+      extraOptionsJson: "",
+    });
+  });
+
+  test("hydrates a Unity form from saved catalog options", () => {
+    expect(
+      formFromCatalogOptions({
+        base_url: "https://workspace.example",
+        uc_catalog: "main",
+      }),
+    ).toEqual({
+      adapter: "unity",
+      modulePath: "",
+      type: "rest",
+      uri: "https://workspace.example",
+      warehouse: "main",
       extraOptionsJson: "",
     });
   });

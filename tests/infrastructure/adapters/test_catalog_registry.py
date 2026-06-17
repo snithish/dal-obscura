@@ -1,19 +1,23 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, ClassVar
 
 import pyarrow as pa
 
-from dal_obscura.common.catalog.ports import TableFormat
+from dal_obscura.common.catalog.ports import (
+    CatalogTableDescriptor,
+    CatalogTableListing,
+    TableFormat,
+)
 from dal_obscura.common.query_planning.models import PlanRequest
 from dal_obscura.common.table_format.ports import InputPartition, Plan, ScanTask
+from dal_obscura.data_plane.infrastructure.adapters import catalog_registry as registry_module
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     CatalogConfig,
-    CatalogTargetConfig,
     DynamicCatalogRegistry,
+    IcebergCatalog,
     ServiceConfig,
-    StaticCatalog,
 )
 from dal_obscura.data_plane.infrastructure.table_providers.registry import (
     TableProviderFactory,
@@ -21,96 +25,99 @@ from dal_obscura.data_plane.infrastructure.table_providers.registry import (
 )
 
 
-def test_static_catalog_resolves_delta_target_to_descriptor():
-    catalog = StaticCatalog(
-        name="analytics",
-        options={},
-        targets={
-            "users": CatalogTargetConfig(
-                backend="delta",
-                table="/warehouse/users",
-                options={"storage_options": {"AWS_REGION": "us-east-1"}},
-            )
-        },
-    )
-
-    descriptor = catalog.describe_table("users")
-
-    assert descriptor.provider_id == "delta"
-    assert descriptor.catalog_name == "analytics"
-    assert descriptor.requested_target == "users"
-    assert descriptor.location == "/warehouse/users"
-
-
-def test_static_catalog_rejects_unknown_backend_with_target_context():
-    catalog = StaticCatalog(
-        name="analytics",
-        options={},
-        targets={"users": CatalogTargetConfig(backend="unknown", table="/warehouse/users")},
-    )
-
-    try:
-        TableProviderRegistry().create(catalog.describe_table("users"))
-    except ValueError as exc:
-        assert str(exc) == (
-            "Unsupported provider 'unknown' for target 'users' in catalog 'analytics'"
-        )
-    else:
-        raise AssertionError("expected unsupported backend error")
-
-
-def test_catalog_config_keeps_target_options_isolated_from_catalog_options():
-    config = CatalogConfig(
-        name="files",
-        module="dal_obscura.data_plane.infrastructure.adapters.catalog_registry.StaticCatalog",
-        options={"storage_options": {"catalog": "value"}},
-        targets={
-            "events": CatalogTargetConfig(
-                backend="json",
-                table="/warehouse/events",
-                options={"storage_options": {"target": "value"}},
-            )
-        },
-    )
-    catalog = StaticCatalog(
-        name=config.name,
-        options=dict(config.options),
-        targets=dict(config.targets),
-    )
-
-    descriptor = catalog.describe_table("events")
-
-    assert descriptor.provider_id == "json"
-    assert descriptor.storage_options == {"target": "value"}
-
-
-def test_dynamic_catalog_registry_uses_descriptor_and_provider_registry():
+def test_dynamic_catalog_registry_uses_named_catalog_plugins_and_provider_registry():
     registry = DynamicCatalogRegistry(
         ServiceConfig(
             catalogs={
-                "static": CatalogConfig(
-                    name="static",
-                    module=(
-                        "dal_obscura.data_plane.infrastructure.adapters.catalog_registry."
-                        "StaticCatalog"
-                    ),
-                    options={},
-                    targets={
-                        "users": CatalogTargetConfig(
-                            backend="postgres",
-                            table="public.users",
-                            options={"dsn": "postgresql://example/db"},
-                        )
-                    },
-                )
+                "analytics": CatalogConfig(
+                    name="analytics",
+                    module="tests.infrastructure.adapters.test_catalog_registry.FakeCatalog",
+                    options={"provider_id": "postgres", "dsn": "postgresql://example/db"},
+                ),
+                "warehouse": CatalogConfig(
+                    name="warehouse",
+                    module="tests.infrastructure.adapters.test_catalog_registry.FakeCatalog",
+                    options={"provider_id": "postgres", "dsn": "postgresql://example/wh"},
+                ),
             }
         ),
         table_provider_registry=TableProviderRegistry(extra_factories=[FakePostgresFactory()]),
     )
 
-    table = registry.describe("static", "users")
+    analytics_table = registry.describe("analytics", "default.users")
+    warehouse_table = registry.describe("warehouse", "default.events")
 
-    assert table.format == "postgres"
+    assert analytics_table.format == "postgres"
+    assert analytics_table.catalog_name == "analytics"
+    assert analytics_table.table_name == "default.users"
+    assert warehouse_table.catalog_name == "warehouse"
+    assert warehouse_table.table_name == "default.events"
+
+
+def test_dynamic_catalog_registry_lists_tables_from_named_catalog():
+    registry = DynamicCatalogRegistry(
+        ServiceConfig(
+            catalogs={
+                "analytics": CatalogConfig(
+                    name="analytics",
+                    module="tests.infrastructure.adapters.test_catalog_registry.FakeCatalog",
+                    options={
+                        "provider_id": "postgres",
+                        "tables": ["default.users", "default.events"],
+                    },
+                )
+            }
+        ),
+    )
+
+    listings = registry.list_tables("analytics")
+
+    assert [table.name for table in listings] == ["default.users", "default.events"]
+    assert {table.provider_id for table in listings} == {"postgres"}
+
+
+def test_catalog_config_requires_logical_name():
+    try:
+        CatalogConfig(
+            name=" ",
+            module="tests.infrastructure.adapters.test_catalog_registry.FakeCatalog",
+            options={},
+        )
+    except ValueError as exc:
+        assert str(exc) == "Catalog configuration requires a non-empty logical name"
+    else:
+        raise AssertionError("expected blank catalog name rejection")
+
+
+def test_iceberg_catalog_uses_provider_catalog_name_from_options(monkeypatch):
+    loaded: dict[str, object] = {}
+
+    class FakePyIcebergCatalog:
+        def load_table(self, table_identifier: str) -> object:
+            loaded["table_identifier"] = table_identifier
+            return FakePyIcebergTable()
+
+    def fake_load_catalog(catalog_name: str, options: dict[str, Any]) -> object:
+        loaded["catalog_name"] = catalog_name
+        loaded["options"] = options
+        return FakePyIcebergCatalog()
+
+    monkeypatch.setattr(registry_module, "_load_iceberg_catalog", fake_load_catalog)
+
+    catalog = IcebergCatalog(
+        name="analytics",
+        options={"provider_catalog_name": "prod_glue", "type": "glue"},
+    )
+
+    descriptor = catalog.describe_table("default.users")
+
+    assert loaded == {
+        "catalog_name": "prod_glue",
+        "options": {"type": "glue"},
+        "table_identifier": "default.users",
+    }
+    assert descriptor.catalog_name == "analytics"
+    assert descriptor.table_identifier == "default.users"
 
 
 def test_dynamic_catalog_registry_rejects_legacy_direct_paths_config():
@@ -126,15 +133,14 @@ def test_dynamic_catalog_registry_rejects_legacy_direct_paths_config():
         raise AssertionError("expected standalone paths to be rejected")
 
 
-def test_dynamic_catalog_registry_rejects_plugins_without_describe_table():
+def test_dynamic_catalog_registry_rejects_plugins_without_required_catalog_surface():
     registry = DynamicCatalogRegistry(
         ServiceConfig(
             catalogs={
                 "legacy": CatalogConfig(
                     name="legacy",
-                    module=("tests.infrastructure.adapters.test_catalog_registry.LegacyCatalog"),
+                    module="tests.infrastructure.adapters.test_catalog_registry.LegacyCatalog",
                     options={},
-                    targets={},
                 )
             }
         )
@@ -146,6 +152,36 @@ def test_dynamic_catalog_registry_rejects_plugins_without_describe_table():
         assert "describe_table" in str(exc)
     else:
         raise AssertionError("expected catalog without describe_table to fail")
+
+
+class FakeCatalog:
+    def __init__(self, name: str, options: dict[str, Any], path_enforcer=None):
+        del path_enforcer
+        self._name = name
+        self._options = dict(options)
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def describe_table(self, target: str) -> CatalogTableDescriptor:
+        return CatalogTableDescriptor(
+            catalog_name=self.name,
+            requested_target=target,
+            provider_id=str(self._options.get("provider_id", "postgres")),
+            table_identifier=target,
+            options={key: value for key, value in self._options.items() if key != "tables"},
+        )
+
+    def list_tables(self) -> list[CatalogTableListing]:
+        return [
+            CatalogTableListing(
+                name=str(name),
+                provider_id=str(self._options.get("provider_id", "postgres")),
+                table_identifier=str(name),
+            )
+            for name in self._options.get("tables", [])
+        ]
 
 
 class FakePostgresFactory(TableProviderFactory):
@@ -186,8 +222,8 @@ class FakePostgresTableFormat(TableFormat):
 
 
 class LegacyCatalog:
-    def __init__(self, name, options, targets, path_enforcer=None):
-        del options, targets, path_enforcer
+    def __init__(self, name, options, path_enforcer=None):
+        del options, path_enforcer
         self._name = name
 
     @property
@@ -200,3 +236,10 @@ class LegacyCatalog:
             table_name=target,
             format="legacy",
         )
+
+
+class FakePyIcebergTable:
+    metadata_location = "s3://warehouse/default/users/metadata.json"
+
+    class io:
+        properties: ClassVar[dict[str, str]] = {"warehouse": "s3://warehouse"}

@@ -28,13 +28,13 @@ type CatalogDiscovery = {
 const presets = [
   {
     adapter: "unity" as const,
-    description: "Connect Unity Catalog through its Iceberg REST-compatible endpoint.",
+    description: "Connect Unity Catalog through its table metadata API.",
     name: "Unity Catalog",
     options: {
       provider: "unity",
-      type: "rest",
-      uri: "https://workspace.example/api/2.1/unity-catalog/iceberg-rest",
-      warehouse: "main",
+      base_url: "https://workspace.example",
+      uc_catalog: "main",
+      schemas: ["default"],
     },
   },
   {
@@ -48,19 +48,6 @@ const presets = [
     description: "Use a SQL-backed PyIceberg catalog for local or simple deployments.",
     name: "Iceberg SQL",
     options: { type: "sql", uri: "sqlite:///catalog.db" },
-  },
-  {
-    adapter: "static" as const,
-    description: "Expose local Delta or file-backed tables from explicit target definitions.",
-    name: "Delta path catalog",
-    options: {
-      targets: {
-        "retail.customer_revenue_delta": {
-          backend: "delta",
-          table: "/workspace/demo/.runtime/delta/customer_revenue",
-        },
-      },
-    },
   },
 ];
 
@@ -181,10 +168,7 @@ export function CatalogsPage() {
                 setCatalogForm({
                   ...formFromCatalogOptions(preset.options),
                   adapter: preset.adapter,
-                  extraOptionsJson:
-                    preset.adapter === "static"
-                      ? JSON.stringify(preset.options, null, 2)
-                      : "",
+                  extraOptionsJson: "",
                 });
                 document.getElementById("catalog-name")?.focus();
               }}
@@ -295,7 +279,7 @@ export function CatalogsPage() {
                 }
                 />
               </>
-          ) : catalogForm.adapter !== "static" ? (
+          ) : (
             <>
               {catalogForm.adapter === "iceberg" ? (
                 <>
@@ -318,13 +302,13 @@ export function CatalogsPage() {
                 </>
               ) : null}
               <label className="mt-4 block text-xs font-black uppercase tracking-wide text-muted">
-                {catalogForm.adapter === "unity" ? "Unity REST endpoint" : "Catalog URI"}
+                {catalogForm.adapter === "unity" ? "Unity base URL" : "Catalog URI"}
               </label>
               <input
                 className="field mt-2"
                 placeholder={
                   catalogForm.adapter === "unity"
-                    ? "https://workspace.example/api/2.1/unity-catalog/iceberg-rest"
+                    ? "https://workspace.example"
                     : catalogForm.type === "rest"
                       ? "http://localhost:8181"
                       : "sqlite:///catalog.db"
@@ -335,7 +319,7 @@ export function CatalogsPage() {
               {(catalogForm.adapter === "unity" || catalogForm.type === "rest") ? (
                 <>
                   <label className="mt-4 block text-xs font-black uppercase tracking-wide text-muted">
-                    {catalogForm.adapter === "unity" ? "Catalog / warehouse" : "Warehouse"}
+                    {catalogForm.adapter === "unity" ? "Unity catalog" : "Warehouse"}
                   </label>
                   <input
                     className="field mt-2"
@@ -348,16 +332,14 @@ export function CatalogsPage() {
                 </>
               ) : null}
             </>
-          ) : null}
+          )}
           <label className="mt-4 block text-xs font-black uppercase tracking-wide text-muted">
             Additional options JSON
           </label>
           <textarea
             className="field mt-2 min-h-[92px] py-2"
             placeholder={
-              catalogForm.adapter === "static"
-                ? '{"targets":{"retail.customer_revenue_delta":{"backend":"delta","table":"/warehouse/delta/customer_revenue"}}}'
-                : catalogForm.adapter === "unity"
+              catalogForm.adapter === "unity"
                 ? '{"token":"${UNITY_TOKEN}"}'
                 : '{"credential":"${CATALOG_TOKEN}"}'
             }

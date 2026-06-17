@@ -1,6 +1,5 @@
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     CatalogConfig,
-    CatalogTargetConfig,
     DynamicCatalogRegistry,
     ServiceConfig,
 )
@@ -51,7 +50,6 @@ __all__ = [
     "ApiKeyIdentityProvider",
     "AuthConfig",
     "CatalogConfig",
-    "CatalogTargetConfig",
     "CompositeIdentityProvider",
     "DataPlaneRuntimeConfig",
     "DefaultIdentityAdapter",

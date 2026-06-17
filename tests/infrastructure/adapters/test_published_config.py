@@ -9,9 +9,17 @@ import pytest
 from sqlalchemy.orm import Session
 
 from dal_obscura.common.access_control.models import Principal
-from dal_obscura.common.catalog.ports import TableFormat
+from dal_obscura.common.catalog.ports import (
+    CatalogTableDescriptor,
+    CatalogTableListing,
+    TableFormat,
+)
 from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
-from dal_obscura.common.config_store.orm import Base, PublishedCellRuntimeRecord
+from dal_obscura.common.config_store.orm import (
+    Base,
+    PublishedCatalogRecord,
+    PublishedCellRuntimeRecord,
+)
 from dal_obscura.common.query_planning.models import PlanRequest
 from dal_obscura.common.table_format.ports import InputPartition, Plan, ScanTask
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
@@ -25,6 +33,7 @@ from dal_obscura.data_plane.infrastructure.table_providers.registry import Table
 ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )
+FAKE_CATALOG_MODULE = "tests.infrastructure.adapters.test_published_config.FakeCatalog"
 
 
 @pytest.fixture
@@ -101,7 +110,9 @@ def test_published_store_uses_last_good_asset_after_transient_failure(
     assert second == first
 
 
-def test_published_catalog_registry_loads_custom_provider_modules(db_session: Session):
+def test_published_catalog_registry_reads_catalog_config_from_published_catalogs(
+    db_session: Session,
+):
     cell_id = uuid4()
     tenant_id = uuid4()
     _publish_asset(
@@ -109,14 +120,16 @@ def test_published_catalog_registry_loads_custom_provider_modules(db_session: Se
         cell_id=cell_id,
         tenant_id=tenant_id,
         policy_version=123,
-        backend="postgres",
-        table="public.users",
-        target_options={
+        catalog_module=FAKE_CATALOG_MODULE,
+        catalog_options={
+            "provider_id": "postgres",
             "provider_modules": [
                 "tests.infrastructure.adapters.test_published_config.FakePostgresFactory"
             ],
             "dsn": "postgresql://example/db",
         },
+        backend="postgres",
+        table="legacy-asset-table-should-not-be-used",
     )
     registry = PublishedConfigCatalogRegistry(PublishedConfigStore(db_session, cell_id=cell_id))
 
@@ -134,6 +147,8 @@ def _publish_asset(
     policy_version: int,
     backend: str = "iceberg",
     table: str = "prod.users",
+    catalog_module: str = ICEBERG_CATALOG_MODULE,
+    catalog_options: dict[str, object] | None = None,
     target_options: dict[str, object] | None = None,
 ) -> None:
     publication_id = uuid4()
@@ -156,6 +171,17 @@ def _publish_asset(
             auth_chain_json={"providers": []},
             ticket_json={},
             path_rules_json=[],
+        )
+    )
+    session.add(
+        PublishedCatalogRecord(
+            publication_id=publication_id,
+            tenant_id=tenant_id,
+            catalog="analytics",
+            config_json={
+                "module": catalog_module,
+                "options": dict(catalog_options or {}),
+            },
         )
     )
     store.insert_published_asset(
@@ -200,6 +226,7 @@ class FakePostgresFactory(TableProviderFactory):
         del path_enforcer
         assert descriptor.location is None
         assert descriptor.options["dsn"] == "postgresql://example/db"
+        assert descriptor.table_identifier == "default.users"
         return FakePostgresTableFormat(
             catalog_name=descriptor.catalog_name,
             table_name=descriptor.requested_target,
@@ -229,3 +256,26 @@ class FakePostgresTableFormat(TableFormat):
     def execute(self, partition: InputPartition):
         del partition
         return self.get_schema(), iter(())
+
+
+class FakeCatalog:
+    def __init__(self, name: str, options: dict[str, object], path_enforcer=None):
+        del path_enforcer
+        self._name = name
+        self._options = dict(options)
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def describe_table(self, target: str) -> CatalogTableDescriptor:
+        return CatalogTableDescriptor(
+            catalog_name=self.name,
+            requested_target=target,
+            provider_id=str(self._options["provider_id"]),
+            table_identifier=target,
+            options=dict(self._options),
+        )
+
+    def list_tables(self) -> list[CatalogTableListing]:
+        return []

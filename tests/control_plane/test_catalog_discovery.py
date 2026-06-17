@@ -63,45 +63,17 @@ def test_catalog_discovery_lists_unity_catalog_tables(monkeypatch):
         return real_client(transport=httpx.MockTransport(handler))
 
     monkeypatch.setattr(
-        "dal_obscura.control_plane.infrastructure.catalog_discovery.httpx.Client",
+        "dal_obscura.data_plane.infrastructure.adapters.unity_catalog.httpx.Client",
         client_factory,
     )
 
     tables = discover_catalog_tables(
         "uc",
         UNITY_CATALOG_MODULE,
-        {"base_url": "https://uc.example", "uc_catalog": "main"},
+        {"base_url": "https://uc.example", "uc_catalog": "main", "schemas": ["default"]},
     )
 
     assert tables == [
         {"backend": "json", "name": "default.events", "table_identifier": "default.events"},
         {"backend": "delta", "name": "default.users", "table_identifier": "default.users"},
-    ]
-
-
-def test_catalog_discovery_lists_static_delta_targets_from_options():
-    from dal_obscura.control_plane.infrastructure.catalog_discovery import (
-        STATIC_CATALOG_MODULE,
-        discover_catalog_tables,
-    )
-
-    tables = discover_catalog_tables(
-        "retail_delta",
-        STATIC_CATALOG_MODULE,
-        {
-            "targets": {
-                "retail.customer_revenue_delta": {
-                    "backend": "delta",
-                    "table": "/workspace/demo/.runtime/delta/customer_revenue",
-                }
-            }
-        },
-    )
-
-    assert tables == [
-        {
-            "backend": "delta",
-            "name": "retail.customer_revenue_delta",
-            "table_identifier": "/workspace/demo/.runtime/delta/customer_revenue",
-        }
     ]

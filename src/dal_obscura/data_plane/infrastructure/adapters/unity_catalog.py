@@ -5,7 +5,11 @@ from typing import Any, cast
 
 import httpx
 
-from dal_obscura.common.catalog.ports import CatalogPlugin, CatalogTableDescriptor
+from dal_obscura.common.catalog.ports import (
+    CatalogPlugin,
+    CatalogTableDescriptor,
+    CatalogTableListing,
+)
 from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 
 
@@ -40,6 +44,17 @@ class UnityCatalogClient:
         response.raise_for_status()
         return _object(response.json())
 
+    def list_tables(self, *, catalog_name: str, schema_name: str) -> list[dict[str, Any]]:
+        response = self._client.get(
+            f"{self._base_url}/tables",
+            headers=self._headers,
+            params={"catalog_name": catalog_name, "schema_name": schema_name},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        tables = payload.get("tables", []) if isinstance(payload, dict) else []
+        return [dict(item) for item in tables if isinstance(item, dict)]
+
     def temporary_table_credentials(self, full_name: str) -> dict[str, Any] | None:
         response = self._client.post(
             f"{self._base_url}/temporary-table-credentials",
@@ -59,13 +74,11 @@ class UnityCatalog(CatalogPlugin):
         self,
         name: str,
         options: dict[str, Any],
-        targets: dict[str, object],
         path_enforcer: PathRuleEnforcer | None = None,
         http_client: httpx.Client | None = None,
     ) -> None:
         self._name = name
-        self.options = options
-        self.targets = targets
+        self.options = dict(options)
         self._path_enforcer = path_enforcer
         self._client = UnityCatalogClient(
             base_url=str(options["base_url"]),
@@ -80,10 +93,6 @@ class UnityCatalog(CatalogPlugin):
 
     def describe_table(self, target: str) -> CatalogTableDescriptor:
         """Resolves Unity Catalog table metadata to a provider-neutral descriptor."""
-        target_config = self.targets.get(target)
-        if target_config is not None:
-            return _descriptor_from_target_config(self.name, target, target_config)
-
         full_name = _full_name(target, self.options.get("uc_catalog"))
         table = _unity_table(self._client.get_table(full_name))
         _ensure_readable_table(target, table)
@@ -111,6 +120,28 @@ class UnityCatalog(CatalogPlugin):
             location=storage_location,
             storage_options=storage_options,
         )
+
+    def list_tables(self) -> list[CatalogTableListing]:
+        uc_catalog = _optional_str(self.options.get("uc_catalog"))
+        if uc_catalog is None:
+            raise ValueError("Unity Catalog table listing requires 'uc_catalog' option")
+        listings: list[CatalogTableListing] = []
+        for schema in _schemas(self.options):
+            for raw in self._client.list_tables(catalog_name=uc_catalog, schema_name=schema):
+                table = _unity_table(raw)
+                try:
+                    provider_id = _backend_from_uc_format(table.data_source_format)
+                except ValueError:
+                    provider_id = "unknown"
+                listings.append(
+                    CatalogTableListing(
+                        name=_relative_unity_name(table.full_name, uc_catalog),
+                        provider_id=provider_id,
+                        table_identifier=table.storage_location
+                        or _relative_unity_name(table.full_name, uc_catalog),
+                    )
+                )
+        return sorted(listings, key=lambda item: item.name)
 
 
 def _normalize_base_url(base_url: str) -> str:
@@ -161,27 +192,19 @@ def _storage_options_from_temporary_credentials(raw: dict[str, Any]) -> dict[str
     return {}
 
 
-def _descriptor_from_target_config(
-    catalog_name: str,
-    requested_target: str,
-    target_config: object,
-) -> CatalogTableDescriptor:
-    backend = _optional_str(getattr(target_config, "backend", None)) or _optional_str(
-        getattr(target_config, "format", None)
-    )
-    table = _optional_str(getattr(target_config, "table", None)) or requested_target
-    options = _object(getattr(target_config, "options", {}))
-    storage_options = _object(options.pop("storage_options", {}))
-    provider_id = (backend or "iceberg").lower()
-    return CatalogTableDescriptor(
-        catalog_name=catalog_name,
-        requested_target=requested_target,
-        provider_id=provider_id,
-        table_identifier=table,
-        location=table if provider_id in _PATH_PROVIDERS else None,
-        options=options,
-        storage_options=storage_options,
-    )
+def _schemas(options: dict[str, Any]) -> list[str]:
+    schemas = options.get("schemas", options.get("schema_names"))
+    if isinstance(schemas, list):
+        return [schema for item in schemas if (schema := str(item).strip())]
+    schema = _optional_str(options.get("schema"))
+    return [schema] if schema else []
+
+
+def _relative_unity_name(full_name: str, uc_catalog: str) -> str:
+    prefix = f"{uc_catalog}."
+    if full_name.startswith(prefix):
+        return full_name[len(prefix) :]
+    return full_name
 
 
 def _object(value: object) -> dict[str, Any]:
@@ -195,6 +218,3 @@ def _optional_str(value: object) -> str | None:
         return None
     text = str(value).strip()
     return text or None
-
-
-_PATH_PROVIDERS = frozenset({"delta", "parquet", "csv", "json", "orc", "avro", "text"})

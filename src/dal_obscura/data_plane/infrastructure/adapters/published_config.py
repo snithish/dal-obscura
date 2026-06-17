@@ -22,12 +22,12 @@ from dal_obscura.common.catalog.ports import TableFormat
 from dal_obscura.common.config_store.orm import (
     ActivePublicationRecord,
     PublishedAssetRecord,
+    PublishedCatalogRecord,
     PublishedCellRuntimeRecord,
     TenantRecord,
 )
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     CatalogConfig,
-    CatalogTargetConfig,
     DynamicCatalogRegistry,
     ServiceConfig,
 )
@@ -56,6 +56,14 @@ class PublishedAsset:
     policy_version: int
 
 
+@dataclass(frozen=True)
+class PublishedCatalog:
+    publication_id: UUID
+    tenant_id: UUID
+    catalog: str
+    config: dict[str, Any]
+
+
 class PublishedConfigStore:
     """Reads active published configuration for one data-plane cell."""
 
@@ -64,6 +72,8 @@ class PublishedConfigStore:
         self._cell_id = cell_id
         self._asset_cache: dict[tuple[UUID, UUID, str, str], PublishedAsset] = {}
         self._last_good_by_target: dict[tuple[UUID, str, str], PublishedAsset] = {}
+        self._catalog_cache: dict[tuple[UUID, UUID], list[PublishedCatalog]] = {}
+        self._last_good_catalogs_by_tenant: dict[UUID, list[PublishedCatalog]] = {}
         self._runtime_cache: dict[UUID, PublishedRuntime] = {}
         self._tenant_cache: dict[str, UUID] = {}
 
@@ -97,6 +107,27 @@ class PublishedConfigStore:
                 return cached
             raise
 
+    def get_catalogs(self, *, tenant_id: str) -> list[PublishedCatalog]:
+        tenant_uuid = self._tenant_uuid(tenant_id)
+        try:
+            publication_id = self.active_publication_id()
+            cache_key = (publication_id, tenant_uuid)
+            cached = self._catalog_cache.get(cache_key)
+            if cached is not None:
+                return cached
+            catalogs = self._published_catalogs(
+                publication_id=publication_id,
+                tenant_id=tenant_uuid,
+            )
+            self._catalog_cache[cache_key] = catalogs
+            self._last_good_catalogs_by_tenant[tenant_uuid] = catalogs
+            return catalogs
+        except Exception:
+            cached = self._last_good_catalogs_by_tenant.get(tenant_uuid)
+            if cached is not None:
+                return cached
+            raise
+
     def _published_asset(
         self,
         *,
@@ -124,6 +155,30 @@ class PublishedConfigStore:
             compiled_config=dict(record.compiled_config_json),
             policy_version=record.policy_version,
         )
+
+    def _published_catalogs(
+        self,
+        *,
+        publication_id: UUID,
+        tenant_id: UUID,
+    ) -> list[PublishedCatalog]:
+        records = self._session.scalars(
+            select(PublishedCatalogRecord)
+            .where(
+                PublishedCatalogRecord.publication_id == publication_id,
+                PublishedCatalogRecord.tenant_id == tenant_id,
+            )
+            .order_by(PublishedCatalogRecord.catalog)
+        )
+        return [
+            PublishedCatalog(
+                publication_id=record.publication_id,
+                tenant_id=record.tenant_id,
+                catalog=record.catalog,
+                config=dict(record.config_json),
+            )
+            for record in records
+        ]
 
     def _tenant_uuid(self, tenant_id: str) -> UUID:
         cached = self._tenant_cache.get(tenant_id)
@@ -230,22 +285,33 @@ class PublishedConfigCatalogRegistry:
         if catalog is None:
             raise ValueError("Catalog name is required to resolve a target")
         asset = self._store.get_asset(tenant_id=tenant_id, catalog=catalog, target=target)
-        config = asset.compiled_config
+        published_catalogs = self._store.get_catalogs(tenant_id=tenant_id)
+        catalogs = {
+            item.catalog: _catalog_config_from_published_catalog(item)
+            for item in published_catalogs
+        }
+        if catalog not in catalogs:
+            raise LookupError(f"No published catalog for {catalog!r}")
         if self._secret_provider is not None:
-            config = cast(
-                dict[str, Any],
-                resolve_secret_refs(config, provider=self._secret_provider),
-            )
-        catalog_config = _catalog_config_from_asset(
-            asset,
-            config,
-        )
+            catalogs = {
+                name: CatalogConfig(
+                    name=config.name,
+                    module=config.module,
+                    options=cast(
+                        dict[str, Any],
+                        resolve_secret_refs(config.options, provider=self._secret_provider),
+                    ),
+                    path_enforcer=config.path_enforcer,
+                )
+                for name, config in catalogs.items()
+            }
         registry = DynamicCatalogRegistry(
-            ServiceConfig(catalogs={catalog: catalog_config}),
+            ServiceConfig(catalogs=catalogs),
             table_provider_registry=TableProviderRegistry(
-                factory_modules=_provider_modules(config),
+                factory_modules=_provider_modules(published_catalogs),
             ),
         )
+        del asset
         return registry.describe(catalog, target, tenant_id=tenant_id)
 
 
@@ -280,27 +346,14 @@ def _access_rule_from_json(raw: dict[str, object]) -> AccessRule:
     )
 
 
-def _catalog_config_from_asset(
-    asset: PublishedAsset,
-    compiled_config: dict[str, Any],
-) -> CatalogConfig:
-    catalog_raw = _mapping(compiled_config.get("catalog"))
-    target_raw = _mapping(compiled_config.get("target"))
-    table_identifier = _optional_str(target_raw.get("table")) or asset.target
-    backend = _optional_str(target_raw.get("backend")) or asset.backend
-    target_options = dict(_mapping(target_raw.get("options")))
-    target_options.pop("provider_modules", None)
+def _catalog_config_from_published_catalog(catalog: PublishedCatalog) -> CatalogConfig:
+    config = _mapping(catalog.config)
+    options = dict(_mapping(config.get("options")))
+    options.pop("provider_modules", None)
     return CatalogConfig(
-        name=asset.catalog,
-        module=str(catalog_raw["module"]),
-        options=dict(_mapping(catalog_raw.get("options"))),
-        targets={
-            asset.target: CatalogTargetConfig(
-                backend=backend,
-                table=table_identifier,
-                options=target_options,
-            )
-        },
+        name=catalog.catalog,
+        module=str(config["module"]),
+        options=options,
     )
 
 
@@ -329,11 +382,12 @@ def _optional_str(value: object) -> str | None:
     return text or None
 
 
-def _provider_modules(compiled_config: dict[str, Any]) -> list[str]:
-    target_raw = _mapping(compiled_config.get("target"))
-    modules = target_raw.get("provider_modules")
-    if modules is None:
-        modules = _mapping(target_raw.get("options")).get("provider_modules")
-    if not isinstance(modules, list):
-        return []
-    return [str(item) for item in modules if str(item).strip()]
+def _provider_modules(catalogs: list[PublishedCatalog]) -> list[str]:
+    modules: list[str] = []
+    for catalog in catalogs:
+        raw = _mapping(catalog.config)
+        options = _mapping(raw.get("options"))
+        value = raw.get("provider_modules", options.get("provider_modules"))
+        if isinstance(value, list):
+            modules.extend(str(item) for item in value if str(item).strip())
+    return modules

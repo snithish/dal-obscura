@@ -95,14 +95,13 @@ class PublicationCompiler:
         )
 
     def _compile_asset(self, asset: AssetDraft, catalog: CatalogDraft) -> CompiledAsset:
-        provider_modules = _provider_modules(asset.options.get("provider_modules"))
+        provider_modules = _provider_modules(catalog.options.get("provider_modules"))
         if asset.backend not in SUPPORTED_BACKENDS and not provider_modules:
             raise ValidationFailure(f"Unsupported backend {asset.backend!r}")
         rules = [
             self._compile_rule(rule) for rule in sorted(asset.rules, key=lambda item: item.ordinal)
         ]
         target_options = dict(asset.options)
-        target_options.pop("provider_modules", None)
         target_config: dict[str, object] = {
             "backend": asset.backend,
             "table": asset.table_identifier or asset.target,
@@ -113,8 +112,6 @@ class PublicationCompiler:
             "target": target_config,
             "policy": {"rules": rules},
         }
-        if provider_modules:
-            target_config["provider_modules"] = provider_modules
         return CompiledAsset(
             tenant_id=asset.tenant_id,
             catalog=asset.catalog_name,

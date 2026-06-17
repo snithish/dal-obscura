@@ -17,9 +17,6 @@ ADMIN_TOKEN = os.environ["DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN"]
 ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )
-STATIC_CATALOG_MODULE = (
-    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.StaticCatalog"
-)
 OIDC_AUTH_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider"
 )
@@ -128,20 +125,6 @@ def _upsert_catalogs(fixture: dict[str, Any], warehouse_path: str) -> None:
                     "type": "sql",
                     "uri": f"sqlite:///{RUNTIME_DIR / f'{catalog_name}.db'}",
                     "warehouse": warehouse_path,
-                },
-            }
-        elif kind == "static":
-            body = {
-                "module": STATIC_CATALOG_MODULE,
-                "options": {
-                    "targets": {
-                        table["target"]: {
-                            "backend": table["backend"],
-                            "table": table["table_path"],
-                        }
-                        for table in fixture["tables"]
-                        if table["catalog"] == catalog_name
-                    }
                 },
             }
         else:

@@ -3,33 +3,30 @@ from __future__ import annotations
 import importlib
 import threading
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import Any
 
-from dal_obscura.common.catalog.ports import CatalogPlugin, CatalogTableDescriptor, TableFormat
+from dal_obscura.common.catalog.ports import (
+    CatalogPlugin,
+    CatalogTableDescriptor,
+    CatalogTableListing,
+    TableFormat,
+)
 from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 from dal_obscura.data_plane.infrastructure.table_providers.registry import TableProviderRegistry
 
 
 @dataclass(frozen=True)
-class CatalogTargetConfig:
-    """Per-target override inside a catalog definition."""
-
-    backend: str | None = None
-    table: str | None = None
-    format: str | None = None
-    paths: tuple[str, ...] = ()
-    options: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
 class CatalogConfig:
-    """One named catalog plus any target-specific overrides."""
+    """One named catalog implementation configured by the control plane."""
 
     name: str
     module: str
-    options: dict[str, Any]
-    targets: dict[str, CatalogTargetConfig]
+    options: dict[str, Any] = field(default_factory=dict)
     path_enforcer: PathRuleEnforcer | None = None
+
+    def __post_init__(self) -> None:
+        if not self.name.strip():
+            raise ValueError("Catalog configuration requires a non-empty logical name")
 
 
 @dataclass(frozen=True)
@@ -80,6 +77,14 @@ class DynamicCatalogRegistry:
         path_enforcer = _path_enforcer(implementation)
         return self._table_provider_registry.create(descriptor, path_enforcer=path_enforcer)
 
+    def list_tables(self, catalog_name: str) -> list[CatalogTableListing]:
+        """Lists tables visible through a named catalog."""
+        with self._lock:
+            implementation = self._catalog_implementations.get(catalog_name)
+            if implementation is None:
+                raise ValueError(f"Unknown catalog: {catalog_name}")
+        return implementation.list_tables()
+
     def describe(
         self,
         catalog: str | None,
@@ -101,12 +106,10 @@ class IcebergCatalog:
         self,
         name: str,
         options: dict[str, Any],
-        targets: dict[str, CatalogTargetConfig],
         path_enforcer: PathRuleEnforcer | None = None,
     ):
         self._name = name
-        self.options = options
-        self.targets = targets
+        self.options = dict(options)
         self._path_enforcer = path_enforcer
         self._catalog: Any | None = None
 
@@ -116,59 +119,39 @@ class IcebergCatalog:
 
     def describe_table(self, target: str) -> CatalogTableDescriptor:
         """Resolves an Iceberg target to provider-neutral metadata."""
-        target_config = self.targets.get(target)
-        if target_config is not None:
-            backend = _backend_id(target_config)
-            if backend != "iceberg":
-                return _descriptor_from_target_config(self.name, target, target_config)
         if self._catalog is None:
-            self._catalog = _load_iceberg_catalog(self.name, self.options)
-        table_identifier = (target_config.table if target_config else None) or target
+            self._catalog = _load_iceberg_catalog(
+                _provider_catalog_name(self.name, self.options),
+                _catalog_options(self.options),
+            )
         return _resolve_iceberg_descriptor(
             self._catalog,
             self.name,
             target,
-            table_identifier,
-        )
-
-
-class StaticCatalog:
-    """Catalog resolver for catalogs that require explicit target mappings."""
-
-    def __init__(
-        self,
-        name: str,
-        options: dict[str, Any],
-        targets: dict[str, CatalogTargetConfig],
-        path_enforcer: PathRuleEnforcer | None = None,
-    ):
-        self._name = name
-        self.options = options
-        self.targets = targets
-        self._path_enforcer = path_enforcer
-        self._catalog: Any | None = None
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    def describe_table(self, target: str) -> CatalogTableDescriptor:
-        """Resolves an explicitly configured target to provider-neutral metadata."""
-        target_config = self.targets.get(target)
-        if target_config is None:
-            raise ValueError(f"Unknown target {target!r} for catalog {self.name!r}")
-        backend = _backend_id(target_config)
-        if backend != "iceberg":
-            return _descriptor_from_target_config(self.name, target, target_config)
-        if self._catalog is None:
-            self._catalog = _load_iceberg_catalog(self.name, self.options)
-        table_identifier = target_config.table or target
-        return _resolve_iceberg_descriptor(
-            self._catalog,
-            self.name,
             target,
-            table_identifier,
         )
+
+    def list_tables(self) -> list[CatalogTableListing]:
+        if self._catalog is None:
+            self._catalog = _load_iceberg_catalog(
+                _provider_catalog_name(self.name, self.options),
+                _catalog_options(self.options),
+            )
+        table_names = sorted(
+            {
+                _identifier_to_name(identifier)
+                for namespace in _walk_namespaces(self._catalog)
+                for identifier in _list_tables(self._catalog, namespace)
+            }
+        )
+        return [
+            CatalogTableListing(
+                name=table_name,
+                provider_id="iceberg",
+                table_identifier=table_name,
+            )
+            for table_name in table_names
+        ]
 
 
 def _resolve_iceberg_descriptor(
@@ -205,35 +188,6 @@ def _load_iceberg_catalog(catalog_name: str, catalog_options: dict[str, Any]) ->
         raise ValueError(f"Failed to load catalog {catalog_name!r}: {exc}") from exc
 
 
-def _backend_id(target_config: CatalogTargetConfig) -> str:
-    return (target_config.backend or target_config.format or "iceberg").strip().lower()
-
-
-def _descriptor_from_target_config(
-    catalog_name: str,
-    requested_target: str,
-    target_config: CatalogTargetConfig,
-) -> CatalogTableDescriptor:
-    backend_id = _backend_id(target_config)
-    table_uri = target_config.table or requested_target
-    options = dict(target_config.options)
-    storage_options: dict[str, object] = {
-        str(key): str(value)
-        for key, value in _mapping(options.get("storage_options")).items()
-        if value is not None
-    }
-    options.pop("storage_options", None)
-    return CatalogTableDescriptor(
-        catalog_name=catalog_name,
-        requested_target=requested_target,
-        provider_id=backend_id,
-        table_identifier=table_uri,
-        location=table_uri if backend_id in _PATH_PROVIDERS else None,
-        options=options,
-        storage_options=storage_options,
-    )
-
-
 def _load_and_instantiate_catalog(catalog_config: CatalogConfig) -> CatalogPlugin:
     """Dynamically loads and instantiates a catalog from the `module` configuration."""
     module_path = catalog_config.module
@@ -253,20 +207,74 @@ def _load_and_instantiate_catalog(catalog_config: CatalogConfig) -> CatalogPlugi
         return catalog_cls(
             name=catalog_config.name,
             options=dict(catalog_config.options),
-            targets=dict(catalog_config.targets),
             path_enforcer=catalog_config.path_enforcer,
         )
     except Exception as exc:
         raise ValueError(f"Failed to instantiate catalog {catalog_config.name!r}: {exc}") from exc
 
 
-def _mapping(value: object) -> dict[str, Any]:
-    if isinstance(value, dict):
-        return cast(dict[str, Any], value).copy()
-    return {}
+def _provider_catalog_name(logical_name: str, options: dict[str, Any]) -> str:
+    return str(options.get("provider_catalog_name") or options.get("catalog_name") or logical_name)
 
 
-_PATH_PROVIDERS = frozenset({"delta", "parquet", "csv", "json", "orc", "avro", "text"})
+def _catalog_options(options: dict[str, Any]) -> dict[str, Any]:
+    cleaned = dict(options)
+    cleaned.pop("provider_catalog_name", None)
+    cleaned.pop("catalog_name", None)
+    return cleaned
+
+
+def _walk_namespaces(catalog: Any) -> list[tuple[str, ...]]:
+    namespaces: list[tuple[str, ...]] = []
+    pending: list[tuple[str, ...]] = [()]
+    seen: set[tuple[str, ...]] = set()
+    while pending:
+        namespace = pending.pop(0)
+        if namespace in seen:
+            continue
+        seen.add(namespace)
+        namespaces.append(namespace)
+        for child in _list_namespaces(catalog, namespace):
+            pending.append(_namespace_tuple(child))
+    return namespaces
+
+
+def _list_namespaces(catalog: Any, namespace: tuple[str, ...]) -> list[object]:
+    try:
+        if namespace:
+            return list(catalog.list_namespaces(namespace))
+        return list(catalog.list_namespaces())
+    except TypeError:
+        return list(catalog.list_namespaces(namespace))
+
+
+def _list_tables(catalog: Any, namespace: tuple[str, ...]) -> list[object]:
+    try:
+        return list(catalog.list_tables(namespace))
+    except Exception:
+        if namespace:
+            raise
+        return []
+
+
+def _namespace_tuple(namespace: object) -> tuple[str, ...]:
+    if isinstance(namespace, str):
+        return tuple(part for part in namespace.split(".") if part)
+    if isinstance(namespace, tuple):
+        return tuple(str(part) for part in namespace)
+    if isinstance(namespace, list):
+        return tuple(str(part) for part in namespace)
+    return (str(namespace),)
+
+
+def _identifier_to_name(identifier: object) -> str:
+    if isinstance(identifier, str):
+        return identifier
+    if isinstance(identifier, tuple):
+        return ".".join(str(part) for part in identifier)
+    if isinstance(identifier, list):
+        return ".".join(str(part) for part in identifier)
+    return str(identifier)
 
 
 def _path_enforcer(implementation: CatalogPlugin) -> PathRuleEnforcer | None:

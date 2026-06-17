@@ -389,7 +389,6 @@ def _run_iceberg_stream_scenario(
                     name=catalog_name,
                     module="dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog",
                     options={"type": "sql", "uri": catalog_uri, "warehouse": str(warehouse)},
-                    targets={},
                 )
             },
         )

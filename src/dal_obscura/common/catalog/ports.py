@@ -70,3 +70,7 @@ class CatalogPlugin(ABC):
     @abstractmethod
     def describe_table(self, target: str) -> CatalogTableDescriptor:
         """Resolves a target name to provider-neutral table metadata."""
+
+    @abstractmethod
+    def list_tables(self) -> list[CatalogTableListing]:
+        """Lists tables visible through this catalog."""

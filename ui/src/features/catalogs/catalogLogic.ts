@@ -5,11 +5,7 @@ export const CATALOG_ADAPTERS = {
   },
   unity: {
     label: "Unity Catalog",
-    module: "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog",
-  },
-  static: {
-    label: "Static Delta/file catalog",
-    module: "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.StaticCatalog",
+    module: "dal_obscura.data_plane.infrastructure.adapters.unity_catalog.UnityCatalog",
   },
   custom: {
     label: "Custom adapter",
@@ -69,18 +65,33 @@ export function catalogAdapterLabel(module: string, options: Record<string, unkn
   if (options.provider === "unity" || isUnityUri(options.uri)) {
     return "Unity Catalog";
   }
+  if (module === CATALOG_ADAPTERS.unity.module) {
+    return "Unity Catalog";
+  }
   if (module === CATALOG_ADAPTERS.iceberg.module) {
     return "Iceberg catalog";
-  }
-  if (module === CATALOG_ADAPTERS.static.module) {
-    return "Static Delta/file catalog";
   }
   return "Custom adapter";
 }
 
 export function formFromCatalogOptions(options: Record<string, unknown>): CatalogForm {
+  if (options.provider === "unity" || isUnityUri(options.uri) || options.base_url) {
+    return {
+      adapter: "unity",
+      extraOptionsJson: "",
+      modulePath: "",
+      type: "rest",
+      uri:
+        typeof options.base_url === "string"
+          ? options.base_url
+          : typeof options.uri === "string"
+            ? options.uri
+            : "",
+      warehouse: typeof options.uc_catalog === "string" ? options.uc_catalog : "",
+    };
+  }
   return {
-    adapter: options.provider === "unity" || isUnityUri(options.uri) ? "unity" : "iceberg",
+    adapter: "iceberg",
     extraOptionsJson: "",
     modulePath: "",
     type: options.type === "rest" ? "rest" : "sql",
@@ -97,8 +108,15 @@ function catalogModuleFromForm(form: CatalogForm): string {
 }
 
 function catalogOptionsFromForm(form: CatalogForm): Record<string, unknown> {
-  if (form.adapter === "custom" || form.adapter === "static") {
+  if (form.adapter === "custom") {
     return parseExtraOptions(form.extraOptionsJson);
+  }
+  if (form.adapter === "unity") {
+    return {
+      ...parseExtraOptions(form.extraOptionsJson),
+      base_url: form.uri,
+      ...(form.warehouse ? { uc_catalog: form.warehouse } : {}),
+    };
   }
   return {
     ...parseExtraOptions(form.extraOptionsJson),

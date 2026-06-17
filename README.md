@@ -260,13 +260,12 @@ HTTP APIs. Non-path providers can use descriptor fields such as
 `table_identifier`, `options`, and `properties` without inventing a fake file
 location.
 
-Custom providers can be published by setting the asset backend to the provider
-ID and adding `provider_modules` to the asset options:
+Custom providers can be published by adding `provider_modules` to the catalog
+options and setting governed assets to the provider ID returned by that catalog:
 
 ```json
 {
-  "backend": "postgres",
-  "table_identifier": "public.users",
+  "module": "example.PostgresCatalog",
   "options": {
     "provider_modules": ["example.PostgresProviderFactory"],
     "dsn": {"secret": "POSTGRES_DSN"}

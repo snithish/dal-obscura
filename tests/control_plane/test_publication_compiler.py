@@ -123,10 +123,10 @@ def test_compiler_rejects_unknown_backend():
 
 def test_compiler_accepts_custom_backend_with_provider_module():
     draft = _draft()
+    draft.catalogs[0].options["provider_modules"] = ["example.PostgresProviderFactory"]
     draft.assets[0].backend = "postgres"
     draft.assets[0].table_identifier = "public.users"
     draft.assets[0].options = {
-        "provider_modules": ["example.PostgresProviderFactory"],
         "dsn": {"secret": "POSTGRES_DSN"},
     }
 
@@ -134,9 +134,7 @@ def test_compiler_accepts_custom_backend_with_provider_module():
 
     assert asset.backend == "postgres"
     assert asset.compiled_config["target"]["backend"] == "postgres"
-    assert asset.compiled_config["target"]["provider_modules"] == [
-        "example.PostgresProviderFactory"
-    ]
+    assert "provider_modules" not in asset.compiled_config["target"]
 
 
 def test_compiler_rejects_custom_backend_without_provider_module():
