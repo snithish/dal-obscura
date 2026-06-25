@@ -45,9 +45,15 @@ def main() -> None:
         admin_token=admin_token,
         oidc_actor_resolver=oidc_resolver,
         oidc_admin_group=os.getenv("DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP"),
+        cors_origins=cors_origins_from_env(os.environ),
         ui_auth_config=ui_auth_config_from_env(os.environ),
     )
     uvicorn.run(app, host=host, port=port)
+
+
+def cors_origins_from_env(env: Mapping[str, str]) -> tuple[str, ...]:
+    raw = _env_text(env, "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS")
+    return tuple(item.strip() for item in raw.split(",") if item.strip())
 
 
 def ui_auth_config_from_env(env: Mapping[str, str]) -> dict[str, Any] | None:

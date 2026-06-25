@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dal_obscura.control_plane.interfaces.cli import ui_auth_config_from_env
+from dal_obscura.control_plane.interfaces.cli import cors_origins_from_env, ui_auth_config_from_env
 
 
 def test_ui_auth_config_from_env_uses_public_spa_values_without_secret() -> None:
@@ -71,3 +71,13 @@ def test_ui_auth_config_from_env_is_absent_without_public_client_id() -> None:
         )
         is None
     )
+
+
+def test_cors_origins_from_env_parses_comma_separated_origins() -> None:
+    assert cors_origins_from_env(
+        {
+            "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": (
+                " http://127.0.0.1:8821,https://console.example.test, "
+            )
+        }
+    ) == ("http://127.0.0.1:8821", "https://console.example.test")

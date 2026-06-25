@@ -71,6 +71,18 @@ services:
       - .:/workspace/demo:rw
     command: ["control-plane"]
 
+  control-plane-ui:
+    build:
+      context: ../../..
+      dockerfile: ui/Dockerfile
+    depends_on:
+      control-plane:
+        condition: service_started
+    env_file:
+      - .runtime/ui.env
+    ports:
+      - "127.0.0.1:8821:8080"
+
   dal-obscura:
     image: ${DAL_OBSCURA_IMAGE:-ghcr.io/snithish/dal-obscura:latest}
     depends_on:

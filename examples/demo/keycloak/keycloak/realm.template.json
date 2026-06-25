@@ -8,8 +8,8 @@
       "publicClient": true,
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
-      "redirectUris": ["http://127.0.0.1:8820/ui/auth/callback"],
-      "webOrigins": ["http://127.0.0.1:8820"],
+      "redirectUris": ["{{DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI}}"],
+      "webOrigins": ["{{DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN}}"],
       "protocol": "openid-connect",
       "attributes": {
         "pkce.code.challenge.method": "S256"

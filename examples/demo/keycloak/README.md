@@ -49,8 +49,9 @@ What happens:
 ./run credentials
 ```
 
-Open `http://127.0.0.1:8820/ui`, choose **Sign in**, and log in through
-Keycloak. Useful demo users:
+Open `http://127.0.0.1:8821`, choose **Sign in**, and log in through
+Keycloak. The control-plane API remains on `http://127.0.0.1:8820`, with
+Swagger docs at `http://127.0.0.1:8820/docs`. Useful demo users:
 
 - `demo-admin`: platform admin access.
 - `asset-owner`: can edit owners, policies, filters, masks, and publish policy
@@ -69,7 +70,7 @@ password. Other users still use Keycloak with the generated passwords.
 
 ## Demo Flow
 
-1. Open `http://127.0.0.1:8820/ui`.
+1. Open `http://127.0.0.1:8821`.
 2. Sign in as `demo-admin` using the password from `./run credentials`.
 3. Open Catalogs and run discovery for `retail_demo` and `retail_delta`; the
    tables should appear as governed.

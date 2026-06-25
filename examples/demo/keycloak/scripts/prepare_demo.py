@@ -14,6 +14,7 @@ CONTROL_PLANE_ENV = RUNTIME_DIR / "control-plane.env"
 DATA_PLANE_ENV = RUNTIME_DIR / "data-plane.env"
 CLIENT_ENV = RUNTIME_DIR / "client.env"
 SETUP_ENV = RUNTIME_DIR / "setup.env"
+UI_ENV = RUNTIME_DIR / "ui.env"
 
 SECRET_KEYS = {
     "KC_BOOTSTRAP_ADMIN_PASSWORD": "kc-admin",
@@ -44,10 +45,12 @@ STATIC_VALUES = {
     "DAL_OBSCURA_CONTROL_PLANE_OIDC_SUBJECT_CLAIM": "preferred_username",
     "DAL_OBSCURA_CONTROL_PLANE_OIDC_GROUP_CLAIMS": "groups",
     "DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP": "platform-admins",
+    "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": "http://127.0.0.1:8821",
     "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": ("http://127.0.0.1:8080/realms/dal-obscura-demo"),
     "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "dal-obscura-ui",
-    "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": ("http://127.0.0.1:8820/ui/auth/callback"),
-    "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI": ("http://127.0.0.1:8820/ui"),
+    "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN": "http://127.0.0.1:8821",
+    "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": ("http://127.0.0.1:8821/auth/callback"),
+    "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI": ("http://127.0.0.1:8821"),
     "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_SCOPE": "openid profile",
     "DAL_OBSCURA_CONTROL_PLANE_UI_LOGIN_SHORTCUTS": (
         "Platform owner=demo-admin;Data asset owner=asset-owner"
@@ -56,6 +59,7 @@ STATIC_VALUES = {
         "http://keycloak:8080/realms/dal-obscura-demo/protocol/openid-connect/token"
     ),
     "DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_CLIENT_ID": "dal-obscura-cli",
+    "DAL_OBSCURA_API_BASE_URL": "http://127.0.0.1:8820",
     "DAL_OBSCURA_LOCATION": "grpc://0.0.0.0:8815",
     "DAL_OBSCURA_JSON_LOGS": "true",
     "DEMO_DIR": "/workspace/demo",
@@ -112,6 +116,7 @@ def _read_all_env_files() -> dict[str, str]:
         DATA_PLANE_ENV,
         CLIENT_ENV,
         SETUP_ENV,
+        UI_ENV,
     ):
         values.update(_read_env_file(path))
     return values
@@ -154,8 +159,10 @@ def _write_env_files(values: dict[str, str]) -> None:
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_SUBJECT_CLAIM",
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_GROUP_CLAIMS",
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP",
+            "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_SCOPE",
@@ -208,6 +215,11 @@ def _write_env_files(values: dict[str, str]) -> None:
             "CONTROL_PLANE_URL",
             "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN",
         ),
+    )
+    _write_env_file(
+        UI_ENV,
+        values,
+        ("DAL_OBSCURA_API_BASE_URL",),
     )
 
 

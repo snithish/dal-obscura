@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session, sessionmaker
 
 from dal_obscura.control_plane.interfaces.routes import (
@@ -68,6 +69,7 @@ def create_app(
     admin_token: str,
     oidc_actor_resolver: OidcActorResolver | None = None,
     oidc_admin_group: str | None = None,
+    cors_origins: tuple[str, ...] = (),
     ui_auth_config: Mapping[str, object] | None = None,
 ) -> FastAPI:
     app = FastAPI(
@@ -78,6 +80,13 @@ def create_app(
         redoc_url="/redoc",
         openapi_url="/openapi.json",
     )
+    if cors_origins:
+        app.add_middleware(
+            CORSMiddleware,  # ty: ignore[invalid-argument-type]
+            allow_origins=list(cors_origins),
+            allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+            allow_headers=["authorization", "content-type", "accept"],
+        )
     deps = ControlPlaneDeps(
         session_maker=session_maker,
         admin_token=admin_token,
