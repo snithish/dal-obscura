@@ -52,9 +52,6 @@ markers = [
   "heavy: tests that are intentionally excluded from the default pre-commit pytest hook",
 ]
 
-[tool.setuptools.package-data]
-"dal_obscura.control_plane.interfaces" = ["ui_assets/dist/**/*"]
-
 [dependency-groups]
 dev = [
   "pre-commit>=3.4.0",
