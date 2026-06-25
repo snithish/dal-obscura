@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  buildDraftReview,
   canPublishDraft,
   policyVersionLabel,
   publishBlockers,
@@ -55,5 +56,35 @@ describe("policy version labels", () => {
         target: "default.users",
       }),
     ).toBe("default.users v123");
+  });
+});
+
+describe("draft review", () => {
+  test("builds review state from workspace catalogs and assets", () => {
+    expect(
+      buildDraftReview({
+        assets: [
+          {
+            catalog: "analytics",
+            id: "asset-1",
+            name: "default.users",
+            policy_status: "ready",
+          },
+        ],
+        catalogs: [{ name: "analytics", status: "configured" }],
+      }),
+    ).toEqual({
+      asset_count: 1,
+      assets: [
+        {
+          catalog: "analytics",
+          id: "asset-1",
+          name: "default.users",
+          policy_status: "ready",
+        },
+      ],
+      catalog_count: 1,
+      catalogs: [{ name: "analytics", status: "configured" }],
+    });
   });
 });

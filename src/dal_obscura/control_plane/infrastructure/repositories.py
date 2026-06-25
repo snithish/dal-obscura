@@ -748,16 +748,6 @@ class PublicationStore:
         catalogs = self.list_workspace_catalogs(context)
         assets = self.list_workspace_assets(context)
         missing_policy_count = sum(1 for asset in assets if asset["policy_status"] == "missing")
-        active: dict[str, str] | None
-        try:
-            active_publication = self.get_active_publication_summary(context.cell_id)
-            active = {
-                "publication_id": active_publication["publication_id"],
-                "manifest_hash": active_publication["manifest_hash"],
-                "status": active_publication["status"],
-            }
-        except LookupError:
-            active = None
         enabled_auth_provider_count = sum(
             1 for provider in self.list_auth_providers(context.cell_id) if provider["enabled"]
         )
@@ -769,7 +759,6 @@ class PublicationStore:
             "draft_change_count": len(assets),
             "runtime_configured": self.get_runtime_settings(context.cell_id) is not None,
             "enabled_auth_provider_count": enabled_auth_provider_count,
-            "active_publication": active,
         }
 
     def get_workspace_draft(self, context: WorkspaceContext) -> dict[str, object]:
@@ -1060,7 +1049,6 @@ def _empty_workspace_summary() -> dict[str, object]:
         "draft_change_count": 0,
         "runtime_configured": False,
         "enabled_auth_provider_count": 0,
-        "active_publication": None,
     }
 
 

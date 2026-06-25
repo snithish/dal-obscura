@@ -14,6 +14,7 @@ def test_public_publication_routes_are_removed():
 
     assert client.get("/v1/publications", headers=ADMIN_HEADERS).status_code == 404
     assert client.post("/v1/publications", headers=ADMIN_HEADERS).status_code == 404
+    assert client.get("/v1/publications/draft", headers=ADMIN_HEADERS).status_code == 404
 
 
 def test_policy_version_publish_rejects_unowned_assets():
@@ -116,8 +117,9 @@ def test_policy_version_publish_bootstraps_default_runtime_context():
         headers=ADMIN_HEADERS,
     )
 
-    draft = client.get("/v1/publications/draft", headers=ADMIN_HEADERS).json()
     versions_before = client.get("/v1/policy-versions", headers=ADMIN_HEADERS).json()
+    assets_before = client.get("/v1/assets", headers=ADMIN_HEADERS).json()
+    catalogs_before = client.get("/v1/catalogs", headers=ADMIN_HEADERS).json()
     version = client.post(
         f"/v1/assets/{asset['id']}/policy-versions",
         headers=ADMIN_HEADERS,
@@ -125,8 +127,8 @@ def test_policy_version_publish_bootstraps_default_runtime_context():
     versions_after_publish = client.get("/v1/policy-versions", headers=ADMIN_HEADERS).json()
     summary = client.get("/v1/workspace/summary", headers=ADMIN_HEADERS).json()
 
-    assert draft["catalog_count"] == 1
-    assert draft["asset_count"] == 1
+    assert len(catalogs_before) == 1
+    assert len(assets_before) == 1
     assert versions_before == []
     assert version["asset_id"] == asset["id"]
     assert version["policy_version"] == versions_after_publish[0]["policy_version"]
@@ -136,11 +138,9 @@ def test_policy_version_publish_bootstraps_default_runtime_context():
     assert versions_after_publish[0]["target"] == "default.users"
     assert versions_after_publish[0]["active"] is True
     assert "cell_id" not in versions_after_publish[0]
-    assert summary["active_publication"] == {
-        "publication_id": version["publication_id"],
-        "manifest_hash": version["manifest_hash"],
-        "status": "published",
-    }
+    assert "publication_id" not in version
+    assert "manifest_hash" not in version
+    assert "active_publication" not in summary
     assert summary["runtime_configured"] is True
     assert summary["enabled_auth_provider_count"] == 1
 

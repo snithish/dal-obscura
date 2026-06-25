@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from uuid import UUID
-
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -94,10 +92,6 @@ def test_api_provisions_and_activates_default_policy_version():
 
     session_maker = session_factory(engine)
     with session_maker() as db_session:
-        runtime = db_session.scalar(
-            select(PublishedCellRuntimeRecord).where(
-                PublishedCellRuntimeRecord.publication_id == UUID(published["publication_id"])
-            )
-        )
+        runtime = db_session.scalar(select(PublishedCellRuntimeRecord))
     assert runtime is not None
     assert runtime.ticket_json["max_exchanges"] == 2

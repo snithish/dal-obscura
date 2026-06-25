@@ -62,9 +62,7 @@ def create_asset_policy_version(
         )
         return {
             "asset_id": str(asset.id),
-            "publication_id": publication["publication_id"],
             "policy_version": compiled_asset.policy_version,
-            "manifest_hash": publication["manifest_hash"],
         }
 
     replaced = False
@@ -96,9 +94,7 @@ def create_asset_policy_version(
     store.activate_publication(cell_id=asset.cell_id, publication_id=publication_id)
     return {
         "asset_id": str(asset.id),
-        "publication_id": str(publication_id),
         "policy_version": compiled_asset.policy_version,
-        "manifest_hash": compiled.manifest_hash,
     }
 
 

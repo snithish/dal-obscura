@@ -17,6 +17,25 @@ export type PolicyVersionHistoryItem = {
   target: string;
 };
 
+export type DraftReviewAsset = {
+  catalog: string;
+  id: string;
+  name: string;
+  policy_status: string;
+};
+
+export type DraftReviewCatalog = {
+  name: string;
+  status: string;
+};
+
+export type DraftReview = {
+  asset_count: number;
+  assets: DraftReviewAsset[];
+  catalog_count: number;
+  catalogs: DraftReviewCatalog[];
+};
+
 export function canPublishDraft(readiness: DraftReadiness): boolean {
   return publishBlockers(readiness).length === 0;
 }
@@ -57,6 +76,21 @@ export function publishBlockers(readiness: DraftReadiness): string[] {
 
 export function policyVersionLabel(item: PolicyVersionHistoryItem): string {
   return `${item.asset_name} v${item.policy_version}`;
+}
+
+export function buildDraftReview({
+  assets,
+  catalogs,
+}: {
+  assets: DraftReviewAsset[];
+  catalogs: DraftReviewCatalog[];
+}): DraftReview {
+  return {
+    asset_count: assets.length,
+    assets,
+    catalog_count: catalogs.length,
+    catalogs,
+  };
 }
 
 function plural(count: number, singular: string, pluralForm = `${singular}s`): string {

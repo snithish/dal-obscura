@@ -108,7 +108,6 @@ def test_reads_workspace_draft_resources_after_writes():
     assets = client.get("/v1/assets", headers=ADMIN_HEADERS).json()
     rules = client.get(f"/v1/assets/{asset['id']}/policy-rules", headers=ADMIN_HEADERS).json()
     auth = client.get("/v1/settings/auth-providers", headers=ADMIN_HEADERS).json()
-    draft = client.get("/v1/publications/draft", headers=ADMIN_HEADERS).json()
 
     assert runtime == {
         "ticket_ttl_seconds": 900,
@@ -145,10 +144,8 @@ def test_reads_workspace_draft_resources_after_writes():
             "enabled": True,
         }
     ]
-    assert draft["catalog_count"] == 1
-    assert draft["asset_count"] == 1
-    assert draft["catalogs"][0]["name"] == "analytics"
-    assert draft["assets"][0]["name"] == "default.users"
+    assert len(catalogs) == 1
+    assert len(assets) == 1
 
 
 def test_cell_draft_route_is_not_public_workspace_api():
@@ -163,7 +160,7 @@ def test_cell_draft_route_is_not_public_workspace_api():
     assert response.json()["detail"] == "Not Found"
 
 
-def test_reads_policy_versions_and_active_publication():
+def test_reads_policy_versions_without_public_publication_fields():
     client = _client()
     asset = _provision_draft(client)
 
@@ -190,6 +187,7 @@ def test_reads_policy_versions_and_active_publication():
 
     summary = client.get("/v1/workspace/summary", headers=ADMIN_HEADERS).json()
 
-    assert summary["active_publication"]["publication_id"] == created["publication_id"]
-    assert summary["active_publication"]["status"] == "published"
+    assert "active_publication" not in summary
+    assert "publication_id" not in created
+    assert "manifest_hash" not in created
     assert versions[0]["active"] is True

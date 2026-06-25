@@ -101,8 +101,7 @@ class PublicationCompiler:
         )
 
     def _compile_asset(self, asset: AssetDraft, catalog: CatalogDraft) -> CompiledAsset:
-        provider_modules = _provider_modules(catalog.options.get("provider_modules"))
-        if asset.backend not in SUPPORTED_BACKENDS and not provider_modules:
+        if asset.backend not in SUPPORTED_BACKENDS:
             raise ValidationFailure(f"Unsupported backend {asset.backend!r}")
         rules = [
             self._compile_rule(rule) for rule in sorted(asset.rules, key=lambda item: item.ordinal)
@@ -180,12 +179,6 @@ def _stable_hash(value: object) -> str:
 
 def _stable_int63(value: object) -> int:
     return int(_stable_hash(value), 16) & ((1 << 63) - 1)
-
-
-def _provider_modules(value: object) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    return [str(item) for item in value if str(item).strip()]
 
 
 def _mask_dict(value: object) -> dict[str, object]:

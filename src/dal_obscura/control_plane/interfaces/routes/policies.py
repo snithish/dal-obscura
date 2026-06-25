@@ -60,10 +60,6 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
             )
         )
 
-    @api.get("/v1/publications/draft", dependencies=[Depends(deps.require_actor)])
-    def get_workspace_publication_draft() -> object:
-        return deps.with_service(lambda service: service.get_workspace_draft())
-
     @api.get("/v1/policy-versions", dependencies=[Depends(deps.require_actor)])
     def list_policy_version_history() -> object:
         return deps.with_service(lambda service: service.list_policy_version_history())

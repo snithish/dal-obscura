@@ -2,18 +2,17 @@ import { type ReactNode, useEffect, useState } from "react";
 
 import { apiGet, apiPost } from "../../api/client";
 import {
+  buildDraftReview,
   canPublishDraft,
   policyVersionLabel,
   publishBlockers,
+  type DraftReview,
+  type DraftReviewAsset,
+  type DraftReviewCatalog,
   type PolicyVersionHistoryItem,
 } from "./publishLogic";
 
 type WorkspaceSummary = {
-  active_publication: {
-    manifest_hash: string;
-    publication_id: string;
-    status: string;
-  } | null;
   asset_count: number;
   catalog_count: number;
   draft_change_count: number;
@@ -23,44 +22,28 @@ type WorkspaceSummary = {
   unowned_asset_count: number;
 };
 
-type Draft = {
-  asset_count: number;
-  assets: Array<{
-    catalog: string;
-    id: string;
-    name: string;
-    policy_status: string;
-  }>;
-  catalog_count: number;
-  catalogs: Array<{
-    name: string;
-    status: string;
-  }>;
-};
-
 type CreatedPolicyVersion = {
   asset_id: string;
-  manifest_hash: string;
   policy_version: number;
-  publication_id: string;
 };
 
 export function PublishPage() {
   const [summary, setSummary] = useState<WorkspaceSummary | null>(null);
-  const [draft, setDraft] = useState<Draft | null>(null);
+  const [draft, setDraft] = useState<DraftReview | null>(null);
   const [policyVersions, setPolicyVersions] = useState<PolicyVersionHistoryItem[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<"publish" | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
 
   async function refresh() {
-    const [loadedSummary, loadedDraft, loadedPolicyVersions] = await Promise.all([
+    const [loadedSummary, loadedCatalogs, loadedAssets, loadedPolicyVersions] = await Promise.all([
       apiGet<WorkspaceSummary>("/v1/workspace/summary"),
-      apiGet<Draft>("/v1/publications/draft"),
+      apiGet<DraftReviewCatalog[]>("/v1/catalogs"),
+      apiGet<DraftReviewAsset[]>("/v1/assets"),
       apiGet<PolicyVersionHistoryItem[]>("/v1/policy-versions"),
     ]);
     setSummary(loadedSummary);
-    setDraft(loadedDraft);
+    setDraft(buildDraftReview({ assets: loadedAssets, catalogs: loadedCatalogs }));
     setPolicyVersions(loadedPolicyVersions);
   }
 
@@ -114,7 +97,7 @@ export function PublishPage() {
             the policy editor for the selected asset.
           </p>
         </div>
-        {summary?.active_publication ? null : (
+        {activePolicyVersions.length > 0 ? null : (
           <button
             className="btn-secondary"
             disabled={!canPublish || isPublishing}
@@ -219,7 +202,9 @@ export function PublishPage() {
                 : "None"}
             </strong>
             <p className="mt-2 break-all text-xs leading-5 text-muted">
-              {summary?.active_publication?.manifest_hash ?? "No active manifest yet."}
+              {activePolicyVersions.length > 0
+                ? "Active policy versions are listed below."
+                : "No active policy versions yet."}
             </p>
           </div>
           {latestPolicyVersion ? (

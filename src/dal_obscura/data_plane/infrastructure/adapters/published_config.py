@@ -324,7 +324,6 @@ def _policy_from_asset(asset: PublishedAsset) -> Policy:
 def _catalog_config_from_published_catalog(catalog: PublishedCatalog) -> CatalogConfig:
     config = _mapping(catalog.config)
     options = dict(_mapping(config.get("options")))
-    options.pop("provider_modules", None)
     return CatalogConfig(name=catalog.catalog, type=_catalog_type(config), options=options)
 
 

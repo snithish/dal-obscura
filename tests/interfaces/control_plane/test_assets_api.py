@@ -296,7 +296,6 @@ def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
         "draft_change_count": 1,
         "runtime_configured": True,
         "enabled_auth_provider_count": 1,
-        "active_publication": None,
     }
     assert catalogs == [
         {

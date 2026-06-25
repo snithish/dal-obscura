@@ -126,7 +126,7 @@ def test_compiler_rejects_unknown_backend():
         PublicationCompiler().compile(draft)
 
 
-def test_compiler_accepts_custom_backend_with_provider_module():
+def test_compiler_rejects_custom_backend_with_provider_module():
     draft = _draft()
     draft.catalogs[0].options["provider_modules"] = ["example.PostgresProviderFactory"]
     draft.assets[0].backend = "postgres"
@@ -135,11 +135,8 @@ def test_compiler_accepts_custom_backend_with_provider_module():
         "dsn": {"secret": "POSTGRES_DSN"},
     }
 
-    asset = PublicationCompiler().compile(draft).assets[0]
-
-    assert asset.backend == "postgres"
-    assert asset.compiled_config["target"]["backend"] == "postgres"
-    assert "provider_modules" not in asset.compiled_config["target"]
+    with pytest.raises(ValidationFailure, match="Unsupported backend 'postgres'"):
+        PublicationCompiler().compile(draft)
 
 
 def test_compiler_rejects_custom_backend_without_provider_module():
