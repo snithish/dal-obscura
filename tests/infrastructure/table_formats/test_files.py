@@ -6,6 +6,7 @@ import pyarrow.parquet as pq
 
 from dal_obscura.common.access_control.filters import parse_row_filter
 from dal_obscura.common.query_planning.models import PlanRequest
+from dal_obscura.data_plane.infrastructure.table_formats import files as files_module
 from dal_obscura.data_plane.infrastructure.table_formats.files import (
     ArrowDatasetTableFormat,
     AvroTableFormat,
@@ -206,6 +207,39 @@ def test_avro_table_format_plans_directory_files_and_applies_filter(tmp_path):
     assert table.to_pydict() == {"id": [1], "region": ["us"]}
 
 
+def test_avro_table_format_filters_per_file_before_concat(tmp_path, monkeypatch):
+    root = tmp_path / "events"
+    root.mkdir()
+    _write_avro(root / "part-us.avro", [{"id": 1, "region": "us"}])
+    _write_avro(root / "part-eu.avro", [{"id": 2, "region": "eu"}])
+    table_format = AvroTableFormat(
+        catalog_name="files",
+        table_name="events",
+        uri=str(root),
+    )
+    row_filter = parse_row_filter("region = 'us'", table_format.get_schema())
+    plan = table_format.plan(
+        PlanRequest(
+            catalog="files",
+            target="events",
+            columns=["id", "region"],
+            row_filter=row_filter,
+        ),
+        max_tickets=1,
+    )
+
+    def fail_concat_tables(*args, **kwargs):
+        del args, kwargs
+        raise AssertionError("Avro execute should stream/filter files without pa.concat_tables")
+
+    monkeypatch.setattr(files_module.pa, "concat_tables", fail_concat_tables)
+
+    schema, batches = table_format.execute(plan.tasks[0].partition)
+    table = pa.Table.from_batches(list(batches), schema=schema)
+
+    assert table.to_pydict() == {"id": [1], "region": ["us"]}
+
+
 def test_text_table_format_reads_lines_into_configured_column(tmp_path):
     path = tmp_path / "events.txt"
     path.write_text("first\nsecond\n")
@@ -257,6 +291,30 @@ def test_text_table_format_plans_directory_files_and_applies_filter(tmp_path):
     assert plan.backend_pushdown_row_filter is None
     assert plan.residual_row_filter == row_filter
     assert table.to_pydict() == {"line": ["keep"]}
+
+
+def test_text_table_format_streams_batches(tmp_path):
+    path = tmp_path / "events.txt"
+    path.write_text("".join(f"line-{index}\n" for index in range(9000)))
+    table_format = TextTableFormat(
+        catalog_name="files",
+        table_name="events",
+        uri=str(path),
+        column_name="line",
+    )
+    plan = table_format.plan(
+        PlanRequest(catalog="files", target="events", columns=["line"]),
+        max_tickets=4,
+    )
+
+    schema, batches = table_format.execute(plan.tasks[0].partition)
+    batch_list = list(batches)
+    table = pa.Table.from_batches(batch_list, schema=schema)
+
+    assert len(batch_list) > 1
+    assert table.num_rows == 9000
+    assert table.column("line")[0].as_py() == "line-0"
+    assert table.column("line")[-1].as_py() == "line-8999"
 
 
 def _execute_to_table(table_format, partition):

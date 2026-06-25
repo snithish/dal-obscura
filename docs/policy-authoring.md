@@ -99,6 +99,16 @@ Test every policy with representative principals:
 Local reference environments can script these checks, but the same pattern
 applies to any deployment.
 
+The control-plane API exposes the same server-side policy semantics for preview:
+
+```http
+POST /v1/assets/{asset_id}/policy-preview
+```
+
+The request supplies a principal, groups, and claims. The response reports the
+allow/deny decision, visible columns, masks, row filter, and matched rule
+ordinal without exposing tenant or cell internals.
+
 For code changes to policy resolution, add focused tests under
 `tests/domain/access_control/` and data-plane tests under `tests/interfaces/` or
 `tests/infrastructure/` only when behavior changes there.

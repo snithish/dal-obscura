@@ -6,6 +6,7 @@ from deltalake import write_deltalake
 from dal_obscura.common.access_control.filters import parse_row_filter
 from dal_obscura.common.query_planning.models import PlanRequest
 from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
+from dal_obscura.data_plane.infrastructure.table_formats import delta as delta_module
 from dal_obscura.data_plane.infrastructure.table_formats.delta import (
     DeltaInputPartition,
     DeltaTableFormat,
@@ -93,6 +94,39 @@ def test_delta_table_format_parallelizes_unfiltered_files(tmp_path):
     )
 
     assert len(plan.tasks) == 2
+
+
+def test_delta_table_format_streams_planned_fragments_without_concat(tmp_path, monkeypatch):
+    table_uri = tmp_path / "users"
+    write_deltalake(table_uri, pa.table({"id": [1], "region": ["us"]}))
+    write_deltalake(
+        table_uri,
+        pa.table({"id": [2], "region": ["eu"]}),
+        mode="append",
+    )
+    table_format = DeltaTableFormat(
+        catalog_name="analytics",
+        table_name="users",
+        table_uri=str(table_uri),
+    )
+    plan = table_format.plan(
+        PlanRequest(
+            catalog="analytics",
+            target="users",
+            columns=["id", "region"],
+        ),
+        max_tickets=1,
+    )
+
+    def fail_concat_tables(*args, **kwargs):
+        raise AssertionError("Delta execute must stream fragments without concat_tables")
+
+    monkeypatch.setattr(delta_module.pa, "concat_tables", fail_concat_tables)
+    schema, batches = table_format.execute(plan.tasks[0].partition)
+    table = pa.Table.from_batches(list(batches), schema=schema)
+
+    rows = sorted(table.to_pylist(), key=lambda row: row["id"])
+    assert rows == [{"id": 1, "region": "us"}, {"id": 2, "region": "eu"}]
 
 
 def test_delta_table_format_plans_pruned_file_tasks_and_applies_filter(tmp_path):

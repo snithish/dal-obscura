@@ -1,10 +1,19 @@
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
+from dal_obscura.common.access_control.models import (
+    AccessRule,
+    DatasetPolicy,
+    MaskRule,
+    Policy,
+    Principal,
+    PrincipalConditionValue,
+)
+from dal_obscura.common.access_control.policy_resolution import resolve_access
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.compiler import PublicationCompiler
 from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
@@ -365,6 +374,62 @@ class ProvisioningService:
     ) -> list[dict[str, object]]:
         return self._store.replace_asset_schema_fields(asset_id=asset_id, fields=fields)
 
+    def preview_asset_policy(
+        self,
+        asset_id: UUID,
+        *,
+        principal: str,
+        groups: list[str],
+        claims: dict[str, object],
+    ) -> dict[str, object]:
+        asset = self._store.get_workspace_asset(asset_id)
+        raw_rules = self._store.list_policy_rules(asset_id)
+        rules = [_access_rule_from_response(rule) for rule in raw_rules]
+        preview_principal = Principal(
+            id=principal,
+            groups=groups,
+            attributes=_principal_attributes(claims),
+        )
+        requested_columns = _preview_columns(asset, rules)
+        matched_ordinal = _first_matching_rule_ordinal(raw_rules, preview_principal)
+        policy = Policy(
+            version=0,
+            datasets=[
+                DatasetPolicy(
+                    target=str(asset["name"]),
+                    catalog=str(asset["catalog"]),
+                    rules=rules,
+                )
+            ],
+        )
+        try:
+            visible_columns, masks, row_filter = resolve_access(
+                policy,
+                preview_principal,
+                str(asset["name"]),
+                str(asset["catalog"]),
+                requested_columns,
+            )
+        except PermissionError:
+            return {
+                "decision": "deny",
+                "matched_ordinal": matched_ordinal,
+                "reason": _deny_preview_reason(matched_ordinal),
+                "visible_columns": [],
+                "masks": [],
+                "row_filter": None,
+            }
+        return {
+            "decision": "allow",
+            "matched_ordinal": matched_ordinal,
+            "reason": _allow_preview_reason(matched_ordinal),
+            "visible_columns": visible_columns,
+            "masks": [
+                {"column": column, "type": mask.type} for column, mask in sorted(masks.items())
+            ],
+            "row_filter": row_filter,
+        }
+
     def replace_auth_providers(self, cell_id: UUID, providers: list[dict[str, Any]]) -> None:
         self._store.replace_auth_providers(cell_id=cell_id, providers=providers)
 
@@ -470,3 +535,91 @@ def _catalogs_with_selected(active_catalogs, catalog):
 
 def _plural(count: int, singular: str, plural: str) -> str:
     return singular if count == 1 else plural
+
+
+def _access_rule_from_response(raw: dict[str, object]) -> AccessRule:
+    masks = cast(dict[str, object], raw.get("masks", {}))
+    return AccessRule(
+        principals=[str(item) for item in _object_list(raw.get("principals"))],
+        columns=[str(item) for item in _object_list(raw.get("columns"))],
+        masks={
+            str(column): MaskRule(
+                type=str(cast(dict[str, object], value).get("type")),
+                value=cast(dict[str, object], value).get("value"),
+            )
+            for column, value in masks.items()
+            if isinstance(value, dict) and cast(dict[str, object], value).get("type")
+        },
+        row_filter=cast(str | None, raw.get("row_filter")),
+        effect=cast(Literal["allow", "deny"], str(raw.get("effect", "allow"))),
+        when=cast(dict[str, PrincipalConditionValue], raw.get("when", {})),
+    )
+
+
+def _principal_attributes(claims: dict[str, object]) -> dict[str, str]:
+    return {str(key): str(value) for key, value in claims.items()}
+
+
+def _object_list(value: object) -> list[object]:
+    return list(value) if isinstance(value, list) else []
+
+
+def _preview_columns(asset: dict[str, object], rules: list[AccessRule]) -> list[str]:
+    schema_fields = cast(list[dict[str, object]], asset.get("schema_fields", []))
+    schema_columns = [str(field["name"]) for field in schema_fields if str(field.get("name", ""))]
+    if schema_columns:
+        return schema_columns
+    columns: list[str] = []
+    seen: set[str] = set()
+    for rule in rules:
+        for column in rule.columns:
+            if column == "*" or column in seen:
+                continue
+            columns.append(column)
+            seen.add(column)
+    return columns or ["*"]
+
+
+def _first_matching_rule_ordinal(
+    raw_rules: list[dict[str, object]],
+    principal: Principal,
+) -> int | None:
+    principal_tokens = set(principal.tokens())
+    for raw_rule in raw_rules:
+        rule = _access_rule_from_response(raw_rule)
+        if not principal_tokens.intersection(rule.principals):
+            continue
+        if _preview_conditions_match(rule.when, principal.attributes):
+            return int(cast(int | str, raw_rule["ordinal"]))
+    return None
+
+
+def _preview_conditions_match(
+    conditions: dict[str, PrincipalConditionValue] | None,
+    attributes: dict[str, str],
+) -> bool:
+    if not conditions:
+        return True
+    for key, expected in conditions.items():
+        actual = attributes.get(key)
+        if actual is None:
+            return False
+        if isinstance(expected, list):
+            if actual not in {str(item) for item in expected}:
+                return False
+            continue
+        if actual != str(expected):
+            return False
+    return True
+
+
+def _allow_preview_reason(matched_ordinal: int | None) -> str:
+    if matched_ordinal is None:
+        return "Policy allowed access."
+    return f"Rule {matched_ordinal} matched."
+
+
+def _deny_preview_reason(matched_ordinal: int | None) -> str:
+    if matched_ordinal is None:
+        return "No rule matched."
+    return f"Rule {matched_ordinal} denied access."

@@ -344,6 +344,78 @@ def test_workspace_policy_rules_can_be_replaced_from_asset_detail():
     ]
 
 
+def test_asset_policy_preview_uses_server_policy_semantics():
+    client = _client()
+    client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+    asset = client.put(
+        "/v1/assets/analytics/default.users",
+        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
+        headers=ADMIN_HEADERS,
+    ).json()
+    client.put(
+        f"/v1/assets/{asset['id']}/schema-fields",
+        json={
+            "fields": [
+                {"name": "id", "type": "long", "nullable": False},
+                {"name": "email", "type": "string", "nullable": True},
+                {"name": "region", "type": "string", "nullable": True},
+            ]
+        },
+        headers=ADMIN_HEADERS,
+    )
+    client.put(
+        f"/v1/assets/{asset['id']}/policy-rules",
+        json={
+            "rules": [
+                {
+                    "ordinal": 10,
+                    "effect": "allow",
+                    "principals": ["group:data-stewards"],
+                    "when": {"tenant": "default"},
+                    "columns": ["id", "email"],
+                    "masks": {"email": {"type": "email"}},
+                    "row_filter": "region = 'us'",
+                }
+            ]
+        },
+        headers=ADMIN_HEADERS,
+    )
+
+    unauthorized = client.post(
+        f"/v1/assets/{asset['id']}/policy-preview",
+        json={"principal": "user:alice@example.com"},
+    )
+    response = client.post(
+        f"/v1/assets/{asset['id']}/policy-preview",
+        json={
+            "principal": "user:alice@example.com",
+            "groups": ["data-stewards"],
+            "claims": {"tenant": "default"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+
+    assert unauthorized.status_code == 401
+    assert response.status_code == 200
+    assert response.json() == {
+        "decision": "allow",
+        "matched_ordinal": 10,
+        "reason": "Rule 10 matched.",
+        "visible_columns": ["id", "email"],
+        "masks": [{"column": "email", "type": "email"}],
+        "row_filter": "(region = 'us')",
+    }
+    assert "tenant" not in _keys_recursive(response.json())
+    assert "cell" not in _keys_recursive(response.json())
+
+
 def test_workspace_asset_owners_can_be_replaced_from_asset_detail():
     client = _client()
     client.put(

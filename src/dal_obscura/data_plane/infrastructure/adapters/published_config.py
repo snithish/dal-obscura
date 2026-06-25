@@ -280,11 +280,16 @@ class PublishedConfigCatalogRegistry:
     ) -> None:
         self._store = store
         self._secret_provider = secret_provider
+        self._registry_cache: dict[tuple[UUID, UUID], DynamicCatalogRegistry] = {}
 
     def describe(self, catalog: str | None, target: str, *, tenant_id: str) -> TableFormat:
         if catalog is None:
             raise ValueError("Catalog name is required to resolve a target")
         asset = self._store.get_asset(tenant_id=tenant_id, catalog=catalog, target=target)
+        cache_key = (asset.publication_id, asset.tenant_id)
+        registry = self._registry_cache.get(cache_key)
+        if registry is not None:
+            return registry.describe(catalog, target, tenant_id=tenant_id)
         published_catalogs = self._store.get_catalogs(tenant_id=tenant_id)
         catalogs = {
             item.catalog: _catalog_config_from_published_catalog(item)
@@ -311,7 +316,7 @@ class PublishedConfigCatalogRegistry:
                 factory_modules=_provider_modules(published_catalogs),
             ),
         )
-        del asset
+        self._registry_cache[cache_key] = registry
         return registry.describe(catalog, target, tenant_id=tenant_id)
 
 

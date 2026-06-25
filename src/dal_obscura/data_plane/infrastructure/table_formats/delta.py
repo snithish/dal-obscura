@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
 import pyarrow as pa
+import pyarrow.dataset as ds
 
 from dal_obscura.common.access_control.filters import RowFilter, row_filter_to_sql
 from dal_obscura.common.catalog.ports import TableFormat
@@ -14,6 +15,8 @@ from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEn
 from dal_obscura.data_plane.infrastructure.table_formats.filters import (
     row_filter_to_arrow_expression,
 )
+
+_DELTA_BATCH_SIZE = 8_192
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -76,28 +79,13 @@ class DeltaTableFormat(TableFormat):
         dataset = table.to_pyarrow_dataset()
         row_filter = _partition_filter(partition.row_filter_sql, dataset.schema)
         selected_paths = set(partition.paths)
-        fragment_tables = [
-            _fragment_table(fragment, dataset.schema, partition.columns)
-            for fragment in dataset.get_fragments(filter=row_filter)
-            if fragment.path in selected_paths
-        ]
-        arrow_table = (
-            pa.concat_tables(fragment_tables, promote_options="default")
-            if fragment_tables
-            else pa.Table.from_batches([], schema=dataset.schema)
+        projected_schema = _projected_schema(dataset.schema, partition.columns)
+        return projected_schema, _delta_batches(
+            dataset=dataset,
+            selected_paths=selected_paths,
+            columns=partition.columns,
+            row_filter=row_filter,
         )
-        if row_filter is not None and arrow_table.num_rows:
-            import pyarrow.dataset as ds
-
-            arrow_table = ds.dataset(arrow_table).scanner(filter=row_filter).to_table()
-        if partition.columns:
-            arrow_table = arrow_table.select(partition.columns)
-        projected_schema = dataset.schema
-        if partition.columns:
-            projected_schema = pa.schema(
-                [projected_schema.field(column) for column in partition.columns]
-            )
-        return projected_schema, arrow_table.to_batches()
 
     def _load_table(self, *, version: int | None = None) -> Any:
         _check_path(self.table_uri, self.path_enforcer)
@@ -165,6 +153,40 @@ def _partition_filter(filter_sql: str | None, schema: pa.Schema):
     from dal_obscura.common.access_control.filters import parse_row_filter
 
     return row_filter_to_arrow_expression(parse_row_filter(filter_sql, schema))
+
+
+def _delta_batches(
+    *,
+    dataset: ds.Dataset,
+    selected_paths: set[str],
+    columns: list[str],
+    row_filter: object | None,
+) -> Iterator[pa.RecordBatch]:
+    for fragment in dataset.get_fragments(filter=row_filter):
+        if fragment.path not in selected_paths:
+            continue
+        table = _fragment_table(fragment, dataset.schema, columns)
+        yield from _filtered_table_batches(table, columns=columns, row_filter=row_filter)
+
+
+def _filtered_table_batches(
+    table: pa.Table,
+    *,
+    columns: list[str],
+    row_filter: object | None,
+) -> Iterator[pa.RecordBatch]:
+    scanner = ds.dataset(table).scanner(
+        columns=columns or None,
+        filter=row_filter,
+        batch_size=_DELTA_BATCH_SIZE,
+    )
+    yield from scanner.to_batches()
+
+
+def _projected_schema(schema: pa.Schema, columns: list[str]) -> pa.Schema:
+    if not columns:
+        return schema
+    return pa.schema([schema.field(column) for column in columns])
 
 
 def _fragment_table(fragment: Any, schema: pa.Schema, columns: list[str]) -> pa.Table:

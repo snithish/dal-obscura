@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -16,6 +16,8 @@ from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEn
 from dal_obscura.data_plane.infrastructure.table_formats.filters import (
     row_filter_to_arrow_expression,
 )
+
+_FILE_FORMAT_BATCH_SIZE = 8_192
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -119,19 +121,13 @@ class AvroTableFormat(TableFormat):
     def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
         if not isinstance(partition, FileInputPartition):
             raise TypeError("AvroTableFormat requires a FileInputPartition")
-        table = (
-            pa.concat_tables(
-                [_read_avro_table(path, self.path_enforcer) for path in partition.paths]
-            )
-            if partition.paths
-            else pa.Table.from_batches([], schema=self.get_schema())
+        schema = _projected_schema(self.get_schema(), partition.columns)
+        return schema, _avro_batches(
+            partition.paths,
+            columns=partition.columns,
+            row_filter_sql=partition.row_filter_sql,
+            path_enforcer=self.path_enforcer,
         )
-        row_filter = _partition_filter(partition.row_filter_sql, table.schema)
-        if row_filter is not None:
-            table = ds.dataset(table).scanner(filter=row_filter).to_table()
-        if partition.columns:
-            table = table.select(partition.columns)
-        return table.schema, table.to_batches()
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -172,18 +168,93 @@ class TextTableFormat(TableFormat):
     def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
         if not isinstance(partition, FileInputPartition):
             raise TypeError("TextTableFormat requires a FileInputPartition")
-        lines: list[str] = []
-        for path in partition.paths:
-            _check_path(path, self.path_enforcer)
-            with open(path, encoding="utf-8") as handle:
-                lines.extend(line.rstrip("\n") for line in handle)
-        table = pa.table({self.column_name: lines})
-        row_filter = _partition_filter(partition.row_filter_sql, table.schema)
-        if row_filter is not None:
-            table = ds.dataset(table).scanner(filter=row_filter).to_table()
-        if partition.columns:
-            table = table.select(partition.columns)
-        return table.schema, table.to_batches()
+        schema = _projected_schema(self.get_schema(), partition.columns)
+        return schema, _text_batches(
+            partition.paths,
+            column_name=self.column_name,
+            columns=partition.columns,
+            row_filter_sql=partition.row_filter_sql,
+            path_enforcer=self.path_enforcer,
+        )
+
+
+def _avro_batches(
+    paths: list[str],
+    *,
+    columns: list[str],
+    row_filter_sql: str | None,
+    path_enforcer: PathRuleEnforcer | None,
+) -> Iterator[pa.RecordBatch]:
+    for path in paths:
+        table = _read_avro_table(path, path_enforcer)
+        yield from _filtered_table_batches(
+            table,
+            columns=columns,
+            row_filter_sql=row_filter_sql,
+        )
+
+
+def _text_batches(
+    paths: list[str],
+    *,
+    column_name: str,
+    columns: list[str],
+    row_filter_sql: str | None,
+    path_enforcer: PathRuleEnforcer | None,
+) -> Iterator[pa.RecordBatch]:
+    pending: list[str] = []
+    for path in paths:
+        _check_path(path, path_enforcer)
+        with open(path, encoding="utf-8") as handle:
+            for line in handle:
+                pending.append(line.rstrip("\n"))
+                if len(pending) >= _FILE_FORMAT_BATCH_SIZE:
+                    yield from _text_chunk_batches(
+                        pending,
+                        column_name=column_name,
+                        columns=columns,
+                        row_filter_sql=row_filter_sql,
+                    )
+                    pending = []
+    if pending:
+        yield from _text_chunk_batches(
+            pending,
+            column_name=column_name,
+            columns=columns,
+            row_filter_sql=row_filter_sql,
+        )
+
+
+def _text_chunk_batches(
+    lines: list[str],
+    *,
+    column_name: str,
+    columns: list[str],
+    row_filter_sql: str | None,
+) -> Iterator[pa.RecordBatch]:
+    table = pa.table({column_name: lines})
+    yield from _filtered_table_batches(table, columns=columns, row_filter_sql=row_filter_sql)
+
+
+def _filtered_table_batches(
+    table: pa.Table,
+    *,
+    columns: list[str],
+    row_filter_sql: str | None,
+) -> Iterator[pa.RecordBatch]:
+    row_filter = _partition_filter(row_filter_sql, table.schema)
+    scanner = ds.dataset(table).scanner(
+        columns=columns or None,
+        filter=row_filter,
+        batch_size=_FILE_FORMAT_BATCH_SIZE,
+    )
+    yield from scanner.to_batches()
+
+
+def _projected_schema(schema: pa.Schema, columns: list[str]) -> pa.Schema:
+    if not columns:
+        return schema
+    return pa.schema([schema.field(column) for column in columns])
 
 
 def _read_avro_table(path: str, enforcer: PathRuleEnforcer | None) -> pa.Table:

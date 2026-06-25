@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Callable, Mapping
 from typing import Any, cast
-from urllib.parse import parse_qs, urlencode
-from urllib.request import Request as UrlRequest
-from urllib.request import urlopen
+from urllib.parse import parse_qs
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -15,6 +12,14 @@ from sqlalchemy.orm import Session, sessionmaker
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control_plane.application.provisioning import ProvisioningService
+from dal_obscura.control_plane.interfaces.session_api import (
+    OidcActorResolver,
+    actor_response,
+    demo_login_config,
+    exchange_demo_password_token,
+    oidc_actor_from_header,
+    public_ui_auth_config,
+)
 from dal_obscura.control_plane.interfaces.ui import install_ui
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
 from dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks import (
@@ -70,6 +75,12 @@ class PolicyRulesRequest(_StrictModel):
     rules: list[dict[str, Any]]
 
 
+class PolicyPreviewRequest(_StrictModel):
+    principal: str = Field(min_length=1)
+    groups: list[str] = Field(default_factory=list)
+    claims: dict[str, object] = Field(default_factory=dict)
+
+
 class AssetOwnersRequest(_StrictModel):
     owners: list[str] = Field(default_factory=list)
 
@@ -90,9 +101,6 @@ class AuthProvidersRequest(_StrictModel):
 
 class DemoLoginRequest(_StrictModel):
     login_hint: str = Field(min_length=1)
-
-
-OidcActorResolver = Callable[[str], object]
 
 
 def create_oidc_actor_resolver(
@@ -120,6 +128,9 @@ def create_oidc_actor_resolver(
     return resolve
 
 
+_exchange_demo_password_token = exchange_demo_password_token
+
+
 def create_app(  # noqa: C901
     session_maker: sessionmaker[Session],
     *,
@@ -136,7 +147,7 @@ def create_app(  # noqa: C901
         if authorization != expected:
             if oidc_actor_resolver is None:
                 raise HTTPException(status_code=401, detail="Unauthorized")
-            actor = _oidc_actor_from_header(
+            actor = oidc_actor_from_header(
                 authorization,
                 resolver=oidc_actor_resolver,
                 admin_group=oidc_admin_group,
@@ -173,26 +184,26 @@ def create_app(  # noqa: C901
 
     @app.get("/v1/session")
     def get_session(actor: ControlPlaneActor = Depends(require_actor)) -> object:  # noqa: B008
-        return _actor_response(actor)
+        return actor_response(actor)
 
     @app.get("/v1/ui-auth-config")
     def get_ui_auth_config() -> object:
         if ui_auth_config is None:
             raise HTTPException(status_code=404, detail="UI auth is not configured")
-        return _public_ui_auth_config(ui_auth_config)
+        return public_ui_auth_config(ui_auth_config)
 
     @app.post("/v1/demo-login")
     def demo_login(request: DemoLoginRequest) -> object:
         if ui_auth_config is None:
             raise HTTPException(status_code=404, detail="Demo login is not configured")
-        demo_login_config = _demo_login_config(ui_auth_config)
-        if not demo_login_config:
+        login_config = demo_login_config(ui_auth_config)
+        if not login_config:
             raise HTTPException(status_code=404, detail="Demo login is not configured")
         username = request.login_hint.strip()
-        passwords = cast(dict[str, str], demo_login_config["passwords"])
+        passwords = cast(dict[str, str], login_config["passwords"])
         if username not in passwords:
             raise HTTPException(status_code=404, detail="Demo persona is not configured")
-        return {"access_token": _exchange_demo_password_token(demo_login_config, username)}
+        return {"access_token": _exchange_demo_password_token(login_config, username)}
 
     @app.get("/v1/tenants", dependencies=[Depends(require_actor)])
     def list_tenants() -> object:
@@ -434,6 +445,21 @@ def create_app(  # noqa: C901
             )
         ) or {"asset_id": str(asset_id)}
 
+    @app.post("/v1/assets/{asset_id}/policy-preview")
+    def preview_asset_policy(
+        asset_id: UUID,
+        request: PolicyPreviewRequest,
+        _actor: ControlPlaneActor = Depends(require_actor),  # noqa: B008
+    ) -> object:
+        return with_service(
+            lambda service: service.preview_asset_policy(
+                asset_id=asset_id,
+                principal=request.principal,
+                groups=request.groups,
+                claims=request.claims,
+            )
+        )
+
     @app.post("/v1/assets/{asset_id}/policy-versions")
     def create_asset_policy_version(
         asset_id: UUID,
@@ -552,169 +578,3 @@ def _json_object(raw: object) -> dict[str, object]:
     if not isinstance(value, dict):
         raise ValueError("options must be a JSON object")
     return {str(key): item for key, item in value.items()}
-
-
-def _actor_response(actor: ControlPlaneActor) -> dict[str, object]:
-    return {
-        "principal": actor.principal,
-        "groups": list(actor.groups),
-        "platform_admin": actor.platform_admin,
-    }
-
-
-def _public_login_shortcuts(value: object) -> list[dict[str, str]]:
-    if not isinstance(value, list):
-        return []
-    shortcuts: list[dict[str, str]] = []
-    for item in value:
-        if not isinstance(item, Mapping):
-            continue
-        shortcut = cast(Mapping[str, object], item)
-        label = str(shortcut.get("label", "")).strip()
-        login_hint = str(shortcut.get("login_hint", "")).strip()
-        if label and login_hint:
-            shortcut = {"label": label, "login_hint": login_hint}
-            shortcuts.append(shortcut)
-    return shortcuts
-
-
-def _public_ui_auth_config(config: Mapping[str, object]) -> dict[str, object]:
-    public_keys = (
-        "authority",
-        "client_id",
-        "redirect_uri",
-        "post_logout_redirect_uri",
-        "scope",
-    )
-    public: dict[str, object] = {
-        key: value for key in public_keys if (value := str(config.get(key, "")).strip())
-    }
-    demo_passwords = _demo_login_passwords(config)
-    login_shortcuts = _public_login_shortcuts(config.get("login_shortcuts"))
-    if login_shortcuts:
-        public["login_shortcuts"] = [
-            {
-                **shortcut,
-                **(
-                    {"demo_login_path": "/v1/demo-login"}
-                    if shortcut["login_hint"] in demo_passwords
-                    else {}
-                ),
-            }
-            for shortcut in login_shortcuts
-        ]
-    return public
-
-
-def _demo_login_config(config: Mapping[str, object]) -> dict[str, object]:
-    value = config.get("demo_login")
-    if not isinstance(value, Mapping):
-        return {}
-    demo_login = cast(Mapping[str, object], value)
-    token_url = str(demo_login.get("token_url", "")).strip()
-    client_id = str(demo_login.get("client_id", "")).strip()
-    client_secret = str(demo_login.get("client_secret", "")).strip()
-    passwords = _demo_login_passwords(config)
-    if not token_url or not client_id or not client_secret or not passwords:
-        return {}
-    return {
-        "token_url": token_url,
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "passwords": passwords,
-    }
-
-
-def _demo_login_passwords(config: Mapping[str, object]) -> dict[str, str]:
-    value = config.get("demo_login")
-    if not isinstance(value, Mapping):
-        return {}
-    passwords = cast(Mapping[str, object], value).get("passwords")
-    if not isinstance(passwords, Mapping):
-        return {}
-    return {
-        str(username).strip(): str(password).strip()
-        for username, password in cast(Mapping[object, object], passwords).items()
-        if str(username).strip() and str(password).strip()
-    }
-
-
-def _exchange_demo_password_token(config: Mapping[str, object], username: str) -> str:
-    passwords = cast(dict[str, str], config["passwords"])
-    body = urlencode(
-        {
-            "grant_type": "password",
-            "client_id": str(config["client_id"]),
-            "client_secret": str(config["client_secret"]),
-            "username": username,
-            "password": passwords[username],
-        }
-    ).encode()
-    request = UrlRequest(
-        str(config["token_url"]),
-        data=body,
-        headers={"content-type": "application/x-www-form-urlencoded"},
-        method="POST",
-    )
-    with urlopen(request, timeout=10) as response:
-        payload = json.loads(response.read().decode("utf-8"))
-    token = str(payload.get("access_token", "")).strip()
-    if not token:
-        raise HTTPException(status_code=502, detail="Demo identity provider did not return a token")
-    return token
-
-
-def _oidc_actor_from_header(
-    authorization: str,
-    *,
-    resolver: OidcActorResolver,
-    admin_group: str | None,
-) -> ControlPlaneActor | None:
-    token = _bearer_token(authorization)
-    if token is None:
-        return None
-    try:
-        resolved = resolver(token)
-    except Exception:
-        return None
-    principal = _attribute_text(resolved, "principal")
-    if not principal:
-        return None
-    groups = tuple(_attribute_list(resolved, "groups"))
-    return ControlPlaneActor(
-        principal=principal,
-        groups=groups,
-        platform_admin=bool(admin_group and admin_group in groups),
-    )
-
-
-def _bearer_token(authorization: str) -> str | None:
-    parts = authorization.split(" ", 1)
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        return None
-    token = parts[1].strip()
-    return token or None
-
-
-def _attribute_text(value: object, name: str) -> str:
-    raw = (
-        cast(Mapping[str, object], value).get(name)
-        if isinstance(value, Mapping)
-        else getattr(value, name, None)
-    )
-    if raw is None or isinstance(raw, list | tuple | dict):
-        return ""
-    return str(raw).strip()
-
-
-def _attribute_list(value: object, name: str) -> list[str]:
-    raw = (
-        cast(Mapping[str, object], value).get(name, ())
-        if isinstance(value, Mapping)
-        else getattr(value, name, ())
-    )
-    if isinstance(raw, str):
-        return [raw] if raw else []
-    if not isinstance(raw, list | tuple | set):
-        return []
-    return [str(item).strip() for item in raw if str(item).strip()]
