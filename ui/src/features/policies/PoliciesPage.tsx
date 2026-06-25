@@ -3,18 +3,19 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { apiGet, apiPost, apiPut } from "../../api/client";
 import {
   canEditPolicy,
+  policyEditorResponsibility,
+  validateRuleForms,
+  type SessionActor,
+} from "./policyValidation";
+import { previewPolicy, type PolicyPreview } from "./policyPreview";
+import {
   defaultRule,
   formToRule,
   mergeColumnSelections,
-  policyEditorResponsibility,
-  previewPolicy,
   ruleToForm,
-  validateRuleForms,
-  type PolicyPreview,
   type PolicyRule,
   type PolicyRuleForm,
-  type SessionActor,
-} from "./policyLogic";
+} from "./ruleForm";
 import {
   PreviewPanel,
   SummaryCard,

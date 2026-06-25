@@ -1,4 +1,4 @@
-import { type PolicyPreview } from "./policyLogic";
+import { type PolicyPreview } from "./policyPreview";
 
 export type PreviewClaimRow = {
   key: string;

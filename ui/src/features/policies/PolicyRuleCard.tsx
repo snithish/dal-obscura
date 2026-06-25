@@ -1,10 +1,10 @@
+import { describeRuleForm } from "./policyValidation";
 import {
-  describeRuleForm,
   type ColumnSelection,
   type ConditionRow,
   type MaskRow,
   type PolicyRuleForm,
-} from "./policyLogic";
+} from "./ruleForm";
 
 export function RuleCard({
   canRemove,
