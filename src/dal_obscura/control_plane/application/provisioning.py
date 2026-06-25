@@ -1,23 +1,18 @@
 from __future__ import annotations
 
-from typing import Any, Literal, cast
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
-from dal_obscura.common.access_control.models import (
-    AccessRule,
-    DatasetPolicy,
-    MaskRule,
-    Policy,
-    Principal,
-    PrincipalConditionValue,
+from dal_obscura.control_plane.application import (
+    asset_service,
+    catalog_service,
+    policy_service,
+    policy_version_service,
+    workspace_service,
 )
-from dal_obscura.common.access_control.policy_resolution import resolve_access
 from dal_obscura.control_plane.application.access import ControlPlaneActor
-from dal_obscura.control_plane.application.compiler import PublicationCompiler
-from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
-from dal_obscura.control_plane.domain.models import CompiledCatalog, CompiledPublication
 from dal_obscura.control_plane.infrastructure.catalog_discovery import discover_catalog_tables
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 
@@ -86,97 +81,41 @@ class ProvisioningService:
         return self._store.get_active_publication_summary(cell_id)
 
     def get_workspace_summary(self) -> dict[str, object]:
-        context = self._store.get_default_workspace_context()
-        return self._store.get_workspace_summary(context)
+        return workspace_service.get_workspace_summary(self._store)
 
     def get_workspace_runtime_settings(self) -> dict[str, object] | None:
-        context = self._store.get_default_workspace_context()
-        if context is None:
-            return None
-        settings = self._store.get_runtime_settings(context.cell_id)
-        if settings is None:
-            return None
-        return {
-            "ticket_ttl_seconds": settings["ticket_ttl_seconds"],
-            "max_tickets": settings["max_tickets"],
-            "max_ticket_exchanges": settings["max_ticket_exchanges"],
-        }
+        return workspace_service.get_workspace_runtime_settings(self._store)
 
     def list_workspace_auth_providers(self) -> list[dict[str, object]]:
-        context = self._store.get_default_workspace_context()
-        if context is None:
-            return []
-        return [
-            _auth_provider_response(item)
-            for item in self._store.list_auth_providers(context.cell_id)
-        ]
+        return workspace_service.list_workspace_auth_providers(self._store)
 
     def list_workspace_publications(self) -> list[dict[str, object]]:
-        context = self._store.get_default_workspace_context()
-        if context is None:
-            return []
-        return [
-            _publication_list_response(item)
-            for item in self._store.list_publications(context.cell_id)
-        ]
+        return policy_version_service.list_workspace_publications(self._store)
 
     def list_workspace_catalogs(self) -> list[dict[str, object]]:
-        context = self._store.get_default_workspace_context()
-        if context is None:
-            return []
-        return self._store.list_workspace_catalogs(context)
+        return catalog_service.list_workspace_catalogs(self._store)
 
     def discover_workspace_catalog_tables(self, name: str) -> dict[str, object]:
-        context = self._required_workspace_context()
-        catalog = self._store.get_workspace_catalog(context, name)
-        catalog_options = cast(dict[str, Any], catalog["options"])
-        tables = discover_catalog_tables(
-            str(catalog["name"]),
-            str(catalog["module"]),
-            catalog_options,
+        return catalog_service.discover_workspace_catalog_tables(
+            self._store,
+            name,
+            discover=discover_catalog_tables,
         )
-        governed_targets = {
-            value
-            for asset in self._store.list_workspace_assets(context)
-            if asset["catalog"] == catalog["name"]
-            for value in (asset["name"], asset["table_identifier"])
-            if isinstance(value, str) and value
-        }
-        return {
-            "catalog": catalog["name"],
-            "tables": [
-                {
-                    **table,
-                    "target": table["name"],
-                    "governed": table["name"] in governed_targets
-                    or table["table_identifier"] in governed_targets,
-                }
-                for table in tables
-            ],
-        }
 
     def list_workspace_assets(self) -> list[dict[str, object]]:
-        context = self._store.get_default_workspace_context()
-        if context is None:
-            return []
-        return self._store.list_workspace_assets(context)
+        return asset_service.list_workspace_assets(self._store)
 
     def get_workspace_asset(self, asset_id: UUID) -> dict[str, object]:
-        return self._store.get_workspace_asset(asset_id)
+        return asset_service.get_workspace_asset(self._store, asset_id)
 
     def get_workspace_draft(self) -> dict[str, object]:
-        context = self._required_workspace_context()
-        return self._store.get_workspace_draft(context)
+        return workspace_service.get_workspace_draft(self._store)
 
     def create_workspace_publication(self) -> dict[str, object]:
-        context = self._required_workspace_context()
-        publication = self.create_publication(context.cell_id)
-        return {
-            "publication_id": publication["publication_id"],
-            "asset_count": publication["asset_count"],
-            "catalog_count": publication["catalog_count"],
-            "manifest_hash": publication["manifest_hash"],
-        }
+        return policy_version_service.create_workspace_publication(
+            self._store,
+            self.create_publication,
+        )
 
     def create_asset_policy_version(
         self,
@@ -184,68 +123,20 @@ class ProvisioningService:
         *,
         actor: ControlPlaneActor,
     ) -> dict[str, object]:
-        self._ensure_policy_editor(asset_id, actor)
-        asset, catalog = self._store.load_asset_publish_draft(asset_id)
-        if not asset.rules:
-            raise ValidationFailure("Cannot publish a policy version without policy rules.")
-        compiler = PublicationCompiler()
-        compiled_asset = compiler.compile_asset(asset, catalog)
-        try:
-            active = self._store.load_active_compiled_publication(asset.cell_id)
-        except LookupError:
-            publication = self.create_publication(asset.cell_id)
-            self.activate_publication(
-                cell_id=asset.cell_id,
-                publication_id=UUID(str(publication["publication_id"])),
-            )
-            return {
-                "asset_id": str(asset.id),
-                "publication_id": publication["publication_id"],
-                "policy_version": compiled_asset.policy_version,
-                "manifest_hash": publication["manifest_hash"],
-            }
-
-        replaced = False
-        assets = []
-        for current in active.assets:
-            if (
-                current.tenant_id == compiled_asset.tenant_id
-                and current.catalog == compiled_asset.catalog
-                and current.target == compiled_asset.target
-            ):
-                assets.append(compiled_asset)
-                replaced = True
-            else:
-                assets.append(current)
-        if not replaced:
-            assets.append(compiled_asset)
-        catalogs = _catalogs_with_selected(active.catalogs, catalog)
-        compiled = compiler.compile_policy_version(
-            cell_id=asset.cell_id,
-            runtime=active.runtime,
-            catalogs=catalogs,
-            assets=assets,
+        return policy_version_service.create_asset_policy_version(
+            self._store,
+            asset_id,
+            actor=actor,
+            create_publication=self.create_publication,
+            activate_publication=self.activate_publication,
         )
-        publication_id = uuid4()
-        self._store.insert_compiled_publication(
-            publication_id=publication_id,
-            compiled=compiled,
-        )
-        self._store.activate_publication(cell_id=asset.cell_id, publication_id=publication_id)
-        return {
-            "asset_id": str(asset.id),
-            "publication_id": str(publication_id),
-            "policy_version": compiled_asset.policy_version,
-            "manifest_hash": compiled.manifest_hash,
-        }
 
     def activate_workspace_publication(self, publication_id: UUID) -> dict[str, str]:
-        context = self._required_workspace_context()
-        activated = self.activate_publication(
-            cell_id=context.cell_id,
-            publication_id=publication_id,
+        return workspace_service.activate_workspace_publication(
+            self._store,
+            self.activate_publication,
+            publication_id,
         )
-        return {"publication_id": activated["publication_id"]}
 
     def assign_tenant(self, cell_id: UUID, tenant_id: UUID, shard_key: str) -> None:
         self._store.assign_tenant_to_cell(
@@ -274,9 +165,8 @@ class ProvisioningService:
         max_tickets: int,
         max_ticket_exchanges: int,
     ) -> None:
-        context = self._store.ensure_default_workspace_context()
-        self.upsert_runtime_settings(
-            cell_id=context.cell_id,
+        workspace_service.upsert_workspace_runtime_settings(
+            self._store,
             ttl=ttl,
             max_tickets=max_tickets,
             max_ticket_exchanges=max_ticket_exchanges,
@@ -305,10 +195,8 @@ class ProvisioningService:
         module: str,
         options: dict[str, Any],
     ) -> dict[str, str]:
-        context = self._store.ensure_default_workspace_context()
-        return self.upsert_catalog(
-            cell_id=context.cell_id,
-            tenant_id=context.tenant_id,
+        return catalog_service.upsert_workspace_catalog(
+            self._store,
             name=name,
             module=module,
             options=options,
@@ -343,10 +231,8 @@ class ProvisioningService:
         table_identifier: str | None,
         options: dict[str, Any],
     ) -> dict[str, str]:
-        context = self._required_workspace_context()
-        return self.upsert_asset(
-            cell_id=context.cell_id,
-            tenant_id=context.tenant_id,
+        return asset_service.upsert_workspace_asset(
+            self._store,
             catalog=catalog,
             target=target,
             backend=backend,
@@ -361,18 +247,22 @@ class ProvisioningService:
         *,
         actor: ControlPlaneActor,
     ) -> None:
-        self._ensure_policy_editor(asset_id, actor)
-        self._store.replace_policy_rules(asset_id=asset_id, rules=rules)
+        policy_service.replace_policy_rules(
+            self._store,
+            asset_id,
+            rules,
+            actor=actor,
+        )
 
     def replace_asset_owners(self, asset_id: UUID, owners: list[str]) -> list[str]:
-        return self._store.replace_asset_owners(asset_id=asset_id, owners=owners)
+        return asset_service.replace_asset_owners(self._store, asset_id, owners)
 
     def replace_asset_schema_fields(
         self,
         asset_id: UUID,
         fields: list[dict[str, Any]],
     ) -> list[dict[str, object]]:
-        return self._store.replace_asset_schema_fields(asset_id=asset_id, fields=fields)
+        return asset_service.replace_asset_schema_fields(self._store, asset_id, fields)
 
     def preview_asset_policy(
         self,
@@ -382,244 +272,35 @@ class ProvisioningService:
         groups: list[str],
         claims: dict[str, object],
     ) -> dict[str, object]:
-        asset = self._store.get_workspace_asset(asset_id)
-        raw_rules = self._store.list_policy_rules(asset_id)
-        rules = [_access_rule_from_response(rule) for rule in raw_rules]
-        preview_principal = Principal(
-            id=principal,
+        return policy_service.preview_asset_policy(
+            self._store,
+            asset_id,
+            principal=principal,
             groups=groups,
-            attributes=_principal_attributes(claims),
+            claims=claims,
         )
-        requested_columns = _preview_columns(asset, rules)
-        matched_ordinal = _first_matching_rule_ordinal(raw_rules, preview_principal)
-        policy = Policy(
-            version=0,
-            datasets=[
-                DatasetPolicy(
-                    target=str(asset["name"]),
-                    catalog=str(asset["catalog"]),
-                    rules=rules,
-                )
-            ],
-        )
-        try:
-            visible_columns, masks, row_filter = resolve_access(
-                policy,
-                preview_principal,
-                str(asset["name"]),
-                str(asset["catalog"]),
-                requested_columns,
-            )
-        except PermissionError:
-            return {
-                "decision": "deny",
-                "matched_ordinal": matched_ordinal,
-                "reason": _deny_preview_reason(matched_ordinal),
-                "visible_columns": [],
-                "masks": [],
-                "row_filter": None,
-            }
-        return {
-            "decision": "allow",
-            "matched_ordinal": matched_ordinal,
-            "reason": _allow_preview_reason(matched_ordinal),
-            "visible_columns": visible_columns,
-            "masks": [
-                {"column": column, "type": mask.type} for column, mask in sorted(masks.items())
-            ],
-            "row_filter": row_filter,
-        }
 
     def replace_auth_providers(self, cell_id: UUID, providers: list[dict[str, Any]]) -> None:
         self._store.replace_auth_providers(cell_id=cell_id, providers=providers)
 
     def replace_workspace_auth_providers(self, providers: list[dict[str, Any]]) -> None:
-        context = self._store.ensure_default_workspace_context()
-        self.replace_auth_providers(cell_id=context.cell_id, providers=providers)
+        workspace_service.replace_workspace_auth_providers(self._store, providers)
 
     def create_publication(self, cell_id: UUID) -> dict[str, object]:
-        draft = self._store.load_publish_draft(cell_id)
-        self._validate_publish_readiness(draft)
-        compiled = PublicationCompiler().compile(draft)
-        publication_id = uuid4()
-        self._store.insert_compiled_publication(
-            publication_id=publication_id,
-            compiled=compiled,
-        )
-        return _publication_response(publication_id, compiled)
+        return policy_version_service.create_publication(self._store, cell_id)
 
     def activate_publication(self, cell_id: UUID, publication_id: UUID) -> dict[str, str]:
-        self._store.activate_publication(cell_id=cell_id, publication_id=publication_id)
-        return {"cell_id": str(cell_id), "publication_id": str(publication_id)}
+        return policy_version_service.activate_publication(
+            self._store,
+            cell_id,
+            publication_id,
+        )
 
     def _required_workspace_context(self):
-        context = self._store.get_default_workspace_context()
-        if context is None:
-            raise LookupError("No workspace has been configured")
-        return context
+        return workspace_service.required_workspace_context(self._store)
 
     def _ensure_policy_editor(self, asset_id: UUID, actor: ControlPlaneActor) -> None:
-        if actor.platform_admin:
-            return
-        owners = set(self._store.list_asset_owners(asset_id))
-        if owners.intersection(actor.owner_principals()):
-            return
-        raise AuthorizationFailure("Only platform admins or asset owners can change policies.")
+        policy_service.ensure_policy_editor(self._store, asset_id, actor)
 
     def _validate_publish_readiness(self, draft) -> None:
-        if len(draft.catalogs) == 0:
-            raise ValidationFailure("Cannot publish until at least one catalog is configured.")
-        if len(draft.assets) == 0:
-            raise ValidationFailure("Cannot publish until at least one asset is promoted.")
-        if not any(provider.enabled for provider in draft.auth_providers):
-            raise ValidationFailure("Cannot publish until at least one auth provider is enabled.")
-        missing_owner_count = sum(
-            1 for asset in draft.assets if not self._store.list_asset_owners(asset.id)
-        )
-        if missing_owner_count:
-            raise ValidationFailure(
-                f"Cannot publish until {missing_owner_count} "
-                f"{_plural(missing_owner_count, 'asset has', 'assets have')} an assigned owner."
-            )
-        missing_policy_count = sum(1 for asset in draft.assets if not asset.rules)
-        if missing_policy_count:
-            raise ValidationFailure(
-                f"Cannot publish until {missing_policy_count} "
-                f"{_plural(missing_policy_count, 'asset has', 'assets have')} policy rules."
-            )
-
-
-def _publication_response(publication_id: UUID, compiled: CompiledPublication) -> dict[str, object]:
-    return {
-        "publication_id": str(publication_id),
-        "cell_id": str(compiled.cell_id),
-        "asset_count": len(compiled.assets),
-        "catalog_count": len(compiled.catalogs),
-        "manifest_hash": compiled.manifest_hash,
-    }
-
-
-def _auth_provider_response(provider: dict[str, object]) -> dict[str, object]:
-    return {
-        "id": provider["id"],
-        "ordinal": provider["ordinal"],
-        "module": provider["module"],
-        "args": provider["args"],
-        "enabled": provider["enabled"],
-    }
-
-
-def _publication_list_response(publication: dict[str, object]) -> dict[str, object]:
-    return {
-        "id": publication["id"],
-        "schema_version": publication["schema_version"],
-        "status": publication["status"],
-        "manifest_hash": publication["manifest_hash"],
-        "active": publication["active"],
-    }
-
-
-def _catalogs_with_selected(active_catalogs, catalog):
-    for active in active_catalogs:
-        if active.tenant_id == catalog.tenant_id and active.catalog == catalog.name:
-            return list(active_catalogs)
-    return [
-        *active_catalogs,
-        CompiledCatalog(
-            tenant_id=catalog.tenant_id,
-            catalog=catalog.name,
-            config={"module": catalog.module, "options": dict(catalog.options)},
-        ),
-    ]
-
-
-def _plural(count: int, singular: str, plural: str) -> str:
-    return singular if count == 1 else plural
-
-
-def _access_rule_from_response(raw: dict[str, object]) -> AccessRule:
-    masks = cast(dict[str, object], raw.get("masks", {}))
-    return AccessRule(
-        principals=[str(item) for item in _object_list(raw.get("principals"))],
-        columns=[str(item) for item in _object_list(raw.get("columns"))],
-        masks={
-            str(column): MaskRule(
-                type=str(cast(dict[str, object], value).get("type")),
-                value=cast(dict[str, object], value).get("value"),
-            )
-            for column, value in masks.items()
-            if isinstance(value, dict) and cast(dict[str, object], value).get("type")
-        },
-        row_filter=cast(str | None, raw.get("row_filter")),
-        effect=cast(Literal["allow", "deny"], str(raw.get("effect", "allow"))),
-        when=cast(dict[str, PrincipalConditionValue], raw.get("when", {})),
-    )
-
-
-def _principal_attributes(claims: dict[str, object]) -> dict[str, str]:
-    return {str(key): str(value) for key, value in claims.items()}
-
-
-def _object_list(value: object) -> list[object]:
-    return list(value) if isinstance(value, list) else []
-
-
-def _preview_columns(asset: dict[str, object], rules: list[AccessRule]) -> list[str]:
-    schema_fields = cast(list[dict[str, object]], asset.get("schema_fields", []))
-    schema_columns = [str(field["name"]) for field in schema_fields if str(field.get("name", ""))]
-    if schema_columns:
-        return schema_columns
-    columns: list[str] = []
-    seen: set[str] = set()
-    for rule in rules:
-        for column in rule.columns:
-            if column == "*" or column in seen:
-                continue
-            columns.append(column)
-            seen.add(column)
-    return columns or ["*"]
-
-
-def _first_matching_rule_ordinal(
-    raw_rules: list[dict[str, object]],
-    principal: Principal,
-) -> int | None:
-    principal_tokens = set(principal.tokens())
-    for raw_rule in raw_rules:
-        rule = _access_rule_from_response(raw_rule)
-        if not principal_tokens.intersection(rule.principals):
-            continue
-        if _preview_conditions_match(rule.when, principal.attributes):
-            return int(cast(int | str, raw_rule["ordinal"]))
-    return None
-
-
-def _preview_conditions_match(
-    conditions: dict[str, PrincipalConditionValue] | None,
-    attributes: dict[str, str],
-) -> bool:
-    if not conditions:
-        return True
-    for key, expected in conditions.items():
-        actual = attributes.get(key)
-        if actual is None:
-            return False
-        if isinstance(expected, list):
-            if actual not in {str(item) for item in expected}:
-                return False
-            continue
-        if actual != str(expected):
-            return False
-    return True
-
-
-def _allow_preview_reason(matched_ordinal: int | None) -> str:
-    if matched_ordinal is None:
-        return "Policy allowed access."
-    return f"Rule {matched_ordinal} matched."
-
-
-def _deny_preview_reason(matched_ordinal: int | None) -> str:
-    if matched_ordinal is None:
-        return "No rule matched."
-    return f"Rule {matched_ordinal} denied access."
+        policy_version_service._validate_publish_readiness(self._store, draft)
