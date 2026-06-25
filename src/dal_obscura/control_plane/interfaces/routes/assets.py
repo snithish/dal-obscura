@@ -19,10 +19,6 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
     def list_workspace_assets() -> object:
         return deps.with_service(lambda service: service.list_workspace_assets())
 
-    @api.get("/v1/cells/{cell_id}/assets", dependencies=[Depends(deps.require_actor)])
-    def list_assets(cell_id: UUID) -> object:
-        return deps.with_service(lambda service: service.list_assets(cell_id))
-
     @api.get("/v1/assets/{asset_id}", dependencies=[Depends(deps.require_actor)])
     def get_workspace_asset(asset_id: UUID) -> object:
         return deps.with_service(lambda service: service.get_workspace_asset(asset_id))
@@ -46,29 +42,6 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
             )
         )
         return {"asset_id": str(asset_id), "fields": fields}
-
-    @api.put(
-        "/v1/tenants/{tenant_id}/cells/{cell_id}/assets/{catalog}/{target}",
-        dependencies=[Depends(deps.require_admin)],
-    )
-    def upsert_asset(
-        tenant_id: UUID,
-        cell_id: UUID,
-        catalog: str,
-        target: str,
-        request: AssetRequest,
-    ) -> object:
-        return deps.with_service(
-            lambda service: service.upsert_asset(
-                cell_id=cell_id,
-                tenant_id=tenant_id,
-                catalog=catalog,
-                target=target,
-                backend=request.backend,
-                table_identifier=request.table_identifier,
-                options=request.options,
-            )
-        )
 
     @api.put("/v1/assets/{catalog}/{target}", dependencies=[Depends(deps.require_admin)])
     def upsert_workspace_asset(catalog: str, target: str, request: AssetRequest) -> object:

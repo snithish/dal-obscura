@@ -60,6 +60,10 @@ flowchart TB
 The UI is asset-first. Internal runtime details such as tenant or cell IDs are
 kept out of normal user workflows.
 
+Tenant and cell records remain internal runtime partitioning data. The public
+control-plane API exposes a single workspace model for catalogs, assets,
+owners, policies, policy versions, and settings.
+
 ## Asset Lifecycle
 
 ```mermaid

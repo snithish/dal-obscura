@@ -12,9 +12,10 @@ from fastapi.testclient import TestClient
 from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
 from pyiceberg.types import BooleanType, DoubleType, IntegerType, LongType, NestedField, StringType
+from sqlalchemy import select
 
 from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
-from dal_obscura.common.config_store.orm import Base
+from dal_obscura.common.config_store.orm import Base, CellRecord
 from dal_obscura.control_plane.interfaces.api import create_app
 
 RUNTIME_DIR = Path(os.environ.get("RUNTIME_DIR", "/workspace/runtime"))
@@ -264,48 +265,25 @@ def _provision_control_plane(
     database_url = f"sqlite+pysqlite:///{database_path}"
     engine = create_engine_from_url(database_url)
     Base.metadata.create_all(engine)
-    client = TestClient(create_app(session_factory(engine), admin_token=ADMIN_TOKEN))
+    factory = session_factory(engine)
+    client = TestClient(create_app(factory, admin_token=ADMIN_TOKEN))
     headers = {"authorization": f"Bearer {ADMIN_TOKEN}"}
 
-    tenant = _request(
-        client,
-        "post",
-        "/v1/tenants",
-        headers,
-        {"slug": TENANT_SLUG, "display_name": "Default Example Tenant"},
-    )
-    cell = _request(
-        client,
-        "post",
-        "/v1/cells",
-        headers,
-        {"name": "local-example", "region": "local"},
-    )
-    tenant_id = str(tenant["id"])
-    cell_id = str(cell["id"])
     _request(
         client,
         "put",
-        f"/v1/cells/{cell_id}/tenants/{tenant_id}",
-        headers,
-        {"shard_key": TENANT_SLUG},
-    )
-    _request(
-        client,
-        "put",
-        f"/v1/tenants/{tenant_id}/cells/{cell_id}/runtime-settings",
+        "/v1/settings/runtime",
         headers,
         {
             "ticket_ttl_seconds": 900,
             "max_tickets": 64,
             "max_ticket_exchanges": 1,
-            "path_rules": [],
         },
     )
     _request(
         client,
         "put",
-        f"/v1/tenants/{tenant_id}/cells/{cell_id}/catalogs/{catalog_name}",
+        f"/v1/catalogs/{catalog_name}",
         headers,
         {
             "module": ICEBERG_CATALOG_MODULE,
@@ -322,7 +300,7 @@ def _provision_control_plane(
         asset = _request(
             client,
             "put",
-            f"/v1/tenants/{tenant_id}/cells/{cell_id}/assets/{catalog_name}/{target}",
+            f"/v1/assets/{catalog_name}/{target}",
             headers,
             {"backend": "iceberg", "table_identifier": target, "options": {}},
         )
@@ -336,18 +314,14 @@ def _provision_control_plane(
     _request(
         client,
         "put",
-        f"/v1/cells/{cell_id}/auth-providers",
+        "/v1/settings/auth-providers",
         headers,
         {"providers": _auth_providers(auth_flow)},
     )
-    publication = _request(client, "post", f"/v1/cells/{cell_id}/publications", headers)
-    _request(
-        client,
-        "post",
-        f"/v1/cells/{cell_id}/publications/{publication['publication_id']}/activate",
-        headers,
-    )
-    return cell_id
+    publication = _request(client, "post", "/v1/publications", headers)
+    _request(client, "post", f"/v1/publications/{publication['publication_id']}/activate", headers)
+    with factory() as session:
+        return str(session.scalar(select(CellRecord.id).order_by(CellRecord.name)))
 
 
 def _compiled_policy_rules(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:

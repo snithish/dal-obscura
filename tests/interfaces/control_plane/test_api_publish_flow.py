@@ -21,23 +21,8 @@ def test_api_provisions_and_activates_default_cell_publication():
     client = TestClient(app)
     headers = {"authorization": "Bearer test-admin"}
 
-    tenant = client.post(
-        "/v1/tenants",
-        json={"slug": "default", "display_name": "Default"},
-        headers=headers,
-    ).json()
-    cell = client.post(
-        "/v1/cells",
-        json={"name": "default", "region": "local"},
-        headers=headers,
-    ).json()
     client.put(
-        f"/v1/cells/{cell['id']}/tenants/{tenant['id']}",
-        json={"shard_key": "default"},
-        headers=headers,
-    )
-    client.put(
-        f"/v1/tenants/{tenant['id']}/cells/{cell['id']}/runtime-settings",
+        "/v1/settings/runtime",
         json={
             "ticket_ttl_seconds": 900,
             "max_tickets": 64,
@@ -46,7 +31,7 @@ def test_api_provisions_and_activates_default_cell_publication():
         headers=headers,
     )
     catalog = client.put(
-        f"/v1/tenants/{tenant['id']}/cells/{cell['id']}/catalogs/analytics",
+        "/v1/catalogs/analytics",
         json={
             "module": ICEBERG_CATALOG_MODULE,
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
@@ -54,7 +39,7 @@ def test_api_provisions_and_activates_default_cell_publication():
         headers=headers,
     ).json()
     asset = client.put(
-        f"/v1/tenants/{tenant['id']}/cells/{cell['id']}/assets/analytics/default.users",
+        "/v1/assets/analytics/default.users",
         json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
         headers=headers,
     ).json()
@@ -81,7 +66,7 @@ def test_api_provisions_and_activates_default_cell_publication():
         headers=headers,
     )
     client.put(
-        f"/v1/cells/{cell['id']}/auth-providers",
+        "/v1/settings/auth-providers",
         json={
             "providers": [
                 {
@@ -98,9 +83,9 @@ def test_api_provisions_and_activates_default_cell_publication():
         headers=headers,
     )
 
-    published = client.post(f"/v1/cells/{cell['id']}/publications", headers=headers).json()
+    published = client.post("/v1/publications", headers=headers).json()
     activated = client.post(
-        f"/v1/cells/{cell['id']}/publications/{published['publication_id']}/activate",
+        f"/v1/publications/{published['publication_id']}/activate",
         headers=headers,
     ).json()
 

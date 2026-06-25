@@ -6,10 +6,11 @@ from urllib.parse import quote
 from uuid import UUID
 
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine
+from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
 from dal_obscura.common.config_store.db import session_factory
+from dal_obscura.common.config_store.orm import CellTenantRecord
 from dal_obscura.control_plane.interfaces.api import create_app
 
 ICEBERG_CATALOG_MODULE = (
@@ -41,30 +42,9 @@ def provision_default_published_asset(
     client = TestClient(app)
     headers = {"authorization": "Bearer test-admin"}
 
-    tenant = _checked_json(
-        client.post(
-            "/v1/tenants",
-            json={"slug": f"tenant-{target}", "display_name": "Default"},
-            headers=headers,
-        )
-    )
-    cell = _checked_json(
-        client.post(
-            "/v1/cells",
-            json={"name": f"cell-{target}", "region": "local"},
-            headers=headers,
-        )
-    )
     _checked_json(
         client.put(
-            f"/v1/cells/{cell['id']}/tenants/{tenant['id']}",
-            json={"shard_key": "default"},
-            headers=headers,
-        )
-    )
-    _checked_json(
-        client.put(
-            f"/v1/tenants/{tenant['id']}/cells/{cell['id']}/runtime-settings",
+            "/v1/settings/runtime",
             json={
                 "ticket_ttl_seconds": 900,
                 "max_tickets": 64,
@@ -75,7 +55,7 @@ def provision_default_published_asset(
     )
     _checked_json(
         client.put(
-            f"/v1/tenants/{tenant['id']}/cells/{cell['id']}/catalogs/{catalog_name}",
+            f"/v1/catalogs/{catalog_name}",
             json={
                 "module": ICEBERG_CATALOG_MODULE,
                 "options": catalog_options,
@@ -85,8 +65,7 @@ def provision_default_published_asset(
     )
     asset = _checked_json(
         client.put(
-            f"/v1/tenants/{tenant['id']}/cells/{cell['id']}/assets/"
-            f"{quote(catalog_name, safe='')}/{quote(target, safe='')}",
+            f"/v1/assets/{quote(catalog_name, safe='')}/{quote(target, safe='')}",
             json={
                 "backend": "iceberg",
                 "table_identifier": table_identifier or target,
@@ -104,24 +83,25 @@ def provision_default_published_asset(
     )
     _checked_json(
         client.put(
-            f"/v1/cells/{cell['id']}/auth-providers",
+            "/v1/settings/auth-providers",
             json={"providers": [auth_provider]},
             headers=headers,
         )
     )
-    publication = _checked_json(
-        client.post(f"/v1/cells/{cell['id']}/publications", headers=headers)
-    )
+    publication = _checked_json(client.post("/v1/publications", headers=headers))
     _checked_json(
         client.post(
-            f"/v1/cells/{cell['id']}/publications/{publication['publication_id']}/activate",
+            f"/v1/publications/{publication['publication_id']}/activate",
             headers=headers,
         )
     )
+    assignment = db_session.scalar(select(CellTenantRecord))
+    if assignment is None:
+        raise LookupError("workspace bootstrap did not create tenant/cell assignment")
 
     return ProvisionedConfig(
-        cell_id=UUID(str(cell["id"])),
-        tenant_id=UUID(str(tenant["id"])),
+        cell_id=assignment.cell_id,
+        tenant_id=assignment.tenant_id,
         publication_id=UUID(str(publication["publication_id"])),
     )
 

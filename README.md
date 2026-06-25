@@ -178,9 +178,11 @@ cp -R dist ../src/dal_obscura/control_plane/interfaces/ui_assets/dist
 See [docs/frontend.md](docs/frontend.md) for frontend conventions, pnpm
 supply-chain settings, and dependency admission rules.
 
-Provision tenants, cells, catalogs, assets, policy rules, and auth providers
-through the HTTP API, then publish and activate a snapshot. Start each data
-plane cell from the same database without calling the control-plane service:
+Provision workspace catalogs, assets, policy rules, owners, runtime settings,
+and auth providers through the HTTP API, then publish and activate a policy
+snapshot. Tenant and cell records remain internal runtime partitioning data.
+Start each data plane cell from the same database without calling the
+control-plane service:
 
 ```bash
 export DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:///runtime/control-plane.db
@@ -296,28 +298,16 @@ table formats are rejected before tickets are minted.
 
 ### Provisioning Flow
 
-```bash
-curl -H "authorization: Bearer $DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN" \
-  -H "content-type: application/json" \
-  -d '{"slug":"default","display_name":"Default"}' \
-  http://localhost:8080/v1/tenants
+Call:
 
-curl -H "authorization: Bearer $DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN" \
-  -H "content-type: application/json" \
-  -d '{"name":"local","region":"dev"}' \
-  http://localhost:8080/v1/cells
-```
-
-Then call:
-
-- `PUT /v1/cells/{cell_id}/tenants/{tenant_id}`
-- `PUT /v1/tenants/{tenant_id}/cells/{cell_id}/runtime-settings`
-- `PUT /v1/tenants/{tenant_id}/cells/{cell_id}/catalogs/{name}`
-- `PUT /v1/tenants/{tenant_id}/cells/{cell_id}/assets/{catalog}/{target}`
+- `PUT /v1/settings/runtime`
+- `PUT /v1/catalogs/{name}`
+- `PUT /v1/assets/{catalog}/{target}`
 - `PUT /v1/assets/{asset_id}/policy-rules`
-- `PUT /v1/cells/{cell_id}/auth-providers`
-- `POST /v1/cells/{cell_id}/publications`
-- `POST /v1/cells/{cell_id}/publications/{publication_id}/activate`
+- `PUT /v1/assets/{asset_id}/owners`
+- `PUT /v1/settings/auth-providers`
+- `POST /v1/publications`
+- `POST /v1/publications/{publication_id}/activate`
 
 Runtime ticket settings include `ticket_ttl_seconds`, `max_tickets`, and
 `max_ticket_exchanges`. `max_ticket_exchanges` limits how many successful

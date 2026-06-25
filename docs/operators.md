@@ -32,12 +32,16 @@ from the configured repository.
 
 | Component | Purpose |
 | --- | --- |
-| Control plane | HTTP API, UI, catalog discovery, assets, owners, policies, publications. |
+| Control plane | HTTP API, UI, catalog discovery, assets, owners, policies, policy versions. |
 | Data plane | Arrow Flight reads, authentication, ticket verification, policy enforcement. |
 | Postgres | Persistent configuration, publications, and ticket state. |
 | IAM provider | OIDC/JWKS, API key, mTLS, trusted headers, or a composite provider. |
 | Catalog | Discovers and resolves tables. |
 | Warehouse | Stores table metadata and data files. |
+
+Tenant and cell records are internal runtime partitioning details. Operators
+configure the public control plane through workspace-level catalog, asset,
+policy, owner, runtime, and auth-provider endpoints.
 
 ## Required Decisions
 

@@ -12,7 +12,7 @@ from dal_obscura.control_plane.interfaces.routes.schemas import (
 )
 
 
-def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
+def router(deps: ControlPlaneDeps) -> APIRouter:
     api = APIRouter()
 
     @api.get("/v1/assets/{asset_id}/policy-rules", dependencies=[Depends(deps.require_actor)])
@@ -68,37 +68,9 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
     def list_workspace_publications() -> object:
         return deps.with_service(lambda service: service.list_workspace_publications())
 
-    @api.get("/v1/cells/{cell_id}/draft", dependencies=[Depends(deps.require_actor)])
-    def get_cell_draft(cell_id: UUID) -> object:
-        return deps.with_service(lambda service: service.get_cell_draft(cell_id))
-
-    @api.get("/v1/cells/{cell_id}/publications", dependencies=[Depends(deps.require_actor)])
-    def list_publications(cell_id: UUID) -> object:
-        return deps.with_service(lambda service: service.list_publications(cell_id))
-
-    @api.get("/v1/cells/{cell_id}/active-publication", dependencies=[Depends(deps.require_actor)])
-    def get_active_publication_summary(cell_id: UUID) -> object:
-        return deps.with_service(lambda service: service.get_active_publication_summary(cell_id))
-
-    @api.post("/v1/cells/{cell_id}/publications", dependencies=[Depends(deps.require_admin)])
-    def create_publication(cell_id: UUID) -> object:
-        return deps.with_service(lambda service: service.create_publication(cell_id))
-
     @api.post("/v1/publications", dependencies=[Depends(deps.require_admin)])
     def create_workspace_publication() -> object:
         return deps.with_service(lambda service: service.create_workspace_publication())
-
-    @api.post(
-        "/v1/cells/{cell_id}/publications/{publication_id}/activate",
-        dependencies=[Depends(deps.require_admin)],
-    )
-    def activate_publication(cell_id: UUID, publication_id: UUID) -> object:
-        return deps.with_service(
-            lambda service: service.activate_publication(
-                cell_id=cell_id,
-                publication_id=publication_id,
-            )
-        )
 
     @api.post(
         "/v1/publications/{publication_id}/activate",
