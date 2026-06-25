@@ -108,7 +108,7 @@ mvn -f connectors/jvm/pom.xml verify
 - Ticket content is the single source of truth for `do_get`; never trust client replays of `PlanRequest`.
 - Masking changes must update both the DuckDB projection logic and the masked schema logic.
 - Catalog resolution must stay deterministic; never mutate shared config or registry state during requests.
-- Catalog implementations return provider-neutral descriptors; they must not construct executable table formats directly.
+- Catalog implementations resolve governed targets into executable table formats directly.
 - Avoid pickling arbitrary user input; only serialize trusted, internal task payloads.
 
 ## Style

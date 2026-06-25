@@ -52,7 +52,8 @@ sequenceDiagram
 ## Full Environment Reset
 
 Only reset persistent state when you intentionally want to remove catalog
-configuration, assets, owners, policy versions, publications, and tickets.
+configuration, assets, owners, policy versions, internal active-policy records,
+and tickets.
 
 Recommended order:
 

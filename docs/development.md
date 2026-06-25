@@ -8,6 +8,10 @@ connectors.
 dal-obscura follows a hexagonal architecture. Domain and application code should
 not depend on transport adapters.
 
+The public control-plane model is workspace-first: assets, catalogs, owners,
+policies, policy versions, and settings. Tenant, cell, and publication records
+are internal runtime implementation details.
+
 ```mermaid
 flowchart TB
     interfaces["interfaces/*\nFlight, CLI, API, UI"] --> app["application/*\nuse cases and ports"]
@@ -113,3 +117,18 @@ cp -R dist ../src/dal_obscura/control_plane/interfaces/ui_assets/dist
 - `uv run pytest`
 - `mvn -f connectors/jvm/pom.xml verify` when JVM connector behavior changed.
 - Rebuild packaged UI when `ui/` changed.
+
+## Extension Notes
+
+Catalog implementations resolve governed targets into executable table readers.
+Built-in catalog config uses `type`; Python module strings are not part of the
+public config format. Add a catalog by implementing `CatalogPlugin.resolve_table()`
+and returning a `TableFormat` directly.
+
+Breaking API/config changes in this simplification pass:
+
+- Public tenant and cell endpoints were removed.
+- Public publication endpoints were replaced by policy-version history.
+- Catalog config now uses typed catalog entries instead of Python module strings.
+- Catalogs now resolve executable table readers directly; table provider
+  registry extension is removed.

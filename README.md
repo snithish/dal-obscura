@@ -15,7 +15,7 @@ masking, and row filters.
 - Delta Lake backend (delta-rs) and file-backed Parquet/CSV/JSON/ORC/Avro/Text assets
 - Unity Catalog metadata resolution for Delta and file-backed tables
 - API-first FastAPI control plane for configuration provisioning
-- RDBMS-backed published configuration consumed by cell-scoped data planes
+- RDBMS-backed published configuration consumed by data planes
 - DuckDB-powered row filters and column masks
 
 ## Architecture
@@ -179,10 +179,10 @@ See [docs/frontend.md](docs/frontend.md) for frontend conventions, pnpm
 supply-chain settings, and dependency admission rules.
 
 Provision workspace catalogs, assets, policy rules, owners, runtime settings,
-and auth providers through the HTTP API, then publish and activate a policy
-snapshot. Tenant and cell records remain internal runtime partitioning data.
-Start each data plane cell from the same database without calling the
-control-plane service:
+and auth providers through the HTTP API, then submit asset-scoped policy
+versions. Tenant and cell records remain internal runtime partitioning data.
+Start each data plane from the same database without calling the control-plane
+service:
 
 ```bash
 export DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:///runtime/control-plane.db
@@ -256,24 +256,35 @@ HTTP APIs. Non-path providers can use descriptor fields such as
 `table_identifier`, `options`, and `properties` without inventing a fake file
 location.
 
-Custom providers can be published by adding `provider_modules` to the catalog
-options and setting governed assets to the provider ID returned by that catalog:
+Catalog implementations resolve governed targets into executable table readers.
+Built-in catalog config uses `type`; Python module strings are not part of the
+public catalog config format.
+
+Custom catalog types should implement `CatalogPlugin.resolve_table()` and return
+an executable `TableFormat` directly. The old provider-registry extension point
+is intentionally gone; do not configure `provider_modules` or make catalogs
+return provider-neutral descriptors.
+
+File-backed catalogs use typed config:
 
 ```json
 {
-  "module": "example.PostgresCatalog",
+  "name": "warehouse",
+  "type": "files",
   "options": {
-    "provider_modules": ["example.PostgresProviderFactory"],
-    "dsn": {"secret": "POSTGRES_DSN"}
+    "format": "parquet",
+    "location": "s3://warehouse/users/",
+    "storage_options": {"AWS_REGION": "us-east-1"}
   }
 }
 ```
 
-Unity Catalog is configured as a catalog module:
+Unity Catalog is configured as a typed catalog:
 
 ```json
 {
-  "module": "dal_obscura.data_plane.infrastructure.adapters.unity_catalog.UnityCatalog",
+  "name": "main",
+  "type": "unity",
   "options": {
     "base_url": "https://workspace.example.com",
     "token": {"secret": "UNITY_CATALOG_TOKEN"},
@@ -320,7 +331,7 @@ and physical locations must come from catalog definitions and governed assets.
 
 Flight tickets are opaque HMAC-signed references. The executable scan payload,
 including the pickled internal `ScanTask`, is stored server-side in the
-cell-scoped ticket table and hash-checked before use. Pickle is only trusted for
+runtime ticket table and hash-checked before use. Pickle is only trusted for
 that DB-stored internal payload; clients never receive the pickled scan task in
 the Flight ticket.
 
@@ -367,6 +378,14 @@ publishing several provider records with ascending `ordinal` values.
 
 Providers run in order. Missing credentials fall through to the next provider;
 invalid credentials stop the chain and reject the request.
+
+### Breaking Changes
+
+- Public tenant and cell endpoints were removed.
+- Public publication endpoints were replaced by asset-scoped policy-version history.
+- Catalog config now uses typed catalog entries instead of Python module strings.
+- Catalogs now resolve executable table readers directly; the table provider
+  registry extension point was removed.
 
 ### Transport TLS
 

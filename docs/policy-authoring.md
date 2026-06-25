@@ -18,6 +18,10 @@ flowchart LR
 Publishing is asset-scoped. Treat it as submitting a new version of one asset's
 policy, not as a global release.
 
+The public control-plane model is workspace-first: assets, catalogs, owners,
+policies, policy versions, and settings. Tenant, cell, and publication records
+are internal runtime implementation details.
+
 ## Rule Evaluation
 
 ```mermaid
@@ -112,3 +116,8 @@ ordinal without exposing tenant or cell internals.
 For code changes to policy resolution, add focused tests under
 `tests/domain/access_control/` and data-plane tests under `tests/interfaces/` or
 `tests/infrastructure/` only when behavior changes there.
+
+Breaking changes for policy authors and API clients:
+
+- Public tenant and cell endpoints were removed.
+- Public publication endpoints were replaced by policy-version history.

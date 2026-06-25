@@ -48,7 +48,7 @@ flowchart TB
 
 | Object | Meaning |
 | --- | --- |
-| Catalog | A configured source that can discover tables. |
+| Catalog | A configured source that can discover tables and resolve governed targets into executable readers. |
 | Discovered table | A table found by catalog discovery. |
 | Asset | A governed table that owners can manage. |
 | Owner | A principal or group allowed to edit policy for an asset. |
@@ -63,6 +63,10 @@ kept out of normal user workflows.
 Tenant and cell records remain internal runtime partitioning data. The public
 control-plane API exposes a single workspace model for catalogs, assets,
 owners, policies, policy versions, and settings.
+
+Catalog implementations resolve governed targets into executable table readers.
+Built-in catalog config uses `type`; Python module strings are not part of the
+public config format.
 
 ## Asset Lifecycle
 
@@ -114,3 +118,11 @@ close to the execution engine and makes expressions testable.
 Use Postgres for persistent control-plane state in shared and deployed
 environments. SQLite is useful for local development and tests, but it is not
 the recommended datastore when state must survive restarts reliably.
+
+## Breaking Changes
+
+- Public tenant and cell endpoints were removed.
+- Public publication endpoints were replaced by policy-version history.
+- Catalog config now uses typed catalog entries instead of Python module strings.
+- Catalogs now resolve executable table readers directly; table provider
+  registry extension is removed.

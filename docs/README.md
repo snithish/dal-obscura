@@ -39,7 +39,7 @@ flowchart LR
 
 - [Quickstart](quickstart.md): start the service and verify the first governed
   read.
-- [Concepts](concepts.md): catalogs, assets, owners, policies, publications, and
+- [Concepts](concepts.md): catalogs, assets, owners, policies, policy versions, and
   data-plane reads.
 - [Policy Authoring](policy-authoring.md): row filters, masks, owners, and
   policy-version publishing.

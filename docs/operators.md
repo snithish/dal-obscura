@@ -43,6 +43,10 @@ Tenant and cell records are internal runtime partitioning details. Operators
 configure the public control plane through workspace-level catalog, asset,
 policy, owner, runtime, and auth-provider endpoints.
 
+The public control-plane model is workspace-first: assets, catalogs, owners,
+policies, policy versions, and settings. Publication records remain an internal
+runtime representation of active policy sets.
+
 ## Required Decisions
 
 | Decision | Recommendation |
@@ -108,3 +112,11 @@ sequenceDiagram
 - Policy changes affect reads after a policy version is submitted, so test with real personas.
 - SQLite state is easy to lose; use Postgres for anything others will try.
 - Internal cell identifiers should not become user-facing concepts.
+
+## Breaking Changes
+
+- Public tenant and cell endpoints were removed.
+- Public publication endpoints were replaced by policy-version history.
+- Catalog config now uses typed catalog entries instead of Python module strings.
+- Catalogs now resolve executable table readers directly; table provider
+  registry extension is removed.
