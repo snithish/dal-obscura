@@ -4,6 +4,11 @@ from uuid import uuid4
 
 import pytest
 
+from dal_obscura.common.access_control.compiled_policy import (
+    CompiledMaskRule,
+    CompiledPolicy,
+    CompiledPolicyRule,
+)
 from dal_obscura.control_plane.application.compiler import PublicationCompiler
 from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.domain.models import (
@@ -179,3 +184,29 @@ def test_compiler_rejects_masks_on_deny_rules():
 
     with pytest.raises(ValidationFailure, match="deny rules may not define masks"):
         PublicationCompiler().compile(draft)
+
+
+def test_compiled_policy_round_trips_to_evaluator_policy():
+    compiled = CompiledPolicy(
+        version=7,
+        catalog="analytics",
+        target="users",
+        rules=[
+            CompiledPolicyRule(
+                ordinal=1,
+                effect="allow",
+                principals=["group:data-stewards"],
+                columns=["id", "email"],
+                masks={"email": CompiledMaskRule(type="email", value=None)},
+                row_filter="region = 'us'",
+                when={"department": "analytics"},
+            )
+        ],
+    )
+
+    policy = compiled.to_policy()
+
+    assert policy.version == 7
+    assert policy.datasets[0].catalog == "analytics"
+    assert policy.datasets[0].target == "users"
+    assert policy.datasets[0].rules[0].columns == ["id", "email"]

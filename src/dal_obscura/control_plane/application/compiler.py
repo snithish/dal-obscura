@@ -2,8 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+from typing import cast
 from uuid import UUID
 
+from dal_obscura.common.access_control.compiled_policy import (
+    CompiledMaskRule,
+    CompiledPolicy,
+    CompiledPolicyRule,
+)
 from dal_obscura.common.access_control.filters import deserialize_row_filter
 from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.domain.models import (
@@ -101,6 +107,13 @@ class PublicationCompiler:
         rules = [
             self._compile_rule(rule) for rule in sorted(asset.rules, key=lambda item: item.ordinal)
         ]
+        policy = CompiledPolicy(
+            version=0,
+            catalog=asset.catalog_name,
+            target=asset.target,
+            rules=rules,
+        )
+        policy_json = policy.to_json()
         target_options = dict(asset.options)
         target_config: dict[str, object] = {
             "backend": asset.backend,
@@ -110,31 +123,41 @@ class PublicationCompiler:
         compiled_config: dict[str, object] = {
             "catalog": {"module": catalog.module, "options": dict(catalog.options)},
             "target": target_config,
-            "policy": {"rules": rules},
+            "policy": policy_json,
         }
+        policy_version = _stable_int63(policy_json)
+        compiled_config["policy"]["version"] = policy_version
         return CompiledAsset(
             tenant_id=asset.tenant_id,
             catalog=asset.catalog_name,
             target=asset.target,
             backend=asset.backend,
             compiled_config=compiled_config,
-            policy_version=_stable_int63(compiled_config["policy"]),
+            policy_version=policy_version,
         )
 
-    def _compile_rule(self, rule: PolicyRuleDraft) -> dict[str, object]:
+    def _compile_rule(self, rule: PolicyRuleDraft) -> CompiledPolicyRule:
         if rule.effect == "deny" and rule.masks:
             raise ValidationFailure("deny rules may not define masks")
         if rule.effect == "deny" and rule.row_filter:
             raise ValidationFailure("deny rules may not define row_filter")
         row_filter = _normalize_row_filter(rule.row_filter)
-        return {
-            "principals": list(rule.principals),
-            "columns": list(rule.columns),
-            "effect": rule.effect,
-            "when": dict(rule.when),
-            "masks": dict(rule.masks),
-            "row_filter": row_filter,
-        }
+        return CompiledPolicyRule(
+            ordinal=rule.ordinal,
+            principals=list(rule.principals),
+            columns=list(rule.columns),
+            effect=rule.effect,
+            when=dict(rule.when),
+            masks={
+                column: CompiledMaskRule(
+                    type=str(_mask_dict(mask)["type"]),
+                    value=_mask_dict(mask).get("value"),
+                )
+                for column, mask in rule.masks.items()
+                if _mask_dict(mask).get("type")
+            },
+            row_filter=row_filter,
+        )
 
 
 def _normalize_row_filter(value: str | None) -> str | None:
@@ -163,6 +186,10 @@ def _provider_modules(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item) for item in value if str(item).strip()]
+
+
+def _mask_dict(value: object) -> dict[str, object]:
+    return cast(dict[str, object], value) if isinstance(value, dict) else {}
 
 
 def _publication_hash(

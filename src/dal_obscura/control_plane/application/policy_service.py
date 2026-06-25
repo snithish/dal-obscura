@@ -3,11 +3,13 @@ from __future__ import annotations
 from typing import Any, Literal, cast
 from uuid import UUID
 
+from dal_obscura.common.access_control.compiled_policy import (
+    CompiledMaskRule,
+    CompiledPolicy,
+    CompiledPolicyRule,
+)
 from dal_obscura.common.access_control.models import (
     AccessRule,
-    DatasetPolicy,
-    MaskRule,
-    Policy,
     Principal,
     PrincipalConditionValue,
 )
@@ -42,7 +44,9 @@ def preview_asset_policy(
 ) -> dict[str, object]:
     asset = store.get_workspace_asset(asset_id)
     raw_rules = store.list_policy_rules(asset_id)
-    rules = [_access_rule_from_response(rule) for rule in raw_rules]
+    compiled = _compiled_policy_from_response(asset, raw_rules)
+    policy = compiled.to_policy()
+    rules = policy.datasets[0].rules
     preview_principal = Principal(
         id=principal,
         groups=groups,
@@ -50,16 +54,6 @@ def preview_asset_policy(
     )
     requested_columns = _preview_columns(asset, rules)
     matched_ordinal = _first_matching_rule_ordinal(raw_rules, preview_principal)
-    policy = Policy(
-        version=0,
-        datasets=[
-            DatasetPolicy(
-                target=str(asset["name"]),
-                catalog=str(asset["catalog"]),
-                rules=rules,
-            )
-        ],
-    )
     try:
         visible_columns, masks, row_filter = resolve_access(
             policy,
@@ -100,13 +94,26 @@ def ensure_policy_editor(
     raise AuthorizationFailure("Only platform admins or asset owners can change policies.")
 
 
-def _access_rule_from_response(raw: dict[str, object]) -> AccessRule:
+def _compiled_policy_from_response(
+    asset: dict[str, object],
+    raw_rules: list[dict[str, object]],
+) -> CompiledPolicy:
+    return CompiledPolicy(
+        version=0,
+        catalog=str(asset["catalog"]),
+        target=str(asset["name"]),
+        rules=[_compiled_rule_from_response(rule) for rule in raw_rules],
+    )
+
+
+def _compiled_rule_from_response(raw: dict[str, object]) -> CompiledPolicyRule:
     masks = cast(dict[str, object], raw.get("masks", {}))
-    return AccessRule(
+    return CompiledPolicyRule(
+        ordinal=int(cast(int | str, raw.get("ordinal", 0))),
         principals=[str(item) for item in _object_list(raw.get("principals"))],
         columns=[str(item) for item in _object_list(raw.get("columns"))],
         masks={
-            str(column): MaskRule(
+            str(column): CompiledMaskRule(
                 type=str(cast(dict[str, object], value).get("type")),
                 value=cast(dict[str, object], value).get("value"),
             )
@@ -117,6 +124,10 @@ def _access_rule_from_response(raw: dict[str, object]) -> AccessRule:
         effect=cast(Literal["allow", "deny"], str(raw.get("effect", "allow"))),
         when=cast(dict[str, PrincipalConditionValue], raw.get("when", {})),
     )
+
+
+def _access_rule_from_response(raw: dict[str, object]) -> AccessRule:
+    return _compiled_rule_from_response(raw).to_access_rule()
 
 
 def _principal_attributes(claims: dict[str, object]) -> dict[str, str]:

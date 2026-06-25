@@ -2,20 +2,17 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Literal, cast
+from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from dal_obscura.common.access_control.compiled_policy import CompiledPolicy
 from dal_obscura.common.access_control.models import (
     AccessDecision,
-    AccessRule,
-    DatasetPolicy,
-    MaskRule,
     Policy,
     Principal,
-    PrincipalConditionValue,
 )
 from dal_obscura.common.access_control.policy_resolution import resolve_access
 from dal_obscura.common.catalog.ports import TableFormat
@@ -321,34 +318,12 @@ class PublishedConfigCatalogRegistry:
 
 
 def _policy_from_asset(asset: PublishedAsset) -> Policy:
-    rules = [
-        _access_rule_from_json(raw)
-        for raw in _mapping(asset.compiled_config.get("policy")).get("rules", [])
-        if isinstance(raw, dict)
-    ]
-    return Policy(
+    return CompiledPolicy.from_json(
+        _mapping(asset.compiled_config.get("policy")),
         version=asset.policy_version,
-        datasets=[DatasetPolicy(target=asset.target, catalog=asset.catalog, rules=rules)],
-    )
-
-
-def _access_rule_from_json(raw: dict[str, object]) -> AccessRule:
-    masks_raw = _mapping(raw.get("masks"))
-    return AccessRule(
-        principals=[str(item) for item in _list(raw.get("principals"))],
-        columns=[str(item) for item in _list(raw.get("columns"))],
-        masks={
-            name: MaskRule(
-                type=str(_mapping(mask).get("type")),
-                value=_mapping(mask).get("value"),
-            )
-            for name, mask in masks_raw.items()
-            if isinstance(name, str) and isinstance(mask, dict) and _mapping(mask).get("type")
-        },
-        row_filter=_optional_str(raw.get("row_filter")),
-        effect=cast(Literal["allow", "deny"], str(raw.get("effect", "allow"))),
-        when=cast(dict[str, PrincipalConditionValue], _mapping(raw.get("when"))),
-    )
+        catalog=asset.catalog,
+        target=asset.target,
+    ).to_policy()
 
 
 def _catalog_config_from_published_catalog(catalog: PublishedCatalog) -> CatalogConfig:
@@ -372,19 +347,6 @@ def _mapping(value: object) -> dict[str, Any]:
     if isinstance(value, dict):
         return cast(dict[str, Any], value).copy()
     return {}
-
-
-def _list(value: object) -> list[object]:
-    if isinstance(value, list):
-        return list(cast(list[object], value))
-    return []
-
-
-def _optional_str(value: object) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
 
 
 def _provider_modules(catalogs: list[PublishedCatalog]) -> list[str]:
