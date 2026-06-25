@@ -13,23 +13,33 @@ def _client() -> TestClient:
     return TestClient(create_app(session_factory(engine), admin_token="test-admin"))
 
 
-def test_ui_serves_react_index_without_embedding_admin_token():
+def test_swagger_docs_are_exposed_without_auth() -> None:
     client = _client()
 
-    response = client.get("/ui")
+    response = client.get("/docs")
 
     assert response.status_code == 200
-    assert '<div id="root">' in response.text
-    assert "dal-obscura control plane" in response.text
+    assert "Swagger UI" in response.text
     assert "test-admin" not in response.text
-    assert "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN" not in response.text
 
 
-def test_ui_client_routes_fall_back_to_react_index():
+def test_openapi_schema_describes_control_plane_api() -> None:
+    client = _client()
+
+    response = client.get("/openapi.json")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["info"]["title"] == "dal-obscura control-plane API"
+    assert "/v1/assets" in payload["paths"]
+    assert "/v1/ui-auth-config" in payload["paths"]
+
+
+def test_ui_paths_do_not_mask_missing_api_routes() -> None:
     client = _client()
 
     response = client.get("/ui/assets/example")
 
-    assert response.status_code == 200
-    assert '<div id="root">' in response.text
-    assert "dal-obscura control plane" in response.text
+    assert response.status_code == 404
+    assert response.headers["content-type"].startswith("application/json")
+    assert '<div id="root">' not in response.text

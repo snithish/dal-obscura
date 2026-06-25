@@ -28,7 +28,6 @@ from dal_obscura.control_plane.interfaces.session_api import (
     OidcActorResolver,
     exchange_demo_password_token,
 )
-from dal_obscura.control_plane.interfaces.ui import install_ui
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
 from dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks import (
     OidcJwksIdentityProvider,
@@ -71,8 +70,14 @@ def create_app(
     oidc_admin_group: str | None = None,
     ui_auth_config: Mapping[str, object] | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="dal-obscura control plane")
-    install_ui(app)
+    app = FastAPI(
+        title="dal-obscura control-plane API",
+        summary="Configuration, catalog, asset, policy, and session API for dal-obscura.",
+        version="0.1.0",
+        docs_url="/docs",
+        redoc_url="/redoc",
+        openapi_url="/openapi.json",
+    )
     deps = ControlPlaneDeps(
         session_maker=session_maker,
         admin_token=admin_token,
