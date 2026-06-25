@@ -126,7 +126,7 @@ function AppShell() {
               <p className="text-xs font-black uppercase text-muted">Operating model</p>
               <p className="mt-2 text-sm font-black">Catalog, govern, publish</p>
               <p className="mt-1 text-xs leading-5 text-muted">
-                Draft changes stay local until an immutable publication is activated.
+                Draft policy changes stay local until an immutable version is submitted.
               </p>
             </div>
           </aside>
@@ -138,7 +138,7 @@ function AppShell() {
                     Open-source deployment console
                   </p>
                   <p className="mt-1 text-sm text-muted">
-                    Configure assets, ownership, policies, and data-plane publications.
+                    Configure assets, ownership, policies, and runtime settings.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">

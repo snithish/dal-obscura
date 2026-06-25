@@ -2,9 +2,10 @@ import { type ReactNode, useEffect, useState } from "react";
 
 import { apiGet, apiPost } from "../../api/client";
 import {
-  activationConfirmationLabel,
   canPublishDraft,
+  policyVersionLabel,
   publishBlockers,
+  type PolicyVersionHistoryItem,
 } from "./publishLogic";
 
 type WorkspaceSummary = {
@@ -26,6 +27,7 @@ type Draft = {
   asset_count: number;
   assets: Array<{
     catalog: string;
+    id: string;
     name: string;
     policy_status: string;
   }>;
@@ -36,39 +38,30 @@ type Draft = {
   }>;
 };
 
-type Publication = {
-  active: boolean;
-  id: string;
+type CreatedPolicyVersion = {
+  asset_id: string;
   manifest_hash: string;
-  schema_version: number;
-  status: string;
-};
-
-type CreatedPublication = {
-  asset_count: number;
-  catalog_count: number;
-  manifest_hash: string;
+  policy_version: number;
   publication_id: string;
 };
 
 export function PublishPage() {
   const [summary, setSummary] = useState<WorkspaceSummary | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [publications, setPublications] = useState<Publication[]>([]);
+  const [policyVersions, setPolicyVersions] = useState<PolicyVersionHistoryItem[]>([]);
   const [status, setStatus] = useState<string | null>(null);
-  const [pendingAction, setPendingAction] = useState<"publish" | "activate" | null>(null);
+  const [pendingAction, setPendingAction] = useState<"publish" | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
-  const [isActivating, setIsActivating] = useState(false);
 
   async function refresh() {
-    const [loadedSummary, loadedDraft, loadedPublications] = await Promise.all([
+    const [loadedSummary, loadedDraft, loadedPolicyVersions] = await Promise.all([
       apiGet<WorkspaceSummary>("/v1/workspace/summary"),
       apiGet<Draft>("/v1/publications/draft"),
-      apiGet<Publication[]>("/v1/publications"),
+      apiGet<PolicyVersionHistoryItem[]>("/v1/policy-versions"),
     ]);
     setSummary(loadedSummary);
     setDraft(loadedDraft);
-    setPublications(loadedPublications);
+    setPolicyVersions(loadedPolicyVersions);
   }
 
   useEffect(() => {
@@ -76,12 +69,19 @@ export function PublishPage() {
   }, []);
 
   async function publishDraft() {
+    const asset = draft?.assets[0];
+    if (!asset) {
+      setStatus("No asset is ready to version.");
+      return;
+    }
     setStatus(null);
     setIsPublishing(true);
     try {
-      const publication = await apiPost<CreatedPublication>("/v1/publications");
+      const version = await apiPost<CreatedPolicyVersion>(
+        `/v1/assets/${asset.id}/policy-versions`,
+      );
       await refresh();
-      setStatus(`Publication ${publication.publication_id} created.`);
+      setStatus(`Policy version ${version.policy_version} created.`);
       setPendingAction(null);
     } catch {
       setStatus("Publish failed. Check runtime settings, catalogs, assets, and policies.");
@@ -90,22 +90,8 @@ export function PublishPage() {
     }
   }
 
-  async function activatePublication(publicationId: string) {
-    setStatus(null);
-    setIsActivating(true);
-    try {
-      await apiPost(`/v1/publications/${publicationId}/activate`);
-      await refresh();
-      setStatus("Publication activated.");
-      setPendingAction(null);
-    } catch {
-      setStatus("Activation failed.");
-    } finally {
-      setIsActivating(false);
-    }
-  }
-
-  const latestPublication = publications[publications.length - 1];
+  const latestPolicyVersion = policyVersions[policyVersions.length - 1];
+  const activePolicyVersions = policyVersions.filter((item) => item.active);
   const readiness = {
     assetCount: draft?.asset_count ?? 0,
     authProviderCount: summary?.enabled_auth_provider_count ?? 0,
@@ -183,8 +169,8 @@ export function PublishPage() {
                 Policy versioning
               </span>
               <p className="mt-2 text-sm leading-6 text-muted">
-                Every publication snapshots asset policy rules. New Flight tickets
-                use the active version at planning time.
+                Every policy version snapshots asset policy rules. New Flight
+                tickets use the active version at planning time.
               </p>
             </div>
             <div className="surface-muted p-4">
@@ -220,43 +206,36 @@ export function PublishPage() {
         <div className="surface p-5">
           <h2 className="text-lg font-black">Active policy set</h2>
           <p className="mt-1 text-sm leading-6 text-muted">
-            The data plane reads from the active policy set. Asset policy publishes
+            The data plane reads from the active policy set. Asset policy versions
             create a new active set while carrying unchanged assets forward.
           </p>
           <div className="mt-5 rounded-card border border-border bg-soft p-4">
             <span className="text-xs font-black uppercase tracking-wide text-muted">
-              Active publication
+              Active policy versions
             </span>
             <strong className="mt-2 block break-all text-sm">
-              {summary?.active_publication?.publication_id ?? "None"}
+              {activePolicyVersions.length > 0
+                ? `${activePolicyVersions.length} active`
+                : "None"}
             </strong>
             <p className="mt-2 break-all text-xs leading-5 text-muted">
               {summary?.active_publication?.manifest_hash ?? "No active manifest yet."}
             </p>
           </div>
-          {latestPublication ? (
-            <button
-              className="btn-primary mt-4 w-full"
-              disabled={latestPublication.active || isActivating}
-              type="button"
-              onClick={() => setPendingAction("activate")}
-            >
-              {latestPublication.active
-                ? "Latest publication active"
-                : isActivating
-                  ? "Activating..."
-                  : "Activate selected version"}
-            </button>
+          {latestPolicyVersion ? (
+            <p className="mt-4 text-sm font-bold text-muted">
+              Latest: {policyVersionLabel(latestPolicyVersion)}
+            </p>
           ) : null}
         </div>
       </section>
 
       {pendingAction === "publish" ? (
         <ConfirmationPanel
-          confirmLabel={isPublishing ? "Publishing..." : "Create publication"}
+          confirmLabel={isPublishing ? "Publishing..." : "Create policy version"}
           disabled={!canPublish || isPublishing}
-          eyebrow="Publish confirmation"
-          title="Create first immutable policy set"
+          eyebrow="Version confirmation"
+          title="Create first immutable policy version"
           onCancel={() => setPendingAction(null)}
           onConfirm={publishDraft}
         >
@@ -271,62 +250,31 @@ export function PublishPage() {
         </ConfirmationPanel>
       ) : null}
 
-      {pendingAction === "activate" && latestPublication ? (
-        <ConfirmationPanel
-          confirmLabel={
-            isActivating
-              ? "Activating..."
-              : activationConfirmationLabel(latestPublication.id)
-          }
-          disabled={latestPublication.active || isActivating}
-          eyebrow="Activation confirmation"
-          title="Switch active policy set"
-          onCancel={() => setPendingAction(null)}
-          onConfirm={() => activatePublication(latestPublication.id)}
-        >
-          <p className="text-sm leading-6 text-muted">
-            Activation points new planning requests at this compiled policy set.
-            Tickets already issued against older versions remain bounded by their
-            TTL and exchange limits.
-          </p>
-          <div className="mt-4 rounded-card border border-border bg-soft p-4">
-            <span className="text-xs font-black uppercase tracking-wide text-muted">
-              Publication
-            </span>
-            <strong className="mt-2 block break-all text-sm">{latestPublication.id}</strong>
-            <span className="mt-2 block break-all text-xs text-muted">
-              {latestPublication.manifest_hash}
-            </span>
-          </div>
-        </ConfirmationPanel>
-      ) : null}
-
       <section className="surface p-5">
-        <h2 className="text-lg font-black">Publication history</h2>
+        <h2 className="text-lg font-black">Policy version history</h2>
         <p className="mt-1 text-sm leading-6 text-muted">
-          Publication IDs are durable release records. The active row is the version
-          used for newly planned tickets.
+          The active rows are the versions used for newly planned tickets.
         </p>
         <div className="table-shell mt-4">
-          {publications.length === 0 ? (
+          {policyVersions.length === 0 ? (
             <div className="px-4 py-10 text-center text-sm text-muted">
-              No publications created yet.
+              No policy versions created yet.
             </div>
           ) : (
-            publications.map((publication) => (
+            policyVersions.map((version) => (
               <div
-                className="grid grid-cols-1 gap-2 border-b border-border px-4 py-3 text-sm last:border-b-0 md:grid-cols-[1fr_140px_100px]"
-                key={publication.id}
+                className="grid grid-cols-1 gap-2 border-b border-border px-4 py-3 text-sm last:border-b-0 md:grid-cols-[1fr_160px_100px]"
+                key={`${version.asset_id}-${version.policy_version}-${version.created_at}`}
               >
                 <div className="min-w-0">
-                  <strong className="block break-all">{publication.id}</strong>
+                  <strong className="block break-all">{version.asset_name}</strong>
                   <span className="block break-all text-xs text-muted">
-                    {publication.manifest_hash}
+                    {version.catalog} / {version.target}
                   </span>
                 </div>
-                <span className="badge">{publication.status}</span>
-                <span className={publication.active ? "badge badge-success" : "badge"}>
-                  {publication.active ? "active" : "inactive"}
+                <span className="badge">v{version.policy_version}</span>
+                <span className={version.active ? "badge badge-success" : "badge"}>
+                  {version.active ? "active" : "inactive"}
                 </span>
               </div>
             ))

@@ -53,8 +53,8 @@ def test_workspace_routes_require_admin_token():
     assert client.get("/v1/assets").status_code == 401
     assert client.put("/v1/assets/analytics/default.users", json={}).status_code == 401
     assert client.get("/v1/publications/draft").status_code == 401
+    assert client.get("/v1/policy-versions").status_code == 401
     assert client.get("/v1/settings/auth-providers").status_code == 401
-    assert client.get("/v1/publications").status_code == 401
 
 
 def test_tenant_and_cell_routes_are_not_public_workspace_api():
@@ -581,17 +581,27 @@ def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
     assert "cell" not in _keys_recursive(summary | {"catalogs": catalogs, "assets": assets})
 
 
-def test_workspace_publish_rejects_unowned_assets():
+def test_public_publication_routes_are_removed():
     client = _client()
-    _provision_draft(client)
 
-    response = client.post("/v1/publications", headers=ADMIN_HEADERS)
+    assert client.get("/v1/publications", headers=ADMIN_HEADERS).status_code == 404
+    assert client.post("/v1/publications", headers=ADMIN_HEADERS).status_code == 404
+
+
+def test_policy_version_publish_rejects_unowned_assets():
+    client = _client()
+    asset = _provision_draft(client)
+
+    response = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        headers=ADMIN_HEADERS,
+    )
 
     assert response.status_code == 400
     assert response.json() == {"detail": "Cannot publish until 1 asset has an assigned owner."}
 
 
-def test_workspace_publish_rejects_assets_without_policy_rules():
+def test_policy_version_publish_rejects_assets_without_policy_rules():
     client = _client()
     client.put(
         "/v1/settings/runtime",
@@ -635,13 +645,16 @@ def test_workspace_publish_rejects_assets_without_policy_rules():
         headers=ADMIN_HEADERS,
     )
 
-    response = client.post("/v1/publications", headers=ADMIN_HEADERS)
+    response = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        headers=ADMIN_HEADERS,
+    )
 
     assert response.status_code == 400
-    assert response.json() == {"detail": "Cannot publish until 1 asset has policy rules."}
+    assert response.json() == {"detail": "Cannot publish a policy version without policy rules."}
 
 
-def test_workspace_publish_rejects_missing_auth_provider():
+def test_policy_version_publish_rejects_missing_auth_provider():
     client = _client()
     asset = _provision_draft(client)
     client.put(
@@ -655,7 +668,10 @@ def test_workspace_publish_rejects_missing_auth_provider():
         headers=ADMIN_HEADERS,
     )
 
-    response = client.post("/v1/publications", headers=ADMIN_HEADERS)
+    response = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        headers=ADMIN_HEADERS,
+    )
 
     assert response.status_code == 400
     assert response.json() == {
@@ -663,7 +679,7 @@ def test_workspace_publish_rejects_missing_auth_provider():
     }
 
 
-def test_workspace_publish_routes_use_default_runtime_context():
+def test_policy_version_publish_bootstraps_default_runtime_context():
     client = _client()
     asset = _provision_draft(client)
     client.put(
@@ -673,39 +689,63 @@ def test_workspace_publish_routes_use_default_runtime_context():
     )
 
     draft = client.get("/v1/publications/draft", headers=ADMIN_HEADERS).json()
-    publications_before = client.get("/v1/publications", headers=ADMIN_HEADERS).json()
-    publication = client.post("/v1/publications", headers=ADMIN_HEADERS).json()
-    publications_after_publish = client.get("/v1/publications", headers=ADMIN_HEADERS).json()
-    activate = client.post(
-        f"/v1/publications/{publication['publication_id']}/activate",
+    versions_before = client.get("/v1/policy-versions", headers=ADMIN_HEADERS).json()
+    version = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
         headers=ADMIN_HEADERS,
     ).json()
-    publications_after_activate = client.get("/v1/publications", headers=ADMIN_HEADERS).json()
+    versions_after_publish = client.get("/v1/policy-versions", headers=ADMIN_HEADERS).json()
     summary = client.get("/v1/workspace/summary", headers=ADMIN_HEADERS).json()
 
     assert draft["catalog_count"] == 1
     assert draft["asset_count"] == 1
-    assert publications_before == []
-    assert publication["catalog_count"] == 1
-    assert publication["asset_count"] == 1
-    assert publications_after_publish == [
-        {
-            "id": publication["publication_id"],
-            "schema_version": 1,
-            "status": "published",
-            "manifest_hash": publication["manifest_hash"],
-            "active": False,
-        }
-    ]
-    assert activate["publication_id"] == publication["publication_id"]
-    assert publications_after_activate[0]["active"] is True
+    assert versions_before == []
+    assert version["asset_id"] == asset["id"]
+    assert version["policy_version"] == versions_after_publish[0]["policy_version"]
+    assert versions_after_publish[0]["asset_id"] == asset["id"]
+    assert versions_after_publish[0]["asset_name"] == "default.users"
+    assert versions_after_publish[0]["catalog"] == "analytics"
+    assert versions_after_publish[0]["target"] == "default.users"
+    assert versions_after_publish[0]["active"] is True
+    assert "cell_id" not in versions_after_publish[0]
     assert summary["active_publication"] == {
-        "publication_id": publication["publication_id"],
-        "manifest_hash": publication["manifest_hash"],
+        "publication_id": version["publication_id"],
+        "manifest_hash": version["manifest_hash"],
         "status": "published",
     }
     assert summary["runtime_configured"] is True
     assert summary["enabled_auth_provider_count"] == 1
+
+
+def test_policy_version_history_is_asset_focused():
+    client = _client()
+    asset = _provision_draft(client)
+    client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["user:owner@example.com"]},
+        headers=ADMIN_HEADERS,
+    )
+    created = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        headers=ADMIN_HEADERS,
+    ).json()
+
+    response = client.get("/v1/policy-versions", headers=ADMIN_HEADERS)
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "asset_id": asset["id"],
+            "asset_name": "default.users",
+            "catalog": "analytics",
+            "target": "default.users",
+            "policy_version": created["policy_version"],
+            "active": True,
+            "created_at": response.json()[0]["created_at"],
+        }
+    ]
+    assert response.json()[0]["created_at"]
+    assert "cell_id" not in response.json()[0]
 
 
 def test_policy_publish_versions_one_asset_without_publishing_other_drafts():
@@ -750,10 +790,11 @@ def test_policy_publish_versions_one_asset_without_publishing_other_drafts():
         },
         headers=ADMIN_HEADERS,
     )
-    initial_response = client.post("/v1/publications", headers=ADMIN_HEADERS)
+    initial_response = client.post(
+        f"/v1/assets/{first_asset['id']}/policy-versions",
+        headers=ADMIN_HEADERS,
+    )
     assert initial_response.status_code == 200, initial_response.json()
-    initial = initial_response.json()
-    client.post(f"/v1/publications/{initial['publication_id']}/activate", headers=ADMIN_HEADERS)
 
     before_versions = _active_policy_versions(factory)
     client.put(

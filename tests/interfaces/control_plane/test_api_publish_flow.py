@@ -14,7 +14,7 @@ ICEBERG_CATALOG_MODULE = (
 )
 
 
-def test_api_provisions_and_activates_default_cell_publication():
+def test_api_provisions_and_activates_default_policy_version():
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
     Base.metadata.create_all(engine)
     app = create_app(session_factory(engine), admin_token="test-admin")
@@ -83,15 +83,14 @@ def test_api_provisions_and_activates_default_cell_publication():
         headers=headers,
     )
 
-    published = client.post("/v1/publications", headers=headers).json()
-    activated = client.post(
-        f"/v1/publications/{published['publication_id']}/activate",
+    published = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
         headers=headers,
     ).json()
 
     assert catalog["name"] == "analytics"
-    assert activated["publication_id"] == published["publication_id"]
-    assert published["asset_count"] == 1
+    assert published["asset_id"] == asset["id"]
+    assert published["policy_version"] > 0
 
     session_maker = session_factory(engine)
     with session_maker() as db_session:

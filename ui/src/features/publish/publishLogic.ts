@@ -7,6 +7,16 @@ export type DraftReadiness = {
   unownedAssetCount: number;
 };
 
+export type PolicyVersionHistoryItem = {
+  active: boolean;
+  asset_id: string;
+  asset_name: string;
+  catalog: string;
+  created_at: string;
+  policy_version: number;
+  target: string;
+};
+
 export function canPublishDraft(readiness: DraftReadiness): boolean {
   return publishBlockers(readiness).length === 0;
 }
@@ -45,8 +55,8 @@ export function publishBlockers(readiness: DraftReadiness): string[] {
   return blockers;
 }
 
-export function activationConfirmationLabel(publicationId: string): string {
-  return `Activate ${publicationId.slice(0, 8)}`;
+export function policyVersionLabel(item: PolicyVersionHistoryItem): string {
+  return `${item.asset_name} v${item.policy_version}`;
 }
 
 function plural(count: number, singular: string, pluralForm = `${singular}s`): string {

@@ -34,7 +34,7 @@ from the configured repository.
 | --- | --- |
 | Control plane | HTTP API, UI, catalog discovery, assets, owners, policies, policy versions. |
 | Data plane | Arrow Flight reads, authentication, ticket verification, policy enforcement. |
-| Postgres | Persistent configuration, publications, and ticket state. |
+| Postgres | Persistent configuration, policy versions, and ticket state. |
 | IAM provider | OIDC/JWKS, API key, mTLS, trusted headers, or a composite provider. |
 | Catalog | Discovers and resolves tables. |
 | Warehouse | Stores table metadata and data files. |
@@ -105,6 +105,6 @@ sequenceDiagram
 
 - A stale or wrong IAM configuration can make valid users appear unauthorized.
 - Secret values should not be written into catalog or policy records.
-- Policy changes affect reads after publication, so test with real personas.
+- Policy changes affect reads after a policy version is submitted, so test with real personas.
 - SQLite state is easy to lose; use Postgres for anything others will try.
 - Internal cell identifiers should not become user-facing concepts.

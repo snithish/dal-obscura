@@ -11,7 +11,7 @@ flowchart LR
     owner["Asset owner"] --> draft["Edit draft"]
     draft --> validate["Validate DuckDB SQL"]
     validate --> publish["Publish policy version"]
-    publish --> active["Active publication"]
+    publish --> active["Active policy version"]
     active --> read["Reads use that version"]
 ```
 

@@ -1,8 +1,8 @@
 # Concepts
 
 dal-obscura separates policy management from governed reads. The control plane
-owns configuration and publication. The data plane performs reads through Arrow
-Flight and applies the active policy version.
+owns workspace configuration and policy versions. The data plane performs reads
+through Arrow Flight and applies the active policy version.
 
 ## System Shape
 
@@ -54,7 +54,7 @@ flowchart TB
 | Owner | A principal or group allowed to edit policy for an asset. |
 | Policy rule | A grant, column selection, row filter, or mask. |
 | Policy version | An asset-scoped submitted policy snapshot. |
-| Publication | The active policy version used by reads. |
+| Active policy set | The internally published policy set used by reads. |
 | Ticket | A short-lived opaque reference used by Flight `do_get`. |
 
 The UI is asset-first. Internal runtime details such as tenant or cell IDs are
@@ -72,7 +72,7 @@ stateDiagram-v2
     Discovered --> Governed: Promote to asset
     Governed --> Drafting: Edit owners or policy
     Drafting --> Submitted: Publish policy version
-    Submitted --> Active: Activate publication
+    Submitted --> Active: Version becomes active
     Active --> Drafting: Start next change
 ```
 

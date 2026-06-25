@@ -92,6 +92,9 @@ class ProvisioningService:
     def list_workspace_publications(self) -> list[dict[str, object]]:
         return policy_version_service.list_workspace_publications(self._store)
 
+    def list_policy_version_history(self) -> list[dict[str, object]]:
+        return policy_version_service.list_policy_version_history(self._store)
+
     def list_workspace_catalogs(self) -> list[dict[str, object]]:
         return catalog_service.list_workspace_catalogs(self._store)
 

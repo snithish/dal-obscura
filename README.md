@@ -31,7 +31,7 @@ masking, and row filters.
 - `interfaces/`
   - `flight`: Arrow Flight transport adapter.
   - `cli`: composition root and runtime wiring.
-  - `control_plane`: FastAPI provisioning and publication API.
+  - `control_plane`: FastAPI provisioning and policy-version API.
 
 ## Requirements
 - Python 3.10+
@@ -306,8 +306,8 @@ Call:
 - `PUT /v1/assets/{asset_id}/policy-rules`
 - `PUT /v1/assets/{asset_id}/owners`
 - `PUT /v1/settings/auth-providers`
-- `POST /v1/publications`
-- `POST /v1/publications/{publication_id}/activate`
+- `POST /v1/assets/{asset_id}/policy-versions`
+- `GET /v1/policy-versions`
 
 Runtime ticket settings include `ticket_ttl_seconds`, `max_tickets`, and
 `max_ticket_exchanges`. `max_ticket_exchanges` limits how many successful

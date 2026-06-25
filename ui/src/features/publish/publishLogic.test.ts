@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest";
 
 import {
-  activationConfirmationLabel,
   canPublishDraft,
+  policyVersionLabel,
   publishBlockers,
   type DraftReadiness,
 } from "./publishLogic";
@@ -42,10 +42,18 @@ describe("publish readiness", () => {
   });
 });
 
-describe("activation confirmation", () => {
-  test("uses the publication prefix in confirmation labels", () => {
-    expect(activationConfirmationLabel("12345678-90ab-cdef")).toBe(
-      "Activate 12345678",
-    );
+describe("policy version labels", () => {
+  test("uses asset name and policy version", () => {
+    expect(
+      policyVersionLabel({
+        active: true,
+        asset_id: "asset-1",
+        asset_name: "default.users",
+        catalog: "analytics",
+        created_at: "2026-06-25T00:00:00Z",
+        policy_version: 123,
+        target: "default.users",
+      }),
+    ).toBe("default.users v123");
   });
 });

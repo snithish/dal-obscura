@@ -698,6 +698,50 @@ class PublicationStore:
             )
         ]
 
+    def list_policy_version_history(self, context: WorkspaceContext) -> list[dict[str, object]]:
+        active = self._session.get(ActivePublicationRecord, context.cell_id)
+        active_publication_id = active.publication_id if active is not None else None
+        rows = self._session.execute(
+            select(
+                PublishedAssetRecord,
+                ConfigPublicationRecord,
+                AssetRecord,
+            )
+            .join(
+                ConfigPublicationRecord,
+                ConfigPublicationRecord.id == PublishedAssetRecord.publication_id,
+            )
+            .join(
+                CatalogRecord,
+                CatalogRecord.cell_id == ConfigPublicationRecord.cell_id,
+            )
+            .join(
+                AssetRecord,
+                AssetRecord.catalog_id == CatalogRecord.id,
+            )
+            .where(
+                ConfigPublicationRecord.cell_id == context.cell_id,
+                PublishedAssetRecord.tenant_id == context.tenant_id,
+                CatalogRecord.tenant_id == context.tenant_id,
+                CatalogRecord.name == PublishedAssetRecord.catalog,
+                AssetRecord.tenant_id == context.tenant_id,
+                AssetRecord.target == PublishedAssetRecord.target,
+            )
+            .order_by(ConfigPublicationRecord.created_at, PublishedAssetRecord.target)
+        )
+        return [
+            {
+                "asset_id": str(asset.id),
+                "asset_name": asset.target,
+                "catalog": published.catalog,
+                "target": published.target,
+                "policy_version": published.policy_version,
+                "active": published.publication_id == active_publication_id,
+                "created_at": _isoformat(publication.created_at),
+            }
+            for published, publication, asset in rows
+        ]
+
     def get_workspace_summary(self, context: WorkspaceContext | None) -> dict[str, object]:
         if context is None:
             return _empty_workspace_summary()
@@ -1018,6 +1062,10 @@ def _empty_workspace_summary() -> dict[str, object]:
         "enabled_auth_provider_count": 0,
         "active_publication": None,
     }
+
+
+def _isoformat(value) -> str:
+    return value.isoformat().replace("+00:00", "Z")
 
 
 def _normalize_principals(principals: list[str]) -> list[str]:

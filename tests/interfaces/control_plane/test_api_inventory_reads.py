@@ -23,7 +23,7 @@ def test_inventory_reads_require_admin_token():
     assert client.get("/v1/assets").status_code == 401
     assert client.get("/v1/settings/runtime").status_code == 401
     assert client.get("/v1/settings/auth-providers").status_code == 401
-    assert client.get("/v1/publications").status_code == 401
+    assert client.get("/v1/policy-versions").status_code == 401
 
 
 ICEBERG_CATALOG_MODULE = (
@@ -163,39 +163,33 @@ def test_cell_draft_route_is_not_public_workspace_api():
     assert response.json()["detail"] == "Not Found"
 
 
-def test_reads_publications_and_active_publication():
+def test_reads_policy_versions_and_active_publication():
     client = _client()
-    _provision_draft(client)
+    asset = _provision_draft(client)
 
-    publication = client.post(
-        "/v1/publications",
+    created = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
         headers=ADMIN_HEADERS,
     ).json()
-    publications_before_activation = client.get(
-        "/v1/publications",
+    versions = client.get(
+        "/v1/policy-versions",
         headers=ADMIN_HEADERS,
     ).json()
 
-    assert publications_before_activation == [
+    assert versions == [
         {
-            "id": publication["publication_id"],
-            "schema_version": 1,
-            "status": "published",
-            "manifest_hash": publication["manifest_hash"],
-            "active": False,
+            "asset_id": asset["id"],
+            "asset_name": "default.users",
+            "catalog": "analytics",
+            "target": "default.users",
+            "policy_version": created["policy_version"],
+            "active": True,
+            "created_at": versions[0]["created_at"],
         }
     ]
 
-    client.post(
-        f"/v1/publications/{publication['publication_id']}/activate",
-        headers=ADMIN_HEADERS,
-    )
     summary = client.get("/v1/workspace/summary", headers=ADMIN_HEADERS).json()
-    publications_after_activation = client.get(
-        "/v1/publications",
-        headers=ADMIN_HEADERS,
-    ).json()
 
-    assert summary["active_publication"]["publication_id"] == publication["publication_id"]
+    assert summary["active_publication"]["publication_id"] == created["publication_id"]
     assert summary["active_publication"]["status"] == "published"
-    assert publications_after_activation[0]["active"] is True
+    assert versions[0]["active"] is True

@@ -64,21 +64,8 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
     def get_workspace_publication_draft() -> object:
         return deps.with_service(lambda service: service.get_workspace_draft())
 
-    @api.get("/v1/publications", dependencies=[Depends(deps.require_actor)])
-    def list_workspace_publications() -> object:
-        return deps.with_service(lambda service: service.list_workspace_publications())
-
-    @api.post("/v1/publications", dependencies=[Depends(deps.require_admin)])
-    def create_workspace_publication() -> object:
-        return deps.with_service(lambda service: service.create_workspace_publication())
-
-    @api.post(
-        "/v1/publications/{publication_id}/activate",
-        dependencies=[Depends(deps.require_admin)],
-    )
-    def activate_workspace_publication(publication_id: UUID) -> object:
-        return deps.with_service(
-            lambda service: service.activate_workspace_publication(publication_id)
-        )
+    @api.get("/v1/policy-versions", dependencies=[Depends(deps.require_actor)])
+    def list_policy_version_history() -> object:
+        return deps.with_service(lambda service: service.list_policy_version_history())
 
     return api

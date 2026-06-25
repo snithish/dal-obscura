@@ -17,6 +17,13 @@ def list_workspace_publications(store: PublicationStore) -> list[dict[str, objec
     return [_publication_list_response(item) for item in store.list_publications(context.cell_id)]
 
 
+def list_policy_version_history(store: PublicationStore) -> list[dict[str, object]]:
+    context = store.get_default_workspace_context()
+    if context is None:
+        return []
+    return store.list_policy_version_history(context)
+
+
 def create_workspace_publication(
     store: PublicationStore,
     create_publication,
