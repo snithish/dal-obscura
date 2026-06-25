@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     CatalogConfig,
-    DynamicCatalogRegistry,
+    CatalogRegistry,
+    CatalogType,
     ServiceConfig,
 )
 
@@ -23,12 +24,12 @@ def discover_catalog_tables(
     module: str,
     options: dict[str, Any],
 ) -> list[CatalogTable]:
-    registry = DynamicCatalogRegistry(
+    registry = CatalogRegistry(
         ServiceConfig(
             catalogs={
                 catalog_name: CatalogConfig(
                     name=catalog_name,
-                    module=module,
+                    type=_catalog_type(module),
                     options=dict(options),
                 )
             }
@@ -42,6 +43,14 @@ def discover_catalog_tables(
         }
         for table in registry.list_tables(catalog_name)
     ]
+
+
+def _catalog_type(module: str) -> CatalogType:
+    if module == ICEBERG_CATALOG_MODULE:
+        return "iceberg"
+    if module == UNITY_CATALOG_MODULE:
+        return "unity"
+    return cast(CatalogType, module)
 
 
 def discover_iceberg_tables(

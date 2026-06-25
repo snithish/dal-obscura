@@ -239,17 +239,11 @@ file paths, and `options.storage_options` can carry object-store options. Those
 options can use the same secret-reference pattern as other published runtime
 configuration.
 
-Catalogs and table formats are separate extension points:
+Catalogs resolve governed targets directly into executable table formats:
 
-- A catalog implements `CatalogPlugin.describe_table()` and returns a
-  provider-neutral `CatalogTableDescriptor`. The descriptor identifies the
-  `provider_id` plus table identity, location, metadata location, storage
-  options, and provider-specific properties. Catalog implementations should do
-  discovery and metadata resolution only; they should not construct executable
-  readers.
-- A table provider implements `TableProviderFactory` and is registered in
-  `TableProviderRegistry`. The provider validates the descriptor shape and
-  creates the executable `TableFormat`.
+- A catalog implements `CatalogPlugin.resolve_table()` and returns a
+  `TableFormat`. Built-in catalog types are configured with `type`, not Python
+  module strings.
 - A `TableFormat` owns schema extraction, task planning, and execution. Planning
   should split work into parallel scan tasks whenever the backend exposes
   splittable work such as files, fragments, partitions, or row groups. If a

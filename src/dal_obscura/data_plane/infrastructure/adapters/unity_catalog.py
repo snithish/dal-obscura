@@ -9,8 +9,15 @@ from dal_obscura.common.catalog.ports import (
     CatalogPlugin,
     CatalogTableDescriptor,
     CatalogTableListing,
+    TableFormat,
 )
 from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
+from dal_obscura.data_plane.infrastructure.table_formats.delta import DeltaTableFormat
+from dal_obscura.data_plane.infrastructure.table_formats.files import (
+    ArrowDatasetTableFormat,
+    AvroTableFormat,
+    TextTableFormat,
+)
 
 
 @dataclass(frozen=True)
@@ -90,6 +97,42 @@ class UnityCatalog(CatalogPlugin):
     @property
     def name(self) -> str:
         return self._name
+
+    def resolve_table(self, target: str) -> TableFormat:
+        descriptor = self.describe_table(target)
+        if descriptor.provider_id == "delta":
+            return DeltaTableFormat(
+                catalog_name=descriptor.catalog_name,
+                table_name=descriptor.requested_target,
+                table_uri=str(descriptor.location or descriptor.table_identifier),
+                storage_options=_string_mapping(descriptor.storage_options),
+                path_enforcer=self._path_enforcer,
+            )
+        if descriptor.provider_id in {"parquet", "csv", "json", "orc"}:
+            return ArrowDatasetTableFormat(
+                catalog_name=descriptor.catalog_name,
+                table_name=descriptor.requested_target,
+                uri=str(descriptor.location or descriptor.table_identifier),
+                format=descriptor.provider_id,
+                options=dict(descriptor.options),
+                path_enforcer=self._path_enforcer,
+            )
+        if descriptor.provider_id == "avro":
+            return AvroTableFormat(
+                catalog_name=descriptor.catalog_name,
+                table_name=descriptor.requested_target,
+                uri=str(descriptor.location or descriptor.table_identifier),
+                options=dict(descriptor.options),
+                path_enforcer=self._path_enforcer,
+            )
+        if descriptor.provider_id == "text":
+            return TextTableFormat(
+                catalog_name=descriptor.catalog_name,
+                table_name=descriptor.requested_target,
+                uri=str(descriptor.location or descriptor.table_identifier),
+                path_enforcer=self._path_enforcer,
+            )
+        raise ValueError(f"Unsupported Unity Catalog table format {descriptor.provider_id!r}")
 
     def describe_table(self, target: str) -> CatalogTableDescriptor:
         """Resolves Unity Catalog table metadata to a provider-neutral descriptor."""
@@ -190,6 +233,10 @@ def _storage_options_from_temporary_credentials(raw: dict[str, Any]) -> dict[str
             "AWS_SESSION_TOKEN": credentials.get("session_token"),
         }
     return {}
+
+
+def _string_mapping(value: dict[str, object]) -> dict[str, str]:
+    return {str(key): str(item) for key, item in value.items() if item is not None}
 
 
 def _schemas(options: dict[str, Any]) -> list[str]:

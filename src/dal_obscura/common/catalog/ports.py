@@ -68,8 +68,8 @@ class CatalogPlugin(ABC):
         """Name of the catalog registered in the configuration."""
 
     @abstractmethod
-    def describe_table(self, target: str) -> CatalogTableDescriptor:
-        """Resolves a target name to provider-neutral table metadata."""
+    def resolve_table(self, target: str) -> TableFormat:
+        """Resolves a target name to an executable table format."""
 
     @abstractmethod
     def list_tables(self) -> list[CatalogTableListing]:

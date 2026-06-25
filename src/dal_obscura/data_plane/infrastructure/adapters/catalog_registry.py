@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import importlib
-import threading
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from dal_obscura.common.catalog.ports import (
     CatalogPlugin,
@@ -12,15 +10,23 @@ from dal_obscura.common.catalog.ports import (
     TableFormat,
 )
 from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
-from dal_obscura.data_plane.infrastructure.table_providers.registry import TableProviderRegistry
+from dal_obscura.data_plane.infrastructure.table_formats.delta import DeltaTableFormat
+from dal_obscura.data_plane.infrastructure.table_formats.files import (
+    ArrowDatasetTableFormat,
+    AvroTableFormat,
+    TextTableFormat,
+)
+from dal_obscura.data_plane.infrastructure.table_formats.iceberg import IcebergTableFormat
+
+CatalogType = Literal["iceberg", "files", "delta", "unity"]
 
 
 @dataclass(frozen=True)
 class CatalogConfig:
-    """One named catalog implementation configured by the control plane."""
+    """One named built-in catalog configured by the control plane."""
 
     name: str
-    module: str
+    type: CatalogType
     options: dict[str, Any] = field(default_factory=dict)
     path_enforcer: PathRuleEnforcer | None = None
 
@@ -36,54 +42,39 @@ class ServiceConfig:
     catalogs: dict[str, CatalogConfig]
 
 
-class DynamicCatalogRegistry:
-    """Stores catalog implementations and resolves dataset requests into tables."""
+class CatalogRegistry:
+    """Resolves configured catalog targets into executable table formats."""
 
-    def __init__(
-        self,
-        config: ServiceConfig,
-        *,
-        table_provider_registry: TableProviderRegistry | None = None,
-    ) -> None:
-        self._lock = threading.RLock()
-        self._catalog_implementations: dict[str, CatalogPlugin] = {}
-        self._table_provider_registry = table_provider_registry or TableProviderRegistry()
-        self._current_config = config
-        self.reload(config)
+    def __init__(self, config: ServiceConfig) -> None:
+        self._config = config
+        self._catalogs = {
+            name: _build_catalog(catalog_config) for name, catalog_config in config.catalogs.items()
+        }
 
     @property
     def current_config(self) -> ServiceConfig:
-        """Latest service config currently installed in the registry."""
-        with self._lock:
-            return self._current_config
+        return self._config
 
     def reload(self, config: ServiceConfig) -> None:
-        """Publishes the latest catalog configuration and instantiates catalogs."""
-        new_catalogs: dict[str, CatalogPlugin] = {}
-        for catalog_config in config.catalogs.values():
-            new_catalogs[catalog_config.name] = _load_and_instantiate_catalog(catalog_config)
+        self._config = config
+        self._catalogs = {
+            name: _build_catalog(catalog_config) for name, catalog_config in config.catalogs.items()
+        }
 
-        with self._lock:
-            self._catalog_implementations = new_catalogs
-            self._current_config = config
-
-    def describe_catalog(self, catalog_name: str, target: str) -> TableFormat:
-        """Resolves a target within a named catalog."""
-        with self._lock:
-            implementation = self._catalog_implementations.get(catalog_name)
-            if implementation is None:
-                raise ValueError(f"Unknown catalog: {catalog_name}")
-        descriptor = implementation.describe_table(target)
-        path_enforcer = _path_enforcer(implementation)
-        return self._table_provider_registry.create(descriptor, path_enforcer=path_enforcer)
-
-    def list_tables(self, catalog_name: str) -> list[CatalogTableListing]:
-        """Lists tables visible through a named catalog."""
-        with self._lock:
-            implementation = self._catalog_implementations.get(catalog_name)
-            if implementation is None:
-                raise ValueError(f"Unknown catalog: {catalog_name}")
-        return implementation.list_tables()
+    def resolve(
+        self,
+        catalog: str | None,
+        target: str,
+        *,
+        tenant_id: str = "default",
+    ) -> TableFormat:
+        del tenant_id
+        if catalog is None:
+            raise ValueError("Catalog name is required to resolve a target")
+        implementation = self._catalogs.get(catalog)
+        if implementation is None:
+            raise ValueError(f"Unknown catalog: {catalog}")
+        return implementation.resolve_table(target)
 
     def describe(
         self,
@@ -92,14 +83,22 @@ class DynamicCatalogRegistry:
         *,
         tenant_id: str = "default",
     ) -> TableFormat:
-        """Describes a target by asking the requested catalog implementation."""
-        del tenant_id
-        if catalog is None:
-            raise ValueError("Catalog name is required to resolve a target")
-        return self.describe_catalog(catalog, target)
+        return self.resolve(catalog, target, tenant_id=tenant_id)
+
+    def describe_catalog(self, catalog_name: str, target: str) -> TableFormat:
+        return self.resolve(catalog_name, target)
+
+    def list_tables(self, catalog_name: str) -> list[CatalogTableListing]:
+        implementation = self._catalogs.get(catalog_name)
+        if implementation is None:
+            raise ValueError(f"Unknown catalog: {catalog_name}")
+        return implementation.list_tables()
 
 
-class IcebergCatalog:
+DynamicCatalogRegistry = CatalogRegistry
+
+
+class IcebergCatalog(CatalogPlugin):
     """Catalog resolver for SQL-style Iceberg catalogs."""
 
     def __init__(
@@ -117,8 +116,23 @@ class IcebergCatalog:
     def name(self) -> str:
         return self._name
 
+    def resolve_table(self, target: str) -> TableFormat:
+        descriptor = self.describe_table(target)
+        metadata_location = descriptor.metadata_location
+        if metadata_location is None:
+            raise ValueError(
+                f"Iceberg target {target!r} in catalog {self.name!r} requires metadata_location"
+            )
+        return IcebergTableFormat(
+            catalog_name=self.name,
+            table_name=target,
+            metadata_location=metadata_location,
+            io_options=dict(descriptor.storage_options),
+            path_enforcer=self._path_enforcer,
+        )
+
     def describe_table(self, target: str) -> CatalogTableDescriptor:
-        """Resolves an Iceberg target to provider-neutral metadata."""
+        """Compatibility helper for catalog-discovery tests."""
         if self._catalog is None:
             self._catalog = _load_iceberg_catalog(
                 _provider_catalog_name(self.name, self.options),
@@ -154,6 +168,117 @@ class IcebergCatalog:
         ]
 
 
+class FileCatalog(CatalogPlugin):
+    def __init__(
+        self,
+        name: str,
+        options: dict[str, Any],
+        path_enforcer: PathRuleEnforcer | None = None,
+    ) -> None:
+        self._name = name
+        self._options = dict(options)
+        self._path_enforcer = path_enforcer
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def resolve_table(self, target: str) -> TableFormat:
+        file_format = str(self._options.get("format", "parquet")).strip().lower()
+        uri = _target_uri(self._options, target)
+        options = {key: value for key, value in self._options.items() if key not in _FILE_KEYS}
+        if file_format in {"parquet", "csv", "json", "orc"}:
+            return ArrowDatasetTableFormat(
+                catalog_name=self.name,
+                table_name=target,
+                uri=uri,
+                format=file_format,
+                options=options,
+                path_enforcer=self._path_enforcer,
+            )
+        if file_format == "avro":
+            return AvroTableFormat(
+                catalog_name=self.name,
+                table_name=target,
+                uri=uri,
+                options=options,
+                path_enforcer=self._path_enforcer,
+            )
+        if file_format == "text":
+            return TextTableFormat(
+                catalog_name=self.name,
+                table_name=target,
+                uri=uri,
+                column_name=str(self._options.get("column_name") or "value"),
+                path_enforcer=self._path_enforcer,
+            )
+        raise ValueError(f"Unsupported file catalog format: {file_format}")
+
+    def list_tables(self) -> list[CatalogTableListing]:
+        return [
+            CatalogTableListing(
+                name=str(item),
+                provider_id=str(self._options.get("format", "parquet")),
+                table_identifier=str(self._options.get("location") or item),
+            )
+            for item in self._options.get("tables", [])
+        ]
+
+
+class DeltaCatalog(CatalogPlugin):
+    def __init__(
+        self,
+        name: str,
+        options: dict[str, Any],
+        path_enforcer: PathRuleEnforcer | None = None,
+    ) -> None:
+        self._name = name
+        self._options = dict(options)
+        self._path_enforcer = path_enforcer
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def resolve_table(self, target: str) -> TableFormat:
+        table_uri = _target_uri(self._options, target)
+        storage_options = {
+            str(key): str(value)
+            for key, value in dict(self._options.get("storage_options", {})).items()
+        }
+        return DeltaTableFormat(
+            catalog_name=self.name,
+            table_name=target,
+            table_uri=table_uri,
+            storage_options=storage_options,
+            path_enforcer=self._path_enforcer,
+        )
+
+    def list_tables(self) -> list[CatalogTableListing]:
+        return [
+            CatalogTableListing(
+                name=str(item),
+                provider_id="delta",
+                table_identifier=str(item),
+            )
+            for item in self._options.get("tables", [])
+        ]
+
+
+def _build_catalog(config: CatalogConfig) -> CatalogPlugin:
+    if config.type == "iceberg":
+        return IcebergCatalog(config.name, config.options, config.path_enforcer)
+    if config.type == "files":
+        return FileCatalog(config.name, config.options, config.path_enforcer)
+    if config.type == "delta":
+        return DeltaCatalog(config.name, config.options, config.path_enforcer)
+    if config.type == "unity":
+        from dal_obscura.data_plane.infrastructure.adapters.unity_catalog import UnityCatalog
+
+        return UnityCatalog(config.name, config.options, config.path_enforcer)
+    raise ValueError(f"Unsupported catalog type: {config.type}")
+
+
 def _resolve_iceberg_descriptor(
     catalog: Any,
     catalog_name: str,
@@ -186,31 +311,6 @@ def _load_iceberg_catalog(catalog_name: str, catalog_options: dict[str, Any]) ->
         return load_catalog(catalog_name, **catalog_options)
     except Exception as exc:
         raise ValueError(f"Failed to load catalog {catalog_name!r}: {exc}") from exc
-
-
-def _load_and_instantiate_catalog(catalog_config: CatalogConfig) -> CatalogPlugin:
-    """Dynamically loads and instantiates a catalog from the `module` configuration."""
-    module_path = catalog_config.module
-    try:
-        if "." not in module_path:
-            raise ValueError(f"Module path {module_path!r} must be a fully qualified class name")
-        module_name, class_name = module_path.rsplit(".", 1)
-        module = importlib.import_module(module_name)
-    except Exception as exc:
-        raise ValueError(f"Failed to load module {module_path!r}: {exc}") from exc
-
-    catalog_cls = getattr(module, class_name, None)
-    if catalog_cls is None:
-        raise ValueError(f"Module {module_name!r} does not define a class named {class_name!r}")
-
-    try:
-        return catalog_cls(
-            name=catalog_config.name,
-            options=dict(catalog_config.options),
-            path_enforcer=catalog_config.path_enforcer,
-        )
-    except Exception as exc:
-        raise ValueError(f"Failed to instantiate catalog {catalog_config.name!r}: {exc}") from exc
 
 
 def _provider_catalog_name(logical_name: str, options: dict[str, Any]) -> str:
@@ -277,8 +377,11 @@ def _identifier_to_name(identifier: object) -> str:
     return str(identifier)
 
 
-def _path_enforcer(implementation: CatalogPlugin) -> PathRuleEnforcer | None:
-    value = getattr(implementation, "_path_enforcer", None)
-    if isinstance(value, PathRuleEnforcer):
-        return value
-    return None
+_FILE_KEYS = {"format", "location", "uri", "tables"}
+
+
+def _target_uri(options: dict[str, Any], target: str) -> str:
+    tables = options.get("tables")
+    if isinstance(tables, dict) and target in tables:
+        return str(tables[target])
+    return str(options.get("location") or options.get("uri") or options.get("table_uri") or target)

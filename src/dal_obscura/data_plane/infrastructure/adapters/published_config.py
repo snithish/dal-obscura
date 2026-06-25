@@ -25,14 +25,14 @@ from dal_obscura.common.config_store.orm import (
 )
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     CatalogConfig,
-    DynamicCatalogRegistry,
+    CatalogRegistry,
+    CatalogType,
     ServiceConfig,
 )
 from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
     SecretProvider,
     resolve_secret_refs,
 )
-from dal_obscura.data_plane.infrastructure.table_providers.registry import TableProviderRegistry
 
 
 @dataclass(frozen=True)
@@ -277,7 +277,7 @@ class PublishedConfigCatalogRegistry:
     ) -> None:
         self._store = store
         self._secret_provider = secret_provider
-        self._registry_cache: dict[tuple[UUID, UUID], DynamicCatalogRegistry] = {}
+        self._registry_cache: dict[tuple[UUID, UUID], CatalogRegistry] = {}
 
     def describe(self, catalog: str | None, target: str, *, tenant_id: str) -> TableFormat:
         if catalog is None:
@@ -298,7 +298,7 @@ class PublishedConfigCatalogRegistry:
             catalogs = {
                 name: CatalogConfig(
                     name=config.name,
-                    module=config.module,
+                    type=config.type,
                     options=cast(
                         dict[str, Any],
                         resolve_secret_refs(config.options, provider=self._secret_provider),
@@ -307,12 +307,7 @@ class PublishedConfigCatalogRegistry:
                 )
                 for name, config in catalogs.items()
             }
-        registry = DynamicCatalogRegistry(
-            ServiceConfig(catalogs=catalogs),
-            table_provider_registry=TableProviderRegistry(
-                factory_modules=_provider_modules(published_catalogs),
-            ),
-        )
+        registry = CatalogRegistry(ServiceConfig(catalogs=catalogs))
         self._registry_cache[cache_key] = registry
         return registry.describe(catalog, target, tenant_id=tenant_id)
 
@@ -330,11 +325,7 @@ def _catalog_config_from_published_catalog(catalog: PublishedCatalog) -> Catalog
     config = _mapping(catalog.config)
     options = dict(_mapping(config.get("options")))
     options.pop("provider_modules", None)
-    return CatalogConfig(
-        name=catalog.catalog,
-        module=str(config["module"]),
-        options=options,
-    )
+    return CatalogConfig(name=catalog.catalog, type=_catalog_type(config), options=options)
 
 
 def _tenant_id(principal: Principal) -> str:
@@ -349,12 +340,17 @@ def _mapping(value: object) -> dict[str, Any]:
     return {}
 
 
-def _provider_modules(catalogs: list[PublishedCatalog]) -> list[str]:
-    modules: list[str] = []
-    for catalog in catalogs:
-        raw = _mapping(catalog.config)
-        options = _mapping(raw.get("options"))
-        value = raw.get("provider_modules", options.get("provider_modules"))
-        if isinstance(value, list):
-            modules.extend(str(item) for item in value if str(item).strip())
-    return modules
+def _catalog_type(config: dict[str, Any]) -> CatalogType:
+    raw_type = config.get("type")
+    if raw_type is not None:
+        return _known_catalog_type(str(raw_type))
+    module = str(config.get("module", ""))
+    if module.endswith("IcebergCatalog"):
+        return "iceberg"
+    return _known_catalog_type(module)
+
+
+def _known_catalog_type(value: str) -> CatalogType:
+    if value in {"iceberg", "files", "delta", "unity"}:
+        return cast(CatalogType, value)
+    raise ValueError(f"Unsupported catalog type: {value}")

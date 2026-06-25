@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 import pyarrow as pa
 
@@ -15,54 +15,70 @@ from dal_obscura.common.table_format.ports import InputPartition, Plan, ScanTask
 from dal_obscura.data_plane.infrastructure.adapters import catalog_registry as registry_module
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     CatalogConfig,
-    DynamicCatalogRegistry,
+    CatalogRegistry,
     IcebergCatalog,
     ServiceConfig,
 )
-from dal_obscura.data_plane.infrastructure.table_providers.registry import (
-    TableProviderFactory,
-    TableProviderRegistry,
-)
 
 
-def test_dynamic_catalog_registry_uses_named_catalog_plugins_and_provider_registry():
-    registry = DynamicCatalogRegistry(
+def test_catalog_registry_resolves_executable_reader_without_provider_registry(tmp_path):
+    config = ServiceConfig(
+        catalogs={
+            "local": CatalogConfig(
+                name="local",
+                type="files",
+                options={"format": "parquet", "location": str(tmp_path / "users.parquet")},
+            )
+        }
+    )
+    registry = CatalogRegistry(config)
+
+    table = registry.resolve("local", "users")
+
+    assert table.catalog_name == "local"
+    assert table.table_name == "users"
+    assert table.format == "parquet"
+
+
+def test_catalog_registry_uses_named_builtin_catalogs():
+    registry = CatalogRegistry(
         ServiceConfig(
             catalogs={
                 "analytics": CatalogConfig(
                     name="analytics",
-                    module="tests.infrastructure.adapters.test_catalog_registry.FakeCatalog",
-                    options={"provider_id": "postgres", "dsn": "postgresql://example/db"},
+                    type="files",
+                    options={"format": "parquet", "location": "/tmp/users.parquet"},
                 ),
                 "warehouse": CatalogConfig(
                     name="warehouse",
-                    module="tests.infrastructure.adapters.test_catalog_registry.FakeCatalog",
-                    options={"provider_id": "postgres", "dsn": "postgresql://example/wh"},
+                    type="files",
+                    options={"format": "csv", "location": "/tmp/events.csv"},
                 ),
             }
-        ),
-        table_provider_registry=TableProviderRegistry(extra_factories=[FakePostgresFactory()]),
+        )
     )
 
     analytics_table = registry.describe("analytics", "default.users")
     warehouse_table = registry.describe("warehouse", "default.events")
 
-    assert analytics_table.format == "postgres"
+    assert analytics_table.format == "parquet"
     assert analytics_table.catalog_name == "analytics"
     assert analytics_table.table_name == "default.users"
+    assert warehouse_table.format == "csv"
     assert warehouse_table.catalog_name == "warehouse"
     assert warehouse_table.table_name == "default.events"
 
 
-def test_dynamic_catalog_registry_lists_tables_from_named_catalog():
-    registry = DynamicCatalogRegistry(
+def test_catalog_registry_lists_tables_from_named_catalog():
+    registry = CatalogRegistry(
         ServiceConfig(
             catalogs={
                 "analytics": CatalogConfig(
                     name="analytics",
-                    module="tests.infrastructure.adapters.test_catalog_registry.FakeCatalog",
+                    type="files",
                     options={
-                        "provider_id": "postgres",
+                        "format": "parquet",
+                        "location": "/tmp/users.parquet",
                         "tables": ["default.users", "default.events"],
                     },
                 )
@@ -73,14 +89,14 @@ def test_dynamic_catalog_registry_lists_tables_from_named_catalog():
     listings = registry.list_tables("analytics")
 
     assert [table.name for table in listings] == ["default.users", "default.events"]
-    assert {table.provider_id for table in listings} == {"postgres"}
+    assert {table.provider_id for table in listings} == {"parquet"}
 
 
 def test_catalog_config_requires_logical_name():
     try:
         CatalogConfig(
             name=" ",
-            module="tests.infrastructure.adapters.test_catalog_registry.FakeCatalog",
+            type="files",
             options={},
         )
     except ValueError as exc:
@@ -133,25 +149,17 @@ def test_dynamic_catalog_registry_rejects_legacy_direct_paths_config():
         raise AssertionError("expected standalone paths to be rejected")
 
 
-def test_dynamic_catalog_registry_rejects_plugins_without_required_catalog_surface():
-    registry = DynamicCatalogRegistry(
-        ServiceConfig(
-            catalogs={
-                "legacy": CatalogConfig(
-                    name="legacy",
-                    module="tests.infrastructure.adapters.test_catalog_registry.LegacyCatalog",
-                    options={},
-                )
-            }
-        )
-    )
-
+def test_catalog_config_rejects_module_config():
     try:
-        registry.describe("legacy", "users")
-    except AttributeError as exc:
-        assert "describe_table" in str(exc)
+        cast(Any, CatalogConfig)(
+            name="legacy",
+            module="tests.infrastructure.adapters.test_catalog_registry.LegacyCatalog",
+            options={},
+        )
+    except TypeError as exc:
+        assert "module" in str(exc)
     else:
-        raise AssertionError("expected catalog without describe_table to fail")
+        raise AssertionError("expected Python module catalog config to fail")
 
 
 class FakeCatalog:
@@ -182,19 +190,6 @@ class FakeCatalog:
             )
             for name in self._options.get("tables", [])
         ]
-
-
-class FakePostgresFactory(TableProviderFactory):
-    provider_id = "postgres"
-
-    def create(self, descriptor, *, path_enforcer=None):
-        assert descriptor.location is None
-        assert path_enforcer is None
-        return FakePostgresTableFormat(
-            catalog_name=descriptor.catalog_name,
-            table_name=descriptor.requested_target,
-            format="postgres",
-        )
 
 
 class FakePostgresTableFormat(TableFormat):

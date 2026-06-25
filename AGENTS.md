@@ -64,17 +64,16 @@ mvn -f connectors/jvm/pom.xml verify
   - `domain/access_control/`: policy models + resolution rules.
   - `domain/query_planning/`: plan request/read spec.
   - `domain/ticket_delivery/`: ticket payload value object.
-  - `domain/catalog/`, `common/table_format/`: catalog descriptor and executable table format ports.
+  - `domain/catalog/`, `common/table_format/`: catalog and executable table format ports.
 - **Infrastructure (adapters)**
-  - Catalog + table provider registries, policy file authorizer, JWT identity, HMAC ticket codec.
+  - Catalog registry, policy file authorizer, JWT identity, HMAC ticket codec.
   - Iceberg, Delta, and file-backed table formats.
   - DuckDB masking + row-transform implementation.
 
 ### Request Flow
 1. `get_flight_info` -> `PlanAccessUseCase`
    - Authenticate via JWT headers.
-   - Resolve catalog/target -> `CatalogTableDescriptor`.
-   - Resolve table provider -> executable `TableFormat` -> schema + parallel scan tasks where possible.
+   - Resolve catalog/target -> executable `TableFormat` -> schema + parallel scan tasks where possible.
    - Authorize columns/filters/masks via policy.
    - Mint HMAC-signed tickets with policy version and scan payload.
    - Return masked output schema + ticket endpoints.
@@ -95,8 +94,8 @@ mvn -f connectors/jvm/pom.xml verify
 - `tests/`: unit tests
 
 ## Common Tasks
-- Add a new catalog: implement `CatalogPlugin.describe_table()` (see `common/catalog/ports.py`) and configure it in the service config.
-- Add a new table provider/format: implement a `TableProviderFactory` plus executable `TableFormat`, then register the factory in `TableProviderRegistry`.
+- Add a new catalog type: implement `CatalogPlugin.resolve_table()` (see `common/catalog/ports.py`) and return an executable `TableFormat`.
+- Add a new table format: implement `TableFormat` and construct it from the owning catalog type.
 - Extend policy: update policy parsing/resolution and add tests.
 - Add a new mask type: update `_mask_expression` and any schema adjustments, plus tests.
 - Change ticket payloads: update `TicketPayload`, `HmacTicketCodecAdapter`, both use cases, and tests.

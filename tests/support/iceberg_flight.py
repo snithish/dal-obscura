@@ -5,6 +5,7 @@ from typing import Any, cast
 
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     CatalogConfig,
+    CatalogType,
     ServiceConfig,
 )
 from tests.support.iceberg import iceberg_sql_catalog_options
@@ -21,7 +22,7 @@ def iceberg_catalog_config(
 ) -> CatalogConfig:
     return CatalogConfig(
         name=name,
-        module=ICEBERG_CATALOG_MODULE,
+        type="iceberg",
         options=iceberg_sql_catalog_options(tmp_path, name, warehouse_name),
     )
 
@@ -38,7 +39,7 @@ def service_config_from_raw(raw_service_config: dict[str, object]) -> ServiceCon
         raw_config = cast(dict[str, Any], raw)
         catalogs[name] = CatalogConfig(
             name=name,
-            module=str(raw_config["module"]),
+            type=_catalog_type(raw_config),
             options=_dict(raw_config.get("options")),
         )
     return ServiceConfig(catalogs=catalogs)
@@ -46,3 +47,15 @@ def service_config_from_raw(raw_service_config: dict[str, object]) -> ServiceCon
 
 def _dict(raw: object) -> dict[str, object]:
     return dict(cast(dict[str, object], raw)) if isinstance(raw, dict) else {}
+
+
+def _catalog_type(raw_config: dict[str, Any]) -> CatalogType:
+    raw_type = raw_config.get("type")
+    if raw_type is not None:
+        return cast(CatalogType, str(raw_type))
+    module = str(raw_config.get("module", ""))
+    if module == ICEBERG_CATALOG_MODULE:
+        return "iceberg"
+    if module.endswith("DeltaCatalog"):
+        return "delta"
+    return cast(CatalogType, module)

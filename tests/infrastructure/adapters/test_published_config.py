@@ -33,7 +33,7 @@ from dal_obscura.data_plane.infrastructure.table_providers.registry import Table
 ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )
-FAKE_CATALOG_MODULE = "tests.infrastructure.adapters.test_published_config.FakeCatalog"
+FILES_CATALOG_TYPE = "files"
 
 
 @pytest.fixture
@@ -120,22 +120,19 @@ def test_published_catalog_registry_reads_catalog_config_from_published_catalogs
         cell_id=cell_id,
         tenant_id=tenant_id,
         policy_version=123,
-        catalog_module=FAKE_CATALOG_MODULE,
+        catalog_module=FILES_CATALOG_TYPE,
         catalog_options={
-            "provider_id": "postgres",
-            "provider_modules": [
-                "tests.infrastructure.adapters.test_published_config.FakePostgresFactory"
-            ],
-            "dsn": "postgresql://example/db",
+            "format": "parquet",
+            "location": "/warehouse/users.parquet",
         },
-        backend="postgres",
+        backend="parquet",
         table="legacy-asset-table-should-not-be-used",
     )
     registry = PublishedConfigCatalogRegistry(PublishedConfigStore(db_session, cell_id=cell_id))
 
     table = registry.describe("analytics", "default.users", tenant_id=str(tenant_id))
 
-    assert table.format == "postgres"
+    assert table.format == "parquet"
     assert table.table_name == "default.users"
 
 
@@ -150,22 +147,19 @@ def test_published_config_catalog_registry_reuses_registry_for_active_publicatio
         cell_id=cell_id,
         tenant_id=tenant_id,
         policy_version=123,
-        catalog_module=FAKE_CATALOG_MODULE,
+        catalog_module=FILES_CATALOG_TYPE,
         catalog_options={
-            "provider_id": "postgres",
-            "provider_modules": [
-                "tests.infrastructure.adapters.test_published_config.FakePostgresFactory"
-            ],
-            "dsn": "postgresql://example/db",
+            "format": "parquet",
+            "location": "/warehouse/users.parquet",
         },
-        backend="postgres",
+        backend="parquet",
     )
     registry_constructions = 0
     from dal_obscura.data_plane.infrastructure.adapters import published_config
 
-    real_registry = published_config.DynamicCatalogRegistry
+    real_registry = published_config.CatalogRegistry
 
-    class CountingDynamicCatalogRegistry(real_registry):
+    class CountingCatalogRegistry(real_registry):
         def __init__(self, *args, **kwargs):
             nonlocal registry_constructions
             registry_constructions += 1
@@ -173,16 +167,16 @@ def test_published_config_catalog_registry_reuses_registry_for_active_publicatio
 
     monkeypatch.setattr(
         published_config,
-        "DynamicCatalogRegistry",
-        CountingDynamicCatalogRegistry,
+        "CatalogRegistry",
+        CountingCatalogRegistry,
     )
     registry = PublishedConfigCatalogRegistry(PublishedConfigStore(db_session, cell_id=cell_id))
 
     first = registry.describe("analytics", "default.users", tenant_id=str(tenant_id))
     second = registry.describe("analytics", "default.users", tenant_id=str(tenant_id))
 
-    assert first.format == "postgres"
-    assert second.format == "postgres"
+    assert first.format == "parquet"
+    assert second.format == "parquet"
     assert registry_constructions == 1
 
 
