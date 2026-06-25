@@ -4,9 +4,20 @@ import logging
 
 import pyarrow.flight as flight
 
-from dal_obscura.data_plane.application.use_cases.fetch_stream import FetchStreamUseCase
+from dal_obscura.common.query_planning.models import PlanRequest
+from dal_obscura.data_plane.application.access_flow import AccessFlow
+from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
+from dal_obscura.data_plane.application.use_cases.fetch_stream import (
+    FetchStreamResult,
+    FetchStreamUseCase,
+    fetch_read,
+)
 from dal_obscura.data_plane.application.use_cases.get_schema import GetSchemaUseCase
-from dal_obscura.data_plane.application.use_cases.plan_access import PlanAccessUseCase
+from dal_obscura.data_plane.application.use_cases.plan_access import (
+    PlanAccessResult,
+    PlanAccessUseCase,
+    plan_read,
+)
 from dal_obscura.data_plane.interfaces.flight.contracts import (
     REQUEST_HEADERS_MIDDLEWARE_KEY,
     RequestHeadersMiddlewareFactory,
@@ -27,9 +38,10 @@ class DataAccessFlightService(flight.FlightServerBase):
         self,
         location: str,
         get_schema_use_case: GetSchemaUseCase,
-        plan_access_use_case: PlanAccessUseCase,
-        fetch_stream_use_case: FetchStreamUseCase,
+        plan_access_use_case: PlanAccessUseCase | None = None,
+        fetch_stream_use_case: FetchStreamUseCase | None = None,
         *,
+        access_flow: AccessFlow | None = None,
         tls_certificates: list[flight.CertKeyPair] | None = None,
         verify_client: bool = False,
         root_certificates: bytes | None = None,
@@ -42,8 +54,8 @@ class DataAccessFlightService(flight.FlightServerBase):
             middleware={REQUEST_HEADERS_MIDDLEWARE_KEY: RequestHeadersMiddlewareFactory()},
         )
         self._get_schema_use_case = get_schema_use_case
-        self._plan_access_use_case = plan_access_use_case
-        self._fetch_stream_use_case = fetch_stream_use_case
+        self._plan_access_use_case = plan_access_use_case or _PlanReadAdapter(access_flow)
+        self._fetch_stream_use_case = fetch_stream_use_case or _FetchReadAdapter(access_flow)
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def get_schema(
@@ -142,3 +154,31 @@ class DataAccessFlightService(flight.FlightServerBase):
     def _log_extra(self, **extra: object) -> dict[str, object]:
         """Adds process-level telemetry to every structured log line."""
         return {"resident_memory_bytes": get_resident_memory_bytes(), **extra}
+
+
+class _PlanReadAdapter:
+    def __init__(self, access_flow: AccessFlow | None) -> None:
+        if access_flow is None:
+            raise ValueError("plan_access_use_case or access_flow is required")
+        self._access_flow = access_flow
+
+    def execute(
+        self,
+        request: PlanRequest,
+        auth_request: AuthenticationRequest,
+    ) -> PlanAccessResult:
+        return plan_read(self._access_flow, request, auth_request)
+
+
+class _FetchReadAdapter:
+    def __init__(self, access_flow: AccessFlow | None) -> None:
+        if access_flow is None:
+            raise ValueError("fetch_stream_use_case or access_flow is required")
+        self._access_flow = access_flow
+
+    def execute(
+        self,
+        ticket: str,
+        auth_request: AuthenticationRequest,
+    ) -> FetchStreamResult:
+        return fetch_read(self._access_flow, ticket, auth_request)

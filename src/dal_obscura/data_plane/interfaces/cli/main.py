@@ -11,10 +11,9 @@ from dal_obscura.common.config_store.db import (
     ensure_config_store_schema,
     session_factory,
 )
+from dal_obscura.data_plane.application.access_flow import AccessFlow
 from dal_obscura.data_plane.application.ports.identity import IdentityPort
-from dal_obscura.data_plane.application.use_cases.fetch_stream import FetchStreamUseCase
 from dal_obscura.data_plane.application.use_cases.get_schema import GetSchemaUseCase
-from dal_obscura.data_plane.application.use_cases.plan_access import PlanAccessUseCase
 from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
@@ -75,6 +74,18 @@ def main() -> None:
     ticket_codec = HmacTicketCodecAdapter(runtime_config.ticket_secret)
     ticket_store = SqlAlchemyTicketStore(session_maker, cell_id=runtime_config.cell_id)
     ticket_settings = published_runtime.ticket
+    access_flow = AccessFlow(
+        identity=identity,
+        authorizer=authorizer,
+        catalog_registry=catalog_registry,
+        masking=masking,
+        row_transform=row_transform,
+        ticket_codec=ticket_codec,
+        ticket_store=ticket_store,
+        ticket_ttl_seconds=int(ticket_settings.get("ttl_seconds", 300)),
+        max_tickets=int(ticket_settings.get("max_tickets", 1)),
+        max_ticket_exchanges=int(ticket_settings.get("max_exchanges", 1)),
+    )
 
     get_schema = GetSchemaUseCase(
         identity=identity,
@@ -82,30 +93,10 @@ def main() -> None:
         catalog_registry=catalog_registry,
         masking=masking,
     )
-    plan_access = PlanAccessUseCase(
-        identity=identity,
-        authorizer=authorizer,
-        catalog_registry=catalog_registry,
-        masking=masking,
-        ticket_codec=ticket_codec,
-        ticket_store=ticket_store,
-        ticket_ttl_seconds=int(ticket_settings.get("ttl_seconds", 300)),
-        max_tickets=int(ticket_settings.get("max_tickets", 1)),
-        max_ticket_exchanges=int(ticket_settings.get("max_exchanges", 1)),
-    )
-    fetch_stream = FetchStreamUseCase(
-        identity=identity,
-        authorizer=authorizer,
-        masking=masking,
-        row_transform=row_transform,
-        ticket_codec=ticket_codec,
-        ticket_store=ticket_store,
-    )
     server = DataAccessFlightService(
         location=runtime_config.location,
         get_schema_use_case=get_schema,
-        plan_access_use_case=plan_access,
-        fetch_stream_use_case=fetch_stream,
+        access_flow=access_flow,
         tls_certificates=_tls_certificates(
             cert=runtime_config.tls_cert,
             key=runtime_config.tls_key,
