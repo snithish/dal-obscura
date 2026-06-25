@@ -13,14 +13,14 @@ import { getAccessToken } from "./client";
 const authConfig: UiAuthConfig = {
   authority: "http://127.0.0.1:8080/realms/dal-obscura-demo",
   client_id: "dal-obscura-ui",
-  post_logout_redirect_uri: "http://127.0.0.1:8820/ui",
-  redirect_uri: "http://127.0.0.1:8820/ui/auth/callback",
+  post_logout_redirect_uri: "http://127.0.0.1:8821",
+  redirect_uri: "http://127.0.0.1:8821/auth/callback",
   scope: "openid profile",
 };
 
 const transaction: PkceTransaction = {
   codeVerifier: "verifier-123",
-  returnTo: "/ui/policies",
+  returnTo: "/policies",
   state: "state-123",
 };
 
@@ -32,9 +32,7 @@ describe("OIDC PKCE browser auth", () => {
       "http://127.0.0.1:8080/realms/dal-obscura-demo/protocol/openid-connect/auth",
     );
     expect(url.searchParams.get("client_id")).toBe("dal-obscura-ui");
-    expect(url.searchParams.get("redirect_uri")).toBe(
-      "http://127.0.0.1:8820/ui/auth/callback",
-    );
+    expect(url.searchParams.get("redirect_uri")).toBe("http://127.0.0.1:8821/auth/callback");
     expect(url.searchParams.get("response_type")).toBe("code");
     expect(url.searchParams.get("code_challenge")).toBe("challenge-123");
     expect(url.searchParams.get("code_challenge_method")).toBe("S256");
@@ -71,7 +69,7 @@ describe("OIDC PKCE browser auth", () => {
 
   test("validates callback state before returning the authorization code", () => {
     const code = callbackCodeFromUrl(
-      "http://127.0.0.1:8820/ui/auth/callback?code=code-123&state=state-123",
+      "http://127.0.0.1:8821/auth/callback?code=code-123&state=state-123",
       transaction,
     );
 
@@ -81,7 +79,7 @@ describe("OIDC PKCE browser auth", () => {
   test("rejects callbacks with the wrong state", () => {
     expect(() =>
       callbackCodeFromUrl(
-        "http://127.0.0.1:8820/ui/auth/callback?code=code-123&state=wrong",
+        "http://127.0.0.1:8821/auth/callback?code=code-123&state=wrong",
         transaction,
       ),
     ).toThrow("OIDC callback state did not match");

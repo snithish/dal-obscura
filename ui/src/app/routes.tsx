@@ -1,7 +1,10 @@
 export const routes = {
-  assets: "/ui/assets",
-  catalogs: "/ui/catalogs",
-  policies: "/ui/policies",
-  publish: "/ui/publish",
-  settings: "/ui/settings",
+  assets: "/assets",
+  authCallback: "/auth/callback",
+  catalogs: "/catalogs",
+  login: "/login",
+  policies: "/policies",
+  publish: "/publish",
+  root: "/",
+  settings: "/settings",
 } as const;

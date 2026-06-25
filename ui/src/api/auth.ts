@@ -1,4 +1,5 @@
 import { apiGetPublic, setAccessToken } from "./client";
+import { apiUrl } from "./config";
 
 const OIDC_TRANSACTION_KEY = "dal-obscura.oidcTransaction";
 
@@ -77,7 +78,7 @@ export async function completeOidcCallback(config: UiAuthConfig, callbackUrl: st
 }
 
 export async function completeDemoLogin(path: string, loginHint: string): Promise<void> {
-  const response = await fetch(path, {
+  const response = await fetch(apiUrl(path), {
     body: JSON.stringify({ login_hint: loginHint }),
     headers: {
       Accept: "application/json",
@@ -155,7 +156,7 @@ function oidcEndpoint(config: UiAuthConfig, path: string): URL {
 async function createPkceTransaction(returnTo: string): Promise<PkceTransaction> {
   return {
     codeVerifier: randomUrlSafeText(64),
-    returnTo: returnTo.startsWith("/ui") ? returnTo : "/ui/assets",
+    returnTo: returnTo.startsWith("/") ? returnTo : "/assets",
     state: randomUrlSafeText(32),
   };
 }

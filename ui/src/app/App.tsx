@@ -17,13 +17,14 @@ import { CatalogsPage } from "../features/catalogs/CatalogsPage";
 import { PoliciesPage } from "../features/policies/PoliciesPage";
 import { PublishPage } from "../features/publish/PublishPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
+import { routes } from "./routes";
 
 const navItems = [
-  { to: "/ui/assets", label: "Assets", hint: "Inventory" },
-  { to: "/ui/catalogs", label: "Catalogs", hint: "Sources" },
-  { to: "/ui/policies", label: "Policies", hint: "Rules" },
-  { to: "/ui/publish", label: "Versions", hint: "Policy history" },
-  { to: "/ui/settings", label: "Settings", hint: "Runtime" },
+  { to: routes.assets, label: "Assets", hint: "Inventory" },
+  { to: routes.catalogs, label: "Catalogs", hint: "Sources" },
+  { to: routes.policies, label: "Policies", hint: "Rules" },
+  { to: routes.publish, label: "Versions", hint: "Policy history" },
+  { to: routes.settings, label: "Settings", hint: "Runtime" },
 ];
 
 export function App() {
@@ -150,7 +151,7 @@ function AppShell() {
                       Sign out
                     </button>
                   ) : (
-                    <NavLink className="btn-primary h-9" to="/ui/login">
+                    <NavLink className="btn-primary h-9" to={routes.login}>
                       Sign in
                     </NavLink>
                   )}
@@ -159,15 +160,15 @@ function AppShell() {
             </div>
             <div className="px-4 py-5 lg:px-8 lg:py-7">
             <Routes>
-              <Route element={<Navigate replace to="/ui/assets" />} path="/ui" />
+              <Route element={<Navigate replace to={routes.assets} />} path={routes.root} />
               <Route
                 element={<AuthCallback onSessionReady={() => void refreshSession()} />}
-                path="/ui/auth/callback"
+                path={routes.authCallback}
               />
               <Route
                 element={
                   session ? (
-                    <Navigate replace to="/ui/assets" />
+                    <Navigate replace to={routes.assets} />
                   ) : (
                     <LoginPage
                       authConfig={authConfig}
@@ -176,13 +177,13 @@ function AppShell() {
                     />
                   )
                 }
-                path="/ui/login"
+                path={routes.login}
               />
-              <Route element={session ? <AssetsPage /> : <Navigate replace to="/ui/login" />} path="/ui/assets" />
-              <Route element={session ? <CatalogsPage /> : <Navigate replace to="/ui/login" />} path="/ui/catalogs" />
-              <Route element={session ? <PoliciesPage /> : <Navigate replace to="/ui/login" />} path="/ui/policies" />
-              <Route element={session ? <PublishPage /> : <Navigate replace to="/ui/login" />} path="/ui/publish" />
-              <Route element={session ? <SettingsPage /> : <Navigate replace to="/ui/login" />} path="/ui/settings" />
+              <Route element={session ? <AssetsPage /> : <Navigate replace to={routes.login} />} path={routes.assets} />
+              <Route element={session ? <CatalogsPage /> : <Navigate replace to={routes.login} />} path={routes.catalogs} />
+              <Route element={session ? <PoliciesPage /> : <Navigate replace to={routes.login} />} path={routes.policies} />
+              <Route element={session ? <PublishPage /> : <Navigate replace to={routes.login} />} path={routes.publish} />
+              <Route element={session ? <SettingsPage /> : <Navigate replace to={routes.login} />} path={routes.settings} />
             </Routes>
             </div>
           </main>
@@ -202,7 +203,7 @@ function LoginPage({
 }) {
   const navigate = useNavigate();
   const [status, setStatus] = useState("");
-  const returnTo = "/ui/assets";
+  const returnTo = routes.assets;
 
   async function useShortcut(shortcut: UiLoginShortcut) {
     try {

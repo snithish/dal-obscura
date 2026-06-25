@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { apiGet, apiPut } from "../../api/client";
+import { routes } from "../../app/routes";
 import {
   assetOptionsFromForm,
   filterAssets,
@@ -199,7 +200,7 @@ export function AssetsPage() {
           >
             Promote asset
           </button>
-          <Link className="btn-secondary" to="/ui/catalogs">
+          <Link className="btn-secondary" to={routes.catalogs}>
             Add catalog
           </Link>
         </div>
@@ -274,7 +275,7 @@ export function AssetsPage() {
                 Connect a catalog first. Discovered tables can then be promoted into
                 governed assets and assigned to owners.
               </p>
-              <Link className="btn-secondary mt-5" to="/ui/catalogs">
+              <Link className="btn-secondary mt-5" to={routes.catalogs}>
                 Connect catalog
               </Link>
             </div>
@@ -536,7 +537,7 @@ export function AssetsPage() {
             Catalog
           </label>
           {catalogOptions.length === 0 ? (
-            <Link className="btn-secondary mt-2 w-full" to="/ui/catalogs">
+            <Link className="btn-secondary mt-2 w-full" to={routes.catalogs}>
               Configure a catalog first
             </Link>
           ) : (

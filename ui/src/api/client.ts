@@ -1,3 +1,5 @@
+import { apiUrl } from "./config";
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -31,7 +33,7 @@ function apiHeaders(): HeadersInit {
 }
 
 export async function apiGetPublic<T>(path: string): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetch(apiUrl(path), {
     headers: { Accept: "application/json" },
   });
   if (!response.ok) {
@@ -41,7 +43,7 @@ export async function apiGetPublic<T>(path: string): Promise<T> {
 }
 
 export async function apiGet<T>(path: string): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetch(apiUrl(path), {
     headers: apiHeaders(),
   });
   if (!response.ok) {
@@ -51,7 +53,7 @@ export async function apiGet<T>(path: string): Promise<T> {
 }
 
 export async function apiPut<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetch(apiUrl(path), {
     body: JSON.stringify(body),
     headers: {
       ...apiHeaders(),
@@ -66,7 +68,7 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
 }
 
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetch(apiUrl(path), {
     body: body === undefined ? undefined : JSON.stringify(body),
     headers: body === undefined
       ? apiHeaders()
