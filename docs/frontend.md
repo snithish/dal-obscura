@@ -123,10 +123,12 @@ pnpm dev
 
 Vite proxies `/v1` to `http://127.0.0.1:8820`.
 
-Build the packaged UI:
+Production UI is not packaged into the Python control-plane API. Build the
+standalone Caddy-served UI image instead:
 
 ```bash
-cd ui
-pnpm build
-cp -R dist ../src/dal_obscura/control_plane/interfaces/ui_assets/dist
+docker build -f ui/Dockerfile -t dal-obscura-control-plane-ui:local .
 ```
+
+Set `DAL_OBSCURA_API_BASE_URL` in the UI container to the browser-visible API
+origin, for example `http://127.0.0.1:8820` in local demos.

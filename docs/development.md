@@ -85,18 +85,28 @@ mvn -f connectors/jvm/pom.xml verify
 
 Read [Frontend Conventions](frontend.md) before changing the UI.
 
+Run the API:
+
+```bash
+uv run dal-obscura-control-plane
+```
+
+Run the frontend dev server:
+
 ```bash
 cd ui
 pnpm install
 pnpm dev
 ```
 
-Build packaged UI assets:
+Vite proxies `/v1` to `http://127.0.0.1:8820`. Production-like local runs use
+the Caddy UI image:
 
 ```bash
-cd ui
-pnpm build
-cp -R dist ../src/dal_obscura/control_plane/interfaces/ui_assets/dist
+docker build -f ui/Dockerfile -t dal-obscura-control-plane-ui:local .
+docker run --rm -p 127.0.0.1:8821:8080 \
+  -e DAL_OBSCURA_API_BASE_URL=http://127.0.0.1:8820 \
+  dal-obscura-control-plane-ui:local
 ```
 
 ## Change Guidance
@@ -107,7 +117,7 @@ cp -R dist ../src/dal_obscura/control_plane/interfaces/ui_assets/dist
 | Ticket payloads | Ticket model, codec, planning, fetching, and connector fixtures. |
 | Masking | DuckDB projection logic and masked schema behavior. |
 | Catalog behavior | Catalog adapter tests and discovery UI/API behavior if visible. |
-| UI workflow | API helper types, feature page, and packaged UI build. |
+| UI workflow | API helper types, feature page, UI tests, and Caddy image build. |
 | Connector contract | Contract fixtures and JVM/Python connector tests. |
 
 ## Release-Oriented Checklist
@@ -116,7 +126,7 @@ cp -R dist ../src/dal_obscura/control_plane/interfaces/ui_assets/dist
 - `uv run ty check`
 - `uv run pytest`
 - `mvn -f connectors/jvm/pom.xml verify` when JVM connector behavior changed.
-- Rebuild packaged UI when `ui/` changed.
+- Run UI tests and rebuild the Caddy UI image when `ui/` changed.
 
 ## Extension Notes
 

@@ -98,7 +98,8 @@ sequenceDiagram
 | Task | Action |
 | --- | --- |
 | Confirm API health | Open `/healthz` on the control plane or data plane. |
-| Confirm UI | Open `/ui` on the control plane. |
+| Confirm API docs | Open `/docs` on the control plane. |
+| Confirm UI | Open the separately deployed UI service. In the local demo this is `http://127.0.0.1:8821`. |
 | Confirm discovery | Run catalog discovery and verify expected tables appear. |
 | Confirm governance | Promote a discovered table to an asset and publish a policy version. |
 | Confirm read path | Read as at least one allowed user and one denied user. |

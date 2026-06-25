@@ -38,7 +38,8 @@ build_image() {
 
 credentials() {
   prepare >/dev/null
-  printf 'Control plane UI: http://127.0.0.1:8820/ui\n'
+  printf 'Control plane UI: http://127.0.0.1:8821\n'
+  printf 'API docs:         http://127.0.0.1:8820/docs\n'
   printf 'Keycloak:         http://127.0.0.1:8080\n'
   printf 'Flight URI:       grpc+tcp://127.0.0.1:8815\n'
   printf '\n'

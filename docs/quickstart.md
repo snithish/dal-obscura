@@ -51,7 +51,13 @@ uv run dal-obscura-control-plane
 Open the UI:
 
 ```text
-http://127.0.0.1:8820/ui
+http://127.0.0.1:8821
+```
+
+Swagger docs are available from the API process:
+
+```text
+http://127.0.0.1:8820/docs
 ```
 
 For short-lived local development, SQLite also works:

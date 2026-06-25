@@ -148,17 +148,17 @@ export DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN=dev-admin
 uv run dal-obscura-control-plane
 ```
 
-Open the operator dashboard from the same control-plane process:
+Open the API docs:
 
 ```bash
-open http://localhost:8820/ui
+open http://localhost:8820/docs
 ```
 
-The dashboard is a React app served by the control plane. All state reads and
-writes go through the protected `/v1` API. The admin token is not rendered into
-the HTML shell by the service.
+The operator dashboard runs as a separate React app. All state reads and writes
+go through the protected `/v1` API. The admin token is not rendered into the UI
+HTML.
 
-For frontend development, run the API and Vite dev server separately:
+For frontend development, run the API and Vite dev server:
 
 ```bash
 uv run dal-obscura-control-plane
@@ -167,12 +167,13 @@ pnpm install
 pnpm dev
 ```
 
-Build the packaged dashboard with:
+For a production-like local UI run, build and serve the Caddy image:
 
 ```bash
-cd ui
-pnpm build
-cp -R dist ../src/dal_obscura/control_plane/interfaces/ui_assets/dist
+docker build -f ui/Dockerfile -t dal-obscura-control-plane-ui:local .
+docker run --rm -p 127.0.0.1:8821:8080 \
+  -e DAL_OBSCURA_API_BASE_URL=http://127.0.0.1:8820 \
+  dal-obscura-control-plane-ui:local
 ```
 
 See [docs/frontend.md](docs/frontend.md) for frontend conventions, pnpm
