@@ -4,6 +4,7 @@ from collections.abc import Mapping
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
 from dal_obscura.control_plane.interfaces.routes import (
@@ -98,6 +99,17 @@ def create_app(
             username,
         ),
     )
+
+    @app.get("/healthz", include_in_schema=False)
+    def healthz() -> object:
+        return {"status": "ok", "service": "control-plane"}
+
+    @app.get("/readyz", include_in_schema=False)
+    def readyz() -> object:
+        with session_maker() as session:
+            session.execute(text("SELECT 1"))
+        return {"status": "ready", "service": "control-plane"}
+
     for route in (
         session_routes.router,
         workspace_routes.router,

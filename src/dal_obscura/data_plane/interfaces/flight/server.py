@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 
 import pyarrow.flight as flight
@@ -30,6 +31,8 @@ from dal_obscura.data_plane.interfaces.flight.streaming import (
 )
 from dal_obscura.observability import get_resident_memory_bytes
 
+HEALTH_ACTION = "healthz"
+
 
 class DataAccessFlightService(flight.FlightServerBase):
     """Arrow Flight transport adapter for the plan-then-fetch data access flow."""
@@ -57,6 +60,21 @@ class DataAccessFlightService(flight.FlightServerBase):
         self._plan_access_use_case = plan_access_use_case or _PlanReadAdapter(access_flow)
         self._fetch_stream_use_case = fetch_stream_use_case or _FetchReadAdapter(access_flow)
         self._logger = logging.getLogger(self.__class__.__name__)
+
+    def list_actions(self, context: flight.ServerCallContext) -> list[flight.ActionType]:
+        del context
+        return [flight.ActionType(HEALTH_ACTION, "Data plane health check")]
+
+    def do_action(
+        self,
+        context: flight.ServerCallContext,
+        action: flight.Action,
+    ) -> list[flight.Result]:
+        del context
+        if action.type != HEALTH_ACTION:
+            raise flight.FlightInternalError(f"Unsupported action: {action.type}")
+        body = json.dumps({"status": "ok", "service": "data-plane"}, separators=(",", ":"))
+        return [flight.Result(body.encode("utf-8"))]
 
     def get_schema(
         self, context: flight.ServerCallContext, descriptor: flight.FlightDescriptor

@@ -97,7 +97,8 @@ sequenceDiagram
 
 | Task | Action |
 | --- | --- |
-| Confirm API health | Open `/healthz` on the control plane or data plane. |
+| Confirm control-plane health | Open `/healthz`; use `/readyz` to verify database reachability. |
+| Confirm data-plane health | Call the Arrow Flight `healthz` action and expect `{"status":"ok","service":"data-plane"}`. |
 | Confirm API docs | Open `/docs` on the control plane. |
 | Confirm UI | Open the separately deployed UI service. In the local demo this is `http://127.0.0.1:8821`. |
 | Confirm discovery | Run catalog discovery and verify expected tables appear. |

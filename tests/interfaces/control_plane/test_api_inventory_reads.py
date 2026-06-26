@@ -26,6 +26,24 @@ def test_inventory_reads_require_admin_token():
     assert client.get("/v1/policy-versions").status_code == 401
 
 
+def test_control_plane_healthz_is_public():
+    client = _client()
+
+    response = client.get("/healthz")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "service": "control-plane"}
+
+
+def test_control_plane_readyz_checks_database():
+    client = _client()
+
+    response = client.get("/readyz")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready", "service": "control-plane"}
+
+
 ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )

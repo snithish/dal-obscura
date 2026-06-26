@@ -131,6 +131,42 @@ def test_flight_info_schema_matches_mask_output_types(
     assert table.schema.field(column_name).type == expected_type
 
 
+def test_flight_service_exposes_health_action():
+    server = build_flight_service(
+        table_format=StubTableFormat(
+            catalog_name="analytics",
+            table_name="test.table",
+            format="stub_format",
+            schema=id_region_schema(),
+            batches=(id_region_batch([1], ["us"]),),
+        ),
+        policy_rules=[allow_rule(["id", "region"])],
+    )
+
+    actions = list(server.list_actions(None))
+
+    assert any(action.type == "healthz" for action in actions)
+
+
+def test_flight_service_health_action_returns_ok():
+    server = build_flight_service(
+        table_format=StubTableFormat(
+            catalog_name="analytics",
+            table_name="test.table",
+            format="stub_format",
+            schema=id_region_schema(),
+            batches=(id_region_batch([1], ["us"]),),
+        ),
+        policy_rules=[allow_rule(["id", "region"])],
+    )
+    action = flight.Action("healthz", b"")
+
+    results = list(server.do_action(None, action))
+
+    assert len(results) == 1
+    assert results[0].body.to_pybytes() == b'{"status":"ok","service":"data-plane"}'
+
+
 def test_parse_descriptor_rejects_path_descriptor():
     descriptor = flight.FlightDescriptor.for_path("analytics", "users")
     with pytest.raises(ValueError):

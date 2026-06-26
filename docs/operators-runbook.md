@@ -19,19 +19,19 @@ Checklist:
 
 - Database is reachable from control plane and data plane.
 - IAM provider metadata or credentials are reachable.
-- Control plane health endpoint is healthy.
+- Control plane `/healthz` returns ok and `/readyz` can query the database.
 - UI loads and can authenticate an administrative user.
 - Catalog discovery finds the expected tables.
 - Governed assets have owners.
 - At least one policy version is active per governed asset.
-- Data plane health endpoint is healthy.
+- Data plane Arrow Flight `healthz` action returns ok.
 - One allowed read and one denied read behave as expected.
 
 ## Restart
 
 1. Keep the config database running.
 2. Restart the control plane.
-3. Confirm the UI and API health checks.
+3. Confirm the UI, `/healthz`, and `/readyz`.
 4. Restart the data plane.
 5. Run one read-path check.
 
@@ -44,9 +44,9 @@ sequenceDiagram
 
     Ops->>DB: Keep persistent state online
     Ops->>CP: Restart
-    Ops->>CP: Check health
+    Ops->>CP: Check /healthz and /readyz
     Ops->>DP: Restart
-    Ops->>DP: Check health and read path
+    Ops->>DP: Check Flight healthz action and read path
 ```
 
 ## Full Environment Reset
