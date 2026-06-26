@@ -8,12 +8,16 @@ from typing import Any, cast
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
+from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
+
 DEMO_DIR = Path(os.environ.get("DEMO_DIR", "/workspace/demo"))
 RUNTIME_DIR = DEMO_DIR / ".runtime"
 FIXTURE_FILE = DEMO_DIR / "fixtures" / "demo_fixture.json"
 DATA_PLANE_ENV = RUNTIME_DIR / "data-plane.env"
 CONTROL_PLANE_URL = os.environ.get("CONTROL_PLANE_URL", "http://control-plane:8820")
 ADMIN_TOKEN = os.environ["DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN"]
+DATABASE_URL = os.environ["DAL_OBSCURA_DATABASE_URL"]
 ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )
@@ -58,14 +62,13 @@ def _wait_for_control_plane() -> None:
 
 
 def _workspace_cell_id() -> str:
-    cells = _request("GET", "/v1/cells")
-    if not isinstance(cells, list) or not cells:
-        raise RuntimeError("workspace provisioning did not create a cell")
-    rows = cast(list[dict[str, Any]], cells)
-    for row in rows:
-        if row.get("name") == "default":
-            return str(row["id"])
-    return str(rows[0]["id"])
+    engine = create_engine_from_url(DATABASE_URL)
+    session_maker = session_factory(engine)
+    with session_maker() as session:
+        context = PublicationStore(session).get_default_workspace_context()
+        if context is None:
+            raise RuntimeError("workspace provisioning did not create a runtime context")
+        return str(context.cell_id)
 
 
 def _provision_workspace(fixture: dict[str, Any]) -> str:
@@ -81,8 +84,9 @@ def _provision_workspace(fixture: dict[str, Any]) -> str:
     )
     cell_id = _workspace_cell_id()
     _upsert_catalogs(fixture, warehouse_path)
+    asset_ids = []
     for table_fixture in fixture["tables"]:
-        _promote_table(fixture, table_fixture)
+        asset_ids.append(_promote_table(fixture, table_fixture))
     _request(
         "PUT",
         "/v1/settings/auth-providers",
@@ -106,11 +110,8 @@ def _provision_workspace(fixture: dict[str, Any]) -> str:
             ]
         },
     )
-    publication = _request("POST", "/v1/publications")
-    if not isinstance(publication, dict):
-        raise RuntimeError("publication response was not a JSON object")
-    publication_payload = cast(dict[str, Any], publication)
-    _request("POST", f"/v1/publications/{publication_payload['publication_id']}/activate")
+    for asset_id in asset_ids:
+        _request("POST", f"/v1/assets/{asset_id}/policy-versions")
     return cell_id
 
 
@@ -127,12 +128,23 @@ def _upsert_catalogs(fixture: dict[str, Any], warehouse_path: str) -> None:
                     "warehouse": warehouse_path,
                 },
             }
+        elif kind == "delta_static":
+            body = {
+                "module": "delta",
+                "options": {
+                    "tables": {
+                        str(table["target"]): str(table["table_path"])
+                        for table in fixture["tables"]
+                        if str(table["catalog"]) == catalog_name
+                    }
+                },
+            }
         else:
             raise RuntimeError(f"unsupported demo catalog kind {kind!r}")
         _request("PUT", f"/v1/catalogs/{catalog_name}", body)
 
 
-def _promote_table(fixture: dict[str, Any], table_fixture: dict[str, Any]) -> None:
+def _promote_table(fixture: dict[str, Any], table_fixture: dict[str, Any]) -> str:
     catalog_name = str(table_fixture["catalog"])
     target = str(table_fixture["target"])
     discovered = _request("GET", f"/v1/catalogs/{catalog_name}/tables")
@@ -173,6 +185,7 @@ def _promote_table(fixture: dict[str, Any], table_fixture: dict[str, Any]) -> No
     )
     _request("PUT", f"/v1/assets/{asset_id}/owners", {"owners": fixture["owners"]})
     _request("PUT", f"/v1/assets/{asset_id}/policy-rules", {"rules": fixture["policies"]})
+    return asset_id
 
 
 def _request(method: str, path: str, body: object | None = None) -> object:

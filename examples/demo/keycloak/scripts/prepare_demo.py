@@ -213,6 +213,7 @@ def _write_env_files(values: dict[str, str]) -> None:
         (
             "DEMO_DIR",
             "CONTROL_PLANE_URL",
+            "DAL_OBSCURA_DATABASE_URL",
             "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN",
         ),
     )
