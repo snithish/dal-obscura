@@ -15,9 +15,11 @@ from dal_obscura.common.config_store.orm import (
 )
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 from dal_obscura.data_plane.infrastructure.adapters.published_config import (
+    PublishedCatalog,
     PublishedConfigAuthorizer,
     PublishedConfigCatalogRegistry,
     PublishedConfigStore,
+    _catalog_config_from_published_catalog,
 )
 
 ICEBERG_CATALOG_MODULE = (
@@ -168,6 +170,29 @@ def test_published_config_catalog_registry_reuses_registry_for_active_publicatio
     assert first.format == "parquet"
     assert second.format == "parquet"
     assert registry_constructions == 1
+
+
+def test_published_catalog_config_strips_provider_modules_from_catalog_options():
+    catalog = PublishedCatalog(
+        publication_id=uuid4(),
+        tenant_id=uuid4(),
+        catalog="analytics",
+        config={
+            "module": FILES_CATALOG_TYPE,
+            "options": {
+                "format": "parquet",
+                "location": "/warehouse/users.parquet",
+                "provider_modules": ["example.ProviderFactory"],
+            },
+        },
+    )
+
+    config = _catalog_config_from_published_catalog(catalog)
+
+    assert config.options == {
+        "format": "parquet",
+        "location": "/warehouse/users.parquet",
+    }
 
 
 def _publish_asset(
