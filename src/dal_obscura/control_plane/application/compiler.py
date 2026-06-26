@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import cast
+from typing import Any, Literal, cast
 from uuid import UUID
 
 from dal_obscura.common.access_control.compiled_policy import (
@@ -26,6 +26,14 @@ from dal_obscura.control_plane.domain.models import (
 SUPPORTED_BACKENDS = frozenset(
     {"iceberg", "delta", "parquet", "csv", "json", "orc", "avro", "text"}
 )
+
+
+def validate_policy_rule_payloads(rules: list[dict[str, Any]]) -> None:
+    """Validate mutable policy-rule payloads before storing draft policy state."""
+    compiler = PublicationCompiler()
+    for index, raw in enumerate(rules, start=1):
+        draft = _policy_rule_draft_from_payload(index, raw)
+        compiler._compile_rule(draft)
 
 
 class PublicationCompiler:
@@ -170,6 +178,39 @@ def _normalize_row_filter(value: str | None) -> str | None:
     except Exception as exc:
         raise ValidationFailure(f"Invalid row_filter SQL: {normalized}") from exc
     return normalized
+
+
+def _policy_rule_draft_from_payload(index: int, raw: dict[str, Any]) -> PolicyRuleDraft:
+    try:
+        effect = str(raw.get("effect", "allow"))
+        if effect not in {"allow", "deny"}:
+            raise ValueError("effect must be allow or deny")
+        row_filter = raw.get("row_filter")
+        if row_filter is not None and not isinstance(row_filter, str):
+            raise ValueError("row_filter must be a string")
+        when = raw.get("when", {})
+        if not isinstance(when, dict):
+            raise ValueError("when must be an object")
+        masks = raw.get("masks", {})
+        if not isinstance(masks, dict):
+            raise ValueError("masks must be an object")
+        return PolicyRuleDraft(
+            ordinal=int(raw["ordinal"]),
+            effect=cast(Literal["allow", "deny"], effect),
+            principals=[str(item) for item in _list(raw.get("principals"))],
+            when=cast(dict[str, str | list[str]], dict(when)),
+            columns=[str(item) for item in _list(raw.get("columns"))],
+            masks=dict(masks),
+            row_filter=row_filter,
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValidationFailure(f"Invalid policy rule {index}") from exc
+
+
+def _list(value: object) -> list[object]:
+    if isinstance(value, list):
+        return list(value)
+    return []
 
 
 def _stable_hash(value: object) -> str:

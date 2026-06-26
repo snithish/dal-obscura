@@ -15,6 +15,7 @@ from dal_obscura.common.access_control.models import (
 )
 from dal_obscura.common.access_control.policy_resolution import resolve_access
 from dal_obscura.control_plane.application.access import ControlPlaneActor
+from dal_obscura.control_plane.application.compiler import validate_policy_rule_payloads
 from dal_obscura.control_plane.application.errors import AuthorizationFailure
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 
@@ -31,6 +32,7 @@ def replace_policy_rules(
     actor: ControlPlaneActor,
 ) -> None:
     ensure_policy_editor(store, asset_id, actor)
+    validate_policy_rule_payloads(rules)
     store.replace_policy_rules(asset_id=asset_id, rules=rules)
 
 

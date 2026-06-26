@@ -257,6 +257,37 @@ def test_non_owner_cannot_change_policy_rules_or_publish_policy_version():
     assert publish.status_code == 403
 
 
+def test_policy_save_rejects_invalid_row_filter_before_publish():
+    client = _client()
+    asset = _provision_owned_asset(client)
+
+    response = client.put(
+        f"/v1/assets/{asset}/policy-rules",
+        json={"rules": [_allow_rule(row_filter="region =")]},
+        headers=_bearer("owner-token"),
+    )
+
+    assert response.status_code == 400
+    assert "Invalid row_filter SQL" in response.json()["detail"]
+
+
+def test_policy_save_rejects_deny_rule_with_mask_before_publish():
+    client = _client()
+    asset = _provision_owned_asset(client)
+    rule = _allow_rule(row_filter=None)
+    rule["effect"] = "deny"
+    rule["masks"] = {"email": {"type": "email"}}
+
+    response = client.put(
+        f"/v1/assets/{asset}/policy-rules",
+        json={"rules": [rule]},
+        headers=_bearer("owner-token"),
+    )
+
+    assert response.status_code == 400
+    assert "deny rules may not define masks" in response.json()["detail"]
+
+
 def test_platform_admin_can_assign_owner_and_bootstrap_policy():
     client = _client()
     asset = _provision_asset_without_owner(client)
