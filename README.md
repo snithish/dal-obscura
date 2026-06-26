@@ -304,13 +304,18 @@ table formats are rejected before tickets are minted.
 
 ### Provisioning Flow
 
+The public control-plane API is workspace-first. Tenant and cell identifiers are
+internal runtime concerns, not public workspace API inputs.
+
 Call:
 
 - `PUT /v1/settings/runtime`
 - `PUT /v1/catalogs/{name}`
+- `GET /v1/catalogs/{name}/tables`
 - `PUT /v1/assets/{catalog}/{target}`
-- `PUT /v1/assets/{asset_id}/policy-rules`
 - `PUT /v1/assets/{asset_id}/owners`
+- `PUT /v1/assets/{asset_id}/schema-fields`
+- `PUT /v1/assets/{asset_id}/policy-rules`
 - `PUT /v1/settings/auth-providers`
 - `POST /v1/assets/{asset_id}/policy-versions`
 - `GET /v1/policy-versions`

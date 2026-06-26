@@ -87,7 +87,7 @@ sequenceDiagram
     CP->>DB: Store active configuration
 ```
 
-At minimum, configure:
+At minimum, configure through the workspace API or UI:
 
 1. IAM provider.
 2. Catalog connection.
