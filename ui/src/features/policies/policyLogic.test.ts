@@ -73,7 +73,7 @@ describe("policy preview", () => {
       masks: [{ column: "email", type: "email" }],
       matchedOrdinal: 1,
       reason: "Rule 1 matched.",
-      rowFilter: "region = 'us'",
+      rowFilter: "(region = 'us')",
       visibleColumns: ["id", "email"],
     });
   });
@@ -107,6 +107,119 @@ describe("policy preview", () => {
       rowFilter: null,
       visibleColumns: [],
     });
+  });
+
+  test("unions matching allow rules and combines row filters", () => {
+    const preview = previewPolicy(
+      [
+        {
+          columns: ["id"],
+          effect: "allow",
+          masks: {},
+          ordinal: 1,
+          principals: ["group:finance"],
+          row_filter: "region = 'us'",
+          when: {},
+        },
+        {
+          columns: ["email"],
+          effect: "allow",
+          masks: { email: { type: "email" } },
+          ordinal: 2,
+          principals: ["group:finance"],
+          row_filter: "active = true",
+          when: {},
+        },
+      ],
+      {
+        claims: {},
+        principal: "user:alice@example.com",
+        groups: ["finance"],
+      },
+      ["id", "email", "region"],
+    );
+
+    expect(preview).toEqual({
+      decision: "allow",
+      masks: [{ column: "email", type: "email" }],
+      matchedOrdinal: 1,
+      reason: "Rules 1, 2 matched.",
+      rowFilter: "(region = 'us') AND (active = true)",
+      visibleColumns: ["id", "email"],
+    });
+  });
+
+  test("applies deny precedence across matching rules", () => {
+    const preview = previewPolicy(
+      [
+        {
+          columns: ["id", "email"],
+          effect: "allow",
+          masks: { email: { type: "email" } },
+          ordinal: 1,
+          principals: ["group:analysts"],
+          row_filter: null,
+          when: {},
+        },
+        {
+          columns: ["email"],
+          effect: "deny",
+          masks: {},
+          ordinal: 2,
+          principals: ["group:analysts"],
+          row_filter: null,
+          when: { clearance: "low" },
+        },
+      ],
+      {
+        claims: { clearance: "low" },
+        principal: "user:bob@example.com",
+        groups: ["analysts"],
+      },
+      ["id", "email"],
+    );
+
+    expect(preview).toEqual({
+      decision: "allow",
+      masks: [],
+      matchedOrdinal: 1,
+      reason: "Rules 1, 2 matched.",
+      rowFilter: null,
+      visibleColumns: ["id"],
+    });
+  });
+
+  test("keeps stricter mask when several allow rules mask the same column", () => {
+    const preview = previewPolicy(
+      [
+        {
+          columns: ["email"],
+          effect: "allow",
+          masks: { email: { type: "hash" } },
+          ordinal: 1,
+          principals: ["group:support"],
+          row_filter: null,
+          when: {},
+        },
+        {
+          columns: ["email"],
+          effect: "allow",
+          masks: { email: { type: "redact" } },
+          ordinal: 2,
+          principals: ["group:support"],
+          row_filter: null,
+          when: {},
+        },
+      ],
+      {
+        claims: {},
+        principal: "user:caseworker@example.com",
+        groups: ["support"],
+      },
+      ["email"],
+    );
+
+    expect(preview.masks).toEqual([{ column: "email", type: "redact" }]);
   });
 });
 

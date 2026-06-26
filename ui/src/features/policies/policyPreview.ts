@@ -21,9 +21,48 @@ export function previewPolicy(
   schemaColumns: string[],
 ): PolicyPreview {
   const orderedRules = [...rules].sort((left, right) => left.ordinal - right.ordinal);
-  const matchedRule = orderedRules.find((rule) => ruleMatches(rule, context));
+  const allowed = new Set<string>();
+  const denied = new Set<string>();
+  const masks = new Map<string, { column: string; type: string }>();
+  const rowFilters: string[] = [];
+  const matchedOrdinals: number[] = [];
+  let firstDenyOrdinal: number | null = null;
 
-  if (!matchedRule) {
+  for (const rule of orderedRules) {
+    if (!ruleMatches(rule, context)) {
+      continue;
+    }
+
+    matchedOrdinals.push(rule.ordinal);
+    const matchingColumns = expandColumns(rule.columns, schemaColumns);
+
+    if (rule.effect === "deny") {
+      firstDenyOrdinal ??= rule.ordinal;
+      for (const column of matchingColumns) {
+        denied.add(column);
+        masks.delete(column);
+      }
+      continue;
+    }
+
+    for (const column of matchingColumns) {
+      if (!denied.has(column)) {
+        allowed.add(column);
+      }
+    }
+    for (const [column, value] of Object.entries(rule.masks)) {
+      if (denied.has(column)) {
+        continue;
+      }
+      const candidate = { column, type: maskType(value) };
+      masks.set(column, chooseMask(masks.get(column), candidate));
+    }
+    if (rule.row_filter) {
+      rowFilters.push(rule.row_filter);
+    }
+  }
+
+  if (matchedOrdinals.length === 0) {
     return {
       decision: "deny",
       masks: [],
@@ -34,27 +73,37 @@ export function previewPolicy(
     };
   }
 
-  if (matchedRule.effect === "deny") {
+  const visibleColumns = expandColumns(["*"], schemaColumns).filter(
+    (column) => allowed.has(column) && !denied.has(column),
+  );
+  if (visibleColumns.length === 0) {
+    const denyOrdinal =
+      matchedOrdinals.length === 1 && firstDenyOrdinal !== null
+        ? firstDenyOrdinal
+        : matchedOrdinals[0];
     return {
       decision: "deny",
       masks: [],
-      matchedOrdinal: matchedRule.ordinal,
-      reason: `Rule ${matchedRule.ordinal} denied access.`,
+      matchedOrdinal: denyOrdinal,
+      reason:
+        matchedOrdinals.length === 1 && firstDenyOrdinal !== null
+          ? `Rule ${firstDenyOrdinal} denied access.`
+          : "No columns visible.",
       rowFilter: null,
       visibleColumns: [],
     };
   }
 
+  const visible = new Set(visibleColumns);
+
   return {
     decision: "allow",
-    masks: Object.entries(matchedRule.masks).map(([column, value]) => ({
-      column,
-      type: maskType(value),
-    })),
-    matchedOrdinal: matchedRule.ordinal,
-    reason: `Rule ${matchedRule.ordinal} matched.`,
-    rowFilter: matchedRule.row_filter,
-    visibleColumns: expandColumns(matchedRule.columns, schemaColumns),
+    masks: Array.from(masks.values()).filter((mask) => visible.has(mask.column)),
+    matchedOrdinal: matchedOrdinals[0],
+    reason: formatMatchedReason(matchedOrdinals),
+    rowFilter:
+      rowFilters.length > 0 ? rowFilters.map((filter) => `(${filter})`).join(" AND ") : null,
+    visibleColumns,
   };
 }
 
@@ -87,4 +136,36 @@ function expandColumns(columns: string[], schemaColumns: string[]): string[] {
     return schemaColumns.length > 0 ? schemaColumns : ["*"];
   }
   return columns;
+}
+
+function chooseMask(
+  existing: { column: string; type: string } | undefined,
+  candidate: { column: string; type: string },
+): { column: string; type: string } {
+  if (!existing) {
+    return candidate;
+  }
+  return maskPrecedence(candidate.type) > maskPrecedence(existing.type) ? candidate : existing;
+}
+
+function maskPrecedence(mask: string): number {
+  switch (mask.toLowerCase()) {
+    case "null":
+      return 4;
+    case "redact":
+      return 3;
+    case "hash":
+      return 2;
+    case "default":
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+function formatMatchedReason(ordinals: number[]): string {
+  if (ordinals.length === 1) {
+    return `Rule ${ordinals[0]} matched.`;
+  }
+  return `Rules ${ordinals.join(", ")} matched.`;
 }
