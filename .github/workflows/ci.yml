@@ -23,8 +23,8 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  python:
-    name: Python tests and lint
+  python-quality:
+    name: Python quality
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -46,7 +46,7 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Install dependencies
-        run: uv sync --dev --extra server --frozen
+        run: uv sync --dev --extra server --extra postgres --frozen
 
       - name: Check formatting
         run: uv run ruff format --check .
@@ -57,8 +57,68 @@ jobs:
       - name: Type check
         run: uv run ty check
 
+  python-tests:
+    name: Python tests
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install dependencies
+        run: uv sync --dev --extra server --extra postgres --frozen
+
       - name: Run Python tests
         run: uv run pytest
+
+  python-package:
+    name: Python package smoke
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Build package
+        run: uv build
+
+      - name: Install wheel with Postgres extra
+        run: |
+          smoke_env="$(mktemp -d)"
+          uv venv "$smoke_env"
+          wheel_path="$(ls dist/dal_obscura-*-py3-none-any.whl)"
+          uv pip install --python "$smoke_env/bin/python" "${wheel_path}[postgres]"
+          PATH="$smoke_env/bin:$PATH"
+          dal-obscura-migrate upgrade --database-url sqlite+pysqlite:///"$smoke_env/config-store.db"
+          dal-obscura-migrate check --database-url sqlite+pysqlite:///"$smoke_env/config-store.db"
 
   jvm:
     name: JVM connector tests
@@ -91,7 +151,9 @@ jobs:
     name: Build, scan, and publish image
     runs-on: ubuntu-24.04
     needs:
-      - python
+      - python-quality
+      - python-tests
+      - python-package
       - jvm
     permissions:
       contents: read
