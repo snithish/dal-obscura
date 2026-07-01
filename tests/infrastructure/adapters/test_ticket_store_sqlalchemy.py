@@ -6,8 +6,12 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
-from dal_obscura.common.config_store.orm import Base, CellRecord, DataPlaneTicketRecord
+from dal_obscura.common.config_store.db import (
+    create_engine_from_url,
+    migrate_config_store,
+    session_factory,
+)
+from dal_obscura.common.config_store.orm import CellRecord, DataPlaneTicketRecord
 from dal_obscura.common.ticket_delivery.models import TicketPayload
 from dal_obscura.data_plane.infrastructure.adapters.ticket_store_sqlalchemy import (
     SqlAlchemyTicketStore,
@@ -16,7 +20,7 @@ from dal_obscura.data_plane.infrastructure.adapters.ticket_store_sqlalchemy impo
 
 def _session_maker() -> sessionmaker[Session]:
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    migrate_config_store(engine)
     return session_factory(engine)
 
 

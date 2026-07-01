@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
-from dal_obscura.common.config_store.orm import (
-    Base,
+from dal_obscura.common.config_store.db import (
+    create_engine_from_url,
+    migrate_config_store,
+    session_factory,
 )
 from dal_obscura.control_plane.interfaces.api import create_app
 from tests.interfaces.control_plane.workspace_helpers import (
@@ -70,7 +71,7 @@ def test_tenant_and_cell_routes_are_not_public_workspace_api():
 
 def test_policy_publish_versions_one_asset_without_publishing_other_drafts():
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    migrate_config_store(engine)
     factory = session_factory(engine)
     client = TestClient(create_app(factory, admin_token="test-admin"))
     first_asset = _provision_draft(client)

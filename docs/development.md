@@ -37,7 +37,7 @@ flowchart TB
 ## Setup
 
 ```bash
-uv sync --dev
+uv sync --dev --extra server --extra sqlite
 ```
 
 Run the service help:
@@ -88,6 +88,10 @@ Read [Frontend Conventions](frontend.md) before changing the UI.
 Run the API:
 
 ```bash
+export DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:///runtime/control-plane.db
+export DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN=dev-admin
+uv run dal-obscura-migrate upgrade
+uv run dal-obscura-migrate check
 uv run dal-obscura-control-plane
 ```
 

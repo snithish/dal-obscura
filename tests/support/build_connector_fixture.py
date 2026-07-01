@@ -37,9 +37,9 @@ create_iceberg_table = importlib.import_module("tests.support.iceberg").create_i
 
 from dal_obscura.common.config_store.db import (  # noqa: E402
     create_engine_from_url,
+    migrate_config_store,
     session_factory,
 )
-from dal_obscura.common.config_store.orm import Base  # noqa: E402
 from dal_obscura.control_plane.application.access import ControlPlaneActor  # noqa: E402
 from dal_obscura.control_plane.application.provisioning import ProvisioningService  # noqa: E402
 
@@ -523,7 +523,7 @@ def _expected_metadata() -> dict[str, object]:
 def _provision_control_plane(output_dir: Path, table_id: str) -> tuple[str, str, str]:
     database_url = f"sqlite+pysqlite:///{output_dir / 'control-plane.db'}"
     engine = create_engine_from_url(database_url)
-    Base.metadata.create_all(engine)
+    migrate_config_store(engine)
 
     with session_factory(engine)() as session:
         service = ProvisioningService(session)

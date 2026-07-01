@@ -30,18 +30,19 @@ What happens:
    unless `DAL_OBSCURA_IMAGE` is set to a prebuilt image.
 3. Docker Compose starts Postgres on `127.0.0.1:5432` and Keycloak on
    `127.0.0.1:8080`.
-4. The control plane starts on `127.0.0.1:8820` with Postgres config storage,
+4. The `migrate` service runs `dal-obscura-migrate upgrade` against Postgres.
+5. The control plane starts on `127.0.0.1:8820` with Postgres config storage,
    Keycloak token validation, and public browser-login configuration for the UI.
-5. The `setup` service creates the Iceberg table metadata, Delta table log, and
+6. The `setup` service creates the Iceberg table metadata, Delta table log, and
    data files from `fixtures/demo_fixture.json`.
-6. The setup service waits for the control plane and provisions it through the
+7. The setup service waits for the control plane and provisions it through the
    HTTP API. It configures one Iceberg SQL catalog and one static Delta catalog,
    calls catalog discovery, confirms both demo tables are discovered, then
    promotes them to governed assets.
-7. The setup service assigns `group:asset-owners`, installs the demo policies,
+8. The setup service assigns `group:asset-owners`, installs the demo policies,
    configures OIDC/JWKS auth for the data plane, and publishes the first active
    policy version.
-8. The Flight data plane starts on `127.0.0.1:8815`.
+9. The Flight data plane starts on `127.0.0.1:8815`.
 
 ## Credentials
 
@@ -116,6 +117,9 @@ Delete containers, generated files, and the Postgres volume:
 ```bash
 ./run reset
 ```
+
+After a reset, `./run up` recreates `.runtime/`, starts Postgres, and runs the
+explicit migration service before the control plane starts.
 
 ## Security Notes
 

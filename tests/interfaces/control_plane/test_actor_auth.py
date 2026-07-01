@@ -6,8 +6,11 @@ from uuid import UUID
 from fastapi.testclient import TestClient
 
 from dal_obscura.common.access_control.models import Principal
-from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
-from dal_obscura.common.config_store.orm import Base
+from dal_obscura.common.config_store.db import (
+    create_engine_from_url,
+    migrate_config_store,
+    session_factory,
+)
 from dal_obscura.control_plane.interfaces import api as api_module
 from dal_obscura.control_plane.interfaces.api import create_app, create_oidc_actor_resolver
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
@@ -39,7 +42,7 @@ def _actor_for_token(token: str) -> DemoToken:
 
 def _client() -> TestClient:
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    migrate_config_store(engine)
     return TestClient(
         create_app(
             session_factory(engine),
@@ -52,7 +55,7 @@ def _client() -> TestClient:
 
 def _client_with_ui_auth_config() -> TestClient:
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    migrate_config_store(engine)
     return TestClient(
         create_app(
             session_factory(engine),

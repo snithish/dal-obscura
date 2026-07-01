@@ -7,7 +7,8 @@ background, read [Operator Guide](operators.md).
 
 ```mermaid
 flowchart LR
-    db["Database ready"] --> iam["IAM ready"]
+    db["Database ready"] --> schema["Schema migrated"]
+    schema --> iam["IAM ready"]
     iam --> cp["Control plane healthy"]
     cp --> catalog["Catalog discovery succeeds"]
     catalog --> policy["Policy version active"]
@@ -18,6 +19,7 @@ flowchart LR
 Checklist:
 
 - Database is reachable from control plane and data plane.
+- `dal-obscura-migrate check` reports the config-store schema is current.
 - IAM provider metadata or credentials are reachable.
 - Control plane `/healthz` returns ok and `/readyz` can query the database.
 - UI loads and can authenticate an administrative user.
@@ -30,10 +32,11 @@ Checklist:
 ## Restart
 
 1. Keep the config database running.
-2. Restart the control plane.
-3. Confirm the UI, `/healthz`, and `/readyz`.
-4. Restart the data plane.
-5. Run one read-path check.
+2. Run `dal-obscura-migrate check`.
+3. Restart the control plane.
+4. Confirm the UI, `/healthz`, and `/readyz`.
+5. Restart the data plane.
+6. Run one read-path check.
 
 ```mermaid
 sequenceDiagram
@@ -43,6 +46,7 @@ sequenceDiagram
     participant DP as "Data plane"
 
     Ops->>DB: Keep persistent state online
+    Ops->>DB: Run dal-obscura-migrate check
     Ops->>CP: Restart
     Ops->>CP: Check /healthz and /readyz
     Ops->>DP: Restart
@@ -61,10 +65,12 @@ Recommended order:
 2. Stop the control plane.
 3. Snapshot or export the database if needed.
 4. Drop or recreate the config database.
-5. Re-run provisioning.
-6. Re-run catalog discovery.
-7. Re-publish policy versions.
-8. Verify read personas.
+5. Run `dal-obscura-migrate upgrade`.
+6. Run `dal-obscura-migrate check`.
+7. Re-run provisioning.
+8. Re-run catalog discovery.
+9. Re-publish policy versions.
+10. Verify read personas.
 
 ## Fast Triage
 
@@ -76,6 +82,7 @@ Recommended order:
 | Read denied unexpectedly | Principal identity, groups, active policy version, row filters. |
 | Policy change not visible | Confirm a new asset-scoped policy version was published. |
 | Reads fail after restart | Database URL, ticket secret, IAM metadata, catalog credentials. |
+| Services fail before startup | Run `dal-obscura-migrate check`; upgrade the config-store schema if needed. |
 | State disappeared | Confirm Postgres volume/database was not reset. |
 
 ## Local Reference Runbook

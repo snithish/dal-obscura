@@ -7,8 +7,8 @@ from typing import Any
 import uvicorn
 
 from dal_obscura.common.config_store.db import (
+    check_config_store_schema,
     create_engine_from_url,
-    ensure_config_store_schema,
     session_factory,
 )
 from dal_obscura.control_plane.interfaces.api import create_app, create_oidc_actor_resolver
@@ -39,7 +39,7 @@ def main() -> None:
             ),
         )
     engine = create_engine_from_url(database_url)
-    ensure_config_store_schema(engine)
+    check_config_store_schema(engine)
     app = create_app(
         session_factory(engine),
         admin_token=admin_token,

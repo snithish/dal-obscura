@@ -203,6 +203,9 @@ cython_debug/
 # Ruff stuff:
 .ruff_cache/
 
+# CocoIndex Code local project state
+.cocoindex_code/
+
 # Superpowers brainstorming companion artifacts
 .superpowers/
 

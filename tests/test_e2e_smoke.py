@@ -20,8 +20,11 @@ from pyiceberg.types import (
     StructType,
 )
 
-from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
-from dal_obscura.common.config_store.orm import Base
+from dal_obscura.common.config_store.db import (
+    create_engine_from_url,
+    migrate_config_store,
+    session_factory,
+)
 from dal_obscura.common.flight_contract import encode_plan_command
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.provisioning import ProvisioningService
@@ -156,7 +159,7 @@ def control_plane_setup(tmp_path: Path, iceberg_setup: tuple[str, Path]) -> dict
     catalog_uri, warehouse = iceberg_setup
     database_url = f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
     engine = create_engine_from_url(database_url)
-    Base.metadata.create_all(engine)
+    migrate_config_store(engine)
 
     with session_factory(engine)() as session:
         service = ProvisioningService(session)

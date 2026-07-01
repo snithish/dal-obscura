@@ -56,3 +56,4 @@ def test_console_scripts_target_plane_specific_entry_points() -> None:
     assert (
         'dal-obscura-control-plane = "dal_obscura.control_plane.interfaces.cli:main"' in pyproject
     )
+    assert 'dal-obscura-migrate = "dal_obscura.common.config_store.cli:main"' in pyproject

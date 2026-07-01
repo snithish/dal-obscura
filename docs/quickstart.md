@@ -32,7 +32,7 @@ flowchart LR
 ## Install
 
 ```bash
-uv sync --dev
+uv sync --dev --extra server --extra postgres
 uv run dal-obscura --help
 ```
 
@@ -45,6 +45,8 @@ export DAL_OBSCURA_DATABASE_URL=postgresql+psycopg://dal_obscura:dal_obscura@127
 export DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN=dev-admin
 export DAL_OBSCURA_CONTROL_PLANE_HOST=127.0.0.1
 export DAL_OBSCURA_CONTROL_PLANE_PORT=8820
+uv run dal-obscura-migrate upgrade
+uv run dal-obscura-migrate check
 uv run dal-obscura-control-plane
 ```
 
@@ -63,6 +65,7 @@ http://127.0.0.1:8820/docs
 For short-lived local development, SQLite also works:
 
 ```bash
+uv sync --dev --extra server --extra sqlite
 export DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:///runtime/control-plane.db
 ```
 
@@ -100,6 +103,7 @@ At minimum, configure through the workspace API or UI:
 
 ```bash
 export DAL_OBSCURA_DATABASE_URL=postgresql+psycopg://dal_obscura:dal_obscura@127.0.0.1:5432/dal_obscura
+uv run dal-obscura-migrate check
 export DAL_OBSCURA_CELL_ID=00000000-0000-0000-0000-000000000001
 export DAL_OBSCURA_LOCATION=grpc://127.0.0.1:8815
 export DAL_OBSCURA_TICKET_SECRET=replace-with-a-secret

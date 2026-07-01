@@ -14,8 +14,12 @@ from pyiceberg.schema import Schema
 from pyiceberg.types import BooleanType, DoubleType, IntegerType, LongType, NestedField, StringType
 from sqlalchemy import select
 
-from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
-from dal_obscura.common.config_store.orm import Base, CellRecord
+from dal_obscura.common.config_store.db import (
+    create_engine_from_url,
+    migrate_config_store,
+    session_factory,
+)
+from dal_obscura.common.config_store.orm import CellRecord
 from dal_obscura.control_plane.interfaces.api import create_app
 
 RUNTIME_DIR = Path(os.environ.get("RUNTIME_DIR", "/workspace/runtime"))
@@ -264,7 +268,7 @@ def _provision_control_plane(
     database_path.unlink(missing_ok=True)
     database_url = f"sqlite+pysqlite:///{database_path}"
     engine = create_engine_from_url(database_url)
-    Base.metadata.create_all(engine)
+    migrate_config_store(engine)
     factory = session_factory(engine)
     client = TestClient(create_app(factory, admin_token=ADMIN_TOKEN))
     headers = {"authorization": f"Bearer {ADMIN_TOKEN}"}

@@ -3,8 +3,12 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
-from dal_obscura.common.config_store.orm import Base, PublishedCellRuntimeRecord
+from dal_obscura.common.config_store.db import (
+    create_engine_from_url,
+    migrate_config_store,
+    session_factory,
+)
+from dal_obscura.common.config_store.orm import PublishedCellRuntimeRecord
 from dal_obscura.control_plane.interfaces.api import create_app
 
 ICEBERG_CATALOG_MODULE = (
@@ -14,7 +18,7 @@ ICEBERG_CATALOG_MODULE = (
 
 def test_api_provisions_and_activates_default_policy_version():
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    migrate_config_store(engine)
     app = create_app(session_factory(engine), admin_token="test-admin")
     client = TestClient(app)
     headers = {"authorization": "Bearer test-admin"}

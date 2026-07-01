@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
-from dal_obscura.common.config_store.orm import Base
+from dal_obscura.common.config_store.db import (
+    create_engine_from_url,
+    migrate_config_store,
+    session_factory,
+)
 from dal_obscura.control_plane.interfaces.api import create_app
 
 ADMIN_HEADERS = {"authorization": "Bearer test-admin"}
@@ -11,7 +14,7 @@ ADMIN_HEADERS = {"authorization": "Bearer test-admin"}
 
 def _client() -> TestClient:
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    migrate_config_store(engine)
     return TestClient(create_app(session_factory(engine), admin_token="test-admin"))
 
 

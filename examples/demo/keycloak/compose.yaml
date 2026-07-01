@@ -31,6 +31,15 @@ services:
       timeout: 3s
       retries: 30
 
+  migrate:
+    image: ${DAL_OBSCURA_IMAGE:-ghcr.io/snithish/dal-obscura:latest}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .runtime/control-plane.env
+    command: ["dal-obscura-migrate", "upgrade"]
+
   setup:
     build:
       context: ../../..
@@ -63,6 +72,8 @@ services:
         condition: service_started
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     env_file:
       - .runtime/control-plane.env
     ports:
@@ -92,6 +103,8 @@ services:
         condition: service_started
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     ports:
       - "127.0.0.1:8815:8815"
     volumes:

@@ -41,7 +41,7 @@ masking, and row filters.
 
 ```bash
 uv venv
-uv sync
+uv sync --extra server --extra sqlite
 uv run dal-obscura --help
 ```
 
@@ -67,10 +67,22 @@ Use the published image directly:
 docker pull ghcr.io/snithish/dal-obscura:latest
 ```
 
-Start the data plane, which is the default image command:
+Run migrations explicitly before starting services. For example, with a mounted
+runtime directory for local SQLite:
 
 ```bash
 docker run --rm \
+  -v "$PWD/runtime:/runtime" \
+  -e DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:////runtime/control-plane.db \
+  ghcr.io/snithish/dal-obscura:latest dal-obscura-migrate upgrade
+```
+
+Start the data plane, which is the default image command, only after the config
+database is migrated:
+
+```bash
+docker run --rm \
+  -v "$PWD/runtime:/runtime" \
   -e DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:////runtime/control-plane.db \
   -e DAL_OBSCURA_CELL_ID=00000000-0000-0000-0000-000000000001 \
   -e DAL_OBSCURA_LOCATION=grpc://0.0.0.0:8815 \
@@ -84,6 +96,7 @@ role:
 
 ```bash
 docker run --rm \
+  -v "$PWD/runtime:/runtime" \
   -e DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:////runtime/control-plane.db \
   -e DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN=dev-admin \
   -p 8820:8820 \
@@ -145,6 +158,8 @@ Start the control plane against an RDBMS URL:
 ```bash
 export DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:///runtime/control-plane.db
 export DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN=dev-admin
+uv run dal-obscura-migrate upgrade
+uv run dal-obscura-migrate check
 uv run dal-obscura-control-plane
 ```
 
@@ -161,6 +176,8 @@ HTML.
 For frontend development, run the API and Vite dev server:
 
 ```bash
+uv run dal-obscura-migrate upgrade
+uv run dal-obscura-migrate check
 uv run dal-obscura-control-plane
 cd ui
 pnpm install
@@ -183,10 +200,11 @@ Provision workspace catalogs, assets, policy rules, owners, runtime settings,
 and auth providers through the HTTP API, then submit asset-scoped policy
 versions. Tenant and cell records remain internal runtime partitioning data.
 Start each data plane from the same database without calling the control-plane
-service:
+service. The config database must already be migrated:
 
 ```bash
 export DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:///runtime/control-plane.db
+uv run dal-obscura-migrate check
 export DAL_OBSCURA_CELL_ID=00000000-0000-0000-0000-000000000001
 export DAL_OBSCURA_LOCATION=grpc://0.0.0.0:8815
 export DAL_OBSCURA_TICKET_SECRET=dev-ticket-secret
@@ -432,7 +450,7 @@ for the shared run pattern and per-provider caveats.
 ## Development
 
 ```bash
-uv sync --dev
+uv sync --dev --extra server --extra sqlite
 uv run pytest
 uv run ruff check .
 uv run ruff format .
@@ -473,7 +491,7 @@ uv run pytest tests/domain/access_control/test_row_filters.py tests/interfaces/f
 
 ## Pre-commit hooks
 
-After `uv sync --dev`, install the hooks with `uv run pre-commit install`. The configured hooks run `uv run ruff format` and `uv run ruff check` (each passed the staged python files), plus `uv run ty check` and `uv run pytest -m "not heavy" --maxfail=1 --disable-warnings` on every commit to guard formatting, linting, typing, and non-heavy tests. Heavy suites are marked with `@pytest.mark.heavy` and remain available through explicit `uv run pytest` or benchmark commands. Re-run the hooks manually with `uv run pre-commit run --all-files` if needed.
+After `uv sync --dev --extra server --extra sqlite`, install the hooks with `uv run pre-commit install`. The configured hooks run `uv run ruff format` and `uv run ruff check` (each passed the staged python files), plus `uv run ty check` and `uv run pytest -m "not heavy" --maxfail=1 --disable-warnings` on every commit to guard formatting, linting, typing, and non-heavy tests. Heavy suites are marked with `@pytest.mark.heavy` and remain available through explicit `uv run pytest` or benchmark commands. Re-run the hooks manually with `uv run pre-commit run --all-files` if needed.
 
 ## Notes
 - Mask expressions are executed in DuckDB SQL.

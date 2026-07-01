@@ -15,10 +15,10 @@ ENV UV_LINK_MODE=copy \
 COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY src ./src
 
-# Install only production dependencies plus the Flight server extra. No dev,
-# test, or build caches are copied into the runtime stage.
+# Install only production dependencies plus the Flight server and Postgres
+# driver extras. No dev, test, or build caches are copied into the runtime stage.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --extra server --frozen --no-dev
+    uv sync --extra server --extra postgres --frozen --no-dev
 
 # Runtime image has Python but not uv. Keeping the package manager out of the
 # final image reduces both size and attack surface.

@@ -84,6 +84,8 @@ sequenceDiagram
     participant UI
 
     Ops->>DB: Start database
+    Ops->>DB: Run dal-obscura-migrate upgrade
+    Ops->>DB: Run dal-obscura-migrate check
     Ops->>IAM: Start or configure IAM
     Ops->>CP: Start control plane
     Ops->>CP: Configure catalog and auth
@@ -97,6 +99,7 @@ sequenceDiagram
 
 | Task | Action |
 | --- | --- |
+| Confirm schema | Run `dal-obscura-migrate check`; services never run migrations at startup. |
 | Confirm control-plane health | Open `/healthz`; use `/readyz` to verify database reachability. |
 | Confirm data-plane health | Call the Arrow Flight `healthz` action and expect `{"status":"ok","service":"data-plane"}`. |
 | Confirm API docs | Open `/docs` on the control plane. |
@@ -104,7 +107,7 @@ sequenceDiagram
 | Confirm discovery | Run catalog discovery and verify expected tables appear. |
 | Confirm governance | Promote a discovered table to an asset and publish a policy version. |
 | Confirm read path | Read as at least one allowed user and one denied user. |
-| Restart safely | Restart services without deleting the Postgres volume. |
+| Restart safely | Run `dal-obscura-migrate check`, then restart services without deleting the Postgres volume. |
 | Reset local example | Use example reset helpers only for disposable local environments. |
 
 ## Operational Risks

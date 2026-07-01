@@ -7,9 +7,12 @@ import pytest
 from sqlalchemy.orm import Session
 
 from dal_obscura.common.access_control.models import Principal
-from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
+from dal_obscura.common.config_store.db import (
+    create_engine_from_url,
+    migrate_config_store,
+    session_factory,
+)
 from dal_obscura.common.config_store.orm import (
-    Base,
     PublishedCatalogRecord,
     PublishedCellRuntimeRecord,
 )
@@ -31,7 +34,7 @@ FILES_CATALOG_TYPE = "files"
 @pytest.fixture
 def db_session() -> Iterator[Session]:
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    migrate_config_store(engine)
     session_maker = session_factory(engine)
     with session_maker() as session:
         yield session

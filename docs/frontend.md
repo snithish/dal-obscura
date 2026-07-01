@@ -110,6 +110,8 @@ Run the backend:
 ```bash
 export DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:///runtime/control-plane.db
 export DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN=dev-admin
+uv run dal-obscura-migrate upgrade
+uv run dal-obscura-migrate check
 uv run dal-obscura-control-plane
 ```
 
