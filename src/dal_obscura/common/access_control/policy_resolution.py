@@ -27,12 +27,13 @@ def resolve_access(
 
     principal_tokens = set(principal.tokens())
     allowed_set: set[str] = set()
-    denied_set: set[str] = set()
     masks: dict[str, MaskRule] = {}
     row_filters: list[str] = []
 
     requested = list(requested_columns)
     for rule in matched_dataset.rules:
+        if rule.effect != "allow":
+            continue
         if not principal_tokens.intersection(rule.principals):
             continue
         if not _matches_conditions(principal, rule.when):
@@ -41,26 +42,16 @@ def resolve_access(
         matching_columns = (
             requested if "*" in rule.columns else [c for c in requested if c in rule.columns]
         )
-        if rule.effect == "deny":
-            denied_set.update(matching_columns)
-            for column in matching_columns:
-                masks.pop(column, None)
-            continue
-
         # Rule matches are unioned so multiple roles can widen the projection while
         # still allowing the stricter mask precedence rules below to win.
-        allowed_set.update(column for column in matching_columns if column not in denied_set)
+        allowed_set.update(matching_columns)
         for column, mask in rule.masks.items():
-            if column in denied_set:
-                continue
             existing = masks.get(column)
             masks[column] = _choose_mask(existing, mask)
         if rule.row_filter:
             row_filters.append(rule.row_filter)
 
-    effective_allowed = [
-        column for column in requested if column in allowed_set and column not in denied_set
-    ]
+    effective_allowed = [column for column in requested if column in allowed_set]
     if not effective_allowed:
         raise PermissionError("No allowed columns for principal")
 

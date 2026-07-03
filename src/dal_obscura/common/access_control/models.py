@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import fnmatch
 from dataclasses import dataclass
-from typing import Literal
 
 PrincipalConditionValue = str | list[str]
 
@@ -17,13 +16,13 @@ class MaskRule:
 
 @dataclass(frozen=True)
 class AccessRule:
-    """Single policy rule evaluated for a matching principal token."""
+    """Single explicit grant evaluated for a matching principal token."""
 
     principals: list[str]
     columns: list[str]
     masks: dict[str, MaskRule]
     row_filter: str | None
-    effect: Literal["allow", "deny"] = "allow"
+    effect: str = "allow"
     when: dict[str, PrincipalConditionValue] | None = None
 
 

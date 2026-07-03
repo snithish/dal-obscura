@@ -78,7 +78,7 @@ describe("policy preview", () => {
     });
   });
 
-  test("returns deny when the first matching rule denies access", () => {
+  test("ignores non-grant rules when previewing legacy data", () => {
     const preview = previewPolicy(
       [
         {
@@ -89,7 +89,7 @@ describe("policy preview", () => {
           principals: ["user:blocked@example.com"],
           row_filter: null,
           when: {},
-        },
+        } as unknown as PolicyRule,
       ],
       {
         claims: {},
@@ -102,8 +102,8 @@ describe("policy preview", () => {
     expect(preview).toEqual({
       decision: "deny",
       masks: [],
-      matchedOrdinal: 1,
-      reason: "Rule 1 denied access.",
+      matchedOrdinal: null,
+      reason: "No grant matched.",
       rowFilter: null,
       visibleColumns: [],
     });
@@ -149,43 +149,34 @@ describe("policy preview", () => {
     });
   });
 
-  test("applies deny precedence across matching rules", () => {
+  test("does not treat wildcard principals as match-all in preview", () => {
     const preview = previewPolicy(
       [
         {
-          columns: ["id", "email"],
+          columns: ["id"],
           effect: "allow",
-          masks: { email: { type: "email" } },
+          masks: {},
           ordinal: 1,
-          principals: ["group:analysts"],
+          principals: ["*"],
           row_filter: null,
           when: {},
         },
-        {
-          columns: ["email"],
-          effect: "deny",
-          masks: {},
-          ordinal: 2,
-          principals: ["group:analysts"],
-          row_filter: null,
-          when: { clearance: "low" },
-        },
       ],
       {
-        claims: { clearance: "low" },
-        principal: "user:bob@example.com",
-        groups: ["analysts"],
+        claims: {},
+        principal: "user:alice@example.com",
+        groups: [],
       },
-      ["id", "email"],
+      ["id"],
     );
 
     expect(preview).toEqual({
-      decision: "allow",
+      decision: "deny",
       masks: [],
-      matchedOrdinal: 1,
-      reason: "Rules 1, 2 matched.",
+      matchedOrdinal: null,
+      reason: "No grant matched.",
       rowFilter: null,
-      visibleColumns: ["id"],
+      visibleColumns: [],
     });
   });
 
@@ -305,15 +296,8 @@ describe("policy rule authoring support", () => {
         {
           ...defaultRule,
           principalsText: "",
-          rowFilter: "region = 'us'",
-          masks: [{ column: "email", type: "email" }],
-          effect: "deny",
         },
       ]),
-    ).toEqual([
-      "Rule 1 needs at least one principal.",
-      "Rule 1 deny rules cannot include row filters.",
-      "Rule 1 deny rules cannot include masks.",
-    ]);
+    ).toEqual(["Rule 1 needs at least one principal."]);
   });
 });

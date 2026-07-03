@@ -282,18 +282,19 @@ class PublicationStore:
         return asset_id
 
     def replace_policy_rules(self, *, asset_id: UUID, rules: list[dict[str, Any]]) -> None:
+        normalized_rules = [_normalize_policy_rule(raw) for raw in rules]
         for record in self._session.scalars(
             select(PolicyRuleRecord).where(PolicyRuleRecord.asset_id == asset_id)
         ):
             self._session.delete(record)
         self._session.flush()
-        for raw in rules:
+        for raw in normalized_rules:
             self._session.add(
                 PolicyRuleRecord(
                     id=uuid4(),
                     asset_id=asset_id,
                     ordinal=int(raw["ordinal"]),
-                    effect=str(raw.get("effect", "allow")),
+                    effect=raw["effect"],
                     principals_json=list(raw.get("principals", [])),
                     when_json=dict(raw.get("when", {})),
                     columns_json=list(raw.get("columns", [])),
@@ -832,7 +833,7 @@ class PublicationStore:
             rules = [
                 PolicyRuleDraft(
                     ordinal=rule.ordinal,
-                    effect=cast(Literal["allow", "deny"], rule.effect),
+                    effect=_normalize_policy_rule_effect(rule.effect),
                     principals=list(rule.principals_json),
                     when=cast(dict[str, str | list[str]], dict(rule.when_json)),
                     columns=list(rule.columns_json),
@@ -891,7 +892,7 @@ class PublicationStore:
         rules = [
             PolicyRuleDraft(
                 ordinal=rule.ordinal,
-                effect=cast(Literal["allow", "deny"], rule.effect),
+                effect=_normalize_policy_rule_effect(rule.effect),
                 principals=list(rule.principals_json),
                 when=cast(dict[str, str | list[str]], dict(rule.when_json)),
                 columns=list(rule.columns_json),
@@ -1083,3 +1084,14 @@ def _normalize_schema_fields(fields: list[dict[str, Any]]) -> list[dict[str, obj
         )
         seen.add(name)
     return normalized
+
+
+def _normalize_policy_rule(raw: dict[str, Any]) -> dict[str, Any]:
+    effect = _normalize_policy_rule_effect(str(raw.get("effect", "allow")))
+    return {**raw, "effect": effect}
+
+
+def _normalize_policy_rule_effect(effect: str) -> Literal["allow"]:
+    if effect != "allow":
+        raise ValueError("Policy rules are explicit grants")
+    return "allow"

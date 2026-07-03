@@ -35,7 +35,7 @@ def test_control_plane_healthz_is_public():
     response = client.get("/healthz")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "service": "control-plane"}
+    assert response.json() == {"status": "ok"}
 
 
 def test_control_plane_readyz_checks_database():
@@ -44,7 +44,7 @@ def test_control_plane_readyz_checks_database():
     response = client.get("/readyz")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ready", "service": "control-plane"}
+    assert response.json() == {"status": "ready", "checks": {"database": "ok"}}
 
 
 ICEBERG_CATALOG_MODULE = (

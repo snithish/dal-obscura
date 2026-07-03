@@ -1,6 +1,6 @@
 export type PolicyRule = {
   ordinal: number;
-  effect: "allow" | "deny";
+  effect: "allow";
   principals: string[];
   when: Record<string, unknown>;
   columns: string[];
@@ -28,7 +28,7 @@ export type PolicyRuleForm = {
   columnsText: string;
   columnSelections: ColumnSelection[];
   conditions: ConditionRow[];
-  effect: "allow" | "deny";
+  effect: "allow";
   masks: MaskRow[];
   ordinal: number;
   principalsText: string;

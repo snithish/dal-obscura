@@ -90,15 +90,6 @@ def test_policy_preview_uses_server_policy_resolution(db_session):
         [
             {
                 "ordinal": 1,
-                "effect": "deny",
-                "principals": ["group:suspended"],
-                "when": {},
-                "columns": [],
-                "masks": {},
-                "row_filter": None,
-            },
-            {
-                "ordinal": 2,
                 "effect": "allow",
                 "principals": ["group:data-stewards"],
                 "when": {"tenant": "default"},
@@ -119,8 +110,8 @@ def test_policy_preview_uses_server_policy_resolution(db_session):
 
     assert preview == {
         "decision": "allow",
-        "matched_ordinal": 2,
-        "reason": "Rule 2 matched.",
+        "matched_ordinal": 1,
+        "reason": "Rule 1 matched.",
         "visible_columns": ["id", "email"],
         "masks": [{"column": "email", "type": "email"}],
         "row_filter": "(region = 'us')",

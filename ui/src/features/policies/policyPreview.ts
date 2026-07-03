@@ -21,39 +21,28 @@ export function previewPolicy(
   schemaColumns: string[],
 ): PolicyPreview {
   const orderedRules = [...rules].sort((left, right) => left.ordinal - right.ordinal);
-  const allowed = new Set<string>();
-  const denied = new Set<string>();
+  const matchedRules = orderedRules.filter(
+    (rule) => rule.effect === "allow" && ruleMatches(rule, context),
+  );
+
+  if (matchedRules.length === 0) {
+    return {
+      decision: "deny",
+      masks: [],
+      matchedOrdinal: null,
+      reason: "No grant matched.",
+      rowFilter: null,
+      visibleColumns: [],
+    };
+  }
+
+  const visibleColumns = new Set<string>();
   const masks = new Map<string, { column: string; type: string }>();
   const rowFilters: string[] = [];
-  const matchedOrdinals: number[] = [];
-  let firstDenyOrdinal: number | null = null;
 
-  for (const rule of orderedRules) {
-    if (!ruleMatches(rule, context)) {
-      continue;
-    }
-
-    matchedOrdinals.push(rule.ordinal);
-    const matchingColumns = expandColumns(rule.columns, schemaColumns);
-
-    if (rule.effect === "deny") {
-      firstDenyOrdinal ??= rule.ordinal;
-      for (const column of matchingColumns) {
-        denied.add(column);
-        masks.delete(column);
-      }
-      continue;
-    }
-
-    for (const column of matchingColumns) {
-      if (!denied.has(column)) {
-        allowed.add(column);
-      }
-    }
+  for (const rule of matchedRules) {
+    expandColumns(rule.columns, schemaColumns).forEach((column) => visibleColumns.add(column));
     for (const [column, value] of Object.entries(rule.masks)) {
-      if (denied.has(column)) {
-        continue;
-      }
       const candidate = { column, type: maskType(value) };
       masks.set(column, chooseMask(masks.get(column), candidate));
     }
@@ -62,39 +51,12 @@ export function previewPolicy(
     }
   }
 
-  if (matchedOrdinals.length === 0) {
-    return {
-      decision: "deny",
-      masks: [],
-      matchedOrdinal: null,
-      reason: "No rule matched.",
-      rowFilter: null,
-      visibleColumns: [],
-    };
-  }
-
-  const visibleColumns = expandColumns(["*"], schemaColumns).filter(
-    (column) => allowed.has(column) && !denied.has(column),
-  );
-  if (visibleColumns.length === 0) {
-    const denyOrdinal =
-      matchedOrdinals.length === 1 && firstDenyOrdinal !== null
-        ? firstDenyOrdinal
-        : matchedOrdinals[0];
-    return {
-      decision: "deny",
-      masks: [],
-      matchedOrdinal: denyOrdinal,
-      reason:
-        matchedOrdinals.length === 1 && firstDenyOrdinal !== null
-          ? `Rule ${firstDenyOrdinal} denied access.`
-          : "No columns visible.",
-      rowFilter: null,
-      visibleColumns: [],
-    };
-  }
-
-  const visible = new Set(visibleColumns);
+  const matchedOrdinals = matchedRules.map((rule) => rule.ordinal);
+  const orderedVisibleColumns =
+    schemaColumns.length > 0
+      ? schemaColumns.filter((column) => visibleColumns.has(column))
+      : [...visibleColumns];
+  const visible = new Set(orderedVisibleColumns);
 
   return {
     decision: "allow",
@@ -103,7 +65,7 @@ export function previewPolicy(
     reason: formatMatchedReason(matchedOrdinals),
     rowFilter:
       rowFilters.length > 0 ? rowFilters.map((filter) => `(${filter})`).join(" AND ") : null,
-    visibleColumns,
+    visibleColumns: orderedVisibleColumns,
   };
 }
 
@@ -112,7 +74,7 @@ function ruleMatches(rule: PolicyRule, context: PreviewContext): boolean {
 }
 
 function principalsMatch(principals: string[], context: PreviewContext): boolean {
-  if (principals.includes("*") || principals.includes(context.principal)) {
+  if (principals.includes(context.principal)) {
     return true;
   }
   return context.groups.some((group) => principals.includes(`group:${group}`));

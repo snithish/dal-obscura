@@ -69,6 +69,7 @@ runtime representation of active policy sets.
 | `DAL_OBSCURA_CELL_ID` | Data plane | Runtime cell identifier. Keep this internal. |
 | `DAL_OBSCURA_LOCATION` | Data plane | Advertised Flight endpoint location. |
 | `DAL_OBSCURA_TICKET_SECRET` | Data plane | HMAC secret for opaque tickets. |
+| `DAL_OBSCURA_ALLOW_STALE_CONFIG_SECONDS` | Data plane | Optional bounded fallback window for serving the last successfully loaded published config during short config-store outages. Unset means fail closed. |
 
 Auth-specific variables depend on the provider. See [Security](security.md).
 
@@ -100,8 +101,10 @@ sequenceDiagram
 | Task | Action |
 | --- | --- |
 | Confirm schema | Run `dal-obscura-migrate check`; services never run migrations at startup. |
-| Confirm control-plane health | Open `/healthz`; use `/readyz` to verify database reachability. |
-| Confirm data-plane health | Call the Arrow Flight `healthz` action and expect `{"status":"ok","service":"data-plane"}`. |
+| Confirm control-plane liveness | `GET /healthz` on the control-plane HTTP port. It does not require auth and returns `{"status":"ok"}` when the process is alive. |
+| Confirm control-plane readiness | `GET /readyz` on the control-plane HTTP port. It does not require auth, runs `SELECT 1` against the config database, and returns `503` when the database check fails. |
+| Confirm data-plane liveness | `GET /healthz` on the optional data-plane health HTTP app when that app is enabled. It returns `{"status":"ok"}` when the health process is alive. |
+| Confirm data-plane readiness | `GET /readyz` on the optional data-plane health HTTP app. It returns `503` unless an active publication, runtime settings, and at least one enabled auth provider are loaded. |
 | Confirm API docs | Open `/docs` on the control plane. |
 | Confirm UI | Open the separately deployed UI service. In the local demo this is `http://127.0.0.1:8821`. |
 | Confirm discovery | Run catalog discovery and verify expected tables appear. |
@@ -110,6 +113,22 @@ sequenceDiagram
 | Restart safely | Run `dal-obscura-migrate check`, then restart services without deleting the Postgres volume. |
 | Reset local example | Use example reset helpers only for disposable local environments. |
 
+## Health and Readiness Probes
+
+Control-plane probes are served by the main FastAPI app:
+
+- `GET /healthz`: process liveness only; no authentication required.
+- `GET /readyz`: config-store readiness; no authentication required. A ready
+  response includes `{"status":"ready","checks":{"database":"ok"}}`; database
+  failures return `503` with `{"status":"not_ready"}`.
+
+The data plane has an optional HTTP health app with the same paths:
+
+- `GET /healthz`: health app liveness.
+- `GET /readyz`: published runtime readiness. The check is ready only after the
+  active publication, runtime settings, and at least one enabled auth provider
+  can be loaded.
+
 ## Operational Risks
 
 - A stale or wrong IAM configuration can make valid users appear unauthorized.
@@ -117,6 +136,10 @@ sequenceDiagram
 - Policy changes affect reads after a policy version is submitted, so test with real personas.
 - SQLite state is easy to lose; use Postgres for anything others will try.
 - Internal cell identifiers should not become user-facing concepts.
+- By default, data planes fail closed when they cannot read active published
+  configuration. Set `DAL_OBSCURA_ALLOW_STALE_CONFIG_SECONDS` to a small value,
+  such as `60`, only when short config-store outages should keep previously
+  authorized reads working.
 
 ## Breaking Changes
 

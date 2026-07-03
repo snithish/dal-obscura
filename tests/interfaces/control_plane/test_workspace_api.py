@@ -69,6 +69,37 @@ def test_tenant_and_cell_routes_are_not_public_workspace_api():
     )
 
 
+def test_workspace_policy_rules_reject_deny_effect_before_save():
+    client = _client()
+    asset = _provision_draft(client)
+
+    response = client.put(
+        f"/v1/assets/{asset['id']}/policy-rules",
+        headers=ADMIN_HEADERS,
+        json={
+            "rules": [
+                {
+                    "ordinal": 1,
+                    "principals": ["group:data-stewards"],
+                    "columns": ["email"],
+                    "effect": "deny",
+                    "when": {},
+                    "masks": {},
+                    "row_filter": None,
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == (
+        "Policy rules are explicit grants; use effect='allow' or omit deny rules."
+    )
+    detail = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
+    assert len(detail["policy_rules"]) == 1
+    assert detail["policy_rules"][0]["effect"] == "allow"
+
+
 def test_policy_publish_versions_one_asset_without_publishing_other_drafts():
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
     migrate_config_store(engine)

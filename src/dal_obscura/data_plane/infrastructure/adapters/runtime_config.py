@@ -20,6 +20,9 @@ class DataPlaneRuntimeConfig:
     tls_key: str | None = None
     tls_client_ca: str | None = None
     tls_verify_client: bool = False
+    allow_stale_config_seconds: int | None = None
+    health_host: str = "127.0.0.1"
+    health_port: int | None = None
     secret_provider: SecretProviderConfig = field(default_factory=SecretProviderConfig)
 
 
@@ -42,6 +45,10 @@ def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
         tls_key=_optional_env("DAL_OBSCURA_TLS_KEY"),
         tls_client_ca=_optional_env("DAL_OBSCURA_TLS_CLIENT_CA"),
         tls_verify_client=tls_verify_client,
+        allow_stale_config_seconds=_optional_int_env("DAL_OBSCURA_ALLOW_STALE_CONFIG_SECONDS"),
+        health_host=os.getenv("DAL_OBSCURA_DATA_PLANE_HEALTH_HOST", "127.0.0.1").strip()
+        or "127.0.0.1",
+        health_port=_optional_int_env("DAL_OBSCURA_DATA_PLANE_HEALTH_PORT"),
         secret_provider=_secret_provider_config(),
     )
 
@@ -64,6 +71,16 @@ def _bool_env(value: str | None) -> bool:
     if value is None:
         return False
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _optional_int_env(name: str) -> int | None:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return None
+    parsed = int(value)
+    if parsed <= 0:
+        raise ValueError(f"{name} must be greater than 0")
+    return parsed
 
 
 def _secret_provider_config() -> SecretProviderConfig:

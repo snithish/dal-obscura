@@ -236,8 +236,8 @@ export function PoliciesPage() {
             <div>
               <h2 className="text-lg font-black">Policy editor</h2>
               <p className="mt-1 text-sm leading-6 text-muted">
-                Build ordered allow/deny rules with principals, columns, masks,
-                optional match conditions, and DuckDB row filters.
+                Build ordered grant rules with principals, columns, masks, optional match
+                conditions, and DuckDB row filters.
               </p>
             </div>
             {selectedAsset ? <span className="badge">{selectedAsset.policy_status}</span> : null}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any, cast
 from uuid import uuid4
 
 import pytest
@@ -166,20 +167,20 @@ def test_compiler_rejects_unsafe_row_filter_shapes(row_filter):
         PublicationCompiler().compile(_draft(row_filter=row_filter))
 
 
-def test_compiler_rejects_masks_on_deny_rules():
+def test_compiler_rejects_deny_rules():
     draft = _draft()
     deny_rule = PolicyRuleDraft(
         ordinal=20,
-        effect="deny",
+        effect=cast(Any, "deny"),
         principals=["group:analyst"],
         when={},
         columns=["email"],
-        masks={"email": {"type": "redact"}},
+        masks={},
         row_filter=None,
     )
     draft.assets[0].rules.append(deny_rule)
 
-    with pytest.raises(ValidationFailure, match="deny rules may not define masks"):
+    with pytest.raises(ValidationFailure, match="Policy rules are explicit grants"):
         PublicationCompiler().compile(draft)
 
 

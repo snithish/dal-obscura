@@ -288,7 +288,7 @@ def test_policy_save_rejects_deny_rule_with_mask_before_publish():
     )
 
     assert response.status_code == 400
-    assert "deny rules may not define masks" in response.json()["detail"]
+    assert "Policy rules are explicit grants" in response.json()["detail"]
 
 
 def test_platform_admin_can_assign_owner_and_bootstrap_policy():

@@ -76,7 +76,7 @@ def test_published_authorizer_accepts_tenant_slug_attribute(db_session: Session)
     assert decision.policy_version == 123
 
 
-def test_published_store_uses_last_good_asset_after_transient_failure(
+def test_published_store_fails_closed_by_default_after_transient_failure(
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -85,17 +85,52 @@ def test_published_store_uses_last_good_asset_after_transient_failure(
     _publish_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
     config_store = PublishedConfigStore(db_session, cell_id=cell_id)
 
+    config_store.get_asset(
+        tenant_id=str(tenant_id),
+        catalog="analytics",
+        target="default.users",
+    )
+
+    def fail_get(*args, **kwargs):
+        del args, kwargs
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(db_session, "get", fail_get)
+
+    with pytest.raises(RuntimeError, match="database unavailable"):
+        config_store.get_asset(
+            tenant_id=str(tenant_id),
+            catalog="analytics",
+            target="default.users",
+        )
+
+
+def test_published_store_uses_last_good_asset_when_stale_mode_is_enabled(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    cell_id = uuid4()
+    tenant_id = uuid4()
+    _publish_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
+    now = 100.0
+    config_store = PublishedConfigStore(
+        db_session,
+        cell_id=cell_id,
+        allow_stale_seconds=60,
+        clock=lambda: now,
+    )
+
     first = config_store.get_asset(
         tenant_id=str(tenant_id),
         catalog="analytics",
         target="default.users",
     )
 
-    def fail_scalar(*args, **kwargs):
+    def fail_get(*args, **kwargs):
         del args, kwargs
         raise RuntimeError("database unavailable")
 
-    monkeypatch.setattr(db_session, "scalar", fail_scalar)
+    monkeypatch.setattr(db_session, "get", fail_get)
     second = config_store.get_asset(
         tenant_id=str(tenant_id),
         catalog="analytics",
@@ -103,6 +138,85 @@ def test_published_store_uses_last_good_asset_after_transient_failure(
     )
 
     assert second == first
+
+
+def test_published_store_rejects_expired_last_good_asset(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    cell_id = uuid4()
+    tenant_id = uuid4()
+    _publish_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
+    now = 100.0
+    config_store = PublishedConfigStore(
+        db_session,
+        cell_id=cell_id,
+        allow_stale_seconds=60,
+        clock=lambda: now,
+    )
+
+    config_store.get_asset(
+        tenant_id=str(tenant_id),
+        catalog="analytics",
+        target="default.users",
+    )
+
+    def fail_get(*args, **kwargs):
+        del args, kwargs
+        raise RuntimeError("database unavailable")
+
+    now = 161.0
+    monkeypatch.setattr(db_session, "get", fail_get)
+
+    with pytest.raises(RuntimeError, match="database unavailable"):
+        config_store.get_asset(
+            tenant_id=str(tenant_id),
+            catalog="analytics",
+            target="default.users",
+        )
+
+
+def test_published_store_does_not_use_last_good_when_asset_is_removed(
+    db_session: Session,
+):
+    cell_id = uuid4()
+    tenant_id = uuid4()
+    _publish_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
+    config_store = PublishedConfigStore(
+        db_session,
+        cell_id=cell_id,
+        allow_stale_seconds=60,
+    )
+
+    config_store.get_asset(
+        tenant_id=str(tenant_id),
+        catalog="analytics",
+        target="default.users",
+    )
+    removed_asset_publication_id = uuid4()
+    store = PublicationStore(db_session)
+    store.insert_publication(
+        cell_id=cell_id,
+        publication_id=removed_asset_publication_id,
+        manifest_hash="c" * 64,
+    )
+    db_session.add(
+        PublishedCellRuntimeRecord(
+            publication_id=removed_asset_publication_id,
+            auth_chain_json={"providers": []},
+            ticket_json={},
+            path_rules_json=[],
+        )
+    )
+    store.activate_publication(cell_id=cell_id, publication_id=removed_asset_publication_id)
+    db_session.commit()
+
+    with pytest.raises(LookupError, match="No published asset"):
+        config_store.get_asset(
+            tenant_id=str(tenant_id),
+            catalog="analytics",
+            target="default.users",
+        )
 
 
 def test_published_catalog_registry_reads_catalog_config_from_published_catalogs(

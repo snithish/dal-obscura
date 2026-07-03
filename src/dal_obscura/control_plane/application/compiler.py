@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any, Literal, cast
+from typing import Any, cast
 from uuid import UUID
 
 from dal_obscura.common.access_control.compiled_policy import (
@@ -144,16 +144,16 @@ class PublicationCompiler:
         )
 
     def _compile_rule(self, rule: PolicyRuleDraft) -> CompiledPolicyRule:
-        if rule.effect == "deny" and rule.masks:
-            raise ValidationFailure("deny rules may not define masks")
-        if rule.effect == "deny" and rule.row_filter:
-            raise ValidationFailure("deny rules may not define row_filter")
+        if rule.effect != "allow":
+            raise ValidationFailure(
+                "Policy rules are explicit grants; use effect='allow' or omit deny rules."
+            )
         row_filter = _normalize_row_filter(rule.row_filter)
         return CompiledPolicyRule(
             ordinal=rule.ordinal,
             principals=list(rule.principals),
             columns=list(rule.columns),
-            effect=rule.effect,
+            effect="allow",
             when=dict(rule.when),
             masks={
                 column: CompiledMaskRule(
@@ -183,8 +183,10 @@ def _normalize_row_filter(value: str | None) -> str | None:
 def _policy_rule_draft_from_payload(index: int, raw: dict[str, Any]) -> PolicyRuleDraft:
     try:
         effect = str(raw.get("effect", "allow"))
-        if effect not in {"allow", "deny"}:
-            raise ValueError("effect must be allow or deny")
+        if effect != "allow":
+            raise ValidationFailure(
+                "Policy rules are explicit grants; use effect='allow' or omit deny rules."
+            )
         row_filter = raw.get("row_filter")
         if row_filter is not None and not isinstance(row_filter, str):
             raise ValueError("row_filter must be a string")
@@ -196,13 +198,15 @@ def _policy_rule_draft_from_payload(index: int, raw: dict[str, Any]) -> PolicyRu
             raise ValueError("masks must be an object")
         return PolicyRuleDraft(
             ordinal=int(raw["ordinal"]),
-            effect=cast(Literal["allow", "deny"], effect),
+            effect="allow",
             principals=[str(item) for item in _list(raw.get("principals"))],
             when=cast(dict[str, str | list[str]], dict(when)),
             columns=[str(item) for item in _list(raw.get("columns"))],
             masks=dict(masks),
             row_filter=row_filter,
         )
+    except ValidationFailure:
+        raise
     except (KeyError, TypeError, ValueError) as exc:
         raise ValidationFailure(f"Invalid policy rule {index}") from exc
 

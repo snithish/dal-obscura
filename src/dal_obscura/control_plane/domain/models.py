@@ -18,7 +18,7 @@ class CatalogDraft:
 @dataclass(frozen=True)
 class PolicyRuleDraft:
     ordinal: int
-    effect: Literal["allow", "deny"]
+    effect: Literal["allow"]
     principals: list[str]
     when: dict[str, str | list[str]]
     columns: list[str]

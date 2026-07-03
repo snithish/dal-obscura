@@ -35,9 +35,10 @@ flowchart TD
     masks --> result["Return governed rows"]
 ```
 
-Allow rules can expose columns, add DuckDB row filters, and apply masks. Deny
-rules deny matching projected columns for matching principals and conditions;
-they do not carry row filters or masks.
+All columns are denied by default. A policy rule is an explicit grant: it can
+expose columns, add row filters, and define masks. Multiple matching grants
+combine by unioning columns, AND-combining row filters, and choosing the
+strictest mask per column.
 
 ## Authoring Checklist
 
@@ -97,7 +98,7 @@ Test every policy with representative principals:
 | --- | --- |
 | Allowed reader | Receives only authorized columns and rows. |
 | Privileged reader | Receives the intended unmasked columns. |
-| Denied reader | Receives an authorization failure. |
+| Reader without a matching grant | Receives an authorization failure. |
 | Asset owner | Can edit owners, filters, masks, and policy versions. |
 
 Local reference environments can script these checks, but the same pattern

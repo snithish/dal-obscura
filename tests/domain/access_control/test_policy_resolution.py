@@ -1,3 +1,5 @@
+import pytest
+
 from dal_obscura.common.access_control.models import (
     AccessRule,
     DatasetPolicy,
@@ -32,7 +34,82 @@ def test_resolve_access_allows_columns():
     assert row_filter == "(region = 'us')"
 
 
-def test_resolve_access_unions_columns_and_filters():
+def test_resolve_access_default_denies_without_matching_grant():
+    policy = _policy(
+        AccessRule(
+            principals=["group:analyst"],
+            columns=["id"],
+            masks={},
+            row_filter=None,
+        )
+    )
+    principal = Principal(id="user1", groups=["guest"], attributes={})
+
+    with pytest.raises(PermissionError, match="No allowed columns"):
+        resolve_access(
+            policy,
+            principal,
+            target="catalog.db.table",
+            catalog="analytics",
+            requested_columns=["id"],
+        )
+
+
+def test_resolve_access_unions_grants_filters_and_strictest_masks():
+    policy = _policy(
+        AccessRule(
+            principals=["group:analyst"],
+            columns=["id", "email"],
+            masks={"email": MaskRule(type="hash")},
+            row_filter="region = 'us'",
+        ),
+        AccessRule(
+            principals=["user1"],
+            columns=["email", "region"],
+            masks={"email": MaskRule(type="null")},
+            row_filter="active = true",
+        ),
+    )
+    principal = Principal(id="user1", groups=["analyst"], attributes={})
+
+    allowed, masks, row_filter = resolve_access(
+        policy,
+        principal,
+        target="catalog.db.table",
+        catalog="analytics",
+        requested_columns=["id", "email", "region"],
+    )
+
+    assert allowed == ["id", "email", "region"]
+    assert masks["email"].type == "null"
+    assert row_filter == "(region = 'us') AND (active = true)"
+
+
+def test_resolve_access_allows_by_role_and_principal_attributes():
+    policy = _policy(
+        AccessRule(
+            principals=["group:analyst"],
+            when={"tenant": "acme"},
+            columns=["id", "region"],
+            masks={},
+            row_filter="region = 'us'",
+        )
+    )
+    principal = Principal(id="user1", groups=["analyst"], attributes={"tenant": "acme"})
+
+    allowed, _masks, row_filter = resolve_access(
+        policy,
+        principal,
+        target="catalog.db.table",
+        catalog="analytics",
+        requested_columns=["id", "region"],
+    )
+
+    assert allowed == ["id", "region"]
+    assert row_filter == "(region = 'us')"
+
+
+def test_resolve_access_unions_columns_and_filters_for_matching_grants():
     policy = _policy(
         AccessRule(
             principals=["user1"],
@@ -62,98 +139,6 @@ def test_resolve_access_unions_columns_and_filters():
     assert allowed == ["id", "name"]
     assert "name" in masks
     assert row_filter == "(region = 'us') AND (active = true)"
-
-
-def test_resolve_access_allows_by_role_and_principal_attributes():
-    policy = _policy(
-        AccessRule(
-            principals=["group:analyst"],
-            when={"tenant": "acme"},
-            columns=["id", "region"],
-            masks={},
-            row_filter="region = 'us'",
-        )
-    )
-    principal = Principal(id="user1", groups=["analyst"], attributes={"tenant": "acme"})
-
-    allowed, _masks, row_filter = resolve_access(
-        policy,
-        principal,
-        target="catalog.db.table",
-        catalog="analytics",
-        requested_columns=["id", "region"],
-    )
-
-    assert allowed == ["id", "region"]
-    assert row_filter == "(region = 'us')"
-
-
-def test_resolve_access_denies_override_allows():
-    policy = _policy(
-        AccessRule(
-            principals=["group:analyst"],
-            columns=["id", "email"],
-            masks={},
-            row_filter=None,
-        ),
-        AccessRule(
-            principals=["group:analyst"],
-            when={"clearance": "low"},
-            effect="deny",
-            columns=["email"],
-            masks={},
-            row_filter=None,
-        ),
-    )
-    principal = Principal(id="user1", groups=["analyst"], attributes={"clearance": "low"})
-
-    allowed, _masks, row_filter = resolve_access(
-        policy,
-        principal,
-        target="catalog.db.table",
-        catalog="analytics",
-        requested_columns=["id", "email"],
-    )
-
-    assert allowed == ["id"]
-    assert row_filter is None
-
-
-def test_resolve_access_applies_deny_precedence_across_multiple_rules():
-    policy = _policy(
-        AccessRule(
-            principals=["group:analyst"],
-            columns=["id"],
-            masks={},
-            row_filter=None,
-        ),
-        AccessRule(
-            principals=["group:analyst"],
-            when={"region_scope": ["eu", "global"]},
-            columns=["email"],
-            masks={},
-            row_filter=None,
-        ),
-        AccessRule(
-            principals=["group:analyst"],
-            when={"region_scope": "eu"},
-            effect="deny",
-            columns=["email"],
-            masks={},
-            row_filter=None,
-        ),
-    )
-    principal = Principal(id="user1", groups=["analyst"], attributes={"region_scope": "eu"})
-
-    allowed, _masks, _row_filter = resolve_access(
-        policy,
-        principal,
-        target="catalog.db.table",
-        catalog="analytics",
-        requested_columns=["id", "email"],
-    )
-
-    assert allowed == ["id"]
 
 
 def test_policy_version_changes_when_abac_clauses_change():

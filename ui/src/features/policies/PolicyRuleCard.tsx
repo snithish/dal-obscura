@@ -41,22 +41,6 @@ export function RuleCard({
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <select
-            className="field min-w-[120px]"
-            disabled={!editable}
-            value={rule.effect}
-            onChange={(event) => {
-              const effect = event.target.value as "allow" | "deny";
-              onChange(
-                effect === "deny"
-                  ? { effect, masks: [], rowFilter: "" }
-                  : { effect },
-              );
-            }}
-          >
-            <option value="allow">Allow</option>
-            <option value="deny">Deny</option>
-          </select>
           {canRemove ? (
             <button
               className="btn-secondary"
@@ -95,23 +79,21 @@ export function RuleCard({
         )}
       </div>
 
-      {rule.effect === "allow" ? (
-        <label className="mt-4 block">
-          <span className="text-xs font-black uppercase tracking-wide text-muted">
-            Row filter SQL
-          </span>
-          <input
-            className="field mt-2"
-            disabled={!editable}
-            placeholder="region = 'us'"
-            value={rule.rowFilter}
-            onChange={(event) => onChange({ rowFilter: event.target.value })}
-          />
-          <span className="mt-1 block text-xs text-muted">
-            DuckDB SQL expression applied before masking.
-          </span>
-        </label>
-      ) : null}
+      <label className="mt-4 block">
+        <span className="text-xs font-black uppercase tracking-wide text-muted">
+          Row filter SQL
+        </span>
+        <input
+          className="field mt-2"
+          disabled={!editable}
+          placeholder="region = 'us'"
+          value={rule.rowFilter}
+          onChange={(event) => onChange({ rowFilter: event.target.value })}
+        />
+        <span className="mt-1 block text-xs text-muted">
+          DuckDB SQL expression applied before masking.
+        </span>
+      </label>
 
       <EditablePairs
         addLabel="Add condition"
@@ -124,14 +106,12 @@ export function RuleCard({
         disabled={!editable}
       />
 
-      {rule.effect === "allow" ? (
-        <MaskEditor
-          schemaColumns={schemaColumns}
-          masks={rule.masks}
-          onChange={(masks) => onChange({ masks })}
-          disabled={!editable}
-        />
-      ) : null}
+      <MaskEditor
+        schemaColumns={schemaColumns}
+        masks={rule.masks}
+        onChange={(masks) => onChange({ masks })}
+        disabled={!editable}
+      />
     </article>
   );
 }

@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import importlib
 import logging
+import socket
+import threading
 from typing import cast
 
 import pyarrow.flight as flight
+import uvicorn
+from sqlalchemy.orm import Session, sessionmaker
 
 from dal_obscura.common.config_store.db import (
     check_config_store_schema,
@@ -28,6 +32,7 @@ from dal_obscura.data_plane.infrastructure.adapters.published_config import (
     PublishedRuntime,
 )
 from dal_obscura.data_plane.infrastructure.adapters.runtime_config import (
+    DataPlaneRuntimeConfig,
     load_data_plane_runtime_config,
 )
 from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
@@ -41,6 +46,7 @@ from dal_obscura.data_plane.infrastructure.adapters.ticket_store_sqlalchemy impo
     SqlAlchemyTicketStore,
 )
 from dal_obscura.data_plane.interfaces.flight.server import DataAccessFlightService
+from dal_obscura.data_plane.interfaces.health import create_health_app, published_runtime_readiness
 from dal_obscura.logging_config import LoggingConfig, setup_logging
 
 LOGGER = logging.getLogger(__name__)
@@ -55,8 +61,12 @@ def main() -> None:
     engine = create_engine_from_url(runtime_config.database_url)
     check_config_store_schema(engine)
     session_maker = session_factory(engine)
-    session = session_maker()
-    config_store = PublishedConfigStore(session, cell_id=runtime_config.cell_id)
+    _start_health_server(session_maker, runtime_config)
+    config_store = PublishedConfigStore(
+        session_maker,
+        cell_id=runtime_config.cell_id,
+        allow_stale_seconds=runtime_config.allow_stale_config_seconds,
+    )
     published_runtime = config_store.get_runtime()
     secret_provider = load_secret_provider(
         runtime_config.secret_provider,
@@ -104,10 +114,7 @@ def main() -> None:
         verify_client=runtime_config.tls_verify_client,
         root_certificates=_tls_root_certificates(runtime_config.tls_client_ca),
     )
-    try:
-        server.serve()
-    finally:
-        session.close()
+    server.serve()
 
 
 def _identity_from_runtime(
@@ -129,6 +136,51 @@ def _identity_from_runtime(
     if len(providers) == 1:
         return providers[0]
     return CompositeIdentityProvider(providers)
+
+
+def _start_health_server(
+    session_maker: sessionmaker[Session],
+    runtime_config: DataPlaneRuntimeConfig,
+) -> None:
+    if runtime_config.health_port is None:
+        return
+    health_socket = _bind_health_socket(runtime_config.health_host, runtime_config.health_port)
+
+    def readiness() -> dict[str, object]:
+        with session_maker() as health_session:
+            store = PublishedConfigStore(
+                health_session,
+                cell_id=runtime_config.cell_id,
+                allow_stale_seconds=runtime_config.allow_stale_config_seconds,
+            )
+            return published_runtime_readiness(store)
+
+    app = create_health_app(readiness=readiness)
+    config = uvicorn.Config(
+        app,
+        host=runtime_config.health_host,
+        port=runtime_config.health_port,
+        log_level=runtime_config.log_level.lower(),
+    )
+    server = uvicorn.Server(config)
+    thread = threading.Thread(
+        target=lambda: server.run(sockets=[health_socket]),
+        name="dal-obscura-health",
+        daemon=True,
+    )
+    thread.start()
+
+
+def _bind_health_socket(host: str, port: int) -> socket.socket:
+    health_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        health_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        health_socket.bind((host, port))
+        health_socket.listen()
+        return health_socket
+    except OSError:
+        health_socket.close()
+        raise
 
 
 def _tls_certificates(cert: str | None, key: str | None) -> list[flight.CertKeyPair] | None:

@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+import logging
+from collections.abc import Callable, Iterable
+from contextlib import contextmanager
 from dataclasses import dataclass
+from threading import RLock
+from time import monotonic
 from typing import Any, cast
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from dal_obscura.common.access_control.compiled_policy import CompiledPolicy
 from dal_obscura.common.access_control.models import (
@@ -33,6 +37,8 @@ from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
     SecretProvider,
     resolve_secret_refs,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -64,76 +70,152 @@ class PublishedCatalog:
 class PublishedConfigStore:
     """Reads active published configuration for one data-plane cell."""
 
-    def __init__(self, session: Session, *, cell_id: UUID) -> None:
-        self._session = session
+    def __init__(
+        self,
+        session: Session | sessionmaker[Session],
+        *,
+        cell_id: UUID,
+        allow_stale_seconds: int | None = None,
+        clock: Callable[[], float] = monotonic,
+    ) -> None:
+        if isinstance(session, Session):
+            self._session: Session | None = session
+            self._session_maker: sessionmaker[Session] | None = None
+        else:
+            self._session = None
+            self._session_maker = session
         self._cell_id = cell_id
+        self._allow_stale_seconds = allow_stale_seconds
+        self._clock = clock
+        self._lock = RLock()
         self._asset_cache: dict[tuple[UUID, UUID, str, str], PublishedAsset] = {}
         self._last_good_by_target: dict[tuple[UUID, str, str], PublishedAsset] = {}
+        self._last_good_asset_loaded_at: dict[tuple[UUID, str, str], float] = {}
         self._catalog_cache: dict[tuple[UUID, UUID], list[PublishedCatalog]] = {}
         self._last_good_catalogs_by_tenant: dict[UUID, list[PublishedCatalog]] = {}
+        self._last_good_catalogs_loaded_at: dict[UUID, float] = {}
         self._runtime_cache: dict[UUID, PublishedRuntime] = {}
         self._tenant_cache: dict[str, UUID] = {}
 
     def active_publication_id(self) -> UUID:
-        record = self._session.get(ActivePublicationRecord, self._cell_id)
-        if record is None:
-            raise LookupError(f"No active publication for cell {self._cell_id}")
-        return record.publication_id
+        with self._session_scope() as session:
+            return self._active_publication_id(session)
 
     def get_asset(self, *, tenant_id: str, catalog: str, target: str) -> PublishedAsset:
-        tenant_uuid = self._tenant_uuid(tenant_id)
-        target_key = (tenant_uuid, catalog, target)
-        try:
-            publication_id = self.active_publication_id()
-            cache_key = (publication_id, tenant_uuid, catalog, target)
-            cached = self._asset_cache.get(cache_key)
-            if cached is not None:
-                return cached
-            asset = self._published_asset(
-                publication_id=publication_id,
-                tenant_id=tenant_uuid,
-                catalog=catalog,
-                target=target,
-            )
-            self._asset_cache[cache_key] = asset
-            self._last_good_by_target[target_key] = asset
-            return asset
-        except Exception:
-            cached = self._last_good_by_target.get(target_key)
-            if cached is not None:
-                return cached
-            raise
+        with self._lock:
+            tenant_uuid = self._tenant_uuid(tenant_id)
+            target_key = (tenant_uuid, catalog, target)
+            try:
+                with self._session_scope() as session:
+                    publication_id = self._active_publication_id(session)
+                    cache_key = (publication_id, tenant_uuid, catalog, target)
+                    cached = self._asset_cache.get(cache_key)
+                    if cached is not None:
+                        return cached
+                    asset = self._published_asset(
+                        session,
+                        publication_id=publication_id,
+                        tenant_id=tenant_uuid,
+                        catalog=catalog,
+                        target=target,
+                    )
+                self._asset_cache[cache_key] = asset
+                self._last_good_by_target[target_key] = asset
+                self._last_good_asset_loaded_at[target_key] = self._clock()
+                return asset
+            except LookupError:
+                raise
+            except Exception as exc:
+                cached = self._last_good_asset(target_key)
+                if cached is not None:
+                    LOGGER.warning(
+                        "using_stale_published_asset",
+                        extra={
+                            "cell_id": str(self._cell_id),
+                            "tenant_id": str(tenant_uuid),
+                            "catalog": catalog,
+                            "target": target,
+                            "publication_id": str(cached.publication_id),
+                            "stale_age_seconds": self._stale_age_seconds(
+                                self._last_good_asset_loaded_at[target_key]
+                            ),
+                        },
+                    )
+                    return cached
+                raise exc
 
     def get_catalogs(self, *, tenant_id: str) -> list[PublishedCatalog]:
-        tenant_uuid = self._tenant_uuid(tenant_id)
-        try:
-            publication_id = self.active_publication_id()
-            cache_key = (publication_id, tenant_uuid)
-            cached = self._catalog_cache.get(cache_key)
-            if cached is not None:
-                return cached
-            catalogs = self._published_catalogs(
-                publication_id=publication_id,
-                tenant_id=tenant_uuid,
-            )
-            self._catalog_cache[cache_key] = catalogs
-            self._last_good_catalogs_by_tenant[tenant_uuid] = catalogs
-            return catalogs
-        except Exception:
-            cached = self._last_good_catalogs_by_tenant.get(tenant_uuid)
-            if cached is not None:
-                return cached
-            raise
+        with self._lock:
+            tenant_uuid = self._tenant_uuid(tenant_id)
+            try:
+                with self._session_scope() as session:
+                    publication_id = self._active_publication_id(session)
+                    cache_key = (publication_id, tenant_uuid)
+                    cached = self._catalog_cache.get(cache_key)
+                    if cached is not None:
+                        return cached
+                    catalogs = self._published_catalogs(
+                        session,
+                        publication_id=publication_id,
+                        tenant_id=tenant_uuid,
+                    )
+                self._catalog_cache[cache_key] = catalogs
+                self._last_good_catalogs_by_tenant[tenant_uuid] = catalogs
+                self._last_good_catalogs_loaded_at[tenant_uuid] = self._clock()
+                return catalogs
+            except LookupError:
+                raise
+            except Exception as exc:
+                cached = self._last_good_catalogs(tenant_uuid)
+                if cached is not None:
+                    LOGGER.warning(
+                        "using_stale_published_catalogs",
+                        extra={
+                            "cell_id": str(self._cell_id),
+                            "tenant_id": str(tenant_uuid),
+                            "stale_age_seconds": self._stale_age_seconds(
+                                self._last_good_catalogs_loaded_at[tenant_uuid]
+                            ),
+                        },
+                    )
+                    return cached
+                raise exc
+
+    def _last_good_asset(
+        self,
+        target_key: tuple[UUID, str, str],
+    ) -> PublishedAsset | None:
+        cached = self._last_good_by_target.get(target_key)
+        loaded_at = self._last_good_asset_loaded_at.get(target_key)
+        if cached is None or loaded_at is None or not self._stale_cache_enabled(loaded_at):
+            return None
+        return cached
+
+    def _last_good_catalogs(self, tenant_id: UUID) -> list[PublishedCatalog] | None:
+        cached = self._last_good_catalogs_by_tenant.get(tenant_id)
+        loaded_at = self._last_good_catalogs_loaded_at.get(tenant_id)
+        if cached is None or loaded_at is None or not self._stale_cache_enabled(loaded_at):
+            return None
+        return cached
+
+    def _stale_cache_enabled(self, loaded_at: float) -> bool:
+        if self._allow_stale_seconds is None:
+            return False
+        return self._stale_age_seconds(loaded_at) <= self._allow_stale_seconds
+
+    def _stale_age_seconds(self, loaded_at: float) -> float:
+        return self._clock() - loaded_at
 
     def _published_asset(
         self,
+        session: Session,
         *,
         publication_id: UUID,
         tenant_id: UUID,
         catalog: str,
         target: str,
     ) -> PublishedAsset:
-        record = self._session.scalar(
+        record = session.scalar(
             select(PublishedAssetRecord).where(
                 PublishedAssetRecord.publication_id == publication_id,
                 PublishedAssetRecord.tenant_id == tenant_id,
@@ -155,11 +237,12 @@ class PublishedConfigStore:
 
     def _published_catalogs(
         self,
+        session: Session,
         *,
         publication_id: UUID,
         tenant_id: UUID,
     ) -> list[PublishedCatalog]:
-        records = self._session.scalars(
+        records = session.scalars(
             select(PublishedCatalogRecord)
             .where(
                 PublishedCatalogRecord.publication_id == publication_id,
@@ -184,35 +267,54 @@ class PublishedConfigStore:
         try:
             tenant_uuid = UUID(tenant_id)
         except ValueError:
-            tenant_uuid = self._tenant_uuid_by_slug(tenant_id)
+            with self._session_scope() as session:
+                tenant_uuid = self._tenant_uuid_by_slug(session, tenant_id)
         self._tenant_cache[tenant_id] = tenant_uuid
         return tenant_uuid
 
-    def _tenant_uuid_by_slug(self, slug: str) -> UUID:
-        record = self._session.scalar(select(TenantRecord).where(TenantRecord.slug == slug))
+    def _tenant_uuid_by_slug(self, session: Session, slug: str) -> UUID:
+        record = session.scalar(select(TenantRecord).where(TenantRecord.slug == slug))
         if record is None:
             raise LookupError(f"No tenant with slug {slug!r}")
         return record.id
 
     def get_runtime(self) -> PublishedRuntime:
-        publication_id = self.active_publication_id()
-        cached = self._runtime_cache.get(publication_id)
-        if cached is not None:
-            return cached
-        record = self._session.scalar(
-            select(PublishedCellRuntimeRecord).where(
-                PublishedCellRuntimeRecord.publication_id == publication_id
-            )
-        )
+        with self._lock:
+            with self._session_scope() as session:
+                publication_id = self._active_publication_id(session)
+                cached = self._runtime_cache.get(publication_id)
+                if cached is not None:
+                    return cached
+                record = session.scalar(
+                    select(PublishedCellRuntimeRecord).where(
+                        PublishedCellRuntimeRecord.publication_id == publication_id
+                    )
+                )
+                if record is None:
+                    raise LookupError(f"No published runtime for publication {publication_id}")
+                runtime = PublishedRuntime(
+                    publication_id=record.publication_id,
+                    auth_chain=dict(record.auth_chain_json),
+                    ticket=dict(record.ticket_json),
+                )
+            self._runtime_cache[publication_id] = runtime
+            return runtime
+
+    def _active_publication_id(self, session: Session) -> UUID:
+        record = session.get(ActivePublicationRecord, self._cell_id)
         if record is None:
-            raise LookupError(f"No published runtime for publication {publication_id}")
-        runtime = PublishedRuntime(
-            publication_id=record.publication_id,
-            auth_chain=dict(record.auth_chain_json),
-            ticket=dict(record.ticket_json),
-        )
-        self._runtime_cache[publication_id] = runtime
-        return runtime
+            raise LookupError(f"No active publication for cell {self._cell_id}")
+        return record.publication_id
+
+    @contextmanager
+    def _session_scope(self):
+        if self._session is not None:
+            yield self._session
+            return
+        if self._session_maker is None:
+            raise RuntimeError("PublishedConfigStore is missing a session factory")
+        with self._session_maker() as session:
+            yield session
 
 
 class PublishedConfigAuthorizer:
