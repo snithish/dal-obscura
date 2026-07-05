@@ -1,16 +1,26 @@
 # Policy Authoring
 
-Policies describe who can read an asset and how data is shaped before it is
-returned. Asset owners use the control-plane UI to edit owners, rules, row
-filters, masks, and policy versions.
+Policies describe who can read an asset and how rows and columns are shaped
+before data is returned. Asset owners use the control-plane UI or API to edit
+owners, rules, row filters, masks, and policy versions.
+
+## Contents
+
+- [Policy Flow](#policy-flow)
+- [Rule Evaluation](#rule-evaluation)
+- [Authoring Checklist](#authoring-checklist)
+- [Example Rule](#example-rule)
+- [Row Filters](#row-filters)
+- [Masks](#masks)
+- [Testing A Policy](#testing-a-policy)
 
 ## Policy Flow
 
 ```mermaid
 flowchart LR
     owner["Asset owner"] --> draft["Edit draft"]
-    draft --> validate["Validate DuckDB SQL"]
-    validate --> publish["Publish policy version"]
+    draft --> validate["Validate policy"]
+    validate --> publish["Submit policy version"]
     publish --> active["Active policy version"]
     active --> read["Reads use that version"]
 ```
@@ -31,22 +41,25 @@ flowchart TD
     grant -- "No" --> deny["Deny"]
     grant -- "Yes" --> columns["Resolve allowed columns"]
     columns --> filter["Apply row filter"]
-    filter --> masks["Apply column masks"]
+    filter --> masks["Apply masks"]
     masks --> result["Return governed rows"]
 ```
 
-All columns are denied by default. A policy rule is an explicit grant: it can
-expose columns, add row filters, and define masks. Multiple matching grants
-combine by unioning columns, AND-combining row filters, and choosing the
-strictest mask per column.
+All columns are denied by default. A grant can expose columns, add a row filter,
+and define masks. Multiple matching grants combine by:
+
+- unioning visible columns,
+- AND-combining row filters,
+- choosing the strictest mask for each masked column.
 
 ## Authoring Checklist
 
-- Start with the asset owner list. Only trusted owners should edit policies.
+- Start with owners. Only trusted owners should edit policy for an asset.
 - Grant the smallest useful column set.
 - Express row filters as DuckDB SQL boolean expressions.
 - Use one supported mask type per masked field.
-- Publish a policy version only after testing with representative users.
+- Preview with representative principals before submitting a policy version.
+- Verify one allowed, one privileged, and one denied read persona.
 
 ## Example Rule
 
@@ -78,10 +91,12 @@ revenue <= 100000
 Avoid expressions that depend on non-deterministic behavior unless you have a
 clear operational reason.
 
+Unsupported SQL is rejected before activation or planning. Keep row filters as
+expressions, not statements.
+
 ## Masks
 
-Masks are named operations evaluated by the DuckDB transform. The current mask
-types are:
+Masks are named operations evaluated by the DuckDB transform.
 
 | Type | Value | Output |
 | --- | --- | --- |
@@ -110,12 +125,9 @@ Test every policy with representative principals:
 | Principal type | Expected check |
 | --- | --- |
 | Allowed reader | Receives only authorized columns and rows. |
-| Privileged reader | Receives the intended unmasked columns. |
+| Privileged reader | Receives intended unmasked columns. |
 | Reader without a matching grant | Receives an authorization failure. |
 | Asset owner | Can edit owners, filters, masks, and policy versions. |
-
-Local reference environments can script these checks, but the same pattern
-applies to any deployment.
 
 The control-plane API exposes the same server-side policy semantics for preview:
 
@@ -130,8 +142,3 @@ ordinal without exposing tenant or cell internals.
 For code changes to policy resolution, add focused tests under
 `tests/domain/access_control/` and data-plane tests under `tests/interfaces/` or
 `tests/infrastructure/` only when behavior changes there.
-
-Breaking changes for policy authors and API clients:
-
-- Public tenant and cell endpoints were removed.
-- Public publication endpoints were replaced by policy-version history.

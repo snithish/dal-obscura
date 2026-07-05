@@ -1,8 +1,19 @@
 # Concepts
 
 dal-obscura separates policy management from governed reads. The control plane
-owns workspace configuration and policy versions. The data plane performs reads
-through Arrow Flight and applies the active policy version.
+owns workspace configuration and policy versions. The data plane performs Arrow
+Flight reads and enforces the active policy version for each asset.
+
+## Contents
+
+- [System Shape](#system-shape)
+- [Core Objects](#core-objects)
+- [Asset Lifecycle](#asset-lifecycle)
+- [Read Lifecycle](#read-lifecycle)
+- [Policy Evaluation](#policy-evaluation)
+- [Catalog Resolution](#catalog-resolution)
+- [Persistence](#persistence)
+- [Compatibility Notes](#compatibility-notes)
 
 ## System Shape
 
@@ -48,25 +59,18 @@ flowchart TB
 
 | Object | Meaning |
 | --- | --- |
-| Catalog | A configured source that can discover tables and resolve governed targets into executable readers. |
-| Discovered table | A table found by catalog discovery. |
-| Asset | A governed table that owners can manage. |
-| Owner | A principal or group allowed to edit policy for an asset. |
-| Policy rule | A grant, column selection, row filter, or mask. |
-| Policy version | An asset-scoped submitted policy snapshot. |
-| Active policy set | The internally published policy set used by reads. |
-| Ticket | A short-lived opaque reference used by Flight `do_get`. |
+| Catalog | Configured source that discovers tables and resolves governed targets. |
+| Discovered table | Table found by catalog discovery before it is governed. |
+| Asset | Governed table that owners can manage. |
+| Owner | Principal or group allowed to edit policy for an asset. |
+| Policy rule | Explicit grant with columns, optional row filter, and optional masks. |
+| Policy version | Asset-scoped submitted policy snapshot. |
+| Active policy set | Internal published representation used by reads. |
+| Ticket | Short-lived opaque reference used by Flight `do_get`. |
 
-The UI is asset-first. Internal runtime details such as tenant or cell IDs are
-kept out of normal user workflows.
-
-Tenant and cell records remain internal runtime partitioning data. The public
-control-plane API exposes a single workspace model for catalogs, assets,
-owners, policies, policy versions, and settings.
-
-Catalog implementations resolve governed targets into executable table readers.
-Built-in catalog config uses `type`; Python module strings are not part of the
-public config format.
+The public product model is asset-first: catalogs, assets, owners, policies,
+policy versions, and settings. Tenant and cell records are internal runtime
+partitioning details.
 
 ## Asset Lifecycle
 
@@ -75,10 +79,13 @@ stateDiagram-v2
     [*] --> Discovered: Catalog discovery
     Discovered --> Governed: Promote to asset
     Governed --> Drafting: Edit owners or policy
-    Drafting --> Submitted: Publish policy version
+    Drafting --> Submitted: Submit policy version
     Submitted --> Active: Version becomes active
     Active --> Drafting: Start next change
 ```
+
+Publishing is scoped to one asset. Treat it as submitting a new policy version
+for that asset, not as a global workspace release.
 
 ## Read Lifecycle
 
@@ -105,13 +112,30 @@ sequenceDiagram
     Flight-->>Client: Arrow record batches
 ```
 
+The ticket is the source of truth for `do_get`. Clients cannot replay a modified
+plan request during streaming.
+
 ## Policy Evaluation
 
-Policy rules decide whether a principal can read an asset, which columns are
-visible, which row filter applies, and which masks are applied to columns.
+Policies decide whether a principal can read an asset, which columns are
+visible, which row filter applies, and which masks apply to sensitive columns.
 
-Row filters and masks are DuckDB SQL expressions. This keeps policy behavior
-close to the execution engine and makes expressions testable.
+Default behavior is deny. Matching grants can expose columns, add row filters,
+and define masks. Row filters and masks are DuckDB SQL expressions so behavior
+stays close to the execution engine and can be tested with the same SQL shape.
+
+## Catalog Resolution
+
+Catalogs resolve governed targets into executable table readers. The current
+workspace API field is named `module`; built-in short values such as `iceberg`,
+`files`, `delta`, and `unity` are accepted. Publication normalizes those values
+into data-plane runtime config.
+
+Custom catalog code implements `CatalogPlugin.resolve_table()` and returns a
+`TableFormat`. A `TableFormat` owns schema extraction, scan-task planning, and
+execution. Backends should produce parallel scan tasks whenever their storage
+format exposes splittable work such as files, fragments, partitions, or row
+groups.
 
 ## Persistence
 
@@ -119,10 +143,12 @@ Use Postgres for persistent control-plane state in shared and deployed
 environments. SQLite is useful for local development and tests, but it is not
 the recommended datastore when state must survive restarts reliably.
 
-## Breaking Changes
+Services do not run migrations automatically. Run `dal-obscura-migrate upgrade`
+and `dal-obscura-migrate check` explicitly.
+
+## Compatibility Notes
 
 - Public tenant and cell endpoints were removed.
 - Public publication endpoints were replaced by policy-version history.
-- Catalog config now uses typed catalog entries instead of Python module strings.
-- Catalogs now resolve executable table readers directly; table provider
-  registry extension is removed.
+- Catalogs now resolve executable table readers directly; the old table
+  provider registry extension point was removed.

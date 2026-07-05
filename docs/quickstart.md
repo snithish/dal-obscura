@@ -1,44 +1,159 @@
 # Quickstart
 
-This guide gets you from a clean checkout to a working dal-obscura service. It
-uses local defaults where possible, but the shape matches a real deployment:
-control plane, data plane, IAM, catalog, and persistent configuration.
+This guide gets you to a working dal-obscura environment first, then shows the
+manual service shape used in real deployments.
 
-## What You Are Starting
+## Contents
+
+- [Run The Local Demo](#run-the-local-demo)
+- [What Starts](#what-starts)
+- [Verify The Environment](#verify-the-environment)
+- [Use The UI](#use-the-ui)
+- [Stop Or Reset](#stop-or-reset)
+- [Manual Service Shape](#manual-service-shape)
+- [Next Reads](#next-reads)
+
+## Run The Local Demo
+
+Prerequisites:
+
+- Docker with Compose v2.
+- Python 3 for the local `./run` helper.
+
+Start the complete local environment:
+
+```bash
+cd examples/demo/keycloak
+./run up
+```
+
+The demo builds from the current checkout unless `DAL_OBSCURA_IMAGE` points at a
+prebuilt image.
+
+## What Starts
 
 ```mermaid
 flowchart LR
-    user["User or client"] --> cp["Control plane API and UI"]
-    client["Flight client"] --> dp["Data plane"]
-    cp --> db[("Config database")]
+    browser["Browser"] --> ui["UI :8821"]
+    ui --> api["Control plane API :8820"]
+    api --> db[("Postgres")]
+    api --> keycloak["Keycloak :8080"]
+    api --> catalog["Iceberg and Delta catalogs"]
+    client["Flight client"] --> dp["Data plane :8815"]
     dp --> db
-    cp --> iam["IAM provider"]
-    dp --> iam
-    cp --> catalog["Catalog"]
-    dp --> catalog
-    dp --> storage["Table storage"]
+    dp --> keycloak
+    dp --> storage["Demo table files"]
 ```
 
-## Prerequisites
+The demo provisions:
 
-- Python 3.10+.
-- `uv`.
-- A SQL database for persistent configuration. Use Postgres for shared or
-  restart-stable environments.
-- An IAM provider such as OIDC/JWKS, API keys, mTLS, trusted headers, or a
-  composite provider.
-- A configured catalog and table storage.
+1. Keycloak realm and demo users.
+2. Postgres-backed config store.
+3. Control-plane API.
+4. Standalone React UI.
+5. Iceberg and Delta demo tables.
+6. Catalog discovery and governed assets.
+7. Asset owners, policies, masks, row filters, and active policy versions.
+8. Arrow Flight data plane.
 
-## Install
+Open:
+
+- UI: `http://127.0.0.1:8821`
+- API docs: `http://127.0.0.1:8820/docs`
+- OpenAPI JSON: `http://127.0.0.1:8820/openapi.json`
+- Keycloak: `http://127.0.0.1:8080`
+- Flight data plane: `grpc://127.0.0.1:8815`
+
+## Verify The Environment
+
+Run the smoke checks:
+
+```bash
+./run smoke
+```
+
+Run individual read checks:
+
+```bash
+./run read --as us-analyst
+./run read --as eu-analyst
+./run read --as data-steward
+./run read --as blocked-user
+```
+
+Expected behavior:
+
+- `us-analyst` reads US rows with masked email values.
+- `eu-analyst` reads EU rows with masked email values.
+- `data-steward` reads all rows with clear email values.
+- `blocked-user` is denied by policy.
+
+## Use The UI
+
+Print demo credentials:
+
+```bash
+./run credentials
+```
+
+Open `http://127.0.0.1:8821`.
+
+Useful personas:
+
+- `demo-admin`: platform administration.
+- `asset-owner`: owner workflow for editing policy and submitting policy
+  versions.
+- `us-analyst`, `eu-analyst`, `data-steward`: read-path policy behavior.
+- `blocked-user`: denied principal.
+
+Suggested UI path:
+
+1. Sign in as `demo-admin`.
+2. Open Catalogs and confirm both demo catalogs are discovered.
+3. Open Assets and inspect `retail.customer_revenue`.
+4. Sign in as `asset-owner`.
+5. Edit a row filter or mask and submit a new policy version.
+6. Sign in as an analyst and confirm policy controls are not editable.
+
+## Stop Or Reset
+
+Stop containers but keep generated files and Postgres volume:
+
+```bash
+./run down
+```
+
+Delete containers, generated files, and demo database state:
+
+```bash
+./run reset
+```
+
+## Manual Service Shape
+
+Use this section when you want to understand the production-shaped runtime
+instead of the all-in-one demo.
+
+### Install
 
 ```bash
 uv sync --dev --extra server --extra postgres
 uv run dal-obscura --help
+uv run dal-obscura-control-plane --help
+uv run dal-obscura-migrate --help
 ```
 
-## Start A Control Plane
+SQLite works for short-lived local development:
 
-Set a persistent database URL and bootstrap admin token:
+```bash
+uv sync --dev --extra server --extra sqlite
+export DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:///runtime/control-plane.db
+```
+
+Use Postgres for shared environments or state that must survive restarts
+reliably.
+
+### Start The Control Plane
 
 ```bash
 export DAL_OBSCURA_DATABASE_URL=postgresql+psycopg://dal_obscura:dal_obscura@127.0.0.1:5432/dal_obscura
@@ -50,47 +165,34 @@ uv run dal-obscura-migrate check
 uv run dal-obscura-control-plane
 ```
 
-Open the UI:
+The API process serves:
 
-```text
-http://127.0.0.1:8821
-```
+- `http://127.0.0.1:8820/docs`
+- `http://127.0.0.1:8820/redoc`
+- `http://127.0.0.1:8820/openapi.json`
 
-Swagger docs are available from the API process:
+### Start The UI
 
-```text
-http://127.0.0.1:8820/docs
-```
-
-For short-lived local development, SQLite also works:
+For frontend development:
 
 ```bash
-uv sync --dev --extra server --extra sqlite
-export DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:///runtime/control-plane.db
+cd ui
+pnpm install
+pnpm dev
 ```
 
-Use Postgres when other people will use the environment or when state must
-survive restarts reliably.
+For a production-like local UI:
 
-## Configure The Service
-
-```mermaid
-sequenceDiagram
-    participant Admin
-    participant CP as "Control plane"
-    participant DB as "Config database"
-    participant Catalog
-
-    Admin->>CP: Configure IAM
-    Admin->>CP: Configure catalog
-    CP->>Catalog: Discover tables
-    Admin->>CP: Promote table to asset
-    Admin->>CP: Assign owners
-    Admin->>CP: Publish policy version
-    CP->>DB: Store active configuration
+```bash
+docker build -f ui/Dockerfile -t dal-obscura-control-plane-ui:local .
+docker run --rm -p 127.0.0.1:8821:8080 \
+  -e DAL_OBSCURA_API_BASE_URL=http://127.0.0.1:8820 \
+  dal-obscura-control-plane-ui:local
 ```
 
-At minimum, configure through the workspace API or UI:
+### Configure The Service
+
+Configure at least:
 
 1. IAM provider.
 2. Catalog connection.
@@ -99,7 +201,11 @@ At minimum, configure through the workspace API or UI:
 5. Asset owners.
 6. Active policy version.
 
-## Start A Data Plane
+Use the UI or workspace API. The control-plane API is workspace-first: normal
+users work with catalogs, assets, owners, policies, policy versions, and
+settings.
+
+### Start A Data Plane
 
 ```bash
 export DAL_OBSCURA_DATABASE_URL=postgresql+psycopg://dal_obscura:dal_obscura@127.0.0.1:5432/dal_obscura
@@ -110,36 +216,14 @@ export DAL_OBSCURA_TICKET_SECRET=replace-with-a-secret
 uv run dal-obscura
 ```
 
-The data plane reads published configuration from the config database, verifies
-identity, mints opaque tickets during planning, and applies the active policy
-version during streaming.
+The data plane reads published configuration from the config database,
+authenticates each request, mints opaque tickets during planning, and verifies
+the active policy version again during streaming.
 
-## Verify The Read Path
+## Next Reads
 
-```mermaid
-flowchart LR
-    identity["Valid identity"] --> info["get_flight_info"]
-    info --> ticket["Opaque ticket"]
-    ticket --> get["do_get"]
-    get --> rows["Filtered and masked rows"]
-```
-
-Use one allowed principal and one denied principal. A useful first check is:
-
-- The allowed principal receives only authorized columns.
-- Row filters remove rows outside that principal's scope.
-- Masks apply to sensitive columns.
-- The denied principal receives an authorization failure.
-
-## Optional Local Reference
-
-The repository includes a complete Keycloak/Postgres/Iceberg example for local
-evaluation:
-
-```bash
-cd examples/demo/keycloak
-./run up
-```
-
-Treat it as one reference deployment, not the required way to run the service.
-See [`examples/demo/keycloak/README.md`](../examples/demo/keycloak/README.md).
+- [Concepts](concepts.md): understand assets, policies, tickets, and read flow.
+- [Policy Authoring](policy-authoring.md): define grants, filters, and masks.
+- [Operators](operators.md): prepare a shared or persistent environment.
+- [Security](security.md): review identity providers, tickets, and secret
+  handling.

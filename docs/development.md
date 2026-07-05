@@ -3,6 +3,18 @@
 This guide is for contributors changing the service, UI, policies, or
 connectors.
 
+## Contents
+
+- [Architecture](#architecture)
+- [Repo Map](#repo-map)
+- [Setup](#setup)
+- [Test Pyramid](#test-pyramid)
+- [Common Checks](#common-checks)
+- [Frontend](#frontend)
+- [Change Guidance](#change-guidance)
+- [Release-Oriented Checklist](#release-oriented-checklist)
+- [Extension Notes](#extension-notes)
+
 ## Architecture
 
 dal-obscura follows a hexagonal architecture. Domain and application code should
@@ -14,10 +26,11 @@ are internal runtime implementation details.
 
 ```mermaid
 flowchart TB
-    interfaces["interfaces/*\nFlight, CLI, API, UI"] --> app["application/*\nuse cases and ports"]
+    interfaces["interfaces/*\nFlight, CLI, API"] --> app["application/*\nuse cases and ports"]
     app --> domain["domain/*\nmodels and rules"]
     infra["infrastructure/*\nadapters"] --> app
     infra --> domain
+    ui["ui/*\nReact control-plane UI"] --> api["control-plane /v1 API"]
 ```
 
 ## Repo Map
@@ -25,11 +38,11 @@ flowchart TB
 | Path | Purpose |
 | --- | --- |
 | `src/dal_obscura/data_plane/interfaces/flight` | Arrow Flight transport. |
-| `src/dal_obscura/control_plane` | HTTP API, UI assets, repositories, and control-plane workflows. |
+| `src/dal_obscura/control_plane` | HTTP API, repositories, and control-plane workflows. |
 | `src/dal_obscura/data_plane/application` | Data-plane use cases and ports. |
 | `src/dal_obscura/common` | Shared models, policy logic, catalog contracts, tickets, and config-store ORM. |
 | `src/dal_obscura/data_plane/infrastructure` | Catalogs, auth, ticket codecs, table formats, transforms. |
-| `ui` | React control-plane UI. |
+| `ui` | Standalone React/Vite control-plane UI. |
 | `connectors` | JVM connector modules and contract fixtures. |
 | `examples` | Auth examples, manifests, and local reference environments. |
 | `tests` | Unit, integration, smoke, and benchmark tests. |
@@ -40,10 +53,12 @@ flowchart TB
 uv sync --dev --extra server --extra sqlite
 ```
 
-Run the service help:
+Run command help:
 
 ```bash
 uv run dal-obscura --help
+uv run dal-obscura-control-plane --help
+uv run dal-obscura-migrate --help
 ```
 
 ## Test Pyramid
@@ -81,7 +96,7 @@ JVM connectors:
 mvn -f connectors/jvm/pom.xml verify
 ```
 
-The Spark datasource also supports profile-specific verification:
+Spark profile-specific verification:
 
 ```bash
 mvn -f connectors/jvm/pom.xml -Pspark-3.5 verify
@@ -110,8 +125,9 @@ pnpm install
 pnpm dev
 ```
 
-Vite proxies `/v1` to `http://127.0.0.1:8820`. Production-like local runs use
-the Caddy UI image:
+Vite proxies `/v1` to `http://127.0.0.1:8820`.
+
+Production-like local runs use the Caddy UI image:
 
 ```bash
 docker build -f ui/Dockerfile -t dal-obscura-control-plane-ui:local .
@@ -143,14 +159,17 @@ docker run --rm -p 127.0.0.1:8821:8080 \
 ## Extension Notes
 
 Catalog implementations resolve governed targets into executable table readers.
-Built-in catalog config uses `type`; Python module strings are not part of the
-public config format. Add a catalog by implementing `CatalogPlugin.resolve_table()`
-and returning a `TableFormat` directly.
+The current workspace API field is named `module`; built-in short values such
+as `iceberg`, `files`, `delta`, and `unity` are accepted and normalized during
+publication.
 
-Breaking API/config changes in this simplification pass:
+Add a catalog by implementing `CatalogPlugin.resolve_table()` and returning a
+`TableFormat` directly. A table format owns schema extraction, scan-task
+planning, and execution.
+
+Current compatibility notes:
 
 - Public tenant and cell endpoints were removed.
 - Public publication endpoints were replaced by policy-version history.
-- Catalog config now uses typed catalog entries instead of Python module strings.
-- Catalogs now resolve executable table readers directly; table provider
-  registry extension is removed.
+- Catalogs now resolve executable table readers directly; the old table
+  provider registry extension point was removed.

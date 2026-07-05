@@ -1,17 +1,30 @@
 # Operator Guide
 
-This guide is for people running dal-obscura as a service. It focuses on the
-runtime pieces, persistence, deployment order, and operational checks.
+This guide is for people running dal-obscura as a service. It covers runtime
+components, deployment decisions, startup order, health checks, and risks.
+
+For incident-style steps, use the [Operator Runbook](operators-runbook.md).
+
+## Contents
+
+- [Production Shape](#production-shape)
+- [Components](#components)
+- [Required Decisions](#required-decisions)
+- [Common Environment Variables](#common-environment-variables)
+- [Startup Order](#startup-order)
+- [Health And Readiness](#health-and-readiness)
+- [Operational Risks](#operational-risks)
 
 ## Production Shape
 
 ```mermaid
 flowchart TB
-    users["Browser users"] --> lb1["HTTP ingress"]
-    clients["Flight clients"] --> lb2["Flight ingress"]
+    users["Browser users"] --> http["HTTP ingress"]
+    clients["Flight clients"] --> flight_ingress["Flight ingress"]
 
-    lb1 --> cp["Control plane API and UI"]
-    lb2 --> dp["Data plane"]
+    http --> ui["Standalone UI"]
+    ui --> cp["Control plane API"]
+    flight_ingress --> dp["Data plane"]
 
     cp --> db[("Postgres config database")]
     dp --> db
@@ -24,28 +37,25 @@ flowchart TB
     dp --> secrets
 ```
 
-Postgres is the recommended datastore for persistent control-plane state. The
-data plane remains stateless with respect to table data and reads configuration
-from the configured repository.
+Use Postgres for persistent control-plane state. Data planes remain stateless
+with respect to table data and read published configuration from the configured
+repository.
 
 ## Components
 
 | Component | Purpose |
 | --- | --- |
-| Control plane | HTTP API, UI, catalog discovery, assets, owners, policies, policy versions. |
+| Control plane API | Catalog discovery, assets, owners, policies, policy versions, runtime settings. |
+| Standalone UI | Browser workflow for admins and asset owners. |
 | Data plane | Arrow Flight reads, authentication, ticket verification, policy enforcement. |
-| Postgres | Persistent configuration, policy versions, and ticket state. |
-| IAM provider | OIDC/JWKS, API key, mTLS, trusted headers, or a composite provider. |
-| Catalog | Discovers and resolves tables. |
+| Postgres | Persistent configuration, policy versions, active policy set, and ticket state. |
+| IAM provider | OIDC/JWKS, API key, mTLS, trusted headers, or composite provider. |
+| Catalog | Discovers tables and resolves governed targets. |
 | Warehouse | Stores table metadata and data files. |
 
-Tenant and cell records are internal runtime partitioning details. Operators
-configure the public control plane through workspace-level catalog, asset,
-policy, owner, runtime, and auth-provider endpoints.
-
 The public control-plane model is workspace-first: assets, catalogs, owners,
-policies, policy versions, and settings. Publication records remain an internal
-runtime representation of active policy sets.
+policies, policy versions, and settings. Tenant and cell records are internal
+runtime partitioning details.
 
 ## Required Decisions
 
@@ -55,12 +65,12 @@ runtime representation of active policy sets.
 | IAM | Use OIDC/JWKS when possible. |
 | Secrets | Store references in config; keep secret values in the runtime secret provider. |
 | Publishing | Keep policy versions asset-scoped. |
-| Catalogs | Resolve all governed tables through catalogs; do not publish standalone file paths. |
+| Catalogs | Resolve governed tables through catalogs; do not publish standalone file paths. |
 | UI exposure | Put the UI behind the same IAM posture as the API. |
+| Stale config | Keep fail-closed default unless a short bounded stale window is an explicit risk decision. |
 
-The control-plane UI and workspace API hide tenant and cell IDs from normal
-users. Operators still configure `DAL_OBSCURA_CELL_ID` for each data-plane
-process so it can load the correct published runtime.
+Operators still configure `DAL_OBSCURA_CELL_ID` for each data-plane process so
+it can load the correct internal runtime partition.
 
 ## Common Environment Variables
 
@@ -70,12 +80,13 @@ process so it can load the correct published runtime.
 | `DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN` | Control plane | Bootstrap admin token for API setup. |
 | `DAL_OBSCURA_CONTROL_PLANE_HOST` | Control plane | HTTP bind host. |
 | `DAL_OBSCURA_CONTROL_PLANE_PORT` | Control plane | HTTP bind port. |
-| `DAL_OBSCURA_CELL_ID` | Data plane | Runtime cell identifier. Keep this internal. |
+| `DAL_OBSCURA_CELL_ID` | Data plane | Internal runtime cell identifier. |
 | `DAL_OBSCURA_LOCATION` | Data plane | Advertised Flight endpoint location. |
 | `DAL_OBSCURA_TICKET_SECRET` | Data plane | HMAC secret for opaque tickets. |
-| `DAL_OBSCURA_ALLOW_STALE_CONFIG_SECONDS` | Data plane | Optional bounded window for serving the last successfully loaded published config during short config-store outages. Unset means fail closed. |
+| `DAL_OBSCURA_ALLOW_STALE_CONFIG_SECONDS` | Data plane | Optional bounded stale-config window during short config-store outages. |
 
-Auth-specific variables depend on the provider. See [Security](security.md).
+Auth-specific variables depend on the provider. See [Security](security.md) and
+the runnable [authentication examples](../examples/auth/README.md).
 
 ## Startup Order
 
@@ -84,71 +95,55 @@ sequenceDiagram
     participant Ops
     participant DB as "Postgres"
     participant IAM
-    participant CP as "Control plane"
-    participant DP as "Data plane"
+    participant CP as "Control plane API"
     participant UI
+    participant DP as "Data plane"
 
     Ops->>DB: Start database
     Ops->>DB: Run dal-obscura-migrate upgrade
     Ops->>DB: Run dal-obscura-migrate check
     Ops->>IAM: Start or configure IAM
-    Ops->>CP: Start control plane
-    Ops->>CP: Configure catalog and auth
-    Ops->>CP: Discover tables and create assets
-    Ops->>CP: Assign owners and publish policy version
+    Ops->>CP: Start control plane API
+    Ops->>UI: Start UI with API base URL
+    Ops->>CP: Configure auth, runtime, catalogs, assets, owners, policy version
     Ops->>DP: Start data plane
-    UI->>CP: Verify asset and policy management
+    Ops->>DP: Verify allowed and denied reads
 ```
 
-## Runbook
+Services never run config-store migrations automatically at startup.
 
-| Task | Action |
-| --- | --- |
-| Confirm schema | Run `dal-obscura-migrate check`; services never run migrations at startup. |
-| Confirm control-plane liveness | `GET /healthz` on the control-plane HTTP port. It does not require auth and returns `{"status":"ok"}` when the process is alive. |
-| Confirm control-plane readiness | `GET /readyz` on the control-plane HTTP port. It does not require auth, runs `SELECT 1` against the config database, and returns `503` when the database check fails. |
-| Confirm data-plane liveness | `GET /healthz` on the optional data-plane health HTTP app when that app is enabled. It returns `{"status":"ok"}` when the health process is alive. |
-| Confirm data-plane readiness | `GET /readyz` on the optional data-plane health HTTP app. It returns `503` unless an active publication, runtime settings, and at least one enabled auth provider are loaded. |
-| Confirm API docs | Open `/docs` on the control plane. |
-| Confirm UI | Open the separately deployed UI service. In the local demo this is `http://127.0.0.1:8821`. |
-| Confirm discovery | Run catalog discovery and verify expected tables appear. |
-| Confirm governance | Promote a discovered table to an asset and publish a policy version. |
-| Confirm read path | Read as at least one allowed user and one denied user. |
-| Restart safely | Run `dal-obscura-migrate check`, then restart services without deleting the Postgres volume. |
-| Reset local example | Use example reset helpers only for disposable local environments. |
-
-## Health and Readiness Probes
+## Health And Readiness
 
 Control-plane probes are served by the main FastAPI app:
 
 - `GET /healthz`: process liveness only; no authentication required.
-- `GET /readyz`: config-store readiness; no authentication required. A ready
-  response includes `{"status":"ready","checks":{"database":"ok"}}`; database
-  failures return `503` with `{"status":"not_ready"}`.
+- `GET /readyz`: config-store readiness; no authentication required. Database
+  failures return `503`.
 
-The data plane has an optional HTTP health app with the same paths:
+The data plane can expose an optional HTTP health app:
 
 - `GET /healthz`: health app liveness.
 - `GET /readyz`: published runtime readiness. The check is ready only after the
   active publication, runtime settings, and at least one enabled auth provider
   can be loaded.
 
+Operational verification should also include:
+
+- API docs at `/docs`.
+- UI can reach the configured API base URL.
+- Catalog discovery returns expected tables.
+- At least one governed asset has an active policy version.
+- One allowed read and one denied read behave as expected.
+
 ## Operational Risks
 
-- A stale or wrong IAM configuration can make valid users appear unauthorized.
-- Secret values should not be written into catalog or policy records.
-- Policy changes affect reads after a policy version is submitted, so test with real personas.
-- SQLite state is easy to lose; use Postgres for anything others will try.
+- Wrong IAM claims can make valid users appear unauthorized.
+- Secret values should not be written into catalog, auth-provider, or policy
+  records.
+- Policy changes affect reads after a policy version is submitted; test with
+  real personas before exposing the environment.
+- SQLite state is easy to lose; use Postgres for anything shared.
 - Internal cell identifiers should not become user-facing concepts.
 - By default, data planes fail closed when they cannot read active published
-  configuration. Set `DAL_OBSCURA_ALLOW_STALE_CONFIG_SECONDS` to a small value,
-  such as `60`, only when short config-store outages should keep previously
-  authorized reads working.
-
-## Breaking Changes
-
-- Public tenant and cell endpoints were removed.
-- Public publication endpoints were replaced by policy-version history.
-- Catalog config now uses typed catalog entries instead of Python module strings.
-- Catalogs now resolve executable table readers directly; table provider
-  registry extension is removed.
+  configuration. Set `DAL_OBSCURA_ALLOW_STALE_CONFIG_SECONDS` only when short
+  config-store outages should keep previously authorized reads working.

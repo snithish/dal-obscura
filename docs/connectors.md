@@ -1,7 +1,17 @@
 # Connectors
 
-Clients read governed data through Arrow Flight. The current connector surface is
-kept small: a Python client helper, JVM libraries, and a Spark datasource.
+Clients read governed data through Arrow Flight. Use this guide to choose a
+client surface and understand the read path. For protocol details and JVM build
+commands, see the [connector workspace README](../connectors/README.md).
+
+## Contents
+
+- [Read Path](#read-path)
+- [Choose A Surface](#choose-a-surface)
+- [Spark Read](#spark-read)
+- [Python Read](#python-read)
+- [Connector Rules](#connector-rules)
+- [Testing Connectors](#testing-connectors)
 
 ## Read Path
 
@@ -21,36 +31,20 @@ sequenceDiagram
     Client-->>App: DataFrame or Arrow result
 ```
 
-## Available Surfaces
+The data plane owns planning, authentication, authorization, row-filter
+validation, ticket minting, and masking. Connectors submit read requests and
+exchange returned tickets.
+
+## Choose A Surface
 
 | Surface | Location | Use when |
 | --- | --- | --- |
-| Python SDK | `src/dal_obscura/connectors/python_sdk.py` | You need a simple Python read helper. |
+| Python SDK | `src/dal_obscura/connectors/python_sdk.py` | You need PyArrow tables, batches, or DuckDB relations. |
 | Java client | `connectors/jvm/dal-obscura-client-java` | You are integrating with JVM applications. |
-| Spark datasource | `connectors/jvm/spark3-datasource` | You want Spark reads through dal-obscura. |
-| Contract fixtures | `connectors/contract-fixtures` | You are testing connector request contracts. |
+| Spark datasource | `connectors/jvm/spark3-datasource` | You want Spark DataFrame reads through dal-obscura. |
+| Contract fixtures | `connectors/contract-fixtures` | You are testing request-shape compatibility. |
 
-See [`connectors/README.md`](../connectors/README.md) for connector-specific
-build and usage details.
-
-## Request Contract
-
-Connectors send a logical read request to `get_flight_info`. The data plane
-returns an output schema and short-lived tickets. The connector then exchanges
-each ticket through `do_get`.
-
-```mermaid
-flowchart LR
-    request["Plan request"] --> info["FlightInfo"]
-    info --> schema["Masked output schema"]
-    info --> tickets["Opaque tickets"]
-    tickets --> batches["Arrow record batches"]
-```
-
-The ticket is the source of truth for `do_get`. Connectors should not assume
-they can mutate or replay the original plan request during streaming.
-
-Spark read options use the `dal.*` namespace:
+## Spark Read
 
 ```java
 spark.read()
@@ -62,12 +56,41 @@ spark.read()
      .load();
 ```
 
-Unprefixed option names are rejected. Pass custom request headers as
-`dal.auth.header.<name>`.
+Use the `dal.*` namespace for Spark options. Unprefixed option names are
+rejected. Pass custom headers as `dal.auth.header.<name>`.
+
+## Python Read
+
+```python
+from dal_obscura.connectors import DalObscuraClient
+
+with DalObscuraClient("grpc+tcp://localhost:8815", auth_token=token) as client:
+    table = client.read_table(
+        catalog="analytics",
+        target="default.users",
+        columns=["id", "email"],
+        row_filter="region = 'US'",
+    )
+```
+
+The Python SDK can return schemas, planned Flight endpoints, record batches,
+PyArrow tables, and DuckDB relations.
+
+## Connector Rules
+
+- Send protobuf `dal_obscura.flight.v1.PlanRequest` in
+  `FlightDescriptor.command`.
+- Use `protocol_version: 1`.
+- Treat tickets as opaque.
+- Reuse the returned ticket endpoints; do not rebuild stream requests from the
+  original plan request.
+- Send auth material on schema, plan, and fetch calls unless the deployment
+  authenticates entirely through transport identity such as mTLS.
+- Render connector row filters as validated DuckDB SQL expressions.
 
 ## Testing Connectors
 
-Use the contract fixtures when changing request shape or error behavior:
+Use contract fixtures when request shape or error behavior changes:
 
 ```text
 connectors/contract-fixtures/
@@ -82,7 +105,6 @@ For JVM connector changes:
 mvn -f connectors/jvm/pom.xml verify
 ```
 
-For end-to-end reads, use any configured dal-obscura environment with one
-allowed principal and one denied principal. The bundled local examples are
-useful references, but connector behavior should not depend on a specific
-reference stack.
+For end-to-end reads, use a configured dal-obscura environment with one allowed
+principal and one denied principal. The local examples are useful references,
+but connector behavior should not depend on a specific reference stack.

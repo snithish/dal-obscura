@@ -4,6 +4,18 @@ dal-obscura uses a small React application for the control-plane UI. The UI is
 an operational console for catalogs, assets, policies, publishing, and settings.
 It should stay understandable for contributors who primarily work in Python.
 
+## Contents
+
+- [Stack](#stack)
+- [Folder Layout](#folder-layout)
+- [API Pattern](#api-pattern)
+- [Forms](#forms)
+- [Errors](#errors)
+- [Styling](#styling)
+- [pnpm Supply-Chain Policy](#pnpm-supply-chain-policy)
+- [Adding Dependencies](#adding-dependencies)
+- [Local Development](#local-development)
+
 ## Stack
 
 - React
