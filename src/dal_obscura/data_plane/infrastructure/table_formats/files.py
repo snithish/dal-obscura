@@ -1,3 +1,17 @@
+"""File-backed TableFormat implementations.
+
+Example:
+    ```python
+    table_format = ArrowDatasetTableFormat(
+        catalog_name="analytics",
+        table_name="events",
+        uri="/data/events",
+        format="parquet",
+    )
+    plan = table_format.plan(request, max_tickets=8)
+    ```
+"""
+
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
@@ -22,6 +36,14 @@ _FILE_FORMAT_BATCH_SIZE = 8_192
 
 @dataclass(frozen=True, kw_only=True)
 class FileInputPartition(InputPartition):
+    """A bounded group of file paths and projected columns for one scan task.
+
+    Example:
+        ```python
+        partition = FileInputPartition(columns=["id"], paths=["/data/a.parquet"])
+        ```
+    """
+
     columns: list[str]
     paths: list[str]
     row_filter_sql: str | None = None
@@ -29,6 +51,20 @@ class FileInputPartition(InputPartition):
 
 @dataclass(frozen=True, kw_only=True)
 class ArrowDatasetTableFormat(TableFormat):
+    """Executes Parquet, CSV, JSON, and ORC reads through PyArrow Dataset.
+
+    Example:
+        ```python
+        table_format = ArrowDatasetTableFormat(
+            catalog_name="analytics",
+            table_name="events",
+            uri="/data/events",
+            format="parquet",
+        )
+        schema = table_format.get_schema()
+        ```
+    """
+
     uri: str
     format: str
     options: dict[str, Any] = field(default_factory=dict)
@@ -84,6 +120,18 @@ class ArrowDatasetTableFormat(TableFormat):
 
 @dataclass(frozen=True, kw_only=True)
 class AvroTableFormat(TableFormat):
+    """Executes Avro file reads as bounded Arrow record batches.
+
+    Example:
+        ```python
+        table_format = AvroTableFormat(
+            catalog_name="analytics",
+            table_name="events",
+            uri="/data/events.avro",
+        )
+        ```
+    """
+
     format: str = "avro"
     uri: str
     options: dict[str, Any] = field(default_factory=dict)
@@ -132,6 +180,19 @@ class AvroTableFormat(TableFormat):
 
 @dataclass(frozen=True, kw_only=True)
 class TextTableFormat(TableFormat):
+    """Executes newline-delimited text files as one string column.
+
+    Example:
+        ```python
+        table_format = TextTableFormat(
+            catalog_name="analytics",
+            table_name="logs",
+            uri="/data/app.log",
+            column_name="message",
+        )
+        ```
+    """
+
     format: str = "text"
     uri: str
     column_name: str = "value"

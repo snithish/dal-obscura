@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pytest
 
+from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
+
 
 def test_path_rule_enforcer_allows_configured_roots_and_descendants():
-    from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
-
     enforcer = PathRuleEnforcer(
         [
             {"root": "/warehouse"},
@@ -26,8 +26,6 @@ def test_path_rule_enforcer_allows_configured_roots_and_descendants():
 
 
 def test_path_rule_enforcer_rejects_glob_rules_and_wildcard_roots():
-    from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
-
     with pytest.raises(ValueError, match="glob patterns are no longer supported"):
         PathRuleEnforcer([{"glob": "s3://warehouse/*", "allow": True}])
 
@@ -35,10 +33,10 @@ def test_path_rule_enforcer_rejects_glob_rules_and_wildcard_roots():
         PathRuleEnforcer([{"root": "s3://warehouse/*"}])
 
 
-def test_path_rule_enforcer_preserves_existing_behavior_when_rules_are_empty():
-    from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
-
+def test_path_rule_enforcer_is_disabled_when_no_roots_are_published():
     enforcer = PathRuleEnforcer([])
+
+    assert enforcer.enabled is False
 
     enforcer.check("s3://any-bucket/any/path.parquet")
     enforcer.check("/local/dev/path.parquet")

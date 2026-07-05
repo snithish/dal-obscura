@@ -28,6 +28,15 @@ class ConfigStoreMigrationRequired(ConfigStoreSchemaError):
 
 @dataclass(frozen=True)
 class ConfigStoreMigrationStatus:
+    """Current and expected Alembic heads for the config store.
+
+    Example:
+        ```python
+        status = check_config_store_schema(engine)
+        assert status.is_current
+        ```
+    """
+
     current_heads: tuple[str, ...]
     expected_heads: tuple[str, ...]
 

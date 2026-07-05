@@ -1,3 +1,19 @@
+"""Python client helpers for the public dal-obscura Flight read contract.
+
+Example:
+    ```python
+    from dal_obscura.connectors import DalObscuraClient
+
+    with DalObscuraClient("grpc+tcp://localhost:8815", auth_token=token) as client:
+        table = client.read_table(
+            catalog="analytics",
+            target="default.users",
+            columns=["id", "email"],
+            row_filter="region = 'us'",
+        )
+    ```
+"""
+
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
@@ -13,7 +29,18 @@ PROTOCOL_VERSION = FLIGHT_PROTOCOL_VERSION
 
 
 class DalObscuraClient:
-    """Small Python SDK for the dal-obscura Arrow Flight read contract."""
+    """Small Python SDK for the dal-obscura Arrow Flight read contract.
+
+    Example:
+        ```python
+        with DalObscuraClient("grpc+tcp://localhost:8815", auth_token=token) as client:
+            schema = client.fetch_schema(
+                catalog="analytics",
+                target="default.users",
+                columns=["id", "email"],
+            )
+        ```
+    """
 
     def __init__(self, uri: str, *, auth_token: str) -> None:
         self._client = flight.FlightClient(_location_for(uri))
@@ -27,6 +54,14 @@ class DalObscuraClient:
         *,
         auth_token: str,
     ) -> DalObscuraClient:
+        """Wraps an existing PyArrow Flight client without taking ownership.
+
+        Example:
+            ```python
+            flight_client = flight.FlightClient("grpc+tcp://localhost:8815")
+            client = DalObscuraClient.from_flight_client(flight_client, auth_token=token)
+            ```
+        """
         instance = cls.__new__(cls)
         instance._client = client
         instance._auth_token = auth_token
@@ -41,6 +76,17 @@ class DalObscuraClient:
         columns: Iterable[str] = ("*",),
         row_filter: str | None = None,
     ) -> pa.Schema:
+        """Returns the authorized output schema without reading rows.
+
+        Example:
+            ```python
+            schema = client.fetch_schema(
+                catalog="analytics",
+                target="default.users",
+                columns=["id", "email"],
+            )
+            ```
+        """
         descriptor = _descriptor(catalog, target, columns, row_filter)
         return self._client.get_schema(descriptor, options=self._call_options()).schema
 
@@ -52,6 +98,17 @@ class DalObscuraClient:
         columns: Iterable[str],
         row_filter: str | None = None,
     ) -> flight.FlightInfo:
+        """Plans a governed read and returns Flight endpoints with opaque tickets.
+
+        Example:
+            ```python
+            info = client.plan(
+                catalog="analytics",
+                target="default.users",
+                columns=["id"],
+            )
+            ```
+        """
         descriptor = _descriptor(catalog, target, columns, row_filter)
         return self._client.get_flight_info(descriptor, options=self._call_options())
 
@@ -63,6 +120,18 @@ class DalObscuraClient:
         columns: Iterable[str],
         row_filter: str | None = None,
     ) -> Iterator[pa.RecordBatch]:
+        """Yields authorized record batches from every planned endpoint.
+
+        Example:
+            ```python
+            for batch in client.read_batches(
+                catalog="analytics",
+                target="default.users",
+                columns=["id", "email"],
+            ):
+                handle(batch)
+            ```
+        """
         info = self.plan(catalog=catalog, target=target, columns=columns, row_filter=row_filter)
         for endpoint in info.endpoints:
             reader = self._client.do_get(endpoint.ticket, options=self._call_options())
@@ -76,6 +145,17 @@ class DalObscuraClient:
         columns: Iterable[str],
         row_filter: str | None = None,
     ) -> pa.Table:
+        """Reads all authorized batches into a PyArrow table.
+
+        Example:
+            ```python
+            table = client.read_table(
+                catalog="analytics",
+                target="default.users",
+                columns=["id", "email"],
+            )
+            ```
+        """
         info = self.plan(catalog=catalog, target=target, columns=columns, row_filter=row_filter)
         batches: list[pa.RecordBatch] = []
         for endpoint in info.endpoints:
@@ -86,6 +166,7 @@ class DalObscuraClient:
         return pa.Table.from_batches([], schema=info.schema)
 
     def close(self) -> None:
+        """Closes the owned Flight client, if this instance created it."""
         if self._owns_client:
             self._client.close()
 
@@ -103,7 +184,19 @@ class DalObscuraClient:
 
 
 class DuckDBDalObscuraReader:
-    """Exposes SDK reads as DuckDB relations for local analytical clients."""
+    """Exposes SDK reads as DuckDB relations for local analytical clients.
+
+    Example:
+        ```python
+        with DalObscuraClient("grpc+tcp://localhost:8815", auth_token=token) as client:
+            reader = DuckDBDalObscuraReader(client)
+            relation = reader.relation(
+                catalog="analytics",
+                target="default.users",
+                columns=["id", "email"],
+            )
+        ```
+    """
 
     def __init__(
         self,
@@ -123,6 +216,7 @@ class DuckDBDalObscuraReader:
         columns: Iterable[str],
         row_filter: str | None = None,
     ) -> duckdb.DuckDBPyRelation:
+        """Reads a governed table and registers it as a DuckDB relation."""
         table = self._client.read_table(
             catalog=catalog,
             target=target,
@@ -132,6 +226,7 @@ class DuckDBDalObscuraReader:
         return self._connection.from_arrow(table)
 
     def close(self) -> None:
+        """Closes the owned DuckDB connection, if this instance created it."""
         if self._owns_connection:
             self._connection.close()
 

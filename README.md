@@ -6,8 +6,10 @@
 [![GitHub Stars](https://img.shields.io/github/stars/snithish/dal-obscura?style=social)](https://github.com/snithish/dal-obscura/stargazers)
 [![License](https://img.shields.io/github/license/snithish/dal-obscura)](https://github.com/snithish/dal-obscura/blob/main/LICENSE)
 
-Data access layer with Arrow Flight, Iceberg, Delta Lake, Unity Catalog,
-masking, and row filters.
+Governed analytical data access layer with Arrow Flight, Iceberg, Delta Lake,
+Unity Catalog, masking, and row filters. Platform teams configure catalogs and
+assets in the control plane; clients read through the data plane and receive
+only the rows and columns allowed by the active asset policy version.
 
 ## Highlights
 - Arrow Flight plan/ticket flow with HMAC-signed, DB-backed tickets
@@ -15,7 +17,7 @@ masking, and row filters.
 - Delta Lake backend (delta-rs) and file-backed Parquet/CSV/JSON/ORC/Avro/Text assets
 - Unity Catalog metadata resolution for Delta and file-backed tables
 - API-first FastAPI control plane for configuration provisioning
-- RDBMS-backed published configuration consumed by data planes
+- RDBMS-backed published configuration consumed by stateless data planes
 - DuckDB-powered row filters and column masks
 
 ## Architecture
@@ -252,10 +254,10 @@ Assets can use these read-only backends:
 - `avro`: Avro object-container files read through fastavro.
 - `text`: line-oriented text files exposed as one string column, default `value`.
 
-Delta and file-backed targets must be resolved through a catalog. Static
-catalog entries can carry `table_identifier` values that point at table roots or
-file paths, and `options.storage_options` can carry object-store options. Those
-options can use the same secret-reference pattern as other published runtime
+Delta and file-backed targets must be resolved through a catalog. Catalog
+implementations can return `table_identifier`, `location`, and
+`storage_options` values that point at table roots or file paths. Those options
+can use the same secret-reference pattern as other published runtime
 configuration.
 
 Catalogs resolve governed targets directly into executable table formats:
@@ -276,8 +278,10 @@ HTTP APIs. Non-path providers can use descriptor fields such as
 location.
 
 Catalog implementations resolve governed targets into executable table readers.
-Built-in catalog config uses `type`; Python module strings are not part of the
-public catalog config format.
+Published data-plane catalog config uses `type`. The current workspace API
+field is named `module`; pass built-in short values such as `iceberg`, `files`,
+`delta`, or `unity`, or one of the built-in catalog class paths. Publication
+normalizes those values into typed runtime config for the data plane.
 
 Custom catalog types should implement `CatalogPlugin.resolve_table()` and return
 an executable `TableFormat` directly. The old provider-registry extension point
@@ -315,28 +319,64 @@ Unity Catalog is configured as a typed catalog:
 ```
 
 `credential_mode` accepts `configured`, `uc_temp`, or `both`. In `both` mode,
-the resolver tries Unity Catalog temporary read credentials first and falls back
-to configured storage options only when credential vending is unavailable. Views,
-materialized views, streaming tables, missing storage locations, and unsupported
-table formats are rejected before tickets are minted.
+the resolver uses Unity Catalog temporary read credentials when they are
+available and otherwise uses configured storage options. Views, materialized
+views, streaming tables, missing storage locations, and unsupported table
+formats are rejected before tickets are minted.
 
 ### Provisioning Flow
 
 The public control-plane API is workspace-first. Tenant and cell identifiers are
 internal runtime concerns, not public workspace API inputs.
 
+Set the admin token header once:
+
+```bash
+export DAL_OBSCURA_ADMIN_AUTH="authorization: Bearer $DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN"
+```
+
 Call:
 
 - `PUT /v1/settings/runtime`
 - `PUT /v1/catalogs/{name}`
 - `GET /v1/catalogs/{name}/tables`
+- `GET /v1/assets`
 - `PUT /v1/assets/{catalog}/{target}`
 - `PUT /v1/assets/{asset_id}/owners`
 - `PUT /v1/assets/{asset_id}/schema-fields`
 - `PUT /v1/assets/{asset_id}/policy-rules`
+- `POST /v1/assets/{asset_id}/policy-preview`
 - `PUT /v1/settings/auth-providers`
 - `POST /v1/assets/{asset_id}/policy-versions`
 - `GET /v1/policy-versions`
+
+Configure runtime and a catalog:
+
+```bash
+curl -H "$DAL_OBSCURA_ADMIN_AUTH" \
+  -H "content-type: application/json" \
+  -d '{"ticket_ttl_seconds":900,"max_tickets":64,"max_ticket_exchanges":2}' \
+  http://localhost:8820/v1/settings/runtime
+
+curl -X PUT \
+  -H "$DAL_OBSCURA_ADMIN_AUTH" \
+  -H "content-type: application/json" \
+  -d '{"module":"iceberg","options":{"type":"sql","uri":"sqlite:///catalog.db"}}' \
+  http://localhost:8820/v1/catalogs/analytics
+```
+
+Promote a table to a governed asset:
+
+```bash
+curl -X PUT \
+  -H "$DAL_OBSCURA_ADMIN_AUTH" \
+  -H "content-type: application/json" \
+  -d '{"backend":"iceberg","table_identifier":"default.users","options":{}}' \
+  http://localhost:8820/v1/assets/analytics/default.users
+```
+
+The asset-scoped policy-version route is the normal way to submit a new version
+for one governed asset.
 
 Runtime ticket settings include `ticket_ttl_seconds`, `max_tickets`, and
 `max_ticket_exchanges`. `max_ticket_exchanges` limits how many successful
@@ -478,7 +518,7 @@ Use the JSON output as the before/after artifact for any planner, filter, maskin
 - `tests/application/use_cases/test_access_flow_use_cases.py`: access-flow planning and ticket/fetch guardrails, including wildcard expansion, nested requests, and pending internal-dependency regressions.
 - `tests/domain/access_control/test_policy_resolution.py`: policy resolution, rule union semantics, row-filter composition, and policy parsing validation.
 - `tests/infrastructure/adapters/test_duckdb_transform.py`: masked schema derivation, nested struct masking, and DuckDB projection behavior.
-- `tests/infrastructure/adapters/test_iceberg_phase0_regressions.py`: current Iceberg planning baseline plus pending predicate-pushdown regression coverage.
+- `tests/infrastructure/adapters/test_iceberg_phase0_regressions.py`: current Iceberg planning and execution behavior.
 - `tests/interfaces/flight/test_service_streaming.py`: end-to-end Flight behavior for authorization, filtering, masking, and streaming.
 - `tests/benchmarks/test_masking_row_filter_benchmarks.py`: row-filter and masking throughput baselines.
 - `tests/benchmarks/test_iceberg_multifile_benchmark.py`: large multi-file Iceberg execution baseline.
@@ -496,7 +536,7 @@ After `uv sync --dev --extra server --extra sqlite`, install the hooks with `uv 
 ## Notes
 - Mask expressions are executed in DuckDB SQL.
 - Supported mask types include `null`, `redact`, `hash`, `default`, `email`, and `keep_last`.
-- `hash`, `redact`, `email`, and `keep_last` expose masked values as Arrow `string`; `default` exposes the Arrow type DuckDB infers for the configured literal, while `null` preserves the original field type.
+- `hash`, `redact`, `email`, and `keep_last` expose masked values as Arrow `string`; `default` exposes the Arrow type DuckDB infers for the configured literal, while `null` preserves the original field type using DuckDB typed-null output.
 - Row filters are parsed with SQLGlot using the DuckDB dialect, must contain exactly one expression, and are validated against a small allowlist before execution.
 - Supported row-filter shapes are boolean columns, comparisons, `AND`/`OR`/`NOT`, scalar arithmetic inside comparisons, `IN` with scalar literal lists, `IS NULL`/`IS NOT NULL`, `LOWER(...)`, `COALESCE(...)`, and `CAST(...)`.
 - Row filters reject SQL statements, multi-statement input, subqueries, table functions such as `read_csv(...)`, extension commands, `COPY`, `ATTACH`, DDL, and DML.

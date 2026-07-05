@@ -62,7 +62,7 @@ class DefaultMaskingAdapter:
                 )
             seen.add(column)
 
-        return pa.schema(selected_fields)
+        return pa.schema(_duckdb_output_field(field) for field in selected_fields)
 
 
 class DuckDBRowTransformAdapter:
@@ -319,7 +319,7 @@ def _mask_expression(expr: str, mask: MaskRule) -> str:
     """Returns the DuckDB SQL fragment for a single mask rule."""
     mask_type = mask.type.lower()
     if mask_type == "null":
-        return "NULL"
+        return f"cast_to_type(NULL, {expr})"
     if mask_type == "redact":
         return _sql_literal(str(mask.value or "***"))
     if mask_type == "hash":
@@ -433,14 +433,9 @@ def _projected_nested_field(
     if pa.types.is_list(field.type) or pa.types.is_large_list(field.type):
         value_field = field.type.value_field
         projected_value_field = _projected_nested_field(value_field, path, projection, masks)
-        list_type = (
-            pa.list_(projected_value_field)
-            if pa.types.is_list(field.type)
-            else pa.large_list(projected_value_field)
-        )
         return pa.field(
             field.name,
-            list_type,
+            pa.list_(projected_value_field),
             nullable=field.nullable,
             metadata=field.metadata,
         )
@@ -471,16 +466,11 @@ def _masked_field(field: pa.Field, path: str, masks: Mapping[str, MaskRule]) -> 
         if pa.types.is_list(field.type) or pa.types.is_large_list(field.type):
             value_field = field.type.value_field
             nested_value_field = _masked_field(value_field, path, masks)
-            if nested_value_field.equals(value_field):
+            if nested_value_field.equals(value_field) and pa.types.is_list(field.type):
                 return field
-            list_type = (
-                pa.list_(nested_value_field)
-                if pa.types.is_list(field.type)
-                else pa.large_list(nested_value_field)
-            )
             return pa.field(
                 field.name,
-                list_type,
+                pa.list_(nested_value_field),
                 nullable=field.nullable,
                 metadata=field.metadata,
             )
@@ -510,6 +500,26 @@ def _masked_leaf_field(field: pa.Field, mask: MaskRule) -> pa.Field:
             raise ValueError("default mask requires a value")
         return pa.field(field.name, _default_mask_type(mask.value), nullable=field.nullable)
     return field
+
+
+def _duckdb_output_field(field: pa.Field) -> pa.Field:
+    """Models the Arrow field shape emitted by DuckDB projection queries."""
+    return pa.field(field.name, _duckdb_output_type(field.type), nullable=True)
+
+
+def _duckdb_output_type(data_type: pa.DataType) -> pa.DataType:
+    # Flight streams must declare the exact schema DuckDB emits. DuckDB strips
+    # field metadata, marks projected fields nullable, and narrows large string
+    # and large list Arrow types during projection.
+    if pa.types.is_large_string(data_type):
+        return pa.string()
+    if pa.types.is_large_binary(data_type):
+        return pa.binary()
+    if pa.types.is_struct(data_type):
+        return pa.struct(_duckdb_output_field(child) for child in data_type)
+    if pa.types.is_list(data_type) or pa.types.is_large_list(data_type):
+        return pa.list_(_duckdb_output_field(data_type.value_field))
+    return data_type
 
 
 def _has_mask_for_path(path: str, masks: Mapping[str, MaskRule]) -> bool:

@@ -87,7 +87,7 @@ def test_resolve_secret_refs_uses_explicit_secret_shape_only():
     resolved = resolve_secret_refs(
         {
             "jwt_secret": {"secret": "jwt-signing"},
-            "legacy": {"key": "DAL_OBSCURA_JWT_SECRET"},
+            "plain_env_ref": {"key": "DAL_OBSCURA_JWT_SECRET"},
             "keys": [{"id": "svc", "secret": {"secret": "api-key"}}],
         },
         provider=provider,
@@ -95,7 +95,7 @@ def test_resolve_secret_refs_uses_explicit_secret_shape_only():
 
     assert resolved == {
         "jwt_secret": "local:bootstrap-token:jwt-signing",
-        "legacy": {"key": "DAL_OBSCURA_JWT_SECRET"},
+        "plain_env_ref": {"key": "DAL_OBSCURA_JWT_SECRET"},
         "keys": [{"id": "svc", "secret": "local:bootstrap-token:api-key"}],
     }
 

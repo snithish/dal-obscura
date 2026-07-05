@@ -1,3 +1,25 @@
+"""Public catalog and table-format extension contracts.
+
+Example:
+    ```python
+    class MyCatalog(CatalogPlugin):
+        @property
+        def name(self) -> str:
+            return "analytics"
+
+        def describe_table(self, target: str) -> CatalogTableDescriptor:
+            return CatalogTableDescriptor(
+                catalog_name=self.name,
+                requested_target=target,
+                provider_id="delta",
+                location="s3://warehouse/users",
+            )
+
+        def list_tables(self) -> list[CatalogTableListing]:
+            return [CatalogTableListing(name="default.users", provider_id="delta")]
+    ```
+"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -14,7 +36,18 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, kw_only=True)
 class CatalogTableDescriptor:
-    """Catalog-resolved metadata used to choose and build an executable provider."""
+    """Catalog-resolved metadata used to choose and build an executable provider.
+
+    Example:
+        ```python
+        descriptor = CatalogTableDescriptor(
+            catalog_name="analytics",
+            requested_target="default.users",
+            provider_id="iceberg",
+            metadata_location="s3://warehouse/users/metadata/v1.metadata.json",
+        )
+        ```
+    """
 
     catalog_name: str
     requested_target: str
@@ -30,7 +63,13 @@ class CatalogTableDescriptor:
 
 @dataclass(frozen=True, kw_only=True)
 class CatalogTableListing:
-    """Lightweight table metadata returned by catalog discovery."""
+    """Lightweight table metadata returned by catalog discovery.
+
+    Example:
+        ```python
+        listing = CatalogTableListing(name="default.users", provider_id="iceberg")
+        ```
+    """
 
     name: str
     provider_id: str
@@ -40,7 +79,16 @@ class CatalogTableListing:
 
 @dataclass(frozen=True, kw_only=True)
 class TableFormat(ABC):
-    """Catalog-resolved executable table format descriptor."""
+    """Catalog-resolved executable table format descriptor.
+
+    Example:
+        ```python
+        schema = table_format.get_schema()
+        plan = table_format.plan(request, max_tickets=32)
+        for task in plan.tasks:
+            task_schema, batches = table_format.execute(task.partition)
+        ```
+    """
 
     catalog_name: str
     table_name: str
@@ -60,7 +108,14 @@ class TableFormat(ABC):
 
 
 class CatalogPlugin(ABC):
-    """Catalog behavior defining dataset lookup and format identification."""
+    """Catalog behavior defining dataset lookup and format identification.
+
+    Example:
+        ```python
+        descriptor = catalog.describe_table("default.users")
+        assert descriptor.provider_id in {"iceberg", "delta", "parquet"}
+        ```
+    """
 
     @property
     @abstractmethod

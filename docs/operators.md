@@ -58,6 +58,10 @@ runtime representation of active policy sets.
 | Catalogs | Resolve all governed tables through catalogs; do not publish standalone file paths. |
 | UI exposure | Put the UI behind the same IAM posture as the API. |
 
+The control-plane UI and workspace API hide tenant and cell IDs from normal
+users. Operators still configure `DAL_OBSCURA_CELL_ID` for each data-plane
+process so it can load the correct published runtime.
+
 ## Common Environment Variables
 
 | Variable | Used by | Meaning |
@@ -69,7 +73,7 @@ runtime representation of active policy sets.
 | `DAL_OBSCURA_CELL_ID` | Data plane | Runtime cell identifier. Keep this internal. |
 | `DAL_OBSCURA_LOCATION` | Data plane | Advertised Flight endpoint location. |
 | `DAL_OBSCURA_TICKET_SECRET` | Data plane | HMAC secret for opaque tickets. |
-| `DAL_OBSCURA_ALLOW_STALE_CONFIG_SECONDS` | Data plane | Optional bounded fallback window for serving the last successfully loaded published config during short config-store outages. Unset means fail closed. |
+| `DAL_OBSCURA_ALLOW_STALE_CONFIG_SECONDS` | Data plane | Optional bounded window for serving the last successfully loaded published config during short config-store outages. Unset means fail closed. |
 
 Auth-specific variables depend on the provider. See [Security](security.md).
 

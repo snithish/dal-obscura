@@ -7,6 +7,21 @@ from uuid import UUID
 
 @dataclass(frozen=True)
 class CatalogDraft:
+    """Draft catalog definition before publication.
+
+    Example:
+        ```python
+        draft = CatalogDraft(
+            id=id,
+            cell_id=cell,
+            tenant_id=tenant,
+            name="analytics",
+            module=module,
+            options={},
+        )
+        ```
+    """
+
     id: UUID
     cell_id: UUID
     tenant_id: UUID
@@ -17,6 +32,14 @@ class CatalogDraft:
 
 @dataclass(frozen=True)
 class PolicyRuleDraft:
+    """Draft access-control rule attached to an asset.
+
+    Example:
+        ```python
+        rule = PolicyRuleDraft(0, "allow", ["analyst"], {}, ["id"], {}, None)
+        ```
+    """
+
     ordinal: int
     effect: Literal["allow"]
     principals: list[str]
@@ -28,6 +51,14 @@ class PolicyRuleDraft:
 
 @dataclass
 class AssetDraft:
+    """Draft asset configuration before publication.
+
+    Example:
+        ```python
+        asset.rules.append(rule)
+        ```
+    """
+
     id: UUID
     cell_id: UUID
     tenant_id: UUID
@@ -42,6 +73,14 @@ class AssetDraft:
 
 @dataclass(frozen=True)
 class AuthProviderDraft:
+    """Draft authentication provider configuration.
+
+    Example:
+        ```python
+        provider = AuthProviderDraft(0, "example.Provider", {}, True)
+        ```
+    """
+
     ordinal: int
     module: str
     args: dict[str, Any]
@@ -50,6 +89,14 @@ class AuthProviderDraft:
 
 @dataclass(frozen=True)
 class CellRuntimeDraft:
+    """Draft runtime ticket and fan-out settings for a cell.
+
+    Example:
+        ```python
+        runtime = CellRuntimeDraft(ticket_ttl_seconds=300, max_tickets=32, max_ticket_exchanges=1)
+        ```
+    """
+
     ticket_ttl_seconds: int
     max_tickets: int
     max_ticket_exchanges: int
@@ -57,6 +104,21 @@ class CellRuntimeDraft:
 
 @dataclass(frozen=True)
 class PublishDraft:
+    """Complete draft snapshot to compile into a publication.
+
+    Example:
+        ```python
+        publish = PublishDraft(
+            cell_id=cell,
+            tenants=[tenant],
+            runtime=runtime,
+            auth_providers=[],
+            catalogs=[],
+            assets=[],
+        )
+        ```
+    """
+
     cell_id: UUID
     tenants: list[UUID]
     runtime: CellRuntimeDraft
@@ -67,12 +129,28 @@ class PublishDraft:
 
 @dataclass(frozen=True)
 class CompiledRuntime:
+    """Runtime settings serialized into a publication manifest.
+
+    Example:
+        ```python
+        compiled = CompiledRuntime(auth_chain={}, ticket={"ttl_seconds": 300})
+        ```
+    """
+
     auth_chain: dict[str, Any]
     ticket: dict[str, int]
 
 
 @dataclass(frozen=True)
 class CompiledCatalog:
+    """Catalog configuration serialized into a publication manifest.
+
+    Example:
+        ```python
+        catalog = CompiledCatalog(tenant_id=tenant, catalog="analytics", config={})
+        ```
+    """
+
     tenant_id: UUID
     catalog: str
     config: dict[str, Any]
@@ -80,6 +158,14 @@ class CompiledCatalog:
 
 @dataclass(frozen=True)
 class CompiledAsset:
+    """Asset configuration and policy version serialized into a publication.
+
+    Example:
+        ```python
+        asset = CompiledAsset(tenant, "analytics", "orders", "iceberg", {}, 1)
+        ```
+    """
+
     tenant_id: UUID
     catalog: str
     target: str
@@ -90,6 +176,14 @@ class CompiledAsset:
 
 @dataclass(frozen=True)
 class CompiledPublication:
+    """Compiled immutable publication manifest.
+
+    Example:
+        ```python
+        publication = CompiledPublication(cell, runtime, catalogs, assets, manifest_hash)
+        ```
+    """
+
     cell_id: UUID
     runtime: CompiledRuntime
     catalogs: list[CompiledCatalog]

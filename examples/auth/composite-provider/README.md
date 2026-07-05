@@ -30,6 +30,6 @@ composite-provider with jwt: authenticated as example-user and read 2 rows
 
 ## Caveats
 
-Composite auth is meant for mixed environments and migrations. Provider order
-matters: missing credentials fall through to the next provider, while invalid
-credentials stop the chain and reject the request.
+Composite auth is meant for deployments that intentionally accept more than one
+credential family. Provider order matters: missing credentials continue to the
+next provider, while invalid credentials stop the chain and reject the request.

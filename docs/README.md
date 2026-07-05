@@ -53,6 +53,10 @@ flowchart LR
   checks.
 - [Frontend Conventions](frontend.md): React UI patterns and supply-chain policy.
 
+Historical design notes live under [`docs/superpowers`](superpowers/README.md).
+They explain why older choices were made, but the guides above are the current
+user and operator documentation.
+
 ## Mental Model
 
 ```mermaid

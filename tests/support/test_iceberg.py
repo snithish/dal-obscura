@@ -23,7 +23,7 @@ def _sorted_table_dict(table: pa.Table, column: str) -> dict[str, list[object]]:
     return table.sort_by([(column, "ascending")]).to_pydict()
 
 
-def test_create_iceberg_table_keeps_default_compatibility(tmp_path: Path):
+def test_create_iceberg_table_creates_default_users_table(tmp_path: Path):
     table_id = create_iceberg_table(tmp_path, "iceberg_catalog", "warehouse", [1, 2, 3])
 
     assert table_id == "default.users"

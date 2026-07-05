@@ -15,6 +15,16 @@ from dal_obscura.data_plane.application.ports.ticket_store import StoredTicket
 
 
 class SqlAlchemyTicketStore:
+    """Durable SQLAlchemy-backed ticket exchange store.
+
+    Example:
+        ```python
+        store = SqlAlchemyTicketStore(session_factory, cell_id=cell_id)
+        store.store(payload, max_exchanges=1)
+        stored = store.reserve_exchange(payload.ticket_id, now=payload.expires_at - 1)
+        ```
+    """
+
     def __init__(self, session_maker: sessionmaker[Session], *, cell_id: UUID) -> None:
         self._session_maker = session_maker
         self._cell_id = cell_id

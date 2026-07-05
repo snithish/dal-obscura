@@ -28,7 +28,7 @@ sequenceDiagram
 | Python SDK | `src/dal_obscura/connectors/python_sdk.py` | You need a simple Python read helper. |
 | Java client | `connectors/jvm/dal-obscura-client-java` | You are integrating with JVM applications. |
 | Spark datasource | `connectors/jvm/spark3-datasource` | You want Spark reads through dal-obscura. |
-| Contract fixtures | `connectors/contract-fixtures` | You are testing connector request compatibility. |
+| Contract fixtures | `connectors/contract-fixtures` | You are testing connector request contracts. |
 
 See [`connectors/README.md`](../connectors/README.md) for connector-specific
 build and usage details.
@@ -49,6 +49,21 @@ flowchart LR
 
 The ticket is the source of truth for `do_get`. Connectors should not assume
 they can mutate or replay the original plan request during streaming.
+
+Spark read options use the `dal.*` namespace:
+
+```java
+spark.read()
+     .format("dal_obscura")
+     .option("dal.uri", "grpc+tcp://localhost:8815")
+     .option("dal.catalog", "analytics")
+     .option("dal.target", "default.users")
+     .option("dal.auth.token", token)
+     .load();
+```
+
+Unprefixed option names are rejected. Pass custom request headers as
+`dal.auth.header.<name>`.
 
 ## Testing Connectors
 

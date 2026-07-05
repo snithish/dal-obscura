@@ -209,6 +209,9 @@ cython_debug/
 # Superpowers brainstorming companion artifacts
 .superpowers/
 
+# CocoIndex Code local index state
+.cocoindex_code/
+
 # PyPI configuration file
 .pypirc
 

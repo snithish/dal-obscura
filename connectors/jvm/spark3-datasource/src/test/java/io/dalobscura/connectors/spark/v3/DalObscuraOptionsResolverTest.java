@@ -2,6 +2,7 @@ package io.dalobscura.connectors.spark.v3;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.Map;
 import org.apache.spark.sql.util.CaseInsensitiveStringMap;
@@ -11,7 +12,7 @@ class DalObscuraOptionsResolverTest {
     private final DalObscuraOptionsResolver resolver = new DalObscuraOptionsResolver();
 
     @Test
-    void prefersReadOptionsOverSessionConf() {
+    void resolvesReadOptions() {
         DalObscuraConnectorOptions options =
                 resolver.resolve(
                         new CaseInsensitiveStringMap(
@@ -20,10 +21,7 @@ class DalObscuraOptionsResolverTest {
                                         "dal.catalog", "analytics",
                                         "dal.target", "default.users",
                                         "dal.auth.token", "read-token",
-                                        "dal.auth.header.x-api-key", "read-secret",
-                                        "uri", "grpc+tcp://session-option:8815",
-                                        "auth.token", "session-token",
-                                        "auth.header.x-api-key", "session-secret")));
+                                        "dal.auth.header.x-api-key", "read-secret")));
 
         assertEquals("grpc+tcp://read-option:8815", options.uri());
         assertEquals("analytics", options.catalog());
@@ -33,20 +31,24 @@ class DalObscuraOptionsResolverTest {
     }
 
     @Test
-    void fallsBackToSessionConfWhenReadOptionMissing() {
-        DalObscuraConnectorOptions options =
-                resolver.resolve(
-                        new CaseInsensitiveStringMap(
-                                Map.of(
-                                        "dal.target", "default.users",
-                                        "uri", "grpc+tcp://session-option:8815",
-                                        "catalog", "analytics",
-                                        "auth.header.x-api-key", "session-secret")));
+    void rejectsUnprefixedOptions() {
+        IllegalArgumentException error =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () ->
+                                resolver.resolve(
+                                        new CaseInsensitiveStringMap(
+                                                Map.of(
+                                                        "uri",
+                                                        "grpc+tcp://session-option:8815",
+                                                        "catalog",
+                                                        "analytics",
+                                                        "target",
+                                                        "default.users",
+                                                        "auth.header.x-api-key",
+                                                        "session-secret"))));
 
-        assertEquals("grpc+tcp://session-option:8815", options.uri());
-        assertEquals("analytics", options.catalog());
-        assertEquals("default.users", options.target());
-        assertEquals("session-secret", options.auth().header("x-api-key"));
+        assertEquals("Missing required option: dal.uri", error.getMessage());
     }
 
     @Test

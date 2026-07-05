@@ -82,6 +82,16 @@ def fetch_read(
     ticket: str,
     auth_request: AuthenticationRequest,
 ) -> FetchStreamResult:
+    """Verifies a planned ticket and returns the authorized Arrow stream.
+
+    Example:
+        ```python
+        result = fetch_read(flow, ticket, auth_request)
+        for batch in result.result_batches:
+            ...
+        ```
+    """
+
     client_payload = flow.ticket_codec.verify(ticket)
     if client_payload.ticket_id is None:
         raise PermissionError("Unauthorized")

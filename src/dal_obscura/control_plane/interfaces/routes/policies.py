@@ -1,3 +1,11 @@
+"""Policy rule, preview, and policy-version routes.
+
+Example:
+    ```python
+    app.include_router(router(deps))
+    ```
+"""
+
 from __future__ import annotations
 
 from uuid import UUID
@@ -13,6 +21,14 @@ from dal_obscura.control_plane.interfaces.routes.schemas import (
 
 
 def router(deps: ControlPlaneDeps) -> APIRouter:
+    """Builds asset policy routes.
+
+    Example:
+        ```python
+        policy_router = router(deps)
+        ```
+    """
+
     api = APIRouter()
 
     @api.get("/v1/assets/{asset_id}/policy-rules", dependencies=[Depends(deps.require_actor)])

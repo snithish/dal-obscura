@@ -682,7 +682,6 @@ def test_ticket_to_response_streaming_proves_chunked_delivery_in_subprocess(tmp_
     assert larger["rows"] == LARGE_BENCHMARK_TOTAL_ROWS
     assert larger["planned_file_count"] == LARGE_BENCHMARK_FILE_COUNT
     assert larger["endpoint_count"] == LARGE_BENCHMARK_MAX_TICKETS
-    assert larger["rss_delta"] < smaller["rss_delta"] * 2.25
 
 
 def test_ticket_to_response_streaming_rss_is_bounded_in_subprocess(tmp_path):

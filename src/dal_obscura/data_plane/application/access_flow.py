@@ -1,3 +1,22 @@
+"""Shared dependency bundle for data-plane read planning and fetch execution.
+
+Example:
+    ```python
+    flow = AccessFlow(
+        identity=identity,
+        authorizer=authorizer,
+        catalog_registry=catalog_registry,
+        masking=masking,
+        row_transform=row_transform,
+        ticket_codec=ticket_codec,
+        ticket_store=ticket_store,
+        ticket_ttl_seconds=300,
+        max_tickets=32,
+        max_ticket_exchanges=1,
+    )
+    ```
+"""
+
 from __future__ import annotations
 
 import os
@@ -29,6 +48,14 @@ def _ticket_id() -> str:
 
 @dataclass(frozen=True)
 class AccessFlow:
+    """Immutable dependencies and runtime settings for one data-plane request flow.
+
+    Example:
+        ```python
+        result = plan_read(flow, request, auth_request)
+        ```
+    """
+
     identity: IdentityPort
     authorizer: AuthorizationPort
     catalog_registry: CatalogRegistryPort

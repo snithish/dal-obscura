@@ -45,7 +45,7 @@ strictest mask per column.
 - Start with the asset owner list. Only trusted owners should edit policies.
 - Grant the smallest useful column set.
 - Express row filters as DuckDB SQL boolean expressions.
-- Express masks as DuckDB SQL expressions that preserve the intended type.
+- Use one supported mask type per masked field.
 - Publish a policy version only after testing with representative users.
 
 ## Example Rule
@@ -57,7 +57,8 @@ strictest mask per column.
   "columns": ["customer_id", "region", "revenue", "email"],
   "row_filter": "region = 'US'",
   "masks": {
-    "email": "regexp_replace(email, '(^.).*(@.*$)', '\\1***\\2')"
+    "email": {"type": "email"},
+    "customer_id": {"type": "hash"}
   }
 }
 ```
@@ -79,15 +80,27 @@ clear operational reason.
 
 ## Masks
 
-Masks are DuckDB SQL expressions evaluated per row. Keep them simple and
-obvious.
+Masks are named operations evaluated by the DuckDB transform. The current mask
+types are:
+
+| Type | Value | Output |
+| --- | --- | --- |
+| `null` | none | typed `NULL` for the original field type |
+| `redact` | replacement string, default `***` | string |
+| `hash` | none | SHA-256 hex string |
+| `default` | scalar literal | DuckDB-inferred literal type |
+| `email` | none | partially redacted email string |
+| `keep_last` | non-negative integer | string with only the last N characters visible |
 
 Examples:
 
-```sql
-'***'
-regexp_replace(email, '(^.).*(@.*$)', '\\1***\\2')
-case when region = 'EU' then null else phone end
+```json
+{
+  "email": {"type": "email"},
+  "account_number": {"type": "keep_last", "value": 4},
+  "notes": {"type": "redact", "value": "[redacted]"},
+  "nickname": {"type": "null"}
+}
 ```
 
 ## Testing A Policy

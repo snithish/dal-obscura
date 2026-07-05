@@ -24,6 +24,14 @@ def discover_catalog_tables(
     module: str,
     options: dict[str, Any],
 ) -> list[CatalogTable]:
+    """Lists tables for a configured catalog.
+
+    Example:
+        ```python
+        tables = discover_catalog_tables("analytics", "iceberg", {"uri": "sqlite:///catalog.db"})
+        ```
+    """
+
     registry = CatalogRegistry(
         ServiceConfig(
             catalogs={
@@ -59,6 +67,14 @@ def discover_iceberg_tables(
     *,
     load_catalog_fn: LoadCatalogFn | None = None,
 ) -> list[CatalogTable]:
+    """Lists every table reachable through a PyIceberg catalog.
+
+    Example:
+        ```python
+        tables = discover_iceberg_tables("analytics", {"uri": "http://localhost:8181"})
+        ```
+    """
+
     loader = load_catalog_fn or _load_catalog
     catalog = loader(catalog_name, **options)
     table_names = sorted(

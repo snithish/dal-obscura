@@ -28,6 +28,6 @@ api-key: authenticated as example-user and read 2 rows
 
 ## Caveats
 
-API keys are useful for service accounts, batch jobs, and legacy clients that
-cannot obtain OIDC tokens. They are bearer secrets, so production use needs
-per-client ownership, rotation, revocation, audit logging, and secure transport.
+API keys are useful for service accounts and batch jobs that cannot obtain OIDC
+tokens. They are bearer secrets, so production use needs per-client ownership,
+rotation, revocation, audit logging, and secure transport.

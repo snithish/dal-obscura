@@ -30,7 +30,7 @@ describe("catalog adapter form mapping", () => {
     });
   });
 
-  test("maps Unity Catalog as a REST-compatible catalog with extra options", () => {
+  test("maps Unity Catalog as a REST-based catalog with extra options", () => {
     const form: CatalogForm = {
       adapter: "unity",
       modulePath: "",

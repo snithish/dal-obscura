@@ -169,6 +169,15 @@ class IcebergCatalog(CatalogPlugin):
 
 
 class FileCatalog(CatalogPlugin):
+    """Catalog that resolves targets under a configured file-backed location.
+
+    Example:
+        ```python
+        catalog = FileCatalog("warehouse", {"format": "parquet", "location": "/data"})
+        table_format = catalog.resolve_table("orders")
+        ```
+    """
+
     def __init__(
         self,
         name: str,
@@ -226,6 +235,15 @@ class FileCatalog(CatalogPlugin):
 
 
 class DeltaCatalog(CatalogPlugin):
+    """Catalog that resolves targets to Delta Lake table roots.
+
+    Example:
+        ```python
+        catalog = DeltaCatalog("lake", {"location": "s3://warehouse"})
+        table_format = catalog.resolve_table("orders")
+        ```
+    """
+
     def __init__(
         self,
         name: str,

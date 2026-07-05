@@ -1,3 +1,11 @@
+"""Logging configuration helpers for service entrypoints.
+
+Example:
+    ```python
+    setup_logging(LoggingConfig(level="DEBUG", json=True))
+    ```
+"""
+
 from __future__ import annotations
 
 import json
@@ -11,11 +19,21 @@ _STANDARD_LOG_RECORD_FIELDS = frozenset(logging.makeLogRecord({}).__dict__) | {"
 
 @dataclass(frozen=True)
 class LoggingConfig:
+    """Runtime logging options.
+
+    Example:
+        ```python
+        config = LoggingConfig(level="INFO", json=True)
+        ```
+    """
+
     level: str = "INFO"
     json: bool = True
 
 
 class JsonFormatter(logging.Formatter):
+    """Formats Python log records as compact JSON lines."""
+
     def format(self, record: logging.LogRecord) -> str:
         payload = {
             "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
@@ -36,12 +54,20 @@ class JsonFormatter(logging.Formatter):
 
 
 def resolve_logging_config() -> LoggingConfig:
+    """Reads logging options from `DAL_OBSCURA_LOG_LEVEL` and `DAL_OBSCURA_LOG_JSON`."""
     level = os.getenv("DAL_OBSCURA_LOG_LEVEL", "INFO")
     json_enabled = os.getenv("DAL_OBSCURA_LOG_JSON", "true").lower() in {"1", "true", "yes"}
     return LoggingConfig(level=level, json=json_enabled)
 
 
 def setup_logging(config: LoggingConfig | None = None) -> None:
+    """Installs the root logger handler used by service CLIs.
+
+    Example:
+        ```python
+        setup_logging(resolve_logging_config())
+        ```
+    """
     config = config or resolve_logging_config()
     root = logging.getLogger()
     root.setLevel(config.level.upper())

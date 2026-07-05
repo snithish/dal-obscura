@@ -15,6 +15,14 @@ target_metadata = Base.metadata
 
 
 def run_migrations_online() -> None:
+    """Runs Alembic migrations with the connection supplied by the migration CLI.
+
+    Example:
+        ```python
+        run_migrations_online()
+        ```
+    """
+
     connectable = config.attributes.get("connection")
     if connectable is None:
         raise RuntimeError("Config-store migrations require an existing SQLAlchemy connection")

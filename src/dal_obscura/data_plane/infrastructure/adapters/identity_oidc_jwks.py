@@ -23,6 +23,15 @@ JsonFetcher = Callable[[str], JsonObject]
 
 @dataclass(frozen=True)
 class OidcJwksConfig:
+    """Resolved OIDC/JWKS verification settings.
+
+    Example:
+        ```python
+        config = provider._config
+        print(config.issuer, config.algorithms)
+        ```
+    """
+
     issuer: str
     audience: str | Sequence[str] | None
     jwks_url: str

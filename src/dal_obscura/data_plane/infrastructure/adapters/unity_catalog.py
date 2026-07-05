@@ -22,6 +22,14 @@ from dal_obscura.data_plane.infrastructure.table_formats.files import (
 
 @dataclass(frozen=True)
 class UnityTable:
+    """Normalized Unity Catalog table metadata used by the resolver.
+
+    Example:
+        ```python
+        table = UnityTable("main.default.orders", "MANAGED", "DELTA", "s3://lake/orders")
+        ```
+    """
+
     full_name: str
     table_type: str
     data_source_format: str

@@ -1,3 +1,11 @@
+"""Control-plane HTTP health and readiness routes.
+
+Example:
+    ```python
+    install_health_routes(app, session_factory(engine))
+    ```
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -9,6 +17,14 @@ from sqlalchemy.orm import Session, sessionmaker
 
 
 def install_health_routes(app: FastAPI, session_maker: sessionmaker[Session]) -> None:
+    """Installs `/healthz` and `/readyz` routes on the control-plane app.
+
+    Example:
+        ```python
+        install_health_routes(app, session_maker)
+        ```
+    """
+
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
         return {"status": "ok"}

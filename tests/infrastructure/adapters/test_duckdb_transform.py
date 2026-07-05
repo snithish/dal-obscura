@@ -17,12 +17,6 @@ from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
 )
 
 
-def test_parse_json_payload_from_subprocess_output_ignores_leading_noise():
-    output = '\n100% ████████████ (00:00:02.94 elapsed)\n{"rows": 12}\n'
-
-    assert _parse_json_payload_from_subprocess_output(output) == {"rows": 12}
-
-
 def test_duckdb_transform_connection_disables_progress_bar(monkeypatch: pytest.MonkeyPatch):
     executed: list[str] = []
 

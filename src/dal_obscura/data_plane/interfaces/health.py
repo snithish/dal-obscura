@@ -1,3 +1,11 @@
+"""HTTP health and readiness helpers for the data plane.
+
+Example:
+    ```python
+    app = create_health_app(readiness=lambda: {"status": "ready", "checks": {}})
+    ```
+"""
+
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
@@ -8,6 +16,14 @@ from fastapi.responses import JSONResponse
 
 
 class RuntimeStore(Protocol):
+    """Store protocol used by the readiness probe.
+
+    Example:
+        ```python
+        payload = published_runtime_readiness(store)
+        ```
+    """
+
     def get_runtime(self) -> object: ...
 
 
@@ -15,6 +31,14 @@ HealthPayload = Mapping[str, object]
 
 
 def create_health_app(*, readiness: Callable[[], HealthPayload]) -> FastAPI:
+    """Creates the optional FastAPI app serving `/healthz` and `/readyz`.
+
+    Example:
+        ```python
+        app = create_health_app(readiness=lambda: {"status": "ready", "checks": {}})
+        ```
+    """
+
     app = FastAPI(title="dal-obscura data plane health")
 
     @app.get("/healthz")
@@ -35,6 +59,15 @@ def create_health_app(*, readiness: Callable[[], HealthPayload]) -> FastAPI:
 
 
 def published_runtime_readiness(store: RuntimeStore) -> dict[str, object]:
+    """Checks whether published runtime state is sufficient to admit traffic.
+
+    Example:
+        ```python
+        readiness = published_runtime_readiness(store)
+        assert readiness["status"] in {"ready", "not_ready"}
+        ```
+    """
+
     checks: dict[str, str] = {}
     try:
         runtime = store.get_runtime()

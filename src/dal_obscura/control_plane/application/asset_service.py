@@ -1,3 +1,11 @@
+"""Workspace asset service functions.
+
+Example:
+    ```python
+    assets = list_workspace_assets(store)
+    ```
+"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -7,6 +15,14 @@ from dal_obscura.control_plane.infrastructure.repositories import PublicationSto
 
 
 def list_workspace_assets(store: PublicationStore) -> list[dict[str, object]]:
+    """Lists governed assets in the default workspace.
+
+    Example:
+        ```python
+        assets = list_workspace_assets(store)
+        ```
+    """
+
     context = store.get_default_workspace_context()
     if context is None:
         return []
@@ -14,6 +30,14 @@ def list_workspace_assets(store: PublicationStore) -> list[dict[str, object]]:
 
 
 def get_workspace_asset(store: PublicationStore, asset_id: UUID) -> dict[str, object]:
+    """Returns one governed asset by id.
+
+    Example:
+        ```python
+        asset = get_workspace_asset(store, asset_id)
+        ```
+    """
+
     return store.get_workspace_asset(asset_id)
 
 
@@ -25,6 +49,14 @@ def upsert_workspace_asset(
     table_identifier: str | None,
     options: dict[str, Any],
 ) -> dict[str, str]:
+    """Creates or updates a governed asset binding.
+
+    Example:
+        ```python
+        result = upsert_workspace_asset(store, "analytics", "orders", "iceberg", None, {})
+        ```
+    """
+
     context = _required_workspace_context(store)
     asset_id = store.upsert_asset(
         cell_id=context.cell_id,
@@ -43,6 +75,14 @@ def replace_asset_owners(
     asset_id: UUID,
     owners: list[str],
 ) -> list[str]:
+    """Replaces owners for one governed asset.
+
+    Example:
+        ```python
+        owners = replace_asset_owners(store, asset_id, ["alice", "group:analytics"])
+        ```
+    """
+
     return store.replace_asset_owners(asset_id=asset_id, owners=owners)
 
 
@@ -51,6 +91,14 @@ def replace_asset_schema_fields(
     asset_id: UUID,
     fields: list[dict[str, Any]],
 ) -> list[dict[str, object]]:
+    """Replaces the schema-field metadata for one governed asset.
+
+    Example:
+        ```python
+        fields = replace_asset_schema_fields(store, asset_id, [{"name": "id"}])
+        ```
+    """
+
     return store.replace_asset_schema_fields(asset_id=asset_id, fields=fields)
 
 

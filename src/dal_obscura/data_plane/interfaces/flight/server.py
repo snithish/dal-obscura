@@ -25,10 +25,7 @@ from dal_obscura.data_plane.interfaces.flight.contracts import (
     authentication_request_from_context,
     parse_descriptor,
 )
-from dal_obscura.data_plane.interfaces.flight.streaming import (
-    make_stream,
-    normalize_schema_for_flight,
-)
+from dal_obscura.data_plane.interfaces.flight.streaming import make_stream
 from dal_obscura.observability import get_resident_memory_bytes
 
 HEALTH_ACTION = "healthz"
@@ -101,7 +98,7 @@ class DataAccessFlightService(flight.FlightServerBase):
                 policy_version=result.policy_version,
             ),
         )
-        return flight.SchemaResult(normalize_schema_for_flight(result.output_schema))
+        return flight.SchemaResult(result.output_schema)
 
     def get_flight_info(
         self, context: flight.ServerCallContext, descriptor: flight.FlightDescriptor
@@ -139,9 +136,7 @@ class DataAccessFlightService(flight.FlightServerBase):
             flight.FlightEndpoint(flight.Ticket(token.encode("utf-8")), [])
             for token in result.ticket_tokens
         ]
-        return flight.FlightInfo(
-            normalize_schema_for_flight(result.output_schema), descriptor, endpoints, -1, -1
-        )
+        return flight.FlightInfo(result.output_schema, descriptor, endpoints, -1, -1)
 
     def do_get(
         self, context: flight.ServerCallContext, ticket: flight.Ticket

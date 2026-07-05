@@ -1,3 +1,11 @@
+"""Workspace asset-policy service functions.
+
+Example:
+    ```python
+    rules = list_policy_rules(store, asset_id)
+    ```
+"""
+
 from __future__ import annotations
 
 from typing import Any, Literal, cast
@@ -21,6 +29,14 @@ from dal_obscura.control_plane.infrastructure.repositories import PublicationSto
 
 
 def list_policy_rules(store: PublicationStore, asset_id: UUID) -> list[dict[str, object]]:
+    """Lists ordered policy rules for one asset.
+
+    Example:
+        ```python
+        rules = list_policy_rules(store, asset_id)
+        ```
+    """
+
     return store.list_policy_rules(asset_id)
 
 
@@ -31,6 +47,14 @@ def replace_policy_rules(
     *,
     actor: ControlPlaneActor,
 ) -> None:
+    """Validates and replaces policy rules for one asset.
+
+    Example:
+        ```python
+        replace_policy_rules(store, asset_id, rules, actor=actor)
+        ```
+    """
+
     ensure_policy_editor(store, asset_id, actor)
     validate_policy_rule_payloads(rules)
     store.replace_policy_rules(asset_id=asset_id, rules=rules)
@@ -44,6 +68,20 @@ def preview_asset_policy(
     groups: list[str],
     claims: dict[str, object],
 ) -> dict[str, object]:
+    """Evaluates draft policy rules for a preview principal.
+
+    Example:
+        ```python
+        preview = preview_asset_policy(
+            store,
+            asset_id,
+            principal="alice",
+            groups=["analytics"],
+            claims={},
+        )
+        ```
+    """
+
     asset = store.get_workspace_asset(asset_id)
     raw_rules = store.list_policy_rules(asset_id)
     compiled = _compiled_policy_from_response(asset, raw_rules)
@@ -88,6 +126,14 @@ def ensure_policy_editor(
     asset_id: UUID,
     actor: ControlPlaneActor,
 ) -> None:
+    """Requires the actor to be a platform admin or asset owner.
+
+    Example:
+        ```python
+        ensure_policy_editor(store, asset_id, actor)
+        ```
+    """
+
     if actor.platform_admin:
         return
     owners = set(store.list_asset_owners(asset_id))

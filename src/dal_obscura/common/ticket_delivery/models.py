@@ -1,3 +1,13 @@
+"""Ticket payload value objects and canonical hashing helpers.
+
+Example:
+    ```python
+    payload_hash = ticket_payload_hash(payload)
+    encoded = payload.to_dict()
+    restored = TicketPayload.from_dict(encoded)
+    ```
+"""
+
 from __future__ import annotations
 
 import hashlib
@@ -8,11 +18,15 @@ from typing import TypedDict, cast
 
 
 class MaskPayload(TypedDict):
+    """JSON shape for one mask stored inside a ticket scan payload."""
+
     type: str
     value: object | None
 
 
 class ScanPayload(TypedDict):
+    """JSON shape for server-stored scan context referenced by a ticket."""
+
     read_payload: str
     full_row_filter: str | None
     masks: dict[str, MaskPayload]
@@ -20,7 +34,24 @@ class ScanPayload(TypedDict):
 
 @dataclass(frozen=True)
 class TicketPayload:
-    """Serialized contents of a signed Flight ticket."""
+    """Serialized contents of a signed Flight ticket.
+
+    Example:
+        ```python
+        payload = TicketPayload(
+            ticket_id="ticket-1",
+            catalog="analytics",
+            target="default.users",
+            columns=["id"],
+            scan={"read_payload": "...", "full_row_filter": None, "masks": {}},
+            policy_version=1,
+            principal_id="user:alice",
+            expires_at=1_900_000_000,
+            nonce="nonce",
+            tenant_id="default",
+        )
+        ```
+    """
 
     target: str
     columns: list[str]
@@ -133,6 +164,13 @@ def _coerce_row_filter(raw: object) -> str | None:
 
 
 def canonical_ticket_payload_bytes(payload: TicketPayload) -> bytes:
+    """Returns stable JSON bytes used for signing and integrity checks.
+
+    Example:
+        ```python
+        signed_bytes = canonical_ticket_payload_bytes(payload)
+        ```
+    """
     return json.dumps(
         payload.to_dict(),
         sort_keys=True,
@@ -141,4 +179,11 @@ def canonical_ticket_payload_bytes(payload: TicketPayload) -> bytes:
 
 
 def ticket_payload_hash(payload: TicketPayload) -> str:
+    """Returns SHA-256 hex digest of the canonical ticket payload.
+
+    Example:
+        ```python
+        digest = ticket_payload_hash(payload)
+        ```
+    """
     return hashlib.sha256(canonical_ticket_payload_bytes(payload)).hexdigest()

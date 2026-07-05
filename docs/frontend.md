@@ -45,8 +45,8 @@ Keep API calls in `ui/src/api/`. Each helper should:
 - throw `ApiError` for non-2xx responses,
 - avoid embedding presentation decisions.
 
-Do not call legacy tenant/cell routes from React pages unless the migration
-plan explicitly requires it. Prefer workspace endpoints such as `/v1/assets`.
+Do not call tenant/cell routes from React pages. Use workspace endpoints such as
+`/v1/assets`.
 
 ## Forms
 

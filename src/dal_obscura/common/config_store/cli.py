@@ -1,3 +1,11 @@
+"""Command-line entry point for explicit config-store migrations.
+
+Example:
+    ```python
+    exit_code = run(["check", "--database-url", "sqlite+pysqlite:///:memory:"])
+    ```
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -16,10 +24,26 @@ from dal_obscura.common.config_store.db import (
 
 
 def main() -> None:
+    """Runs the `dal-obscura-migrate` console script.
+
+    Example:
+        ```python
+        main()
+        ```
+    """
+
     raise SystemExit(run())
 
 
 def run(argv: Sequence[str] | None = None) -> int:
+    """Runs a config-store migration command and returns a process exit code.
+
+    Example:
+        ```python
+        code = run(["current", "--database-url", database_url])
+        ```
+    """
+
     parser = _parser()
     args = parser.parse_args(argv)
     database_url = args.database_url or os.getenv("DAL_OBSCURA_DATABASE_URL")

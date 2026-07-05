@@ -1,3 +1,13 @@
+"""Control-plane CLI entry point.
+
+Example:
+    ```bash
+    DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:///runtime/control-plane.db \
+    DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN=dev-admin \
+    dal-obscura-control-plane
+    ```
+"""
+
 from __future__ import annotations
 
 import os
@@ -15,6 +25,14 @@ from dal_obscura.control_plane.interfaces.api import create_app, create_oidc_act
 
 
 def main() -> None:
+    """Starts the control-plane API server from environment variables.
+
+    Example:
+        ```python
+        main()
+        ```
+    """
+
     database_url = os.environ["DAL_OBSCURA_DATABASE_URL"]
     admin_token = os.environ["DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN"]
     host = os.getenv("DAL_OBSCURA_CONTROL_PLANE_HOST", "0.0.0.0")
@@ -52,11 +70,27 @@ def main() -> None:
 
 
 def cors_origins_from_env(env: Mapping[str, str]) -> tuple[str, ...]:
+    """Parses comma-separated CORS origins from environment variables.
+
+    Example:
+        ```python
+        origins = cors_origins_from_env({"DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": "http://localhost:5173"})
+        ```
+    """
+
     raw = _env_text(env, "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS")
     return tuple(item.strip() for item in raw.split(",") if item.strip())
 
 
 def ui_auth_config_from_env(env: Mapping[str, str]) -> dict[str, Any] | None:
+    """Builds public UI OIDC/demo-login config from environment variables.
+
+    Example:
+        ```python
+        config = ui_auth_config_from_env(os.environ)
+        ```
+    """
+
     issuer = _env_text(
         env,
         "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER",

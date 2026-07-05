@@ -1,3 +1,12 @@
+"""Environment-backed data-plane runtime configuration.
+
+Example:
+    ```python
+    config = load_data_plane_runtime_config()
+    assert config.location.startswith("grpc")
+    ```
+"""
+
 from __future__ import annotations
 
 import json
@@ -10,6 +19,19 @@ from dal_obscura.data_plane.infrastructure.adapters.secret_providers import Secr
 
 @dataclass(frozen=True)
 class DataPlaneRuntimeConfig:
+    """Configuration required to start one data-plane process.
+
+    Example:
+        ```python
+        config = DataPlaneRuntimeConfig(
+            database_url="sqlite+pysqlite:///control-plane.db",
+            cell_id=cell_id,
+            location="grpc://0.0.0.0:8815",
+            ticket_secret="dev-ticket-secret",
+        )
+        ```
+    """
+
     database_url: str
     cell_id: UUID
     location: str
@@ -27,6 +49,7 @@ class DataPlaneRuntimeConfig:
 
 
 def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
+    """Loads data-plane configuration from environment variables."""
     database_url = _required_env("DAL_OBSCURA_DATABASE_URL")
     cell_id = UUID(_required_env("DAL_OBSCURA_CELL_ID"))
     location = os.getenv("DAL_OBSCURA_LOCATION", "grpc://0.0.0.0:8815").strip()

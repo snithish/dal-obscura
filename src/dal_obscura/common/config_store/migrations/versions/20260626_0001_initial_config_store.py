@@ -249,6 +249,27 @@ def _create_published_assets() -> None:
     )
 
 
+def _create_active_published_assets() -> None:
+    op.create_table(
+        "active_published_assets",
+        sa.Column("cell_id", sa.Uuid(), nullable=False),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("catalog", sa.String(length=160), nullable=False),
+        sa.Column("target", sa.Text(), nullable=False),
+        sa.Column("publication_id", sa.Uuid(), nullable=False),
+        sa.ForeignKeyConstraint(["cell_id"], ["cells.id"]),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"]),
+        sa.ForeignKeyConstraint(["publication_id"], ["config_publications.id"]),
+        sa.PrimaryKeyConstraint("cell_id", "tenant_id", "catalog", "target"),
+    )
+    op.create_index(
+        "ix_active_published_assets_publication",
+        "active_published_assets",
+        ["publication_id"],
+        unique=False,
+    )
+
+
 def _create_data_plane_tickets() -> None:
     op.create_table(
         "data_plane_tickets",
@@ -299,11 +320,20 @@ TABLE_CREATORS = (
     ("published_cell_runtime", _create_published_cell_runtime),
     ("published_catalogs", _create_published_catalogs),
     ("published_assets", _create_published_assets),
+    ("active_published_assets", _create_active_published_assets),
     ("data_plane_tickets", _create_data_plane_tickets),
 )
 
 
 def upgrade() -> None:
+    """Creates the initial config-store schema.
+
+    Example:
+        ```python
+        upgrade()
+        ```
+    """
+
     bind = op.get_bind()
     inspector = inspect(bind)
     existing_tables = set(inspector.get_table_names())
@@ -328,6 +358,19 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """Drops the initial config-store schema.
+
+    Example:
+        ```python
+        downgrade()
+        ```
+    """
+
+    op.drop_index(
+        "ix_active_published_assets_publication",
+        table_name="active_published_assets",
+    )
+    op.drop_table("active_published_assets")
     op.drop_index("ix_data_plane_tickets_cell_ticket", table_name="data_plane_tickets")
     op.drop_index("ix_data_plane_tickets_cell_expires", table_name="data_plane_tickets")
     op.drop_table("data_plane_tickets")

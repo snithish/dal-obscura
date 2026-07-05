@@ -39,7 +39,7 @@ def test_composite_tries_next_provider_only_when_credentials_are_missing():
     assert principal.attributes == {"tenant": "acme"}
 
 
-def test_composite_does_not_fall_back_after_invalid_credentials():
+def test_composite_stops_after_invalid_credentials():
     provider = CompositeIdentityProvider([InvalidProvider(), AcceptingProvider()])
 
     with pytest.raises(InvalidCredentialsError, match="Invalid token"):

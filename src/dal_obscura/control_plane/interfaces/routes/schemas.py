@@ -1,3 +1,15 @@
+"""Pydantic request models for control-plane routes.
+
+Example:
+    ```python
+    request = RuntimeSettingsRequest(
+        ticket_ttl_seconds=300,
+        max_tickets=32,
+        max_ticket_exchanges=1,
+    )
+    ```
+"""
+
 from __future__ import annotations
 
 from typing import Any, cast
@@ -9,82 +21,223 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class StrictModel(BaseModel):
+    """Base model that rejects unknown request fields.
+
+    Example:
+        ```python
+        class RequestModel(StrictModel):
+            name: str
+        ```
+    """
+
     model_config = ConfigDict(extra="forbid")
 
 
 class TenantRequest(StrictModel):
+    """Tenant/workspace creation request.
+
+    Example:
+        ```python
+        TenantRequest(slug="default", display_name="Default workspace")
+        ```
+    """
+
     slug: str = Field(min_length=1)
     display_name: str = Field(min_length=1)
 
 
 class CellRequest(StrictModel):
+    """Data-plane cell creation request.
+
+    Example:
+        ```python
+        CellRequest(name="default", region="local")
+        ```
+    """
+
     name: str = Field(min_length=1)
     region: str = Field(min_length=1)
 
 
 class TenantCellRequest(CellRequest):
+    """Combined tenant and cell assignment request.
+
+    Example:
+        ```python
+        TenantCellRequest(name="default", region="local", shard_key="default")
+        ```
+    """
+
     shard_key: str = Field(default="default", min_length=1)
 
 
 class TenantCellAssignmentRequest(StrictModel):
+    """Assigns an existing cell to a tenant.
+
+    Example:
+        ```python
+        TenantCellAssignmentRequest(cell_id=cell_id, shard_key="default")
+        ```
+    """
+
     cell_id: UUID
     shard_key: str = Field(default="default", min_length=1)
 
 
 class CellTenantRequest(StrictModel):
+    """Assigns the workspace tenant to an existing cell.
+
+    Example:
+        ```python
+        CellTenantRequest(shard_key="default")
+        ```
+    """
+
     shard_key: str = Field(default="default", min_length=1)
 
 
 class RuntimeSettingsRequest(StrictModel):
+    """Runtime ticket and scan fan-out settings request.
+
+    Example:
+        ```python
+        RuntimeSettingsRequest(
+            ticket_ttl_seconds=300,
+            max_tickets=32,
+            max_ticket_exchanges=1,
+        )
+        ```
+    """
+
     ticket_ttl_seconds: int = Field(gt=0)
     max_tickets: int = Field(gt=0)
     max_ticket_exchanges: int = Field(gt=0)
 
 
 class CatalogRequest(StrictModel):
+    """Catalog configuration request.
+
+    Example:
+        ```python
+        CatalogRequest(module="iceberg", options={"uri": "sqlite:///catalog.db"})
+        ```
+    """
+
     module: str = Field(min_length=1)
     options: dict[str, Any] = Field(default_factory=dict)
 
 
 class AssetRequest(StrictModel):
+    """Governed asset backend binding request.
+
+    Example:
+        ```python
+        AssetRequest(backend="iceberg", table_identifier="default.orders")
+        ```
+    """
+
     backend: str = Field(min_length=1)
     table_identifier: str | None = None
     options: dict[str, Any] = Field(default_factory=dict)
 
 
 class PolicyRulesRequest(StrictModel):
+    """Ordered policy-rule replacement request.
+
+    Example:
+        ```python
+        PolicyRulesRequest(rules=[{"effect": "allow", "columns": ["id"]}])
+        ```
+    """
+
     rules: list[dict[str, Any]]
 
 
 class PolicyPreviewRequest(StrictModel):
+    """Policy-preview request for a candidate principal.
+
+    Example:
+        ```python
+        PolicyPreviewRequest(principal="alice", groups=["analytics"], claims={})
+        ```
+    """
+
     principal: str = Field(min_length=1)
     groups: list[str] = Field(default_factory=list)
     claims: dict[str, object] = Field(default_factory=dict)
 
 
 class AssetOwnersRequest(StrictModel):
+    """Asset owner-principal replacement request.
+
+    Example:
+        ```python
+        AssetOwnersRequest(owners=["alice", "group:analytics"])
+        ```
+    """
+
     owners: list[str] = Field(default_factory=list)
 
 
 class AssetSchemaFieldRequest(StrictModel):
+    """Single asset schema-field request.
+
+    Example:
+        ```python
+        AssetSchemaFieldRequest(name="customer_id", type="string", nullable=False)
+        ```
+    """
+
     name: str = Field(min_length=1)
     type: str = Field(default="string", min_length=1)
     nullable: bool = True
 
 
 class AssetSchemaFieldsRequest(StrictModel):
+    """Asset schema-field replacement request.
+
+    Example:
+        ```python
+        AssetSchemaFieldsRequest(fields=[AssetSchemaFieldRequest(name="id")])
+        ```
+    """
+
     fields: list[AssetSchemaFieldRequest] = Field(default_factory=list)
 
 
 class AuthProvidersRequest(StrictModel):
+    """Authentication provider-chain replacement request.
+
+    Example:
+        ```python
+        AuthProvidersRequest(providers=[{"module": "example.Provider", "args": {}}])
+        ```
+    """
+
     providers: list[dict[str, Any]]
 
 
 class DemoLoginRequest(StrictModel):
+    """Local demo-login request.
+
+    Example:
+        ```python
+        DemoLoginRequest(login_hint="alice")
+        ```
+    """
+
     login_hint: str = Field(min_length=1)
 
 
 async def request_payload(request: Request) -> dict[str, object]:
+    """Parses JSON or form-encoded route payloads into a mapping.
+
+    Example:
+        ```python
+        payload = await request_payload(request)
+        ```
+    """
+
     content_type = request.headers.get("content-type", "")
     if "application/json" in content_type:
         raw = await request.json()

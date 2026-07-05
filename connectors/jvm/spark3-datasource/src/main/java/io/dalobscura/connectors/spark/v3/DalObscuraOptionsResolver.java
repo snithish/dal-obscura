@@ -8,22 +8,17 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap;
 
 public final class DalObscuraOptionsResolver {
     private static final String READ_HEADER_PREFIX = "dal.auth.header.";
-    private static final String SESSION_HEADER_PREFIX = "auth.header.";
 
     public DalObscuraConnectorOptions resolve(CaseInsensitiveStringMap options) {
-        String uri = firstNonBlank(options.get("dal.uri"), options.get("uri"));
-        String catalog = firstNonBlank(options.get("dal.catalog"), options.get("catalog"));
-        String target = firstNonBlank(options.get("dal.target"), options.get("target"));
+        String uri = options.get("dal.uri");
+        String catalog = options.get("dal.catalog");
+        String target = options.get("dal.target");
 
         require("dal.uri", uri);
         require("dal.catalog", catalog);
         require("dal.target", target);
 
         return new DalObscuraConnectorOptions(uri, catalog, target, resolveAuth(options));
-    }
-
-    private static String firstNonBlank(String primary, String fallback) {
-        return primary != null && !primary.isBlank() ? primary : fallback;
     }
 
     private static void require(String key, String value) {
@@ -35,8 +30,6 @@ public final class DalObscuraOptionsResolver {
     private static DalObscuraAuth resolveAuth(CaseInsensitiveStringMap options) {
         Map<String, String> rawOptions = options.asCaseSensitiveMap();
         LinkedHashMap<String, String> headers = new LinkedHashMap<>();
-        applyBearerToken(headers, rawOptions.get("auth.token"));
-        addHeaderOptions(headers, rawOptions, SESSION_HEADER_PREFIX);
         applyBearerToken(headers, rawOptions.get("dal.auth.token"));
         addHeaderOptions(headers, rawOptions, READ_HEADER_PREFIX);
         return new DalObscuraAuth(headers);

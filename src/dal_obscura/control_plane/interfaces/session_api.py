@@ -1,3 +1,11 @@
+"""Session and UI-auth helpers for the control-plane API.
+
+Example:
+    ```python
+    actor = oidc_actor_from_header("Bearer token", resolver=resolver, admin_group="admins")
+    ```
+"""
+
 from __future__ import annotations
 
 import json
@@ -26,6 +34,20 @@ def create_oidc_actor_resolver(
     subject_claim: str,
     group_claims: tuple[str, ...],
 ) -> OidcActorResolver:
+    """Builds an OIDC bearer-token resolver for control-plane actors.
+
+    Example:
+        ```python
+        resolver = create_oidc_actor_resolver(
+            issuer="https://idp.example.com",
+            audience="dal-obscura-ui",
+            jwks_url=None,
+            subject_claim="preferred_username",
+            group_claims=("groups",),
+        )
+        ```
+    """
+
     provider = OidcJwksIdentityProvider(
         issuer=issuer,
         audience=audience or None,
@@ -44,6 +66,14 @@ def create_oidc_actor_resolver(
 
 
 def actor_response(actor: ControlPlaneActor) -> dict[str, object]:
+    """Serializes a control-plane actor for the session API.
+
+    Example:
+        ```python
+        payload = actor_response(actor)
+        ```
+    """
+
     return {
         "principal": actor.principal,
         "groups": list(actor.groups),
@@ -52,6 +82,14 @@ def actor_response(actor: ControlPlaneActor) -> dict[str, object]:
 
 
 def public_ui_auth_config(config: Mapping[str, object]) -> dict[str, object]:
+    """Returns only browser-safe UI authentication settings.
+
+    Example:
+        ```python
+        public = public_ui_auth_config(raw_config)
+        ```
+    """
+
     public_keys = (
         "authority",
         "client_id",
@@ -80,6 +118,14 @@ def public_ui_auth_config(config: Mapping[str, object]) -> dict[str, object]:
 
 
 def demo_login_config(config: Mapping[str, object]) -> dict[str, object]:
+    """Extracts server-only demo-login token exchange settings.
+
+    Example:
+        ```python
+        demo = demo_login_config(raw_config)
+        ```
+    """
+
     value = config.get("demo_login")
     if not isinstance(value, Mapping):
         return {}
@@ -99,6 +145,14 @@ def demo_login_config(config: Mapping[str, object]) -> dict[str, object]:
 
 
 def exchange_demo_password_token(config: Mapping[str, object], username: str) -> str:
+    """Exchanges a configured demo password for an OIDC access token.
+
+    Example:
+        ```python
+        token = exchange_demo_password_token(config, "alice")
+        ```
+    """
+
     passwords = cast(dict[str, str], config["passwords"])
     body = urlencode(
         {
@@ -129,6 +183,18 @@ def oidc_actor_from_header(
     resolver: OidcActorResolver,
     admin_group: str | None,
 ) -> ControlPlaneActor | None:
+    """Converts an authorization header into a control-plane actor.
+
+    Example:
+        ```python
+        actor = oidc_actor_from_header(
+            "Bearer token",
+            resolver=resolver,
+            admin_group="platform-admins",
+        )
+        ```
+    """
+
     token = _bearer_token(authorization)
     if token is None:
         return None
@@ -148,6 +214,14 @@ def oidc_actor_from_header(
 
 
 def public_login_shortcuts(value: object) -> list[dict[str, str]]:
+    """Normalizes browser-visible login shortcuts.
+
+    Example:
+        ```python
+        shortcuts = public_login_shortcuts([{"label": "Alice", "login_hint": "alice"}])
+        ```
+    """
+
     if not isinstance(value, list):
         return []
     shortcuts: list[dict[str, str]] = []
@@ -163,6 +237,14 @@ def public_login_shortcuts(value: object) -> list[dict[str, str]]:
 
 
 def demo_login_passwords(config: Mapping[str, object]) -> dict[str, str]:
+    """Returns configured demo-login passwords keyed by login hint.
+
+    Example:
+        ```python
+        passwords = demo_login_passwords(config)
+        ```
+    """
+
     value = config.get("demo_login")
     if not isinstance(value, Mapping):
         return {}

@@ -9,6 +9,17 @@ from dal_obscura.common.access_control.filters import RowFilter
 
 
 def row_filter_to_arrow_expression(row_filter: RowFilter | None) -> ds.Expression | None:
+    """Converts supported policy row filters to PyArrow Dataset expressions.
+
+    Unsupported SQL constructs return None so the caller can evaluate the full
+    filter later through DuckDB.
+
+    Example:
+        ```python
+        expression = row_filter_to_arrow_expression(parse_row_filter("region = 'US'", schema))
+        ```
+    """
+
     if row_filter is None:
         return None
     return _expression(row_filter.expression)

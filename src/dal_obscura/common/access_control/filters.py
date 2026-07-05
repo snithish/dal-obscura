@@ -1,3 +1,12 @@
+"""DuckDB row-filter parsing, validation, and serialization.
+
+Example:
+    ```python
+    row_filter = parse_row_filter("region = 'us'", schema)
+    sql = row_filter_to_sql(row_filter)
+    ```
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -10,6 +19,15 @@ from sqlglot.errors import ParseError
 
 @dataclass(frozen=True)
 class RowFilter:
+    """Validated row-filter expression plus canonical DuckDB SQL.
+
+    Example:
+        ```python
+        row_filter = parse_row_filter("lower(region) = 'us'", schema)
+        assert row_filter.sql == "LOWER(region) = 'us'"
+        ```
+    """
+
     sql: str
     expression: exp.Expr = field(repr=False, compare=False)
 

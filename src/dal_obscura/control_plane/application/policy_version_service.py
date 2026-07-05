@@ -1,3 +1,11 @@
+"""Policy-version and publication service functions.
+
+Example:
+    ```python
+    versions = list_policy_version_history(store)
+    ```
+"""
+
 from __future__ import annotations
 
 from uuid import UUID, uuid4
@@ -11,6 +19,14 @@ from dal_obscura.control_plane.infrastructure.repositories import PublicationSto
 
 
 def list_workspace_publications(store: PublicationStore) -> list[dict[str, object]]:
+    """Lists publications for the default workspace.
+
+    Example:
+        ```python
+        publications = list_workspace_publications(store)
+        ```
+    """
+
     context = store.get_default_workspace_context()
     if context is None:
         return []
@@ -18,6 +34,14 @@ def list_workspace_publications(store: PublicationStore) -> list[dict[str, objec
 
 
 def list_policy_version_history(store: PublicationStore) -> list[dict[str, object]]:
+    """Lists asset-scoped policy-version history for the workspace.
+
+    Example:
+        ```python
+        history = list_policy_version_history(store)
+        ```
+    """
+
     context = store.get_default_workspace_context()
     if context is None:
         return []
@@ -28,6 +52,14 @@ def create_workspace_publication(
     store: PublicationStore,
     create_publication,
 ) -> dict[str, object]:
+    """Creates a full workspace publication snapshot.
+
+    Example:
+        ```python
+        publication = create_workspace_publication(store, create_publication)
+        ```
+    """
+
     context = _required_workspace_context(store)
     publication = create_publication(context.cell_id)
     return {
@@ -46,6 +78,20 @@ def create_asset_policy_version(
     create_publication,
     activate_publication,
 ) -> dict[str, object]:
+    """Publishes and activates a new policy version for one asset.
+
+    Example:
+        ```python
+        result = create_asset_policy_version(
+            store,
+            asset_id,
+            actor=actor,
+            create_publication=create_publication,
+            activate_publication=activate_publication,
+        )
+        ```
+    """
+
     ensure_policy_editor(store, asset_id, actor)
     asset, catalog = store.load_asset_publish_draft(asset_id)
     if not asset.rules:
@@ -53,7 +99,7 @@ def create_asset_policy_version(
     compiler = PublicationCompiler()
     compiled_asset = compiler.compile_asset(asset, catalog)
     try:
-        active = store.load_active_compiled_publication(asset.cell_id)
+        active = store.load_active_compiled_publication_config(asset.cell_id)
     except LookupError:
         publication = create_publication(asset.cell_id)
         activate_publication(
@@ -99,6 +145,14 @@ def create_asset_policy_version(
 
 
 def create_publication(store: PublicationStore, cell_id: UUID) -> dict[str, object]:
+    """Compiles and stores a publication for one cell.
+
+    Example:
+        ```python
+        publication = create_publication(store, cell_id)
+        ```
+    """
+
     draft = store.load_publish_draft(cell_id)
     _validate_publish_readiness(store, draft)
     compiled = PublicationCompiler().compile(draft)
@@ -115,6 +169,14 @@ def activate_publication(
     cell_id: UUID,
     publication_id: UUID,
 ) -> dict[str, str]:
+    """Marks a publication active for one cell.
+
+    Example:
+        ```python
+        active = activate_publication(store, cell_id, publication_id)
+        ```
+    """
+
     store.activate_publication(cell_id=cell_id, publication_id=publication_id)
     return {"cell_id": str(cell_id), "publication_id": str(publication_id)}
 

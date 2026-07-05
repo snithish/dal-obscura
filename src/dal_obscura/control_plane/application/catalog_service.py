@@ -1,3 +1,11 @@
+"""Workspace catalog service functions.
+
+Example:
+    ```python
+    catalogs = list_workspace_catalogs(store)
+    ```
+"""
+
 from __future__ import annotations
 
 from typing import Any, cast
@@ -9,6 +17,14 @@ CatalogDiscoverer = Any
 
 
 def list_workspace_catalogs(store: PublicationStore) -> list[dict[str, object]]:
+    """Lists catalogs configured in the default workspace.
+
+    Example:
+        ```python
+        catalogs = list_workspace_catalogs(store)
+        ```
+    """
+
     context = store.get_default_workspace_context()
     if context is None:
         return []
@@ -21,6 +37,14 @@ def discover_workspace_catalog_tables(
     *,
     discover: CatalogDiscoverer = discover_catalog_tables,
 ) -> dict[str, object]:
+    """Discovers tables for a configured workspace catalog.
+
+    Example:
+        ```python
+        result = discover_workspace_catalog_tables(store, "analytics")
+        ```
+    """
+
     context = _required_workspace_context(store)
     catalog = store.get_workspace_catalog(context, name)
     catalog_options = cast(dict[str, Any], catalog["options"])
@@ -56,6 +80,14 @@ def upsert_workspace_catalog(
     module: str,
     options: dict[str, Any],
 ) -> dict[str, str]:
+    """Creates or updates a workspace catalog definition.
+
+    Example:
+        ```python
+        result = upsert_workspace_catalog(store, "analytics", "iceberg", {})
+        ```
+    """
+
     context = store.ensure_default_workspace_context()
     catalog_id = store.upsert_catalog(
         cell_id=context.cell_id,

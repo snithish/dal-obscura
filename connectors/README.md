@@ -2,7 +2,7 @@
 
 This workspace hosts engine-specific clients that read through `dal-obscura`.
 
-- `contract-fixtures/`: language-neutral compatibility cases
+- `contract-fixtures/`: language-neutral connector contract cases
 - `jvm/dal-obscura-client-java/`: Java Flight read client
 - `jvm/spark3-datasource/`: Spark 3.x DataSource V2 adapter
 - `jvm/connector-testkit-jvm/`: shared JVM integration helpers
@@ -30,7 +30,7 @@ Build and verify the JVM workspace with:
 mvn -f connectors/jvm/pom.xml -Pspark-3.5 verify
 ```
 
-Spark 4 is tracked as a separate compatibility lane because Spark 4.x uses the
+Spark 4 is tracked separately because Spark 4.x uses the
 Scala 2.13 artifact line and JDK 17 baseline:
 
 ```bash
@@ -66,16 +66,6 @@ spark.read()
 
 Auth headers are optional at the connector boundary. That allows deployments
 that authenticate with mTLS peer identity or another transport-level mechanism.
-
-Session-level fallback options use Spark's datasource prefix:
-
-```java
-spark.conf().set("spark.datasource.dal_obscura.uri", "grpc+tcp://localhost:8815");
-spark.conf().set("spark.datasource.dal_obscura.catalog", "analytics");
-spark.conf().set("spark.datasource.dal_obscura.target", "default.users");
-spark.conf().set("spark.datasource.dal_obscura.auth.token", token);
-spark.conf().set("spark.datasource.dal_obscura.auth.header.x-api-key", apiKey);
-```
 
 The Spark connector is read-only in v1. Planning, authn/authz, row-filter
 validation, masking, and ticket minting remain in `dal-obscura`; the connector

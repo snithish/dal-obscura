@@ -21,6 +21,15 @@ from dal_obscura.data_plane.application.use_cases.plan_access import (
 
 @dataclass(frozen=True)
 class GetSchemaResult:
+    """Authorized schema response returned by GetSchemaUseCase.
+
+    Example:
+        ```python
+        result = get_schema.execute(plan_request, auth_request)
+        print(result.output_schema, result.policy_version)
+        ```
+    """
+
     output_schema: pa.Schema
     target: str
     columns: list[str]

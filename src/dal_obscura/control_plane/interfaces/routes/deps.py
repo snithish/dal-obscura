@@ -1,3 +1,18 @@
+"""Shared FastAPI dependencies for control-plane route modules.
+
+Example:
+    ```python
+    deps = ControlPlaneDeps(
+        session_maker=session_maker,
+        admin_token="dev-admin",
+        oidc_actor_resolver=None,
+        oidc_admin_group=None,
+        ui_auth_config=None,
+        demo_token_exchange=lambda config, username: "",
+    )
+    ```
+"""
+
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
@@ -19,6 +34,14 @@ DemoTokenExchange = Callable[[Mapping[str, object], str], str]
 
 @dataclass(frozen=True)
 class ControlPlaneDeps:
+    """Route dependency bundle for auth checks and service session handling.
+
+    Example:
+        ```python
+        actor = deps.require_admin("Bearer dev-admin")
+        ```
+    """
+
     session_maker: sessionmaker[Session]
     admin_token: str
     oidc_actor_resolver: OidcActorResolver | None

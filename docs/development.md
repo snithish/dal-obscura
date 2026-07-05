@@ -24,11 +24,11 @@ flowchart TB
 
 | Path | Purpose |
 | --- | --- |
-| `src/dal_obscura/interfaces/flight` | Arrow Flight transport. |
+| `src/dal_obscura/data_plane/interfaces/flight` | Arrow Flight transport. |
 | `src/dal_obscura/control_plane` | HTTP API, UI assets, repositories, and control-plane workflows. |
-| `src/dal_obscura/application` | Use cases and ports. |
-| `src/dal_obscura/domain` | Pure models, policy logic, planning types. |
-| `src/dal_obscura/infrastructure` | Catalogs, auth, ticket codecs, table formats, transforms. |
+| `src/dal_obscura/data_plane/application` | Data-plane use cases and ports. |
+| `src/dal_obscura/common` | Shared models, policy logic, catalog contracts, tickets, and config-store ORM. |
+| `src/dal_obscura/data_plane/infrastructure` | Catalogs, auth, ticket codecs, table formats, transforms. |
 | `ui` | React control-plane UI. |
 | `connectors` | JVM connector modules and contract fixtures. |
 | `examples` | Auth examples, manifests, and local reference environments. |
@@ -50,7 +50,7 @@ uv run dal-obscura --help
 
 ```mermaid
 flowchart TB
-    e2e["Smoke and compatibility tests"] --> integration["Adapter and interface tests"]
+    e2e["Smoke and connector contract tests"] --> integration["Adapter and interface tests"]
     integration --> unit["Domain and use-case tests"]
 ```
 
@@ -79,6 +79,13 @@ JVM connectors:
 
 ```bash
 mvn -f connectors/jvm/pom.xml verify
+```
+
+The Spark datasource also supports profile-specific verification:
+
+```bash
+mvn -f connectors/jvm/pom.xml -Pspark-3.5 verify
+mvn -f connectors/jvm/pom.xml -Pspark-4.0 verify
 ```
 
 ## Frontend
@@ -123,6 +130,7 @@ docker run --rm -p 127.0.0.1:8821:8080 \
 | Catalog behavior | Catalog adapter tests and discovery UI/API behavior if visible. |
 | UI workflow | API helper types, feature page, UI tests, and Caddy image build. |
 | Connector contract | Contract fixtures and JVM/Python connector tests. |
+| Public Python interface | Pydoc docstrings with a short example. |
 
 ## Release-Oriented Checklist
 

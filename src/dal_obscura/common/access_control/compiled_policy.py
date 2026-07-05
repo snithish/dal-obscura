@@ -1,3 +1,12 @@
+"""JSON-serializable compiled policy records.
+
+Example:
+    ```python
+    compiled = CompiledPolicy.from_json(payload)
+    policy = compiled.to_policy()
+    ```
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -14,6 +23,15 @@ from dal_obscura.common.access_control.models import (
 
 @dataclass(frozen=True)
 class CompiledMaskRule:
+    """Compiled mask rule stored in published asset policy JSON.
+
+    Example:
+        ```python
+        mask = CompiledMaskRule(type="hash")
+        rule = mask.to_mask_rule()
+        ```
+    """
+
     type: str
     value: object | None = None
 
@@ -34,6 +52,20 @@ class CompiledMaskRule:
 
 @dataclass(frozen=True)
 class CompiledPolicyRule:
+    """Compiled access rule stored in published asset policy JSON.
+
+    Example:
+        ```python
+        rule = CompiledPolicyRule(
+            ordinal=0,
+            effect="allow",
+            principals=["analyst"],
+            columns=["id"],
+            masks={},
+        )
+        ```
+    """
+
     ordinal: int
     effect: Literal["allow", "deny"]
     principals: list[str]
@@ -83,6 +115,15 @@ class CompiledPolicyRule:
 
 @dataclass(frozen=True)
 class CompiledPolicy:
+    """Compiled policy snapshot for one governed asset.
+
+    Example:
+        ```python
+        compiled = CompiledPolicy(version=1, catalog="analytics", target="orders", rules=[])
+        policy = compiled.to_policy()
+        ```
+    """
+
     version: int
     catalog: str
     target: str

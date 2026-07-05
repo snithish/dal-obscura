@@ -5,6 +5,15 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class ControlPlaneActor:
+    """Authenticated control-plane caller.
+
+    Example:
+        ```python
+        actor = ControlPlaneActor.for_platform_admin("admin")
+        assert actor.platform_admin
+        ```
+    """
+
     principal: str
     groups: tuple[str, ...]
     platform_admin: bool = False

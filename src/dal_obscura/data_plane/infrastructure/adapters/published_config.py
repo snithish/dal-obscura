@@ -43,6 +43,15 @@ LOGGER = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class PublishedRuntime:
+    """Active runtime settings compiled from the control plane.
+
+    Example:
+        ```python
+        runtime = store.get_runtime()
+        ttl = runtime.ticket["ttl_seconds"]
+        ```
+    """
+
     publication_id: UUID
     auth_chain: dict[str, Any]
     ticket: dict[str, Any]
@@ -50,6 +59,14 @@ class PublishedRuntime:
 
 @dataclass(frozen=True)
 class PublishedAsset:
+    """Published asset policy and backend configuration for one target.
+
+    Example:
+        ```python
+        asset = store.get_asset(tenant_id="default", catalog="analytics", target="orders")
+        ```
+    """
+
     publication_id: UUID
     tenant_id: UUID
     catalog: str
@@ -61,6 +78,14 @@ class PublishedAsset:
 
 @dataclass(frozen=True)
 class PublishedCatalog:
+    """Published catalog configuration for one tenant.
+
+    Example:
+        ```python
+        catalogs = store.get_catalogs(tenant_id="default")
+        ```
+    """
+
     publication_id: UUID
     tenant_id: UUID
     catalog: str

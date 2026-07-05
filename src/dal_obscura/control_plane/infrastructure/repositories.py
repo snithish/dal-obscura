@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import base64
+import json
 from dataclasses import dataclass
 from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select, tuple_
 from sqlalchemy.orm import Session
 
 from dal_obscura.common.config_store.orm import (
     ActivePublicationRecord,
+    ActivePublishedAssetRecord,
     AssetOwnerRecord,
     AssetRecord,
     AssetSchemaFieldRecord,
@@ -40,12 +43,28 @@ from dal_obscura.control_plane.domain.models import (
 
 @dataclass(frozen=True)
 class ActivePublication:
+    """Active publication pointer for one data-plane cell.
+
+    Example:
+        ```python
+        active = store.active_publication(cell_id)
+        ```
+    """
+
     cell_id: UUID
     publication_id: UUID
 
 
 @dataclass(frozen=True)
 class PublishedAsset:
+    """Published asset view returned by repository read paths.
+
+    Example:
+        ```python
+        asset = store.published_asset(publication_id, tenant_id, "analytics", "orders")
+        ```
+    """
+
     publication_id: UUID
     tenant_id: UUID
     catalog: str
@@ -57,11 +76,43 @@ class PublishedAsset:
 
 @dataclass(frozen=True)
 class WorkspaceContext:
+    """Internal cell and tenant identifiers for the default workspace.
+
+    Example:
+        ```python
+        context = store.ensure_default_workspace_context()
+        ```
+    """
+
     cell_id: UUID
     tenant_id: UUID
 
 
+@dataclass(frozen=True)
+class AssetPage:
+    """Cursor-paginated asset listing.
+
+    Example:
+        ```python
+        page = store.list_assets(cell_id=context.cell_id, tenant_id=context.tenant_id)
+        ```
+    """
+
+    items: list[dict[str, object]]
+    next_cursor: str | None
+
+
 class PublicationStore:
+    """Repository for draft configuration, publication, and activation records.
+
+    Example:
+        ```python
+        with Session(engine) as session:
+            store = PublicationStore(session)
+            context = store.ensure_default_workspace_context()
+        ```
+    """
+
     def __init__(self, session: Session) -> None:
         self._session = session
 
@@ -399,7 +450,50 @@ class PublicationStore:
             )
         else:
             existing.publication_id = publication_id
+        for asset in self._session.scalars(
+            select(PublishedAssetRecord).where(
+                PublishedAssetRecord.publication_id == publication_id
+            )
+        ):
+            self.activate_published_asset(
+                cell_id=cell_id,
+                tenant_id=asset.tenant_id,
+                catalog=asset.catalog,
+                target=asset.target,
+                publication_id=publication_id,
+            )
         self._session.flush()
+
+    def activate_published_asset(
+        self,
+        *,
+        cell_id: UUID,
+        tenant_id: UUID,
+        catalog: str,
+        target: str,
+        publication_id: UUID,
+    ) -> None:
+        existing = self._session.get(
+            ActivePublishedAssetRecord,
+            {
+                "cell_id": cell_id,
+                "tenant_id": tenant_id,
+                "catalog": catalog,
+                "target": target,
+            },
+        )
+        if existing is None:
+            self._session.add(
+                ActivePublishedAssetRecord(
+                    cell_id=cell_id,
+                    tenant_id=tenant_id,
+                    catalog=catalog,
+                    target=target,
+                    publication_id=publication_id,
+                )
+            )
+        else:
+            existing.publication_id = publication_id
 
     def get_active_publication(self, cell_id: UUID) -> ActivePublication:
         record = self._session.get(ActivePublicationRecord, cell_id)
@@ -500,13 +594,15 @@ class PublicationStore:
 
     def list_workspace_catalogs(self, context: WorkspaceContext) -> list[dict[str, object]]:
         assets_by_catalog: dict[UUID, int] = {}
-        for asset in self._session.scalars(
-            select(AssetRecord).where(
+        for row in self._session.execute(
+            select(AssetRecord.catalog_id, func.count())
+            .where(
                 AssetRecord.cell_id == context.cell_id,
                 AssetRecord.tenant_id == context.tenant_id,
             )
+            .group_by(AssetRecord.catalog_id)
         ):
-            assets_by_catalog[asset.catalog_id] = assets_by_catalog.get(asset.catalog_id, 0) + 1
+            assets_by_catalog[row[0]] = row[1]
         return [
             {
                 "id": str(record.id),
@@ -566,26 +662,52 @@ class PublicationStore:
         return assets
 
     def list_workspace_assets(self, context: WorkspaceContext) -> list[dict[str, object]]:
-        catalog_records = list(
+        records = list(
             self._session.scalars(
-                select(CatalogRecord).where(
-                    CatalogRecord.cell_id == context.cell_id,
-                    CatalogRecord.tenant_id == context.tenant_id,
-                )
-            )
-        )
-        catalog_by_id = {record.id: record for record in catalog_records}
-        return [
-            self._workspace_asset_row(record, catalog_by_id[record.catalog_id])
-            for record in self._session.scalars(
                 select(AssetRecord)
                 .where(
                     AssetRecord.cell_id == context.cell_id,
                     AssetRecord.tenant_id == context.tenant_id,
                 )
-                .order_by(AssetRecord.target)
+                .order_by(AssetRecord.target, AssetRecord.id)
             )
-        ]
+        )
+        return self._workspace_asset_rows(records)
+
+    def list_workspace_assets_page(
+        self,
+        context: WorkspaceContext,
+        *,
+        limit: int,
+        cursor: str | None = None,
+        search: str | None = None,
+    ) -> AssetPage:
+        after = _decode_asset_cursor(cursor) if cursor else None
+        query = select(AssetRecord).where(
+            AssetRecord.cell_id == context.cell_id,
+            AssetRecord.tenant_id == context.tenant_id,
+        )
+        if search:
+            pattern = f"%{search.strip()}%"
+            query = query.where(
+                or_(
+                    AssetRecord.target.ilike(pattern),
+                    AssetRecord.table_identifier.ilike(pattern),
+                    AssetRecord.backend.ilike(pattern),
+                )
+            )
+        if after is not None:
+            query = query.where(tuple_(AssetRecord.target, AssetRecord.id) > after)
+        records = list(
+            self._session.scalars(
+                query.order_by(AssetRecord.target, AssetRecord.id).limit(limit + 1)
+            )
+        )
+        next_cursor = None
+        if len(records) > limit:
+            records = records[:limit]
+            next_cursor = _encode_asset_cursor(records[-1])
+        return AssetPage(items=self._workspace_asset_rows(records), next_cursor=next_cursor)
 
     def get_workspace_asset(self, asset_id: UUID) -> dict[str, object]:
         record = self._session.get(AssetRecord, asset_id)
@@ -921,7 +1043,7 @@ class PublicationStore:
             catalog_draft,
         )
 
-    def load_active_compiled_publication(self, cell_id: UUID) -> CompiledPublication:
+    def load_active_compiled_publication_config(self, cell_id: UUID) -> CompiledPublication:
         active = self._session.get(ActivePublicationRecord, cell_id)
         if active is None:
             raise LookupError(f"No active publication for cell {cell_id}")
@@ -943,21 +1065,33 @@ class PublicationStore:
                 )
             )
         ]
-        assets = [
-            CompiledAsset(
-                tenant_id=record.tenant_id,
-                catalog=record.catalog,
-                target=record.target,
-                backend=record.backend,
-                compiled_config=dict(record.compiled_config_json),
-                policy_version=record.policy_version,
+        assets: list[CompiledAsset] = []
+        for active_asset in self._session.scalars(
+            select(ActivePublishedAssetRecord).where(ActivePublishedAssetRecord.cell_id == cell_id)
+        ):
+            record = self._session.get(
+                PublishedAssetRecord,
+                {
+                    "publication_id": active_asset.publication_id,
+                    "tenant_id": active_asset.tenant_id,
+                    "catalog": active_asset.catalog,
+                    "target": active_asset.target,
+                },
             )
-            for record in self._session.scalars(
-                select(PublishedAssetRecord).where(
-                    PublishedAssetRecord.publication_id == active.publication_id
+            if record is None:
+                raise LookupError(
+                    f"No published asset {active_asset.catalog}/{active_asset.target}"
+                )
+            assets.append(
+                CompiledAsset(
+                    tenant_id=record.tenant_id,
+                    catalog=record.catalog,
+                    target=record.target,
+                    backend=record.backend,
+                    compiled_config=dict(record.compiled_config_json),
+                    policy_version=record.policy_version,
                 )
             )
-        ]
         return CompiledPublication(
             cell_id=cell_id,
             runtime=CompiledRuntime(
@@ -1026,19 +1160,73 @@ class PublicationStore:
         record: AssetRecord,
         catalog: CatalogRecord,
     ) -> dict[str, object]:
-        policy_rules = self.list_policy_rules(record.id)
-        owners = self.list_asset_owners(record.id)
-        return {
-            "id": str(record.id),
-            "name": record.target,
-            "catalog": catalog.name,
-            "backend": record.backend,
-            "table_identifier": record.table_identifier,
-            "owner_count": len(owners),
-            "owners": owners,
-            "policy_status": "configured" if policy_rules else "missing",
-            "draft_status": "draft",
+        return self._workspace_asset_rows([record], catalog_by_id={catalog.id: catalog})[0]
+
+    def _workspace_asset_rows(
+        self,
+        records: list[AssetRecord],
+        *,
+        catalog_by_id: dict[UUID, CatalogRecord] | None = None,
+    ) -> list[dict[str, object]]:
+        if not records:
+            return []
+        if catalog_by_id is None:
+            catalog_ids = {record.catalog_id for record in records}
+            catalog_by_id = {
+                record.id: record
+                for record in self._session.scalars(
+                    select(CatalogRecord).where(CatalogRecord.id.in_(catalog_ids))
+                )
+            }
+        asset_ids = [record.id for record in records]
+        owners_by_asset: dict[UUID, list[str]] = {asset_id: [] for asset_id in asset_ids}
+        for asset_id, principal in self._session.execute(
+            select(AssetOwnerRecord.asset_id, AssetOwnerRecord.principal)
+            .where(AssetOwnerRecord.asset_id.in_(asset_ids))
+            .order_by(AssetOwnerRecord.asset_id, AssetOwnerRecord.ordinal)
+        ):
+            owners_by_asset.setdefault(asset_id, []).append(principal)
+        assets_with_rules = {
+            asset_id
+            for (asset_id,) in self._session.execute(
+                select(PolicyRuleRecord.asset_id)
+                .where(PolicyRuleRecord.asset_id.in_(asset_ids))
+                .group_by(PolicyRuleRecord.asset_id)
+            )
         }
+        rows = []
+        for record in records:
+            catalog = catalog_by_id[record.catalog_id]
+            owners = owners_by_asset.get(record.id, [])
+            rows.append(
+                {
+                    "id": str(record.id),
+                    "name": record.target,
+                    "catalog": catalog.name,
+                    "backend": record.backend,
+                    "table_identifier": record.table_identifier,
+                    "owner_count": len(owners),
+                    "owners": owners,
+                    "policy_status": "configured" if record.id in assets_with_rules else "missing",
+                    "draft_status": "draft",
+                }
+            )
+        return rows
+
+
+def _encode_asset_cursor(record: AssetRecord) -> str:
+    raw = json.dumps({"target": record.target, "id": str(record.id)}, separators=(",", ":"))
+    return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
+
+
+def _decode_asset_cursor(value: str) -> tuple[str, UUID]:
+    try:
+        padded = value + "=" * (-len(value) % 4)
+        raw = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
+        data = json.loads(raw)
+        return str(data["target"]), UUID(str(data["id"]))
+    except Exception as exc:
+        raise ValueError("Invalid asset cursor") from exc
 
 
 def _empty_workspace_summary() -> dict[str, object]:

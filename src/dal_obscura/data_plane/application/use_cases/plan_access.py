@@ -98,6 +98,16 @@ def plan_read(
     request: PlanRequest,
     auth_request: AuthenticationRequest,
 ) -> PlanAccessResult:
+    """Authenticates, authorizes, plans scan tasks, and stores signed tickets.
+
+    Example:
+        ```python
+        result = plan_read(flow, plan_request, auth_request)
+        for token in result.ticket_tokens:
+            ...
+        ```
+    """
+
     principal = flow.identity.authenticate(auth_request)
     tenant_id = _tenant_id(principal)
 

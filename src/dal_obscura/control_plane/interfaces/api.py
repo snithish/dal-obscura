@@ -1,3 +1,11 @@
+"""FastAPI control-plane application factory.
+
+Example:
+    ```python
+    app = create_app(session_factory(engine), admin_token="dev-admin")
+    ```
+"""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -44,6 +52,20 @@ def create_oidc_actor_resolver(
     subject_claim: str,
     group_claims: tuple[str, ...],
 ) -> OidcActorResolver:
+    """Builds a bearer-token resolver for control-plane OIDC users.
+
+    Example:
+        ```python
+        resolver = create_oidc_actor_resolver(
+            issuer="https://idp.example.com/realms/data",
+            audience="dal-obscura-ui",
+            jwks_url=None,
+            subject_claim="preferred_username",
+            group_claims=("groups",),
+        )
+        ```
+    """
+
     provider = OidcJwksIdentityProvider(
         issuer=issuer,
         audience=audience or None,
@@ -73,6 +95,14 @@ def create_app(
     cors_origins: tuple[str, ...] = (),
     ui_auth_config: Mapping[str, object] | None = None,
 ) -> FastAPI:
+    """Creates the control-plane FastAPI app with all workspace routes installed.
+
+    Example:
+        ```python
+        app = create_app(session_factory(engine), admin_token="dev-admin")
+        ```
+    """
+
     app = FastAPI(
         title="dal-obscura control-plane API",
         summary="Configuration, catalog, asset, policy, and session API for dal-obscura.",

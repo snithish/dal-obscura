@@ -1,3 +1,12 @@
+"""Storage path allowlist enforcement.
+
+Example:
+    ```python
+    enforcer = PathRuleEnforcer([{"root": "s3://warehouse/"}])
+    enforcer.check("s3://warehouse/users/data.parquet")
+    ```
+"""
+
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
@@ -6,11 +15,25 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class PathRule:
+    """One allowed storage root.
+
+    Example:
+        ```python
+        rule = PathRule(root="s3://warehouse")
+        ```
+    """
+
     root: str
 
 
 class PathRuleEnforcer:
-    """Checks storage paths against published allowed storage roots."""
+    """Checks storage paths against published allowed storage roots.
+
+    Example:
+        ```python
+        PathRuleEnforcer([{"root": "/data"}]).check("/data/users.parquet")
+        ```
+    """
 
     def __init__(self, rules: Sequence[Mapping[str, object]]) -> None:
         self._rules = [_path_rule(raw) for raw in rules]
@@ -20,6 +43,7 @@ class PathRuleEnforcer:
         return bool(self._rules)
 
     def check(self, path: str) -> None:
+        """Raises `PermissionError` when `path` is outside every configured root."""
         if not self._rules:
             return
         normalized = _normalize_path(path)

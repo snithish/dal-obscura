@@ -59,7 +59,7 @@ class DummyContext:
             "default_text",
             pa.field("default_text", pa.int64()),
             pa.array([42], type=pa.int64()),
-            {"type": "default", "value": "fallback"},
+            {"type": "default", "value": "replacement"},
             pa.string(),
         ),
         (
@@ -206,7 +206,7 @@ def test_parse_descriptor_accepts_protobuf_protocol_version_one():
     assert request.columns == ["id"]
 
 
-def test_parse_descriptor_rejects_json_command_without_fallback():
+def test_parse_descriptor_rejects_json_command_payload():
     descriptor = flight.FlightDescriptor.for_command(
         b'{"protocol_version":1,"catalog":"analytics","target":"test.table","columns":["id"]}'
     )
@@ -509,7 +509,7 @@ def test_flight_streaming_masks_list_of_struct_fields(tmp_path):
         assert [item["theme"] for item in preferences] == ["[hidden]", "[hidden]"]
 
 
-def test_flight_normalizes_large_list_schema_for_clients(tmp_path):
+def test_flight_schema_matches_duckdb_list_output(tmp_path):
     del tmp_path
     schema = metadata_schema(large_list=True)
     batch = metadata_batch(large_list=True)

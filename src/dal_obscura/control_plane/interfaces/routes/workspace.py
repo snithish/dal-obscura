@@ -1,3 +1,11 @@
+"""Workspace summary routes.
+
+Example:
+    ```python
+    app.include_router(router(deps))
+    ```
+"""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
@@ -6,6 +14,14 @@ from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 
 
 def router(deps: ControlPlaneDeps) -> APIRouter:
+    """Builds workspace summary routes.
+
+    Example:
+        ```python
+        workspace_router = router(deps)
+        ```
+    """
+
     api = APIRouter()
 
     @api.get("/v1/workspace/summary", dependencies=[Depends(deps.require_actor)])

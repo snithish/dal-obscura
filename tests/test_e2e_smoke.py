@@ -322,7 +322,7 @@ def test_e2e_flight_server_with_iceberg(control_plane_setup: dict[str, str]):
 
         assert table.num_rows == 2
         assert table.schema.field("id").type == pa.int64()
-        assert table.schema.field("email").type == pa.large_string()
+        assert table.schema.field("email").type == pa.string()
         assert pa.types.is_struct(table.schema.field("metadata").type)
 
         data = table.to_pylist()

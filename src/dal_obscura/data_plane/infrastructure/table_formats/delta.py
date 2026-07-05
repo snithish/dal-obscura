@@ -1,3 +1,16 @@
+"""Delta Lake TableFormat implementation.
+
+Example:
+    ```python
+    table_format = DeltaTableFormat(
+        catalog_name="analytics",
+        table_name="orders",
+        table_uri="/lake/orders",
+    )
+    plan = table_format.plan(request, max_tickets=16)
+    ```
+"""
+
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
@@ -21,6 +34,14 @@ _DELTA_BATCH_SIZE = 8_192
 
 @dataclass(frozen=True, kw_only=True)
 class DeltaInputPartition(InputPartition):
+    """A bounded Delta scan partition tied to a table version.
+
+    Example:
+        ```python
+        partition = DeltaInputPartition(columns=["order_id"], paths=["part-0.parquet"])
+        ```
+    """
+
     columns: list[str]
     paths: list[str]
     version: int | None = None
@@ -29,6 +50,19 @@ class DeltaInputPartition(InputPartition):
 
 @dataclass(frozen=True, kw_only=True)
 class DeltaTableFormat(TableFormat):
+    """Plans and executes Delta Lake scans through delta-rs and PyArrow.
+
+    Example:
+        ```python
+        table_format = DeltaTableFormat(
+            catalog_name="analytics",
+            table_name="orders",
+            table_uri="s3://warehouse/orders",
+        )
+        schema = table_format.get_schema()
+        ```
+    """
+
     format: str = "delta"
     table_uri: str
     storage_options: dict[str, str] = field(default_factory=dict)

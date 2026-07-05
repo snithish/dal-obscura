@@ -1,3 +1,11 @@
+"""Runtime and authentication settings routes.
+
+Example:
+    ```python
+    app.include_router(router(deps))
+    ```
+"""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
@@ -10,6 +18,14 @@ from dal_obscura.control_plane.interfaces.routes.schemas import (
 
 
 def router(deps: ControlPlaneDeps) -> APIRouter:
+    """Builds workspace settings routes.
+
+    Example:
+        ```python
+        settings_router = router(deps)
+        ```
+    """
+
     api = APIRouter()
 
     @api.get("/v1/settings/runtime", dependencies=[Depends(deps.require_actor)])
