@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
 import pyarrow as pa
-from deltalake import write_deltalake
 from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
 from pyiceberg.types import DoubleType, LongType, NestedField, StringType
@@ -22,13 +20,7 @@ def main() -> None:
     fixture = _read_fixture()
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     for table_fixture in fixture["tables"]:
-        backend = str(table_fixture["backend"])
-        if backend == "iceberg":
-            _create_iceberg_table(table_fixture)
-        elif backend == "delta":
-            _create_delta_table(table_fixture)
-        else:
-            raise ValueError(f"unsupported demo backend {backend!r}")
+        _create_iceberg_table(table_fixture)
     print(json.dumps({"tables": [table["target"] for table in fixture["tables"]]}))
 
 
@@ -63,17 +55,6 @@ def _create_iceberg_table(table_fixture: dict[str, Any]) -> None:
         properties={"format-version": "2"},
     )
     created.append(pa.Table.from_pylist(table_fixture["rows"], schema=arrow_schema))
-
-
-def _create_delta_table(table_fixture: dict[str, Any]) -> None:
-    table_path = Path(str(table_fixture["table_path"]))
-    if table_path.exists():
-        shutil.rmtree(table_path)
-    _, arrow_schema = _schemas(table_fixture["schema"])
-    write_deltalake(
-        str(table_path),
-        pa.Table.from_pylist(table_fixture["rows"], schema=arrow_schema),
-    )
 
 
 def _schemas(fields: list[dict[str, Any]]) -> tuple[Schema, pa.Schema]:

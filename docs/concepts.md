@@ -126,16 +126,12 @@ stays close to the execution engine and can be tested with the same SQL shape.
 
 ## Catalog Resolution
 
-Catalogs resolve governed targets into executable table readers. The current
-workspace API field is named `module`; built-in short values such as `iceberg`,
-`files`, `delta`, and `unity` are accepted. Publication normalizes those values
-into data-plane runtime config.
+Catalogs resolve operator-registered Iceberg targets into executable table
+readers. Publication accepts only the fixed Iceberg catalog adapter; dynamic
+catalog modules and other backend types are rejected.
 
-Custom catalog code implements `CatalogPlugin.resolve_table()` and returns a
-`TableFormat`. A `TableFormat` owns schema extraction, scan-task planning, and
-execution. Backends should produce parallel scan tasks whenever their storage
-format exposes splittable work such as files, fragments, partitions, or row
-groups.
+The Iceberg table format owns schema extraction, scan-task planning, and
+execution. It creates parallel scan tasks from Iceberg file work where possible.
 
 ## Persistence
 

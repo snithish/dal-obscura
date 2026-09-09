@@ -9,9 +9,8 @@ Governed analytical data access layer for Arrow Flight reads. Platform teams
 register catalogs and assets, asset owners submit policy versions, and clients
 receive only the rows and columns allowed by the active asset policy.
 
-dal-obscura currently supports Iceberg, Delta Lake, Unity Catalog resolution,
-file-backed assets, DuckDB row filters, column masks, and JVM/Python connector
-surfaces.
+dal-obscura supports governed Iceberg assets, DuckDB row filters, column masks,
+and JVM/Python connector surfaces.
 
 ## Contents
 
@@ -37,7 +36,7 @@ surfaces.
 ## Fast start
 
 Use the local Keycloak demo when you want a complete working stack with IAM,
-Postgres, control plane, UI, Iceberg, Delta, and Flight reads:
+Postgres, control plane, Iceberg, and Flight reads:
 
 ```bash
 cd examples/demo/keycloak
@@ -47,7 +46,6 @@ cd examples/demo/keycloak
 
 Open:
 
-- UI: `http://127.0.0.1:8821`
 - API docs: `http://127.0.0.1:8820/docs`
 - Flight data plane: `grpc://127.0.0.1:8815`
 

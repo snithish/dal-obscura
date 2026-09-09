@@ -7,7 +7,6 @@ import sys
 USERS = ("us-analyst", "eu-analyst", "data-steward", "asset-owner", "blocked-user")
 TARGETS = (
     ("DEMO_ICEBERG_CATALOG", "DEMO_ICEBERG_TARGET"),
-    ("DEMO_DELTA_CATALOG", "DEMO_DELTA_TARGET"),
 )
 
 

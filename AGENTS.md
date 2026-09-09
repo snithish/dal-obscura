@@ -1,7 +1,7 @@
 # Agent Guide (dal-obscura)
 
 ## Purpose
-This repo implements a data access layer for Iceberg tables and file-backed datasets exposed via Arrow Flight, with policy-based masking and row filters. The runtime is organized as a hexagonal/clean architecture with explicit ports and adapters.
+This repo implements a governed Iceberg data access layer exposed through Arrow Flight, with policy-based masking and row filters. The runtime is organized as a hexagonal/clean architecture with explicit ports and adapters.
 
 ## Ground Rules
 - Keep the service stateless; do not add persistent state without explicit approval.
@@ -67,7 +67,7 @@ mvn -f connectors/jvm/pom.xml verify
   - `domain/catalog/`, `common/table_format/`: catalog and executable table format ports.
 - **Infrastructure (adapters)**
   - Catalog registry, policy file authorizer, JWT identity, HMAC ticket codec.
-  - Iceberg, Delta, and file-backed table formats.
+  - Iceberg table format.
   - DuckDB masking + row-transform implementation.
 
 ### Request Flow

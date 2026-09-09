@@ -128,17 +128,6 @@ def _upsert_catalogs(fixture: dict[str, Any], warehouse_path: str) -> None:
                     "warehouse": warehouse_path,
                 },
             }
-        elif kind == "delta_static":
-            body = {
-                "module": "delta",
-                "options": {
-                    "tables": {
-                        str(table["target"]): str(table["table_path"])
-                        for table in fixture["tables"]
-                        if str(table["catalog"]) == catalog_name
-                    }
-                },
-            }
         else:
             raise RuntimeError(f"unsupported demo catalog kind {kind!r}")
         _request("PUT", f"/v1/catalogs/{catalog_name}", body)

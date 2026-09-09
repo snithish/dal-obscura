@@ -159,9 +159,8 @@ docker run --rm -p 127.0.0.1:8821:8080 \
 ## Extension Notes
 
 Catalog implementations resolve governed targets into executable table readers.
-The current workspace API field is named `module`; built-in short values such
-as `iceberg`, `files`, `delta`, and `unity` are accepted and normalized during
-publication.
+The current workspace API catalog module is the fixed Iceberg catalog adapter.
+Other backend/module values are rejected during publication.
 
 Add a catalog by implementing `CatalogPlugin.resolve_table()` and returning a
 `TableFormat` directly. A table format owns schema extraction, scan-task
