@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import importlib
 import logging
 import socket
 import threading
-from typing import cast
+from typing import Any, cast
 
 import pyarrow.flight as flight
 import uvicorn
@@ -24,6 +23,9 @@ from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
 )
 from dal_obscura.data_plane.infrastructure.adapters.identity_composite import (
     CompositeIdentityProvider,
+)
+from dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks import (
+    OidcJwksIdentityProvider,
 )
 from dal_obscura.data_plane.infrastructure.adapters.published_config import (
     PublishedConfigAuthorizer,
@@ -50,6 +52,10 @@ from dal_obscura.data_plane.interfaces.health import create_health_app, publishe
 from dal_obscura.logging_config import LoggingConfig, setup_logging
 
 LOGGER = logging.getLogger(__name__)
+
+_OIDC_IDENTITY_PROVIDER = (
+    "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider"
+)
 
 
 def main() -> None:
@@ -202,26 +208,14 @@ def _load_identity_provider(
     *,
     secret_provider: SecretProvider,
 ) -> IdentityPort:
-    module_path = str(raw["module"])
+    module_path = raw.get("module")
+    if module_path != _OIDC_IDENTITY_PROVIDER:
+        raise ValueError("Unsupported identity provider; only built-in OIDC is supported")
     args = cast(
         dict[str, object],
         resolve_secret_refs(raw.get("args", {}), provider=secret_provider),
     )
-    provider_cls = _load_class(module_path)
-    provider = provider_cls(**args)
-    authenticate = getattr(provider, "authenticate", None)
-    if not callable(authenticate):
-        raise ValueError(f"Auth provider {module_path!r} must define authenticate(request)")
-    return cast(IdentityPort, provider)
-
-
-def _load_class(module_path: str) -> type:
-    module_name, class_name = module_path.rsplit(".", 1)
-    module = importlib.import_module(module_name)
-    provider_cls = getattr(module, class_name, None)
-    if not isinstance(provider_cls, type):
-        raise ValueError(f"Auth provider {module_path!r} must be a class")
-    return provider_cls
+    return OidcJwksIdentityProvider(**cast(Any, args))
 
 
 def _provider_records(value: object) -> list[dict[str, object]]:
