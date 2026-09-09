@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any, cast
 from uuid import uuid4
 
@@ -43,8 +44,11 @@ def _draft(row_filter: str = "region = 'us'") -> PublishDraft:
         auth_providers=[
             AuthProviderDraft(
                 ordinal=1,
-                module="dal_obscura.data_plane.infrastructure.adapters.identity_default.DefaultIdentityAdapter",
-                args={"jwt_secret": {"secret": "DAL_OBSCURA_JWT_SECRET"}},
+                module=(
+                    "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks."
+                    "OidcJwksIdentityProvider"
+                ),
+                args={"issuer": "https://issuer.example"},
                 enabled=True,
             )
         ],
@@ -122,6 +126,22 @@ def test_compiler_rejects_unknown_backend():
 
     with pytest.raises(ValidationFailure, match="Unsupported backend 'unknown'"):
         PublicationCompiler().compile(draft)
+
+
+def test_compiler_rejects_dynamic_runtime_modules():
+    catalog_draft = _draft()
+    catalog_draft.catalogs[0] = replace(
+        catalog_draft.catalogs[0], module="untrusted.catalog.Provider"
+    )
+    with pytest.raises(ValidationFailure, match="Unsupported catalog module"):
+        PublicationCompiler().compile(catalog_draft)
+
+    identity_draft = _draft()
+    identity_draft.auth_providers[0] = AuthProviderDraft(
+        ordinal=1, module="untrusted.identity.Provider", args={}, enabled=True
+    )
+    with pytest.raises(ValidationFailure, match="Unsupported identity provider"):
+        PublicationCompiler().compile(identity_draft)
 
 
 def test_compiler_rejects_custom_backend_with_provider_module():
