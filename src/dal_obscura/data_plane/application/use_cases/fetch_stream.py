@@ -10,9 +10,9 @@ from typing import cast
 import pyarrow as pa
 
 from dal_obscura.common.access_control.filters import RowFilter, deserialize_row_filter
-from dal_obscura.common.access_control.models import MaskRule
+from dal_obscura.common.access_control.models import MaskRule, Principal
 from dal_obscura.common.table_format.ports import ScanTask
-from dal_obscura.common.ticket_delivery.models import ticket_payload_hash
+from dal_obscura.common.ticket_delivery.models import TicketPayload, ticket_payload_hash
 from dal_obscura.data_plane.application.access_flow import AccessFlow
 from dal_obscura.data_plane.application.ports.authorization import AuthorizationPort
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest, IdentityPort
@@ -125,14 +125,15 @@ def fetch_read(
     if current_policy_version != payload.policy_version:
         raise PermissionError("stale policy version")
 
+    scan = _decode_scan(payload.scan)
+    _require_current_authorization(flow, principal, payload, scan)
+
     now = flow.now()
     try:
         flow.ticket_store.reserve_exchange(client_payload.ticket_id, now=now)
     except PermissionError:
         flow.ticket_store.cleanup_expired_and_exhausted(now=now)
         raise
-
-    scan = _decode_scan(payload.scan)
 
     import pickle
 
@@ -158,6 +159,29 @@ def fetch_read(
         columns=payload.columns,
         catalog=payload.catalog,
     )
+
+
+def _require_current_authorization(
+    flow: AccessFlow,
+    principal: Principal,
+    payload: TicketPayload,
+    scan: DecodedScan,
+) -> None:
+    """Ensure the caller still has the grant used when the ticket was issued."""
+    # Payload data is server-stored and HMAC-bound, but identity group and
+    # attribute membership can change without changing the policy document.
+    decision = flow.authorizer.authorize(
+        principal,
+        payload.target,
+        payload.catalog,
+        payload.columns,
+    )
+    if (
+        decision.policy_version != payload.policy_version
+        or not set(payload.columns).issubset(decision.allowed_columns)
+        or decision.masks != scan.masks
+    ):
+        raise PermissionError("Unauthorized")
 
 
 def _decode_scan(scan_info: Mapping[str, object]) -> DecodedScan:

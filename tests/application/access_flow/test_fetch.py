@@ -6,18 +6,27 @@ from dal_obscura.common.access_control.models import AccessDecision, Principal
 from dal_obscura.common.query_planning.models import PlanRequest
 from dal_obscura.common.ticket_delivery.models import TicketPayload
 from dal_obscura.data_plane.application.use_cases.fetch_stream import FetchStreamUseCase
+from dal_obscura.data_plane.application.use_cases.plan_access import PlanAccessUseCase
+from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
+    DefaultMaskingAdapter,
+    DuckDBRowTransformAdapter,
+)
+from dal_obscura.data_plane.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
 from tests.application.access_flow.helpers import (
     AUTHORIZATION_HEADER,
     _build_end_to_end_access_flow,
     _build_use_case_dependencies,
     _ticket_store_with,
 )
+from tests.support.flight import InMemoryPolicyAuthorizer
 from tests.support.use_cases import (
     FakeAuthorizer,
+    FakeCatalogRegistry,
     FakeIdentity,
     FakeMasking,
     FakeRowTransform,
     FakeTicketCodec,
+    FakeTicketStore,
     PretendPushdownTableFormat,
     encode_scan_task,
 )
@@ -41,7 +50,15 @@ def test_fetch_stream_accepts_matching_current_policy_version():
         expires_at=9999999999,
         nonce="nonce",
     )
-    authorizer = FakeAuthorizer(decision=None, current_version=100)
+    authorizer = FakeAuthorizer(
+        decision=AccessDecision(
+            allowed_columns=["id"],
+            masks={},
+            row_filter=None,
+            policy_version=100,
+        ),
+        current_version=100,
+    )
     ticket_store = _ticket_store_with(payload)
     use_case = FetchStreamUseCase(
         identity=FakeIdentity(
@@ -188,3 +205,51 @@ def test_fetch_stream_principal_mismatch():
 
     with pytest.raises(PermissionError):
         use_case.execute("token", AUTHORIZATION_HEADER)
+
+
+def test_fetch_stream_rejects_ticket_when_granting_group_is_removed():
+    schema = pa.schema([pa.field("id", pa.int64())])
+    table_format = PretendPushdownTableFormat(
+        catalog_name="analytics",
+        table_name="users",
+        format="test",
+        schema=schema,
+        batches=(pa.record_batch([pa.array([1], type=pa.int64())], schema=schema),),
+    )
+    identity = FakeIdentity(principal=Principal(id="user1", groups=["analyst"], attributes={}))
+    authorizer = InMemoryPolicyAuthorizer(
+        catalog="analytics",
+        target="users",
+        rules=[{"principals": ["group:analyst"], "columns": ["id"]}],
+    )
+    masking = DefaultMaskingAdapter()
+    ticket_codec = HmacTicketCodecAdapter("secret")
+    ticket_store = FakeTicketStore()
+    plan_access = PlanAccessUseCase(
+        identity=identity,
+        authorizer=authorizer,
+        catalog_registry=FakeCatalogRegistry(table_format),
+        masking=masking,
+        ticket_codec=ticket_codec,
+        ticket_store=ticket_store,
+        ticket_ttl_seconds=300,
+        max_tickets=1,
+        max_ticket_exchanges=1,
+    )
+    fetch_stream = FetchStreamUseCase(
+        identity=identity,
+        authorizer=authorizer,
+        masking=masking,
+        row_transform=DuckDBRowTransformAdapter(masking),
+        ticket_codec=ticket_codec,
+        ticket_store=ticket_store,
+    )
+
+    planned = plan_access.execute(
+        PlanRequest(catalog="analytics", target="users", columns=["id"]),
+        AUTHORIZATION_HEADER,
+    )
+    identity._principal = Principal(id="user1", groups=[], attributes={})
+
+    with pytest.raises(PermissionError):
+        fetch_stream.execute(planned.ticket_tokens[0], AUTHORIZATION_HEADER)

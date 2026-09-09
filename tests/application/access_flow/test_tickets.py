@@ -4,7 +4,7 @@ from typing import Any, cast
 
 import pytest
 
-from dal_obscura.common.access_control.models import Principal
+from dal_obscura.common.access_control.models import AccessDecision, Principal
 from dal_obscura.common.query_planning.models import PlanRequest
 from dal_obscura.common.ticket_delivery.models import ScanPayload, TicketPayload
 from dal_obscura.data_plane.application.ports.ticket_store import StoredTicket
@@ -133,7 +133,15 @@ def test_fetch_stream_rejects_legacy_ticket_without_ticket_id_before_decoding(mo
         identity=FakeIdentity(
             principal=Principal(id="user1", groups=[], attributes={"tenant_id": "tenant-a"})
         ),
-        authorizer=FakeAuthorizer(decision=None, current_version=100),
+        authorizer=FakeAuthorizer(
+            decision=AccessDecision(
+                allowed_columns=["id"],
+                masks={},
+                row_filter=None,
+                policy_version=100,
+            ),
+            current_version=100,
+        ),
         masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
@@ -171,7 +179,15 @@ def test_fetch_stream_rejects_missing_db_ticket_before_decoding(monkeypatch):
         identity=FakeIdentity(
             principal=Principal(id="user1", groups=[], attributes={"tenant_id": "tenant-a"})
         ),
-        authorizer=FakeAuthorizer(decision=None, current_version=100),
+        authorizer=FakeAuthorizer(
+            decision=AccessDecision(
+                allowed_columns=["id"],
+                masks={},
+                row_filter=None,
+                policy_version=100,
+            ),
+            current_version=100,
+        ),
         masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
@@ -256,7 +272,15 @@ def test_fetch_stream_reserves_exchange_before_scan_execution():
         identity=FakeIdentity(
             principal=Principal(id="user1", groups=[], attributes={"tenant_id": "tenant-a"})
         ),
-        authorizer=FakeAuthorizer(decision=None, current_version=100),
+        authorizer=FakeAuthorizer(
+            decision=AccessDecision(
+                allowed_columns=["id"],
+                masks={},
+                row_filter=None,
+                policy_version=100,
+            ),
+            current_version=100,
+        ),
         masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
@@ -425,7 +449,6 @@ def test_fetch_stream_rejects_invalid_scan_payloads():
 
 
 def test_fetch_stream_rejects_legacy_partition_payload():
-    _, decision, _ = _build_use_case_dependencies()
     payload = TicketPayload(
         ticket_id="00000000-0000-0000-0000-000000000001",
         catalog="catalog1",
@@ -444,9 +467,18 @@ def test_fetch_stream_rejects_legacy_partition_payload():
         nonce="abc",
     )
     ticket_store = _ticket_store_with(payload)
+    authorizer = FakeAuthorizer(
+        decision=AccessDecision(
+            allowed_columns=["id", "region"],
+            masks={},
+            row_filter=None,
+            policy_version=100,
+        ),
+        current_version=100,
+    )
     use_case = FetchStreamUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=FakeAuthorizer(decision=decision, current_version=100),
+        authorizer=authorizer,
         masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
