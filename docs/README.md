@@ -31,7 +31,7 @@ Use this page as the map. The docs are grouped by what you are trying to do.
 - [Quickstart](quickstart.md): run the local demo, verify the UI/API/Flight
   path, and learn the manual service shape.
 - [Local Keycloak Demo](../examples/demo/keycloak/README.md): complete laptop
-  environment with Keycloak, Postgres, Iceberg, Delta, UI, and Flight reads.
+  environment with Keycloak, Postgres, Iceberg, and Flight reads.
 
 ### Understand The Model
 

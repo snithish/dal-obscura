@@ -1,9 +1,8 @@
 # Local Keycloak Demo
 
 This demo runs dal-obscura locally with Keycloak IAM, Postgres-backed
-control-plane state, seeded Iceberg and Delta tables, the control-plane UI, and
-a Flight data plane. It is built for sales walkthroughs and hands-on trials on a
-laptop.
+control-plane state, a seeded Iceberg table, and a Flight data plane. It is
+built for sales walkthroughs and hands-on trials on a laptop.
 
 Generated secrets and table files stay under this directory in `.runtime/`.
 Control-plane state is stored in the Compose `postgres-data` volume so policy

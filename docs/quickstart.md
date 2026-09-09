@@ -38,7 +38,7 @@ flowchart LR
     ui --> api["Control plane API :8820"]
     api --> db[("Postgres")]
     api --> keycloak["Keycloak :8080"]
-    api --> catalog["Iceberg and Delta catalogs"]
+    api --> catalog["Iceberg catalog"]
     client["Flight client"] --> dp["Data plane :8815"]
     dp --> db
     dp --> keycloak
@@ -51,7 +51,7 @@ The demo provisions:
 2. Postgres-backed config store.
 3. Control-plane API.
 4. Standalone React UI.
-5. Iceberg and Delta demo tables.
+5. Iceberg demo table.
 6. Catalog discovery and governed assets.
 7. Asset owners, policies, masks, row filters, and active policy versions.
 8. Arrow Flight data plane.
