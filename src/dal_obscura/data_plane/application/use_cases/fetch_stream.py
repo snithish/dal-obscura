@@ -110,8 +110,7 @@ def fetch_read(
         raise PermissionError("Unauthorized")
     if not hmac.compare_digest(client_payload.nonce, payload.nonce):
         raise PermissionError("Unauthorized")
-    if principal.id != payload.principal_id:
-        raise PermissionError("Unauthorized")
+    _require_ticket_identity(principal, payload)
 
     tenant_id = _tenant_id(principal)
     if tenant_id != payload.tenant_id:
@@ -181,6 +180,12 @@ def _require_current_authorization(
         or not set(payload.columns).issubset(decision.allowed_columns)
         or decision.masks != scan.masks
     ):
+        raise PermissionError("Unauthorized")
+
+
+def _require_ticket_identity(principal: Principal, payload: TicketPayload) -> None:
+    """Reject tickets whose authenticated issuer or subject no longer matches."""
+    if principal.id != payload.principal_id or principal.issuer != payload.issuer:
         raise PermissionError("Unauthorized")
 
 

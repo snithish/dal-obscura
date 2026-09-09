@@ -169,9 +169,10 @@ def plan_read(
             },
             policy_version=decision.policy_version,
             principal_id=principal.id,
-            expires_at=now + flow.ticket_ttl_seconds,
+            expires_at=_ticket_expiry(principal.expires_at, now, flow.ticket_ttl_seconds),
             nonce=flow.nonce_factory(),
             tenant_id=tenant_id,
+            issuer=principal.issuer,
         )
         flow.ticket_store.store(payload, max_exchanges=flow.max_ticket_exchanges)
         ticket_tokens.append(flow.ticket_codec.sign_payload(payload))
@@ -195,6 +196,16 @@ def plan_read(
         visible_column_count=len(execution_projection.visible_columns),
         execution_column_count=len(execution_projection.execution_columns),
     )
+
+
+def _ticket_expiry(identity_expiry: int | None, now: int, ttl_seconds: int) -> int:
+    """Caps ticket validity at the authenticated identity's validated expiry."""
+    configured_expiry = now + ttl_seconds
+    if identity_expiry is None:
+        return configured_expiry
+    if identity_expiry <= now:
+        raise PermissionError("Expired identity")
+    return min(configured_expiry, identity_expiry)
 
 
 def _build_execution_projection(

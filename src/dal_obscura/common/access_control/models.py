@@ -59,6 +59,8 @@ class Principal:
     id: str
     groups: list[str]
     attributes: dict[str, str]
+    issuer: str = ""
+    expires_at: int | None = None
 
     def tokens(self) -> list[str]:
         """Returns tokens used by policy matching, including `group:` prefixes."""

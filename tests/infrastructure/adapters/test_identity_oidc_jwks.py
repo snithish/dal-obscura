@@ -86,6 +86,8 @@ def test_valid_keycloak_like_access_token_authenticates():
     principal = provider.authenticate(_auth_request(token))
 
     assert principal.id == "user-123"
+    assert principal.issuer == ISSUER
+    assert principal.expires_at is not None
     assert principal.groups == []
     assert principal.attributes == {}
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 from urllib.request import urlopen
@@ -92,7 +92,14 @@ class OidcJwksIdentityProvider:
         if not token:
             raise MissingCredentialsError("Missing token")
         payload = self._decode(token)
-        return self._mapper.map_claims(payload)
+        expires_at = payload.get("exp")
+        if isinstance(expires_at, bool) or not isinstance(expires_at, int):
+            raise InvalidCredentialsError("Invalid token")
+        return replace(
+            self._mapper.map_claims(payload),
+            issuer=self._config.issuer,
+            expires_at=expires_at,
+        )
 
     def _decode(self, token: str) -> JsonObject:
         try:

@@ -61,6 +61,7 @@ class TicketPayload:
     expires_at: int
     nonce: str
     tenant_id: str = "default"
+    issuer: str = ""
     catalog: str | None = None
     ticket_id: str | None = None
 
@@ -75,6 +76,7 @@ class TicketPayload:
             "expires_at": self.expires_at,
             "nonce": self.nonce,
             "tenant_id": self.tenant_id,
+            "issuer": self.issuer,
         }
         if self.catalog is not None:
             payload["catalog"] = self.catalog
@@ -94,6 +96,7 @@ class TicketPayload:
             expires_at=_coerce_int(payload.get("expires_at")),
             nonce=str(payload.get("nonce", "")),
             tenant_id=str(payload.get("tenant_id", "default") or "default"),
+            issuer=str(payload.get("issuer", "") or ""),
             catalog=_coerce_optional_str(payload.get("catalog")),
             ticket_id=_coerce_optional_str(payload.get("ticket_id")),
         )
