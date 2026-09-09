@@ -123,7 +123,9 @@ class CatalogRequest(StrictModel):
         ```
     """
 
-    module: str = Field(min_length=1)
+    module: Literal[
+        "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
+    ]
     options: dict[str, Any] = Field(default_factory=dict)
 
 

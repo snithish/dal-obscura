@@ -41,6 +41,18 @@ def test_workspace_catalog_upsert_bootstraps_default_workspace():
     assert summary["enabled_auth_provider_count"] == 0
 
 
+def test_workspace_catalog_rejects_non_iceberg_module():
+    client = _client()
+
+    response = client.put(
+        "/v1/catalogs/analytics",
+        json={"module": "example.CustomCatalog", "options": {}},
+        headers=ADMIN_HEADERS,
+    )
+
+    assert response.status_code == 422
+
+
 def test_workspace_catalog_tables_can_be_discovered_without_runtime_ids(monkeypatch):
     client = _client()
     client.put(
