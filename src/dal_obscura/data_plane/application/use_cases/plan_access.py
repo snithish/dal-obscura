@@ -347,7 +347,11 @@ def _authorize_requested_row_filter(
 
     dependencies = _extract_filter_dependencies(row_filter)
 
-    masked = [column for column in dependencies if column in decision.masks]
+    masked = [
+        column
+        for column in dependencies
+        if any(_paths_overlap(column, mask_path) for mask_path in decision.masks)
+    ]
     if masked:
         raise PermissionError(
             "Requested row filter may not reference masked columns: " + ", ".join(masked)
@@ -359,6 +363,10 @@ def _authorize_requested_row_filter(
             "Requested row filter may only reference visible unmasked columns: "
             + ", ".join(invisible)
         )
+
+
+def _paths_overlap(first: str, second: str) -> bool:
+    return first == second or first.startswith(f"{second}.") or second.startswith(f"{first}.")
 
 
 def _validate_policy_row_filter(schema: pa.Schema, row_filter: str | None) -> RowFilter | None:

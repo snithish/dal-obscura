@@ -427,6 +427,57 @@ def test_plan_access_rejects_requested_row_filter_for_masked_column():
         )
 
 
+def test_plan_access_rejects_requested_row_filter_below_masked_parent():
+    schema = pa.schema(
+        [
+            pa.field(
+                "profile",
+                pa.struct([pa.field("region", pa.string()), pa.field("name", pa.string())]),
+            )
+        ]
+    )
+    use_case = PlanAccessUseCase(
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+        authorizer=FakeAuthorizer(
+            decision=AccessDecision(
+                allowed_columns=["profile.region"],
+                masks={"profile": MaskRule(type="null")},
+                row_filter=None,
+                policy_version=100,
+            )
+        ),
+        catalog_registry=cast(
+            Any,
+            FakeCatalogRegistry(
+                TrackingTableFormat(
+                    catalog_name="catalog1",
+                    table_name="users",
+                    format="fake_format",
+                    schema=schema,
+                    planned_columns=[],
+                )
+            ),
+        ),
+        masking=FakeMasking(),
+        ticket_codec=FakeTicketCodec(),
+        ticket_store=FakeTicketStore(),
+        ticket_ttl_seconds=300,
+        max_tickets=1,
+        max_ticket_exchanges=1,
+    )
+
+    with pytest.raises(PermissionError, match=r"masked columns: profile\.region"):
+        use_case.execute(
+            PlanRequest(
+                catalog="catalog1",
+                target="users",
+                columns=["profile.region"],
+                row_filter=deserialize_row_filter("profile.region = 'us'"),
+            ),
+            AUTHORIZATION_HEADER,
+        )
+
+
 def test_plan_access_rejects_requested_row_filter_for_non_visible_column():
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     use_case = PlanAccessUseCase(
