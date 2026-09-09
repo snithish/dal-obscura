@@ -57,6 +57,18 @@ def test_workspace_asset_upsert_uses_default_workspace_context():
     assert "cell" not in _keys_recursive({"assets": assets, "detail": detail})
 
 
+def test_workspace_asset_requires_physical_iceberg_identifier():
+    client = _client()
+
+    response = client.put(
+        "/v1/assets/analytics/default.users",
+        json={"backend": "iceberg", "options": {}},
+        headers=ADMIN_HEADERS,
+    )
+
+    assert response.status_code == 422
+
+
 def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail():
     client = _client()
     client.put(

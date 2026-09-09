@@ -139,7 +139,7 @@ class AssetRequest(StrictModel):
     """
 
     backend: Literal["iceberg"] = "iceberg"
-    table_identifier: str | None = None
+    table_identifier: str = Field(min_length=1, max_length=1_024)
     options: dict[str, Any] = Field(default_factory=dict)
 
 
