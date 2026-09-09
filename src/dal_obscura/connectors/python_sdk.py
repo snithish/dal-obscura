@@ -223,13 +223,19 @@ class DuckDBDalObscuraReader:
         row_filter: str | None = None,
     ) -> duckdb.DuckDBPyRelation:
         """Reads a governed table and registers it as a DuckDB relation."""
-        table = self._client.read_table(
+        schema = self._client.fetch_schema(
             catalog=catalog,
             target=target,
             columns=columns,
             row_filter=row_filter,
         )
-        return self._connection.from_arrow(table)
+        batches = self._client.read_batches(
+            catalog=catalog,
+            target=target,
+            columns=columns,
+            row_filter=row_filter,
+        )
+        return self._connection.from_arrow(pa.RecordBatchReader.from_batches(schema, batches))
 
     def close(self) -> None:
         """Closes the owned DuckDB connection, if this instance created it."""

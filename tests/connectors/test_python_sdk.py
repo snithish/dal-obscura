@@ -1,3 +1,5 @@
+import pytest
+
 from dal_obscura.connectors.python_sdk import DalObscuraClient, DuckDBDalObscuraReader
 from tests.support.arrow import id_email_region_batch, id_email_region_schema
 from tests.support.flight import (
@@ -124,3 +126,24 @@ def test_duckdb_reader_exposes_sdk_results_as_relation():
         result = relation.aggregate("sum(id) AS id_sum").fetchone()
 
     assert result == (4,)
+
+
+def test_duckdb_reader_does_not_call_materializing_table_api(monkeypatch):
+    schema = id_email_region_schema()
+    batch = id_email_region_batch([1], ["a@example.com"], ["us"])
+    sdk = DalObscuraClient.from_flight_client(
+        _StreamingFlightClient(batch),
+        auth_token="token",
+    )
+    monkeypatch.setattr(sdk, "fetch_schema", lambda **_kwargs: schema)
+    monkeypatch.setattr(
+        sdk,
+        "read_table",
+        lambda **_kwargs: pytest.fail("DuckDB adapter materialized the result"),
+    )
+
+    relation = DuckDBDalObscuraReader(sdk).relation(
+        catalog="analytics", target="users", columns=["id", "email", "region"]
+    )
+
+    assert relation.aggregate("count(*) AS rows").fetchone() == (1,)
