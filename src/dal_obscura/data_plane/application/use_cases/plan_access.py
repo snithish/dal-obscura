@@ -146,7 +146,7 @@ def plan_read(
 
     now = flow.now()
     flow.ticket_store.cleanup_expired_and_exhausted(now=now)
-    ticket_tokens: list[str] = []
+    payloads: list[TicketPayload] = []
     for task in plan.tasks:
         # Each ticket carries enough context to re-validate authz later without
         # trusting the client to resubmit the original plan request faithfully.
@@ -174,8 +174,9 @@ def plan_read(
             tenant_id=tenant_id,
             issuer=principal.issuer,
         )
-        flow.ticket_store.store(payload, max_exchanges=flow.max_ticket_exchanges)
-        ticket_tokens.append(flow.ticket_codec.sign_payload(payload))
+        payloads.append(payload)
+    flow.ticket_store.store_many(payloads, max_exchanges=flow.max_ticket_exchanges)
+    ticket_tokens = [flow.ticket_codec.sign_payload(payload) for payload in payloads]
 
     output_schema = flow.masking.masked_schema(
         base_schema, execution_projection.visible_columns, decision.masks

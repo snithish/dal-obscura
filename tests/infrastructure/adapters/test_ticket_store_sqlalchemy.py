@@ -60,6 +60,24 @@ def test_ticket_store_reserves_exchanges_until_limit():
         store.reserve_exchange(ticket_id, now=1002)
 
 
+def test_ticket_store_persists_many_tickets_in_one_transaction():
+    session_maker = _session_maker()
+    cell_id = uuid4()
+    _create_cell(session_maker, cell_id)
+    store = SqlAlchemyTicketStore(session_maker, cell_id=cell_id)
+
+    store.store_many(
+        [
+            _payload("00000000-0000-0000-0000-000000000001"),
+            _payload("00000000-0000-0000-0000-000000000002"),
+        ],
+        max_exchanges=1,
+    )
+
+    assert store.load("00000000-0000-0000-0000-000000000001").exchange_count == 0
+    assert store.load("00000000-0000-0000-0000-000000000002").exchange_count == 0
+
+
 def test_ticket_store_lookup_is_scoped_to_cell():
     session_maker = _session_maker()
     owner_cell = uuid4()

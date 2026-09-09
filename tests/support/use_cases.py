@@ -224,6 +224,13 @@ class FakeTicketStore:
             expires_at=payload.expires_at,
         )
 
+    def store_many(self, payloads, *, max_exchanges: int) -> None:
+        payloads = list(payloads)
+        if self.fail_store:
+            raise RuntimeError("store failed")
+        for payload in payloads:
+            self.store(payload, max_exchanges=max_exchanges)
+
     def load(self, ticket_id: str) -> StoredTicket:
         try:
             return self.records[ticket_id]

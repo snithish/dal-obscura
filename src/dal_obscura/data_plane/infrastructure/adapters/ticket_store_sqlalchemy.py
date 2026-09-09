@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hmac
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from typing import cast
 from uuid import UUID
@@ -30,26 +31,14 @@ class SqlAlchemyTicketStore:
         self._cell_id = cell_id
 
     def store(self, payload: TicketPayload, *, max_exchanges: int) -> None:
-        if payload.ticket_id is None:
-            raise ValueError("ticket_id is required")
-        ticket_uuid = _ticket_uuid(payload.ticket_id)
+        self.store_many([payload], max_exchanges=max_exchanges)
+
+    def store_many(self, payloads: Iterable[TicketPayload], *, max_exchanges: int) -> None:
+        records = [_ticket_record(payload, self._cell_id, max_exchanges) for payload in payloads]
+        if not records:
+            return
         with self._session_maker() as session:
-            session.add(
-                DataPlaneTicketRecord(
-                    ticket_id=ticket_uuid,
-                    cell_id=self._cell_id,
-                    tenant_id=payload.tenant_id,
-                    catalog=payload.catalog,
-                    target=payload.target,
-                    principal_id=payload.principal_id,
-                    policy_version=payload.policy_version,
-                    expires_at=payload.expires_at,
-                    max_exchanges=max_exchanges,
-                    exchange_count=0,
-                    payload_hash=ticket_payload_hash(payload),
-                    payload_json=payload.to_dict(),
-                )
-            )
+            session.add_all(records)
             session.commit()
 
     def load(self, ticket_id: str) -> StoredTicket:
@@ -125,6 +114,27 @@ def _stored_ticket(record: DataPlaneTicketRecord) -> StoredTicket:
         exchange_count=record.exchange_count,
         max_exchanges=record.max_exchanges,
         expires_at=record.expires_at,
+    )
+
+
+def _ticket_record(
+    payload: TicketPayload, cell_id: UUID, max_exchanges: int
+) -> DataPlaneTicketRecord:
+    if payload.ticket_id is None:
+        raise ValueError("ticket_id is required")
+    return DataPlaneTicketRecord(
+        ticket_id=_ticket_uuid(payload.ticket_id),
+        cell_id=cell_id,
+        tenant_id=payload.tenant_id,
+        catalog=payload.catalog,
+        target=payload.target,
+        principal_id=payload.principal_id,
+        policy_version=payload.policy_version,
+        expires_at=payload.expires_at,
+        max_exchanges=max_exchanges,
+        exchange_count=0,
+        payload_hash=ticket_payload_hash(payload),
+        payload_json=payload.to_dict(),
     )
 
 
