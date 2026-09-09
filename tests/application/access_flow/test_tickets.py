@@ -43,6 +43,8 @@ def test_ticket_payload_from_dict_keeps_string_full_row_filter():
             "principal_id": "user1",
             "expires_at": 9999999999,
             "nonce": "abc",
+            "tenant_id": "default",
+            "issuer": "",
         }
     )
 
@@ -50,24 +52,51 @@ def test_ticket_payload_from_dict_keeps_string_full_row_filter():
 
 
 def test_ticket_payload_from_dict_rejects_non_string_full_row_filter():
-    payload = TicketPayload.from_dict(
-        {
-            "catalog": "catalog1",
-            "target": "users",
-            "columns": ["id"],
-            "scan": {
-                "read_payload": "payload",
-                "full_row_filter": {"type": "comparison"},
-                "masks": {},
-            },
-            "policy_version": 100,
-            "principal_id": "user1",
-            "expires_at": 9999999999,
-            "nonce": "abc",
-        }
-    )
+    with pytest.raises(ValueError, match="full_row_filter"):
+        TicketPayload.from_dict(
+            {
+                "catalog": "catalog1",
+                "target": "users",
+                "columns": ["id"],
+                "scan": {
+                    "read_payload": "payload",
+                    "full_row_filter": {"type": "comparison"},
+                    "masks": {},
+                },
+                "policy_version": 100,
+                "principal_id": "user1",
+                "expires_at": 9999999999,
+                "nonce": "abc",
+            }
+        )
 
-    assert payload.scan["full_row_filter"] is None
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("expires_at", True),
+        ("policy_version", False),
+        ("columns", ["id", 1]),
+        ("unexpected", "value"),
+    ],
+)
+def test_ticket_payload_from_dict_rejects_malformed_or_unknown_fields(field, value):
+    raw = {
+        "catalog": "catalog1",
+        "target": "users",
+        "columns": ["id"],
+        "scan": {"read_payload": "payload", "full_row_filter": None, "masks": {}},
+        "policy_version": 100,
+        "principal_id": "user1",
+        "expires_at": 9999999999,
+        "nonce": "abc",
+        "tenant_id": "default",
+        "issuer": "https://issuer.example",
+    }
+    raw[field] = value
+
+    with pytest.raises(ValueError):
+        TicketPayload.from_dict(raw)
 
 
 def test_fetch_stream_rejects_stale_policy_version_before_decoding(monkeypatch):

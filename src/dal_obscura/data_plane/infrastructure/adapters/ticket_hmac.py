@@ -44,7 +44,10 @@ class HmacTicketCodecAdapter:
             reference = json.loads(raw.decode("utf-8"))
             if not isinstance(reference, dict):
                 raise PermissionError("Invalid ticket payload")
-            if int(reference.get("expires_at", 0)) < int(time.time()):
+            expires_at = reference.get("expires_at")
+            if isinstance(expires_at, bool) or not isinstance(expires_at, int):
+                raise PermissionError("Invalid ticket payload")
+            if expires_at <= int(time.time()):
                 raise PermissionError("Ticket expired")
             ticket_id = reference.get("ticket_id")
             nonce = reference.get("nonce")
@@ -59,7 +62,7 @@ class HmacTicketCodecAdapter:
                 scan={"read_payload": "", "full_row_filter": None, "masks": {}},
                 policy_version=0,
                 principal_id="",
-                expires_at=int(reference["expires_at"]),
+                expires_at=expires_at,
                 nonce=nonce,
             )
         except PermissionError:

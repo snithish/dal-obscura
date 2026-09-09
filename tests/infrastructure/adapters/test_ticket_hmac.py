@@ -86,6 +86,37 @@ def test_ticket_expiry():
         codec.verify(ticket)
 
 
+def test_ticket_rejects_expiry_at_current_second(monkeypatch):
+    codec = HmacTicketCodecAdapter("secret")
+    payload = TicketPayload(
+        ticket_id="00000000-0000-0000-0000-000000000001",
+        target="t",
+        columns=[],
+        scan=_scan_payload(),
+        policy_version=1,
+        principal_id="user1",
+        expires_at=100,
+        nonce="expired",
+    )
+    monkeypatch.setattr(
+        "dal_obscura.data_plane.infrastructure.adapters.ticket_hmac.time.time", lambda: 100
+    )
+
+    with pytest.raises(PermissionError, match="expired"):
+        codec.verify(codec.sign_payload(payload))
+
+
+def test_ticket_rejects_boolean_expiry_even_with_valid_signature():
+    secret = "secret"
+    codec = HmacTicketCodecAdapter(secret)
+    raw = b'{"expires_at":true,"nonce":"nonce","ticket_id":"ticket"}'
+    encoded_payload = base64.urlsafe_b64encode(raw).decode("utf-8")
+    signature = hmac.new(secret.encode("utf-8"), raw, sha256).hexdigest()
+
+    with pytest.raises(PermissionError, match="Invalid ticket payload"):
+        codec.verify(f"{encoded_payload}.{signature}")
+
+
 def test_ticket_rejects_tampered_signature():
     codec = HmacTicketCodecAdapter("secret")
     payload = TicketPayload(

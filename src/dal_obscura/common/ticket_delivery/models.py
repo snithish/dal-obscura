@@ -86,84 +86,118 @@ class TicketPayload:
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, object]) -> TicketPayload:
-        """Restores a payload after signature verification and JSON parsing."""
+        """Restores one complete, strictly-shaped stored ticket payload.
+
+        Stored tickets are security inputs.  A malformed record must not be
+        coerced into an apparently valid permissive read.
+        """
+        _reject_unknown_fields(
+            payload,
+            {
+                "target",
+                "columns",
+                "scan",
+                "policy_version",
+                "principal_id",
+                "expires_at",
+                "nonce",
+                "tenant_id",
+                "issuer",
+                "catalog",
+                "ticket_id",
+            },
+        )
         return cls(
-            target=str(payload["target"]),
-            columns=_coerce_columns(payload.get("columns")),
-            scan=_coerce_scan_payload(payload.get("scan")),
-            policy_version=_coerce_int(payload.get("policy_version")),
-            principal_id=str(payload.get("principal_id", "")),
-            expires_at=_coerce_int(payload.get("expires_at")),
-            nonce=str(payload.get("nonce", "")),
-            tenant_id=str(payload.get("tenant_id", "default") or "default"),
-            issuer=str(payload.get("issuer", "") or ""),
-            catalog=_coerce_optional_str(payload.get("catalog")),
-            ticket_id=_coerce_optional_str(payload.get("ticket_id")),
+            target=_required_string(payload, "target"),
+            columns=_strict_columns(payload.get("columns")),
+            scan=_strict_scan_payload(payload.get("scan")),
+            policy_version=_strict_int(payload, "policy_version", minimum=0),
+            principal_id=_required_string(payload, "principal_id"),
+            expires_at=_strict_int(payload, "expires_at", minimum=0),
+            nonce=_required_string(payload, "nonce"),
+            tenant_id=_required_string(payload, "tenant_id"),
+            issuer=_required_string(payload, "issuer", allow_empty=True),
+            catalog=_optional_string(payload, "catalog"),
+            ticket_id=_optional_string(payload, "ticket_id"),
         )
 
 
-def _coerce_int(value: object, default: int = 0) -> int:
-    if isinstance(value, bool):
-        return int(value)
-    if isinstance(value, int):
-        return value
-    if isinstance(value, float):
-        return int(value)
-    if isinstance(value, (str, bytes, bytearray)):
-        try:
-            return int(value)
-        except ValueError:
-            return default
-    return default
+def _reject_unknown_fields(payload: Mapping[str, object], allowed: set[str]) -> None:
+    unknown = set(payload).difference(allowed)
+    if unknown:
+        raise ValueError("Unknown ticket payload fields")
 
 
-def _coerce_optional_str(value: object) -> str | None:
+def _required_string(payload: Mapping[str, object], key: str, *, allow_empty: bool = False) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str) or (not allow_empty and not value):
+        raise ValueError(f"Ticket payload {key} must be a non-empty string")
+    return value
+
+
+def _optional_string(payload: Mapping[str, object], key: str) -> str | None:
+    value = payload.get(key)
     if value is None:
         return None
-    return str(value)
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"Ticket payload {key} must be a non-empty string or null")
+    return value
 
 
-def _coerce_columns(raw: object) -> list[str]:
-    if not isinstance(raw, list):
-        return []
-    return [str(item) for item in raw]
+def _strict_int(payload: Mapping[str, object], key: str, *, minimum: int) -> int:
+    value = payload.get(key)
+    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+        raise ValueError(f"Ticket payload {key} must be an integer")
+    return value
 
 
-def _coerce_scan_payload(raw: object) -> ScanPayload:
+def _strict_columns(raw: object) -> list[str]:
+    if (
+        not isinstance(raw, list)
+        or not raw
+        or any(not isinstance(item, str) or not item for item in raw)
+    ):
+        raise ValueError("Ticket payload columns must be a non-empty string list")
+    if len(raw) != len(set(raw)):
+        raise ValueError("Ticket payload columns must not contain duplicates")
+    return cast(list[str], raw)
+
+
+def _strict_scan_payload(raw: object) -> ScanPayload:
     if not isinstance(raw, Mapping):
-        return {"read_payload": "", "full_row_filter": None, "masks": {}}
+        raise ValueError("Ticket payload scan must be an object")
     raw_mapping = cast(Mapping[str, object], raw)
+    _reject_unknown_fields(raw_mapping, {"read_payload", "full_row_filter", "masks"})
     read_payload = raw_mapping.get("read_payload")
     full_row_filter = raw_mapping.get("full_row_filter")
+    if not isinstance(read_payload, str) or not read_payload:
+        raise ValueError("Ticket payload read_payload must be a non-empty string")
+    if full_row_filter is not None and (
+        not isinstance(full_row_filter, str) or not full_row_filter
+    ):
+        raise ValueError("Ticket payload full_row_filter must be a string or null")
     return {
-        "read_payload": "" if read_payload is None else str(read_payload),
-        "full_row_filter": _coerce_row_filter(full_row_filter),
-        "masks": _coerce_masks(raw_mapping.get("masks")),
+        "read_payload": read_payload,
+        "full_row_filter": full_row_filter,
+        "masks": _strict_masks(raw_mapping.get("masks")),
     }
 
 
-def _coerce_masks(raw: object) -> dict[str, MaskPayload]:
+def _strict_masks(raw: object) -> dict[str, MaskPayload]:
     if not isinstance(raw, Mapping):
-        return {}
+        raise ValueError("Ticket payload masks must be an object")
     masks: dict[str, MaskPayload] = {}
     raw_mapping = cast(Mapping[str, object], raw)
     for key, value in raw_mapping.items():
         if not isinstance(key, str) or not isinstance(value, Mapping):
-            continue
+            raise ValueError("Ticket payload masks must map strings to objects")
         mask_mapping = cast(Mapping[str, object], value)
+        _reject_unknown_fields(mask_mapping, {"type", "value"})
         mask_type = mask_mapping.get("type")
-        if mask_type is None:
-            continue
-        masks[key] = {"type": str(mask_type), "value": mask_mapping.get("value")}
+        if not isinstance(mask_type, str) or not mask_type:
+            raise ValueError("Ticket payload mask type must be a non-empty string")
+        masks[key] = {"type": mask_type, "value": mask_mapping.get("value")}
     return masks
-
-
-def _coerce_row_filter(raw: object) -> str | None:
-    if raw is None:
-        return None
-    if not isinstance(raw, str) or not raw:
-        return None
-    return raw
 
 
 def canonical_ticket_payload_bytes(payload: TicketPayload) -> bytes:
