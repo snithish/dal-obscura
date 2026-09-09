@@ -85,6 +85,34 @@ def test_resolve_access_unions_grants_filters_and_strictest_masks():
     assert row_filter == "(region = 'us') AND (active = true)"
 
 
+def test_resolve_access_rejects_incomparable_masks_regardless_of_rule_order():
+    principal = Principal(id="user1", groups=[], attributes={})
+    rules = (
+        AccessRule(
+            principals=["user1"],
+            columns=["email"],
+            masks={"email": MaskRule(type="email")},
+            row_filter=None,
+        ),
+        AccessRule(
+            principals=["user1"],
+            columns=["email"],
+            masks={"email": MaskRule(type="keep_last", value=4)},
+            row_filter=None,
+        ),
+    )
+
+    for ordered_rules in (rules, tuple(reversed(rules))):
+        with pytest.raises(PermissionError, match="Conflicting masks"):
+            resolve_access(
+                _policy(*ordered_rules),
+                principal,
+                target="catalog.db.table",
+                catalog="analytics",
+                requested_columns=["email"],
+            )
+
+
 def test_resolve_access_allows_by_role_and_principal_attributes():
     policy = _policy(
         AccessRule(

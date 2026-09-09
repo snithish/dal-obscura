@@ -85,25 +85,14 @@ def dataset_version(dataset: DatasetPolicy) -> int:
 
 
 def _choose_mask(existing: MaskRule | None, candidate: MaskRule) -> MaskRule:
-    """Keeps the stricter mask whenever multiple matching rules touch a column."""
+    """Combines compatible masks and rejects ambiguous policy composition."""
     if existing is None:
         return candidate
-    if _mask_precedence(candidate) > _mask_precedence(existing):
-        return candidate
-    return existing
-
-
-def _mask_precedence(mask: MaskRule) -> int:
-    mask_type = mask.type.lower()
-    if mask_type == "null":
-        return 4
-    if mask_type == "redact":
-        return 3
-    if mask_type == "hash":
-        return 2
-    if mask_type == "default":
-        return 1
-    return 0
+    if existing == candidate:
+        return existing
+    if existing.type.lower() == "null" or candidate.type.lower() == "null":
+        return MaskRule(type="null")
+    raise PermissionError("Conflicting masks for the same field")
 
 
 def _matches_conditions(
