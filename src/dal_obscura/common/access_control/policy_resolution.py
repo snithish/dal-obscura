@@ -92,7 +92,18 @@ def _choose_mask(existing: MaskRule | None, candidate: MaskRule) -> MaskRule:
         return existing
     if existing.type.lower() == "null" or candidate.type.lower() == "null":
         return MaskRule(type="null")
+    if existing.type.lower() == candidate.type.lower() == "keep_last":
+        existing_value = _keep_last_value(existing)
+        candidate_value = _keep_last_value(candidate)
+        return MaskRule(type="keep_last", value=min(existing_value, candidate_value))
     raise PermissionError("Conflicting masks for the same field")
+
+
+def _keep_last_value(mask: MaskRule) -> int:
+    value = mask.value
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise PermissionError("Invalid keep_last mask")
+    return value
 
 
 def _matches_conditions(

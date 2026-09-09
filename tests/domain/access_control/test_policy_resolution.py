@@ -113,6 +113,35 @@ def test_resolve_access_rejects_incomparable_masks_regardless_of_rule_order():
             )
 
 
+def test_resolve_access_combines_keep_last_masks_to_smaller_value_regardless_of_order():
+    principal = Principal(id="user1", groups=[], attributes={})
+    rules = (
+        AccessRule(
+            principals=["user1"],
+            columns=["account_id"],
+            masks={"account_id": MaskRule(type="keep_last", value=4)},
+            row_filter=None,
+        ),
+        AccessRule(
+            principals=["user1"],
+            columns=["account_id"],
+            masks={"account_id": MaskRule(type="keep_last", value=2)},
+            row_filter=None,
+        ),
+    )
+
+    for ordered_rules in (rules, tuple(reversed(rules))):
+        _allowed, masks, _row_filter = resolve_access(
+            _policy(*ordered_rules),
+            principal,
+            target="catalog.db.table",
+            catalog="analytics",
+            requested_columns=["account_id"],
+        )
+
+        assert masks["account_id"] == MaskRule(type="keep_last", value=2)
+
+
 def test_resolve_access_allows_by_role_and_principal_attributes():
     policy = _policy(
         AccessRule(
