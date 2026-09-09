@@ -184,6 +184,30 @@ def test_compiler_rejects_deny_rules():
         PublicationCompiler().compile(draft)
 
 
+@pytest.mark.parametrize(
+    "mask",
+    [
+        {},
+        {"type": "unknown"},
+        {"type": "keep_last", "value": -1},
+    ],
+)
+def test_compiler_rejects_invalid_mask_instead_of_dropping_it(mask: dict[str, object]):
+    draft = _draft()
+    draft.assets[0].rules[0] = PolicyRuleDraft(
+        ordinal=10,
+        effect="allow",
+        principals=["group:analyst"],
+        when={"tenant": "acme"},
+        columns=["id", "email", "region"],
+        masks={"email": mask},
+        row_filter="region = 'us'",
+    )
+
+    with pytest.raises(ValidationFailure, match="Invalid mask"):
+        PublicationCompiler().compile(draft)
+
+
 def test_compiled_policy_round_trips_to_evaluator_policy():
     compiled = CompiledPolicy(
         version=7,

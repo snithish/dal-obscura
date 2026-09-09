@@ -26,6 +26,7 @@ from dal_obscura.control_plane.domain.models import (
 SUPPORTED_BACKENDS = frozenset(
     {"iceberg", "delta", "parquet", "csv", "json", "orc", "avro", "text"}
 )
+_MASK_TYPES = frozenset({"null", "redact", "hash", "email", "keep_last", "default"})
 
 
 def validate_policy_rule_payloads(rules: list[dict[str, Any]]) -> None:
@@ -155,14 +156,7 @@ class PublicationCompiler:
             columns=list(rule.columns),
             effect="allow",
             when=dict(rule.when),
-            masks={
-                column: CompiledMaskRule(
-                    type=str(_mask_dict(mask)["type"]),
-                    value=_mask_dict(mask).get("value"),
-                )
-                for column, mask in rule.masks.items()
-                if _mask_dict(mask).get("type")
-            },
+            masks={column: _compile_mask_rule(column, mask) for column, mask in rule.masks.items()},
             row_filter=row_filter,
         )
 
@@ -228,6 +222,28 @@ def _stable_int63(value: object) -> int:
 
 def _mask_dict(value: object) -> dict[str, object]:
     return cast(dict[str, object], value) if isinstance(value, dict) else {}
+
+
+def _compile_mask_rule(column: str, raw_mask: object) -> CompiledMaskRule:
+    """Validate a mask at publication time so invalid rules cannot disappear."""
+    mask = _mask_dict(raw_mask)
+    mask_type = mask.get("type")
+    if not isinstance(mask_type, str) or mask_type.lower() not in _MASK_TYPES:
+        raise ValidationFailure(f"Invalid mask for column {column!r}")
+
+    normalized_type = mask_type.lower()
+    value = mask.get("value")
+    if normalized_type == "keep_last" and (
+        isinstance(value, bool) or not isinstance(value, int) or value < 0
+    ):
+        raise ValidationFailure(f"Invalid mask for column {column!r}")
+    if normalized_type == "default":
+        if value is None or isinstance(value, (dict, list, tuple, set)):
+            raise ValidationFailure(f"Invalid mask for column {column!r}")
+        if isinstance(value, float) and (value != value or value in {float("inf"), float("-inf")}):
+            raise ValidationFailure(f"Invalid mask for column {column!r}")
+
+    return CompiledMaskRule(type=normalized_type, value=value)
 
 
 def _publication_hash(
