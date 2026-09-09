@@ -135,7 +135,13 @@ class DalObscuraClient:
         info = self.plan(catalog=catalog, target=target, columns=columns, row_filter=row_filter)
         for endpoint in info.endpoints:
             reader = self._client.do_get(endpoint.ticket, options=self._call_options())
-            yield from reader.read_all().to_batches()
+            while True:
+                try:
+                    chunk = reader.read_chunk()
+                except StopIteration:
+                    break
+                if chunk.data is not None:
+                    yield chunk.data
 
     def read_table(
         self,

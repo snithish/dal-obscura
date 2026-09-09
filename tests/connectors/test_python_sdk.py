@@ -9,6 +9,35 @@ from tests.support.flight import (
 from tests.support.policy import allow_rule
 
 
+class _StreamingReader:
+    def __init__(self, batch):
+        self._batch = batch
+        self._read = False
+
+    def read_all(self):
+        raise AssertionError("read_batches must not materialize the full result")
+
+    def read_chunk(self):
+        if self._read:
+            raise StopIteration
+        self._read = True
+        return type("Chunk", (), {"data": self._batch})()
+
+
+class _StreamingFlightClient:
+    def __init__(self, batch):
+        self._batch = batch
+
+    def get_flight_info(self, descriptor, *, options):
+        del descriptor, options
+        endpoint = type("Endpoint", (), {"ticket": object()})()
+        return type("Info", (), {"endpoints": [endpoint]})()
+
+    def do_get(self, ticket, *, options):
+        del ticket, options
+        return _StreamingReader(self._batch)
+
+
 def _policy_rules() -> list[dict[str, object]]:
     return [
         allow_rule(
@@ -16,6 +45,18 @@ def _policy_rules() -> list[dict[str, object]]:
             masks={"email": {"type": "redact", "value": "[hidden]"}},
         )
     ]
+
+
+def test_python_sdk_read_batches_does_not_materialize_flight_stream():
+    batch = id_email_region_batch([1], ["a@example.com"], ["us"])
+    sdk = DalObscuraClient.from_flight_client(
+        _StreamingFlightClient(batch),
+        auth_token="token",
+    )
+
+    result = list(sdk.read_batches(catalog="analytics", target="users", columns=["id"]))
+
+    assert result == [batch]
 
 
 def test_python_sdk_reads_authorized_arrow_table():
