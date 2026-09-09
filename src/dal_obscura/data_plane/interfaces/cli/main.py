@@ -71,7 +71,6 @@ def main() -> None:
     config_store = PublishedConfigStore(
         session_maker,
         cell_id=runtime_config.cell_id,
-        allow_stale_seconds=runtime_config.allow_stale_config_seconds,
     )
     published_runtime = config_store.get_runtime()
     secret_provider = load_secret_provider(
@@ -157,7 +156,6 @@ def _start_health_server(
             store = PublishedConfigStore(
                 health_session,
                 cell_id=runtime_config.cell_id,
-                allow_stale_seconds=runtime_config.allow_stale_config_seconds,
             )
             return published_runtime_readiness(store)
 

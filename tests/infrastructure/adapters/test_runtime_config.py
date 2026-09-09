@@ -19,18 +19,13 @@ def test_runtime_config_reads_required_database_and_cell(monkeypatch: pytest.Mon
     assert str(config.cell_id) == "00000000-0000-0000-0000-000000000001"
     assert config.location == "grpc://127.0.0.1:8815"
     assert config.ticket_secret == "ticket-secret"
-    assert config.allow_stale_config_seconds is None
 
 
-def test_runtime_config_reads_stale_config_window(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
-    monkeypatch.setenv("DAL_OBSCURA_CELL_ID", "00000000-0000-0000-0000-000000000001")
-    monkeypatch.setenv("DAL_OBSCURA_TICKET_SECRET", "ticket-secret")
+def test_runtime_config_rejects_stale_config_window(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("DAL_OBSCURA_ALLOW_STALE_CONFIG_SECONDS", "60")
 
-    config = load_data_plane_runtime_config()
-
-    assert config.allow_stale_config_seconds == 60
+    with pytest.raises(ValueError, match="ALLOW_STALE_CONFIG_SECONDS is unsupported"):
+        load_data_plane_runtime_config()
 
 
 def test_runtime_config_reads_data_plane_health_port(monkeypatch: pytest.MonkeyPatch):

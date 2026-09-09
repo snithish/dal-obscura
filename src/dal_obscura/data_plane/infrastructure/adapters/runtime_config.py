@@ -45,7 +45,6 @@ class DataPlaneRuntimeConfig:
     tls_key: str | None = None
     tls_client_ca: str | None = None
     tls_verify_client: bool = False
-    allow_stale_config_seconds: int | None = None
     health_host: str = "127.0.0.1"
     health_port: int | None = None
     secret_provider: SecretProviderConfig = field(default_factory=SecretProviderConfig)
@@ -53,6 +52,8 @@ class DataPlaneRuntimeConfig:
 
 def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
     """Loads data-plane configuration from environment variables."""
+    if os.getenv("DAL_OBSCURA_ALLOW_STALE_CONFIG_SECONDS"):
+        raise ValueError("DAL_OBSCURA_ALLOW_STALE_CONFIG_SECONDS is unsupported")
     database_url = _required_env("DAL_OBSCURA_DATABASE_URL")
     cell_id = UUID(_required_env("DAL_OBSCURA_CELL_ID"))
     location = os.getenv("DAL_OBSCURA_LOCATION", "grpc://0.0.0.0:8815").strip()
@@ -71,7 +72,6 @@ def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
         tls_key=_optional_env("DAL_OBSCURA_TLS_KEY"),
         tls_client_ca=_optional_env("DAL_OBSCURA_TLS_CLIENT_CA"),
         tls_verify_client=tls_verify_client,
-        allow_stale_config_seconds=_optional_int_env("DAL_OBSCURA_ALLOW_STALE_CONFIG_SECONDS"),
         health_host=os.getenv("DAL_OBSCURA_DATA_PLANE_HEALTH_HOST", "127.0.0.1").strip()
         or "127.0.0.1",
         health_port=_optional_int_env("DAL_OBSCURA_DATA_PLANE_HEALTH_PORT"),
