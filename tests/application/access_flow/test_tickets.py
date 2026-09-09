@@ -45,6 +45,8 @@ def test_ticket_payload_from_dict_keeps_string_full_row_filter():
             "nonce": "abc",
             "tenant_id": "default",
             "issuer": "",
+            "identity_context": "",
+            "decision_digest": "",
         }
     )
 
@@ -352,6 +354,8 @@ def test_plan_access_persists_ticket_with_id_before_returning_signed_token():
     assert ticket_codec.signed_payloads[0].ticket_id == ("00000000-0000-0000-0000-000000000001")
     assert ticket_store.stored[0][0] == ticket_codec.signed_payloads[0]
     assert ticket_store.stored[0][1] == 2
+    assert ticket_codec.signed_payloads[0].identity_context
+    assert ticket_codec.signed_payloads[0].decision_digest
 
 
 def test_plan_access_does_not_sign_ticket_when_persistence_fails():

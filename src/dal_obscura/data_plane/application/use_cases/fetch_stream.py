@@ -10,9 +10,13 @@ from typing import cast
 import pyarrow as pa
 
 from dal_obscura.common.access_control.filters import RowFilter, deserialize_row_filter
-from dal_obscura.common.access_control.models import MaskRule, Principal
+from dal_obscura.common.access_control.models import AccessDecision, MaskRule, Principal
 from dal_obscura.common.table_format.ports import ScanTask
-from dal_obscura.common.ticket_delivery.models import TicketPayload, ticket_payload_hash
+from dal_obscura.common.ticket_delivery.models import (
+    TicketPayload,
+    canonical_context_digest,
+    ticket_payload_hash,
+)
 from dal_obscura.data_plane.application.access_flow import AccessFlow
 from dal_obscura.data_plane.application.ports.authorization import AuthorizationPort
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest, IdentityPort
@@ -115,6 +119,10 @@ def fetch_read(
     tenant_id = _tenant_id(principal)
     if tenant_id != payload.tenant_id:
         raise PermissionError("Unauthorized")
+    if payload.identity_context and not hmac.compare_digest(
+        payload.identity_context, _identity_context_digest(principal, tenant_id)
+    ):
+        raise PermissionError("Unauthorized")
 
     current_policy_version = flow.authorizer.current_policy_version(
         payload.target,
@@ -179,6 +187,10 @@ def _require_current_authorization(
         decision.policy_version != payload.policy_version
         or not set(payload.columns).issubset(decision.allowed_columns)
         or decision.masks != scan.masks
+        or (
+            payload.decision_digest
+            and not hmac.compare_digest(payload.decision_digest, _decision_digest(decision))
+        )
     ):
         raise PermissionError("Unauthorized")
 
@@ -187,6 +199,32 @@ def _require_ticket_identity(principal: Principal, payload: TicketPayload) -> No
     """Reject tickets whose authenticated issuer or subject no longer matches."""
     if principal.id != payload.principal_id or principal.issuer != payload.issuer:
         raise PermissionError("Unauthorized")
+
+
+def _identity_context_digest(principal: Principal, tenant_id: str) -> str:
+    return canonical_context_digest(
+        {
+            "issuer": principal.issuer,
+            "subject": principal.id,
+            "tenant_id": tenant_id,
+            "groups": sorted(set(principal.groups)),
+            "attributes": dict(sorted(principal.attributes.items())),
+        }
+    )
+
+
+def _decision_digest(decision: AccessDecision) -> str:
+    return canonical_context_digest(
+        {
+            "allowed_columns": sorted(decision.allowed_columns),
+            "masks": {
+                path: {"type": mask.type, "value": mask.value}
+                for path, mask in sorted(decision.masks.items())
+            },
+            "policy_version": decision.policy_version,
+            "row_filter": decision.row_filter,
+        }
+    )
 
 
 def _decode_scan(scan_info: Mapping[str, object]) -> DecodedScan:

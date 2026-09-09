@@ -17,9 +17,9 @@ from dal_obscura.common.access_control.filters import (
     serialize_row_filter,
     validate_row_filter_against_schema,
 )
-from dal_obscura.common.access_control.models import AccessDecision
+from dal_obscura.common.access_control.models import AccessDecision, Principal
 from dal_obscura.common.query_planning.models import ExecutionProjection, PlanRequest
-from dal_obscura.common.ticket_delivery.models import TicketPayload
+from dal_obscura.common.ticket_delivery.models import TicketPayload, canonical_context_digest
 from dal_obscura.data_plane.application.access_flow import AccessFlow
 from dal_obscura.data_plane.application.ports.authorization import AuthorizationPort
 from dal_obscura.data_plane.application.ports.catalog import CatalogRegistryPort
@@ -173,6 +173,8 @@ def plan_read(
             nonce=flow.nonce_factory(),
             tenant_id=tenant_id,
             issuer=principal.issuer,
+            identity_context=_identity_context_digest(principal, tenant_id),
+            decision_digest=_decision_digest(decision),
         )
         payloads.append(payload)
     flow.ticket_store.store_many(payloads, max_exchanges=flow.max_ticket_exchanges)
@@ -207,6 +209,34 @@ def _ticket_expiry(identity_expiry: int | None, now: int, ttl_seconds: int) -> i
     if identity_expiry <= now:
         raise PermissionError("Expired identity")
     return min(configured_expiry, identity_expiry)
+
+
+def _identity_context_digest(principal: Principal, tenant_id: str) -> str:
+    """Returns stable ticket-bound identity context without carrying raw claims."""
+    return canonical_context_digest(
+        {
+            "issuer": principal.issuer,
+            "subject": principal.id,
+            "tenant_id": tenant_id,
+            "groups": sorted(set(principal.groups)),
+            "attributes": dict(sorted(principal.attributes.items())),
+        }
+    )
+
+
+def _decision_digest(decision: AccessDecision) -> str:
+    """Returns a stable summary of the effective authorization decision."""
+    return canonical_context_digest(
+        {
+            "allowed_columns": sorted(decision.allowed_columns),
+            "masks": {
+                path: {"type": mask.type, "value": mask.value}
+                for path, mask in sorted(decision.masks.items())
+            },
+            "policy_version": decision.policy_version,
+            "row_filter": decision.row_filter,
+        }
+    )
 
 
 def _build_execution_projection(

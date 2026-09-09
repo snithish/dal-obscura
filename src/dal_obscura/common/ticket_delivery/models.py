@@ -62,6 +62,8 @@ class TicketPayload:
     nonce: str
     tenant_id: str = "default"
     issuer: str = ""
+    identity_context: str = ""
+    decision_digest: str = ""
     catalog: str | None = None
     ticket_id: str | None = None
 
@@ -77,6 +79,8 @@ class TicketPayload:
             "nonce": self.nonce,
             "tenant_id": self.tenant_id,
             "issuer": self.issuer,
+            "identity_context": self.identity_context,
+            "decision_digest": self.decision_digest,
         }
         if self.catalog is not None:
             payload["catalog"] = self.catalog
@@ -103,6 +107,8 @@ class TicketPayload:
                 "nonce",
                 "tenant_id",
                 "issuer",
+                "identity_context",
+                "decision_digest",
                 "catalog",
                 "ticket_id",
             },
@@ -117,6 +123,8 @@ class TicketPayload:
             nonce=_required_string(payload, "nonce"),
             tenant_id=_required_string(payload, "tenant_id"),
             issuer=_required_string(payload, "issuer", allow_empty=True),
+            identity_context=_required_string(payload, "identity_context", allow_empty=True),
+            decision_digest=_required_string(payload, "decision_digest", allow_empty=True),
             catalog=_optional_string(payload, "catalog"),
             ticket_id=_optional_string(payload, "ticket_id"),
         )
@@ -224,3 +232,9 @@ def ticket_payload_hash(payload: TicketPayload) -> str:
         ```
     """
     return hashlib.sha256(canonical_ticket_payload_bytes(payload)).hexdigest()
+
+
+def canonical_context_digest(value: Mapping[str, object]) -> str:
+    """Hashes normalized authorization or identity context for ticket binding."""
+    raw = json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
