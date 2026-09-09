@@ -23,9 +23,7 @@ from dal_obscura.control_plane.domain.models import (
     PublishDraft,
 )
 
-SUPPORTED_BACKENDS = frozenset(
-    {"iceberg", "delta", "parquet", "csv", "json", "orc", "avro", "text"}
-)
+SUPPORTED_BACKENDS = frozenset({"iceberg"})
 _MASK_TYPES = frozenset({"null", "redact", "hash", "email", "keep_last", "default"})
 
 

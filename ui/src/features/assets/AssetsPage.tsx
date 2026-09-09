@@ -567,14 +567,7 @@ export function AssetsPage() {
               <span className="text-xs font-black uppercase tracking-wide text-muted">
                 Backend
               </span>
-              <select
-                className="field mt-2"
-                value={backend}
-                onChange={(event) => setBackend(event.target.value)}
-              >
-                <option value="iceberg">Iceberg</option>
-                <option value="file">File-backed</option>
-              </select>
+              <input className="field mt-2" value="Iceberg" disabled />
             </label>
             <label className="block">
               <span className="text-xs font-black uppercase tracking-wide text-muted">

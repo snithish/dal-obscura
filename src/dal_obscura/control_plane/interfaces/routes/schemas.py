@@ -12,7 +12,7 @@ Example:
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any, Literal, cast
 from urllib.parse import parse_qs
 from uuid import UUID
 
@@ -136,7 +136,7 @@ class AssetRequest(StrictModel):
         ```
     """
 
-    backend: str = Field(min_length=1)
+    backend: Literal["iceberg"] = "iceberg"
     table_identifier: str | None = None
     options: dict[str, Any] = Field(default_factory=dict)
 
