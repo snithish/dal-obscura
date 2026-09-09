@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import os
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
@@ -63,18 +62,13 @@ def load_secret_provider(
     *,
     context: SecretProviderContext,
 ) -> SecretProvider:
-    """Loads one explicitly configured secret provider module."""
-    provider_cls = _load_class(provider_config.module)
-    provider = provider_cls(
-        database_url=context.database_url,
-        cell_id=context.cell_id,
-        config=provider_config.config,
-        secrets=_resolve_bootstrap_secrets(provider_config.secrets),
-    )
-    get_secret = getattr(provider, "get_secret", None)
-    if not callable(get_secret):
-        raise ValueError(f"Secret provider {provider_config.module!r} must define get_secret(key)")
-    return cast(SecretProvider, provider)
+    """Builds the fixed environment provider from startup-only configuration."""
+    del context
+    if provider_config.module != ENV_SECRET_PROVIDER_MODULE:
+        raise ValueError("Unsupported secret provider; only environment secrets are supported")
+    if provider_config.secrets:
+        _resolve_bootstrap_secrets(provider_config.secrets)
+    return EnvSecretProvider(config=provider_config.config)
 
 
 def resolve_secret_refs(value: object, *, provider: SecretProvider) -> object:
@@ -94,15 +88,6 @@ def resolve_secret_refs(value: object, *, provider: SecretProvider) -> object:
     if isinstance(value, list):
         return [resolve_secret_refs(item, provider=provider) for item in value]
     return value
-
-
-def _load_class(module_path: str) -> type:
-    module_name, class_name = module_path.rsplit(".", 1)
-    module = importlib.import_module(module_name)
-    provider_cls = getattr(module, class_name, None)
-    if not isinstance(provider_cls, type):
-        raise ValueError(f"Secret provider {module_path!r} must be a class")
-    return provider_cls
 
 
 def _resolve_bootstrap_secrets(raw: Mapping[str, object]) -> dict[str, str]:

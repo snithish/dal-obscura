@@ -21,30 +21,24 @@ def test_env_secret_provider_reads_configured_prefix(monkeypatch: pytest.MonkeyP
     assert provider.get_secret("JWT") == "jwt-secret"
 
 
-def test_load_secret_provider_instantiates_module_with_bootstrap_config():
+def test_load_secret_provider_uses_fixed_environment_provider(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("LOCAL_catalog-password", "value")
+
     provider = load_secret_provider(
-        SecretProviderConfig(
-            module="tests.support.secret_provider_fakes.FakeSecretProvider",
-            config={"prefix": "local"},
-            secrets={"token": "bootstrap-token"},
-        ),
+        SecretProviderConfig(config={"prefix": "LOCAL_"}),
         context=SecretProviderContext(
             database_url="sqlite+pysqlite:///:memory:",
             cell_id=UUID("00000000-0000-0000-0000-000000000001"),
         ),
     )
 
-    assert provider.get_secret("catalog-password") == "local:bootstrap-token:catalog-password"
+    assert provider.get_secret("catalog-password") == "value"
 
 
-def test_load_secret_provider_rejects_missing_bootstrap_secret():
-    with pytest.raises(ValueError, match="bootstrap secret 'token'"):
+def test_load_secret_provider_rejects_dynamic_module_path():
+    with pytest.raises(ValueError, match="only environment secrets"):
         load_secret_provider(
-            SecretProviderConfig(
-                module="tests.support.secret_provider_fakes.FakeSecretProvider",
-                config={"prefix": "local"},
-                secrets={"token": {"env": "DAL_OBSCURA_MISSING_TOKEN"}},
-            ),
+            SecretProviderConfig(module="untrusted.module.Provider"),
             context=SecretProviderContext(
                 database_url="sqlite+pysqlite:///:memory:",
                 cell_id=UUID("00000000-0000-0000-0000-000000000001"),
@@ -52,37 +46,10 @@ def test_load_secret_provider_rejects_missing_bootstrap_secret():
         )
 
 
-def test_load_secret_provider_reads_bootstrap_secret_from_file(tmp_path):
-    token_file = tmp_path / "provider-token"
-    token_file.write_text("file-token\n", encoding="utf-8")
-
-    provider = load_secret_provider(
-        SecretProviderConfig(
-            module="tests.support.secret_provider_fakes.FakeSecretProvider",
-            config={"prefix": "local"},
-            secrets={"token": {"file": str(token_file)}},
-        ),
-        context=SecretProviderContext(
-            database_url="sqlite+pysqlite:///:memory:",
-            cell_id=UUID("00000000-0000-0000-0000-000000000001"),
-        ),
-    )
-
-    assert provider.get_secret("catalog-password") == "local:file-token:catalog-password"
-
-
-def test_resolve_secret_refs_uses_explicit_secret_shape_only():
-    provider = load_secret_provider(
-        SecretProviderConfig(
-            module="tests.support.secret_provider_fakes.FakeSecretProvider",
-            config={"prefix": "local"},
-            secrets={"token": "bootstrap-token"},
-        ),
-        context=SecretProviderContext(
-            database_url="sqlite+pysqlite:///:memory:",
-            cell_id=UUID("00000000-0000-0000-0000-000000000001"),
-        ),
-    )
+def test_resolve_secret_refs_uses_explicit_secret_shape_only(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("LOCAL_jwt-signing", "jwt")
+    monkeypatch.setenv("LOCAL_api-key", "api")
+    provider = EnvSecretProvider(config={"prefix": "LOCAL_"})
 
     resolved = resolve_secret_refs(
         {
@@ -94,24 +61,14 @@ def test_resolve_secret_refs_uses_explicit_secret_shape_only():
     )
 
     assert resolved == {
-        "jwt_secret": "local:bootstrap-token:jwt-signing",
+        "jwt_secret": "jwt",
         "plain_env_ref": {"key": "DAL_OBSCURA_JWT_SECRET"},
-        "keys": [{"id": "svc", "secret": "local:bootstrap-token:api-key"}],
+        "keys": [{"id": "svc", "secret": "api"}],
     }
 
 
 def test_resolve_secret_refs_rejects_missing_secret():
-    provider = load_secret_provider(
-        SecretProviderConfig(
-            module="tests.support.secret_provider_fakes.FakeSecretProvider",
-            config={"prefix": "local"},
-            secrets={"token": "bootstrap-token"},
-        ),
-        context=SecretProviderContext(
-            database_url="sqlite+pysqlite:///:memory:",
-            cell_id=UUID("00000000-0000-0000-0000-000000000001"),
-        ),
-    )
+    provider = EnvSecretProvider()
 
     with pytest.raises(ValueError, match="Secret 'missing' could not be resolved"):
         resolve_secret_refs({"jwt_secret": {"secret": "missing"}}, provider=provider)

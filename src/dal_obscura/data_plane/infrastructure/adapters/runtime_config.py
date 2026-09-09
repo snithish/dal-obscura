@@ -14,7 +14,10 @@ import os
 from dataclasses import dataclass, field
 from uuid import UUID
 
-from dal_obscura.data_plane.infrastructure.adapters.secret_providers import SecretProviderConfig
+from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
+    ENV_SECRET_PROVIDER_MODULE,
+    SecretProviderConfig,
+)
 
 
 @dataclass(frozen=True)
@@ -107,11 +110,11 @@ def _optional_int_env(name: str) -> int | None:
 
 
 def _secret_provider_config() -> SecretProviderConfig:
+    module = os.getenv("DAL_OBSCURA_SECRET_PROVIDER_MODULE", ENV_SECRET_PROVIDER_MODULE).strip()
+    if module != ENV_SECRET_PROVIDER_MODULE:
+        raise ValueError("DAL_OBSCURA_SECRET_PROVIDER_MODULE is unsupported")
     return SecretProviderConfig(
-        module=os.getenv(
-            "DAL_OBSCURA_SECRET_PROVIDER_MODULE",
-            SecretProviderConfig().module,
-        ).strip(),
+        module=module,
         config=_json_object_env("DAL_OBSCURA_SECRET_PROVIDER_CONFIG"),
         secrets=_json_object_env("DAL_OBSCURA_SECRET_PROVIDER_SECRETS"),
     )
