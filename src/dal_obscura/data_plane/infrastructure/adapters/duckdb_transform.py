@@ -51,6 +51,10 @@ class DefaultMaskingAdapter:
                 continue
             if nested_projection is None:
                 selected_fields.append(_selected_field(base_schema, column, masks))
+            elif column in masks:
+                # A mask on a compound parent governs every descendant.  Returning
+                # a pruned child expression here would otherwise bypass it.
+                selected_fields.append(_masked_field(base_schema.field(column), column, masks))
             else:
                 selected_fields.append(
                     _projected_nested_field(
@@ -154,13 +158,17 @@ def _build_select_list(
     for column, nested_projection in projection:
         if nested_projection is not None:
             field = base_schema.field(column)
-            expr = _nested_projection_expression(
-                _quote_identifier(column),
-                column,
-                field.type,
-                nested_projection,
-                masks,
-            )
+            direct_mask = masks.get(column)
+            if direct_mask is not None:
+                expr = _mask_expression(_quote_identifier(column), direct_mask)
+            else:
+                expr = _nested_projection_expression(
+                    _quote_identifier(column),
+                    column,
+                    field.type,
+                    nested_projection,
+                    masks,
+                )
             select_list.append(f"{expr} AS {_quote_identifier(column)}")
             masked_columns.extend(
                 sorted(

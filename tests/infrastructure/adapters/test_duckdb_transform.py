@@ -167,6 +167,28 @@ def test_nested_struct_selection_applies_descendant_masks():
     assert 'struct_update(("user")."address", "zip"' in selection.select_list[0]
 
 
+def test_nested_child_projection_cannot_bypass_null_mask_on_parent():
+    profile_type = pa.struct([pa.field("ssn", pa.string()), pa.field("name", pa.string())])
+    input_batch = pa.record_batch(
+        [pa.array([{"ssn": "123-45-6789", "name": "Ada"}], type=profile_type)],
+        names=["profile"],
+    )
+
+    result_batches = list(
+        DuckDBRowTransformAdapter(DefaultMaskingAdapter()).apply_filters_and_masks_stream(
+            [input_batch],
+            ["profile.ssn"],
+            None,
+            {"profile": MaskRule(type="null")},
+        )
+    )
+
+    result = pa.Table.from_batches(result_batches)
+
+    assert result.schema.names == ["profile"]
+    assert result.column("profile").to_pylist() == [None]
+
+
 def test_masked_schema_updates_nested_field_types():
     schema = pa.schema(
         [
