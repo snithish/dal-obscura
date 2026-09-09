@@ -128,6 +128,14 @@ def test_compiler_rejects_unknown_backend():
         PublicationCompiler().compile(draft)
 
 
+def test_compiler_requires_physical_iceberg_identifier():
+    draft = _draft()
+    draft.assets[0].table_identifier = None
+
+    with pytest.raises(ValidationFailure, match="physical Iceberg identifier"):
+        PublicationCompiler().compile(draft)
+
+
 def test_compiler_rejects_dynamic_runtime_modules():
     catalog_draft = _draft()
     catalog_draft.catalogs[0] = replace(

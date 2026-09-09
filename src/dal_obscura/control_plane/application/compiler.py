@@ -127,6 +127,8 @@ class PublicationCompiler:
     def _compile_asset(self, asset: AssetDraft, catalog: CatalogDraft) -> CompiledAsset:
         if asset.backend not in SUPPORTED_BACKENDS:
             raise ValidationFailure(f"Unsupported backend {asset.backend!r}")
+        if not asset.table_identifier or not asset.table_identifier.strip():
+            raise ValidationFailure("Asset requires a physical Iceberg identifier")
         rules = [
             self._compile_rule(rule) for rule in sorted(asset.rules, key=lambda item: item.ordinal)
         ]
@@ -140,7 +142,7 @@ class PublicationCompiler:
         target_options = dict(asset.options)
         target_config: dict[str, object] = {
             "backend": asset.backend,
-            "table": asset.table_identifier or asset.target,
+            "table": asset.table_identifier,
             "options": target_options,
         }
         compiled_config: dict[str, object] = {
