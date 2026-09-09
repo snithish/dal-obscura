@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Any, cast
 from uuid import uuid4
 
 import pytest
@@ -19,17 +18,13 @@ from dal_obscura.common.config_store.orm import (
 )
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 from dal_obscura.data_plane.infrastructure.adapters.published_config import (
-    PublishedCatalog,
     PublishedConfigAuthorizer,
-    PublishedConfigCatalogRegistry,
     PublishedConfigStore,
-    _catalog_config_from_published_catalog,
 )
 
 ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )
-FILES_CATALOG_TYPE = "files"
 
 
 @pytest.fixture
@@ -218,100 +213,6 @@ def test_published_store_does_not_use_last_good_when_asset_is_removed(
             catalog="analytics",
             target="default.users",
         )
-
-
-def test_published_catalog_registry_binds_the_published_asset_table(
-    db_session: Session,
-):
-    cell_id = uuid4()
-    tenant_id = uuid4()
-    _publish_asset(
-        db_session,
-        cell_id=cell_id,
-        tenant_id=tenant_id,
-        policy_version=123,
-        catalog_module=FILES_CATALOG_TYPE,
-        catalog_options={
-            "format": "parquet",
-            "location": "/warehouse/users.parquet",
-        },
-        backend="parquet",
-        table="legacy-asset-table-should-not-be-used",
-    )
-    registry = PublishedConfigCatalogRegistry(PublishedConfigStore(db_session, cell_id=cell_id))
-
-    table = registry.describe("analytics", "default.users", tenant_id=str(tenant_id))
-
-    assert table.format == "parquet"
-    assert table.table_name == "legacy-asset-table-should-not-be-used"
-    assert cast(Any, table).uri == "legacy-asset-table-should-not-be-used"
-
-
-def test_published_config_catalog_registry_reuses_registry_for_active_publication(
-    db_session: Session,
-    monkeypatch: pytest.MonkeyPatch,
-):
-    cell_id = uuid4()
-    tenant_id = uuid4()
-    _publish_asset(
-        db_session,
-        cell_id=cell_id,
-        tenant_id=tenant_id,
-        policy_version=123,
-        catalog_module=FILES_CATALOG_TYPE,
-        catalog_options={
-            "format": "parquet",
-            "location": "/warehouse/users.parquet",
-        },
-        backend="parquet",
-    )
-    registry_constructions = 0
-    from dal_obscura.data_plane.infrastructure.adapters import published_config
-
-    real_registry = published_config.CatalogRegistry
-
-    class CountingCatalogRegistry(real_registry):
-        def __init__(self, *args, **kwargs):
-            nonlocal registry_constructions
-            registry_constructions += 1
-            super().__init__(*args, **kwargs)
-
-    monkeypatch.setattr(
-        published_config,
-        "CatalogRegistry",
-        CountingCatalogRegistry,
-    )
-    registry = PublishedConfigCatalogRegistry(PublishedConfigStore(db_session, cell_id=cell_id))
-
-    first = registry.describe("analytics", "default.users", tenant_id=str(tenant_id))
-    second = registry.describe("analytics", "default.users", tenant_id=str(tenant_id))
-
-    assert first.format == "parquet"
-    assert second.format == "parquet"
-    assert registry_constructions == 1
-
-
-def test_published_catalog_config_strips_provider_modules_from_catalog_options():
-    catalog = PublishedCatalog(
-        publication_id=uuid4(),
-        tenant_id=uuid4(),
-        catalog="analytics",
-        config={
-            "module": FILES_CATALOG_TYPE,
-            "options": {
-                "format": "parquet",
-                "location": "/warehouse/users.parquet",
-                "provider_modules": ["example.ProviderFactory"],
-            },
-        },
-    )
-
-    config = _catalog_config_from_published_catalog(catalog)
-
-    assert config.options == {
-        "format": "parquet",
-        "location": "/warehouse/users.parquet",
-    }
 
 
 def _publish_asset(

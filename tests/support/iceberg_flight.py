@@ -56,6 +56,4 @@ def _catalog_type(raw_config: dict[str, Any]) -> CatalogType:
     module = str(raw_config.get("module", ""))
     if module == ICEBERG_CATALOG_MODULE:
         return "iceberg"
-    if module.endswith("DeltaCatalog"):
-        return "delta"
-    return cast(CatalogType, module)
+    raise ValueError(f"Unsupported catalog module: {module}")

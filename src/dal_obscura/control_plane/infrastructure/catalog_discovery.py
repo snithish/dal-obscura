@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     CatalogConfig,
@@ -12,7 +12,6 @@ from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
 ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )
-UNITY_CATALOG_MODULE = "dal_obscura.data_plane.infrastructure.adapters.unity_catalog.UnityCatalog"
 
 CatalogTable = dict[str, object]
 LoadCatalogFn = Any
@@ -56,9 +55,7 @@ def discover_catalog_tables(
 def _catalog_type(module: str) -> CatalogType:
     if module == ICEBERG_CATALOG_MODULE:
         return "iceberg"
-    if module == UNITY_CATALOG_MODULE:
-        return "unity"
-    return cast(CatalogType, module)
+    raise ValueError(f"Unsupported catalog module: {module}")
 
 
 def discover_iceberg_tables(

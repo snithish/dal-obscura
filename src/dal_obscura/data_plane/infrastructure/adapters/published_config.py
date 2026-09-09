@@ -457,34 +457,11 @@ def _catalog_config_for_asset(catalog: PublishedCatalog, asset: PublishedAsset) 
     config = _catalog_config_from_published_catalog(catalog)
     target = _mapping(asset.compiled_config.get("target"))
     backend = str(target.get("backend") or asset.backend).lower()
-    table = _asset_table_identifier(asset)
-    target_options = _mapping(target.get("options"))
-
     if config.type == "iceberg":
         if backend != "iceberg":
             raise ValueError("Published Iceberg catalogs require Iceberg assets")
         return config
-    if config.type == "delta":
-        if backend != "delta":
-            raise ValueError("Published Delta catalogs require Delta assets")
-        return CatalogConfig(
-            name=config.name,
-            type=config.type,
-            options={**config.options, **target_options, "location": table},
-            path_enforcer=config.path_enforcer,
-        )
-    if config.type == "files":
-        if backend not in {"parquet", "csv", "json", "orc", "avro", "text"}:
-            raise ValueError(f"Unsupported file asset backend: {backend}")
-        return CatalogConfig(
-            name=config.name,
-            type=config.type,
-            options={**config.options, **target_options, "format": backend, "location": table},
-            path_enforcer=config.path_enforcer,
-        )
-    if config.type == "unity" and backend != "iceberg":
-        raise ValueError("Published Unity catalogs require Iceberg assets")
-    return config
+    raise ValueError(f"Unsupported published catalog type: {config.type}")
 
 
 def _asset_table_identifier(asset: PublishedAsset) -> str:
@@ -518,6 +495,6 @@ def _catalog_type(config: dict[str, Any]) -> CatalogType:
 
 
 def _known_catalog_type(value: str) -> CatalogType:
-    if value in {"iceberg", "files", "delta", "unity"}:
+    if value == "iceberg":
         return cast(CatalogType, value)
     raise ValueError(f"Unsupported catalog type: {value}")

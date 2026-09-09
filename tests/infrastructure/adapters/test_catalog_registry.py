@@ -21,82 +21,29 @@ from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
 )
 
 
-def test_catalog_registry_resolves_executable_reader_without_provider_registry(tmp_path):
+def test_catalog_registry_rejects_removed_file_catalog_type(tmp_path):
     config = ServiceConfig(
         catalogs={
             "local": CatalogConfig(
                 name="local",
-                type="files",
+                type=cast(Any, "files"),
                 options={"format": "parquet", "location": str(tmp_path / "users.parquet")},
             )
         }
     )
-    registry = CatalogRegistry(config)
-
-    table = registry.resolve("local", "users")
-
-    assert table.catalog_name == "local"
-    assert table.table_name == "users"
-    assert table.format == "parquet"
-
-
-def test_catalog_registry_uses_named_builtin_catalogs():
-    registry = CatalogRegistry(
-        ServiceConfig(
-            catalogs={
-                "analytics": CatalogConfig(
-                    name="analytics",
-                    type="files",
-                    options={"format": "parquet", "location": "/tmp/users.parquet"},
-                ),
-                "warehouse": CatalogConfig(
-                    name="warehouse",
-                    type="files",
-                    options={"format": "csv", "location": "/tmp/events.csv"},
-                ),
-            }
-        )
-    )
-
-    analytics_table = registry.describe("analytics", "default.users")
-    warehouse_table = registry.describe("warehouse", "default.events")
-
-    assert analytics_table.format == "parquet"
-    assert analytics_table.catalog_name == "analytics"
-    assert analytics_table.table_name == "default.users"
-    assert warehouse_table.format == "csv"
-    assert warehouse_table.catalog_name == "warehouse"
-    assert warehouse_table.table_name == "default.events"
-
-
-def test_catalog_registry_lists_tables_from_named_catalog():
-    registry = CatalogRegistry(
-        ServiceConfig(
-            catalogs={
-                "analytics": CatalogConfig(
-                    name="analytics",
-                    type="files",
-                    options={
-                        "format": "parquet",
-                        "location": "/tmp/users.parquet",
-                        "tables": ["default.users", "default.events"],
-                    },
-                )
-            }
-        ),
-    )
-
-    listings = registry.list_tables("analytics")
-
-    assert [table.name for table in listings] == ["default.users", "default.events"]
-    assert {table.provider_id for table in listings} == {"parquet"}
+    try:
+        CatalogRegistry(config)
+    except ValueError as exc:
+        assert str(exc) == "Unsupported catalog type: files"
+    else:
+        raise AssertionError("expected removed catalog type rejection")
 
 
 def test_catalog_config_requires_logical_name():
     try:
         CatalogConfig(
             name=" ",
-            type="files",
+            type="iceberg",
             options={},
         )
     except ValueError as exc:

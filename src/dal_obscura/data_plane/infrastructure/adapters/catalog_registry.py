@@ -10,15 +10,9 @@ from dal_obscura.common.catalog.ports import (
     TableFormat,
 )
 from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
-from dal_obscura.data_plane.infrastructure.table_formats.delta import DeltaTableFormat
-from dal_obscura.data_plane.infrastructure.table_formats.files import (
-    ArrowDatasetTableFormat,
-    AvroTableFormat,
-    TextTableFormat,
-)
 from dal_obscura.data_plane.infrastructure.table_formats.iceberg import IcebergTableFormat
 
-CatalogType = Literal["iceberg", "files", "delta", "unity"]
+CatalogType = Literal["iceberg"]
 
 
 @dataclass(frozen=True)
@@ -168,132 +162,9 @@ class IcebergCatalog(CatalogPlugin):
         ]
 
 
-class FileCatalog(CatalogPlugin):
-    """Catalog that resolves targets under a configured file-backed location.
-
-    Example:
-        ```python
-        catalog = FileCatalog("warehouse", {"format": "parquet", "location": "/data"})
-        table_format = catalog.resolve_table("orders")
-        ```
-    """
-
-    def __init__(
-        self,
-        name: str,
-        options: dict[str, Any],
-        path_enforcer: PathRuleEnforcer | None = None,
-    ) -> None:
-        self._name = name
-        self._options = dict(options)
-        self._path_enforcer = path_enforcer
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    def resolve_table(self, target: str) -> TableFormat:
-        file_format = str(self._options.get("format", "parquet")).strip().lower()
-        uri = _target_uri(self._options, target)
-        options = {key: value for key, value in self._options.items() if key not in _FILE_KEYS}
-        if file_format in {"parquet", "csv", "json", "orc"}:
-            return ArrowDatasetTableFormat(
-                catalog_name=self.name,
-                table_name=target,
-                uri=uri,
-                format=file_format,
-                options=options,
-                path_enforcer=self._path_enforcer,
-            )
-        if file_format == "avro":
-            return AvroTableFormat(
-                catalog_name=self.name,
-                table_name=target,
-                uri=uri,
-                options=options,
-                path_enforcer=self._path_enforcer,
-            )
-        if file_format == "text":
-            return TextTableFormat(
-                catalog_name=self.name,
-                table_name=target,
-                uri=uri,
-                column_name=str(self._options.get("column_name") or "value"),
-                path_enforcer=self._path_enforcer,
-            )
-        raise ValueError(f"Unsupported file catalog format: {file_format}")
-
-    def list_tables(self) -> list[CatalogTableListing]:
-        return [
-            CatalogTableListing(
-                name=str(item),
-                provider_id=str(self._options.get("format", "parquet")),
-                table_identifier=str(self._options.get("location") or item),
-            )
-            for item in self._options.get("tables", [])
-        ]
-
-
-class DeltaCatalog(CatalogPlugin):
-    """Catalog that resolves targets to Delta Lake table roots.
-
-    Example:
-        ```python
-        catalog = DeltaCatalog("lake", {"location": "s3://warehouse"})
-        table_format = catalog.resolve_table("orders")
-        ```
-    """
-
-    def __init__(
-        self,
-        name: str,
-        options: dict[str, Any],
-        path_enforcer: PathRuleEnforcer | None = None,
-    ) -> None:
-        self._name = name
-        self._options = dict(options)
-        self._path_enforcer = path_enforcer
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    def resolve_table(self, target: str) -> TableFormat:
-        table_uri = _target_uri(self._options, target)
-        storage_options = {
-            str(key): str(value)
-            for key, value in dict(self._options.get("storage_options", {})).items()
-        }
-        return DeltaTableFormat(
-            catalog_name=self.name,
-            table_name=target,
-            table_uri=table_uri,
-            storage_options=storage_options,
-            path_enforcer=self._path_enforcer,
-        )
-
-    def list_tables(self) -> list[CatalogTableListing]:
-        return [
-            CatalogTableListing(
-                name=str(item),
-                provider_id="delta",
-                table_identifier=str(item),
-            )
-            for item in self._options.get("tables", [])
-        ]
-
-
 def _build_catalog(config: CatalogConfig) -> CatalogPlugin:
     if config.type == "iceberg":
         return IcebergCatalog(config.name, config.options, config.path_enforcer)
-    if config.type == "files":
-        return FileCatalog(config.name, config.options, config.path_enforcer)
-    if config.type == "delta":
-        return DeltaCatalog(config.name, config.options, config.path_enforcer)
-    if config.type == "unity":
-        from dal_obscura.data_plane.infrastructure.adapters.unity_catalog import UnityCatalog
-
-        return UnityCatalog(config.name, config.options, config.path_enforcer)
     raise ValueError(f"Unsupported catalog type: {config.type}")
 
 
@@ -393,13 +264,3 @@ def _identifier_to_name(identifier: object) -> str:
     if isinstance(identifier, list):
         return ".".join(str(part) for part in identifier)
     return str(identifier)
-
-
-_FILE_KEYS = {"format", "location", "uri", "tables"}
-
-
-def _target_uri(options: dict[str, Any], target: str) -> str:
-    tables = options.get("tables")
-    if isinstance(tables, dict) and target in tables:
-        return str(tables[target])
-    return str(options.get("location") or options.get("uri") or options.get("table_uri") or target)
