@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from typing import Any, cast
 from uuid import uuid4
 
 import pytest
@@ -219,7 +220,7 @@ def test_published_store_does_not_use_last_good_when_asset_is_removed(
         )
 
 
-def test_published_catalog_registry_reads_catalog_config_from_published_catalogs(
+def test_published_catalog_registry_binds_the_published_asset_table(
     db_session: Session,
 ):
     cell_id = uuid4()
@@ -242,7 +243,8 @@ def test_published_catalog_registry_reads_catalog_config_from_published_catalogs
     table = registry.describe("analytics", "default.users", tenant_id=str(tenant_id))
 
     assert table.format == "parquet"
-    assert table.table_name == "default.users"
+    assert table.table_name == "legacy-asset-table-should-not-be-used"
+    assert cast(Any, table).uri == "legacy-asset-table-should-not-be-used"
 
 
 def test_published_config_catalog_registry_reuses_registry_for_active_publication(

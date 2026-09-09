@@ -404,39 +404,36 @@ class PublishedConfigCatalogRegistry:
     ) -> None:
         self._store = store
         self._secret_provider = secret_provider
-        self._registry_cache: dict[tuple[UUID, UUID], CatalogRegistry] = {}
+        self._registry_cache: dict[tuple[UUID, UUID, str, str], CatalogRegistry] = {}
 
     def describe(self, catalog: str | None, target: str, *, tenant_id: str) -> TableFormat:
         if catalog is None:
             raise ValueError("Catalog name is required to resolve a target")
         asset = self._store.get_asset(tenant_id=tenant_id, catalog=catalog, target=target)
-        cache_key = (asset.publication_id, asset.tenant_id)
+        cache_key = (asset.publication_id, asset.tenant_id, asset.catalog, asset.target)
         registry = self._registry_cache.get(cache_key)
         if registry is not None:
-            return registry.describe(catalog, target, tenant_id=tenant_id)
+            return registry.describe(catalog, _asset_table_identifier(asset), tenant_id=tenant_id)
         published_catalogs = self._store.get_catalogs(tenant_id=tenant_id)
-        catalogs = {
-            item.catalog: _catalog_config_from_published_catalog(item)
-            for item in published_catalogs
-        }
-        if catalog not in catalogs:
+        published_catalog = next(
+            (item for item in published_catalogs if item.catalog == catalog), None
+        )
+        if published_catalog is None:
             raise LookupError(f"No published catalog for {catalog!r}")
+        catalog_config = _catalog_config_for_asset(published_catalog, asset)
         if self._secret_provider is not None:
-            catalogs = {
-                name: CatalogConfig(
-                    name=config.name,
-                    type=config.type,
-                    options=cast(
-                        dict[str, Any],
-                        resolve_secret_refs(config.options, provider=self._secret_provider),
-                    ),
-                    path_enforcer=config.path_enforcer,
-                )
-                for name, config in catalogs.items()
-            }
-        registry = CatalogRegistry(ServiceConfig(catalogs=catalogs))
+            catalog_config = CatalogConfig(
+                name=catalog_config.name,
+                type=catalog_config.type,
+                options=cast(
+                    dict[str, Any],
+                    resolve_secret_refs(catalog_config.options, provider=self._secret_provider),
+                ),
+                path_enforcer=catalog_config.path_enforcer,
+            )
+        registry = CatalogRegistry(ServiceConfig(catalogs={catalog: catalog_config}))
         self._registry_cache[cache_key] = registry
-        return registry.describe(catalog, target, tenant_id=tenant_id)
+        return registry.describe(catalog, _asset_table_identifier(asset), tenant_id=tenant_id)
 
 
 def _policy_from_asset(asset: PublishedAsset) -> Policy:
@@ -453,6 +450,49 @@ def _catalog_config_from_published_catalog(catalog: PublishedCatalog) -> Catalog
     options = dict(_mapping(config.get("options")))
     options.pop("provider_modules", None)
     return CatalogConfig(name=catalog.catalog, type=_catalog_type(config), options=options)
+
+
+def _catalog_config_for_asset(catalog: PublishedCatalog, asset: PublishedAsset) -> CatalogConfig:
+    """Build the runtime catalog config with the published asset as its source of truth."""
+    config = _catalog_config_from_published_catalog(catalog)
+    target = _mapping(asset.compiled_config.get("target"))
+    backend = str(target.get("backend") or asset.backend).lower()
+    table = _asset_table_identifier(asset)
+    target_options = _mapping(target.get("options"))
+
+    if config.type == "iceberg":
+        if backend != "iceberg":
+            raise ValueError("Published Iceberg catalogs require Iceberg assets")
+        return config
+    if config.type == "delta":
+        if backend != "delta":
+            raise ValueError("Published Delta catalogs require Delta assets")
+        return CatalogConfig(
+            name=config.name,
+            type=config.type,
+            options={**config.options, **target_options, "location": table},
+            path_enforcer=config.path_enforcer,
+        )
+    if config.type == "files":
+        if backend not in {"parquet", "csv", "json", "orc", "avro", "text"}:
+            raise ValueError(f"Unsupported file asset backend: {backend}")
+        return CatalogConfig(
+            name=config.name,
+            type=config.type,
+            options={**config.options, **target_options, "format": backend, "location": table},
+            path_enforcer=config.path_enforcer,
+        )
+    if config.type == "unity" and backend != "iceberg":
+        raise ValueError("Published Unity catalogs require Iceberg assets")
+    return config
+
+
+def _asset_table_identifier(asset: PublishedAsset) -> str:
+    target = _mapping(asset.compiled_config.get("target"))
+    table = target.get("table")
+    if not isinstance(table, str) or not table.strip():
+        raise ValueError(f"Published asset {asset.catalog}/{asset.target} has no table identifier")
+    return table
 
 
 def _tenant_id(principal: Principal) -> str:
