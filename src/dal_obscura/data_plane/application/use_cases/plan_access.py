@@ -262,6 +262,12 @@ def _expand_requested_columns(
 ) -> list[str]:
     """Expands `*` into concrete column names so downstream authz remains explicit."""
     requested = list(columns)
+    if not requested:
+        raise ValueError("columns must contain wildcard or one or more explicit fields")
+    if len(requested) != len(set(requested)):
+        raise ValueError("columns must not contain duplicates")
+    if "*" in requested and len(requested) != 1:
+        raise ValueError("wildcard columns request cannot be mixed with explicit fields")
     if "*" not in requested:
         _validate_requested_columns(base_schema, requested)
         return requested
