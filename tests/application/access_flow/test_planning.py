@@ -702,7 +702,7 @@ def test_plan_access_revalidates_requested_row_filter_against_base_schema():
         )
 
 
-def test_plan_access_excludes_denied_requested_columns_from_execution_plan():
+def test_plan_access_rejects_explicit_denied_column_request():
     schema = pa.schema(
         [
             pa.field("id", pa.int64()),
@@ -747,9 +747,43 @@ def test_plan_access_excludes_denied_requested_columns_from_execution_plan():
         max_ticket_exchanges=1,
     )
 
+    with pytest.raises(PermissionError, match="not authorized"):
+        use_case.execute(
+            PlanRequest(catalog="catalog1", target="users", columns=["id", "secret"]),
+            AUTHORIZATION_HEADER,
+        )
+
+    assert planned_columns == []
+
+
+def test_plan_access_prunes_wildcard_to_authorized_columns():
+    schema = pa.schema([pa.field("id", pa.int64()), pa.field("secret", pa.string())])
+    planned_columns: list[list[str]] = []
+    table_format = TrackingTableFormat(
+        catalog_name="catalog1",
+        table_name="users",
+        format="fake_format",
+        schema=schema,
+        planned_columns=planned_columns,
+    )
+    use_case = PlanAccessUseCase(
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+        authorizer=FakeAuthorizer(
+            decision=AccessDecision(
+                allowed_columns=["id"], masks={}, row_filter=None, policy_version=100
+            )
+        ),
+        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        masking=FakeMasking(),
+        ticket_codec=FakeTicketCodec(),
+        ticket_store=FakeTicketStore(),
+        ticket_ttl_seconds=300,
+        max_tickets=1,
+        max_ticket_exchanges=1,
+    )
+
     result = use_case.execute(
-        PlanRequest(catalog="catalog1", target="users", columns=["id", "secret"]),
-        AUTHORIZATION_HEADER,
+        PlanRequest(catalog="catalog1", target="users", columns=["*"]), AUTHORIZATION_HEADER
     )
 
     assert result.columns == ["id"]

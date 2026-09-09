@@ -130,7 +130,9 @@ def plan_read(
         requested_columns=_build_authorization_columns(requested_columns, requested_row_filter),
     )
 
-    visible_columns = _visible_columns(requested_columns, decision)
+    visible_columns = _visible_columns(
+        requested_columns, decision, wildcard_requested=request.columns == ["*"]
+    )
     _authorize_requested_row_filter(requested_row_filter, decision)
 
     policy_row_filter = _validate_policy_row_filter(base_schema, decision.row_filter)
@@ -325,10 +327,14 @@ def _build_authorization_columns(
 def _visible_columns(
     requested_columns: list[str],
     decision: AccessDecision,
+    *,
+    wildcard_requested: bool,
 ) -> list[str]:
     visible_columns = [column for column in requested_columns if column in decision.allowed_columns]
     if not visible_columns:
         raise PermissionError("No allowed columns for principal")
+    if not wildcard_requested and visible_columns != requested_columns:
+        raise PermissionError("Requested columns are not authorized")
     return visible_columns
 
 

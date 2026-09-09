@@ -74,7 +74,9 @@ class GetSchemaUseCase:
             requested_columns=_build_authorization_columns(requested_columns, requested_row_filter),
         )
 
-        visible_columns = _visible_columns(requested_columns, decision)
+        visible_columns = _visible_columns(
+            requested_columns, decision, wildcard_requested=request.columns == ["*"]
+        )
         _authorize_requested_row_filter(requested_row_filter, decision)
 
         output_schema = self._masking.masked_schema(base_schema, visible_columns, decision.masks)
