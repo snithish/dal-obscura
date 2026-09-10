@@ -356,6 +356,59 @@ def test_fetch_stream_stops_before_emitting_batches_after_identity_expiry():
         next(batches)
 
 
+def test_fetch_stream_stops_before_emitting_after_publication_version_changes():
+    schema = pa.schema([pa.field("id", pa.int64())])
+    table_format = PretendPushdownTableFormat(
+        catalog_name="catalog1",
+        table_name="users",
+        format="test",
+        schema=schema,
+        batches=(
+            pa.record_batch([pa.array([1])], schema=schema),
+            pa.record_batch([pa.array([2])], schema=schema),
+        ),
+    )
+    payload = TicketPayload(
+        ticket_id="00000000-0000-0000-0000-000000000001",
+        catalog="catalog1",
+        target="users",
+        tenant_id="tenant-a",
+        columns=["id"],
+        scan={
+            "read_payload": encode_scan_task(table_format, schema),
+            "full_row_filter": None,
+            "masks": {},
+        },
+        policy_version=100,
+        principal_id="user1",
+        expires_at=9999999999,
+        nonce="nonce",
+    )
+    authorizer = FakeAuthorizer(
+        decision=AccessDecision(
+            allowed_columns=["id"], masks={}, row_filter=None, policy_version=100
+        ),
+        current_version=100,
+    )
+    use_case = FetchStreamUseCase(
+        identity=FakeIdentity(
+            principal=Principal(id="user1", groups=[], attributes={"tenant_id": "tenant-a"})
+        ),
+        authorizer=authorizer,
+        masking=FakeMasking(),
+        row_transform=FakeRowTransform(),
+        ticket_codec=FakeTicketCodec(payload),
+        ticket_store=_ticket_store_with(payload),
+    )
+
+    batches = iter(use_case.execute("ticket", AUTHORIZATION_HEADER).result_batches)
+    assert next(batches).column("id").to_pylist() == [1]
+    authorizer._current_version = 101
+
+    with pytest.raises(PermissionError, match="stale policy version"):
+        next(batches)
+
+
 def test_stream_expiry_guard_rejects_ticket_expiry_before_identity_expiry():
     from dal_obscura.data_plane.application.use_cases.fetch_stream import _guard_stream_expiry
 

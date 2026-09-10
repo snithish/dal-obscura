@@ -162,6 +162,14 @@ def fetch_read(
         identity_expires_at=principal.expires_at,
         now=flow.now,
     )
+    result_batches = _guard_stream_policy_version(
+        result_batches,
+        authorizer=flow.authorizer,
+        target=payload.target,
+        catalog=payload.catalog,
+        tenant_id=tenant_id,
+        expected_policy_version=payload.policy_version,
+    )
 
     output_schema = flow.masking.masked_schema(original_schema, payload.columns, scan.masks)
 
@@ -189,6 +197,32 @@ def _guard_stream_expiry(
             raise PermissionError("Ticket expired")
         if identity_expires_at is not None and current_time >= identity_expires_at:
             raise PermissionError("Identity expired")
+        yield batch
+
+
+def _guard_stream_policy_version(
+    batches: Iterable[pa.RecordBatch],
+    *,
+    authorizer: AuthorizationPort,
+    target: str,
+    catalog: str | None,
+    tenant_id: str,
+    expected_policy_version: int | None,
+) -> Iterator[pa.RecordBatch]:
+    """Stops a stream before output when its active publication changes.
+
+    The authorizer's effective policy version includes the immutable active
+    publication ID. Checking it for each yielded batch makes a newly activated
+    generation take effect before subsequent Flight output is handed over.
+    """
+    for batch in batches:
+        current_policy_version = authorizer.current_policy_version(
+            target,
+            catalog,
+            tenant_id=tenant_id,
+        )
+        if current_policy_version != expected_policy_version:
+            raise PermissionError("stale policy version")
         yield batch
 
 
