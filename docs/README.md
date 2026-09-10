@@ -18,7 +18,7 @@ Use this page as the map. The docs are grouped by what you are trying to do.
 | Reader | First read | Next read |
 | --- | --- | --- |
 | Evaluator | [Quickstart](quickstart.md) | [Concepts](concepts.md) |
-| Data consumer | [Quickstart](quickstart.md) | [Connectors](connectors.md) |
+| Data consumer | [Quickstart](quickstart.md) | [Connectors](connectors.md) and [Compatibility](compatibility.md) |
 | Operator | [Policy Authoring](policy-authoring.md) | [Concepts](concepts.md) |
 | Platform operator | [Operators](operators.md) | [Operator Runbook](operators-runbook.md) |
 | Security reviewer | [Security](security.md) | [Policy Authoring](policy-authoring.md) |
@@ -57,6 +57,8 @@ Use this page as the map. The docs are grouped by what you are trying to do.
 ### Integrate Clients
 
 - [Connectors](connectors.md): client surfaces and read-path overview.
+- [Compatibility](compatibility.md): tested Python, Arrow, Java, and Spark
+  versions plus unsupported consumer cells.
 - [Connector Workspace](../connectors/README.md): JVM modules, Spark options,
   and protocol v1 details.
 
