@@ -499,6 +499,38 @@ def test_flight_streaming_supports_nested_projection_with_policy_and_requested_r
         assert all(len(user["address"]["zip"]) == 64 for user in users)
 
 
+def test_flight_parent_projection_prunes_unauthorized_nested_siblings(tmp_path):
+    profile_type = pa.struct([pa.field("name", pa.string()), pa.field("ssn", pa.string())])
+    schema = pa.schema([pa.field("profile", profile_type)])
+    batch = pa.record_batch(
+        [pa.array([{"name": "Ada", "ssn": "123-45-6789"}], type=profile_type)],
+        schema=schema,
+    )
+    table_format = StubTableFormat(
+        catalog_name="analytics",
+        table_name="test.table",
+        format="stub_format",
+        schema=schema,
+        batches=(batch,),
+    )
+
+    del tmp_path
+    server = build_flight_service(
+        table_format=table_format,
+        policy_rules=[allow_rule(["profile.name"])],
+    )
+    with running_flight_client(server) as client:
+        descriptor = command_descriptor(
+            {"catalog": "analytics", "target": "test.table", "columns": ["profile"]}
+        )
+        options = flight_call_options("user1")
+        info = client.get_flight_info(descriptor, options=options)
+        table = client.do_get(info.endpoints[0].ticket, options=options).read_all()
+
+    assert info.schema.field("profile").type.names == ["name"]
+    assert table.column("profile").to_pylist() == [{"name": "Ada"}]
+
+
 def test_flight_streaming_masks_list_of_struct_fields(tmp_path):
     schema = metadata_schema()
     batch = metadata_batch()
