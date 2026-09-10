@@ -21,9 +21,6 @@ from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
 )
-from dal_obscura.data_plane.infrastructure.adapters.identity_composite import (
-    CompositeIdentityProvider,
-)
 from dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks import (
     OidcJwksIdentityProvider,
 )
@@ -131,16 +128,12 @@ def _identity_from_runtime(
     if not providers_raw:
         raise ValueError("Published runtime auth_chain must define at least one provider")
 
-    providers = [
-        _load_identity_provider(provider, secret_provider=secret_provider)
-        for provider in sorted(providers_raw, key=lambda item: int(item.get("ordinal", 0)))
-        if bool(provider.get("enabled", True))
-    ]
-    if not providers:
+    enabled = [provider for provider in providers_raw if bool(provider.get("enabled", True))]
+    if not enabled:
         raise ValueError("Published runtime auth_chain has no enabled providers")
-    if len(providers) == 1:
-        return providers[0]
-    return CompositeIdentityProvider(providers)
+    if len(enabled) != 1:
+        raise ValueError("Published runtime must define exactly one enabled OIDC provider")
+    return _load_identity_provider(enabled[0], secret_provider=secret_provider)
 
 
 def _start_health_server(

@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 
+from dal_obscura.data_plane.infrastructure.adapters.published_config import PublishedRuntime
 from dal_obscura.data_plane.infrastructure.adapters.secret_providers import EnvSecretProvider
-from dal_obscura.data_plane.interfaces.cli.main import _load_identity_provider
+from dal_obscura.data_plane.interfaces.cli.main import (
+    _identity_from_runtime,
+    _load_identity_provider,
+)
 
 
 def test_runtime_rejects_dynamic_identity_provider_module():
@@ -12,3 +18,14 @@ def test_runtime_rejects_dynamic_identity_provider_module():
             {"module": "untrusted.module.Provider", "args": {}},
             secret_provider=EnvSecretProvider(),
         )
+
+
+def test_runtime_rejects_multiple_enabled_identity_providers():
+    runtime = PublishedRuntime(
+        publication_id=uuid4(),
+        auth_chain={"providers": [{"enabled": True}, {"enabled": True}]},
+        ticket={},
+    )
+
+    with pytest.raises(ValueError, match="exactly one enabled OIDC"):
+        _identity_from_runtime(runtime, secret_provider=EnvSecretProvider())
