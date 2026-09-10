@@ -7,12 +7,18 @@ import json
 import os
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 
 from dal_obscura.common.config_store.db import (
     ConfigStoreSchemaError,
     check_config_store_schema,
     create_engine_from_url,
     session_factory,
+)
+from dal_obscura.control_plane.application.operator_manifest import (
+    ManifestValidationError,
+    compile_manifest,
+    load_manifest,
 )
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 
@@ -28,6 +34,8 @@ def run(argv: Sequence[str] | None = None) -> int:
 
     parser = _parser()
     args = parser.parse_args(argv)
+    if args.command == "validate":
+        return _validate(args.manifest)
     database_url = args.database_url or os.getenv("DAL_OBSCURA_DATABASE_URL")
     if not database_url:
         print(
@@ -69,9 +77,30 @@ def _print_status(engine) -> None:
     print(json.dumps(payload, sort_keys=True))
 
 
+def _validate(path: str) -> int:
+    try:
+        compiled = compile_manifest(load_manifest(Path(path)))
+    except ManifestValidationError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    print(
+        json.dumps(
+            {
+                "asset_count": len(compiled.assets),
+                "catalog_count": len(compiled.catalogs),
+                "manifest_hash": compiled.manifest_hash,
+            },
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="dal-obscura-admin")
     subparsers = parser.add_subparsers(dest="command", required=True)
+    validate = subparsers.add_parser("validate", help="validate an Iceberg gateway JSON manifest")
+    validate.add_argument("manifest", help="path to a JSON manifest")
     status = subparsers.add_parser("status", help="show the active publication generation")
     status.add_argument("--database-url", help="SQLAlchemy database URL")
     return parser

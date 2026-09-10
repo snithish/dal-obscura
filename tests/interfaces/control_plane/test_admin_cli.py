@@ -56,3 +56,40 @@ def test_status_reports_unconfigured_store(tmp_path, capsys) -> None:
         "active_publication": None,
         "workspace": None,
     }
+
+
+def test_validate_compiles_operator_manifest(tmp_path, capsys) -> None:
+    path = tmp_path / "manifest.json"
+    path.write_text(
+        json.dumps(
+            {
+                "runtime": {
+                    "ticket_ttl_seconds": 300,
+                    "max_tickets": 16,
+                    "max_ticket_exchanges": 1,
+                },
+                "auth_providers": [{"args": {"issuer": "https://issuer.example"}}],
+                "catalogs": [
+                    {
+                        "name": "analytics",
+                        "options": {"type": "sql", "uri": "sqlite:///warehouse.db"},
+                    }
+                ],
+                "assets": [
+                    {
+                        "catalog": "analytics",
+                        "target": "default.users",
+                        "table_identifier": "prod.users",
+                        "rules": [{"principals": ["group:analyst"], "columns": ["id"]}],
+                    }
+                ],
+            }
+        )
+    )
+
+    assert run(["validate", str(path)]) == 0
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["asset_count"] == 1
+    assert output["catalog_count"] == 1
+    assert output["manifest_hash"]
