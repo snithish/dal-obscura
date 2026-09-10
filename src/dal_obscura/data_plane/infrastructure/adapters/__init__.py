@@ -12,7 +12,6 @@ from dal_obscura.data_plane.infrastructure.adapters.identity_default import (
     AuthConfig,
     DefaultIdentityAdapter,
 )
-from dal_obscura.data_plane.infrastructure.adapters.identity_mtls import MtlsIdentityProvider
 from dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks import (
     OidcJwksIdentityProvider,
 )
@@ -52,7 +51,6 @@ __all__ = [
     "EnvSecretProvider",
     "HmacTicketCodecAdapter",
     "IcebergTableFormat",
-    "MtlsIdentityProvider",
     "OidcJwksIdentityProvider",
     "PublishedConfigAuthorizer",
     "PublishedConfigCatalogRegistry",
