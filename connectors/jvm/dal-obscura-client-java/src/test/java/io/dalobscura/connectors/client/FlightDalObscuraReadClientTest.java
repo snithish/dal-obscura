@@ -1,6 +1,7 @@
 package io.dalobscura.connectors.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.dalobscura.flight.v1.DalObscuraFlightProto;
 import java.util.List;
@@ -28,6 +29,35 @@ class FlightDalObscuraReadClientTest {
         assertEquals("default.users", decoded.getTarget());
         assertEquals(List.of("id", "email"), decoded.getColumnsList());
         assertEquals("region = 'us'", decoded.getRowFilter());
+        assertEquals(2, decoded.getColumnPathsCount());
+        assertEquals(DalObscuraFlightProto.FieldPathSegment.Kind.FIELD,
+                decoded.getColumnPaths(0).getSegments(0).getKind());
+        assertEquals("id", decoded.getColumnPaths(0).getSegments(0).getName());
+    }
+
+    @Test
+    void encodesQuotedAndCollectionPathsAsTypedProtobuf() throws Exception {
+        DalObscuraPlanRequest request =
+                new DalObscuraPlanRequest(
+                        "analytics",
+                        "default.users",
+                        List.of("[\"profile.name\"]", "contacts.$element.email", "tags.$value.label"),
+                        Optional.empty());
+
+        DalObscuraFlightProto.PlanRequest decoded = DalObscuraFlightProto.PlanRequest.parseFrom(
+                FlightDalObscuraReadClient.encodePlanCommand(request));
+
+        assertEquals("profile.name", decoded.getColumnPaths(0).getSegments(0).getName());
+        assertEquals(DalObscuraFlightProto.FieldPathSegment.Kind.LIST_ELEMENT,
+                decoded.getColumnPaths(1).getSegments(1).getKind());
+        assertEquals(DalObscuraFlightProto.FieldPathSegment.Kind.MAP_VALUE,
+                decoded.getColumnPaths(2).getSegments(1).getKind());
+    }
+
+    @Test
+    void rejectsAmbiguousOrInvalidCanonicalPaths() {
+        assertThrows(IllegalArgumentException.class, () -> DalObscuraFieldPath.parse("profile..name"));
+        assertThrows(IllegalArgumentException.class, () -> DalObscuraFieldPath.parse("profile.$unknown"));
     }
 
     @Test

@@ -2,12 +2,14 @@ package io.dalobscura.connectors.client;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public final class DalObscuraPlanRequest {
     private final String catalog;
     private final String target;
     private final List<String> columns;
     private final Optional<String> rowFilter;
+    private final List<DalObscuraFieldPath> columnPaths;
 
     public DalObscuraPlanRequest(
             String catalog,
@@ -18,6 +20,7 @@ public final class DalObscuraPlanRequest {
         this.target = target;
         this.columns = columns;
         this.rowFilter = rowFilter;
+        this.columnPaths = columns.stream().map(DalObscuraFieldPath::parse).collect(Collectors.toUnmodifiableList());
     }
 
     public String catalog() {
@@ -34,5 +37,9 @@ public final class DalObscuraPlanRequest {
 
     public Optional<String> rowFilter() {
         return rowFilter;
+    }
+
+    public List<DalObscuraFieldPath> columnPaths() {
+        return columnPaths;
     }
 }

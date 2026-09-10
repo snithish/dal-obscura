@@ -91,7 +91,11 @@ public final class FlightDalObscuraReadClient implements DalObscuraReadClient {
                 DalObscuraFlightProto.PlanRequest.newBuilder()
                         .setProtocolVersion(PROTOCOL_VERSION)
                         .setTarget(request.target())
-                        .addAllColumns(request.columns());
+                        .addAllColumns(request.columns())
+                        .addAllColumnPaths(
+                                request.columnPaths().stream()
+                                        .map(DalObscuraFieldPath::toProto)
+                                        .collect(Collectors.toList()));
         if (request.catalog() != null && !request.catalog().isEmpty()) {
             payload.setCatalog(request.catalog());
         }
