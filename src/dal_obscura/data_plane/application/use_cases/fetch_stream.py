@@ -156,9 +156,10 @@ def fetch_read(
     transformed_batches = flow.row_transform.apply_filters_and_masks_stream(
         batches, payload.columns, scan.full_row_filter, scan.masks
     )
-    result_batches = _guard_stream_identity_expiry(
+    result_batches = _guard_stream_expiry(
         transformed_batches,
-        expires_at=principal.expires_at,
+        ticket_expires_at=payload.expires_at,
+        identity_expires_at=principal.expires_at,
         now=flow.now,
     )
 
@@ -174,15 +175,19 @@ def fetch_read(
     )
 
 
-def _guard_stream_identity_expiry(
+def _guard_stream_expiry(
     batches: Iterable[pa.RecordBatch],
     *,
-    expires_at: int | None,
+    ticket_expires_at: int,
+    identity_expires_at: int | None,
     now: Callable[[], int],
 ) -> Iterator[pa.RecordBatch]:
-    """Stops a stream before handing over a batch after identity expiry."""
+    """Stops a stream before handing over a batch after ticket or identity expiry."""
     for batch in batches:
-        if expires_at is not None and now() >= expires_at:
+        current_time = now()
+        if current_time >= ticket_expires_at:
+            raise PermissionError("Ticket expired")
+        if identity_expires_at is not None and current_time >= identity_expires_at:
             raise PermissionError("Identity expired")
         yield batch
 

@@ -322,7 +322,7 @@ def test_fetch_stream_stops_before_emitting_batches_after_identity_expiry():
         },
         policy_version=100,
         principal_id="user1",
-        expires_at=1000,
+        expires_at=1001,
         nonce="nonce",
     )
     clock = [999]
@@ -354,3 +354,18 @@ def test_fetch_stream_stops_before_emitting_batches_after_identity_expiry():
     clock[0] = 1000
     with pytest.raises(PermissionError, match="Identity expired"):
         next(batches)
+
+
+def test_stream_expiry_guard_rejects_ticket_expiry_before_identity_expiry():
+    from dal_obscura.data_plane.application.use_cases.fetch_stream import _guard_stream_expiry
+
+    batch = pa.record_batch([pa.array([1])], names=["id"])
+    guarded = _guard_stream_expiry(
+        [batch],
+        ticket_expires_at=1000,
+        identity_expires_at=2000,
+        now=lambda: 1000,
+    )
+
+    with pytest.raises(PermissionError, match="Ticket expired"):
+        next(guarded)
