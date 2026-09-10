@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, or_, select, tuple_
+from sqlalchemy import delete, func, or_, select, tuple_, update
 from sqlalchemy.orm import Session
 
 from dal_obscura.common.config_store.orm import (
@@ -27,6 +27,7 @@ from dal_obscura.common.config_store.orm import (
     PublishedCellRuntimeRecord,
     TenantRecord,
 )
+from dal_obscura.control_plane.application.errors import PublicationConflictError
 from dal_obscura.control_plane.domain.models import (
     AssetDraft,
     AuthProviderDraft,
@@ -450,6 +451,42 @@ class PublicationStore:
             )
         else:
             existing.publication_id = publication_id
+        self._replace_active_assets(cell_id=cell_id, publication_id=publication_id)
+        self._session.flush()
+
+    def activate_publication_if_current(
+        self,
+        *,
+        cell_id: UUID,
+        publication_id: UUID,
+        expected_publication_id: UUID,
+    ) -> None:
+        """Atomically activates a publication only when the expected generation remains active."""
+
+        publication = self._session.get(ConfigPublicationRecord, publication_id)
+        if publication is None or publication.cell_id != cell_id:
+            raise LookupError(f"No publication {publication_id} for cell {cell_id}")
+        result = self._session.execute(
+            update(ActivePublicationRecord)
+            .where(
+                ActivePublicationRecord.cell_id == cell_id,
+                ActivePublicationRecord.publication_id == expected_publication_id,
+            )
+            .values(publication_id=publication_id)
+        )
+        if getattr(result, "rowcount", None) != 1:
+            raise PublicationConflictError(
+                "active generation changed; reread status before publishing"
+            )
+        self._replace_active_assets(cell_id=cell_id, publication_id=publication_id)
+        self._session.flush()
+
+    def _replace_active_assets(self, *, cell_id: UUID, publication_id: UUID) -> None:
+        self._session.execute(
+            delete(ActivePublishedAssetRecord).where(
+                ActivePublishedAssetRecord.cell_id == cell_id
+            )
+        )
         for asset in self._session.scalars(
             select(PublishedAssetRecord).where(
                 PublishedAssetRecord.publication_id == publication_id
@@ -462,7 +499,6 @@ class PublicationStore:
                 target=asset.target,
                 publication_id=publication_id,
             )
-        self._session.flush()
 
     def activate_published_asset(
         self,

@@ -7,3 +7,7 @@ class ValidationFailure(ValueError):
 
 class AuthorizationFailure(PermissionError):
     """Raised when a control-plane actor cannot mutate a protected resource."""
+
+
+class PublicationConflictError(RuntimeError):
+    """Raised when a publication activation loses its generation compare-and-swap."""
