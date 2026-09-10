@@ -510,11 +510,19 @@ def _mask_expression(expr: str, mask: MaskRule) -> str:
     if mask_type == "null":
         return f"cast_to_type(NULL, {expr})"
     if mask_type == "redact":
-        return _sql_literal(str(mask.value or "***"))
+        if not isinstance(mask.value, str):
+            raise ValueError("redact mask requires a string value")
+        return f"CASE WHEN {expr} IS NULL THEN NULL ELSE {_sql_literal(mask.value)} END"
     if mask_type == "hash":
         return f"sha256(CAST({expr} AS VARCHAR))"
     if mask_type == "email":
-        return f"regexp_replace(CAST({expr} AS VARCHAR), '(^.).*(@.*$)', '\\1***\\2')"
+        text_column = f"CAST({expr} AS VARCHAR)"
+        return (
+            "CASE "
+            f"WHEN regexp_full_match({text_column}, '^[^@]+@[^@]+$') "
+            f"THEN regexp_replace({text_column}, '(^.)[^@]*(@[^@]+)$', '\\1***\\2') "
+            "ELSE NULL END"
+        )
     if mask_type == "keep_last":
         if not isinstance(mask.value, int) or mask.value < 0:
             raise ValueError("keep_last mask requires a non-negative integer value")

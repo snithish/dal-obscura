@@ -274,6 +274,50 @@ def test_email_mask_renders_masking_expression():
     assert 'AS "email"' in selection.select_list[0]
 
 
+def test_redact_mask_preserves_null_and_honors_an_empty_replacement():
+    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
+    batch = pa.record_batch(
+        [pa.array(["secret", None], type=pa.string())],
+        names=["email"],
+    )
+
+    result = pa.Table.from_batches(
+        list(
+            adapter.apply_filters_and_masks_stream(
+                [batch],
+                ["email"],
+                None,
+                {"email": MaskRule(type="redact", value="")},
+            )
+        )
+    )
+
+    assert result.column("email").to_pylist() == ["", None]
+
+
+def test_email_mask_nulls_malformed_values_instead_of_passing_them_through():
+    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
+    batch = pa.record_batch(
+        [
+            pa.array(
+                ["ada@example.com", "", "missing-domain@", "two@@example.com", None],
+                type=pa.string(),
+            )
+        ],
+        names=["email"],
+    )
+
+    result = pa.Table.from_batches(
+        list(
+            adapter.apply_filters_and_masks_stream(
+                [batch], ["email"], None, {"email": MaskRule(type="email")}
+            )
+        )
+    )
+
+    assert result.column("email").to_pylist() == ["a***@example.com", None, None, None, None]
+
+
 def test_keep_last_mask_renders_masking_expression():
     schema = pa.schema([pa.field("account_id", pa.string())])
     selection = DefaultMaskingAdapter().apply(

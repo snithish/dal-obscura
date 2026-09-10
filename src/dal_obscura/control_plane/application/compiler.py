@@ -244,12 +244,16 @@ def _mask_dict(value: object) -> dict[str, object]:
 def _compile_mask_rule(column: str, raw_mask: object) -> CompiledMaskRule:
     """Validate a mask at publication time so invalid rules cannot disappear."""
     mask = _mask_dict(raw_mask)
+    if set(mask) - {"type", "value"}:
+        raise ValidationFailure(f"Invalid mask for column {column!r}")
     mask_type = mask.get("type")
     if not isinstance(mask_type, str) or mask_type.lower() not in _MASK_TYPES:
         raise ValidationFailure(f"Invalid mask for column {column!r}")
 
     normalized_type = mask_type.lower()
     value = mask.get("value")
+    if normalized_type == "redact" and not isinstance(value, str):
+        raise ValidationFailure(f"Invalid mask for column {column!r}")
     if normalized_type == "keep_last" and (
         isinstance(value, bool) or not isinstance(value, int) or value < 0
     ):

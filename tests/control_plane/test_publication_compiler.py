@@ -215,6 +215,8 @@ def test_compiler_rejects_deny_rules():
         {},
         {"type": "unknown"},
         {"type": "keep_last", "value": -1},
+        {"type": "redact"},
+        {"type": "redact", "value": 1},
     ],
 )
 def test_compiler_rejects_invalid_mask_instead_of_dropping_it(mask: dict[str, object]):
