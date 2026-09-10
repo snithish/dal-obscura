@@ -351,11 +351,21 @@ def _visible_columns(
     *,
     wildcard_requested: bool,
 ) -> list[str]:
-    visible_columns = [column for column in requested_columns if column in decision.allowed_columns]
+    if wildcard_requested:
+        visible_columns = list(decision.allowed_columns)
+    else:
+        visible_columns = []
+        for requested in requested_columns:
+            authorized_descendants = [
+                allowed for allowed in decision.allowed_columns if _path_covers(requested, allowed)
+            ]
+            if not authorized_descendants:
+                raise PermissionError("Requested columns are not authorized")
+            for allowed in authorized_descendants:
+                if allowed not in visible_columns:
+                    visible_columns.append(allowed)
     if not visible_columns:
         raise PermissionError("No allowed columns for principal")
-    if not wildcard_requested and visible_columns != requested_columns:
-        raise PermissionError("Requested columns are not authorized")
     return visible_columns
 
 
@@ -387,7 +397,19 @@ def _authorize_requested_row_filter(
 
 
 def _paths_overlap(first: str, second: str) -> bool:
-    return first == second or first.startswith(f"{second}.") or second.startswith(f"{first}.")
+    return _path_covers(first, second) or _path_covers(second, first)
+
+
+def _path_covers(parent: str, child: str) -> bool:
+    """Checks typed path ancestry without treating literal dots as nesting."""
+    try:
+        parent_segments = parse_field_path(parent).segments
+        child_segments = parse_field_path(child).segments
+    except ValueError:
+        return parent == child
+    return len(parent_segments) <= len(child_segments) and (
+        parent_segments == child_segments[: len(parent_segments)]
+    )
 
 
 def _validate_policy_row_filter(schema: pa.Schema, row_filter: str | None) -> RowFilter | None:

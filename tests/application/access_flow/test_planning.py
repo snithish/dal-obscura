@@ -285,6 +285,49 @@ def test_plan_access_accepts_nested_requested_columns():
     assert authorizer.last_requested_columns == ["user.address.zip"]
 
 
+def test_plan_access_prunes_parent_request_to_authorized_nested_leaf():
+    schema = pa.schema(
+        [
+            pa.field(
+                "profile",
+                pa.struct([pa.field("name", pa.string()), pa.field("ssn", pa.string())]),
+            )
+        ]
+    )
+    table_format = StubTableFormat(
+        catalog_name="catalog1",
+        table_name="users",
+        format="fake_format",
+        schema=schema,
+        batches=(),
+    )
+    use_case = PlanAccessUseCase(
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+        authorizer=FakeAuthorizer(
+            decision=AccessDecision(
+                allowed_columns=["profile.name"],
+                masks={},
+                row_filter=None,
+                policy_version=100,
+            )
+        ),
+        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        masking=FakeMasking(),
+        ticket_codec=FakeTicketCodec(),
+        ticket_store=FakeTicketStore(),
+        ticket_ttl_seconds=300,
+        max_tickets=1,
+        max_ticket_exchanges=1,
+    )
+
+    result = use_case.execute(
+        PlanRequest(catalog="catalog1", target="users", columns=["profile"]),
+        AUTHORIZATION_HEADER,
+    )
+
+    assert result.columns == ["profile.name"]
+
+
 def test_plan_access_requires_map_key_permission_for_map_value_projection():
     schema = pa.schema(
         [

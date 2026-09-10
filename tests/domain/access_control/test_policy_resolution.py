@@ -198,6 +198,48 @@ def test_resolve_access_unions_columns_and_filters_for_matching_grants():
     assert row_filter == "(region = 'us') AND (active = true)"
 
 
+def test_resolve_access_prunes_parent_request_to_authorized_nested_grant():
+    policy = _policy(
+        AccessRule(
+            principals=["user1"],
+            columns=["profile.name"],
+            masks={},
+            row_filter=None,
+        )
+    )
+
+    allowed, _masks, _filter = resolve_access(
+        policy,
+        Principal(id="user1", groups=[], attributes={}),
+        target="catalog.db.table",
+        catalog="analytics",
+        requested_columns=["profile"],
+    )
+
+    assert allowed == ["profile.name"]
+
+
+def test_resolve_access_parent_grant_authorizes_requested_nested_leaf():
+    policy = _policy(
+        AccessRule(
+            principals=["user1"],
+            columns=["profile"],
+            masks={},
+            row_filter=None,
+        )
+    )
+
+    allowed, _masks, _filter = resolve_access(
+        policy,
+        Principal(id="user1", groups=[], attributes={}),
+        target="catalog.db.table",
+        catalog="analytics",
+        requested_columns=["profile.name"],
+    )
+
+    assert allowed == ["profile.name"]
+
+
 def test_policy_version_changes_when_abac_clauses_change():
     first = _policy(
         AccessRule(

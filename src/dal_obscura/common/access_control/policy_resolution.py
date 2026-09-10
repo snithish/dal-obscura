@@ -11,6 +11,7 @@ from dal_obscura.common.access_control.models import (
     Principal,
     PrincipalConditionValue,
 )
+from dal_obscura.common.query_planning.field_paths import parse_field_path
 
 
 def resolve_access(
@@ -26,7 +27,7 @@ def resolve_access(
         raise PermissionError("No policy for requested table")
 
     principal_tokens = set(principal.tokens())
-    allowed_set: set[str] = set()
+    allowed_columns: list[str] = []
     masks: dict[str, MaskRule] = {}
     row_filters: list[str] = []
 
@@ -39,24 +40,58 @@ def resolve_access(
         if not _matches_conditions(principal, rule.when):
             continue
 
-        matching_columns = (
-            requested if "*" in rule.columns else [c for c in requested if c in rule.columns]
-        )
+        matching_columns = _matching_columns(requested, rule.columns)
         # Rule matches are unioned so multiple roles can widen the projection while
         # still allowing the stricter mask precedence rules below to win.
-        allowed_set.update(matching_columns)
+        for column in matching_columns:
+            if column not in allowed_columns:
+                allowed_columns.append(column)
         for column, mask in rule.masks.items():
             existing = masks.get(column)
             masks[column] = _choose_mask(existing, mask)
         if rule.row_filter:
             row_filters.append(rule.row_filter)
 
-    effective_allowed = [column for column in requested if column in allowed_set]
-    if not effective_allowed:
+    if not allowed_columns:
         raise PermissionError("No allowed columns for principal")
 
     combined_filter = " AND ".join(f"({part})" for part in row_filters) if row_filters else None
-    return effective_allowed, masks, combined_filter
+    return allowed_columns, masks, combined_filter
+
+
+def _matching_columns(requested: list[str], grants: list[str]) -> list[str]:
+    """Returns the exact authorized leaves for requested nested paths.
+
+    A grant on a parent covers a requested descendant. A request for a parent
+    is pruned to each granted descendant, preventing sibling disclosure.
+    """
+    if "*" in grants:
+        return list(requested)
+
+    matched: list[str] = []
+    for requested_path in requested:
+        for grant_path in grants:
+            if _path_covers(grant_path, requested_path):
+                candidate = requested_path
+            elif _path_covers(requested_path, grant_path):
+                candidate = grant_path
+            else:
+                continue
+            if candidate not in matched:
+                matched.append(candidate)
+    return matched
+
+
+def _path_covers(parent: str, child: str) -> bool:
+    """Checks typed path ancestry without confusing literal dotted field names."""
+    try:
+        parent_segments = parse_field_path(parent).segments
+        child_segments = parse_field_path(child).segments
+    except ValueError:
+        return parent == child
+    return len(parent_segments) <= len(child_segments) and (
+        parent_segments == child_segments[: len(parent_segments)]
+    )
 
 
 def dataset_version(dataset: DatasetPolicy) -> int:
