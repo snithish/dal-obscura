@@ -14,7 +14,7 @@ package complete unless its stated evidence exists.
 | W05 | implementing | Asset binding is fixed and catalog construction reads asset/catalog from one captured generation; immutable plan generations and stream freshness remain. |
 | W06 | pending | Existing ticket serialization remains by owner direction. |
 | W07 | pending | Iceberg pinned scan specification has not begun. |
-| W08 | pending | DuckDB/Spark consumer contract has not begun. |
+| W08 | implementing | Python SDK provides a managed sequential Flight stream and opt-in typed path transport; DuckDB remains adapter-only and Spark/distributed attempt support remain. |
 | W09 | pending | Stream lifecycle and resource limits have not begun. |
 | W10 | implementing | Asset admission is Iceberg-only; deletion inventory is recorded but removal waits for replacement paths. |
 | W11 | pending | Client package/deployment privilege split has not begun. |
@@ -34,5 +34,7 @@ package complete unless its stated evidence exists.
 - `65ea54d`: canonical typed paths distinguish quoted literal names and resolve nested Arrow nodes.
 - `482663b`: row-filter dependency validation uses canonical paths.
 - `ad18421`: catalog construction uses a single captured publication generation.
+- `e5e5b66`: Flight accepts canonical typed paths and fetch reauthorization preserves client filter dependencies.
+- `dfc0fe3`: Python client exposes a managed, cancellable Flight batch stream.
 
 These are W01/W04/W05/W10 inputs, not completion evidence for those packages.
