@@ -10,7 +10,15 @@ import pyarrow as pa
 
 from dal_obscura.common.access_control.filters import RowFilter, row_filter_to_sql
 from dal_obscura.common.access_control.models import MaskRule
-from dal_obscura.common.query_planning.field_paths import FieldPath, FieldSegment, parse_field_path
+from dal_obscura.common.query_planning.field_paths import (
+    FieldPath,
+    FieldPathSegment,
+    FieldSegment,
+    ListElementSegment,
+    MapKeySegment,
+    MapValueSegment,
+    parse_field_path,
+)
 from dal_obscura.data_plane.application.ports.masking import MaskedSelection
 
 _DUCKDB_ARROW_OUTPUT_BATCH_SIZE = 8_192
@@ -204,22 +212,29 @@ def _quote_identifier(identifier: str) -> str:
     return '"' + identifier.replace('"', '""') + '"'
 
 
-def _path_field_names(path: str) -> tuple[str, ...]:
-    """Returns field-name segments, rejecting collection paths this adapter cannot model.
-
-    Historical callers may pass an unquoted top-level Arrow name containing SQL
-    punctuation. Preserve that safe case while canonical paths handle dotted
-    names unambiguously.
-    """
+def _path_segments(path: str) -> tuple[FieldPathSegment, ...]:
+    """Parses canonical paths while retaining legacy special-character field names."""
     try:
-        parsed = parse_field_path(path)
+        return parse_field_path(path).segments
     except ValueError:
         if "." not in path:
-            return (path,)
+            return (FieldSegment(path),)
         raise
-    if not all(isinstance(segment, FieldSegment) for segment in parsed.segments):
-        raise ValueError("DuckDB nested projection does not support collection path segments")
-    return tuple(segment.name for segment in parsed.segments if isinstance(segment, FieldSegment))
+
+
+def _path_field_names(path: str) -> tuple[str, ...]:
+    """Returns stable tokens for field and collection segments."""
+    tokens: list[str] = []
+    for segment in _path_segments(path):
+        if isinstance(segment, FieldSegment):
+            tokens.append(segment.name)
+        elif isinstance(segment, ListElementSegment):
+            tokens.append("$element")
+        elif isinstance(segment, MapKeySegment):
+            tokens.append("$key")
+        else:
+            tokens.append("$value")
+    return tuple(tokens)
 
 
 def _top_level_path(source: str, field_name: str) -> str:
@@ -236,7 +251,11 @@ def _field_path(parts: Iterable[str]) -> str:
 
 
 def _append_field_path(path: str, field_name: str) -> str:
-    return _field_path((*_path_field_names(path), field_name))
+    return FieldPath((*_path_segments(path), FieldSegment(field_name))).to_human()
+
+
+def _append_collection_path(path: str, segment: FieldPathSegment) -> str:
+    return FieldPath((*_path_segments(path), segment)).to_human()
 
 
 def _column_reference(path: str) -> str:
@@ -380,6 +399,24 @@ def _nested_projection_expression(
             fields.append(f"{_quote_identifier(child.name)} := {projected_child}")
         packed = f"struct_pack({', '.join(fields)})"
         return f"CASE WHEN {expr} IS NULL THEN NULL ELSE {packed} END"
+
+    if pa.types.is_map(data_type):
+        if "$key" not in projection or "$value" not in projection:
+            raise ValueError("Map projection requires explicit key and value paths")
+        value_path = _append_collection_path(path, MapValueSegment())
+        value_expr = _nested_projection_leaf_or_struct(
+            f"{item_var}_entry.value",
+            value_path,
+            data_type.item_field.type,
+            projection["$value"],
+            masks,
+            item_var=f"{item_var}_entry",
+        )
+        entry_var = f"{item_var}_entry"
+        return (
+            "map_from_entries(list_transform(map_entries("
+            f"{expr}), {entry_var} -> struct_pack(key := {entry_var}.key, value := {value_expr})))"
+        )
 
     if pa.types.is_list(data_type) or pa.types.is_large_list(data_type):
         child_var = f"{item_var}_{len(_path_field_names(path))}"
@@ -545,6 +582,23 @@ def _projected_nested_field(
             metadata=field.metadata,
         )
 
+    if pa.types.is_map(field.type):
+        if "$key" not in projection or "$value" not in projection:
+            raise ValueError("Map projection requires explicit key and value paths")
+        value_field = field.type.item_field
+        projected_value_field = _projected_nested_field(
+            value_field,
+            _append_collection_path(path, MapValueSegment()),
+            projection["$value"],
+            masks,
+        )
+        return pa.field(
+            field.name,
+            pa.map_(field.type.key_field.type, projected_value_field),
+            nullable=field.nullable,
+            metadata=field.metadata,
+        )
+
     if pa.types.is_list(field.type) or pa.types.is_large_list(field.type):
         value_field = field.type.value_field
         projected_value_field = _projected_nested_field(value_field, path, projection, masks)
@@ -578,6 +632,21 @@ def _masked_field(field: pa.Field, path: str, masks: Mapping[str, MaskRule]) -> 
         return _masked_leaf_field(field, mask)
 
     if not pa.types.is_struct(field.type):
+        if pa.types.is_map(field.type):
+            value_field = field.type.item_field
+            nested_value_field = _masked_field(
+                value_field,
+                _append_collection_path(path, MapValueSegment()),
+                masks,
+            )
+            if nested_value_field.equals(value_field):
+                return field
+            return pa.field(
+                field.name,
+                pa.map_(field.type.key_field.type, nested_value_field),
+                nullable=field.nullable,
+                metadata=field.metadata,
+            )
         if pa.types.is_list(field.type) or pa.types.is_large_list(field.type):
             value_field = field.type.value_field
             nested_value_field = _masked_field(value_field, path, masks)

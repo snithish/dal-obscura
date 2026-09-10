@@ -815,3 +815,45 @@ def test_duckdb_transform_preserves_literal_dotted_top_level_field_name():
 
     assert result.schema.names == ["profile.name"]
     assert result.column("profile.name").to_pylist() == ["visible"]
+
+
+def test_duckdb_transform_projects_and_masks_map_value_struct_leaves():
+    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
+    value_type = pa.struct([pa.field("name", pa.string()), pa.field("ssn", pa.string())])
+    input_batch = pa.record_batch(
+        [
+            pa.array(
+                [[("primary", {"name": "Ada", "ssn": "123"})]],
+                type=pa.map_(pa.string(), value_type),
+            )
+        ],
+        names=["contacts"],
+    )
+
+    result = pa.Table.from_batches(
+        list(
+            adapter.apply_filters_and_masks_stream(
+                [input_batch],
+                ["contacts.$key", "contacts.$value.name"],
+                None,
+                {"contacts.$value.name": MaskRule(type="redact", value="[hidden]")},
+            )
+        )
+    )
+
+    assert result.column("contacts").to_pylist() == [[("primary", {"name": "[hidden]"})]]
+
+
+def test_masked_schema_prunes_and_masks_map_value_struct_leaves():
+    value_type = pa.struct([pa.field("name", pa.string()), pa.field("ssn", pa.string())])
+    schema = pa.schema([pa.field("contacts", pa.map_(pa.string(), value_type))])
+
+    output = DefaultMaskingAdapter().masked_schema(
+        schema,
+        ["contacts.$key", "contacts.$value.name"],
+        {"contacts.$value.name": MaskRule(type="redact", value="[hidden]")},
+    )
+
+    item_type = output.field("contacts").type.item_field.type
+    assert item_type.names == ["name"]
+    assert item_type.field("name").type == pa.string()
