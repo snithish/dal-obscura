@@ -417,8 +417,25 @@ def test_stream_expiry_guard_rejects_ticket_expiry_before_identity_expiry():
         [batch],
         ticket_expires_at=1000,
         identity_expires_at=2000,
+        stream_deadline_at=2000,
         now=lambda: 1000,
     )
 
     with pytest.raises(PermissionError, match="Ticket expired"):
+        next(guarded)
+
+
+def test_stream_deadline_guard_stops_before_emitting_a_late_batch():
+    from dal_obscura.data_plane.application.use_cases.fetch_stream import _guard_stream_expiry
+
+    batch = pa.record_batch([pa.array([1])], names=["id"])
+    guarded = _guard_stream_expiry(
+        [batch],
+        ticket_expires_at=1000,
+        identity_expires_at=None,
+        stream_deadline_at=100,
+        now=lambda: 100,
+    )
+
+    with pytest.raises(TimeoutError, match="Stream deadline exceeded"):
         next(guarded)

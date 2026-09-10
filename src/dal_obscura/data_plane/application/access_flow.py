@@ -67,6 +67,7 @@ class AccessFlow:
     max_tickets: int
     max_ticket_exchanges: int
     max_ticket_payload_bytes: int = 16 * 1024 * 1024
+    max_stream_seconds: int = 300
     now: Callable[[], int] = _epoch_seconds
     nonce_factory: Callable[[], str] = _nonce
     ticket_id_factory: Callable[[], str] = _ticket_id

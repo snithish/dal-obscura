@@ -160,6 +160,7 @@ def fetch_read(
         transformed_batches,
         ticket_expires_at=payload.expires_at,
         identity_expires_at=principal.expires_at,
+        stream_deadline_at=flow.now() + flow.max_stream_seconds,
         now=flow.now,
     )
     result_batches = _guard_stream_policy_version(
@@ -188,11 +189,14 @@ def _guard_stream_expiry(
     *,
     ticket_expires_at: int,
     identity_expires_at: int | None,
+    stream_deadline_at: int,
     now: Callable[[], int],
 ) -> Iterator[pa.RecordBatch]:
     """Stops a stream before handing over a batch after ticket or identity expiry."""
     for batch in batches:
         current_time = now()
+        if current_time >= stream_deadline_at:
+            raise TimeoutError("Stream deadline exceeded")
         if current_time >= ticket_expires_at:
             raise PermissionError("Ticket expired")
         if identity_expires_at is not None and current_time >= identity_expires_at:
