@@ -10,6 +10,7 @@ import pyarrow as pa
 
 from dal_obscura.common.access_control.filters import RowFilter, row_filter_to_sql
 from dal_obscura.common.access_control.models import MaskRule
+from dal_obscura.common.query_planning.field_paths import FieldPath, FieldSegment, parse_field_path
 from dal_obscura.data_plane.application.ports.masking import MaskedSelection
 
 _DUCKDB_ARROW_OUTPUT_BATCH_SIZE = 8_192
@@ -203,8 +204,47 @@ def _quote_identifier(identifier: str) -> str:
     return '"' + identifier.replace('"', '""') + '"'
 
 
+def _path_field_names(path: str) -> tuple[str, ...]:
+    """Returns field-name segments, rejecting collection paths this adapter cannot model.
+
+    Historical callers may pass an unquoted top-level Arrow name containing SQL
+    punctuation. Preserve that safe case while canonical paths handle dotted
+    names unambiguously.
+    """
+    try:
+        parsed = parse_field_path(path)
+    except ValueError:
+        if "." not in path:
+            return (path,)
+        raise
+    if not all(isinstance(segment, FieldSegment) for segment in parsed.segments):
+        raise ValueError("DuckDB nested projection does not support collection path segments")
+    return tuple(segment.name for segment in parsed.segments if isinstance(segment, FieldSegment))
+
+
+def _top_level_path(source: str, field_name: str) -> str:
+    """Keeps legacy unquoted special-character top-level names compatible."""
+    try:
+        parse_field_path(source)
+    except ValueError:
+        return source
+    return _field_path((field_name,))
+
+
+def _field_path(parts: Iterable[str]) -> str:
+    return FieldPath(tuple(FieldSegment(part) for part in parts)).to_human()
+
+
+def _append_field_path(path: str, field_name: str) -> str:
+    return _field_path((*_path_field_names(path), field_name))
+
+
 def _column_reference(path: str) -> str:
-    return ".".join(_quote_identifier(part) for part in path.split("."))
+    return ".".join(_quote_identifier(part) for part in _path_field_names(path))
+
+
+def _output_field_name(path: str) -> str:
+    return _path_field_names(path)[0]
 
 
 def _build_select_list(
@@ -219,7 +259,7 @@ def _build_select_list(
 
     for column, nested_projection in projection:
         if nested_projection is not None:
-            field = base_schema.field(column)
+            field = base_schema.field(_path_field_names(column)[0])
             direct_mask = masks.get(column)
             if direct_mask is not None:
                 expr = _mask_expression(_quote_identifier(column), direct_mask)
@@ -231,7 +271,7 @@ def _build_select_list(
                     nested_projection,
                     masks,
                 )
-            select_list.append(f"{expr} AS {_quote_identifier(column)}")
+            select_list.append(f"{expr} AS {_quote_identifier(_output_field_name(column))}")
             masked_columns.extend(
                 sorted(
                     mask_path
@@ -244,7 +284,7 @@ def _build_select_list(
         nested_masks = {k: v for k, v in masks.items() if _is_descendant_path(k, column)}
         if column in masks:
             expr = _mask_expression(_column_reference(column), masks[column])
-            select_list.append(f"{expr} AS {_quote_identifier(column)}")
+            select_list.append(f"{expr} AS {_quote_identifier(_output_field_name(column))}")
             masked_columns.append(column)
             continue
 
@@ -256,9 +296,11 @@ def _build_select_list(
                 masks,
             )
             masked_columns.extend(sorted(nested_masks))
-            select_list.append(f"{expr} AS {_quote_identifier(column)}")
+            select_list.append(f"{expr} AS {_quote_identifier(_output_field_name(column))}")
         else:
-            select_list.append(f"{_column_reference(column)} AS {_quote_identifier(column)}")
+            select_list.append(
+                f"{_column_reference(column)} AS {_quote_identifier(_output_field_name(column))}"
+            )
 
     return MaskedSelection(select_list=select_list, masked_columns=masked_columns)
 
@@ -267,25 +309,26 @@ ProjectionTree = dict[str, "ProjectionTree"]
 
 
 def _build_projection(columns: Iterable[str]) -> list[tuple[str, ProjectionTree | None]]:
-    """Groups dotted requested paths into top-level Arrow fields."""
+    """Groups canonical field paths into top-level Arrow fields."""
     projection: list[tuple[str, ProjectionTree | None]] = []
     by_top_level: dict[str, ProjectionTree | None] = {}
 
     for column in columns:
-        top_level, *nested = column.split(".")
-        if top_level not in by_top_level:
+        top_level, *nested = _path_field_names(column)
+        top_level_path = _top_level_path(column, top_level)
+        if top_level_path not in by_top_level:
             tree: ProjectionTree | None = {} if nested else None
-            by_top_level[top_level] = tree
-            projection.append((top_level, tree))
+            by_top_level[top_level_path] = tree
+            projection.append((top_level_path, tree))
 
-        tree = by_top_level[top_level]
+        tree = by_top_level[top_level_path]
         if tree is None:
             continue
         if not nested:
-            by_top_level[top_level] = None
+            by_top_level[top_level_path] = None
             for index, (name, _existing) in enumerate(projection):
-                if name == top_level:
-                    projection[index] = (top_level, None)
+                if name == top_level_path:
+                    projection[index] = (top_level_path, None)
                     break
             continue
         _insert_projection_path(tree, nested)
@@ -300,8 +343,8 @@ def _insert_projection_path(tree: ProjectionTree, parts: list[str]) -> None:
 
 
 def _projection_contains(top_level: str, tree: ProjectionTree, path: str) -> bool:
-    parts = path.split(".")
-    if not parts or parts[0] != top_level:
+    parts = _path_field_names(path)
+    if not parts or _field_path((parts[0],)) != top_level:
         return False
     current = tree
     for part in parts[1:]:
@@ -325,7 +368,7 @@ def _nested_projection_expression(
         fields: list[str] = []
         for child_name, child_projection in projection.items():
             child = data_type.field(child_name)
-            child_path = f"{path}.{child.name}"
+            child_path = _append_field_path(path, child.name)
             child_expr = f"({expr}).{_quote_identifier(child.name)}"
             projected_child = _nested_projection_leaf_or_struct(
                 child_expr,
@@ -339,7 +382,7 @@ def _nested_projection_expression(
         return f"CASE WHEN {expr} IS NULL THEN NULL ELSE {packed} END"
 
     if pa.types.is_list(data_type) or pa.types.is_large_list(data_type):
-        child_var = f"{item_var}_{len(path.split('.'))}"
+        child_var = f"{item_var}_{len(_path_field_names(path))}"
         value_field = data_type.value_field
         transformed = _nested_projection_leaf_or_struct(
             child_var,
@@ -418,7 +461,9 @@ def _mask_expression(expr: str, mask: MaskRule) -> str:
 
 def _is_descendant_path(path: str, parent: str) -> bool:
     """Returns whether `path` is nested underneath `parent`."""
-    return path.startswith(f"{parent}.")
+    path_parts = _path_field_names(path)
+    parent_parts = _path_field_names(parent)
+    return len(path_parts) > len(parent_parts) and path_parts[: len(parent_parts)] == parent_parts
 
 
 def _apply_nested_masks(
@@ -436,7 +481,7 @@ def _apply_nested_masks(
     if pa.types.is_struct(data_type):
         updated_expr = expr
         for child in data_type:
-            child_path = f"{path}.{child.name}"
+            child_path = _append_field_path(path, child.name)
             if not _has_mask_for_path(child_path, masks):
                 continue
             child_expr = _apply_nested_masks(
@@ -455,7 +500,7 @@ def _apply_nested_masks(
         value_field = data_type.value_field
         if not _has_descendant_mask(path, masks):
             return expr
-        child_var = f"{item_var}_{len(path.split('.'))}"
+        child_var = f"{item_var}_{len(_path_field_names(path))}"
         transformed = _apply_nested_masks(
             child_var,
             path,
@@ -472,7 +517,7 @@ def _selected_field(base_schema: pa.Schema, column: str, masks: Mapping[str, Mas
     """Returns the visible field for a requested top-level or nested column path."""
     field = _field_for_path(base_schema, column)
     masked = _masked_field(field, column, masks)
-    return pa.field(column, masked.type, nullable=masked.nullable, metadata=masked.metadata)
+    return pa.field(field.name, masked.type, nullable=masked.nullable, metadata=masked.metadata)
 
 
 def _projected_nested_field(
@@ -486,7 +531,7 @@ def _projected_nested_field(
         child_fields: list[pa.Field] = []
         for child_name, child_projection in projection.items():
             child = field.type.field(child_name)
-            child_path = f"{path}.{child.name}"
+            child_path = _append_field_path(path, child.name)
             if child_projection:
                 child_fields.append(
                     _projected_nested_field(child, child_path, child_projection, masks)
@@ -514,8 +559,8 @@ def _projected_nested_field(
 
 
 def _field_for_path(schema: pa.Schema, path: str) -> pa.Field:
-    """Resolves a top-level or nested field path from the Arrow schema."""
-    parts = path.split(".")
+    """Resolves a canonical field path from the Arrow schema."""
+    parts = _path_field_names(path)
     field = schema.field(parts[0])
     for part in parts[1:]:
         field_type = field.type
@@ -546,7 +591,9 @@ def _masked_field(field: pa.Field, path: str, masks: Mapping[str, MaskRule]) -> 
             )
         return field
 
-    nested_fields = [_masked_field(child, f"{path}.{child.name}", masks) for child in field.type]
+    nested_fields = [
+        _masked_field(child, _append_field_path(path, child.name), masks) for child in field.type
+    ]
     if all(
         original.equals(updated)
         for original, updated in zip(field.type, nested_fields, strict=False)

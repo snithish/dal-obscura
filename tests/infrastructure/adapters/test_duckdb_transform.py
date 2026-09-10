@@ -793,3 +793,25 @@ def _parse_json_payload_from_subprocess_output(output: str) -> dict[str, int]:
         if candidate.startswith("{") and candidate.endswith("}"):
             return cast(dict[str, int], json.loads(candidate))
     raise AssertionError(f"subprocess did not emit a JSON object:\n{output}")
+
+
+def test_duckdb_transform_preserves_literal_dotted_top_level_field_name():
+    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
+    input_batch = pa.record_batch(
+        [pa.array(["visible"], type=pa.string())],
+        names=["profile.name"],
+    )
+
+    result = pa.Table.from_batches(
+        list(
+            adapter.apply_filters_and_masks_stream(
+                [input_batch],
+                ['["profile.name"]'],
+                None,
+                {},
+            )
+        )
+    )
+
+    assert result.schema.names == ["profile.name"]
+    assert result.column("profile.name").to_pylist() == ["visible"]
