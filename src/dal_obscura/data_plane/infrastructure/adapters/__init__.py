@@ -16,9 +16,6 @@ from dal_obscura.data_plane.infrastructure.adapters.identity_mtls import MtlsIde
 from dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks import (
     OidcJwksIdentityProvider,
 )
-from dal_obscura.data_plane.infrastructure.adapters.identity_trusted_headers import (
-    TrustedHeaderIdentityProvider,
-)
 from dal_obscura.data_plane.infrastructure.adapters.published_config import (
     PublishedConfigAuthorizer,
     PublishedConfigCatalogRegistry,
@@ -66,7 +63,6 @@ __all__ = [
     "SecretProviderContext",
     "ServiceConfig",
     "SqlAlchemyTicketStore",
-    "TrustedHeaderIdentityProvider",
     "load_data_plane_runtime_config",
     "load_secret_provider",
     "resolve_secret_refs",
