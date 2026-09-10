@@ -356,91 +356,19 @@ def _compiled_policy_rules(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _auth_providers(auth_flow: str) -> list[dict[str, Any]]:
-    if auth_flow == "shared-jwt":
-        return [
-            _provider(
-                "dal_obscura.data_plane.infrastructure.adapters.identity_default.DefaultIdentityAdapter",
-                {"jwt_secret": {"key": "DAL_OBSCURA_JWT_SECRET"}},
-            )
-        ]
-    if auth_flow == "api-key":
-        return [
-            _provider(
-                "dal_obscura.data_plane.infrastructure.adapters.identity_api_key.ApiKeyIdentityProvider",
-                {"keys": [_api_key_record()]},
-            )
-        ]
-    if auth_flow == "composite-provider":
-        return [
-            _provider(
-                "dal_obscura.data_plane.infrastructure.adapters.identity_api_key.ApiKeyIdentityProvider",
-                {"keys": [_api_key_record()]},
-                ordinal=10,
-            ),
-            _provider(
-                "dal_obscura.data_plane.infrastructure.adapters.identity_default.DefaultIdentityAdapter",
-                {"jwt_secret": {"key": "DAL_OBSCURA_JWT_SECRET"}},
-                ordinal=20,
-            ),
-        ]
-    if auth_flow == "keycloak-oidc":
-        return [
-            _provider(
-                "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider",
-                {
-                    "issuer": "http://keycloak:8080/realms/dal-obscura",
-                    "audience": "dal-obscura",
-                    "jwks_url": (
-                        "http://keycloak:8080/realms/dal-obscura/protocol/openid-connect/certs"
-                    ),
-                    "subject_claim": "preferred_username",
-                },
-            )
-        ]
-    if auth_flow == "mtls":
-        return [
-            _provider(
-                "dal_obscura.data_plane.infrastructure.adapters.identity_mtls.MtlsIdentityProvider",
-                {
-                    "identities": [
-                        {
-                            "peer_identity": "urn:dal-obscura:example-client",
-                            "id": "example-user",
-                            "groups": ["compose-example"],
-                            "attributes": {"client_id": "urn:dal-obscura:example-client"},
-                        }
-                    ]
-                },
-            )
-        ]
-    if auth_flow == "mtls-spiffe":
-        return [
-            _provider(
-                "dal_obscura.data_plane.infrastructure.adapters.identity_mtls.MtlsIdentityProvider",
-                {
-                    "identities": [
-                        {
-                            "peer_identity": "spiffe://example.org/ns/default/sa/dal-obscura-client",
-                            "id": "example-user",
-                            "groups": ["compose-example", "spiffe"],
-                            "attributes": {
-                                "spiffe_id": (
-                                    "spiffe://example.org/ns/default/sa/dal-obscura-client"
-                                )
-                            },
-                        }
-                    ]
-                },
-            )
-        ]
-    if auth_flow == "trusted-headers":
-        return [
-            _provider(
-                "dal_obscura.data_plane.infrastructure.adapters.identity_trusted_headers.TrustedHeaderIdentityProvider",
-                {"shared_secret": {"key": "DAL_OBSCURA_PROXY_SECRET"}},
-            )
-        ]
-    raise ValueError(f"Unsupported auth example flow {auth_flow!r}")
+    if auth_flow != "keycloak-oidc":
+        raise ValueError("Only the keycloak-oidc example flow is supported")
+    return [
+        _provider(
+            "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider",
+            {
+                "issuer": "http://keycloak:8080/realms/dal-obscura",
+                "audience": "dal-obscura",
+                "jwks_url": "http://keycloak:8080/realms/dal-obscura/protocol/openid-connect/certs",
+                "subject_claim": "preferred_username",
+            },
+        )
+    ]
 
 
 def _provider(
@@ -452,18 +380,8 @@ def _provider(
     return {"ordinal": ordinal, "module": module, "args": args, "enabled": True}
 
 
-def _api_key_record() -> dict[str, Any]:
-    return {
-        "id": "example-user",
-        "secret": {"key": "DAL_OBSCURA_API_KEY"},
-        "groups": ["compose-example"],
-    }
-
-
 def _write_data_plane_env(cell_id: str, auth_flow: str) -> None:
-    location = (
-        "grpc+tls://0.0.0.0:8815" if auth_flow in {"mtls", "mtls-spiffe"} else "grpc://0.0.0.0:8815"
-    )
+    location = "grpc://0.0.0.0:8815"
     values = {
         "DAL_OBSCURA_DATABASE_URL": f"sqlite+pysqlite:///{RUNTIME_DIR / 'control-plane.db'}",
         "DAL_OBSCURA_CELL_ID": cell_id,

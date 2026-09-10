@@ -22,7 +22,6 @@ MAX_COLUMN_LENGTH = 256
 MAX_ROW_FILTER_LENGTH = 8192
 SECURITY_SENSITIVE_HEADERS = {
     "authorization",
-    "x-api-key",
     "x-dal-obscura-proxy-secret",
 }
 

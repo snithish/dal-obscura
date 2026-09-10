@@ -42,8 +42,8 @@ def main() -> None:
 
 
 def _options(flow: str) -> flight.FlightCallOptions:
-    if flow in {"mtls", "mtls-spiffe"}:
-        return flight.FlightCallOptions()
+    if flow != "keycloak-oidc":
+        raise ValueError("Only the keycloak-oidc example flow is supported")
     return flight.FlightCallOptions(headers=[])
 
 

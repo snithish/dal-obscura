@@ -38,8 +38,6 @@ def _startup_credentials(flow: str) -> list[str | None]:
     raw = os.environ.get("STARTUP_CREDENTIALS", "").strip()
     if raw:
         return [value.strip() or None for value in raw.split(",")]
-    if flow == "composite-provider":
-        return ["api-key", "jwt"]
     return [None]
 
 

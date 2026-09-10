@@ -8,7 +8,6 @@ from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-import jwt
 import pyarrow.flight as flight
 
 from dal_obscura.common.flight_contract import encode_plan_command
@@ -75,51 +74,18 @@ def perform_read(
 
 
 def create_client(uri: str, auth_flow: str) -> flight.FlightClient:
-    if auth_flow == "mtls":
-        cert_dir = Path(os.environ.get("CLIENT_CERT_DIR", RUNTIME_DIR / "certs"))
-        return flight.connect(
-            uri,
-            tls_root_certs=(cert_dir / "ca.crt").read_bytes(),
-            cert_chain=(cert_dir / "client.crt").read_text(),
-            private_key=(cert_dir / "client.key").read_text(),
-            override_hostname="dal-obscura",
-        )
-    if auth_flow == "mtls-spiffe":
-        cert_dir = Path(os.environ.get("SPIFFE_SVID_DIR", "/workspace/runtime/client-svid"))
-        return flight.connect(
-            uri,
-            tls_root_certs=(cert_dir / "bundle.0.pem").read_bytes(),
-            cert_chain=(cert_dir / "svid.0.pem").read_text(),
-            private_key=(cert_dir / "svid.0.key").read_text(),
-            override_hostname="dal-obscura",
-        )
+    if auth_flow != "keycloak-oidc":
+        raise ValueError("Only the keycloak-oidc example flow is supported")
     return flight.connect(uri)
 
 
 def _call_options(auth_flow: str, credential: str | None) -> flight.FlightCallOptions:
     headers: list[tuple[bytes, bytes]] = []
-    if auth_flow == "shared-jwt":
-        headers.append((b"authorization", f"Bearer {_shared_jwt()}".encode()))
-    elif auth_flow == "keycloak-oidc":
-        headers.append((b"authorization", f"Bearer {_oidc_token()}".encode()))
-    elif auth_flow == "api-key":
-        headers.append((_api_key_header(), os.environ["DAL_OBSCURA_API_KEY"].encode()))
-    elif auth_flow == "composite-provider":
-        if credential == "api-key":
-            headers.append((_api_key_header(), os.environ["DAL_OBSCURA_API_KEY"].encode()))
-        elif credential == "jwt":
-            headers.append((b"authorization", f"Bearer {_shared_jwt()}".encode()))
-        else:
-            raise SystemExit("Composite example requires api-key or jwt credential")
+    if auth_flow != "keycloak-oidc":
+        raise ValueError("Only the keycloak-oidc example flow is supported")
+    del credential
+    headers.append((b"authorization", f"Bearer {_oidc_token()}".encode()))
     return flight.FlightCallOptions(headers=headers)
-
-
-def _shared_jwt() -> str:
-    return jwt.encode({"sub": PRINCIPAL}, os.environ["DAL_OBSCURA_JWT_SECRET"], algorithm="HS256")
-
-
-def _api_key_header() -> bytes:
-    return os.environ.get("API_KEY_HEADER", "x-api-key").encode()
 
 
 def _oidc_token() -> str:
