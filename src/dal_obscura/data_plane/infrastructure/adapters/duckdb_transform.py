@@ -31,6 +31,7 @@ _DUCKDB_TRANSFORM_CONFIG: dict[str, str | bool | int | float | list[str]] = {
 _DEFAULT_DUCKDB_MEMORY_LIMIT = "512MB"
 _DEFAULT_MAX_ACTIVE_STREAMS = 16
 _DEFAULT_MAX_INPUT_BATCH_BYTES = 64 * 1024 * 1024
+_DEFAULT_MAX_OUTPUT_BATCH_BYTES = 64 * 1024 * 1024
 
 
 class StreamAdmissionError(RuntimeError):
@@ -39,6 +40,10 @@ class StreamAdmissionError(RuntimeError):
 
 class InputBatchLimitError(ValueError):
     """Raised when an Arrow input batch exceeds the configured byte budget."""
+
+
+class OutputBatchLimitError(ValueError):
+    """Raised when an Arrow output batch exceeds the configured byte budget."""
 
 
 class DefaultMaskingAdapter:
@@ -101,6 +106,7 @@ class DuckDBRowTransformAdapter:
         max_active_streams: int = _DEFAULT_MAX_ACTIVE_STREAMS,
         duckdb_memory_limit: str = _DEFAULT_DUCKDB_MEMORY_LIMIT,
         max_input_batch_bytes: int = _DEFAULT_MAX_INPUT_BATCH_BYTES,
+        max_output_batch_bytes: int = _DEFAULT_MAX_OUTPUT_BATCH_BYTES,
     ) -> None:
         if max_active_streams < 1:
             raise ValueError("max_active_streams must be positive")
@@ -108,6 +114,8 @@ class DuckDBRowTransformAdapter:
             raise ValueError("duckdb_memory_limit must be non-empty text")
         if max_input_batch_bytes < 1:
             raise ValueError("max_input_batch_bytes must be positive")
+        if max_output_batch_bytes < 1:
+            raise ValueError("max_output_batch_bytes must be positive")
         self._masking = masking
         self._stream_slots = BoundedSemaphore(max_active_streams)
         self._duckdb_config = {
@@ -115,6 +123,7 @@ class DuckDBRowTransformAdapter:
             "memory_limit": duckdb_memory_limit,
         }
         self._max_input_batch_bytes = max_input_batch_bytes
+        self._max_output_batch_bytes = max_output_batch_bytes
 
     def apply_filters_and_masks_stream(
         self,
@@ -139,7 +148,13 @@ class DuckDBRowTransformAdapter:
                 max_input_batch_bytes=self._max_input_batch_bytes,
             ),
         )
-        return _stream_query_results(reader, query, self._stream_slots, self._duckdb_config)
+        return _stream_query_results(
+            reader,
+            query,
+            self._stream_slots,
+            self._duckdb_config,
+            max_output_batch_bytes=self._max_output_batch_bytes,
+        )
 
 
 def _stream_query_results(
@@ -147,6 +162,8 @@ def _stream_query_results(
     query: str,
     stream_slots: BoundedSemaphore,
     duckdb_config: Mapping[str, str | bool | int | float | list[str]],
+    *,
+    max_output_batch_bytes: int,
 ) -> Iterator[pa.RecordBatch]:
     """Executes the generated SQL over the incoming Arrow reader."""
     # DuckDB 1.5.0 removes the Python-side per-batch loop here, but the input side
@@ -161,7 +178,10 @@ def _stream_query_results(
             .query("input", query)
             .to_arrow_reader(batch_size=_DUCKDB_ARROW_OUTPUT_BATCH_SIZE)
         )
-        yield from result_reader
+        yield from _bounded_output_batches(
+            result_reader,
+            max_output_batch_bytes=max_output_batch_bytes,
+        )
     finally:
         try:
             if con is not None:
@@ -191,6 +211,18 @@ def _require_batch_size(batch: pa.RecordBatch, maximum: int) -> None:
         raise InputBatchLimitError(
             f"Arrow input batch is {batch.nbytes} bytes; limit is {maximum} bytes"
         )
+
+
+def _bounded_output_batches(
+    batches: Iterable[pa.RecordBatch], *, max_output_batch_bytes: int
+) -> Iterator[pa.RecordBatch]:
+    for batch in batches:
+        if batch.nbytes > max_output_batch_bytes:
+            raise OutputBatchLimitError(
+                "Arrow output batch is "
+                f"{batch.nbytes} bytes; limit is {max_output_batch_bytes} bytes"
+            )
+        yield batch
 
 
 def _build_query(

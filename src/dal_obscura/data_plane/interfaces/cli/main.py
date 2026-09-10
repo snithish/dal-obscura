@@ -87,6 +87,7 @@ def main() -> None:
         max_active_streams=runtime_config.max_active_streams,
         duckdb_memory_limit=runtime_config.duckdb_memory_limit,
         max_input_batch_bytes=runtime_config.max_input_batch_bytes,
+        max_output_batch_bytes=runtime_config.max_output_batch_bytes,
     )
     ticket_codec = HmacTicketCodecAdapter(runtime_config.ticket_secret)
     ticket_store = SqlAlchemyTicketStore(session_maker, cell_id=runtime_config.cell_id)

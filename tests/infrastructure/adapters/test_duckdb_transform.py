@@ -899,3 +899,10 @@ def test_masked_schema_prunes_canonical_list_element_struct_leaves():
     item_type = output.field("contacts").type.value_field.type
     assert item_type.names == ["email"]
     assert item_type.field("email").type == pa.string()
+
+
+def test_output_batch_limit_rejects_oversized_result_batch():
+    batch = pa.record_batch([pa.array(["payload"])], names=["value"])
+
+    with pytest.raises(duckdb_transform.OutputBatchLimitError, match="output batch"):
+        list(duckdb_transform._bounded_output_batches([batch], max_output_batch_bytes=1))

@@ -50,6 +50,7 @@ class DataPlaneRuntimeConfig:
     max_active_streams: int = 16
     duckdb_memory_limit: str = "512MB"
     max_input_batch_bytes: int = 64 * 1024 * 1024
+    max_output_batch_bytes: int = 64 * 1024 * 1024
     max_ticket_payload_bytes: int = 16 * 1024 * 1024
     secret_provider: SecretProviderConfig = field(default_factory=SecretProviderConfig)
 
@@ -83,6 +84,9 @@ def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
         duckdb_memory_limit=_memory_limit_env(),
         max_input_batch_bytes=_positive_int_env(
             "DAL_OBSCURA_MAX_INPUT_BATCH_BYTES", default=64 * 1024 * 1024
+        ),
+        max_output_batch_bytes=_positive_int_env(
+            "DAL_OBSCURA_MAX_OUTPUT_BATCH_BYTES", default=64 * 1024 * 1024
         ),
         max_ticket_payload_bytes=_positive_int_env(
             "DAL_OBSCURA_MAX_TICKET_PAYLOAD_BYTES", default=16 * 1024 * 1024

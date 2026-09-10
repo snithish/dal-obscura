@@ -15,7 +15,7 @@ package complete unless its stated evidence exists.
 | W06 | pending | Existing ticket serialization remains by owner direction. |
 | W07 | implementing | Format v3 now fails closed; native multi-file tasks stay pinned across append. Delete, schema-evolution and REST-catalog behavior remain unproven; native nested field-ID preservation is covered. |
 | W08 | implementing | Python SDK provides a managed sequential Flight stream and opt-in typed path transport; DuckDB remains adapter-only and Spark/distributed attempt support remain. |
-| W09 | implementing | DuckDB streams have configured non-blocking admission, one execution thread, memory and input-batch limits; planned scan payloads have a byte limit. Identity expiry is checked before each emitted batch; generation freshness, deadlines, audit events, and output/value limits remain. |
+| W09 | implementing | DuckDB streams have configured non-blocking admission, one execution thread, memory and input-batch limits; planned scan payloads have a byte limit. Identity and ticket expiry are checked before each emitted batch; DuckDB output batches have a byte limit. Generation freshness, deadlines, audit events, and per-value limits remain. |
 | W10 | implementing | Asset admission is Iceberg-only; deletion inventory is recorded but removal waits for replacement paths. |
 | W11 | pending | Client package/deployment privilege split has not begun. |
 | W12 | implementing | CI separates deterministic contract/security tests from a bounded integration lane while retaining package and JVM gates. PostgreSQL race, native Iceberg conformance, capacity, and cross-consumer lanes remain. |
@@ -47,5 +47,6 @@ package complete unless its stated evidence exists.
 - `pending`: DuckDB preserves map keys while pruning and masking selected map-value struct leaves.
 - `pending`: DuckDB prunes and masks canonical list-element struct leaves without flattening lists.
 - `pending`: fetch stops streaming before handing over a batch after identity expiry.
+- `pending`: DuckDB rejects transformed output batches above configured byte limits.
 
 These are W01/W04/W05/W10 inputs, not completion evidence for those packages.
