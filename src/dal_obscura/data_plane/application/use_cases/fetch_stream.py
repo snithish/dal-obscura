@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import hmac
 import time
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from typing import cast
 
@@ -153,8 +153,13 @@ def fetch_read(
     if flow.row_transform is None:
         raise ValueError("Fetch flow requires a row transform")
 
-    result_batches = flow.row_transform.apply_filters_and_masks_stream(
+    transformed_batches = flow.row_transform.apply_filters_and_masks_stream(
         batches, payload.columns, scan.full_row_filter, scan.masks
+    )
+    result_batches = _guard_stream_identity_expiry(
+        transformed_batches,
+        expires_at=principal.expires_at,
+        now=flow.now,
     )
 
     output_schema = flow.masking.masked_schema(original_schema, payload.columns, scan.masks)
@@ -167,6 +172,19 @@ def fetch_read(
         columns=payload.columns,
         catalog=payload.catalog,
     )
+
+
+def _guard_stream_identity_expiry(
+    batches: Iterable[pa.RecordBatch],
+    *,
+    expires_at: int | None,
+    now: Callable[[], int],
+) -> Iterator[pa.RecordBatch]:
+    """Stops a stream before handing over a batch after identity expiry."""
+    for batch in batches:
+        if expires_at is not None and now() >= expires_at:
+            raise PermissionError("Identity expired")
+        yield batch
 
 
 def _require_current_authorization(
