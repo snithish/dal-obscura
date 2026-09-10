@@ -18,6 +18,7 @@ from dal_obscura.common.access_control.filters import (
     validate_row_filter_against_schema,
 )
 from dal_obscura.common.access_control.models import AccessDecision, Principal
+from dal_obscura.common.query_planning.field_paths import parse_field_path, resolve_schema_path
 from dal_obscura.common.query_planning.models import ExecutionProjection, PlanRequest
 from dal_obscura.common.ticket_delivery.models import TicketPayload, canonical_context_digest
 from dal_obscura.data_plane.application.access_flow import AccessFlow
@@ -284,26 +285,11 @@ def _validate_requested_columns(schema: pa.Schema, requested: list[str]) -> None
 
 
 def _schema_has_path(schema: pa.Schema, column: str) -> bool:
-    """Returns whether a top-level or nested struct field path exists in the schema."""
-    parts = column.split(".")
-    current_type: pa.DataType | None = None
-
-    for index, part in enumerate(parts):
-        if index == 0:
-            try:
-                current_type = schema.field(part).type
-            except KeyError:
-                return False
-            continue
-
-        if current_type is None or not pa.types.is_struct(current_type):
-            return False
-        struct_type = current_type
-        try:
-            current_type = struct_type.field(part).type
-        except KeyError:
-            return False
-
+    """Returns whether an unambiguous typed path exists in the schema."""
+    try:
+        resolve_schema_path(schema, parse_field_path(column))
+    except ValueError:
+        return False
     return True
 
 
