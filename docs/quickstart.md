@@ -171,25 +171,6 @@ The API process serves:
 - `http://127.0.0.1:8820/redoc`
 - `http://127.0.0.1:8820/openapi.json`
 
-### Start The UI
-
-For frontend development:
-
-```bash
-cd ui
-pnpm install
-pnpm dev
-```
-
-For a production-like local UI:
-
-```bash
-docker build -f ui/Dockerfile -t dal-obscura-control-plane-ui:local .
-docker run --rm -p 127.0.0.1:8821:8080 \
-  -e DAL_OBSCURA_API_BASE_URL=http://127.0.0.1:8820 \
-  dal-obscura-control-plane-ui:local
-```
-
 ### Configure The Service
 
 Configure at least:
@@ -201,7 +182,7 @@ Configure at least:
 5. Asset owners.
 6. Active policy version.
 
-Use the UI or workspace API. The control-plane API is workspace-first: normal
+Use the operator CLI. The control-plane API is workspace-first: normal
 users work with catalogs, assets, owners, policies, policy versions, and
 settings.
 

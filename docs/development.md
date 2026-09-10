@@ -30,7 +30,6 @@ flowchart TB
     app --> domain["domain/*\nmodels and rules"]
     infra["infrastructure/*\nadapters"] --> app
     infra --> domain
-    ui["ui/*\nReact control-plane UI"] --> api["control-plane /v1 API"]
 ```
 
 ## Repo Map
@@ -117,25 +116,6 @@ uv run dal-obscura-migrate check
 uv run dal-obscura-control-plane
 ```
 
-Run the frontend dev server:
-
-```bash
-cd ui
-pnpm install
-pnpm dev
-```
-
-Vite proxies `/v1` to `http://127.0.0.1:8820`.
-
-Production-like local runs use the Caddy UI image:
-
-```bash
-docker build -f ui/Dockerfile -t dal-obscura-control-plane-ui:local .
-docker run --rm -p 127.0.0.1:8821:8080 \
-  -e DAL_OBSCURA_API_BASE_URL=http://127.0.0.1:8820 \
-  dal-obscura-control-plane-ui:local
-```
-
 ## Change Guidance
 
 | Change | Update |
@@ -143,8 +123,7 @@ docker run --rm -p 127.0.0.1:8821:8080 \
 | Policy behavior | Domain policy tests and data-plane enforcement tests. |
 | Ticket payloads | Ticket model, codec, planning, fetching, and connector fixtures. |
 | Masking | DuckDB projection logic and masked schema behavior. |
-| Catalog behavior | Catalog adapter tests and discovery UI/API behavior if visible. |
-| UI workflow | API helper types, feature page, UI tests, and Caddy image build. |
+| Catalog behavior | Catalog adapter tests and operator manifest validation. |
 | Connector contract | Contract fixtures and JVM/Python connector tests. |
 | Public Python interface | Pydoc docstrings with a short example. |
 
@@ -154,7 +133,6 @@ docker run --rm -p 127.0.0.1:8821:8080 \
 - `uv run ty check`
 - `uv run pytest`
 - `mvn -f connectors/jvm/pom.xml verify` when JVM connector behavior changed.
-- Run UI tests and rebuild the Caddy UI image when `ui/` changed.
 
 ## Extension Notes
 
