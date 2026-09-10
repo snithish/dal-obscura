@@ -199,9 +199,7 @@ def _strict_scan_payload(raw: object) -> ScanPayload:
         "masks": _strict_masks(raw_mapping.get("masks")),
     }
     if "authorization_columns" in raw_mapping:
-        payload["authorization_columns"] = _strict_columns(
-            raw_mapping.get("authorization_columns")
-        )
+        payload["authorization_columns"] = _strict_columns(raw_mapping.get("authorization_columns"))
     return payload
 
 

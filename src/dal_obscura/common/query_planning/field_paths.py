@@ -42,9 +42,7 @@ class MapValueSegment:
     """The value node of an Arrow map."""
 
 
-FieldPathSegment: TypeAlias = (
-    FieldSegment | ListElementSegment | MapKeySegment | MapValueSegment
-)
+FieldPathSegment: TypeAlias = FieldSegment | ListElementSegment | MapKeySegment | MapValueSegment
 
 
 @dataclass(frozen=True)

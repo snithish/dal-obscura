@@ -54,12 +54,12 @@ def test_field_path_resolves_nested_struct_list_and_map_nodes():
 
 @pytest.mark.parametrize(
     "path",
-    ["", "a.", ".a", "a..b", "a.$element", "[not-json]", "[\"\"]"],
+    ["", "a.", ".a", "a..b", "a.$element", "[not-json]", '[""]'],
 )
 def test_field_path_rejects_malformed_or_incompatible_paths(path):
     schema = pa.schema([pa.field("a", pa.string())])
 
-    if path in {"", "a.", ".a", "a..b", "[not-json]", "[\"\"]"}:
+    if path in {"", "a.", ".a", "a..b", "[not-json]", '[""]'}:
         with pytest.raises(ValueError):
             parse_field_path(path)
     else:
@@ -99,9 +99,7 @@ def test_field_path_wire_round_trip_preserves_ids_and_collection_nodes():
 
 
 def test_field_path_rejects_a_name_match_with_a_different_field_id():
-    schema = pa.schema(
-        [pa.field("profile", pa.string(), metadata={b"PARQUET:field_id": b"7"})]
-    )
+    schema = pa.schema([pa.field("profile", pa.string(), metadata={b"PARQUET:field_id": b"7"})])
 
     path = FieldPath((FieldSegment("profile", field_id=7),))
     assert resolve_schema_path(schema, path).name == "profile"

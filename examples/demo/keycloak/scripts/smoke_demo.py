@@ -5,9 +5,7 @@ import subprocess
 import sys
 
 USERS = ("us-analyst", "eu-analyst", "data-steward", "asset-owner", "blocked-user")
-TARGETS = (
-    ("DEMO_ICEBERG_CATALOG", "DEMO_ICEBERG_TARGET"),
-)
+TARGETS = (("DEMO_ICEBERG_CATALOG", "DEMO_ICEBERG_TARGET"),)
 
 
 def main() -> None:
