@@ -285,6 +285,95 @@ def test_plan_access_accepts_nested_requested_columns():
     assert authorizer.last_requested_columns == ["user.address.zip"]
 
 
+def test_plan_access_requires_map_key_permission_for_map_value_projection():
+    schema = pa.schema(
+        [
+            pa.field(
+                "contacts",
+                pa.map_(pa.string(), pa.struct([pa.field("name", pa.string())])),
+            )
+        ]
+    )
+    table_format = StubTableFormat(
+        catalog_name="catalog1",
+        table_name="users",
+        format="fake_format",
+        schema=schema,
+        batches=(),
+    )
+    authorizer = FakeAuthorizer(
+        decision=AccessDecision(
+            allowed_columns=["contacts.$value.name"],
+            masks={},
+            row_filter=None,
+            policy_version=100,
+        )
+    )
+    use_case = PlanAccessUseCase(
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+        authorizer=authorizer,
+        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        masking=FakeMasking(),
+        ticket_codec=FakeTicketCodec(),
+        ticket_store=FakeTicketStore(),
+        ticket_ttl_seconds=300,
+        max_tickets=1,
+        max_ticket_exchanges=1,
+    )
+
+    with pytest.raises(PermissionError, match="Requested columns are not authorized"):
+        use_case.execute(
+            PlanRequest(catalog="catalog1", target="users", columns=["contacts.$value.name"]),
+            AUTHORIZATION_HEADER,
+        )
+
+    assert authorizer.last_requested_columns == ["contacts.$value.name", "contacts.$key"]
+
+
+def test_plan_access_includes_authorized_map_keys_with_value_projection():
+    schema = pa.schema(
+        [
+            pa.field(
+                "contacts",
+                pa.map_(pa.string(), pa.struct([pa.field("name", pa.string())])),
+            )
+        ]
+    )
+    table_format = StubTableFormat(
+        catalog_name="catalog1",
+        table_name="users",
+        format="fake_format",
+        schema=schema,
+        batches=(),
+    )
+    authorizer = FakeAuthorizer(
+        decision=AccessDecision(
+            allowed_columns=["contacts.$value.name", "contacts.$key"],
+            masks={},
+            row_filter=None,
+            policy_version=100,
+        )
+    )
+    use_case = PlanAccessUseCase(
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+        authorizer=authorizer,
+        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        masking=FakeMasking(),
+        ticket_codec=FakeTicketCodec(),
+        ticket_store=FakeTicketStore(),
+        ticket_ttl_seconds=300,
+        max_tickets=1,
+        max_ticket_exchanges=1,
+    )
+
+    result = use_case.execute(
+        PlanRequest(catalog="catalog1", target="users", columns=["contacts.$value.name"]),
+        AUTHORIZATION_HEADER,
+    )
+
+    assert result.columns == ["contacts.$value.name", "contacts.$key"]
+
+
 def test_plan_access_rejects_unknown_requested_columns():
     schema = pa.schema(
         [

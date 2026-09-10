@@ -18,7 +18,13 @@ from dal_obscura.common.access_control.filters import (
     validate_row_filter_against_schema,
 )
 from dal_obscura.common.access_control.models import AccessDecision, Principal
-from dal_obscura.common.query_planning.field_paths import parse_field_path, resolve_schema_path
+from dal_obscura.common.query_planning.field_paths import (
+    FieldPath,
+    MapKeySegment,
+    MapValueSegment,
+    parse_field_path,
+    resolve_schema_path,
+)
 from dal_obscura.common.query_planning.models import ExecutionProjection, PlanRequest
 from dal_obscura.common.ticket_delivery.models import TicketPayload, canonical_context_digest
 from dal_obscura.data_plane.application.access_flow import AccessFlow
@@ -122,7 +128,10 @@ def plan_read(
     )
     base_schema = table_format.get_schema()
 
-    requested_columns = _expand_requested_columns(base_schema, request.columns)
+    requested_columns = _with_required_map_keys(
+        base_schema,
+        _expand_requested_columns(base_schema, request.columns),
+    )
     requested_row_filter = _validate_requested_row_filter(base_schema, request.row_filter)
     requested_filter_dependencies = _extract_filter_dependencies(requested_row_filter)
 
@@ -289,6 +298,25 @@ def _validate_requested_columns(schema: pa.Schema, requested: list[str]) -> None
     missing = [column for column in requested if not _schema_has_path(schema, column)]
     if missing:
         raise ValueError(f"Unknown columns requested: {', '.join(missing)}")
+
+
+def _with_required_map_keys(schema: pa.Schema, columns: list[str]) -> list[str]:
+    """Adds structural map-key paths needed to represent authorized values.
+
+    A map value cannot be returned without its keys, so key disclosure is an
+    authorization dependency rather than an incidental transform detail.
+    """
+    expanded = list(columns)
+    for column in columns:
+        path = parse_field_path(column)
+        for index, segment in enumerate(path.segments):
+            if not isinstance(segment, MapValueSegment):
+                continue
+            key_path = FieldPath((*path.segments[:index], MapKeySegment())).to_human()
+            resolve_schema_path(schema, parse_field_path(key_path))
+            if key_path not in expanded:
+                expanded.append(key_path)
+    return expanded
 
 
 def _schema_has_path(schema: pa.Schema, column: str) -> bool:
