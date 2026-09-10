@@ -82,7 +82,11 @@ def main() -> None:
     authorizer = PublishedConfigAuthorizer(config_store)
     catalog_registry = PublishedConfigCatalogRegistry(config_store, secret_provider=secret_provider)
     masking = DefaultMaskingAdapter()
-    row_transform = DuckDBRowTransformAdapter(masking)
+    row_transform = DuckDBRowTransformAdapter(
+        masking,
+        max_active_streams=runtime_config.max_active_streams,
+        duckdb_memory_limit=runtime_config.duckdb_memory_limit,
+    )
     ticket_codec = HmacTicketCodecAdapter(runtime_config.ticket_secret)
     ticket_store = SqlAlchemyTicketStore(session_maker, cell_id=runtime_config.cell_id)
     ticket_settings = published_runtime.ticket

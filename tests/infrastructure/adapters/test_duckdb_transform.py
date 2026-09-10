@@ -14,6 +14,7 @@ from dal_obscura.common.access_control.models import MaskRule
 from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
+    StreamAdmissionError,
 )
 
 
@@ -467,6 +468,8 @@ def test_duckdb_transform_disables_external_access(monkeypatch):
                 "enable_external_access": "false",
                 "autoload_known_extensions": "false",
                 "autoinstall_known_extensions": "false",
+                "threads": 1,
+                "memory_limit": "512MB",
             }
         }
     ]
@@ -530,6 +533,26 @@ def test_duckdb_transform_returns_empty_iterator_without_connecting(monkeypatch)
 
     assert list(adapter.apply_filters_and_masks_stream([], ["id"], None, {})) == []
     assert connect_calls == 0
+
+
+def test_duckdb_transform_rejects_streams_beyond_configured_admission_limit():
+    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter(), max_active_streams=1)
+    batch = pa.record_batch([pa.array([1, 2, 3])], names=["id"])
+    first = adapter.apply_filters_and_masks_stream([batch], ["id"], None, {})
+
+    assert next(cast(Generator[pa.RecordBatch, None, None], first)).num_rows == 3
+    second = adapter.apply_filters_and_masks_stream([batch], ["id"], None, {})
+    with pytest.raises(StreamAdmissionError, match="capacity"):
+        next(cast(Generator[pa.RecordBatch, None, None], second))
+
+    cast(Generator[pa.RecordBatch, None, None], first).close()
+    assert list(adapter.apply_filters_and_masks_stream([batch], ["id"], None, {}))
+
+
+@pytest.mark.parametrize("limit", [0, -1])
+def test_duckdb_transform_rejects_non_positive_admission_limits(limit):
+    with pytest.raises(ValueError, match="max_active_streams"):
+        DuckDBRowTransformAdapter(DefaultMaskingAdapter(), max_active_streams=limit)
 
 
 def test_duckdb_transform_streams_chunked_output(monkeypatch):

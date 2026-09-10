@@ -47,6 +47,8 @@ class DataPlaneRuntimeConfig:
     tls_verify_client: bool = False
     health_host: str = "127.0.0.1"
     health_port: int | None = None
+    max_active_streams: int = 16
+    duckdb_memory_limit: str = "512MB"
     secret_provider: SecretProviderConfig = field(default_factory=SecretProviderConfig)
 
 
@@ -75,6 +77,8 @@ def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
         health_host=os.getenv("DAL_OBSCURA_DATA_PLANE_HEALTH_HOST", "127.0.0.1").strip()
         or "127.0.0.1",
         health_port=_optional_int_env("DAL_OBSCURA_DATA_PLANE_HEALTH_PORT"),
+        max_active_streams=_positive_int_env("DAL_OBSCURA_MAX_ACTIVE_STREAMS", default=16),
+        duckdb_memory_limit=_memory_limit_env(),
         secret_provider=_secret_provider_config(),
     )
 
@@ -107,6 +111,23 @@ def _optional_int_env(name: str) -> int | None:
     if parsed <= 0:
         raise ValueError(f"{name} must be greater than 0")
     return parsed
+
+
+def _positive_int_env(name: str, *, default: int) -> int:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return default
+    parsed = int(value)
+    if parsed <= 0:
+        raise ValueError(f"{name} must be greater than 0")
+    return parsed
+
+
+def _memory_limit_env() -> str:
+    value = os.getenv("DAL_OBSCURA_DUCKDB_MEMORY_LIMIT", "512MB").strip()
+    if not value:
+        raise ValueError("DAL_OBSCURA_DUCKDB_MEMORY_LIMIT must be non-empty")
+    return value
 
 
 def _secret_provider_config() -> SecretProviderConfig:

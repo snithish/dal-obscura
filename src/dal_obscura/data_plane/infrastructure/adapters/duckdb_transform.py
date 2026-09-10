@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Iterator, Mapping
 from functools import lru_cache
 from itertools import chain
+from threading import BoundedSemaphore
 
 import duckdb
 import pyarrow as pa
@@ -16,7 +17,14 @@ _DUCKDB_TRANSFORM_CONFIG: dict[str, str | bool | int | float | list[str]] = {
     "enable_external_access": "false",
     "autoload_known_extensions": "false",
     "autoinstall_known_extensions": "false",
+    "threads": 1,
 }
+_DEFAULT_DUCKDB_MEMORY_LIMIT = "512MB"
+_DEFAULT_MAX_ACTIVE_STREAMS = 16
+
+
+class StreamAdmissionError(RuntimeError):
+    """Raised when the configured governed-stream capacity is exhausted."""
 
 
 class DefaultMaskingAdapter:
@@ -72,8 +80,23 @@ class DefaultMaskingAdapter:
 class DuckDBRowTransformAdapter:
     """Applies row filters and masks to streamed Arrow batches via DuckDB SQL."""
 
-    def __init__(self, masking: DefaultMaskingAdapter) -> None:
+    def __init__(
+        self,
+        masking: DefaultMaskingAdapter,
+        *,
+        max_active_streams: int = _DEFAULT_MAX_ACTIVE_STREAMS,
+        duckdb_memory_limit: str = _DEFAULT_DUCKDB_MEMORY_LIMIT,
+    ) -> None:
+        if max_active_streams < 1:
+            raise ValueError("max_active_streams must be positive")
+        if not isinstance(duckdb_memory_limit, str) or not duckdb_memory_limit.strip():
+            raise ValueError("duckdb_memory_limit must be non-empty text")
         self._masking = masking
+        self._stream_slots = BoundedSemaphore(max_active_streams)
+        self._duckdb_config = {
+            **_DUCKDB_TRANSFORM_CONFIG,
+            "memory_limit": duckdb_memory_limit,
+        }
 
     def apply_filters_and_masks_stream(
         self,
@@ -94,18 +117,23 @@ class DuckDBRowTransformAdapter:
             first_batch.schema,
             chain((first_batch,), batch_iter),
         )
-        return _stream_query_results(reader, query)
+        return _stream_query_results(reader, query, self._stream_slots, self._duckdb_config)
 
 
 def _stream_query_results(
     reader: pa.RecordBatchReader,
     query: str,
+    stream_slots: BoundedSemaphore,
+    duckdb_config: Mapping[str, str | bool | int | float | list[str]],
 ) -> Iterator[pa.RecordBatch]:
     """Executes the generated SQL over the incoming Arrow reader."""
     # DuckDB 1.5.0 removes the Python-side per-batch loop here, but the input side
     # does not appear observably lazy enough to assert callback-order streaming.
-    con = _connect()
+    if not stream_slots.acquire(blocking=False):
+        raise StreamAdmissionError("Governed stream capacity is exhausted")
+    con: duckdb.DuckDBPyConnection | None = None
     try:
+        con = _connect(duckdb_config)
         result_reader = (
             con.from_arrow(reader)
             .query("input", query)
@@ -113,11 +141,17 @@ def _stream_query_results(
         )
         yield from result_reader
     finally:
-        con.close()
+        try:
+            if con is not None:
+                con.close()
+        finally:
+            stream_slots.release()
 
 
-def _connect() -> duckdb.DuckDBPyConnection:
-    con = duckdb.connect(config=_DUCKDB_TRANSFORM_CONFIG.copy())
+def _connect(
+    config: Mapping[str, str | bool | int | float | list[str]] | None = None,
+) -> duckdb.DuckDBPyConnection:
+    con = duckdb.connect(config=dict(config or _DUCKDB_TRANSFORM_CONFIG))
     con.execute("SET enable_progress_bar = false")
     return con
 

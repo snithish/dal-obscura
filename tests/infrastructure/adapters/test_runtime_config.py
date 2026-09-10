@@ -19,6 +19,21 @@ def test_runtime_config_reads_required_database_and_cell(monkeypatch: pytest.Mon
     assert str(config.cell_id) == "00000000-0000-0000-0000-000000000001"
     assert config.location == "grpc://127.0.0.1:8815"
     assert config.ticket_secret == "ticket-secret"
+    assert config.max_active_streams == 16
+    assert config.duckdb_memory_limit == "512MB"
+
+
+def test_runtime_config_reads_stream_resource_limits(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
+    monkeypatch.setenv("DAL_OBSCURA_CELL_ID", "00000000-0000-0000-0000-000000000001")
+    monkeypatch.setenv("DAL_OBSCURA_TICKET_SECRET", "ticket-secret")
+    monkeypatch.setenv("DAL_OBSCURA_MAX_ACTIVE_STREAMS", "3")
+    monkeypatch.setenv("DAL_OBSCURA_DUCKDB_MEMORY_LIMIT", "256MB")
+
+    config = load_data_plane_runtime_config()
+
+    assert config.max_active_streams == 3
+    assert config.duckdb_memory_limit == "256MB"
 
 
 def test_runtime_config_rejects_stale_config_window(monkeypatch: pytest.MonkeyPatch):
