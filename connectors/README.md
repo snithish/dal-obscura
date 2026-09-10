@@ -65,13 +65,14 @@ spark.read()
      .option("dal.uri", "grpc+tcp://localhost:8815")
      .option("dal.catalog", "analytics")
      .option("dal.target", "default.users")
-     .option("dal.auth.token", token)
+     .option("dal.auth.token-env", "DAL_OBSCURA_TOKEN")
      .option("dal.executor.auth.token-env", "DAL_OBSCURA_TOKEN")
      .load();
 ```
 
-`dal.auth.token` becomes `Authorization: Bearer <token>` for driver-side
-schema discovery and planning. Set exactly one executor credential reference on
+`dal.auth.token`, `dal.auth.token-env`, and `dal.auth.token-property` select a
+driver bearer-token source for schema discovery and planning. Use one source at
+most; environment and property references keep the token out of datasource options. Set exactly one executor credential reference on
 every read: `dal.executor.auth.token-env` (recommended for deployed clusters)
 or `dal.executor.auth.token-property` (local development). The partition
 payload contains only that reference, never the bearer token or driver headers.

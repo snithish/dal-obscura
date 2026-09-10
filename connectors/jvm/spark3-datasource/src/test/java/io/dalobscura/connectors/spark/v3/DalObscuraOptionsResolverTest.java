@@ -94,6 +94,38 @@ class DalObscuraOptionsResolverTest {
     }
 
     @Test
+    void resolvesDriverBearerTokenFromAReferencedSystemProperty() {
+        System.setProperty("dal.obscura.driver.token", "property-token");
+        DalObscuraConnectorOptions options = resolver.resolve(
+                new CaseInsensitiveStringMap(Map.of(
+                        "dal.uri", "grpc+tcp://localhost:8815",
+                        "dal.catalog", "analytics",
+                        "dal.target", "default.users",
+                        "dal.auth.token-property", "dal.obscura.driver.token",
+                        "dal.executor.auth.token-property", "dal.obscura.executor.token")));
+
+        assertEquals("Bearer property-token", options.auth().header("authorization"));
+    }
+
+    @Test
+    void rejectsMultipleDriverBearerTokenSources() {
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> resolver.resolve(new CaseInsensitiveStringMap(Map.of(
+                        "dal.uri", "grpc+tcp://localhost:8815",
+                        "dal.catalog", "analytics",
+                        "dal.target", "default.users",
+                        "dal.auth.token", "direct",
+                        "dal.auth.token-property", "dal.obscura.driver.token",
+                        "dal.executor.auth.token-property", "dal.obscura.executor.token"))));
+
+        assertEquals(
+                "Specify at most one driver bearer-token source: dal.auth.token, "
+                        + "dal.auth.token-env, or dal.auth.token-property",
+                error.getMessage());
+    }
+
+    @Test
     void explicitAuthorizationHeaderOverridesTokenConvenience() {
         DalObscuraConnectorOptions options =
                 resolver.resolve(

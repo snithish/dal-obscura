@@ -225,7 +225,7 @@ class SparkReadIT {
                             .option("dal.target", bundle.target())
                             .option("dal.executor.auth.token-property", EXECUTOR_TOKEN_PROPERTY);
             if (includeToken) {
-                reader = reader.option("dal.auth.token", bundle.userToken());
+                reader = reader.option("dal.auth.token-property", EXECUTOR_TOKEN_PROPERTY);
             }
             return reader;
         }
@@ -237,7 +237,7 @@ class SparkReadIT {
                     .option("dal.catalog", bundle.catalog())
                     .option("dal.target", bundle.target())
                     .option("dal.executor.auth.token-property", EXECUTOR_TOKEN_PROPERTY)
-                    .option("dal.auth.header.authorization", "Bearer " + bundle.userToken());
+                    .option("dal.auth.token-property", EXECUTOR_TOKEN_PROPERTY);
         }
 
         @Override

@@ -52,7 +52,7 @@ spark.read()
      .option("dal.uri", "grpc+tcp://localhost:8815")
      .option("dal.catalog", "analytics")
      .option("dal.target", "default.users")
-     .option("dal.auth.token", token)
+     .option("dal.auth.token-env", "DAL_OBSCURA_TOKEN")
      .option("dal.executor.auth.token-env", "DAL_OBSCURA_TOKEN")
      .load();
 ```

@@ -47,15 +47,46 @@ public final class DalObscuraOptionsResolver {
     private static DalObscuraAuth resolveAuth(CaseInsensitiveStringMap options) {
         Map<String, String> rawOptions = options.asCaseSensitiveMap();
         LinkedHashMap<String, String> headers = new LinkedHashMap<>();
-        applyBearerToken(headers, rawOptions.get("dal.auth.token"));
+        applyDriverBearerToken(headers, rawOptions);
         addHeaderOptions(headers, rawOptions, READ_HEADER_PREFIX);
         return new DalObscuraAuth(headers);
     }
 
-    private static void applyBearerToken(Map<String, String> headers, String token) {
-        if (token != null && !token.isBlank()) {
-            headers.put("authorization", "Bearer " + token);
+    private static void applyDriverBearerToken(
+            Map<String, String> headers, Map<String, String> options) {
+        String direct = options.get("dal.auth.token");
+        String environment = options.get("dal.auth.token-env");
+        String property = options.get("dal.auth.token-property");
+        int sourceCount = nonBlankCount(direct, environment, property);
+        if (sourceCount > 1) {
+            throw new IllegalArgumentException(
+                    "Specify at most one driver bearer-token source: dal.auth.token, "
+                            + "dal.auth.token-env, or dal.auth.token-property");
         }
+        if (sourceCount == 0) {
+            return;
+        }
+        String token = isNonBlank(direct)
+                ? direct
+                : isNonBlank(environment) ? System.getenv(environment) : System.getProperty(property);
+        if (!isNonBlank(token)) {
+            throw new IllegalStateException("Driver bearer token is unavailable from configured source");
+        }
+        headers.put("authorization", "Bearer " + token);
+    }
+
+    private static int nonBlankCount(String... values) {
+        int count = 0;
+        for (String value : values) {
+            if (isNonBlank(value)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private static boolean isNonBlank(String value) {
+        return value != null && !value.isBlank();
     }
 
     private static void addHeaderOptions(
