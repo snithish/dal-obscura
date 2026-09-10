@@ -14,6 +14,7 @@ from dal_obscura.common.access_control.models import MaskRule
 from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
+    InputBatchLimitError,
     StreamAdmissionError,
 )
 
@@ -553,6 +554,14 @@ def test_duckdb_transform_rejects_streams_beyond_configured_admission_limit():
 def test_duckdb_transform_rejects_non_positive_admission_limits(limit):
     with pytest.raises(ValueError, match="max_active_streams"):
         DuckDBRowTransformAdapter(DefaultMaskingAdapter(), max_active_streams=limit)
+
+
+def test_duckdb_transform_rejects_an_oversized_input_batch_before_query_execution():
+    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter(), max_input_batch_bytes=1)
+    batch = pa.record_batch([pa.array([1])], names=["id"])
+
+    with pytest.raises(InputBatchLimitError, match="limit"):
+        list(adapter.apply_filters_and_masks_stream([batch], ["id"], None, {}))
 
 
 def test_duckdb_transform_streams_chunked_output(monkeypatch):

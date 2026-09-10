@@ -49,6 +49,7 @@ class DataPlaneRuntimeConfig:
     health_port: int | None = None
     max_active_streams: int = 16
     duckdb_memory_limit: str = "512MB"
+    max_input_batch_bytes: int = 64 * 1024 * 1024
     secret_provider: SecretProviderConfig = field(default_factory=SecretProviderConfig)
 
 
@@ -79,6 +80,9 @@ def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
         health_port=_optional_int_env("DAL_OBSCURA_DATA_PLANE_HEALTH_PORT"),
         max_active_streams=_positive_int_env("DAL_OBSCURA_MAX_ACTIVE_STREAMS", default=16),
         duckdb_memory_limit=_memory_limit_env(),
+        max_input_batch_bytes=_positive_int_env(
+            "DAL_OBSCURA_MAX_INPUT_BATCH_BYTES", default=64 * 1024 * 1024
+        ),
         secret_provider=_secret_provider_config(),
     )
 
