@@ -9,9 +9,6 @@ from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
     DuckDBRowTransformAdapter,
 )
 from dal_obscura.data_plane.infrastructure.adapters.identity_api_key import ApiKeyIdentityProvider
-from dal_obscura.data_plane.infrastructure.adapters.identity_composite import (
-    CompositeIdentityProvider,
-)
 from dal_obscura.data_plane.infrastructure.adapters.identity_default import (
     AuthConfig,
     DefaultIdentityAdapter,
@@ -52,7 +49,6 @@ __all__ = [
     "AuthConfig",
     "CatalogConfig",
     "CatalogRegistry",
-    "CompositeIdentityProvider",
     "DataPlaneRuntimeConfig",
     "DefaultIdentityAdapter",
     "DefaultMaskingAdapter",
