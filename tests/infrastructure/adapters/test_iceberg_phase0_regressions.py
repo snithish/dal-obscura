@@ -276,3 +276,63 @@ def test_iceberg_rejects_unproven_format_versions():
         _require_supported_format_version(1)
     with pytest.raises(ValueError, match="Unsupported Iceberg format version: 3"):
         _require_supported_format_version(3)
+
+
+def test_iceberg_native_plan_is_split_and_pinned_to_its_metadata_snapshot(tmp_path):
+    from pyiceberg.catalog import load_catalog
+
+    from tests.support.iceberg import create_iceberg_table, iceberg_sql_catalog_options
+
+    identifier = create_iceberg_table(
+        tmp_path,
+        "native_iceberg",
+        "warehouse",
+        append_batches=[[1, 2], [3, 4]],
+    )
+    catalog = load_catalog(
+        "native_iceberg",
+        **{
+            key: str(value)
+            for key, value in iceberg_sql_catalog_options(
+                tmp_path, "native_iceberg", "warehouse"
+            ).items()
+        },
+    )
+    table = catalog.load_table(identifier)
+    table_format = IcebergTableFormat(
+        catalog_name="native_iceberg",
+        table_name=identifier,
+        metadata_location=table.metadata_location,
+        io_options={},
+    )
+
+    planned = table_format.plan(
+        PlanRequest(catalog="native_iceberg", target=identifier, columns=["id"]),
+        max_tickets=8,
+    )
+
+    assert len(planned.tasks) == 2
+    table.append(
+        pa.table(
+            {
+                "id": [5],
+                "email": ["user5@example.com"],
+                "region": ["eu"],
+            },
+            schema=pa.schema(
+                [
+                    pa.field("id", pa.int64(), nullable=False),
+                    pa.field("email", pa.string()),
+                    pa.field("region", pa.string()),
+                ]
+            ),
+        )
+    )
+
+    batches = []
+    for task in planned.tasks:
+        _schema, task_batches = table_format.execute(task.partition)
+        batches.extend(task_batches)
+
+    assert sorted(pa.Table.from_batches(batches).column("id").to_pylist()) == [1, 2, 3, 4]
+    assert sorted(table.scan().to_arrow().column("id").to_pylist()) == [1, 2, 3, 4, 5]

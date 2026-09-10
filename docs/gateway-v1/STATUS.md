@@ -13,7 +13,7 @@ package complete unless its stated evidence exists.
 | W04 | implementing | Fetch reauthorization plus issuer/subject/identity-expiry ticket binding are present. JWKS cache bounds, exact Flight endpoint evidence and stream expiry checks remain. |
 | W05 | implementing | Asset binding is fixed and catalog construction reads asset/catalog from one captured generation; immutable plan generations and stream freshness remain. |
 | W06 | pending | Existing ticket serialization remains by owner direction. |
-| W07 | implementing | Format v3 now fails closed; inventory records unproven delete, snapshot, schema-evolution and REST-catalog behavior. |
+| W07 | implementing | Format v3 now fails closed; native multi-file tasks stay pinned across append. Delete, schema-evolution and REST-catalog behavior remain unproven. |
 | W08 | implementing | Python SDK provides a managed sequential Flight stream and opt-in typed path transport; DuckDB remains adapter-only and Spark/distributed attempt support remain. |
 | W09 | implementing | DuckDB streams have configured non-blocking admission, one execution thread, memory and input-batch limits; planned scan payloads have a byte limit. Generation freshness, deadlines, audit events, and output/value limits remain. |
 | W10 | implementing | Asset admission is Iceberg-only; deletion inventory is recorded but removal waits for replacement paths. |
@@ -42,5 +42,6 @@ package complete unless its stated evidence exists.
 - `e255761`: CI separates contract/security and bounded integration test lanes.
 - `pending`: fetch rejects same-subject tickets issued by another issuer before reservation.
 - `pending`: Iceberg v3 admission now fails closed pending native conformance evidence; capability inventory records W07 blockers.
+- `pending`: native two-file plans remain on their original snapshot after a later append.
 
 These are W01/W04/W05/W10 inputs, not completion evidence for those packages.
