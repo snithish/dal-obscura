@@ -49,12 +49,11 @@ The demo provisions:
 
 1. Keycloak realm and demo users.
 2. Postgres-backed config store.
-3. Control-plane API.
-4. Standalone React UI.
-5. Iceberg demo table.
-6. Catalog discovery and governed assets.
-7. Asset owners, policies, masks, row filters, and active policy versions.
-8. Arrow Flight data plane.
+3. Operator CLI and published configuration store.
+4. Iceberg demo table.
+5. Catalog discovery and governed assets.
+6. Asset owners, policies, masks, row filters, and active policy versions.
+7. Arrow Flight data plane.
 
 Open:
 
