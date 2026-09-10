@@ -63,6 +63,7 @@ def test_validate_compiles_operator_manifest(tmp_path, capsys) -> None:
     path.write_text(
         json.dumps(
             {
+                "version": 1,
                 "runtime": {
                     "ticket_ttl_seconds": 300,
                     "max_tickets": 16,

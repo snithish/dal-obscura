@@ -59,9 +59,11 @@ def compile_manifest(manifest: dict[str, object]):
 def _draft_from_manifest(manifest: dict[str, object]) -> PublishDraft:
     _reject_unknown(
         manifest,
-        {"cell_id", "tenant_id", "runtime", "auth_providers", "catalogs", "assets"},
+        {"version", "cell_id", "tenant_id", "runtime", "auth_providers", "catalogs", "assets"},
         "manifest",
     )
+    if manifest.get("version") != 1:
+        raise ManifestValidationError("manifest.version must be 1")
     cell_id = _uuid(manifest.get("cell_id"), "cell_id", "cell")
     tenant_id = _uuid(manifest.get("tenant_id"), "tenant_id", "tenant")
     runtime = _object(manifest.get("runtime"), "runtime")

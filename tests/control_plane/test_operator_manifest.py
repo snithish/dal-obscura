@@ -11,6 +11,7 @@ from dal_obscura.control_plane.application.operator_manifest import (
 
 def _manifest() -> dict[str, object]:
     return {
+        "version": 1,
         "runtime": {
             "ticket_ttl_seconds": 300,
             "max_tickets": 16,
@@ -46,7 +47,7 @@ def test_compile_manifest_uses_supported_runtime_components() -> None:
 
 def test_load_manifest_rejects_duplicate_json_keys(tmp_path) -> None:
     path = tmp_path / "manifest.json"
-    path.write_text('{"runtime": {}, "runtime": {}}')
+    path.write_text('{"version": 1, "runtime": {}, "runtime": {}}')
 
     with pytest.raises(ManifestValidationError, match="duplicate key"):
         load_manifest(path)
@@ -57,4 +58,12 @@ def test_compile_manifest_rejects_unknown_catalog_reference() -> None:
     manifest["assets"] = [{"catalog": "missing", "target": "users", "table_identifier": "users"}]
 
     with pytest.raises(ManifestValidationError, match="unknown catalog"):
+        compile_manifest(manifest)
+
+
+def test_compile_manifest_requires_supported_version() -> None:
+    manifest = _manifest()
+    manifest["version"] = 2
+
+    with pytest.raises(ManifestValidationError, match=r"manifest\.version must be 1"):
         compile_manifest(manifest)
