@@ -102,6 +102,7 @@ def main() -> None:
         ticket_ttl_seconds=int(ticket_settings.get("ttl_seconds", 300)),
         max_tickets=int(ticket_settings.get("max_tickets", 1)),
         max_ticket_exchanges=int(ticket_settings.get("max_exchanges", 1)),
+        max_ticket_payload_bytes=runtime_config.max_ticket_payload_bytes,
     )
 
     get_schema = GetSchemaUseCase(

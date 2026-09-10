@@ -65,6 +65,7 @@ class PlanAccessUseCase:
         ticket_ttl_seconds: int,
         max_tickets: int,
         max_ticket_exchanges: int,
+        max_ticket_payload_bytes: int = 16 * 1024 * 1024,
         now: Callable[[], int] | None = None,
         nonce_factory: Callable[[], str] | None = None,
         ticket_id_factory: Callable[[], str] | None = None,
@@ -82,6 +83,7 @@ class PlanAccessUseCase:
             ticket_ttl_seconds=ticket_ttl_seconds,
             max_tickets=max_tickets,
             max_ticket_exchanges=max_ticket_exchanges,
+            max_ticket_payload_bytes=max_ticket_payload_bytes,
             now=now or _epoch_seconds,
             nonce_factory=nonce_factory or _nonce,
             ticket_id_factory=ticket_id_factory or _ticket_id,
@@ -156,13 +158,16 @@ def plan_read(
         # trusting the client to resubmit the original plan request faithfully.
         import pickle
 
+        serialized_task = pickle.dumps(task)
+        if len(serialized_task) > flow.max_ticket_payload_bytes:
+            raise ValueError("Planned scan payload exceeds configured ticket byte limit")
         payload = TicketPayload(
             ticket_id=flow.ticket_id_factory(),
             catalog=request.catalog,
             target=request.target,
             columns=execution_projection.visible_columns,
             scan={
-                "read_payload": base64.b64encode(pickle.dumps(task)).decode("utf-8"),
+                "read_payload": base64.b64encode(serialized_task).decode("utf-8"),
                 "full_row_filter": None
                 if plan.full_row_filter is None
                 else serialize_row_filter(plan.full_row_filter),

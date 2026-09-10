@@ -201,6 +201,28 @@ def test_plan_access_rejects_ambiguous_or_empty_column_requests(columns):
         )
 
 
+def test_plan_access_rejects_scan_payloads_above_configured_ticket_limit():
+    _schema, decision, table_format = _build_use_case_dependencies()
+    use_case = PlanAccessUseCase(
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+        authorizer=FakeAuthorizer(decision=decision),
+        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        masking=FakeMasking(),
+        ticket_codec=FakeTicketCodec(),
+        ticket_store=FakeTicketStore(),
+        ticket_ttl_seconds=300,
+        max_tickets=1,
+        max_ticket_exchanges=1,
+        max_ticket_payload_bytes=1,
+    )
+
+    with pytest.raises(ValueError, match="ticket byte limit"):
+        use_case.execute(
+            PlanRequest(catalog="catalog1", target="users", columns=["id"]),
+            AUTHORIZATION_HEADER,
+        )
+
+
 def test_plan_access_accepts_nested_requested_columns():
     schema = pa.schema(
         [

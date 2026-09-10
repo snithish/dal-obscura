@@ -22,6 +22,7 @@ def test_runtime_config_reads_required_database_and_cell(monkeypatch: pytest.Mon
     assert config.max_active_streams == 16
     assert config.duckdb_memory_limit == "512MB"
     assert config.max_input_batch_bytes == 64 * 1024 * 1024
+    assert config.max_ticket_payload_bytes == 16 * 1024 * 1024
 
 
 def test_runtime_config_reads_stream_resource_limits(monkeypatch: pytest.MonkeyPatch):
@@ -31,12 +32,14 @@ def test_runtime_config_reads_stream_resource_limits(monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("DAL_OBSCURA_MAX_ACTIVE_STREAMS", "3")
     monkeypatch.setenv("DAL_OBSCURA_DUCKDB_MEMORY_LIMIT", "256MB")
     monkeypatch.setenv("DAL_OBSCURA_MAX_INPUT_BATCH_BYTES", "1048576")
+    monkeypatch.setenv("DAL_OBSCURA_MAX_TICKET_PAYLOAD_BYTES", "524288")
 
     config = load_data_plane_runtime_config()
 
     assert config.max_active_streams == 3
     assert config.duckdb_memory_limit == "256MB"
     assert config.max_input_batch_bytes == 1048576
+    assert config.max_ticket_payload_bytes == 524288
 
 
 def test_runtime_config_rejects_stale_config_window(monkeypatch: pytest.MonkeyPatch):
