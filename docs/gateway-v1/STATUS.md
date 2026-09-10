@@ -1,6 +1,6 @@
 # Governed Iceberg gateway status ledger
 
-Updated: 2026-09-09. This ledger follows the ordered work packages in
+Updated: 2026-09-10. This ledger follows the ordered work packages in
 [WORK_PACKAGES.md](WORK_PACKAGES.md). A committed partial fix does not mark a
 package complete unless its stated evidence exists.
 
@@ -8,10 +8,10 @@ package complete unless its stated evidence exists.
 | --- | --- | --- |
 | W00 | complete | Baseline and removal inventory recorded in `evaluation/baseline/`. |
 | W01 | implementing | Focused regressions exist for parent masking, invalid masks, grant removal, and asset binding; streaming and mask-conflict regressions remain. |
-| W02 | pending | Strict immutable models and typed field paths are not implemented. |
-| W03 | pending | Existing nested projection remains transitional. |
+| W02 | implementing | Immutable request models reject ambiguous projections; versioned typed paths resolve struct/list/map nodes and distinguish literal dotted names. Field IDs and protobuf/Java fixtures remain. |
+| W03 | implementing | Planning and row-filter schema checks share canonical paths; nested grants, pruning, compound masks and collection predicates remain. |
 | W04 | implementing | Fetch reauthorization is present; issuer/subject/expiry binding is not. |
-| W05 | implementing | Asset binding is fixed; immutable publication generations are not. |
+| W05 | implementing | Asset binding is fixed and catalog construction reads asset/catalog from one captured generation; immutable plan generations and stream freshness remain. |
 | W06 | pending | Existing ticket serialization remains by owner direction. |
 | W07 | pending | Iceberg pinned scan specification has not begun. |
 | W08 | pending | DuckDB/Spark consumer contract has not begun. |
@@ -30,6 +30,9 @@ package complete unless its stated evidence exists.
 - `e79af83`: fetch reauthorizes current principal grants.
 - `624dadf`: published assets bind their stored backend/table/options.
 - `7cbf2c9`: control plane accepts Iceberg assets only.
+- `d8cb6ba`: malformed and ambiguous projection requests reject at the model boundary.
+- `65ea54d`: canonical typed paths distinguish quoted literal names and resolve nested Arrow nodes.
+- `482663b`: row-filter dependency validation uses canonical paths.
+- `ad18421`: catalog construction uses a single captured publication generation.
 
 These are W01/W04/W05/W10 inputs, not completion evidence for those packages.
-
