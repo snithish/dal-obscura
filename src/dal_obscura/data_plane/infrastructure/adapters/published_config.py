@@ -153,6 +153,44 @@ class PublishedConfigStore:
             self._catalog_cache[cache_key] = catalogs
             return catalogs
 
+    def get_asset_and_catalog(
+        self,
+        *,
+        tenant_id: str,
+        catalog: str,
+        target: str,
+    ) -> tuple[PublishedAsset, PublishedCatalog]:
+        """Loads a target and its catalog from one captured publication generation."""
+        with self._lock:
+            tenant_uuid = self._tenant_uuid(tenant_id)
+            with self._session_scope() as session:
+                publication_id = self._active_publication_id(session)
+                self._observe_generation(publication_id)
+                asset_key = (publication_id, tenant_uuid, catalog, target)
+                asset = self._asset_cache.get(asset_key)
+                if asset is None:
+                    asset = self._published_asset(
+                        session,
+                        publication_id=publication_id,
+                        tenant_id=tenant_uuid,
+                        catalog=catalog,
+                        target=target,
+                    )
+                catalog_key = (publication_id, tenant_uuid)
+                catalogs = self._catalog_cache.get(catalog_key)
+                if catalogs is None:
+                    catalogs = self._published_catalogs(
+                        session,
+                        publication_id=publication_id,
+                        tenant_id=tenant_uuid,
+                    )
+            self._asset_cache[asset_key] = asset
+            self._catalog_cache[catalog_key] = catalogs
+            published_catalog = next((item for item in catalogs if item.catalog == catalog), None)
+            if published_catalog is None:
+                raise LookupError(f"No published catalog for {catalog!r}")
+            return asset, published_catalog
+
     def _published_asset(
         self,
         session: Session,
@@ -340,17 +378,15 @@ class PublishedConfigCatalogRegistry:
     def describe(self, catalog: str | None, target: str, *, tenant_id: str) -> TableFormat:
         if catalog is None:
             raise ValueError("Catalog name is required to resolve a target")
-        asset = self._store.get_asset(tenant_id=tenant_id, catalog=catalog, target=target)
+        asset, published_catalog = self._store.get_asset_and_catalog(
+            tenant_id=tenant_id,
+            catalog=catalog,
+            target=target,
+        )
         cache_key = (asset.publication_id, asset.tenant_id, asset.catalog, asset.target)
         registry = self._registry_cache.get(cache_key)
         if registry is not None:
             return registry.describe(catalog, _asset_table_identifier(asset), tenant_id=tenant_id)
-        published_catalogs = self._store.get_catalogs(tenant_id=tenant_id)
-        published_catalog = next(
-            (item for item in published_catalogs if item.catalog == catalog), None
-        )
-        if published_catalog is None:
-            raise LookupError(f"No published catalog for {catalog!r}")
         catalog_config = _catalog_config_for_asset(published_catalog, asset)
         if self._secret_provider is not None:
             catalog_config = CatalogConfig(

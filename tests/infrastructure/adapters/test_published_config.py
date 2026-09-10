@@ -74,6 +74,22 @@ def test_published_authorizer_accepts_tenant_slug_attribute(db_session: Session)
     assert decision.policy_version == 123
 
 
+def test_published_store_loads_asset_and_catalog_from_one_generation(db_session: Session):
+    cell_id = uuid4()
+    tenant_id = uuid4()
+    _publish_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
+    store = PublishedConfigStore(db_session, cell_id=cell_id)
+
+    asset, catalog = store.get_asset_and_catalog(
+        tenant_id=str(tenant_id),
+        catalog="analytics",
+        target="default.users",
+    )
+
+    assert asset.publication_id == catalog.publication_id
+    assert asset.catalog == catalog.catalog == "analytics"
+
+
 def test_published_store_fails_closed_by_default_after_transient_failure(
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
