@@ -17,8 +17,22 @@ class PlanRequest:
     row_filter: RowFilter | None = None
 
     def __post_init__(self) -> None:
-        """Detach the request from the caller's mutable projection list."""
+        """Validates and detaches the request from caller-owned projection data."""
 
+        if not isinstance(self.target, str) or not self.target.strip():
+            raise ValueError("target must be non-empty text")
+        if self.catalog is not None and (
+            not isinstance(self.catalog, str) or not self.catalog.strip()
+        ):
+            raise ValueError("catalog must be non-empty text when supplied")
+        if not isinstance(self.columns, list) or not self.columns:
+            raise ValueError("columns must be a non-empty list")
+        if not all(isinstance(column, str) and column.strip() for column in self.columns):
+            raise ValueError("columns must contain non-empty text")
+        if len(self.columns) != len(set(self.columns)):
+            raise ValueError("columns must not contain duplicates")
+        if "*" in self.columns and len(self.columns) != 1:
+            raise ValueError("wildcard columns request cannot be mixed with explicit fields")
         object.__setattr__(self, "columns", list(self.columns))
 
 
