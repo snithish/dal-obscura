@@ -143,9 +143,6 @@ class _JwksCache:
         if kid not in self._keys_by_kid and self._static_jwks is None:
             self._refresh()
         key = self._keys_by_kid.get(kid)
-        if key is None and self._static_jwks is None:
-            self._refresh()
-            key = self._keys_by_kid.get(kid)
         if key is None:
             raise jwt.InvalidTokenError(f"Unknown signing key id {kid!r}")
         return key

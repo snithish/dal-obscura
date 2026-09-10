@@ -263,3 +263,29 @@ def test_oidc_provider_accepts_jwks_file_without_discovery(tmp_path):
     principal = provider.authenticate(_auth_request(token))
 
     assert principal.id == "file-user"
+
+
+def test_unknown_kid_triggers_at_most_one_jwks_refresh_per_request():
+    known_private_key, known_jwk = _rsa_key_pair("known-kid")
+    unknown_private_key, _unknown_jwk = _rsa_key_pair("unknown-kid")
+    calls = 0
+
+    def fetcher(_url: str):
+        nonlocal calls
+        calls += 1
+        return {"keys": [known_jwk]}
+
+    provider = OidcJwksIdentityProvider(
+        issuer=ISSUER,
+        audience=AUDIENCE,
+        jwks_url="https://keycloak.example.test/certs",
+        jwks_fetcher=fetcher,
+    )
+    known_token = _token(known_private_key, kid="known-kid")
+    unknown_token = _token(unknown_private_key, kid="unknown-kid")
+
+    assert provider.authenticate(_auth_request(known_token)).id == "user-123"
+    with pytest.raises(PermissionError, match="Invalid token"):
+        provider.authenticate(_auth_request(unknown_token))
+
+    assert calls == 2
