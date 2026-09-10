@@ -224,6 +224,38 @@ class PublicationStore:
         self._session.flush()
         return WorkspaceContext(cell_id=cell_id, tenant_id=tenant_id)
 
+    def ensure_publication_context(self, *, cell_id: UUID, tenant_id: UUID) -> None:
+        """Creates the manifest-selected cell and tenant when publishing the first generation."""
+
+        if self._session.get(CellRecord, cell_id) is None:
+            self._session.add(
+                CellRecord(
+                    id=cell_id,
+                    name=f"operator-{cell_id}",
+                    region="operator",
+                    status="active",
+                )
+            )
+        if self._session.get(TenantRecord, tenant_id) is None:
+            self._session.add(
+                TenantRecord(
+                    id=tenant_id,
+                    slug=f"operator-{tenant_id}",
+                    display_name="Operator-managed tenant",
+                    status="active",
+                )
+            )
+        self._session.flush()
+        assignment = self._session.get(
+            CellTenantRecord,
+            {"cell_id": cell_id, "tenant_id": tenant_id},
+        )
+        if assignment is None:
+            self._session.add(
+                CellTenantRecord(cell_id=cell_id, tenant_id=tenant_id, shard_key="operator")
+            )
+        self._session.flush()
+
     def assign_tenant_to_cell(self, *, cell_id: UUID, tenant_id: UUID, shard_key: str) -> None:
         self._session.add(
             CellTenantRecord(cell_id=cell_id, tenant_id=tenant_id, shard_key=shard_key)
@@ -481,11 +513,23 @@ class PublicationStore:
         self._replace_active_assets(cell_id=cell_id, publication_id=publication_id)
         self._session.flush()
 
+    def activate_initial_publication(self, *, cell_id: UUID, publication_id: UUID) -> None:
+        """Activates the first publication only when no generation is active."""
+
+        publication = self._session.get(ConfigPublicationRecord, publication_id)
+        if publication is None or publication.cell_id != cell_id:
+            raise LookupError(f"No publication {publication_id} for cell {cell_id}")
+        if self._session.get(ActivePublicationRecord, cell_id) is not None:
+            raise PublicationConflictError(
+                "active generation already exists; reread status before publishing"
+            )
+        self._session.add(ActivePublicationRecord(cell_id=cell_id, publication_id=publication_id))
+        self._replace_active_assets(cell_id=cell_id, publication_id=publication_id)
+        self._session.flush()
+
     def _replace_active_assets(self, *, cell_id: UUID, publication_id: UUID) -> None:
         self._session.execute(
-            delete(ActivePublishedAssetRecord).where(
-                ActivePublishedAssetRecord.cell_id == cell_id
-            )
+            delete(ActivePublishedAssetRecord).where(ActivePublishedAssetRecord.cell_id == cell_id)
         )
         for asset in self._session.scalars(
             select(PublishedAssetRecord).where(

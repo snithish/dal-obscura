@@ -109,7 +109,7 @@ def _validate(path: str) -> int:
 def _publish(engine, path: str, expected_generation: str) -> int:
     try:
         compiled = compile_manifest(load_manifest(Path(path)))
-        expected_id = UUID(expected_generation)
+        expected_id = None if expected_generation == "none" else UUID(expected_generation)
     except (ManifestValidationError, ValueError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
@@ -117,12 +117,23 @@ def _publish(engine, path: str, expected_generation: str) -> int:
     try:
         with session_factory(engine)() as session, session.begin():
             store = PublicationStore(session)
+            if expected_id is None:
+                store.ensure_publication_context(
+                    cell_id=compiled.cell_id,
+                    tenant_id=compiled.catalogs[0].tenant_id,
+                )
             store.insert_compiled_publication(publication_id=publication_id, compiled=compiled)
-            store.activate_publication_if_current(
-                cell_id=compiled.cell_id,
-                publication_id=publication_id,
-                expected_publication_id=expected_id,
-            )
+            if expected_id is None:
+                store.activate_initial_publication(
+                    cell_id=compiled.cell_id,
+                    publication_id=publication_id,
+                )
+            else:
+                store.activate_publication_if_current(
+                    cell_id=compiled.cell_id,
+                    publication_id=publication_id,
+                    expected_publication_id=expected_id,
+                )
     except (LookupError, PublicationConflictError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
@@ -130,7 +141,7 @@ def _publish(engine, path: str, expected_generation: str) -> int:
         json.dumps(
             {
                 "manifest_hash": compiled.manifest_hash,
-                "previous_generation": str(expected_id),
+                "previous_generation": str(expected_id) if expected_id is not None else None,
                 "publication_id": str(publication_id),
             },
             sort_keys=True,
@@ -233,7 +244,7 @@ def _parser() -> argparse.ArgumentParser:
     publish.add_argument("manifest", help="path to a JSON manifest")
     publish.add_argument("--database-url", help="SQLAlchemy database URL")
     publish.add_argument(
-        "--expected-generation", required=True, help="currently active publication UUID"
+        "--expected-generation", required=True, help="active publication UUID, or 'none' initially"
     )
     status = subparsers.add_parser("status", help="show the active publication generation")
     status.add_argument("--database-url", help="SQLAlchemy database URL")

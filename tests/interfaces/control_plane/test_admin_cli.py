@@ -159,6 +159,36 @@ def test_publish_activates_manifest_with_expected_generation(tmp_path, capsys) -
     assert output["publication_id"] != str(active_id)
 
 
+def test_publish_bootstraps_initial_generation(tmp_path, capsys) -> None:
+    database_url = f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
+    engine = create_engine_from_url(database_url)
+    migrate_config_store(engine)
+    cell_id = uuid4()
+    tenant_id = uuid4()
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(_manifest(cell_id, tenant_id)))
+
+    assert (
+        run(
+            [
+                "publish",
+                str(path),
+                "--database-url",
+                database_url,
+                "--expected-generation",
+                "none",
+            ]
+        )
+        == 0
+    )
+
+    output = json.loads(capsys.readouterr().out)
+    assert output["previous_generation"] is None
+    with session_factory(engine)() as session:
+        active = PublicationStore(session).get_active_publication(cell_id)
+    assert str(active.publication_id) == output["publication_id"]
+
+
 def test_publish_rejects_stale_expected_generation(tmp_path, capsys) -> None:
     database_url = f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
     engine = create_engine_from_url(database_url)
