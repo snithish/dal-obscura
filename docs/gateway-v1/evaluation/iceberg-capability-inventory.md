@@ -11,7 +11,7 @@ path.
 | --- | --- | --- |
 | Iceberg format v2 file planning and execution | bounded implementation | `IcebergTableFormat` plans native file tasks and executes them with `ArrowScan`. Unit regressions cover projection, residual-filter separation, multi-file task fan-out, and append-after-plan snapshot pinning. Delete differential fixtures are still required. |
 | Positional/equality deletes | unknown | Delegated to `ArrowScan`; no gateway differential fixture exists. Treat as a W07 blocker. |
-| Schema evolution and field-ID rebinding | unknown | Canonical request paths can bind Arrow field-ID metadata, but planner tickets do not yet carry immutable schema/snapshot context. Treat as a W07 blocker. |
+| Nested field IDs | bounded implementation | Native test proves `StaticTable`/`ArrowScan` schema preserves top-level and nested `PARQUET:field_id` metadata while reading a nested projection. Schema evolution/rebinding across snapshots remains unproven and blocks W07. |
 | Iceberg format v3 | rejected | Current code rejects v3 because no native conformance inventory or differential fixture proves v3 scan/delete semantics. |
 | Pinned snapshot replay | bounded implementation | Native test plans two files, appends a later snapshot, then proves planned tasks emit only original rows. It still depends on retained trusted internal task serialization; full immutable plan metadata is a W06/W07 blocker. |
 | Sub-file splitting | unsupported | Planner exposes native file tasks only. Large single files remain one task; no raw-Parquet workaround is used. |

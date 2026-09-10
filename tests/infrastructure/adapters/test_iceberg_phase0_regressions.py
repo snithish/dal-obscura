@@ -336,3 +336,61 @@ def test_iceberg_native_plan_is_split_and_pinned_to_its_metadata_snapshot(tmp_pa
 
     assert sorted(pa.Table.from_batches(batches).column("id").to_pylist()) == [1, 2, 3, 4]
     assert sorted(table.scan().to_arrow().column("id").to_pylist()) == [1, 2, 3, 4, 5]
+
+
+def test_iceberg_native_schema_preserves_nested_field_ids(tmp_path):
+    from pyiceberg.catalog import load_catalog
+    from pyiceberg.schema import Schema
+    from pyiceberg.types import LongType, NestedField, StringType, StructType
+
+    catalog = load_catalog(
+        "nested_iceberg",
+        type="sql",
+        uri=f"sqlite:///{tmp_path / 'nested_iceberg.db'}",
+        warehouse=str(tmp_path / "warehouse"),
+    )
+    catalog.create_namespace("default")
+    table = catalog.create_table(
+        "default.users",
+        schema=Schema(
+            NestedField(field_id=1, name="id", field_type=LongType(), required=True),
+            NestedField(
+                field_id=2,
+                name="profile",
+                field_type=StructType(
+                    NestedField(
+                        field_id=3,
+                        name="email",
+                        field_type=StringType(),
+                        required=False,
+                    )
+                ),
+                required=False,
+            ),
+        ),
+        properties={"format-version": "2"},
+    )
+    arrow_schema = table.schema().as_arrow()
+    table.append(
+        pa.table({"id": [1], "profile": [{"email": "a@example.com"}]}, schema=arrow_schema)
+    )
+    table_format = IcebergTableFormat(
+        catalog_name="nested_iceberg",
+        table_name="default.users",
+        metadata_location=table.metadata_location,
+        io_options={},
+    )
+
+    schema = table_format.get_schema()
+    assert schema.field("profile").metadata == {b"PARQUET:field_id": b"2"}
+    assert schema.field("profile").type.field("email").metadata == {b"PARQUET:field_id": b"3"}
+
+    plan = table_format.plan(
+        PlanRequest(catalog="nested_iceberg", target="default.users", columns=["profile.email"]),
+        max_tickets=1,
+    )
+    _output_schema, batches = table_format.execute(plan.tasks[0].partition)
+
+    assert pa.Table.from_batches(list(batches)).column("profile").to_pylist() == [
+        {"email": "a@example.com"}
+    ]
