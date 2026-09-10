@@ -54,7 +54,7 @@ Run command help:
 
 ```bash
 uv run dal-obscura --help
-uv run dal-obscura-control-plane --help
+uv run dal-obscura-admin --help
 uv run dal-obscura-migrate --help
 ```
 

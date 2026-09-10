@@ -138,7 +138,7 @@ instead of the all-in-one demo.
 ```bash
 uv sync --dev --extra server --extra postgres
 uv run dal-obscura --help
-uv run dal-obscura-control-plane --help
+uv run dal-obscura-admin --help
 uv run dal-obscura-migrate --help
 ```
 
@@ -152,23 +152,14 @@ export DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:///runtime/control-plane.db
 Use Postgres for shared environments or state that must survive restarts
 reliably.
 
-### Start The Control Plane
+### Initialize A Publication
 
 ```bash
 export DAL_OBSCURA_DATABASE_URL=postgresql+psycopg://dal_obscura:dal_obscura@127.0.0.1:5432/dal_obscura
-export DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN=dev-admin
-export DAL_OBSCURA_CONTROL_PLANE_HOST=127.0.0.1
-export DAL_OBSCURA_CONTROL_PLANE_PORT=8820
 uv run dal-obscura-migrate upgrade
 uv run dal-obscura-migrate check
-uv run dal-obscura-control-plane
+uv run dal-obscura-admin status
 ```
-
-The API process serves:
-
-- `http://127.0.0.1:8820/docs`
-- `http://127.0.0.1:8820/redoc`
-- `http://127.0.0.1:8820/openapi.json`
 
 ### Configure The Service
 
@@ -181,8 +172,7 @@ Configure at least:
 5. Asset owners.
 6. Active policy version.
 
-Use the operator CLI. The control-plane API is workspace-first: normal
-users work with catalogs, assets, owners, policies, policy versions, and
+Use the operator CLI manifest. It defines catalogs, assets, policies, policy versions, and
 settings.
 
 ### Start A Data Plane

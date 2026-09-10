@@ -39,7 +39,6 @@ test = [
 
 [project.scripts]
 dal-obscura = "dal_obscura.data_plane.interfaces.cli:main"
-dal-obscura-control-plane = "dal_obscura.control_plane.interfaces.cli:main"
 dal-obscura-admin = "dal_obscura.control_plane.interfaces.admin_cli:main"
 dal-obscura-migrate = "dal_obscura.common.config_store.cli:main"
 

@@ -60,7 +60,7 @@ For package setup and command discovery from the repo root:
 ```bash
 uv sync --dev --extra server --extra sqlite
 uv run dal-obscura --help
-uv run dal-obscura-control-plane --help
+uv run dal-obscura-admin --help
 uv run dal-obscura-migrate --help
 ```
 
@@ -118,12 +118,11 @@ uv run dal-obscura-migrate upgrade
 uv run dal-obscura-migrate check
 ```
 
-Start the control plane against the config database:
+Inspect or publish configuration with the operator CLI:
 
 ```bash
 export DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:///runtime/control-plane.db
-export DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN=dev-admin
-uv run dal-obscura-control-plane
+uv run dal-obscura-admin status
 ```
 
 Start each data plane from the same published configuration:
