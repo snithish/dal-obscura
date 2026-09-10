@@ -8,6 +8,7 @@ import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from uuid import UUID, uuid4
 
 from dal_obscura.common.config_store.db import (
     ConfigStoreSchemaError,
@@ -15,6 +16,7 @@ from dal_obscura.common.config_store.db import (
     create_engine_from_url,
     session_factory,
 )
+from dal_obscura.control_plane.application.errors import PublicationConflictError
 from dal_obscura.control_plane.application.operator_manifest import (
     ManifestValidationError,
     compile_manifest,
@@ -52,6 +54,8 @@ def run(argv: Sequence[str] | None = None) -> int:
     if args.command == "status":
         _print_status(engine)
         return 0
+    if args.command == "publish":
+        return _publish(engine, args.manifest, args.expected_generation)
     parser.error(f"unsupported command {args.command!r}")
     return 2
 
@@ -96,11 +100,50 @@ def _validate(path: str) -> int:
     return 0
 
 
+def _publish(engine, path: str, expected_generation: str) -> int:
+    try:
+        compiled = compile_manifest(load_manifest(Path(path)))
+        expected_id = UUID(expected_generation)
+    except (ManifestValidationError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    publication_id = uuid4()
+    try:
+        with session_factory(engine)() as session, session.begin():
+            store = PublicationStore(session)
+            store.insert_compiled_publication(publication_id=publication_id, compiled=compiled)
+            store.activate_publication_if_current(
+                cell_id=compiled.cell_id,
+                publication_id=publication_id,
+                expected_publication_id=expected_id,
+            )
+    except (LookupError, PublicationConflictError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    print(
+        json.dumps(
+            {
+                "manifest_hash": compiled.manifest_hash,
+                "previous_generation": str(expected_id),
+                "publication_id": str(publication_id),
+            },
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="dal-obscura-admin")
     subparsers = parser.add_subparsers(dest="command", required=True)
     validate = subparsers.add_parser("validate", help="validate an Iceberg gateway JSON manifest")
     validate.add_argument("manifest", help="path to a JSON manifest")
+    publish = subparsers.add_parser("publish", help="activate a compiled manifest with CAS")
+    publish.add_argument("manifest", help="path to a JSON manifest")
+    publish.add_argument("--database-url", help="SQLAlchemy database URL")
+    publish.add_argument(
+        "--expected-generation", required=True, help="currently active publication UUID"
+    )
     status = subparsers.add_parser("status", help="show the active publication generation")
     status.add_argument("--database-url", help="SQLAlchemy database URL")
     return parser
