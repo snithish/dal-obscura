@@ -154,10 +154,20 @@ class IcebergTableFormat(TableFormat):
 
         _check_path(self.metadata_location, self.path_enforcer)
         table = StaticTable.from_metadata(self.metadata_location, properties=self.io_options)
-        format_version = int(getattr(table.metadata, "format_version", 1))
-        if format_version not in {2, 3}:
-            raise ValueError(f"Unsupported Iceberg format version: {format_version}")
+        _require_supported_format_version(int(getattr(table.metadata, "format_version", 1)))
         return table
+
+
+def _require_supported_format_version(format_version: int) -> None:
+    """Reject table formats without native scan conformance evidence.
+
+    The current executor delegates file and delete handling to PyIceberg's
+    ``ArrowScan``. Its v2 behavior is covered by this gateway's native-scan
+    tests. Version 3 is deliberately rejected until the same evidence exists;
+    accepting a metadata version alone would overstate support.
+    """
+    if format_version != 2:
+        raise ValueError(f"Unsupported Iceberg format version: {format_version}")
 
 
 def _chunk_by_max_tickets(tasks: list, max_tickets: int) -> list[list]:

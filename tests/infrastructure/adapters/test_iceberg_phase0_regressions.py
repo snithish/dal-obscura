@@ -261,3 +261,18 @@ def test_iceberg_execute_deserializes_sql_string_pushdown_filter(monkeypatch):
         row_filter_to_sql(deserialize_row_filter(partition.backend_pushdown_row_filter))
         == "region = 'us'"
     )
+
+
+def test_iceberg_rejects_unproven_format_versions():
+    from dal_obscura.data_plane.infrastructure.table_formats.iceberg import (
+        _require_supported_format_version,
+    )
+
+    _require_supported_format_version(2)
+
+    import pytest
+
+    with pytest.raises(ValueError, match="Unsupported Iceberg format version: 1"):
+        _require_supported_format_version(1)
+    with pytest.raises(ValueError, match="Unsupported Iceberg format version: 3"):
+        _require_supported_format_version(3)

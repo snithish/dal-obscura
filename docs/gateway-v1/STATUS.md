@@ -13,7 +13,7 @@ package complete unless its stated evidence exists.
 | W04 | implementing | Fetch reauthorization is present; issuer/subject/expiry binding is not. |
 | W05 | implementing | Asset binding is fixed and catalog construction reads asset/catalog from one captured generation; immutable plan generations and stream freshness remain. |
 | W06 | pending | Existing ticket serialization remains by owner direction. |
-| W07 | pending | Iceberg pinned scan specification has not begun. |
+| W07 | implementing | Format v3 now fails closed; inventory records unproven delete, snapshot, schema-evolution and REST-catalog behavior. |
 | W08 | implementing | Python SDK provides a managed sequential Flight stream and opt-in typed path transport; DuckDB remains adapter-only and Spark/distributed attempt support remain. |
 | W09 | implementing | DuckDB streams have configured non-blocking admission, one execution thread, memory and input-batch limits; planned scan payloads have a byte limit. Generation freshness, deadlines, audit events, and output/value limits remain. |
 | W10 | implementing | Asset admission is Iceberg-only; deletion inventory is recorded but removal waits for replacement paths. |
@@ -40,5 +40,6 @@ package complete unless its stated evidence exists.
 - `3289af5`: Arrow input batches have a configured byte limit.
 - `72ef40d`: planned ticket scan payloads have a configured byte limit.
 - `e255761`: CI separates contract/security and bounded integration test lanes.
+- `pending`: Iceberg v3 admission now fails closed pending native conformance evidence; capability inventory records W07 blockers.
 
 These are W01/W04/W05/W10 inputs, not completion evidence for those packages.
