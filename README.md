@@ -44,10 +44,7 @@ cd examples/demo/keycloak
 ./run smoke
 ```
 
-Open:
-
-- API docs: `http://127.0.0.1:8820/docs`
-- Flight data plane: `grpc://127.0.0.1:8815`
+Open the Flight data plane at `grpc://127.0.0.1:8815`.
 
 Stop the demo without deleting state:
 

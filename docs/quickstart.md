@@ -57,9 +57,6 @@ The demo provisions:
 
 Open:
 
-- UI: `http://127.0.0.1:8821`
-- API docs: `http://127.0.0.1:8820/docs`
-- OpenAPI JSON: `http://127.0.0.1:8820/openapi.json`
 - Keycloak: `http://127.0.0.1:8080`
 - Flight data plane: `grpc://127.0.0.1:8815`
 

@@ -127,17 +127,11 @@ Test every policy with representative principals:
 | Allowed reader | Receives only authorized columns and rows. |
 | Privileged reader | Receives intended unmasked columns. |
 | Reader without a matching grant | Receives an authorization failure. |
-| Asset owner | Can edit owners, filters, masks, and policy versions. |
+| Operator | Validates and publishes the manifest after preview. |
 
-The control-plane API exposes the same server-side policy semantics for preview:
-
-```http
-POST /v1/assets/{asset_id}/policy-preview
-```
-
-The request supplies a principal, groups, and claims. The response reports the
-allow/deny decision, visible columns, masks, row filter, and matched rule
-ordinal without exposing tenant or cell internals.
+Use `dal-obscura-admin preview manifest.json --personas personas.json` for an
+offline, caller-supplied policy preview. It never authenticates a persona or
+substitutes for a real gateway authorization decision.
 
 For code changes to policy resolution, add focused tests under
 `tests/domain/access_control/` and data-plane tests under `tests/interfaces/` or
