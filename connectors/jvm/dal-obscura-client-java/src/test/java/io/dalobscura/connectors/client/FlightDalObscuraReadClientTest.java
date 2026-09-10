@@ -61,6 +61,18 @@ class FlightDalObscuraReadClientTest {
     }
 
     @Test
+    void omitsTypedPathsForWildcardSchemaDiscovery() throws Exception {
+        DalObscuraPlanRequest request =
+                new DalObscuraPlanRequest("analytics", "default.users", List.of("*"), Optional.empty());
+
+        DalObscuraFlightProto.PlanRequest decoded = DalObscuraFlightProto.PlanRequest.parseFrom(
+                FlightDalObscuraReadClient.encodePlanCommand(request));
+
+        assertEquals(List.of("*"), decoded.getColumnsList());
+        assertEquals(0, decoded.getColumnPathsCount());
+    }
+
+    @Test
     void buildsBearerAuthorizationHeadersFromTokenConvenience() {
         DalObscuraAuth auth = DalObscuraAuth.bearerToken("token-123");
 

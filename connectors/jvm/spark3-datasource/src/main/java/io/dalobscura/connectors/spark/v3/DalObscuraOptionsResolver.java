@@ -18,13 +18,30 @@ public final class DalObscuraOptionsResolver {
         require("dal.catalog", catalog);
         require("dal.target", target);
 
-        return new DalObscuraConnectorOptions(uri, catalog, target, resolveAuth(options));
+        return new DalObscuraConnectorOptions(
+                uri, catalog, target, resolveAuth(options), resolveExecutorAuthProvider(options));
     }
 
     private static void require(String key, String value) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException("Missing required option: " + key);
         }
+    }
+
+    private static DalObscuraExecutorAuthProvider resolveExecutorAuthProvider(
+            CaseInsensitiveStringMap options) {
+        String environment = options.get("dal.executor.auth.token-env");
+        String property = options.get("dal.executor.auth.token-property");
+        boolean hasEnvironment = environment != null && !environment.isBlank();
+        boolean hasProperty = property != null && !property.isBlank();
+        if (hasEnvironment == hasProperty) {
+            throw new IllegalArgumentException(
+                    "Specify exactly one executor credential reference: "
+                            + "dal.executor.auth.token-env or dal.executor.auth.token-property");
+        }
+        return hasEnvironment
+                ? DalObscuraExecutorAuthProvider.fromEnvironment(environment)
+                : DalObscuraExecutorAuthProvider.fromSystemProperty(property);
     }
 
     private static DalObscuraAuth resolveAuth(CaseInsensitiveStringMap options) {

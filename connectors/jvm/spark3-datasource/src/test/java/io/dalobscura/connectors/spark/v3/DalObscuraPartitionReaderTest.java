@@ -23,6 +23,11 @@ import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.jupiter.api.Test;
 
 class DalObscuraPartitionReaderTest {
+    private static DalObscuraExecutorAuthProvider executorAuth() {
+        System.setProperty("dal.obscura.test.token", "executor-token");
+        return DalObscuraExecutorAuthProvider.fromSystemProperty("dal.obscura.test.token");
+    }
+
     @Test
     void returnsSparkColumnarBatchesFromArrowRoots() throws Exception {
         try (RootAllocator allocator = new RootAllocator(Long.MAX_VALUE)) {
@@ -41,18 +46,14 @@ class DalObscuraPartitionReaderTest {
                             client,
                             new DalObscuraInputPartition(
                                     new DalObscuraPlannedPartition("ticket-a"),
-                                    new DalObscuraConnectorOptions(
-                                            "grpc+tcp://localhost:8815",
-                                            "analytics",
-                                            "default.users",
-                                            new DalObscuraAuth(java.util.Map.of("x-api-key", "secret-1"))),
+                                    executorAuth(),
                                     new org.apache.spark.sql.types.StructType().add("id", "long")))) {
                 assertTrue(reader.next());
                 ColumnarBatch batch = reader.get();
                 assertEquals(2, batch.numRows());
                 assertEquals(1L, batch.column(0).getLong(0));
                 assertEquals(2L, batch.column(0).getLong(1));
-                assertEquals("secret-1", client.lastStreamAuth().header("x-api-key"));
+                assertEquals("Bearer executor-token", client.lastStreamAuth().header("authorization"));
             }
         }
     }
@@ -106,11 +107,7 @@ class DalObscuraPartitionReaderTest {
                             new FakeClient(root),
                             new DalObscuraInputPartition(
                                     new DalObscuraPlannedPartition("ticket-a"),
-                                    new DalObscuraConnectorOptions(
-                                            "grpc+tcp://localhost:8815",
-                                            "analytics",
-                                            "default.users",
-                                            DalObscuraAuth.bearerToken("token-123")),
+                                    executorAuth(),
                                     requiredSchema))) {
                 assertTrue(reader.next());
                 ColumnarBatch batch = reader.get();

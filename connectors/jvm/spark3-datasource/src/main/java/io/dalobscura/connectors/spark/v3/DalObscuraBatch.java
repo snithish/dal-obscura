@@ -48,7 +48,7 @@ public final class DalObscuraBatch implements Scan, Batch {
     public InputPartition[] planInputPartitions() {
         List<InputPartition> partitions = new ArrayList<>();
         for (DalObscuraPlannedPartition partition : plannedRead.partitions()) {
-            partitions.add(new DalObscuraInputPartition(partition, options, schema));
+            partitions.add(new DalObscuraInputPartition(partition, options.executorAuthProvider(), schema));
         }
         return partitions.toArray(new InputPartition[0]);
     }

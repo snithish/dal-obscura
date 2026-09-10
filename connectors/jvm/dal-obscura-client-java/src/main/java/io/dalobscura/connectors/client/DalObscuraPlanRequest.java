@@ -20,7 +20,11 @@ public final class DalObscuraPlanRequest {
         this.target = target;
         this.columns = columns;
         this.rowFilter = rowFilter;
-        this.columnPaths = columns.stream().map(DalObscuraFieldPath::parse).collect(Collectors.toUnmodifiableList());
+        this.columnPaths = columns.size() == 1 && "*".equals(columns.get(0))
+                ? List.of()
+                : columns.stream()
+                        .map(DalObscuraFieldPath::parse)
+                        .collect(Collectors.toUnmodifiableList());
     }
 
     public String catalog() {

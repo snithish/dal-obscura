@@ -32,7 +32,11 @@ class DalObscuraScanBuilderTest {
         DalObscuraTable table =
                 new DalObscuraTable(
                         new DalObscuraConnectorOptions(
-                                "grpc+tcp://localhost:8815", "analytics", "default.users", auth),
+                                "grpc+tcp://localhost:8815",
+                                "analytics",
+                                "default.users",
+                                auth,
+                                DalObscuraExecutorAuthProvider.fromSystemProperty("dal.obscura.test.token")),
                         () -> client);
 
         StructType fullSchema = table.schema();
@@ -65,7 +69,8 @@ class DalObscuraScanBuilderTest {
                                 "grpc+tcp://localhost:8815",
                                 "analytics",
                                 "default.users",
-                                DalObscuraAuth.bearerToken("token-123")),
+                                DalObscuraAuth.bearerToken("token-123"),
+                                            DalObscuraExecutorAuthProvider.fromSystemProperty("dal.obscura.test.token")),
                         () -> client);
 
         DalObscuraScanBuilder builder =
@@ -75,6 +80,8 @@ class DalObscuraScanBuilderTest {
         try (ByteArrayOutputStream buffer = new ByteArrayOutputStream();
                 ObjectOutputStream output = new ObjectOutputStream(buffer)) {
             output.writeObject(partitions[0]);
+            String serialized = buffer.toString(java.nio.charset.StandardCharsets.ISO_8859_1);
+            org.junit.jupiter.api.Assertions.assertFalse(serialized.contains("token-123"));
         }
     }
 
@@ -88,7 +95,8 @@ class DalObscuraScanBuilderTest {
                                 "grpc+tcp://localhost:8815",
                                 "analytics",
                                 "default.users",
-                                DalObscuraAuth.bearerToken("token-123")),
+                                DalObscuraAuth.bearerToken("token-123"),
+                                            DalObscuraExecutorAuthProvider.fromSystemProperty("dal.obscura.test.token")),
                         () -> client,
                         providedSchema);
 
@@ -116,7 +124,8 @@ class DalObscuraScanBuilderTest {
                                 "grpc+tcp://localhost:8815",
                                 "analytics",
                                 "default.users",
-                                DalObscuraAuth.bearerToken("token-123")),
+                                DalObscuraAuth.bearerToken("token-123"),
+                                            DalObscuraExecutorAuthProvider.fromSystemProperty("dal.obscura.test.token")),
                         () -> client,
                         fullSchema);
 
@@ -141,7 +150,8 @@ class DalObscuraScanBuilderTest {
                                 "grpc+tcp://localhost:8815",
                                 "analytics",
                                 "default.users",
-                                DalObscuraAuth.bearerToken("token-123")),
+                                DalObscuraAuth.bearerToken("token-123"),
+                                            DalObscuraExecutorAuthProvider.fromSystemProperty("dal.obscura.test.token")),
                         () -> client,
                         fullSchema);
 

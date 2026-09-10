@@ -1,13 +1,12 @@
 package io.dalobscura.connectors.client;
 
-import java.io.Serializable;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
-public final class DalObscuraAuth implements Serializable {
+public final class DalObscuraAuth {
     private static final long serialVersionUID = 1L;
     private static final String AUTHORIZATION_HEADER = "authorization";
 

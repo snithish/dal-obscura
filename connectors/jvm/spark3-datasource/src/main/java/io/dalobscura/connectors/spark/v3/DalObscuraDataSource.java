@@ -42,8 +42,8 @@ public final class DalObscuraDataSource
 
     private DalObscuraTable tableFor(CaseInsensitiveStringMap options, StructType schema) {
         DalObscuraConnectorOptions resolved = resolver.resolve(options);
-        DalObscuraReadClientFactory clientFactory =
-                () -> new FlightDalObscuraReadClient(resolved.uri());
+        String uri = resolved.uri();
+        DalObscuraReadClientFactory clientFactory = () -> new FlightDalObscuraReadClient(uri);
         return new DalObscuraTable(resolved, clientFactory, schema);
     }
 }

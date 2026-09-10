@@ -18,6 +18,7 @@ import org.apache.spark.sql.SparkSession;
 import org.junit.jupiter.api.Test;
 
 class SparkReadIT {
+    private static final String EXECUTOR_TOKEN_PROPERTY = "dal.obscura.integration.executor.token";
     private static final String SPARK_ARROW_JAVA_OPTS =
             "-XX:+IgnoreUnrecognizedVMOptions "
                     + "--add-opens=java.base/java.lang=ALL-UNNAMED "
@@ -187,6 +188,7 @@ class SparkReadIT {
         static SparkFixture create(String appName) throws Exception {
             FixtureBundle bundle = FixtureBuilderRunner.build();
             LocalDalObscuraServer server = LocalDalObscuraServer.start(bundle);
+            System.setProperty(EXECUTOR_TOKEN_PROPERTY, bundle.userToken());
             SparkSession spark =
                     SparkSession.builder()
                             .master("local[2]")
@@ -220,7 +222,8 @@ class SparkReadIT {
                             .format("dal_obscura")
                             .option("dal.uri", server.uri())
                             .option("dal.catalog", bundle.catalog())
-                            .option("dal.target", bundle.target());
+                            .option("dal.target", bundle.target())
+                            .option("dal.executor.auth.token-property", EXECUTOR_TOKEN_PROPERTY);
             if (includeToken) {
                 reader = reader.option("dal.auth.token", bundle.userToken());
             }
@@ -233,6 +236,7 @@ class SparkReadIT {
                     .option("dal.uri", server.uri())
                     .option("dal.catalog", bundle.catalog())
                     .option("dal.target", bundle.target())
+                    .option("dal.executor.auth.token-property", EXECUTOR_TOKEN_PROPERTY)
                     .option("dal.auth.header.authorization", "Bearer " + bundle.userToken());
         }
 
@@ -241,6 +245,7 @@ class SparkReadIT {
             try {
                 spark.close();
             } finally {
+                System.clearProperty(EXECUTOR_TOKEN_PROPERTY);
                 server.close();
             }
         }
