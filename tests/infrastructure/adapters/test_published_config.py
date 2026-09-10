@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from dal_obscura.common.access_control.models import Principal
@@ -13,6 +14,7 @@ from dal_obscura.common.config_store.db import (
     session_factory,
 )
 from dal_obscura.common.config_store.orm import (
+    PublishedAssetRecord,
     PublishedCatalogRecord,
     PublishedCellRuntimeRecord,
 )
@@ -139,6 +141,27 @@ def test_published_store_rejects_assets_removed_by_new_generation(
             target="default.users",
         )
     assert config_store._asset_cache == {}
+
+
+def test_published_authorizer_rejects_corrupt_mask_instead_of_dropping_it(
+    db_session: Session,
+):
+    cell_id = uuid4()
+    tenant_id = uuid4()
+    _publish_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
+    record = db_session.scalar(select(PublishedAssetRecord))
+    assert record is not None
+    record.compiled_config_json["policy"]["rules"][0]["masks"] = {"email": {}}
+    db_session.commit()
+    authorizer = PublishedConfigAuthorizer(PublishedConfigStore(db_session, cell_id=cell_id))
+
+    with pytest.raises(ValueError, match=r"mask\.type"):
+        authorizer.authorize(
+            principal=Principal(id="user1", groups=[], attributes={"tenant_id": str(tenant_id)}),
+            target="default.users",
+            catalog="analytics",
+            requested_columns=["email"],
+        )
 
 
 def _publish_asset(

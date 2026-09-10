@@ -46,8 +46,10 @@ class CompiledMaskRule:
 
     @classmethod
     def from_json(cls, raw: object) -> CompiledMaskRule:
-        data = _mapping(raw)
-        return cls(type=str(data["type"]), value=data.get("value"))
+        data = _required_mapping(raw, "mask")
+        _reject_unknown(data, {"type", "value"}, "mask")
+        mask_type = _required_text(data.get("type"), "mask.type")
+        return cls(type=mask_type, value=data.get("value"))
 
 
 @dataclass(frozen=True)
@@ -97,19 +99,24 @@ class CompiledPolicyRule:
 
     @classmethod
     def from_json(cls, raw: object) -> CompiledPolicyRule:
-        data = _mapping(raw)
+        data = _required_mapping(raw, "policy rule")
+        _reject_unknown(
+            data,
+            {"ordinal", "effect", "principals", "columns", "masks", "row_filter", "when"},
+            "policy rule",
+        )
+        masks = _required_mapping(data.get("masks"), "policy rule.masks")
         return cls(
-            ordinal=int(data.get("ordinal", 0)),
-            effect=cast(Literal["allow", "deny"], str(data.get("effect", "allow"))),
-            principals=[str(item) for item in _list(data.get("principals"))],
-            columns=[str(item) for item in _list(data.get("columns"))],
+            ordinal=_non_negative_int(data.get("ordinal", 0), "policy rule.ordinal"),
+            effect=_effect(data.get("effect")),
+            principals=_text_list(data.get("principals"), "policy rule.principals"),
+            columns=_text_list(data.get("columns"), "policy rule.columns"),
             masks={
-                str(column): CompiledMaskRule.from_json(mask)
-                for column, mask in _mapping(data.get("masks")).items()
-                if isinstance(column, str) and isinstance(mask, dict) and "type" in mask
+                _required_text(column, "policy rule mask path"): CompiledMaskRule.from_json(mask)
+                for column, mask in masks.items()
             },
             row_filter=_optional_str(data.get("row_filter")),
-            when=cast(dict[str, PrincipalConditionValue], _mapping(data.get("when"))),
+            when=_conditions(data.get("when")),
         )
 
 
@@ -158,29 +165,74 @@ class CompiledPolicy:
         catalog: str | None = None,
         target: str | None = None,
     ) -> CompiledPolicy:
-        data = _mapping(raw)
+        data = _required_mapping(raw, "policy")
+        _reject_unknown(data, {"version", "catalog", "target", "rules"}, "policy")
         return cls(
-            version=int(data.get("version", version or 0)),
-            catalog=str(data.get("catalog", catalog or "")),
-            target=str(data.get("target", target or "")),
-            rules=[CompiledPolicyRule.from_json(item) for item in _list(data.get("rules"))],
+            version=_non_negative_int(data.get("version", version), "policy.version"),
+            catalog=_required_text(data.get("catalog", catalog), "policy.catalog"),
+            target=_required_text(data.get("target", target), "policy.target"),
+            rules=[
+                CompiledPolicyRule.from_json(item)
+                for item in _required_list(data.get("rules"), "policy.rules")
+            ],
         )
-
-
-def _mapping(value: object) -> dict[str, Any]:
-    if isinstance(value, dict):
-        return cast(dict[str, Any], value).copy()
-    return {}
-
-
-def _list(value: object) -> list[object]:
-    if isinstance(value, list):
-        return list(cast(list[object], value))
-    return []
 
 
 def _optional_str(value: object) -> str | None:
     if value is None:
         return None
-    text = str(value).strip()
-    return text or None
+    return _required_text(value, "policy rule.row_filter")
+
+
+def _required_mapping(value: object, label: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
+    return cast(dict[str, Any], value).copy()
+
+
+def _required_list(value: object, label: str) -> list[object]:
+    if not isinstance(value, list):
+        raise ValueError(f"{label} must be a list")
+    return list(cast(list[object], value))
+
+
+def _required_text(value: object, label: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{label} must be non-empty text")
+    return value
+
+
+def _non_negative_int(value: object, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"{label} must be a non-negative integer")
+    return value
+
+
+def _effect(value: object) -> Literal["allow", "deny"]:
+    if value not in {"allow", "deny"}:
+        raise ValueError("policy rule.effect must be allow or deny")
+    return cast(Literal["allow", "deny"], value)
+
+
+def _text_list(value: object, label: str) -> list[str]:
+    return [_required_text(item, f"{label}[]") for item in _required_list(value, label)]
+
+
+def _conditions(value: object) -> dict[str, PrincipalConditionValue]:
+    conditions = _required_mapping(value, "policy rule.when")
+    result: dict[str, PrincipalConditionValue] = {}
+    for key, expected in conditions.items():
+        name = _required_text(key, "policy rule.when key")
+        if isinstance(expected, str):
+            result[name] = expected
+        elif isinstance(expected, list) and all(isinstance(item, str) for item in expected):
+            result[name] = cast(list[str], expected)
+        else:
+            raise ValueError(f"policy rule.when[{name!r}] must be text or text list")
+    return result
+
+
+def _reject_unknown(data: dict[str, Any], allowed: set[str], label: str) -> None:
+    unknown = sorted(set(data) - allowed)
+    if unknown:
+        raise ValueError(f"{label} has unsupported keys: {', '.join(unknown)}")
