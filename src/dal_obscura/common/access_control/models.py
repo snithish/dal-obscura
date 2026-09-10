@@ -25,6 +25,12 @@ class AccessRule:
     effect: str = "allow"
     when: dict[str, PrincipalConditionValue] | None = None
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "principals", list(self.principals))
+        object.__setattr__(self, "columns", list(self.columns))
+        object.__setattr__(self, "masks", dict(self.masks))
+        object.__setattr__(self, "when", None if self.when is None else dict(self.when))
+
 
 @dataclass(frozen=True)
 class DatasetPolicy:
@@ -34,6 +40,9 @@ class DatasetPolicy:
     catalog: str | None
     rules: list[AccessRule]
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "rules", list(self.rules))
+
 
 @dataclass(frozen=True)
 class Policy:
@@ -41,6 +50,9 @@ class Policy:
 
     version: int
     datasets: list[DatasetPolicy]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "datasets", list(self.datasets))
 
     def match_dataset(self, target: str, catalog: str | None) -> DatasetPolicy | None:
         """Returns the first dataset policy whose catalog and target glob match."""
