@@ -15,7 +15,7 @@ package complete unless its stated evidence exists.
 | W06 | pending | Existing ticket serialization remains by owner direction. |
 | W07 | implementing | Format v3 now fails closed; native multi-file tasks stay pinned across append. Delete, schema-evolution and REST-catalog behavior remain unproven; native nested field-ID preservation is covered. |
 | W08 | implementing | Python SDK provides a managed sequential Flight stream, opt-in typed path transport, and explicit Polars materialization; DuckDB remains adapter-only. OIDC-backed local Spark integration passes nested/mask/filter reads. Spark partitions contain only an executor credential reference, resolved from an executor environment variable or JVM property; attempt issuance, retries, speculation, cancellation, and a production token-refresh provider remain. |
-| W09 | implementing | DuckDB streams have configured non-blocking admission, one execution thread, memory and input-batch limits; planned scan payloads have a byte limit. Identity and ticket expiry are checked before each emitted batch; DuckDB output batches have a byte limit. Generation freshness, deadlines, audit events, and per-value limits remain. |
+| W09 | implementing | DuckDB streams have configured non-blocking admission, one execution thread, memory and input-batch limits; planned scan payloads have a byte limit. Identity, ticket expiry, active-generation freshness, and a configured delivery deadline are checked before each emitted batch; DuckDB output batches have a byte limit. Audit events and per-value limits remain. |
 | W10 | implementing | Asset admission is Iceberg-only; deletion inventory is recorded but removal waits for replacement paths. |
 | W11 | implementing | The default wheel now depends only on PyArrow and protobuf; DuckDB, Polars, and server dependencies are explicit extras, and the SDK lazy-loads DuckDB. Separate distributable artifacts and deployment privilege separation remain. |
 | W12 | implementing | CI separates deterministic contract/security tests from a bounded integration lane while retaining package and JVM gates. The local Spark integration now runs against RS256/OIDC JWKS fixture credentials. PostgreSQL race, native Iceberg conformance, capacity, and cross-consumer lanes remain. |
@@ -58,5 +58,6 @@ package complete unless its stated evidence exists.
 - `4165ffd`: Java plans encode canonical typed protobuf paths, including quoted and collection segments.
 - `555fef1`: Spark partitions and serializable reader factories exclude credentials; executor token references resolve at execution time.
 - `86df7ae`: default Python client wheel excludes server dependencies and lazy-loads DuckDB.
+- `01ceb39`: configured stream delivery deadline stops output before a late batch is handed to Flight.
 
 These are W01/W04/W05/W10 inputs, not completion evidence for those packages.
