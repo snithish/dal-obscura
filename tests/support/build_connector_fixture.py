@@ -11,6 +11,8 @@ from uuid import UUID
 
 import jwt
 import pyarrow as pa
+from cryptography.hazmat.primitives.asymmetric import rsa
+from jwt.algorithms import RSAAlgorithm
 from pyiceberg.partitioning import PartitionField, PartitionSpec
 from pyiceberg.schema import Schema
 from pyiceberg.transforms import IdentityTransform
@@ -520,7 +522,12 @@ def _expected_metadata() -> dict[str, object]:
     }
 
 
-def _provision_control_plane(output_dir: Path, table_id: str) -> tuple[str, str, str]:
+def _provision_control_plane(
+    output_dir: Path,
+    table_id: str,
+    *,
+    jwks_file: Path,
+) -> tuple[str, str, str]:
     database_url = f"sqlite+pysqlite:///{output_dir / 'control-plane.db'}"
     engine = create_engine_from_url(database_url)
     migrate_config_store(engine)
@@ -607,7 +614,12 @@ def _provision_control_plane(output_dir: Path, table_id: str) -> tuple[str, str,
                         "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks."
                         "OidcJwksIdentityProvider"
                     ),
-                    "args": {"issuer": "https://issuer.example"},
+                    "args": {
+                        "issuer": "https://issuer.example",
+                        "jwks_file": str(jwks_file),
+                        "algorithms": ["RS256"],
+                        "attribute_claims": {"tenant_id": "tenant_id"},
+                    },
                     "enabled": True,
                 }
             ],
@@ -622,6 +634,15 @@ def _provision_control_plane(output_dir: Path, table_id: str) -> tuple[str, str,
     return database_url, cell["id"], tenant["id"]
 
 
+def _write_fixture_jwks(output_dir: Path) -> rsa.RSAPrivateKey:
+    """Writes a public JWKS for the local OIDC-only gateway fixture."""
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    public_jwk = json.loads(RSAAlgorithm.to_jwk(private_key.public_key()))
+    public_jwk.update({"kid": "spark-fixture", "use": "sig", "alg": "RS256"})
+    (output_dir / "fixture-jwks.json").write_text(json.dumps({"keys": [public_jwk]}))
+    return private_key
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-dir", required=True)
@@ -630,6 +651,7 @@ def main() -> None:
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    signing_key = _write_fixture_jwks(output_dir)
 
     table_id = create_iceberg_table(
         output_dir,
@@ -640,12 +662,22 @@ def main() -> None:
         append_tables=_append_tables(),
         partition_spec=_partition_spec(),
     )
-    database_url, cell_id, tenant_id = _provision_control_plane(output_dir, table_id)
+    database_url, cell_id, tenant_id = _provision_control_plane(
+        output_dir,
+        table_id,
+        jwks_file=output_dir / "fixture-jwks.json",
+    )
 
     user_token = jwt.encode(
-        {"sub": "spark_user", "attributes": {"tenant_id": tenant_id}},
-        JWT_SECRET,
-        algorithm="HS256",
+        {
+            "sub": "spark_user",
+            "tenant_id": tenant_id,
+            "iss": "https://issuer.example",
+            "exp": int(datetime.now().timestamp()) + 900,
+        },
+        signing_key,
+        algorithm="RS256",
+        headers={"kid": "spark-fixture"},
     )
 
     print(
