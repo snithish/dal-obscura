@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
+from hashlib import sha256
 from threading import RLock
 from typing import Any, cast
 from uuid import UUID
@@ -340,7 +341,7 @@ class PublishedConfigAuthorizer:
             allowed_columns=allowed_columns,
             masks=masks,
             row_filter=row_filter,
-            policy_version=asset.policy_version,
+            policy_version=_effective_policy_version(asset),
         )
 
     def current_policy_version(
@@ -353,11 +354,13 @@ class PublishedConfigAuthorizer:
         if catalog is None:
             return None
         try:
-            return self._store.get_asset(
-                tenant_id=tenant_id,
-                catalog=catalog,
-                target=target,
-            ).policy_version
+            return _effective_policy_version(
+                self._store.get_asset(
+                    tenant_id=tenant_id,
+                    catalog=catalog,
+                    target=target,
+                )
+            )
         except LookupError:
             return None
 
@@ -401,6 +404,12 @@ class PublishedConfigCatalogRegistry:
         registry = CatalogRegistry(ServiceConfig(catalogs={catalog: catalog_config}))
         self._registry_cache[cache_key] = registry
         return registry.describe(catalog, _asset_table_identifier(asset), tenant_id=tenant_id)
+
+
+def _effective_policy_version(asset: PublishedAsset) -> int:
+    """Binds ticket authorization to one immutable publication generation."""
+    digest = sha256(f"{asset.publication_id}:{asset.policy_version}".encode()).digest()
+    return int.from_bytes(digest[:8], "big") & ((1 << 63) - 1)
 
 
 def _policy_from_asset(asset: PublishedAsset) -> Policy:

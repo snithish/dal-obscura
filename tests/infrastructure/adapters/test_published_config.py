@@ -54,7 +54,7 @@ def test_published_authorizer_resolves_policy_from_active_asset(db_session: Sess
     assert decision.allowed_columns == ["id", "email"]
     assert decision.masks["email"].type == "email"
     assert decision.row_filter == "(region = 'us')"
-    assert decision.policy_version == 123
+    assert decision.policy_version != 123
 
 
 def test_published_authorizer_accepts_tenant_slug_attribute(db_session: Session):
@@ -71,7 +71,7 @@ def test_published_authorizer_accepts_tenant_slug_attribute(db_session: Session)
     )
 
     assert decision.allowed_columns == ["id"]
-    assert decision.policy_version == 123
+    assert decision.policy_version != 123
 
 
 def test_published_store_loads_asset_and_catalog_from_one_generation(db_session: Session):
@@ -258,3 +258,61 @@ def _publish_asset(
     )
     store.activate_publication(cell_id=cell_id, publication_id=publication_id)
     session.commit()
+
+
+def test_published_authorizer_changes_effective_version_for_new_generation(db_session: Session):
+    cell_id = uuid4()
+    tenant_id = uuid4()
+    _publish_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
+    authorizer = PublishedConfigAuthorizer(PublishedConfigStore(db_session, cell_id=cell_id))
+    principal = Principal(id="user1", groups=[], attributes={"tenant_id": str(tenant_id)})
+    initial_version = authorizer.authorize(
+        principal=principal,
+        target="default.users",
+        catalog="analytics",
+        requested_columns=["id"],
+    ).policy_version
+    asset = db_session.scalar(select(PublishedAssetRecord))
+    catalog = db_session.scalar(select(PublishedCatalogRecord))
+    runtime = db_session.scalar(select(PublishedCellRuntimeRecord))
+    assert asset is not None and catalog is not None and runtime is not None
+
+    new_publication_id = uuid4()
+    store = PublicationStore(db_session)
+    store.insert_publication(
+        cell_id=cell_id,
+        publication_id=new_publication_id,
+        manifest_hash="d" * 64,
+    )
+    db_session.add(
+        PublishedCellRuntimeRecord(
+            publication_id=new_publication_id,
+            auth_chain_json=dict(runtime.auth_chain_json),
+            ticket_json=dict(runtime.ticket_json),
+            path_rules_json=list(runtime.path_rules_json),
+        )
+    )
+    db_session.add(
+        PublishedCatalogRecord(
+            publication_id=new_publication_id,
+            tenant_id=tenant_id,
+            catalog=catalog.catalog,
+            config_json=dict(catalog.config_json),
+        )
+    )
+    store.insert_published_asset(
+        publication_id=new_publication_id,
+        tenant_id=tenant_id,
+        catalog=asset.catalog,
+        target=asset.target,
+        backend=asset.backend,
+        compiled_config=dict(asset.compiled_config_json),
+        policy_version=asset.policy_version,
+    )
+    store.activate_publication(cell_id=cell_id, publication_id=new_publication_id)
+    db_session.commit()
+
+    current_version = authorizer.current_policy_version(
+        "default.users", "analytics", tenant_id=str(tenant_id)
+    )
+    assert current_version != initial_version

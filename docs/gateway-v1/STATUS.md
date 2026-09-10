@@ -11,7 +11,7 @@ package complete unless its stated evidence exists.
 | W02 | implementing | Immutable request models reject ambiguous projections; versioned typed paths resolve struct/list/map nodes and distinguish literal dotted names. Field IDs and protobuf/Java fixtures remain. |
 | W03 | implementing | Planning and row-filter schema checks share canonical paths; DuckDB now prunes and masks map-value and list-element struct leaves while preserving keys and list/null shape. Nested grants, compound masks and collection predicates remain. |
 | W04 | implementing | Fetch reauthorization plus issuer/subject/identity-expiry ticket binding are present. JWKS cache bounds, exact Flight endpoint evidence and stream expiry checks remain. |
-| W05 | implementing | Asset binding is fixed and catalog construction reads asset/catalog from one captured generation; immutable plan generations and stream freshness remain. |
+| W05 | implementing | Asset binding is fixed; published authorization versions bind policy revision to immutable publication UUID, invalidating tickets after every activation. Request-scoped publication snapshots and stream generation freshness remain. |
 | W06 | pending | Existing ticket serialization remains by owner direction. |
 | W07 | implementing | Format v3 now fails closed; native multi-file tasks stay pinned across append. Delete, schema-evolution and REST-catalog behavior remain unproven; native nested field-ID preservation is covered. |
 | W08 | implementing | Python SDK provides a managed sequential Flight stream and opt-in typed path transport; DuckDB remains adapter-only and Spark/distributed attempt support remain. |
@@ -48,5 +48,6 @@ package complete unless its stated evidence exists.
 - `pending`: DuckDB prunes and masks canonical list-element struct leaves without flattening lists.
 - `pending`: fetch stops streaming before handing over a batch after identity expiry.
 - `pending`: DuckDB rejects transformed output batches above configured byte limits.
+- `pending`: authorization versions bind ticket checks to active publication UUIDs, including identical-policy republishes.
 
 These are W01/W04/W05/W10 inputs, not completion evidence for those packages.
