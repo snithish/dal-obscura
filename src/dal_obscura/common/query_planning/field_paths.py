@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from typing import Final, TypeAlias
+from typing import Final, TypeAlias, cast
 
 import pyarrow as pa
 
@@ -101,6 +101,21 @@ class FieldPath:
             parts.append(rendered)
         return ".".join(parts)
 
+    @classmethod
+    def from_wire(cls, value: object) -> FieldPath:
+        """Decodes only the supported versioned typed wire representation."""
+        if not isinstance(value, dict) or set(value) != {"version", "segments"}:
+            raise ValueError("Invalid field path wire representation")
+        wire = cast(dict[str, object], value)
+        version = wire["version"]
+        raw_segments = wire["segments"]
+        if not isinstance(version, int) or isinstance(version, bool):
+            raise ValueError("Field path version must be an integer")
+        if not isinstance(raw_segments, list):
+            raise ValueError("Field path segments must be a list")
+        segments = tuple(_segment_from_wire(segment) for segment in raw_segments)
+        return cls(segments=segments, version=version)
+
 
 def parse_field_path(value: str) -> FieldPath:
     """Parses the canonical human form without guessing dotted field names."""
@@ -121,6 +136,33 @@ def parse_field_path(value: str) -> FieldPath:
         else:
             segments.append(FieldSegment(token))
     return FieldPath(tuple(segments))
+
+
+def _segment_from_wire(value: object) -> FieldPathSegment:
+    if not isinstance(value, dict):
+        raise ValueError("Invalid field path segment")
+    wire = cast(dict[str, object], value)
+    kind = wire["kind"]
+    if not isinstance(kind, str):
+        raise ValueError("Invalid field path segment")
+    if kind == "field":
+        allowed = {"kind", "name", "field_id"}
+        name = wire.get("name")
+        if set(wire) - allowed or not isinstance(name, str) or not name:
+            raise ValueError("Invalid field path field segment")
+        field_id = wire.get("field_id")
+        if field_id is not None and (not isinstance(field_id, int) or isinstance(field_id, bool)):
+            raise ValueError("Field path field IDs must be integers")
+        return FieldSegment(name=name, field_id=field_id)
+    if set(wire) != {"kind"}:
+        raise ValueError("Collection path segments cannot carry additional fields")
+    if kind == "list_element":
+        return ListElementSegment()
+    if kind == "map_key":
+        return MapKeySegment()
+    if kind == "map_value":
+        return MapValueSegment()
+    raise ValueError(f"Unknown field path segment kind: {kind}")
 
 
 def resolve_schema_path(schema: pa.Schema, path: FieldPath) -> pa.Field:

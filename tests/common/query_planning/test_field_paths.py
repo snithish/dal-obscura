@@ -84,3 +84,32 @@ def test_field_path_validates_wire_model_invariants():
         ],
     }
     assert MapValueSegment() != MapKeySegment()
+
+
+def test_field_path_wire_round_trip_preserves_ids_and_collection_nodes():
+    path = FieldPath(
+        (
+            FieldSegment("labels", field_id=7),
+            MapValueSegment(),
+            FieldSegment("value.with.dot", field_id=9),
+        )
+    )
+
+    assert FieldPath.from_wire(path.to_wire()) == path
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        {},
+        {"version": 1, "segments": "not-a-list"},
+        {"version": True, "segments": []},
+        {"version": 1, "segments": [{"kind": "field", "name": "", "extra": 1}]},
+        {"version": 1, "segments": [{"kind": "field", "name": "id", "field_id": True}]},
+        {"version": 1, "segments": [{"kind": "map_value", "name": "unexpected"}]},
+        {"version": 1, "segments": [{"kind": "unknown"}]},
+    ],
+)
+def test_field_path_wire_rejects_unknown_or_malformed_values(value):
+    with pytest.raises(ValueError):
+        FieldPath.from_wire(value)
