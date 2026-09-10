@@ -96,6 +96,32 @@ def test_validate_compiles_operator_manifest(tmp_path, capsys) -> None:
     assert output["manifest_hash"]
 
 
+def test_preview_evaluates_caller_supplied_persona(tmp_path, capsys) -> None:
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps(_manifest(uuid4(), uuid4())))
+    personas = tmp_path / "personas.json"
+    personas.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "alice",
+                    "groups": ["analyst"],
+                    "attributes": {},
+                    "catalog": "analytics",
+                    "target": "default.users",
+                    "columns": ["id"],
+                }
+            ]
+        )
+    )
+
+    assert run(["preview", str(manifest), "--personas", str(personas)]) == 0
+
+    assert json.loads(capsys.readouterr().out)["results"] == [
+        {"allowed_columns": ["id"], "id": "alice", "status": "allowed"}
+    ]
+
+
 def test_publish_activates_manifest_with_expected_generation(tmp_path, capsys) -> None:
     database_url = f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
     engine = create_engine_from_url(database_url)
