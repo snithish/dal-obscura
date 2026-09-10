@@ -57,8 +57,8 @@ jobs:
       - name: Type check
         run: uv run ty check
 
-  python-tests:
-    name: Python tests
+  python-contract-tests:
+    name: Python contract and security tests
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -82,8 +82,41 @@ jobs:
       - name: Install dependencies
         run: uv sync --dev --extra server --extra postgres --frozen
 
-      - name: Run Python tests
-        run: uv run pytest
+      - name: Run deterministic contracts
+        run: >-
+          uv run pytest tests/common tests/domain tests/application tests/connectors
+          tests/architecture -q
+
+  python-integration-tests:
+    name: Python integration tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install dependencies
+        run: uv sync --dev --extra server --extra postgres --frozen
+
+      - name: Run integration suite
+        run: >-
+          uv run pytest tests/interfaces tests/infrastructure tests/control_plane
+          tests/examples tests/test_e2e_smoke.py -q
 
   python-package:
     name: Python package smoke
@@ -152,7 +185,8 @@ jobs:
     runs-on: ubuntu-24.04
     needs:
       - python-quality
-      - python-tests
+      - python-contract-tests
+      - python-integration-tests
       - python-package
       - jvm
     permissions:
