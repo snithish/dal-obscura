@@ -1,7 +1,13 @@
+import polars as pl
 import pytest
 
 from dal_obscura.connectors.python_sdk import DalObscuraClient, DuckDBDalObscuraReader
-from tests.support.arrow import id_email_region_batch, id_email_region_schema
+from tests.support.arrow import (
+    id_email_region_batch,
+    id_email_region_schema,
+    metadata_batch,
+    metadata_schema,
+)
 from tests.support.flight import (
     StubTableFormat,
     build_flight_service,
@@ -111,6 +117,80 @@ def test_python_sdk_reads_authorized_arrow_table():
     assert result.schema.names == ["id", "email"]
     assert result.column("id").to_pylist() == [1, 3]
     assert result.column("email").to_pylist() == ["[hidden]", "[hidden]"]
+
+
+def test_python_sdk_materializes_governed_result_as_polars_dataframe():
+    schema = id_email_region_schema()
+    batch = id_email_region_batch(
+        [1, 2, 3],
+        ["a@example.com", "b@example.com", "c@example.com"],
+        ["us", "eu", "us"],
+    )
+    table_format = StubTableFormat(
+        catalog_name="analytics",
+        table_name="test.table",
+        format="stub_format",
+        schema=schema,
+        batches=(batch,),
+    )
+    server = build_flight_service(table_format=table_format, policy_rules=_policy_rules())
+
+    with running_flight_client(server) as flight_client:
+        sdk = DalObscuraClient.from_flight_client(
+            flight_client,
+            auth_token=make_jwt("user1"),
+        )
+        result = sdk.read_polars(
+            catalog="analytics",
+            target="test.table",
+            columns=["id", "email"],
+            row_filter="\"region\" = 'us'",
+        )
+
+    assert isinstance(result, pl.DataFrame)
+    assert result.schema == {"id": pl.Int64, "email": pl.String}
+    assert result.to_dict(as_series=False) == {"id": [1, 3], "email": ["[hidden]", "[hidden]"]}
+
+
+def test_python_sdk_preserves_nested_masked_arrow_values_in_polars():
+    schema = metadata_schema()
+    table_format = StubTableFormat(
+        catalog_name="analytics",
+        table_name="test.table",
+        format="stub_format",
+        schema=schema,
+        batches=(metadata_batch(),),
+    )
+    server = build_flight_service(
+        table_format=table_format,
+        policy_rules=[
+            allow_rule(
+                ["id", "metadata"],
+                masks={"metadata.preferences.theme": {"type": "redact", "value": "[hidden]"}},
+            )
+        ],
+    )
+
+    with running_flight_client(server) as flight_client:
+        sdk = DalObscuraClient.from_flight_client(
+            flight_client,
+            auth_token=make_jwt("user1"),
+        )
+        result = sdk.read_polars(
+            catalog="analytics",
+            target="test.table",
+            columns=["id", "metadata"],
+        )
+
+    assert result.schema["metadata"] == pl.Struct
+    assert result.to_dict(as_series=False)["metadata"] == [
+        {
+            "preferences": [
+                {"name": "web", "theme": "[hidden]"},
+                {"name": "mobile", "theme": "[hidden]"},
+            ]
+        }
+    ]
 
 
 def test_duckdb_reader_exposes_sdk_results_as_relation():

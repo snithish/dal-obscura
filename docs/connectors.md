@@ -39,7 +39,7 @@ exchange returned tickets.
 
 | Surface | Location | Use when |
 | --- | --- | --- |
-| Python SDK | `src/dal_obscura/connectors/python_sdk.py` | You need PyArrow tables, batches, or DuckDB relations. |
+| Python SDK | `src/dal_obscura/connectors/python_sdk.py` | You need PyArrow tables, batches, DuckDB relations, or a materialized Polars DataFrame. |
 | Java client | `connectors/jvm/dal-obscura-client-java` | You are integrating with JVM applications. |
 | Spark datasource | `connectors/jvm/spark3-datasource` | You want Spark DataFrame reads through dal-obscura. |
 | Contract fixtures | `connectors/contract-fixtures` | You are testing request-shape compatibility. |
@@ -74,7 +74,32 @@ with DalObscuraClient("grpc+tcp://localhost:8815", auth_token=token) as client:
 ```
 
 The Python SDK can return schemas, planned Flight endpoints, record batches,
-PyArrow tables, and DuckDB relations.
+PyArrow tables, and DuckDB relations. `read_batches()` is the streaming API:
+use it as a context manager and close it when stopping early. `read_table()`
+intentionally materializes every authorized batch.
+
+### Polars
+
+Install the portable example dependency with `pip install 'dal-obscura[examples]'`.
+`read_polars()` first materializes the governed Arrow result, then converts it:
+
+```python
+frame = client.read_polars(
+    catalog="analytics",
+    target="default.users",
+    columns=["id", "profile"],
+)
+```
+
+Nested values, nulls, and masks are preserved through Arrow conversion. This is
+not a lazy Polars scan and does not claim native Polars predicate pushdown.
+
+### DuckDB lifetime
+
+`DuckDBDalObscuraReader.relation()` supplies DuckDB an Arrow record-batch reader
+without preloading the complete result. The relation is single-pass at the
+gateway boundary; DuckDB operations such as joins or sorts can materialize
+their own intermediate data.
 
 ## Connector Rules
 

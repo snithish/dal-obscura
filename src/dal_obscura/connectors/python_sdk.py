@@ -17,6 +17,7 @@ Example:
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
+from typing import TYPE_CHECKING, cast
 from urllib.parse import urlparse
 
 import duckdb
@@ -24,6 +25,9 @@ import pyarrow as pa
 import pyarrow.flight as flight
 
 from dal_obscura.common.flight_contract import FLIGHT_PROTOCOL_VERSION, encode_plan_command
+
+if TYPE_CHECKING:
+    import polars as pl
 
 PROTOCOL_VERSION = FLIGHT_PROTOCOL_VERSION
 
@@ -228,6 +232,40 @@ class DalObscuraClient:
         if batches:
             return pa.Table.from_batches(batches, schema=stream.schema)
         return pa.Table.from_batches([], schema=stream.schema)
+
+    def read_polars(
+        self,
+        *,
+        catalog: str | None,
+        target: str,
+        columns: Iterable[str],
+        row_filter: str | None = None,
+    ) -> pl.DataFrame:
+        """Materializes a governed read as a Polars DataFrame.
+
+        This explicitly collects the Flight stream into an Arrow table before
+        conversion. It is not a lazy Polars scan and does not provide predicate
+        pushdown beyond the governed ``row_filter`` supplied to this client.
+        Install the optional client dependency with ``dal-obscura[examples]``.
+        """
+        try:
+            import polars as pl
+        except ImportError as error:
+            raise RuntimeError(
+                "Polars support requires the optional dependency: "
+                "pip install 'dal-obscura[examples]'"
+            ) from error
+        return cast(
+            "pl.DataFrame",
+            pl.from_arrow(
+                self.read_table(
+                    catalog=catalog,
+                    target=target,
+                    columns=columns,
+                    row_filter=row_filter,
+                )
+            ),
+        )
 
     def close(self) -> None:
         """Closes the owned Flight client, if this instance created it."""
