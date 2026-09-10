@@ -451,32 +451,38 @@ name = "dal-obscura"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "alembic" },
-    { name = "cryptography" },
-    { name = "duckdb" },
-    { name = "fastapi" },
-    { name = "httpx" },
     { name = "protobuf" },
-    { name = "psutil" },
     { name = "pyarrow" },
-    { name = "pydantic" },
-    { name = "pyiceberg", extra = ["sql-sqlite"] },
-    { name = "pyjwt" },
-    { name = "sqlalchemy" },
-    { name = "sqlglot" },
-    { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.optional-dependencies]
+duckdb = [
+    { name = "duckdb" },
+]
 examples = [
-    { name = "httpx" },
+    { name = "duckdb" },
+    { name = "polars" },
+]
+polars = [
     { name = "polars" },
 ]
 postgres = [
     { name = "psycopg", extra = ["binary"] },
 ]
 server = [
+    { name = "alembic" },
+    { name = "cryptography" },
+    { name = "duckdb" },
+    { name = "fastapi" },
     { name = "grpcio" },
+    { name = "httpx" },
+    { name = "psutil" },
+    { name = "pydantic" },
+    { name = "pyiceberg", extra = ["sql-sqlite"] },
+    { name = "pyjwt" },
+    { name = "sqlalchemy" },
+    { name = "sqlglot" },
+    { name = "uvicorn", extra = ["standard"] },
 ]
 test = [
     { name = "httpx" },
@@ -500,30 +506,31 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "alembic", specifier = ">=1.13.0" },
-    { name = "cryptography", specifier = ">=46.0.7" },
-    { name = "duckdb", specifier = ">=1.0.0" },
-    { name = "fastapi", specifier = ">=0.115.0" },
+    { name = "alembic", marker = "extra == 'server'", specifier = ">=1.13.0" },
+    { name = "cryptography", marker = "extra == 'server'", specifier = ">=46.0.7" },
+    { name = "dal-obscura", extras = ["duckdb", "polars"], marker = "extra == 'examples'" },
+    { name = "duckdb", marker = "extra == 'duckdb'", specifier = ">=1.0.0" },
+    { name = "duckdb", marker = "extra == 'server'", specifier = ">=1.0.0" },
+    { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.115.0" },
     { name = "grpcio", marker = "extra == 'server'", specifier = ">=1.62.0" },
-    { name = "httpx", specifier = ">=0.27.0" },
-    { name = "httpx", marker = "extra == 'examples'", specifier = ">=0.27.0" },
+    { name = "httpx", marker = "extra == 'server'", specifier = ">=0.27.0" },
     { name = "httpx", marker = "extra == 'test'", specifier = ">=0.27.0" },
-    { name = "polars", marker = "extra == 'examples'", specifier = ">=1.0.0" },
+    { name = "polars", marker = "extra == 'polars'", specifier = ">=1.0.0" },
     { name = "protobuf", specifier = ">=7.35.1" },
-    { name = "psutil", specifier = ">=5.9.0" },
+    { name = "psutil", marker = "extra == 'server'", specifier = ">=5.9.0" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.2.0" },
     { name = "pyarrow", specifier = ">=15.0.0" },
-    { name = "pydantic", specifier = ">=2.12.0" },
-    { name = "pyiceberg", extras = ["sql-sqlite"], specifier = ">=0.6.0" },
-    { name = "pyjwt", specifier = ">=2.8.0" },
+    { name = "pydantic", marker = "extra == 'server'", specifier = ">=2.12.0" },
+    { name = "pyiceberg", extras = ["sql-sqlite"], marker = "extra == 'server'", specifier = ">=0.6.0" },
+    { name = "pyjwt", marker = "extra == 'server'", specifier = ">=2.8.0" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8.0.0" },
     { name = "pytest-benchmark", marker = "extra == 'test'", specifier = ">=4.0.0" },
     { name = "pytest-cov", marker = "extra == 'test'", specifier = ">=4.1.0" },
-    { name = "sqlalchemy", specifier = ">=2.0.0" },
-    { name = "sqlglot", specifier = ">=30.2.1" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32.0" },
+    { name = "sqlalchemy", marker = "extra == 'server'", specifier = ">=2.0.0" },
+    { name = "sqlglot", marker = "extra == 'server'", specifier = ">=30.2.1" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'server'", specifier = ">=0.32.0" },
 ]
-provides-extras = ["sqlite", "postgres", "examples", "server", "test"]
+provides-extras = ["duckdb", "polars", "sqlite", "postgres", "server", "examples", "test"]
 
 [package.metadata.requires-dev]
 dev = [

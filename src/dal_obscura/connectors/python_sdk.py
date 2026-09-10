@@ -20,13 +20,13 @@ from collections.abc import Iterable, Iterator
 from typing import TYPE_CHECKING, cast
 from urllib.parse import urlparse
 
-import duckdb
 import pyarrow as pa
 import pyarrow.flight as flight
 
 from dal_obscura.common.flight_contract import FLIGHT_PROTOCOL_VERSION, encode_plan_command
 
 if TYPE_CHECKING:
+    import duckdb
     import polars as pl
 
 PROTOCOL_VERSION = FLIGHT_PROTOCOL_VERSION
@@ -307,7 +307,7 @@ class DuckDBDalObscuraReader:
         connection: duckdb.DuckDBPyConnection | None = None,
     ) -> None:
         self._client = client
-        self._connection = connection or duckdb.connect()
+        self._connection = connection or _duckdb().connect()
         self._owns_connection = connection is None
 
     def relation(
@@ -344,6 +344,16 @@ class DuckDBDalObscuraReader:
     def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
         del exc_type, exc, traceback
         self.close()
+
+
+def _duckdb():
+    try:
+        import duckdb
+    except ImportError as error:
+        raise RuntimeError(
+            "DuckDB support requires the optional dependency: pip install 'dal-obscura[duckdb]'"
+        ) from error
+    return duckdb
 
 
 def _descriptor(

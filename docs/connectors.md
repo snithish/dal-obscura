@@ -53,13 +53,29 @@ spark.read()
      .option("dal.catalog", "analytics")
      .option("dal.target", "default.users")
      .option("dal.auth.token", token)
+     .option("dal.executor.auth.token-env", "DAL_OBSCURA_TOKEN")
      .load();
 ```
 
 Use the `dal.*` namespace for Spark options. Unprefixed option names are
 rejected. Pass custom headers as `dal.auth.header.<name>`.
 
+Spark input partitions never contain driver credentials. Every read must name
+exactly one executor bearer-token source: `dal.executor.auth.token-env` for an
+environment variable on every executor, or `dal.executor.auth.token-property`
+for a JVM property. The environment form is intended for deployed clusters;
+the property form is useful for local development only.
+
 ## Python Read
+
+Install only the Arrow Flight client:
+
+```bash
+pip install dal-obscura
+```
+
+Add `dal-obscura[duckdb]` for local DuckDB relations and
+`dal-obscura[polars]` for `read_polars()`.
 
 ```python
 from dal_obscura.connectors import DalObscuraClient
@@ -80,7 +96,7 @@ intentionally materializes every authorized batch.
 
 ### Polars
 
-Install the portable example dependency with `pip install 'dal-obscura[examples]'`.
+Install Polars with `pip install 'dal-obscura[polars]'`.
 `read_polars()` first materializes the governed Arrow result, then converts it:
 
 ```python

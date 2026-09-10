@@ -66,10 +66,15 @@ spark.read()
      .option("dal.catalog", "analytics")
      .option("dal.target", "default.users")
      .option("dal.auth.token", token)
+     .option("dal.executor.auth.token-env", "DAL_OBSCURA_TOKEN")
      .load();
 ```
 
-`dal.auth.token` becomes `Authorization: Bearer <token>`.
+`dal.auth.token` becomes `Authorization: Bearer <token>` for driver-side
+schema discovery and planning. Set exactly one executor credential reference on
+every read: `dal.executor.auth.token-env` (recommended for deployed clusters)
+or `dal.executor.auth.token-property` (local development). The partition
+payload contains only that reference, never the bearer token or driver headers.
 
 For API keys, gateway-injected headers, or other header-based schemes, pass
 explicit headers:
@@ -100,6 +105,10 @@ mvn -f connectors/jvm/pom.xml -Pspark-4.0 verify
 ```
 
 ## Python SDK
+
+Install `dal-obscura` for the Arrow Flight client, `dal-obscura[duckdb]` for
+DuckDB relations, and `dal-obscura[polars]` for explicit Polars
+materialization. Operators install `dal-obscura[server]`.
 
 The Python SDK lives in `dal_obscura.connectors.python_sdk`. It exposes schema,
 plan, batch, table, and DuckDB relation helpers over the same protocol v1 Flight
