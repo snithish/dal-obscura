@@ -133,6 +133,43 @@ def test_publish_activates_manifest_with_expected_generation(tmp_path, capsys) -
     assert output["publication_id"] != str(active_id)
 
 
+def test_publish_rejects_stale_expected_generation(tmp_path, capsys) -> None:
+    database_url = f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
+    engine = create_engine_from_url(database_url)
+    migrate_config_store(engine)
+    cell_id = uuid4()
+    tenant_id = uuid4()
+    active_id = uuid4()
+    with session_factory(engine)() as session:
+        store = PublicationStore(session)
+        store.create_cell(cell_id=cell_id, name="default", region="local")
+        store.create_tenant(tenant_id=tenant_id, slug="default", display_name="Default")
+        store.assign_tenant_to_cell(cell_id=cell_id, tenant_id=tenant_id, shard_key="default")
+        store.insert_publication(cell_id=cell_id, publication_id=active_id, manifest_hash="a" * 64)
+        store.activate_publication(cell_id=cell_id, publication_id=active_id)
+        session.commit()
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(_manifest(cell_id, tenant_id)))
+
+    assert (
+        run(
+            [
+                "publish",
+                str(path),
+                "--database-url",
+                database_url,
+                "--expected-generation",
+                str(uuid4()),
+            ]
+        )
+        == 1
+    )
+
+    assert "active generation changed" in capsys.readouterr().err
+    with session_factory(engine)() as session:
+        assert PublicationStore(session).get_active_publication(cell_id).publication_id == active_id
+
+
 def _manifest(cell_id, tenant_id) -> dict[str, object]:
     return {
         "version": 1,
