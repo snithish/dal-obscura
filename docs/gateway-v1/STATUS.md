@@ -18,7 +18,7 @@ package complete unless its stated evidence exists.
 | W09 | implementing | DuckDB streams have configured non-blocking admission, one execution thread, memory and input-batch limits; planned scan payloads have a byte limit. Generation freshness, deadlines, audit events, and output/value limits remain. |
 | W10 | implementing | Asset admission is Iceberg-only; deletion inventory is recorded but removal waits for replacement paths. |
 | W11 | pending | Client package/deployment privilege split has not begun. |
-| W12 | pending | CI/test reorganization has not begun. |
+| W12 | implementing | CI separates deterministic contract/security tests from a bounded integration lane while retaining package and JVM gates. PostgreSQL race, native Iceberg conformance, capacity, and cross-consumer lanes remain. |
 | W13 | pending | Independent evaluation has not begun. |
 | W14 | pending | Partner discovery has not begun. |
 | W15 | pending | Release/hold/pivot decision awaits evaluation. |
@@ -39,5 +39,6 @@ package complete unless its stated evidence exists.
 - `21c4b77`: DuckDB stream admission and per-connection resource limits are enforced.
 - `3289af5`: Arrow input batches have a configured byte limit.
 - `72ef40d`: planned ticket scan payloads have a configured byte limit.
+- `e255761`: CI separates contract/security and bounded integration test lanes.
 
 These are W01/W04/W05/W10 inputs, not completion evidence for those packages.
