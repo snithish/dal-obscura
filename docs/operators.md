@@ -19,11 +19,10 @@ For incident-style steps, use the [Operator Runbook](operators-runbook.md).
 
 ```mermaid
 flowchart TB
-    users["Browser users"] --> http["HTTP ingress"]
+    operator["Operator host"] --> cli["Operator CLI"]
     clients["Flight clients"] --> flight_ingress["Flight ingress"]
 
-    http --> ui["Standalone UI"]
-    ui --> cp["Control plane API"]
+    cli --> cp["Publication repository"]
     flight_ingress --> dp["Data plane"]
 
     cp --> db[("Postgres config database")]
@@ -45,16 +44,14 @@ repository.
 
 | Component | Purpose |
 | --- | --- |
-| Control plane API | Catalog discovery, assets, owners, policies, policy versions, runtime settings. |
-| Standalone UI | Browser workflow for admins and asset owners. |
+| Operator CLI | Validates, previews, publishes, and reports immutable runtime generations. |
 | Data plane | Arrow Flight reads, authentication, ticket verification, policy enforcement. |
 | Postgres | Persistent configuration, policy versions, active policy set, and ticket state. |
-| IAM provider | OIDC/JWKS, API key, mTLS, trusted headers, or composite provider. |
+| IAM provider | One configured OIDC/JWKS provider for reader authentication. |
 | Catalog | Discovers tables and resolves governed targets. |
 | Warehouse | Stores table metadata and data files. |
 
-The public control-plane model is workspace-first: assets, catalogs, owners,
-policies, policy versions, and settings. Tenant and cell records are internal
+Publications are immutable manifest generations. Tenant and cell records are
 runtime partitioning details.
 
 ## Required Decisions
@@ -77,15 +74,11 @@ it can load the correct internal runtime partition.
 | Variable | Used by | Meaning |
 | --- | --- | --- |
 | `DAL_OBSCURA_DATABASE_URL` | Control plane and data plane | SQLAlchemy database URL for config state. |
-| `DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN` | Control plane | Bootstrap admin token for API setup. |
-| `DAL_OBSCURA_CONTROL_PLANE_HOST` | Control plane | HTTP bind host. |
-| `DAL_OBSCURA_CONTROL_PLANE_PORT` | Control plane | HTTP bind port. |
 | `DAL_OBSCURA_CELL_ID` | Data plane | Internal runtime cell identifier. |
 | `DAL_OBSCURA_LOCATION` | Data plane | Advertised Flight endpoint location. |
 | `DAL_OBSCURA_TICKET_SECRET` | Data plane | HMAC secret for opaque tickets. |
 
-Auth-specific variables depend on the provider. See [Security](security.md) and
-the runnable [authentication examples](../examples/auth/README.md).
+See [Security](security.md) and the runnable [OIDC example](../examples/auth/keycloak-oidc/README.md).
 
 ## Startup Order
 
@@ -94,17 +87,15 @@ sequenceDiagram
     participant Ops
     participant DB as "Postgres"
     participant IAM
-    participant CP as "Control plane API"
-    participant UI
+    participant CLI as "Operator CLI"
     participant DP as "Data plane"
 
     Ops->>DB: Start database
     Ops->>DB: Run dal-obscura-migrate upgrade
     Ops->>DB: Run dal-obscura-migrate check
     Ops->>IAM: Start or configure IAM
-    Ops->>CP: Start control plane API
-    Ops->>UI: Start UI with API base URL
-    Ops->>CP: Configure auth, runtime, catalogs, assets, owners, policy version
+    Ops->>CLI: Validate and preview a versioned manifest
+    Ops->>CLI: Publish with the expected active generation
     Ops->>DP: Start data plane
     Ops->>DP: Verify allowed and denied reads
 ```
@@ -112,12 +103,6 @@ sequenceDiagram
 Services never run config-store migrations automatically at startup.
 
 ## Health And Readiness
-
-Control-plane probes are served by the main FastAPI app:
-
-- `GET /healthz`: process liveness only; no authentication required.
-- `GET /readyz`: config-store readiness; no authentication required. Database
-  failures return `503`.
 
 The data plane can expose an optional HTTP health app:
 
@@ -128,10 +113,8 @@ The data plane can expose an optional HTTP health app:
 
 Operational verification should also include:
 
-- API docs at `/docs`.
-- UI can reach the configured API base URL.
-- Catalog discovery returns expected tables.
-- At least one governed asset has an active policy version.
+- `dal-obscura-admin status` reports the expected active generation.
+- At least one manifest asset has an active policy.
 - One allowed read and one denied read behave as expected.
 
 ## Operational Risks

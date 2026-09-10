@@ -1,8 +1,9 @@
 # Policy Authoring
 
 Policies describe who can read an asset and how rows and columns are shaped
-before data is returned. Asset owners use the control-plane UI or API to edit
-owners, rules, row filters, masks, and policy versions.
+before data is returned. Operators author a versioned manifest, validate it,
+preview its effective grants against supplied personas, and publish it through
+the administrative CLI.
 
 ## Contents
 
@@ -18,19 +19,17 @@ owners, rules, row filters, masks, and policy versions.
 
 ```mermaid
 flowchart LR
-    owner["Asset owner"] --> draft["Edit draft"]
-    draft --> validate["Validate policy"]
-    validate --> publish["Submit policy version"]
-    publish --> active["Active policy version"]
+    operator["Operator"] --> manifest["Versioned manifest"]
+    manifest --> validate["Validate"]
+    validate --> preview["Preview supplied personas"]
+    preview --> publish["Compare-and-swap publish"]
+    publish --> active["Active generation"]
     active --> read["Reads use that version"]
 ```
 
-Publishing is asset-scoped. Treat it as submitting a new version of one asset's
-policy, not as a global release.
-
-The public control-plane model is workspace-first: assets, catalogs, owners,
-policies, policy versions, and settings. Tenant, cell, and publication records
-are internal runtime implementation details.
+Publishing creates one immutable generation for the selected runtime cell and
+tenant. Preview input is an operator-supplied simulation; it is never reader
+authentication.
 
 ## Rule Evaluation
 
@@ -50,15 +49,15 @@ and define masks. Multiple matching grants combine by:
 
 - unioning visible columns,
 - AND-combining row filters,
-- choosing the strictest mask for each masked column.
+- applying only compatible masks; incompatible overlaps reject publication.
 
 ## Authoring Checklist
 
-- Start with owners. Only trusted owners should edit policy for an asset.
+- Run the CLI only with operator credentials on an administrative host.
 - Grant the smallest useful column set.
 - Express row filters as DuckDB SQL boolean expressions.
 - Use one supported mask type per masked field.
-- Preview with representative principals before submitting a policy version.
+- Preview with representative, caller-supplied personas before publishing.
 - Verify one allowed, one privileged, and one denied read persona.
 
 ## Example Rule

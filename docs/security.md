@@ -12,7 +12,7 @@ batches leave the service.
 - [Ticket Lifecycle](#ticket-lifecycle)
 - [Policy Enforcement](#policy-enforcement)
 - [Secret Handling](#secret-handling)
-- [Browser UI](#browser-ui)
+- [Operator publication](#operator-publication)
 - [Operator Checklist](#operator-checklist)
 
 ## Security Model
@@ -94,20 +94,16 @@ flowchart LR
 Store references in configuration. Keep secret values in environment variables,
 container secret stores, or another runtime secret provider.
 
-## Browser UI
+## Operator publication
 
-For interactive users, prefer OIDC authorization-code flow with PKCE. The local
-Keycloak demo uses this pattern with a public browser client.
-
-The standalone UI should be exposed with the same IAM posture as the API. Do
-not render bootstrap admin tokens into UI HTML or static config.
+Run the operator CLI on an administrative host to validate, preview, publish,
+and inspect manifests. Reader-facing services do not expose policy authoring.
 
 ## Operator Checklist
 
 - Use Postgres for persistent shared state.
-- Use OIDC/JWKS unless another provider is required.
+- Use the supported OIDC/JWKS provider.
 - Bind local examples to `127.0.0.1`.
 - Rotate ticket and IAM secrets through the runtime secret provider.
 - Test one allowed persona and one denied persona before exposing an
   environment.
-- Do not expose trusted-header auth unless a trusted proxy controls the header.

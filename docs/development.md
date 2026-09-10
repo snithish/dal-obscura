@@ -18,13 +18,12 @@ This guide is for contributors changing the service, policies, or connectors.
 dal-obscura follows a hexagonal architecture. Domain and application code should
 not depend on transport adapters.
 
-The public control-plane model is workspace-first: assets, catalogs, owners,
-policies, policy versions, and settings. Tenant, cell, and publication records
-are internal runtime implementation details.
+Operators compile versioned Iceberg/OIDC manifests into immutable publication
+generations. Tenant and cell records are runtime partitioning details.
 
 ```mermaid
 flowchart TB
-    interfaces["interfaces/*\nFlight, CLI, API"] --> app["application/*\nuse cases and ports"]
+    interfaces["interfaces/*\nFlight and operator CLI"] --> app["application/*\nuse cases and ports"]
     app --> domain["domain/*\nmodels and rules"]
     infra["infrastructure/*\nadapters"] --> app
     infra --> domain
@@ -35,11 +34,10 @@ flowchart TB
 | Path | Purpose |
 | --- | --- |
 | `src/dal_obscura/data_plane/interfaces/flight` | Arrow Flight transport. |
-| `src/dal_obscura/control_plane` | HTTP API, repositories, and control-plane workflows. |
+| `src/dal_obscura/control_plane` | Manifest compiler, repositories, and operator workflows. |
 | `src/dal_obscura/data_plane/application` | Data-plane use cases and ports. |
 | `src/dal_obscura/common` | Shared models, policy logic, catalog contracts, tickets, and config-store ORM. |
 | `src/dal_obscura/data_plane/infrastructure` | Catalogs, auth, ticket codecs, table formats, transforms. |
-| `ui` | Standalone React/Vite control-plane UI. |
 | `connectors` | JVM connector modules and contract fixtures. |
 | `examples` | Auth examples, manifests, and local reference environments. |
 | `tests` | Unit, integration, smoke, and benchmark tests. |
