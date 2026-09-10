@@ -38,24 +38,18 @@ stream data.
 | Ticket payload | Client receives an opaque reference, not an editable scan plan. |
 | Config database | Stores policy versions, active state, and trusted internal scan payloads. |
 | Secret values | Stay in runtime secret providers, not in config records. |
-| Trusted headers | Safe only behind a gateway that strips client-supplied identity headers. |
 
 Tickets persist trusted internal Python scan tasks server-side. That DB payload
 is an internal boundary and is not a public connector contract.
 
 ## Identity Providers
 
-Choose the narrowest provider that fits the deployment.
-
 | Provider | Best for | Notes |
 | --- | --- | --- |
-| OIDC/JWKS | Browser UI, Keycloak, enterprise IdPs | Recommended default. |
-| API key | Local development or service accounts | Keep keys in secret storage. |
-| mTLS | Service-to-service reads | Use certificate identity mapping. |
-| Trusted headers | Reverse proxies | Only use behind a locked-down proxy boundary. |
-| Composite | Mixed environments | Make provider order explicit. |
+| OIDC/JWKS | Gateway and local Keycloak demos | Required identity provider. |
 
-Runnable auth examples live under [`examples/auth`](../examples/auth).
+The gateway accepts one configured OIDC/JWKS provider. API keys, trusted headers,
+mTLS identity mapping, shared-secret JWTs, and composite auth are unsupported.
 
 ## Ticket Lifecycle
 

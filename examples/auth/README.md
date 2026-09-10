@@ -13,24 +13,16 @@ you want to run the examples against a release tag, SHA tag, or local image.
 
 | Example | Start here when you want to see |
 | --- | --- |
-| `api-key` | the smallest service credential flow |
-| `shared-jwt` | HS256 bearer JWT validation with a shared secret |
 | `keycloak-oidc` | OIDC/JWKS validation against a real Keycloak issuer |
-| `trusted-headers` | a trusted Flight gateway injecting identity headers |
-| `mtls` | local client-certificate authentication |
-| `mtls-spiffe` | SPIRE-issued SPIFFE X.509-SVID authentication |
-| `composite-provider` | one server accepting multiple credential families |
 
-For a first read-through, start with `api-key` or `shared-jwt`. The mTLS and
-SPIFFE examples include more infrastructure because they demonstrate certificate
-issuance, trust roots, and workload identities.
+Start with `keycloak-oidc`; it is the only supported identity example.
 
 ## Run From an Example Directory
 
 Every example can still be run from its own directory:
 
 ```bash
-cd examples/auth/shared-jwt
+cd examples/auth/keycloak-oidc
 docker compose up -d --wait
 docker compose logs client
 docker compose exec client dal-obscura-example-read --target default.users
@@ -48,10 +40,10 @@ commands without changing into each directory:
 
 ```bash
 examples/auth/run list
-examples/auth/run shared-jwt up
-examples/auth/run shared-jwt logs
-examples/auth/run shared-jwt read --target default.users
-examples/auth/run shared-jwt down
+examples/auth/run keycloak-oidc up
+examples/auth/run keycloak-oidc logs
+examples/auth/run keycloak-oidc read --target default.users
+examples/auth/run keycloak-oidc down
 ```
 
 The helper prints the Docker Compose command it runs, so users can copy the
@@ -69,13 +61,7 @@ Most examples have the same three service roles:
 3. `client` obtains or presents the selected credential, performs a startup
    read, marks itself healthy, and then stays available for interactive reads.
 
-Some examples add provider infrastructure:
-
-- `keycloak-oidc` adds `keycloak`.
-- `trusted-headers` adds `gateway`.
-- `mtls` generates local demo certificates during setup.
-- `mtls-spiffe` includes `compose.spire.yaml`, which contains the SPIRE server,
-  agent, bootstrap, and SVID helper services.
+The OIDC example adds a local `keycloak` issuer.
 
 The sample policy grants `example-user` access to `default.users`, with a row
 filter that returns two rows. A successful run prints:
