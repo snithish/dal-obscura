@@ -9,6 +9,7 @@ Read in order:
 3. [EVALUATION.md](EVALUATION.md): independent correctness, security, performance and product evaluation.
 4. [AGENT_HANDOFF.md](AGENT_HANDOFF.md): execution instructions and reusable assignment prompt.
 5. [NESTED_AND_CONSUMER_CONTRACT.md](NESTED_AND_CONSUMER_CONTRACT.md): normative nested authorization/masking, framework compatibility and distributed retry contract. Read alongside the master scope before implementing W02/W03/W06/W08.
+6. [discovery-packet.md](discovery-packet.md): owner-approved design-partner interview and W15 decision record template.
 
 These documents are the target specification, not a claim about current behavior. Proposed names, commands, types and paths must be created by their assigned packages. Existing commands are explicitly labeled. Resolve any contradiction before implementation; security guarantees take priority over convenience and benchmark targets.
 
