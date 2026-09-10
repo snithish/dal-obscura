@@ -67,7 +67,7 @@ runtime partitioning details.
 | Publishing | Keep policy versions asset-scoped. |
 | Catalogs | Resolve governed tables through catalogs; do not publish standalone file paths. |
 | UI exposure | Put the UI behind the same IAM posture as the API. |
-| Stale config | Keep fail-closed default unless a short bounded stale window is an explicit risk decision. |
+| Config-store outage | Fail closed; restore the config store before serving new requests. |
 
 Operators still configure `DAL_OBSCURA_CELL_ID` for each data-plane process so
 it can load the correct internal runtime partition.
@@ -83,7 +83,6 @@ it can load the correct internal runtime partition.
 | `DAL_OBSCURA_CELL_ID` | Data plane | Internal runtime cell identifier. |
 | `DAL_OBSCURA_LOCATION` | Data plane | Advertised Flight endpoint location. |
 | `DAL_OBSCURA_TICKET_SECRET` | Data plane | HMAC secret for opaque tickets. |
-| `DAL_OBSCURA_ALLOW_STALE_CONFIG_SECONDS` | Data plane | Optional bounded stale-config window during short config-store outages. |
 
 Auth-specific variables depend on the provider. See [Security](security.md) and
 the runnable [authentication examples](../examples/auth/README.md).
@@ -144,6 +143,4 @@ Operational verification should also include:
   real personas before exposing the environment.
 - SQLite state is easy to lose; use Postgres for anything shared.
 - Internal cell identifiers should not become user-facing concepts.
-- By default, data planes fail closed when they cannot read active published
-  configuration. Set `DAL_OBSCURA_ALLOW_STALE_CONFIG_SECONDS` only when short
-  config-store outages should keep previously authorized reads working.
+- Data planes fail closed when they cannot read active published configuration.

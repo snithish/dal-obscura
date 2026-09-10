@@ -117,5 +117,3 @@ not render bootstrap admin tokens into UI HTML or static config.
 - Test one allowed persona and one denied persona before exposing an
   environment.
 - Do not expose trusted-header auth unless a trusted proxy controls the header.
-- Keep `DAL_OBSCURA_ALLOW_STALE_CONFIG_SECONDS` unset unless a bounded stale
-  window is an explicit risk decision.

@@ -101,88 +101,13 @@ def test_published_store_fails_closed_by_default_after_transient_failure(
         )
 
 
-def test_published_store_uses_last_good_asset_when_stale_mode_is_enabled(
-    db_session: Session,
-    monkeypatch: pytest.MonkeyPatch,
-):
-    cell_id = uuid4()
-    tenant_id = uuid4()
-    _publish_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
-    now = 100.0
-    config_store = PublishedConfigStore(
-        db_session,
-        cell_id=cell_id,
-        allow_stale_seconds=60,
-        clock=lambda: now,
-    )
-
-    first = config_store.get_asset(
-        tenant_id=str(tenant_id),
-        catalog="analytics",
-        target="default.users",
-    )
-
-    def fail_get(*args, **kwargs):
-        del args, kwargs
-        raise RuntimeError("database unavailable")
-
-    monkeypatch.setattr(db_session, "get", fail_get)
-    second = config_store.get_asset(
-        tenant_id=str(tenant_id),
-        catalog="analytics",
-        target="default.users",
-    )
-
-    assert second == first
-
-
-def test_published_store_rejects_expired_last_good_asset(
-    db_session: Session,
-    monkeypatch: pytest.MonkeyPatch,
-):
-    cell_id = uuid4()
-    tenant_id = uuid4()
-    _publish_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
-    now = 100.0
-    config_store = PublishedConfigStore(
-        db_session,
-        cell_id=cell_id,
-        allow_stale_seconds=60,
-        clock=lambda: now,
-    )
-
-    config_store.get_asset(
-        tenant_id=str(tenant_id),
-        catalog="analytics",
-        target="default.users",
-    )
-
-    def fail_get(*args, **kwargs):
-        del args, kwargs
-        raise RuntimeError("database unavailable")
-
-    now = 161.0
-    monkeypatch.setattr(db_session, "get", fail_get)
-
-    with pytest.raises(RuntimeError, match="database unavailable"):
-        config_store.get_asset(
-            tenant_id=str(tenant_id),
-            catalog="analytics",
-            target="default.users",
-        )
-
-
-def test_published_store_does_not_use_last_good_when_asset_is_removed(
+def test_published_store_rejects_assets_removed_by_new_generation(
     db_session: Session,
 ):
     cell_id = uuid4()
     tenant_id = uuid4()
     _publish_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
-    config_store = PublishedConfigStore(
-        db_session,
-        cell_id=cell_id,
-        allow_stale_seconds=60,
-    )
+    config_store = PublishedConfigStore(db_session, cell_id=cell_id)
 
     config_store.get_asset(
         tenant_id=str(tenant_id),

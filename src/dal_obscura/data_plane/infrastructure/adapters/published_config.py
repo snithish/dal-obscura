@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import logging
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from threading import RLock
-from time import monotonic
 from typing import Any, cast
 from uuid import UUID
 
@@ -37,8 +35,6 @@ from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
     SecretProvider,
     resolve_secret_refs,
 )
-
-LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -100,8 +96,6 @@ class PublishedConfigStore:
         session: Session | sessionmaker[Session],
         *,
         cell_id: UUID,
-        allow_stale_seconds: int | None = None,
-        clock: Callable[[], float] = monotonic,
     ) -> None:
         if isinstance(session, Session):
             self._session: Session | None = session
@@ -110,15 +104,9 @@ class PublishedConfigStore:
             self._session = None
             self._session_maker = session
         self._cell_id = cell_id
-        self._allow_stale_seconds = allow_stale_seconds
-        self._clock = clock
         self._lock = RLock()
         self._asset_cache: dict[tuple[UUID, UUID, str, str], PublishedAsset] = {}
-        self._last_good_by_target: dict[tuple[UUID, str, str], PublishedAsset] = {}
-        self._last_good_asset_loaded_at: dict[tuple[UUID, str, str], float] = {}
         self._catalog_cache: dict[tuple[UUID, UUID], list[PublishedCatalog]] = {}
-        self._last_good_catalogs_by_tenant: dict[UUID, list[PublishedCatalog]] = {}
-        self._last_good_catalogs_loaded_at: dict[UUID, float] = {}
         self._runtime_cache: dict[UUID, PublishedRuntime] = {}
         self._tenant_cache: dict[str, UUID] = {}
 
@@ -129,107 +117,38 @@ class PublishedConfigStore:
     def get_asset(self, *, tenant_id: str, catalog: str, target: str) -> PublishedAsset:
         with self._lock:
             tenant_uuid = self._tenant_uuid(tenant_id)
-            target_key = (tenant_uuid, catalog, target)
-            try:
-                with self._session_scope() as session:
-                    publication_id = self._active_publication_id(session)
-                    cache_key = (publication_id, tenant_uuid, catalog, target)
-                    cached = self._asset_cache.get(cache_key)
-                    if cached is not None:
-                        return cached
-                    asset = self._published_asset(
-                        session,
-                        publication_id=publication_id,
-                        tenant_id=tenant_uuid,
-                        catalog=catalog,
-                        target=target,
-                    )
-                self._asset_cache[cache_key] = asset
-                self._last_good_by_target[target_key] = asset
-                self._last_good_asset_loaded_at[target_key] = self._clock()
-                return asset
-            except LookupError:
-                raise
-            except Exception as exc:
-                cached = self._last_good_asset(target_key)
+            with self._session_scope() as session:
+                publication_id = self._active_publication_id(session)
+                cache_key = (publication_id, tenant_uuid, catalog, target)
+                cached = self._asset_cache.get(cache_key)
                 if cached is not None:
-                    LOGGER.warning(
-                        "using_stale_published_asset",
-                        extra={
-                            "cell_id": str(self._cell_id),
-                            "tenant_id": str(tenant_uuid),
-                            "catalog": catalog,
-                            "target": target,
-                            "publication_id": str(cached.publication_id),
-                            "stale_age_seconds": self._stale_age_seconds(
-                                self._last_good_asset_loaded_at[target_key]
-                            ),
-                        },
-                    )
                     return cached
-                raise exc
+                asset = self._published_asset(
+                    session,
+                    publication_id=publication_id,
+                    tenant_id=tenant_uuid,
+                    catalog=catalog,
+                    target=target,
+                )
+            self._asset_cache[cache_key] = asset
+            return asset
 
     def get_catalogs(self, *, tenant_id: str) -> list[PublishedCatalog]:
         with self._lock:
             tenant_uuid = self._tenant_uuid(tenant_id)
-            try:
-                with self._session_scope() as session:
-                    publication_id = self._active_publication_id(session)
-                    cache_key = (publication_id, tenant_uuid)
-                    cached = self._catalog_cache.get(cache_key)
-                    if cached is not None:
-                        return cached
-                    catalogs = self._published_catalogs(
-                        session,
-                        publication_id=publication_id,
-                        tenant_id=tenant_uuid,
-                    )
-                self._catalog_cache[cache_key] = catalogs
-                self._last_good_catalogs_by_tenant[tenant_uuid] = catalogs
-                self._last_good_catalogs_loaded_at[tenant_uuid] = self._clock()
-                return catalogs
-            except LookupError:
-                raise
-            except Exception as exc:
-                cached = self._last_good_catalogs(tenant_uuid)
+            with self._session_scope() as session:
+                publication_id = self._active_publication_id(session)
+                cache_key = (publication_id, tenant_uuid)
+                cached = self._catalog_cache.get(cache_key)
                 if cached is not None:
-                    LOGGER.warning(
-                        "using_stale_published_catalogs",
-                        extra={
-                            "cell_id": str(self._cell_id),
-                            "tenant_id": str(tenant_uuid),
-                            "stale_age_seconds": self._stale_age_seconds(
-                                self._last_good_catalogs_loaded_at[tenant_uuid]
-                            ),
-                        },
-                    )
                     return cached
-                raise exc
-
-    def _last_good_asset(
-        self,
-        target_key: tuple[UUID, str, str],
-    ) -> PublishedAsset | None:
-        cached = self._last_good_by_target.get(target_key)
-        loaded_at = self._last_good_asset_loaded_at.get(target_key)
-        if cached is None or loaded_at is None or not self._stale_cache_enabled(loaded_at):
-            return None
-        return cached
-
-    def _last_good_catalogs(self, tenant_id: UUID) -> list[PublishedCatalog] | None:
-        cached = self._last_good_catalogs_by_tenant.get(tenant_id)
-        loaded_at = self._last_good_catalogs_loaded_at.get(tenant_id)
-        if cached is None or loaded_at is None or not self._stale_cache_enabled(loaded_at):
-            return None
-        return cached
-
-    def _stale_cache_enabled(self, loaded_at: float) -> bool:
-        if self._allow_stale_seconds is None:
-            return False
-        return self._stale_age_seconds(loaded_at) <= self._allow_stale_seconds
-
-    def _stale_age_seconds(self, loaded_at: float) -> float:
-        return self._clock() - loaded_at
+                catalogs = self._published_catalogs(
+                    session,
+                    publication_id=publication_id,
+                    tenant_id=tenant_uuid,
+                )
+            self._catalog_cache[cache_key] = catalogs
+            return catalogs
 
     def _published_asset(
         self,
