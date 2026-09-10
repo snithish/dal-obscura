@@ -109,6 +109,7 @@ class PublishedConfigStore:
         self._catalog_cache: dict[tuple[UUID, UUID], list[PublishedCatalog]] = {}
         self._runtime_cache: dict[UUID, PublishedRuntime] = {}
         self._tenant_cache: dict[str, UUID] = {}
+        self._cached_publication_id: UUID | None = None
 
     def active_publication_id(self) -> UUID:
         with self._session_scope() as session:
@@ -119,6 +120,7 @@ class PublishedConfigStore:
             tenant_uuid = self._tenant_uuid(tenant_id)
             with self._session_scope() as session:
                 publication_id = self._active_publication_id(session)
+                self._observe_generation(publication_id)
                 cache_key = (publication_id, tenant_uuid, catalog, target)
                 cached = self._asset_cache.get(cache_key)
                 if cached is not None:
@@ -138,6 +140,7 @@ class PublishedConfigStore:
             tenant_uuid = self._tenant_uuid(tenant_id)
             with self._session_scope() as session:
                 publication_id = self._active_publication_id(session)
+                self._observe_generation(publication_id)
                 cache_key = (publication_id, tenant_uuid)
                 cached = self._catalog_cache.get(cache_key)
                 if cached is not None:
@@ -226,6 +229,7 @@ class PublishedConfigStore:
         with self._lock:
             with self._session_scope() as session:
                 publication_id = self._active_publication_id(session)
+                self._observe_generation(publication_id)
                 cached = self._runtime_cache.get(publication_id)
                 if cached is not None:
                     return cached
@@ -243,6 +247,14 @@ class PublishedConfigStore:
                 )
             self._runtime_cache[publication_id] = runtime
             return runtime
+
+    def _observe_generation(self, publication_id: UUID) -> None:
+        if publication_id == self._cached_publication_id:
+            return
+        self._asset_cache.clear()
+        self._catalog_cache.clear()
+        self._runtime_cache.clear()
+        self._cached_publication_id = publication_id
 
     def _active_publication_id(self, session: Session) -> UUID:
         record = session.get(ActivePublicationRecord, self._cell_id)

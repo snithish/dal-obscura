@@ -138,6 +138,7 @@ def test_published_store_rejects_assets_removed_by_new_generation(
             catalog="analytics",
             target="default.users",
         )
+    assert config_store._asset_cache == {}
 
 
 def _publish_asset(
