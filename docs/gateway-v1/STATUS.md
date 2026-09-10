@@ -10,7 +10,7 @@ package complete unless its stated evidence exists.
 | W01 | implementing | Focused regressions exist for parent masking, invalid masks, grant removal, and asset binding; streaming and mask-conflict regressions remain. |
 | W02 | implementing | Immutable request models reject ambiguous projections; versioned typed paths resolve struct/list/map nodes and distinguish literal dotted names. Field IDs and protobuf/Java fixtures remain. |
 | W03 | implementing | Planning and row-filter schema checks share canonical paths; nested grants, pruning, compound masks and collection predicates remain. |
-| W04 | implementing | Fetch reauthorization is present; issuer/subject/expiry binding is not. |
+| W04 | implementing | Fetch reauthorization plus issuer/subject/identity-expiry ticket binding are present. JWKS cache bounds, exact Flight endpoint evidence and stream expiry checks remain. |
 | W05 | implementing | Asset binding is fixed and catalog construction reads asset/catalog from one captured generation; immutable plan generations and stream freshness remain. |
 | W06 | pending | Existing ticket serialization remains by owner direction. |
 | W07 | implementing | Format v3 now fails closed; inventory records unproven delete, snapshot, schema-evolution and REST-catalog behavior. |
@@ -40,6 +40,7 @@ package complete unless its stated evidence exists.
 - `3289af5`: Arrow input batches have a configured byte limit.
 - `72ef40d`: planned ticket scan payloads have a configured byte limit.
 - `e255761`: CI separates contract/security and bounded integration test lanes.
+- `pending`: fetch rejects same-subject tickets issued by another issuer before reservation.
 - `pending`: Iceberg v3 admission now fails closed pending native conformance evidence; capability inventory records W07 blockers.
 
 These are W01/W04/W05/W10 inputs, not completion evidence for those packages.

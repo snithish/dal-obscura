@@ -253,3 +253,45 @@ def test_fetch_stream_rejects_ticket_when_granting_group_is_removed():
 
     with pytest.raises(PermissionError):
         fetch_stream.execute(planned.ticket_tokens[0], AUTHORIZATION_HEADER)
+
+
+def test_fetch_stream_rejects_matching_subject_from_another_issuer():
+    schema, decision, table_format = _build_use_case_dependencies()
+    payload = TicketPayload(
+        ticket_id="00000000-0000-0000-0000-000000000001",
+        catalog="catalog1",
+        target="users",
+        tenant_id="tenant-a",
+        columns=["id", "region"],
+        scan={
+            "read_payload": encode_scan_task(table_format, schema),
+            "full_row_filter": None,
+            "masks": {},
+        },
+        policy_version=100,
+        principal_id="user1",
+        issuer="https://issuer-a.example",
+        expires_at=9999999999,
+        nonce="abc",
+    )
+    ticket_store = _ticket_store_with(payload)
+    use_case = FetchStreamUseCase(
+        identity=FakeIdentity(
+            principal=Principal(
+                id="user1",
+                groups=[],
+                attributes={"tenant_id": "tenant-a"},
+                issuer="https://issuer-b.example",
+            )
+        ),
+        authorizer=FakeAuthorizer(decision=decision, current_version=100),
+        masking=FakeMasking(),
+        row_transform=FakeRowTransform(),
+        ticket_codec=FakeTicketCodec(payload),
+        ticket_store=ticket_store,
+    )
+
+    with pytest.raises(PermissionError, match="Unauthorized"):
+        use_case.execute("token", AUTHORIZATION_HEADER)
+
+    assert ticket_store.reserve_calls == []
