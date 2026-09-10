@@ -223,10 +223,10 @@ def control_plane_setup(tmp_path: Path, iceberg_setup: tuple[str, Path]) -> dict
                 {
                     "ordinal": 1,
                     "module": (
-                        "dal_obscura.data_plane.infrastructure.adapters.identity_default."
-                        "DefaultIdentityAdapter"
+                        "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks."
+                        "OidcJwksIdentityProvider"
                     ),
-                    "args": {"jwt_secret": {"secret": "DAL_OBSCURA_E2E_JWT_SECRET"}},
+                    "args": {"issuer": "https://issuer.example"},
                     "enabled": True,
                 }
             ],

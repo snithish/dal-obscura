@@ -604,10 +604,10 @@ def _provision_control_plane(output_dir: Path, table_id: str) -> tuple[str, str,
                 {
                     "ordinal": 1,
                     "module": (
-                        "dal_obscura.data_plane.infrastructure.adapters.identity_default."
-                        "DefaultIdentityAdapter"
+                        "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks."
+                        "OidcJwksIdentityProvider"
                     ),
-                    "args": {"jwt_secret": {"secret": "DAL_OBSCURA_JWT_SECRET"}},
+                    "args": {"issuer": "https://issuer.example"},
                     "enabled": True,
                 }
             ],

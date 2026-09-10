@@ -27,16 +27,13 @@ from dal_obscura.common.catalog.ports import TableFormat
 from dal_obscura.common.flight_contract import encode_plan_command_from_mapping
 from dal_obscura.common.query_planning.models import PlanRequest
 from dal_obscura.common.table_format.ports import InputPartition, Plan, ScanTask
+from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
 from dal_obscura.data_plane.application.use_cases.fetch_stream import FetchStreamUseCase
 from dal_obscura.data_plane.application.use_cases.get_schema import GetSchemaUseCase
 from dal_obscura.data_plane.application.use_cases.plan_access import PlanAccessUseCase
 from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
-)
-from dal_obscura.data_plane.infrastructure.adapters.identity_default import (
-    AuthConfig,
-    DefaultIdentityAdapter,
 )
 from dal_obscura.data_plane.infrastructure.adapters.published_config import (
     PublishedConfigAuthorizer,
@@ -48,6 +45,34 @@ from dal_obscura.data_plane.interfaces.flight.server import DataAccessFlightServ
 from tests.support.use_cases import FakeTicketStore
 
 TEST_JWT_SECRET = "test-jwt-secret-32-characters-long"
+
+
+class TestJwtIdentity:
+    """Test-only HS256 identity fixture; production accepts OIDC/JWKS only."""
+
+    def __init__(self, secret: str) -> None:
+        self._secret = secret
+
+    def authenticate(self, request: AuthenticationRequest) -> Principal:
+        header = request.header("authorization")
+        if not header or not header.lower().startswith("bearer "):
+            raise PermissionError("Missing token")
+        try:
+            payload = jwt.decode(header[7:].strip(), self._secret, algorithms=["HS256"])
+        except jwt.PyJWTError as exc:
+            raise PermissionError("Invalid token") from exc
+        subject = payload.get("sub") or payload.get("principal")
+        if not isinstance(subject, str) or not subject:
+            raise PermissionError("Invalid token")
+        groups = payload.get("groups", [])
+        attributes = payload.get("attrs", payload.get("attributes", {}))
+        if not isinstance(groups, list) or not isinstance(attributes, dict):
+            raise PermissionError("Invalid token")
+        return Principal(
+            id=subject,
+            groups=[str(group) for group in groups],
+            attributes={str(key): str(value) for key, value in attributes.items()},
+        )
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -254,7 +279,7 @@ def build_flight_service(
             rules_by_dataset=policy_rules_by_dataset,
         )
 
-    identity = DefaultIdentityAdapter(AuthConfig(jwt_secret=jwt_secret))
+    identity = TestJwtIdentity(jwt_secret)
     masking = DefaultMaskingAdapter()
     row_transform = DuckDBRowTransformAdapter(masking)
     ticket_codec = HmacTicketCodecAdapter(ticket_secret)

@@ -8,10 +8,6 @@ from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
 )
-from dal_obscura.data_plane.infrastructure.adapters.identity_default import (
-    AuthConfig,
-    DefaultIdentityAdapter,
-)
 from dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks import (
     OidcJwksIdentityProvider,
 )
@@ -40,11 +36,9 @@ from dal_obscura.data_plane.infrastructure.adapters.ticket_store_sqlalchemy impo
 from dal_obscura.data_plane.infrastructure.table_formats.iceberg import IcebergTableFormat
 
 __all__ = [
-    "AuthConfig",
     "CatalogConfig",
     "CatalogRegistry",
     "DataPlaneRuntimeConfig",
-    "DefaultIdentityAdapter",
     "DefaultMaskingAdapter",
     "DuckDBRowTransformAdapter",
     "DynamicCatalogRegistry",

@@ -19,7 +19,7 @@ ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )
 DEFAULT_AUTH_MODULE = (
-    "dal_obscura.data_plane.infrastructure.adapters.identity_default.DefaultIdentityAdapter"
+    "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider"
 )
 
 
@@ -94,7 +94,7 @@ def _provision_draft(client: TestClient) -> dict[str, str]:
                 {
                     "ordinal": 1,
                     "module": DEFAULT_AUTH_MODULE,
-                    "args": {"jwt_secret": {"secret": "DAL_OBSCURA_JWT_SECRET"}},
+                    "args": {"issuer": "https://issuer.example"},
                     "enabled": True,
                 }
             ]
