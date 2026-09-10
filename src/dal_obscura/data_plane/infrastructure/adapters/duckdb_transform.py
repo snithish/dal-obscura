@@ -421,11 +421,18 @@ def _nested_projection_expression(
     if pa.types.is_list(data_type) or pa.types.is_large_list(data_type):
         child_var = f"{item_var}_{len(_path_field_names(path))}"
         value_field = data_type.value_field
+        canonical_projection = projection.get("$element")
+        value_projection = projection if canonical_projection is None else canonical_projection
+        value_path = (
+            path
+            if canonical_projection is None
+            else _append_collection_path(path, ListElementSegment())
+        )
         transformed = _nested_projection_leaf_or_struct(
             child_var,
-            path,
+            value_path,
             value_field.type,
-            projection,
+            value_projection,
             masks,
             item_var=child_var,
         )
@@ -601,7 +608,16 @@ def _projected_nested_field(
 
     if pa.types.is_list(field.type) or pa.types.is_large_list(field.type):
         value_field = field.type.value_field
-        projected_value_field = _projected_nested_field(value_field, path, projection, masks)
+        canonical_projection = projection.get("$element")
+        value_projection = projection if canonical_projection is None else canonical_projection
+        value_path = (
+            path
+            if canonical_projection is None
+            else _append_collection_path(path, ListElementSegment())
+        )
+        projected_value_field = _projected_nested_field(
+            value_field, value_path, value_projection, masks
+        )
         return pa.field(
             field.name,
             pa.list_(projected_value_field),
@@ -649,7 +665,11 @@ def _masked_field(field: pa.Field, path: str, masks: Mapping[str, MaskRule]) -> 
             )
         if pa.types.is_list(field.type) or pa.types.is_large_list(field.type):
             value_field = field.type.value_field
-            nested_value_field = _masked_field(value_field, path, masks)
+            canonical_value_path = _append_collection_path(path, ListElementSegment())
+            value_path = (
+                canonical_value_path if _has_mask_for_path(canonical_value_path, masks) else path
+            )
+            nested_value_field = _masked_field(value_field, value_path, masks)
             if nested_value_field.equals(value_field) and pa.types.is_list(field.type):
                 return field
             return pa.field(

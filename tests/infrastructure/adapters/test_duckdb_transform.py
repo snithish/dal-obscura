@@ -857,3 +857,45 @@ def test_masked_schema_prunes_and_masks_map_value_struct_leaves():
     item_type = output.field("contacts").type.item_field.type
     assert item_type.names == ["name"]
     assert item_type.field("name").type == pa.string()
+
+
+def test_duckdb_transform_projects_and_masks_canonical_list_element_leaves():
+    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
+    value_type = pa.struct([pa.field("email", pa.string()), pa.field("ssn", pa.string())])
+    input_batch = pa.record_batch(
+        [
+            pa.array(
+                [[{"email": "ada@example.com", "ssn": "123"}], None],
+                type=pa.list_(value_type),
+            )
+        ],
+        names=["contacts"],
+    )
+
+    result = pa.Table.from_batches(
+        list(
+            adapter.apply_filters_and_masks_stream(
+                [input_batch],
+                ["contacts.$element.email"],
+                None,
+                {"contacts.$element.email": MaskRule(type="email")},
+            )
+        )
+    )
+
+    assert result.column("contacts").to_pylist() == [[{"email": "a***@example.com"}], None]
+
+
+def test_masked_schema_prunes_canonical_list_element_struct_leaves():
+    value_type = pa.struct([pa.field("email", pa.string()), pa.field("ssn", pa.string())])
+    schema = pa.schema([pa.field("contacts", pa.list_(value_type))])
+
+    output = DefaultMaskingAdapter().masked_schema(
+        schema,
+        ["contacts.$element.email"],
+        {"contacts.$element.email": MaskRule(type="email")},
+    )
+
+    item_type = output.field("contacts").type.value_field.type
+    assert item_type.names == ["email"]
+    assert item_type.field("email").type == pa.string()

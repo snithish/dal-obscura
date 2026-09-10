@@ -9,7 +9,7 @@ package complete unless its stated evidence exists.
 | W00 | complete | Baseline and removal inventory recorded in `evaluation/baseline/`. |
 | W01 | implementing | Focused regressions exist for parent masking, invalid masks, grant removal, and asset binding; streaming and mask-conflict regressions remain. |
 | W02 | implementing | Immutable request models reject ambiguous projections; versioned typed paths resolve struct/list/map nodes and distinguish literal dotted names. Field IDs and protobuf/Java fixtures remain. |
-| W03 | implementing | Planning and row-filter schema checks share canonical paths; DuckDB now prunes and masks map-value struct leaves while preserving keys. Nested grants, compound masks and collection predicates remain. |
+| W03 | implementing | Planning and row-filter schema checks share canonical paths; DuckDB now prunes and masks map-value and list-element struct leaves while preserving keys and list/null shape. Nested grants, compound masks and collection predicates remain. |
 | W04 | implementing | Fetch reauthorization plus issuer/subject/identity-expiry ticket binding are present. JWKS cache bounds, exact Flight endpoint evidence and stream expiry checks remain. |
 | W05 | implementing | Asset binding is fixed and catalog construction reads asset/catalog from one captured generation; immutable plan generations and stream freshness remain. |
 | W06 | pending | Existing ticket serialization remains by owner direction. |
@@ -45,5 +45,6 @@ package complete unless its stated evidence exists.
 - `pending`: native two-file plans remain on their original snapshot after a later append.
 - `pending`: native nested schema loading preserves PyIceberg Arrow field IDs.
 - `pending`: DuckDB preserves map keys while pruning and masking selected map-value struct leaves.
+- `pending`: DuckDB prunes and masks canonical list-element struct leaves without flattening lists.
 
 These are W01/W04/W05/W10 inputs, not completion evidence for those packages.
