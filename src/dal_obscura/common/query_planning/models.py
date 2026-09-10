@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import pyarrow as pa
 
-from dal_obscura.common.access_control.filters import RowFilter
+if TYPE_CHECKING:
+    from dal_obscura.common.access_control.filters import RowFilter
 
 
 @dataclass(frozen=True)

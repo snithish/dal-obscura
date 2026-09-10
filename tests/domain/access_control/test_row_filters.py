@@ -58,6 +58,21 @@ def test_parse_row_filter_extracts_dependencies_from_nested_function_predicates(
     assert extract_row_filter_dependencies(row_filter) == ["user.address.zip", "region"]
 
 
+def test_parse_row_filter_distinguishes_quoted_literal_dots_from_nested_fields():
+    schema = pa.schema(
+        [
+            pa.field("a.b", pa.int64()),
+            pa.field("a", pa.struct([pa.field("b", pa.int64())])),
+        ]
+    )
+
+    literal = parse_row_filter('"a.b" = 1', schema)
+    nested = parse_row_filter("a.b = 1", schema)
+
+    assert extract_row_filter_dependencies(literal) == ['["a.b"]']
+    assert extract_row_filter_dependencies(nested) == ["a.b"]
+
+
 def test_parse_row_filter_rejects_query_statements():
     with pytest.raises(ValueError, match="Row filter must be a DuckDB expression"):
         parse_row_filter("SELECT * FROM users", _schema())

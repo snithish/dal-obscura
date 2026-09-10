@@ -16,6 +16,13 @@ import pyarrow as pa
 from sqlglot import exp, parse
 from sqlglot.errors import ParseError
 
+from dal_obscura.common.query_planning.field_paths import (
+    FieldPath,
+    FieldSegment,
+    parse_field_path,
+    resolve_schema_path,
+)
+
 
 @dataclass(frozen=True)
 class RowFilter:
@@ -214,28 +221,14 @@ def _validate_column_references(expression: exp.Expr, schema: pa.Schema) -> None
 
 
 def _column_path(column: exp.Column) -> str:
-    return ".".join(part.name for part in column.parts)
+    return FieldPath(tuple(FieldSegment(part.name) for part in column.parts)).to_human()
 
 
 def _schema_has_path(schema: pa.Schema, column: str) -> bool:
-    parts = column.split(".")
     try:
-        field = schema.field(parts[0])
-    except KeyError:
+        resolve_schema_path(schema, parse_field_path(column))
+    except ValueError:
         return False
-
-    for part in parts[1:]:
-        data_type = field.type
-        if pa.types.is_list(data_type) or pa.types.is_large_list(data_type):
-            field = data_type.value_field
-            data_type = field.type
-        if not pa.types.is_struct(data_type):
-            return False
-        try:
-            field = data_type.field(part)
-        except KeyError:
-            return False
-
     return True
 
 
