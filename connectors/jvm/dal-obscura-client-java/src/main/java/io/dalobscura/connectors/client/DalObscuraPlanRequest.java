@@ -18,11 +18,11 @@ public final class DalObscuraPlanRequest {
             Optional<String> rowFilter) {
         this.catalog = catalog;
         this.target = target;
-        this.columns = columns;
+        this.columns = List.copyOf(columns);
         this.rowFilter = rowFilter;
-        this.columnPaths = columns.size() == 1 && "*".equals(columns.get(0))
+        this.columnPaths = this.columns.size() == 1 && "*".equals(this.columns.get(0))
                 ? List.of()
-                : columns.stream()
+                : this.columns.stream()
                         .map(DalObscuraFieldPath::parse)
                         .collect(Collectors.toUnmodifiableList());
     }

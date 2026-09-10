@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.dalobscura.flight.v1.DalObscuraFlightProto;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -58,6 +59,20 @@ class FlightDalObscuraReadClientTest {
     void rejectsAmbiguousOrInvalidCanonicalPaths() {
         assertThrows(IllegalArgumentException.class, () -> DalObscuraFieldPath.parse("profile..name"));
         assertThrows(IllegalArgumentException.class, () -> DalObscuraFieldPath.parse("profile.$unknown"));
+    }
+
+    @Test
+    void snapshotsCallerColumnsBeforeEncoding() throws Exception {
+        List<String> columns = new ArrayList<>(List.of("id"));
+        DalObscuraPlanRequest request =
+                new DalObscuraPlanRequest("analytics", "default.users", columns, Optional.empty());
+        columns.set(0, "email");
+
+        DalObscuraFlightProto.PlanRequest decoded = DalObscuraFlightProto.PlanRequest.parseFrom(
+                FlightDalObscuraReadClient.encodePlanCommand(request));
+
+        assertEquals(List.of("id"), decoded.getColumnsList());
+        assertEquals("id", decoded.getColumnPaths(0).getSegments(0).getName());
     }
 
     @Test
