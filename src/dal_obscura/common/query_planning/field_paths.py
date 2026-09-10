@@ -186,12 +186,30 @@ def _resolve_field_segment(
 ) -> pa.Field:
     try:
         if index == 0:
-            return schema.field(segment.name)
-        if current is None or not pa.types.is_struct(current.type):
-            raise ValueError(f"Field path does not contain a struct at: {path.to_human()}")
-        return current.type.field(segment.name)
+            resolved = schema.field(segment.name)
+        else:
+            if current is None or not pa.types.is_struct(current.type):
+                raise ValueError(f"Field path does not contain a struct at: {path.to_human()}")
+            resolved = current.type.field(segment.name)
     except KeyError as exc:
         raise ValueError(f"Unknown field path: {path.to_human()}") from exc
+    _require_field_id(resolved, segment, path)
+    return resolved
+
+
+def _require_field_id(field: pa.Field, segment: FieldSegment, path: FieldPath) -> None:
+    if segment.field_id is None:
+        return
+    metadata = field.metadata or {}
+    raw_id = metadata.get(b"PARQUET:field_id") or metadata.get(b"iceberg.field.id")
+    if raw_id is None:
+        raise ValueError(f"Field path has no bound field ID: {path.to_human()}")
+    try:
+        actual_id = int(raw_id)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Field path has invalid field ID metadata: {path.to_human()}") from exc
+    if actual_id != segment.field_id:
+        raise ValueError(f"Field ID does not match path: {path.to_human()}")
 
 
 def _resolve_collection_segment(

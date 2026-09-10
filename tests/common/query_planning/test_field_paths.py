@@ -98,6 +98,22 @@ def test_field_path_wire_round_trip_preserves_ids_and_collection_nodes():
     assert FieldPath.from_wire(path.to_wire()) == path
 
 
+def test_field_path_rejects_a_name_match_with_a_different_field_id():
+    schema = pa.schema(
+        [pa.field("profile", pa.string(), metadata={b"PARQUET:field_id": b"7"})]
+    )
+
+    path = FieldPath((FieldSegment("profile", field_id=7),))
+    assert resolve_schema_path(schema, path).name == "profile"
+    with pytest.raises(ValueError, match="Field ID does not match"):
+        resolve_schema_path(schema, FieldPath((FieldSegment("profile", field_id=8),)))
+    with pytest.raises(ValueError, match="no bound field ID"):
+        resolve_schema_path(
+            pa.schema([pa.field("profile", pa.string())]),
+            FieldPath((FieldSegment("profile", field_id=7),)),
+        )
+
+
 @pytest.mark.parametrize(
     "value",
     [
