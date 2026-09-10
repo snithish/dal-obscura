@@ -8,7 +8,7 @@ manual service shape used in real deployments.
 - [Run The Local Demo](#run-the-local-demo)
 - [What Starts](#what-starts)
 - [Verify The Environment](#verify-the-environment)
-- [Use The UI](#use-the-ui)
+- [Publish With The Operator CLI](#publish-with-the-operator-cli)
 - [Stop Or Reset](#stop-or-reset)
 - [Manual Service Shape](#manual-service-shape)
 - [Next Reads](#next-reads)
@@ -34,11 +34,8 @@ prebuilt image.
 
 ```mermaid
 flowchart LR
-    browser["Browser"] --> ui["UI :8821"]
-    ui --> api["Control plane API :8820"]
-    api --> db[("Postgres")]
-    api --> keycloak["Keycloak :8080"]
-    api --> catalog["Iceberg catalog"]
+    cli["Operator CLI"] --> db[("Postgres")]
+    cli --> catalog["Iceberg catalog"]
     client["Flight client"] --> dp["Data plane :8815"]
     dp --> db
     dp --> keycloak
@@ -51,8 +48,7 @@ The demo provisions:
 2. Postgres-backed config store.
 3. Operator CLI and published configuration store.
 4. Iceberg demo table.
-5. Catalog discovery and governed assets.
-6. Asset owners, policies, masks, row filters, and active policy versions.
+5. Published Iceberg asset, policies, masks, and row filters.
 7. Arrow Flight data plane.
 
 Open:
@@ -84,32 +80,19 @@ Expected behavior:
 - `data-steward` reads all rows with clear email values.
 - `blocked-user` is denied by policy.
 
-## Use The UI
+## Publish With The Operator CLI
 
-Print demo credentials:
+Use a versioned manifest from an administrative host. The CLI has no
+reader-facing authoring endpoint:
 
 ```bash
-./run credentials
+uv run dal-obscura-admin validate examples/manifests/iceberg-gateway.json
+uv run dal-obscura-admin preview examples/manifests/iceberg-gateway.json \
+  --personas examples/manifests/personas.json
+uv run dal-obscura-admin publish examples/manifests/iceberg-gateway.json \
+  --database-url "$DAL_OBSCURA_DATABASE_URL" --expected-generation none
+uv run dal-obscura-admin status --database-url "$DAL_OBSCURA_DATABASE_URL"
 ```
-
-Open `http://127.0.0.1:8821`.
-
-Useful personas:
-
-- `demo-admin`: platform administration.
-- `asset-owner`: owner workflow for editing policy and submitting policy
-  versions.
-- `us-analyst`, `eu-analyst`, `data-steward`: read-path policy behavior.
-- `blocked-user`: denied principal.
-
-Suggested UI path:
-
-1. Sign in as `demo-admin`.
-2. Open Catalogs and confirm both demo catalogs are discovered.
-3. Open Assets and inspect `retail.customer_revenue`.
-4. Sign in as `asset-owner`.
-5. Edit a row filter or mask and submit a new policy version.
-6. Sign in as an analyst and confirm policy controls are not editable.
 
 ## Stop Or Reset
 
@@ -162,15 +145,13 @@ uv run dal-obscura-admin status
 
 Configure at least:
 
-1. IAM provider.
-2. Catalog connection.
-3. Catalog discovery.
-4. Governed asset.
-5. Asset owners.
-6. Active policy version.
+1. OIDC/JWKS reader identity.
+2. Iceberg catalog connection.
+3. Governed asset and policy.
+4. Runtime ticket settings.
 
-Use the operator CLI manifest. It defines catalogs, assets, policies, policy versions, and
-settings.
+Use the operator CLI manifest. It defines the fixed Iceberg/OIDC runtime,
+catalogs, assets, policies, and settings.
 
 ### Start A Data Plane
 

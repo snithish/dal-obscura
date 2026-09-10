@@ -1,0 +1,10 @@
+[
+  {
+    "id": "alice",
+    "groups": ["analyst"],
+    "attributes": {},
+    "catalog": "analytics",
+    "target": "default.users",
+    "columns": ["id", "email"]
+  }
+]

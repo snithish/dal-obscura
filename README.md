@@ -5,9 +5,9 @@
 [![GitHub Release](https://img.shields.io/github/v/release/snithish/dal-obscura)](https://github.com/snithish/dal-obscura/releases)
 [![License](https://img.shields.io/github/license/snithish/dal-obscura)](https://github.com/snithish/dal-obscura/blob/main/LICENSE)
 
-Governed analytical data access layer for Arrow Flight reads. Platform teams
-register catalogs and assets, asset owners submit policy versions, and clients
-receive only the rows and columns allowed by the active asset policy.
+Governed analytical data access layer for Arrow Flight reads. Operators publish
+versioned Iceberg/OIDC manifests, and clients receive only the rows and columns
+allowed by the active policy generation.
 
 dal-obscura supports governed Iceberg assets, DuckDB row filters, column masks,
 and JVM/Python connector surfaces.
@@ -26,8 +26,8 @@ and JVM/Python connector surfaces.
 ## Why dal-obscura
 
 - Governed reads through Arrow Flight plan/ticket flow.
-- Asset-scoped policy versions for row filters, column grants, and masks.
-- Control plane for catalogs, assets, owners, policies, settings, and auth.
+- Versioned manifest publication for row filters, column grants, and masks.
+- Operator CLI for validation, preview, compare-and-swap publication, and status.
 - Stateless data-plane serving over published configuration.
 - HMAC-signed, DB-backed tickets with policy-version checks on fetch.
 - DuckDB execution for residual row filters and masking.
@@ -90,18 +90,16 @@ flowchart LR
     dp --> duckdb["DuckDB filters/masks"]
 ```
 
-The public model is workspace-first: catalogs, assets, owners, policies, policy
-versions, and settings. Tenant and cell identifiers are internal runtime
-partitioning details, not primary user-facing concepts.
+The public model is an immutable published manifest generation. Tenant and cell
+identifiers are runtime partitioning details, not primary user-facing concepts.
 
 Key paths:
 
 | Path | Purpose |
 | --- | --- |
-| `src/dal_obscura/control_plane` | FastAPI control-plane API, repositories, and workflows. |
+| `src/dal_obscura/control_plane` | Manifest compiler, repositories, and operator workflows. |
 | `src/dal_obscura/data_plane` | Arrow Flight service, planning, fetching, auth, transforms. |
 | `src/dal_obscura/common` | Shared policy, catalog, table-format, ticket, and config-store code. |
-| `ui` | React/Vite control-plane UI served separately from the API. |
 | `connectors` | JVM client, Spark datasource, testkit, and contract fixtures. |
 | `examples` | Auth examples, local demo, and sample manifests. |
 | `tests` | Unit, integration, smoke, and benchmark tests. |
@@ -136,7 +134,7 @@ Use `dal-obscura-admin validate`, `preview`, `publish`, and `status` to manage
 published configuration.
 
 The published container image is `ghcr.io/snithish/dal-obscura`. The same image
-can run migration, control-plane, and data-plane commands. See
+can run migration, operator, and data-plane commands. See
 [docs/operators.md](docs/operators.md) for production-oriented setup.
 
 ## Connectors

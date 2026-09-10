@@ -1,8 +1,8 @@
 # dal-obscura Documentation
 
 dal-obscura is a governed analytical data access layer. It exposes Arrow Flight
-reads, applies policy-based row filters and masks, and gives asset owners a
-control-plane UI for managing policy versions.
+reads, applies policy-based row filters and masks, and uses an operator CLI to
+manage immutable publication generations.
 
 Use this page as the map. The docs are grouped by what you are trying to do.
 
@@ -19,7 +19,7 @@ Use this page as the map. The docs are grouped by what you are trying to do.
 | --- | --- | --- |
 | Evaluator | [Quickstart](quickstart.md) | [Concepts](concepts.md) |
 | Data consumer | [Quickstart](quickstart.md) | [Connectors](connectors.md) |
-| Asset owner | [Policy Authoring](policy-authoring.md) | [Concepts](concepts.md) |
+| Operator | [Policy Authoring](policy-authoring.md) | [Concepts](concepts.md) |
 | Platform operator | [Operators](operators.md) | [Operator Runbook](operators-runbook.md) |
 | Security reviewer | [Security](security.md) | [Policy Authoring](policy-authoring.md) |
 | Contributor | [Development](development.md) | [Frontend Conventions](frontend.md) |
@@ -28,8 +28,8 @@ Use this page as the map. The docs are grouped by what you are trying to do.
 
 ### Try The Service
 
-- [Quickstart](quickstart.md): run the local demo, verify the UI/API/Flight
-  path, and learn the manual service shape.
+- [Quickstart](quickstart.md): run the local demo, verify governed Flight reads,
+  and learn the manifest/CLI service shape.
 - [Local Keycloak Demo](../examples/demo/keycloak/README.md): complete laptop
   environment with Keycloak, Postgres, Iceberg, and Flight reads.
 
@@ -46,8 +46,8 @@ Use this page as the map. The docs are grouped by what you are trying to do.
   order, health checks, and operational risks.
 - [Operator Runbook](operators-runbook.md): readiness, restart, reset, and fast
   triage checklist.
-- [Authentication Examples](../examples/auth/README.md): runnable Docker Compose
-  fixtures for each built-in auth provider.
+- [OIDC Example](../examples/auth/keycloak-oidc/README.md): runnable Docker
+  Compose fixture for the supported reader identity provider.
 
 ### Govern Data
 
@@ -64,8 +64,6 @@ Use this page as the map. The docs are grouped by what you are trying to do.
 
 - [Development](development.md): repo layout, common checks, test guidance, and
   release-oriented checklist.
-- [Frontend Conventions](frontend.md): React stack, folder layout, API pattern,
-  styling rules, and pnpm supply-chain policy.
 
 ## Core Guides
 
@@ -88,10 +86,9 @@ after you have at least one governed asset and one allowed read persona.
 ```mermaid
 flowchart LR
     catalog["Catalog discovery"] --> asset["Governed asset"]
-    asset --> owner["Asset owner"]
-    owner --> policy["Draft policy"]
-    policy --> version["Policy version"]
-    version --> publish["Submit for asset"]
+    asset --> policy["Manifest policy"]
+    policy --> version["Published generation"]
+    version --> publish["Compare-and-swap publish"]
     publish --> read["Governed Flight reads"]
 ```
 
