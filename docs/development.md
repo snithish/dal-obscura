@@ -1,7 +1,6 @@
 # Development Guide
 
-This guide is for contributors changing the service, UI, policies, or
-connectors.
+This guide is for contributors changing the service, policies, or connectors.
 
 ## Contents
 
@@ -10,7 +9,6 @@ connectors.
 - [Setup](#setup)
 - [Test Pyramid](#test-pyramid)
 - [Common Checks](#common-checks)
-- [Frontend](#frontend)
 - [Change Guidance](#change-guidance)
 - [Release-Oriented Checklist](#release-oriented-checklist)
 - [Extension Notes](#extension-notes)
@@ -100,20 +98,6 @@ Spark profile-specific verification:
 ```bash
 mvn -f connectors/jvm/pom.xml -Pspark-3.5 verify
 mvn -f connectors/jvm/pom.xml -Pspark-4.0 verify
-```
-
-## Frontend
-
-Read [Frontend Conventions](frontend.md) before changing the UI.
-
-Run the API:
-
-```bash
-export DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:///runtime/control-plane.db
-export DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN=dev-admin
-uv run dal-obscura-migrate upgrade
-uv run dal-obscura-migrate check
-uv run dal-obscura-control-plane
 ```
 
 ## Change Guidance

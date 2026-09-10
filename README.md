@@ -76,13 +76,13 @@ Start with [docs/README.md](docs/README.md). It groups docs by user need.
 | Run the service | [Operators](docs/operators.md) and [Operator Runbook](docs/operators-runbook.md) |
 | Review risk | [Security](docs/security.md) |
 | Integrate clients | [Connectors](docs/connectors.md) and [connectors/README.md](connectors/README.md) |
-| Contribute | [Development](docs/development.md) and [Frontend Conventions](docs/frontend.md) |
+| Contribute | [Development](docs/development.md) |
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    owner["Asset owner"] --> cp["Control plane API/UI"]
+    owner["Operator"] --> cp["Operator CLI"]
     admin["Platform admin"] --> cp
     cp --> db[("Config database")]
     cp --> catalog["Catalogs"]
@@ -136,9 +136,8 @@ export DAL_OBSCURA_TICKET_SECRET=replace-with-a-secret
 uv run dal-obscura
 ```
 
-The control-plane API exposes `/docs`, `/redoc`, and `/openapi.json`. The React
-UI runs as a separate Caddy/Vite build and reads runtime config from
-`/config.json`; see [docs/frontend.md](docs/frontend.md).
+Use `dal-obscura-admin validate`, `preview`, `publish`, and `status` to manage
+published configuration.
 
 The published container image is `ghcr.io/snithish/dal-obscura`. The same image
 can run migration, control-plane, and data-plane commands. See
@@ -173,13 +172,6 @@ JVM connector checks:
 
 ```bash
 mvn -f connectors/jvm/pom.xml verify
-```
-
-Frontend checks:
-
-```bash
-pnpm --filter @dal-obscura/control-plane-ui test
-pnpm --filter @dal-obscura/control-plane-ui build
 ```
 
 Benchmark suites are available under `tests/benchmarks`; use JSON output as the
