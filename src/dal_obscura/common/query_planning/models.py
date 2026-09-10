@@ -16,6 +16,11 @@ class PlanRequest:
     catalog: str | None = None
     row_filter: RowFilter | None = None
 
+    def __post_init__(self) -> None:
+        """Detach the request from the caller's mutable projection list."""
+
+        object.__setattr__(self, "columns", list(self.columns))
+
 
 @dataclass(frozen=True)
 class ExecutionProjection:
@@ -24,6 +29,15 @@ class ExecutionProjection:
     visible_columns: list[str]
     internal_dependency_columns: list[str]
     execution_columns: list[str]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "visible_columns", list(self.visible_columns))
+        object.__setattr__(
+            self,
+            "internal_dependency_columns",
+            list(self.internal_dependency_columns),
+        )
+        object.__setattr__(self, "execution_columns", list(self.execution_columns))
 
 
 @dataclass(frozen=True)
@@ -34,3 +48,6 @@ class ReadSpec:
     catalog: str | None
     columns: list[str]
     schema: pa.Schema
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "columns", list(self.columns))

@@ -62,6 +62,10 @@ class Principal:
     issuer: str = ""
     expires_at: int | None = None
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "groups", list(self.groups))
+        object.__setattr__(self, "attributes", dict(self.attributes))
+
     def tokens(self) -> list[str]:
         """Returns tokens used by policy matching, including `group:` prefixes."""
         return [self.id, *[f"group:{group}" for group in self.groups]]
@@ -75,3 +79,7 @@ class AccessDecision:
     masks: dict[str, MaskRule]
     row_filter: str | None
     policy_version: int
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "allowed_columns", list(self.allowed_columns))
+        object.__setattr__(self, "masks", dict(self.masks))
