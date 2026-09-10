@@ -28,6 +28,69 @@ from dal_obscura.common.flight_contract import FLIGHT_PROTOCOL_VERSION, encode_p
 PROTOCOL_VERSION = FLIGHT_PROTOCOL_VERSION
 
 
+class DalObscuraBatchStream(Iterator[pa.RecordBatch]):
+    """A context-managed, sequential stream of Flight record batches."""
+
+    def __init__(self, client: flight.FlightClient, info: flight.FlightInfo, options) -> None:
+        self.schema = info.schema
+        self._client = client
+        self._endpoints = iter(info.endpoints)
+        self._options = options
+        self._reader = None
+        self._closed = False
+
+    def __iter__(self) -> DalObscuraBatchStream:
+        return self
+
+    def __next__(self) -> pa.RecordBatch:
+        if self._closed:
+            raise StopIteration
+        try:
+            while True:
+                if self._reader is None:
+                    endpoint = next(self._endpoints)
+                    self._reader = self._client.do_get(endpoint.ticket, options=self._options)
+                try:
+                    chunk = self._reader.read_chunk()
+                except StopIteration:
+                    self._close_reader()
+                    continue
+                if chunk.data is not None:
+                    return chunk.data
+        except StopIteration:
+            self.close()
+            raise
+        except BaseException:
+            self.close()
+            raise
+
+    def cancel(self) -> None:
+        """Cancels local consumption and closes the active Flight reader."""
+        self.close()
+
+    def close(self) -> None:
+        """Closes the active reader; repeated calls are safe."""
+        if self._closed:
+            return
+        self._closed = True
+        self._close_reader()
+
+    def __enter__(self) -> DalObscuraBatchStream:
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
+        del exc_type, exc, traceback
+        self.close()
+
+    def _close_reader(self) -> None:
+        reader, self._reader = self._reader, None
+        if reader is None:
+            return
+        close = getattr(reader, "close", None)
+        if callable(close):
+            close()
+
+
 class DalObscuraClient:
     """Small Python SDK for the dal-obscura Arrow Flight read contract.
 
@@ -119,7 +182,7 @@ class DalObscuraClient:
         target: str,
         columns: Iterable[str],
         row_filter: str | None = None,
-    ) -> Iterator[pa.RecordBatch]:
+    ) -> DalObscuraBatchStream:
         """Yields authorized record batches from every planned endpoint.
 
         Example:
@@ -133,15 +196,7 @@ class DalObscuraClient:
             ```
         """
         info = self.plan(catalog=catalog, target=target, columns=columns, row_filter=row_filter)
-        for endpoint in info.endpoints:
-            reader = self._client.do_get(endpoint.ticket, options=self._call_options())
-            while True:
-                try:
-                    chunk = reader.read_chunk()
-                except StopIteration:
-                    break
-                if chunk.data is not None:
-                    yield chunk.data
+        return DalObscuraBatchStream(self._client, info, self._call_options())
 
     def read_table(
         self,
@@ -162,14 +217,17 @@ class DalObscuraClient:
             )
             ```
         """
-        info = self.plan(catalog=catalog, target=target, columns=columns, row_filter=row_filter)
-        batches: list[pa.RecordBatch] = []
-        for endpoint in info.endpoints:
-            reader = self._client.do_get(endpoint.ticket, options=self._call_options())
-            batches.extend(reader.read_all().to_batches())
+        stream = self.read_batches(
+            catalog=catalog,
+            target=target,
+            columns=columns,
+            row_filter=row_filter,
+        )
+        with stream:
+            batches = list(stream)
         if batches:
-            return pa.Table.from_batches(batches, schema=info.schema)
-        return pa.Table.from_batches([], schema=info.schema)
+            return pa.Table.from_batches(batches, schema=stream.schema)
+        return pa.Table.from_batches([], schema=stream.schema)
 
     def close(self) -> None:
         """Closes the owned Flight client, if this instance created it."""

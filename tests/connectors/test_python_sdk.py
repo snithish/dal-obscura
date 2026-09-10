@@ -15,6 +15,7 @@ class _StreamingReader:
     def __init__(self, batch):
         self._batch = batch
         self._read = False
+        self.closed = False
 
     def read_all(self):
         raise AssertionError("read_batches must not materialize the full result")
@@ -25,19 +26,24 @@ class _StreamingReader:
         self._read = True
         return type("Chunk", (), {"data": self._batch})()
 
+    def close(self):
+        self.closed = True
+
 
 class _StreamingFlightClient:
     def __init__(self, batch):
         self._batch = batch
+        self.reader = None
 
     def get_flight_info(self, descriptor, *, options):
         del descriptor, options
         endpoint = type("Endpoint", (), {"ticket": object()})()
-        return type("Info", (), {"endpoints": [endpoint]})()
+        return type("Info", (), {"endpoints": [endpoint], "schema": self._batch.schema})()
 
     def do_get(self, ticket, *, options):
         del ticket, options
-        return _StreamingReader(self._batch)
+        self.reader = _StreamingReader(self._batch)
+        return self.reader
 
 
 def _policy_rules() -> list[dict[str, object]]:
@@ -59,6 +65,18 @@ def test_python_sdk_read_batches_does_not_materialize_flight_stream():
     result = list(sdk.read_batches(catalog="analytics", target="users", columns=["id"]))
 
     assert result == [batch]
+
+
+def test_python_sdk_batch_stream_closes_reader_when_consumer_stops_early():
+    batch = id_email_region_batch([1], ["a@example.com"], ["us"])
+    client = _StreamingFlightClient(batch)
+    sdk = DalObscuraClient.from_flight_client(client, auth_token="token")
+
+    with sdk.read_batches(catalog="analytics", target="users", columns=["id"]) as stream:
+        assert next(stream) == batch
+
+    assert client.reader is not None
+    assert client.reader.closed is True
 
 
 def test_python_sdk_reads_authorized_arrow_table():
