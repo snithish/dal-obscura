@@ -263,6 +263,7 @@ def _descriptor(
             target=target,
             columns=list(columns),
             row_filter=row_filter,
+            include_typed_paths=True,
         )
     )
 

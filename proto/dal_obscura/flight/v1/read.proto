@@ -5,10 +5,31 @@ package dal_obscura.flight.v1;
 option java_package = "io.dalobscura.flight.v1";
 option java_outer_classname = "DalObscuraFlightProto";
 
+message FieldPathSegment {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    FIELD = 1;
+    LIST_ELEMENT = 2;
+    MAP_KEY = 3;
+    MAP_VALUE = 4;
+  }
+
+  Kind kind = 1;
+  string name = 2;
+  optional int32 field_id = 3;
+}
+
+message FieldPath {
+  uint32 version = 1;
+  repeated FieldPathSegment segments = 2;
+}
+
 message PlanRequest {
   uint32 protocol_version = 1;
   string catalog = 2;
   string target = 3;
   repeated string columns = 4;
   string row_filter = 5;
+  // Canonical typed paths. When supplied, they must exactly match `columns`.
+  repeated FieldPath column_paths = 6;
 }

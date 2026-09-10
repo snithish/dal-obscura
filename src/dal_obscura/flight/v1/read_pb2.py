@@ -4,33 +4,40 @@
 # source: dal_obscura/flight/v1/read.proto
 # Protobuf Python Version: 7.35.0
 """Generated protocol buffer code."""
-
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import runtime_version as _runtime_version
 from google.protobuf import symbol_database as _symbol_database
 from google.protobuf.internal import builder as _builder
-
 _runtime_version.ValidateProtobufRuntimeVersion(
-    _runtime_version.Domain.PUBLIC, 7, 35, 0, "", "dal_obscura/flight/v1/read.proto"
+    _runtime_version.Domain.PUBLIC,
+    7,
+    35,
+    0,
+    '',
+    'dal_obscura/flight/v1/read.proto'
 )
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
-    b'\n dal_obscura/flight/v1/read.proto\x12\x15\x64\x61l_obscura.flight.v1"m\n\x0bPlanRequest\x12\x18\n\x10protocol_version\x18\x01 \x01(\r\x12\x0f\n\x07\x63\x61talog\x18\x02 \x01(\t\x12\x0e\n\x06target\x18\x03 \x01(\t\x12\x0f\n\x07\x63olumns\x18\x04 \x03(\t\x12\x12\n\nrow_filter\x18\x05 \x01(\tB0\n\x17io.dalobscura.flight.v1B\x15\x44\x61lObscuraFlightProtob\x06proto3'
-)
+
+
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n dal_obscura/flight/v1/read.proto\x12\x15\x64\x61l_obscura.flight.v1\"\xd7\x01\n\x10\x46ieldPathSegment\x12:\n\x04kind\x18\x01 \x01(\x0e\x32,.dal_obscura.flight.v1.FieldPathSegment.Kind\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x15\n\x08\x66ield_id\x18\x03 \x01(\x05H\x00\x88\x01\x01\"U\n\x04Kind\x12\x14\n\x10KIND_UNSPECIFIED\x10\x00\x12\t\n\x05\x46IELD\x10\x01\x12\x10\n\x0cLIST_ELEMENT\x10\x02\x12\x0b\n\x07MAP_KEY\x10\x03\x12\r\n\tMAP_VALUE\x10\x04\x42\x0b\n\t_field_id\"W\n\tFieldPath\x12\x0f\n\x07version\x18\x01 \x01(\r\x12\x39\n\x08segments\x18\x02 \x03(\x0b\x32\'.dal_obscura.flight.v1.FieldPathSegment\"\xa5\x01\n\x0bPlanRequest\x12\x18\n\x10protocol_version\x18\x01 \x01(\r\x12\x0f\n\x07\x63\x61talog\x18\x02 \x01(\t\x12\x0e\n\x06target\x18\x03 \x01(\t\x12\x0f\n\x07\x63olumns\x18\x04 \x03(\t\x12\x12\n\nrow_filter\x18\x05 \x01(\t\x12\x36\n\x0c\x63olumn_paths\x18\x06 \x03(\x0b\x32 .dal_obscura.flight.v1.FieldPathB0\n\x17io.dalobscura.flight.v1B\x15\x44\x61lObscuraFlightProtob\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
-_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "dal_obscura.flight.v1.read_pb2", _globals)
+_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'dal_obscura.flight.v1.read_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
-    _globals["DESCRIPTOR"]._loaded_options = None
-    _globals[
-        "DESCRIPTOR"
-    ]._serialized_options = b"\n\027io.dalobscura.flight.v1B\025DalObscuraFlightProto"
-    _globals["_PLANREQUEST"]._serialized_start = 59
-    _globals["_PLANREQUEST"]._serialized_end = 168
+  _globals['DESCRIPTOR']._loaded_options = None
+  _globals['DESCRIPTOR']._serialized_options = b'\n\027io.dalobscura.flight.v1B\025DalObscuraFlightProto'
+  _globals['_FIELDPATHSEGMENT']._serialized_start=60
+  _globals['_FIELDPATHSEGMENT']._serialized_end=275
+  _globals['_FIELDPATHSEGMENT_KIND']._serialized_start=177
+  _globals['_FIELDPATHSEGMENT_KIND']._serialized_end=262
+  _globals['_FIELDPATH']._serialized_start=277
+  _globals['_FIELDPATH']._serialized_end=364
+  _globals['_PLANREQUEST']._serialized_start=367
+  _globals['_PLANREQUEST']._serialized_end=532
 # @@protoc_insertion_point(module_scope)

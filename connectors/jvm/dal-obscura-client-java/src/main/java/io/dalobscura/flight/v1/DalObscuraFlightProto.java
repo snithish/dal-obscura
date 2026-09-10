@@ -26,6 +26,1691 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
     registerAllExtensions(
         (com.google.protobuf.ExtensionRegistryLite) registry);
   }
+  public interface FieldPathSegmentOrBuilder extends
+      // @@protoc_insertion_point(interface_extends:dal_obscura.flight.v1.FieldPathSegment)
+      com.google.protobuf.MessageOrBuilder {
+
+    /**
+     * <code>.dal_obscura.flight.v1.FieldPathSegment.Kind kind = 1;</code>
+     * @return The enum numeric value on the wire for kind.
+     */
+    int getKindValue();
+    /**
+     * <code>.dal_obscura.flight.v1.FieldPathSegment.Kind kind = 1;</code>
+     * @return The kind.
+     */
+    io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Kind getKind();
+
+    /**
+     * <code>string name = 2;</code>
+     * @return The name.
+     */
+    java.lang.String getName();
+    /**
+     * <code>string name = 2;</code>
+     * @return The bytes for name.
+     */
+    com.google.protobuf.ByteString
+        getNameBytes();
+
+    /**
+     * <code>optional int32 field_id = 3;</code>
+     * @return Whether the fieldId field is set.
+     */
+    boolean hasFieldId();
+    /**
+     * <code>optional int32 field_id = 3;</code>
+     * @return The fieldId.
+     */
+    int getFieldId();
+  }
+  /**
+   * Protobuf type {@code dal_obscura.flight.v1.FieldPathSegment}
+   */
+  public static final class FieldPathSegment extends
+      com.google.protobuf.GeneratedMessage implements
+      // @@protoc_insertion_point(message_implements:dal_obscura.flight.v1.FieldPathSegment)
+      FieldPathSegmentOrBuilder {
+  private static final long serialVersionUID = 0L;
+    static {
+      com.google.protobuf.RuntimeVersion.validateProtobufGencodeVersion(
+        com.google.protobuf.RuntimeVersion.RuntimeDomain.PUBLIC,
+        /* major= */ 4,
+        /* minor= */ 35,
+        /* patch= */ 0,
+        /* suffix= */ "",
+        "FieldPathSegment");
+    }
+    // Use FieldPathSegment.newBuilder() to construct.
+    private FieldPathSegment(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+      super(builder);
+    }
+    private FieldPathSegment() {
+      kind_ = 0;
+      name_ = "";
+    }
+
+    public static final com.google.protobuf.Descriptors.Descriptor
+        getDescriptor() {
+      return io.dalobscura.flight.v1.DalObscuraFlightProto.internal_static_dal_obscura_flight_v1_FieldPathSegment_descriptor;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Descriptors.Descriptor getDescriptorForType() {
+      return io.dalobscura.flight.v1.DalObscuraFlightProto.internal_static_dal_obscura_flight_v1_FieldPathSegment_descriptor;
+    }
+
+    @java.lang.Override
+    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+        internalGetFieldAccessorTable() {
+      return io.dalobscura.flight.v1.DalObscuraFlightProto.internal_static_dal_obscura_flight_v1_FieldPathSegment_fieldAccessorTable
+          .ensureFieldAccessorsInitialized(
+              io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.class, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Builder.class);
+    }
+
+    /**
+     * Protobuf enum {@code dal_obscura.flight.v1.FieldPathSegment.Kind}
+     */
+    public enum Kind
+        implements com.google.protobuf.ProtocolMessageEnum {
+      /**
+       * <code>KIND_UNSPECIFIED = 0;</code>
+       */
+      KIND_UNSPECIFIED(0),
+      /**
+       * <code>FIELD = 1;</code>
+       */
+      FIELD(1),
+      /**
+       * <code>LIST_ELEMENT = 2;</code>
+       */
+      LIST_ELEMENT(2),
+      /**
+       * <code>MAP_KEY = 3;</code>
+       */
+      MAP_KEY(3),
+      /**
+       * <code>MAP_VALUE = 4;</code>
+       */
+      MAP_VALUE(4),
+      UNRECOGNIZED(-1),
+      ;
+
+      static {
+        com.google.protobuf.RuntimeVersion.validateProtobufGencodeVersion(
+          com.google.protobuf.RuntimeVersion.RuntimeDomain.PUBLIC,
+          /* major= */ 4,
+          /* minor= */ 35,
+          /* patch= */ 0,
+          /* suffix= */ "",
+          "Kind");
+      }
+      /**
+       * <code>KIND_UNSPECIFIED = 0;</code>
+       */
+      public static final int KIND_UNSPECIFIED_VALUE = 0;
+      /**
+       * <code>FIELD = 1;</code>
+       */
+      public static final int FIELD_VALUE = 1;
+      /**
+       * <code>LIST_ELEMENT = 2;</code>
+       */
+      public static final int LIST_ELEMENT_VALUE = 2;
+      /**
+       * <code>MAP_KEY = 3;</code>
+       */
+      public static final int MAP_KEY_VALUE = 3;
+      /**
+       * <code>MAP_VALUE = 4;</code>
+       */
+      public static final int MAP_VALUE_VALUE = 4;
+
+
+      public final int getNumber() {
+        if (this == UNRECOGNIZED) {
+          throw new java.lang.IllegalArgumentException(
+              "Can't get the number of an unknown enum value.");
+        }
+        return value;
+      }
+
+      /**
+       * @param value The numeric wire value of the corresponding enum entry.
+       * @return The enum associated with the given numeric wire value.
+       * @deprecated Use {@link #forNumber(int)} instead.
+       */
+      @java.lang.Deprecated
+      public static Kind valueOf(int value) {
+        return forNumber(value);
+      }
+
+      /**
+       * @param value The numeric wire value of the corresponding enum entry.
+       * @return The enum associated with the given numeric wire value.
+       */
+      public static Kind forNumber(int value) {
+        switch (value) {
+          case 0: return KIND_UNSPECIFIED;
+          case 1: return FIELD;
+          case 2: return LIST_ELEMENT;
+          case 3: return MAP_KEY;
+          case 4: return MAP_VALUE;
+          default: return null;
+        }
+      }
+
+      public static com.google.protobuf.Internal.EnumLiteMap<Kind>
+          internalGetValueMap() {
+        return internalValueMap;
+      }
+      private static final com.google.protobuf.Internal.EnumLiteMap<
+          Kind> internalValueMap =
+            new com.google.protobuf.Internal.EnumLiteMap<Kind>() {
+              public Kind findValueByNumber(int number) {
+                return Kind.forNumber(number);
+              }
+            };
+
+      public final com.google.protobuf.Descriptors.EnumValueDescriptor
+          getValueDescriptor() {
+        if (this == UNRECOGNIZED) {
+          throw new java.lang.IllegalStateException(
+              "Can't get the descriptor of an unrecognized enum value.");
+        }
+        return getDescriptor().getValue(ordinal());
+      }
+      public final com.google.protobuf.Descriptors.EnumDescriptor
+          getDescriptorForType() {
+        return getDescriptor();
+      }
+      public static com.google.protobuf.Descriptors.EnumDescriptor
+          getDescriptor() {
+        return io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.getDescriptor().getEnumType(0);
+      }
+
+      private static final Kind[] VALUES = values();
+
+      public static Kind valueOf(
+          com.google.protobuf.Descriptors.EnumValueDescriptor desc) {
+        if (desc.getType() != getDescriptor()) {
+          throw new java.lang.IllegalArgumentException(
+            "EnumValueDescriptor is not for this type.");
+        }
+        if (desc.getIndex() == -1) {
+          return UNRECOGNIZED;
+        }
+        return VALUES[desc.getIndex()];
+      }
+
+      private final int value;
+
+      private Kind(int value) {
+        this.value = value;
+      }
+
+      // @@protoc_insertion_point(enum_scope:dal_obscura.flight.v1.FieldPathSegment.Kind)
+    }
+
+    private int bitField0_;
+    public static final int KIND_FIELD_NUMBER = 1;
+    private int kind_ = 0;
+    /**
+     * <code>.dal_obscura.flight.v1.FieldPathSegment.Kind kind = 1;</code>
+     * @return The enum numeric value on the wire for kind.
+     */
+    @java.lang.Override public int getKindValue() {
+      return kind_;
+    }
+    /**
+     * <code>.dal_obscura.flight.v1.FieldPathSegment.Kind kind = 1;</code>
+     * @return The kind.
+     */
+    @java.lang.Override public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Kind getKind() {
+      io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Kind result = io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Kind.forNumber(kind_);
+      return result == null ? io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Kind.UNRECOGNIZED : result;
+    }
+
+    public static final int NAME_FIELD_NUMBER = 2;
+    @SuppressWarnings("serial")
+    private volatile java.lang.Object name_ = "";
+    /**
+     * <code>string name = 2;</code>
+     * @return The name.
+     */
+    @java.lang.Override
+    public java.lang.String getName() {
+      java.lang.Object ref = name_;
+      if (ref instanceof java.lang.String) {
+        return (java.lang.String) ref;
+      } else {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        name_ = s;
+        return s;
+      }
+    }
+    /**
+     * <code>string name = 2;</code>
+     * @return The bytes for name.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getNameBytes() {
+      java.lang.Object ref = name_;
+      if (ref instanceof java.lang.String) {
+        com.google.protobuf.ByteString b =
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        name_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+
+    public static final int FIELD_ID_FIELD_NUMBER = 3;
+    private int fieldId_ = 0;
+    /**
+     * <code>optional int32 field_id = 3;</code>
+     * @return Whether the fieldId field is set.
+     */
+    @java.lang.Override
+    public boolean hasFieldId() {
+      return ((bitField0_ & 0x00000001) != 0);
+    }
+    /**
+     * <code>optional int32 field_id = 3;</code>
+     * @return The fieldId.
+     */
+    @java.lang.Override
+    public int getFieldId() {
+      return fieldId_;
+    }
+
+    private byte memoizedIsInitialized = -1;
+    @java.lang.Override
+    public final boolean isInitialized() {
+      byte isInitialized = memoizedIsInitialized;
+      if (isInitialized == 1) return true;
+      if (isInitialized == 0) return false;
+
+      memoizedIsInitialized = 1;
+      return true;
+    }
+
+    @java.lang.Override
+    public void writeTo(com.google.protobuf.CodedOutputStream output)
+                        throws java.io.IOException {
+      if (kind_ != io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Kind.KIND_UNSPECIFIED.getNumber()) {
+        output.writeEnum(1, kind_);
+      }
+      if (!com.google.protobuf.GeneratedMessage.isStringEmpty(name_)) {
+        com.google.protobuf.GeneratedMessage.writeString(output, 2, name_);
+      }
+      if (((bitField0_ & 0x00000001) != 0)) {
+        output.writeInt32(3, fieldId_);
+      }
+      getUnknownFields().writeTo(output);
+    }
+    private int computeSerializedSize_0() {
+      int size = 0;
+      if (kind_ != io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Kind.KIND_UNSPECIFIED.getNumber()) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeEnumSize(1, kind_);
+      }
+      if (!com.google.protobuf.GeneratedMessage.isStringEmpty(name_)) {
+        size += com.google.protobuf.GeneratedMessage.computeStringSize(2, name_);
+      }
+      if (((bitField0_ & 0x00000001) != 0)) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeInt32Size(3, fieldId_);
+      }
+      return size;
+    }
+    @java.lang.Override
+    public int getSerializedSize() {
+      int size = memoizedSize;
+      if (size != -1) return size;
+
+      size = 0;
+      size += computeSerializedSize_0();
+      size += getUnknownFields().getSerializedSize();
+      memoizedSize = size;
+      return size;
+    }
+
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment)) {
+        return super.equals(obj);
+      }
+      io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment other = (io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment) obj;
+
+      if (kind_ != other.kind_) return false;
+      if (!getName()
+          .equals(other.getName())) return false;
+      if (hasFieldId() != other.hasFieldId()) return false;
+      if (hasFieldId()) {
+        if (getFieldId()
+            != other.getFieldId()) return false;
+      }
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
+      return true;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptor().hashCode();
+      hash = (37 * hash) + KIND_FIELD_NUMBER;
+      hash = (53 * hash) + kind_;
+      hash = (37 * hash) + NAME_FIELD_NUMBER;
+      hash = (53 * hash) + getName().hashCode();
+      if (hasFieldId()) {
+        hash = (37 * hash) + FIELD_ID_FIELD_NUMBER;
+        hash = (53 * hash) + getFieldId();
+      }
+      hash = (29 * hash) + getUnknownFields().hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment parseFrom(
+        com.google.protobuf.ByteString data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment parseFrom(
+        com.google.protobuf.ByteString data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment parseFrom(byte[] data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment parseFrom(
+        byte[] data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment parseFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
+    }
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment parseFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment parseDelimitedFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
+    }
+
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment parseDelimitedFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment parseFrom(
+        com.google.protobuf.CodedInputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
+    }
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment parseFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+
+    @java.lang.Override
+    public Builder newBuilderForType() { return newBuilder(); }
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
+    }
+    public static Builder newBuilder(io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    @java.lang.Override
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
+
+    @java.lang.Override
+    protected Builder newBuilderForType(
+        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+      Builder builder = new Builder(parent);
+      return builder;
+    }
+    /**
+     * Protobuf type {@code dal_obscura.flight.v1.FieldPathSegment}
+     */
+    public static final class Builder extends
+        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        // @@protoc_insertion_point(builder_implements:dal_obscura.flight.v1.FieldPathSegment)
+        io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegmentOrBuilder {
+      public static final com.google.protobuf.Descriptors.Descriptor
+          getDescriptor() {
+        return io.dalobscura.flight.v1.DalObscuraFlightProto.internal_static_dal_obscura_flight_v1_FieldPathSegment_descriptor;
+      }
+
+      @java.lang.Override
+      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+          internalGetFieldAccessorTable() {
+        return io.dalobscura.flight.v1.DalObscuraFlightProto.internal_static_dal_obscura_flight_v1_FieldPathSegment_fieldAccessorTable
+            .ensureFieldAccessorsInitialized(
+                io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.class, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Builder.class);
+      }
+
+      // Construct using io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.newBuilder()
+      private Builder() {
+
+      }
+
+      private Builder(
+          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        super(parent);
+
+      }
+      @java.lang.Override
+      public Builder clear() {
+        super.clear();
+        bitField0_ = 0;
+        kind_ = 0;
+        name_ = "";
+        fieldId_ = 0;
+        return this;
+      }
+
+      @java.lang.Override
+      public com.google.protobuf.Descriptors.Descriptor
+          getDescriptorForType() {
+        return io.dalobscura.flight.v1.DalObscuraFlightProto.internal_static_dal_obscura_flight_v1_FieldPathSegment_descriptor;
+      }
+
+      @java.lang.Override
+      public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment getDefaultInstanceForType() {
+        return io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.getDefaultInstance();
+      }
+
+      @java.lang.Override
+      public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment build() {
+        io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment result = buildPartial();
+        if (!result.isInitialized()) {
+          throw newUninitializedMessageException(result);
+        }
+        return result;
+      }
+
+      @java.lang.Override
+      public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment buildPartial() {
+        io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment result = new io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment(this);
+        if (bitField0_ != 0) { buildPartial0(result); }
+        onBuilt();
+        return result;
+      }
+
+      private void buildPartial0(io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment result) {
+        int from_bitField0_ = bitField0_;
+        if (((from_bitField0_ & 0x00000001) != 0)) {
+          result.kind_ = kind_;
+        }
+        if (((from_bitField0_ & 0x00000002) != 0)) {
+          result.name_ = name_;
+        }
+        int to_bitField0_ = 0;
+        if (((from_bitField0_ & 0x00000004) != 0)) {
+          result.fieldId_ = fieldId_;
+          to_bitField0_ |= 0x00000001;
+        }
+        result.bitField0_ |= to_bitField0_;
+      }
+
+      @java.lang.Override
+      public Builder mergeFrom(com.google.protobuf.Message other) {
+        if (other instanceof io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment) {
+          return mergeFrom((io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment)other);
+        } else {
+          super.mergeFrom(other);
+          return this;
+        }
+      }
+
+      public Builder mergeFrom(io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment other) {
+        if (other == io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.getDefaultInstance()) return this;
+        if (other.kind_ != 0) {
+          setKindValue(other.getKindValue());
+        }
+        if (!other.getName().isEmpty()) {
+          name_ = other.name_;
+          bitField0_ |= 0x00000002;
+          onChanged();
+        }
+        if (other.hasFieldId()) {
+          setFieldId(other.getFieldId());
+        }
+        this.mergeUnknownFields(other.getUnknownFields());
+        onChanged();
+        return this;
+      }
+
+      @java.lang.Override
+      public final boolean isInitialized() {
+        return true;
+      }
+
+      @java.lang.Override
+      public Builder mergeFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws java.io.IOException {
+        java.util.Objects.requireNonNull(extensionRegistry);
+        try {
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 8: {
+                kind_ = input.readEnum();
+                bitField0_ |= 0x00000001;
+                break;
+              } // case 8
+              case 18: {
+                name_ = input.readStringRequireUtf8();
+                bitField0_ |= 0x00000002;
+                break;
+              } // case 18
+              case 24: {
+                fieldId_ = input.readInt32();
+                bitField0_ |= 0x00000004;
+                break;
+              } // case 24
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.unwrapIOException();
+        } finally {
+          onChanged();
+        } // finally
+        return this;
+      }
+      private int bitField0_;
+
+      private int kind_ = 0;
+      /**
+       * <code>.dal_obscura.flight.v1.FieldPathSegment.Kind kind = 1;</code>
+       * @return The enum numeric value on the wire for kind.
+       */
+      @java.lang.Override public int getKindValue() {
+        return kind_;
+      }
+      /**
+       * <code>.dal_obscura.flight.v1.FieldPathSegment.Kind kind = 1;</code>
+       * @param value The enum numeric value on the wire for kind to set.
+       * @return This builder for chaining.
+       */
+      public Builder setKindValue(int value) {
+        kind_ = value;
+        bitField0_ |= 0x00000001;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>.dal_obscura.flight.v1.FieldPathSegment.Kind kind = 1;</code>
+       * @return The kind.
+       */
+      @java.lang.Override
+      public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Kind getKind() {
+        io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Kind result = io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Kind.forNumber(kind_);
+        return result == null ? io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Kind.UNRECOGNIZED : result;
+      }
+      /**
+       * <code>.dal_obscura.flight.v1.FieldPathSegment.Kind kind = 1;</code>
+       * @param value The kind to set.
+       * @throws IllegalArgumentException if UNRECOGNIZED is provided.
+       * @return This builder for chaining.
+       */
+      public Builder setKind(io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Kind value) {
+        java.util.Objects.requireNonNull(value);
+        bitField0_ |= 0x00000001;
+        kind_ = value.getNumber();
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>.dal_obscura.flight.v1.FieldPathSegment.Kind kind = 1;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearKind() {
+        bitField0_ = (bitField0_ & ~0x00000001);
+        kind_ = 0;
+        onChanged();
+        return this;
+      }
+
+      private java.lang.Object name_ = "";
+      /**
+       * <code>string name = 2;</code>
+       * @return The name.
+       */
+      public java.lang.String getName() {
+        java.lang.Object ref = name_;
+        if (!(ref instanceof java.lang.String)) {
+          com.google.protobuf.ByteString bs =
+              (com.google.protobuf.ByteString) ref;
+          java.lang.String s = bs.toStringUtf8();
+          name_ = s;
+          return s;
+        } else {
+          return (java.lang.String) ref;
+        }
+      }
+      /**
+       * <code>string name = 2;</code>
+       * @return The bytes for name.
+       */
+      public com.google.protobuf.ByteString
+          getNameBytes() {
+        java.lang.Object ref = name_;
+        if (ref instanceof String) {
+          com.google.protobuf.ByteString b =
+              com.google.protobuf.ByteString.copyFromUtf8(
+                  (java.lang.String) ref);
+          name_ = b;
+          return b;
+        } else {
+          return (com.google.protobuf.ByteString) ref;
+        }
+      }
+      /**
+       * <code>string name = 2;</code>
+       * @param value The name to set.
+       * @return This builder for chaining.
+       */
+      public Builder setName(
+          java.lang.String value) {
+        java.util.Objects.requireNonNull(value);
+        name_ = value;
+        bitField0_ |= 0x00000002;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>string name = 2;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearName() {
+        name_ = getDefaultInstance().getName();
+        bitField0_ = (bitField0_ & ~0x00000002);
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>string name = 2;</code>
+       * @param value The bytes for name to set.
+       * @return This builder for chaining.
+       */
+      public Builder setNameBytes(
+          com.google.protobuf.ByteString value) {
+        java.util.Objects.requireNonNull(value);
+        checkByteStringIsUtf8(value);
+        name_ = value;
+        bitField0_ |= 0x00000002;
+        onChanged();
+        return this;
+      }
+
+      private int fieldId_ ;
+      /**
+       * <code>optional int32 field_id = 3;</code>
+       * @return Whether the fieldId field is set.
+       */
+      @java.lang.Override
+      public boolean hasFieldId() {
+        return ((bitField0_ & 0x00000004) != 0);
+      }
+      /**
+       * <code>optional int32 field_id = 3;</code>
+       * @return The fieldId.
+       */
+      @java.lang.Override
+      public int getFieldId() {
+        return fieldId_;
+      }
+      /**
+       * <code>optional int32 field_id = 3;</code>
+       * @param value The fieldId to set.
+       * @return This builder for chaining.
+       */
+      public Builder setFieldId(int value) {
+
+        fieldId_ = value;
+        bitField0_ |= 0x00000004;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>optional int32 field_id = 3;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearFieldId() {
+        bitField0_ = (bitField0_ & ~0x00000004);
+        fieldId_ = 0;
+        onChanged();
+        return this;
+      }
+
+      // @@protoc_insertion_point(builder_scope:dal_obscura.flight.v1.FieldPathSegment)
+    }
+
+    // @@protoc_insertion_point(class_scope:dal_obscura.flight.v1.FieldPathSegment)
+    private static final io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment();
+    }
+
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment getDefaultInstance() {
+      return DEFAULT_INSTANCE;
+    }
+
+    private static final com.google.protobuf.Parser<FieldPathSegment>
+        PARSER = new com.google.protobuf.AbstractParser<FieldPathSegment>() {
+      @java.lang.Override
+      public FieldPathSegment parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
+      }
+    };
+
+    public static com.google.protobuf.Parser<FieldPathSegment> parser() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<FieldPathSegment> getParserForType() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment getDefaultInstanceForType() {
+      return DEFAULT_INSTANCE;
+    }
+
+  }
+
+  public interface FieldPathOrBuilder extends
+      // @@protoc_insertion_point(interface_extends:dal_obscura.flight.v1.FieldPath)
+      com.google.protobuf.MessageOrBuilder {
+
+    /**
+     * <code>uint32 version = 1;</code>
+     * @return The version.
+     */
+    int getVersion();
+
+    /**
+     * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+     */
+    java.util.List<io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment>
+        getSegmentsList();
+    /**
+     * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+     */
+    io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment getSegments(int index);
+    /**
+     * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+     */
+    int getSegmentsCount();
+    /**
+     * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+     */
+    java.util.List<? extends io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegmentOrBuilder>
+        getSegmentsOrBuilderList();
+    /**
+     * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+     */
+    io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegmentOrBuilder getSegmentsOrBuilder(
+        int index);
+  }
+  /**
+   * Protobuf type {@code dal_obscura.flight.v1.FieldPath}
+   */
+  public static final class FieldPath extends
+      com.google.protobuf.GeneratedMessage implements
+      // @@protoc_insertion_point(message_implements:dal_obscura.flight.v1.FieldPath)
+      FieldPathOrBuilder {
+  private static final long serialVersionUID = 0L;
+    static {
+      com.google.protobuf.RuntimeVersion.validateProtobufGencodeVersion(
+        com.google.protobuf.RuntimeVersion.RuntimeDomain.PUBLIC,
+        /* major= */ 4,
+        /* minor= */ 35,
+        /* patch= */ 0,
+        /* suffix= */ "",
+        "FieldPath");
+    }
+    // Use FieldPath.newBuilder() to construct.
+    private FieldPath(com.google.protobuf.GeneratedMessage.Builder<?> builder) {
+      super(builder);
+    }
+    private FieldPath() {
+      segments_ = java.util.Collections.emptyList();
+    }
+
+    public static final com.google.protobuf.Descriptors.Descriptor
+        getDescriptor() {
+      return io.dalobscura.flight.v1.DalObscuraFlightProto.internal_static_dal_obscura_flight_v1_FieldPath_descriptor;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Descriptors.Descriptor getDescriptorForType() {
+      return io.dalobscura.flight.v1.DalObscuraFlightProto.internal_static_dal_obscura_flight_v1_FieldPath_descriptor;
+    }
+
+    @java.lang.Override
+    protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+        internalGetFieldAccessorTable() {
+      return io.dalobscura.flight.v1.DalObscuraFlightProto.internal_static_dal_obscura_flight_v1_FieldPath_fieldAccessorTable
+          .ensureFieldAccessorsInitialized(
+              io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath.class, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath.Builder.class);
+    }
+
+    public static final int VERSION_FIELD_NUMBER = 1;
+    private int version_ = 0;
+    /**
+     * <code>uint32 version = 1;</code>
+     * @return The version.
+     */
+    @java.lang.Override
+    public int getVersion() {
+      return version_;
+    }
+
+    public static final int SEGMENTS_FIELD_NUMBER = 2;
+    @SuppressWarnings("serial")
+    private java.util.List<io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment> segments_;
+    /**
+     * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+     */
+    @java.lang.Override
+    public java.util.List<io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment> getSegmentsList() {
+      return segments_;
+    }
+    /**
+     * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+     */
+    @java.lang.Override
+    public java.util.List<? extends io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegmentOrBuilder>
+        getSegmentsOrBuilderList() {
+      return segments_;
+    }
+    /**
+     * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+     */
+    @java.lang.Override
+    public int getSegmentsCount() {
+      return segments_.size();
+    }
+    /**
+     * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+     */
+    @java.lang.Override
+    public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment getSegments(int index) {
+      return segments_.get(index);
+    }
+    /**
+     * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+     */
+    @java.lang.Override
+    public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegmentOrBuilder getSegmentsOrBuilder(
+        int index) {
+      return segments_.get(index);
+    }
+
+    private byte memoizedIsInitialized = -1;
+    @java.lang.Override
+    public final boolean isInitialized() {
+      byte isInitialized = memoizedIsInitialized;
+      if (isInitialized == 1) return true;
+      if (isInitialized == 0) return false;
+
+      memoizedIsInitialized = 1;
+      return true;
+    }
+
+    @java.lang.Override
+    public void writeTo(com.google.protobuf.CodedOutputStream output)
+                        throws java.io.IOException {
+      if (version_ != 0) {
+        output.writeUInt32(1, version_);
+      }
+      for (int i = 0; i < segments_.size(); i++) {
+        output.writeMessage(2, segments_.get(i));
+      }
+      getUnknownFields().writeTo(output);
+    }
+    private int computeSerializedSize_0() {
+      int size = 0;
+      if (version_ != 0) {
+        size += com.google.protobuf.CodedOutputStream
+          .computeUInt32Size(1, version_);
+      }
+
+          {
+            final int count = segments_.size();
+            for (int i = 0; i < count; i++) {
+              size += com.google.protobuf.CodedOutputStream
+                .computeMessageSizeNoTag(segments_.get(i));
+            }
+            size += 1 * count;
+          }
+      return size;
+    }
+    @java.lang.Override
+    public int getSerializedSize() {
+      int size = memoizedSize;
+      if (size != -1) return size;
+
+      size = 0;
+      size += computeSerializedSize_0();
+      size += getUnknownFields().getSerializedSize();
+      memoizedSize = size;
+      return size;
+    }
+
+    @java.lang.Override
+    public boolean equals(final java.lang.Object obj) {
+      if (obj == this) {
+       return true;
+      }
+      if (!(obj instanceof io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath)) {
+        return super.equals(obj);
+      }
+      io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath other = (io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath) obj;
+
+      if (getVersion()
+          != other.getVersion()) return false;
+      if (!getSegmentsList()
+          .equals(other.getSegmentsList())) return false;
+      if (!getUnknownFields().equals(other.getUnknownFields())) return false;
+      return true;
+    }
+
+    @java.lang.Override
+    public int hashCode() {
+      if (memoizedHashCode != 0) {
+        return memoizedHashCode;
+      }
+      int hash = 41;
+      hash = (19 * hash) + getDescriptor().hashCode();
+      hash = (37 * hash) + VERSION_FIELD_NUMBER;
+      hash = (53 * hash) + getVersion();
+      if (getSegmentsCount() > 0) {
+        hash = (37 * hash) + SEGMENTS_FIELD_NUMBER;
+        hash = (53 * hash) + getSegmentsList().hashCode();
+      }
+      hash = (29 * hash) + getUnknownFields().hashCode();
+      memoizedHashCode = hash;
+      return hash;
+    }
+
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath parseFrom(
+        java.nio.ByteBuffer data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath parseFrom(
+        java.nio.ByteBuffer data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath parseFrom(
+        com.google.protobuf.ByteString data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath parseFrom(
+        com.google.protobuf.ByteString data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath parseFrom(byte[] data)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data);
+    }
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath parseFrom(
+        byte[] data,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws com.google.protobuf.InvalidProtocolBufferException {
+      return PARSER.parseFrom(data, extensionRegistry);
+    }
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath parseFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
+    }
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath parseFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath parseDelimitedFrom(java.io.InputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input);
+    }
+
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath parseDelimitedFrom(
+        java.io.InputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
+    }
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath parseFrom(
+        com.google.protobuf.CodedInputStream input)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input);
+    }
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath parseFrom(
+        com.google.protobuf.CodedInputStream input,
+        com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+        throws java.io.IOException {
+      return com.google.protobuf.GeneratedMessage
+          .parseWithIOException(PARSER, input, extensionRegistry);
+    }
+
+    @java.lang.Override
+    public Builder newBuilderForType() { return newBuilder(); }
+    public static Builder newBuilder() {
+      return DEFAULT_INSTANCE.toBuilder();
+    }
+    public static Builder newBuilder(io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath prototype) {
+      return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
+    }
+    @java.lang.Override
+    public Builder toBuilder() {
+      return this == DEFAULT_INSTANCE
+          ? new Builder() : new Builder().mergeFrom(this);
+    }
+
+    @java.lang.Override
+    protected Builder newBuilderForType(
+        com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+      Builder builder = new Builder(parent);
+      return builder;
+    }
+    /**
+     * Protobuf type {@code dal_obscura.flight.v1.FieldPath}
+     */
+    public static final class Builder extends
+        com.google.protobuf.GeneratedMessage.Builder<Builder> implements
+        // @@protoc_insertion_point(builder_implements:dal_obscura.flight.v1.FieldPath)
+        io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathOrBuilder {
+      public static final com.google.protobuf.Descriptors.Descriptor
+          getDescriptor() {
+        return io.dalobscura.flight.v1.DalObscuraFlightProto.internal_static_dal_obscura_flight_v1_FieldPath_descriptor;
+      }
+
+      @java.lang.Override
+      protected com.google.protobuf.GeneratedMessage.FieldAccessorTable
+          internalGetFieldAccessorTable() {
+        return io.dalobscura.flight.v1.DalObscuraFlightProto.internal_static_dal_obscura_flight_v1_FieldPath_fieldAccessorTable
+            .ensureFieldAccessorsInitialized(
+                io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath.class, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath.Builder.class);
+      }
+
+      // Construct using io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath.newBuilder()
+      private Builder() {
+
+      }
+
+      private Builder(
+          com.google.protobuf.GeneratedMessage.BuilderParent parent) {
+        super(parent);
+
+      }
+      @java.lang.Override
+      public Builder clear() {
+        super.clear();
+        bitField0_ = 0;
+        version_ = 0;
+        if (segmentsBuilder_ == null) {
+          segments_ = java.util.Collections.emptyList();
+        } else {
+          segments_ = null;
+          segmentsBuilder_.clear();
+        }
+        bitField0_ = (bitField0_ & ~0x00000002);
+        return this;
+      }
+
+      @java.lang.Override
+      public com.google.protobuf.Descriptors.Descriptor
+          getDescriptorForType() {
+        return io.dalobscura.flight.v1.DalObscuraFlightProto.internal_static_dal_obscura_flight_v1_FieldPath_descriptor;
+      }
+
+      @java.lang.Override
+      public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath getDefaultInstanceForType() {
+        return io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath.getDefaultInstance();
+      }
+
+      @java.lang.Override
+      public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath build() {
+        io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath result = buildPartial();
+        if (!result.isInitialized()) {
+          throw newUninitializedMessageException(result);
+        }
+        return result;
+      }
+
+      @java.lang.Override
+      public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath buildPartial() {
+        io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath result = new io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath(this);
+        buildPartialRepeatedFields(result);
+        if (bitField0_ != 0) { buildPartial0(result); }
+        onBuilt();
+        return result;
+      }
+
+      private void buildPartialRepeatedFields(io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath result) {
+        if (segmentsBuilder_ == null) {
+          if (((bitField0_ & 0x00000002) != 0)) {
+            segments_ = java.util.Collections.unmodifiableList(segments_);
+            bitField0_ = (bitField0_ & ~0x00000002);
+          }
+          result.segments_ = segments_;
+        } else {
+          result.segments_ = segmentsBuilder_.build();
+        }
+      }
+
+      private void buildPartial0(io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath result) {
+        int from_bitField0_ = bitField0_;
+        if (((from_bitField0_ & 0x00000001) != 0)) {
+          result.version_ = version_;
+        }
+      }
+
+      @java.lang.Override
+      public Builder mergeFrom(com.google.protobuf.Message other) {
+        if (other instanceof io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath) {
+          return mergeFrom((io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath)other);
+        } else {
+          super.mergeFrom(other);
+          return this;
+        }
+      }
+
+      public Builder mergeFrom(io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath other) {
+        if (other == io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath.getDefaultInstance()) return this;
+        if (other.getVersion() != 0) {
+          setVersion(other.getVersion());
+        }
+        if (segmentsBuilder_ == null) {
+          if (!other.segments_.isEmpty()) {
+            if (segments_.isEmpty()) {
+              segments_ = other.segments_;
+              bitField0_ = (bitField0_ & ~0x00000002);
+            } else {
+              ensureSegmentsIsMutable();
+              segments_.addAll(other.segments_);
+            }
+            onChanged();
+          }
+        } else {
+          if (!other.segments_.isEmpty()) {
+            if (segmentsBuilder_.isEmpty()) {
+              segmentsBuilder_.dispose();
+              segmentsBuilder_ = null;
+              segments_ = other.segments_;
+              bitField0_ = (bitField0_ & ~0x00000002);
+              segmentsBuilder_ =
+                com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
+                   internalGetSegmentsFieldBuilder() : null;
+            } else {
+              segmentsBuilder_.addAllMessages(other.segments_);
+            }
+          }
+        }
+        this.mergeUnknownFields(other.getUnknownFields());
+        onChanged();
+        return this;
+      }
+
+      @java.lang.Override
+      public final boolean isInitialized() {
+        return true;
+      }
+
+      @java.lang.Override
+      public Builder mergeFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws java.io.IOException {
+        java.util.Objects.requireNonNull(extensionRegistry);
+        try {
+          boolean done = false;
+          while (!done) {
+            int tag = input.readTag();
+            switch (tag) {
+              case 0:
+                done = true;
+                break;
+              case 8: {
+                version_ = input.readUInt32();
+                bitField0_ |= 0x00000001;
+                break;
+              } // case 8
+              case 18: {
+                io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment m =
+                    input.readMessage(
+                        io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.parser(),
+                        extensionRegistry);
+                if (segmentsBuilder_ == null) {
+                  ensureSegmentsIsMutable();
+                  segments_.add(m);
+                } else {
+                  segmentsBuilder_.addMessage(m);
+                }
+                break;
+              } // case 18
+              default: {
+                if (!super.parseUnknownField(input, extensionRegistry, tag)) {
+                  done = true; // was an endgroup tag
+                }
+                break;
+              } // default:
+            } // switch (tag)
+          } // while (!done)
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.unwrapIOException();
+        } finally {
+          onChanged();
+        } // finally
+        return this;
+      }
+      private int bitField0_;
+
+      private int version_ ;
+      /**
+       * <code>uint32 version = 1;</code>
+       * @return The version.
+       */
+      @java.lang.Override
+      public int getVersion() {
+        return version_;
+      }
+      /**
+       * <code>uint32 version = 1;</code>
+       * @param value The version to set.
+       * @return This builder for chaining.
+       */
+      public Builder setVersion(int value) {
+
+        version_ = value;
+        bitField0_ |= 0x00000001;
+        onChanged();
+        return this;
+      }
+      /**
+       * <code>uint32 version = 1;</code>
+       * @return This builder for chaining.
+       */
+      public Builder clearVersion() {
+        bitField0_ = (bitField0_ & ~0x00000001);
+        version_ = 0;
+        onChanged();
+        return this;
+      }
+
+      private java.util.List<io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment> segments_ =
+        java.util.Collections.emptyList();
+      private void ensureSegmentsIsMutable() {
+        if (!((bitField0_ & 0x00000002) != 0)) {
+          segments_ = new java.util.ArrayList<io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment>(segments_);
+          bitField0_ |= 0x00000002;
+         }
+      }
+
+      private com.google.protobuf.RepeatedFieldBuilder<
+          io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Builder, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegmentOrBuilder> segmentsBuilder_;
+
+      /**
+       * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+       */
+      public java.util.List<io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment> getSegmentsList() {
+        if (segmentsBuilder_ == null) {
+          return java.util.Collections.unmodifiableList(segments_);
+        } else {
+          return segmentsBuilder_.getMessageList();
+        }
+      }
+      /**
+       * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+       */
+      public int getSegmentsCount() {
+        if (segmentsBuilder_ == null) {
+          return segments_.size();
+        } else {
+          return segmentsBuilder_.getCount();
+        }
+      }
+      /**
+       * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+       */
+      public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment getSegments(int index) {
+        if (segmentsBuilder_ == null) {
+          return segments_.get(index);
+        } else {
+          return segmentsBuilder_.getMessage(index);
+        }
+      }
+      /**
+       * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+       */
+      public Builder setSegments(
+          int index, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment value) {
+        if (segmentsBuilder_ == null) {
+          java.util.Objects.requireNonNull(value);
+          ensureSegmentsIsMutable();
+          segments_.set(index, value);
+          onChanged();
+        } else {
+          segmentsBuilder_.setMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+       */
+      public Builder setSegments(
+          int index, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Builder builderForValue) {
+        if (segmentsBuilder_ == null) {
+          ensureSegmentsIsMutable();
+          segments_.set(index, builderForValue.build());
+          onChanged();
+        } else {
+          segmentsBuilder_.setMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+       */
+      public Builder addSegments(io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment value) {
+        if (segmentsBuilder_ == null) {
+          java.util.Objects.requireNonNull(value);
+          ensureSegmentsIsMutable();
+          segments_.add(value);
+          onChanged();
+        } else {
+          segmentsBuilder_.addMessage(value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+       */
+      public Builder addSegments(
+          int index, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment value) {
+        if (segmentsBuilder_ == null) {
+          java.util.Objects.requireNonNull(value);
+          ensureSegmentsIsMutable();
+          segments_.add(index, value);
+          onChanged();
+        } else {
+          segmentsBuilder_.addMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+       */
+      public Builder addSegments(
+          io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Builder builderForValue) {
+        if (segmentsBuilder_ == null) {
+          ensureSegmentsIsMutable();
+          segments_.add(builderForValue.build());
+          onChanged();
+        } else {
+          segmentsBuilder_.addMessage(builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+       */
+      public Builder addSegments(
+          int index, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Builder builderForValue) {
+        if (segmentsBuilder_ == null) {
+          ensureSegmentsIsMutable();
+          segments_.add(index, builderForValue.build());
+          onChanged();
+        } else {
+          segmentsBuilder_.addMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+       */
+      public Builder addAllSegments(
+          java.lang.Iterable<? extends io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment> values) {
+        if (segmentsBuilder_ == null) {
+          ensureSegmentsIsMutable();
+          com.google.protobuf.AbstractMessageLite.Builder.addAll(
+              values, segments_);
+          onChanged();
+        } else {
+          segmentsBuilder_.addAllMessages(values);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+       */
+      public Builder clearSegments() {
+        if (segmentsBuilder_ == null) {
+          segments_ = java.util.Collections.emptyList();
+          bitField0_ = (bitField0_ & ~0x00000002);
+          onChanged();
+        } else {
+          segmentsBuilder_.clear();
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+       */
+      public Builder removeSegments(int index) {
+        if (segmentsBuilder_ == null) {
+          ensureSegmentsIsMutable();
+          segments_.remove(index);
+          onChanged();
+        } else {
+          segmentsBuilder_.remove(index);
+        }
+        return this;
+      }
+      /**
+       * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+       */
+      public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Builder getSegmentsBuilder(
+          int index) {
+        return internalGetSegmentsFieldBuilder().getBuilder(index);
+      }
+      /**
+       * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+       */
+      public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegmentOrBuilder getSegmentsOrBuilder(
+          int index) {
+        if (segmentsBuilder_ == null) {
+          return segments_.get(index);  } else {
+          return segmentsBuilder_.getMessageOrBuilder(index);
+        }
+      }
+      /**
+       * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+       */
+      public java.util.List<? extends io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegmentOrBuilder>
+           getSegmentsOrBuilderList() {
+        if (segmentsBuilder_ != null) {
+          return segmentsBuilder_.getMessageOrBuilderList();
+        } else {
+          return java.util.Collections.unmodifiableList(segments_);
+        }
+      }
+      /**
+       * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+       */
+      public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Builder addSegmentsBuilder() {
+        return internalGetSegmentsFieldBuilder().addBuilder(
+            io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.getDefaultInstance());
+      }
+      /**
+       * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+       */
+      public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Builder addSegmentsBuilder(
+          int index) {
+        return internalGetSegmentsFieldBuilder().addBuilder(
+            index, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.getDefaultInstance());
+      }
+      /**
+       * <code>repeated .dal_obscura.flight.v1.FieldPathSegment segments = 2;</code>
+       */
+      public java.util.List<io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Builder>
+           getSegmentsBuilderList() {
+        return internalGetSegmentsFieldBuilder().getBuilderList();
+      }
+      private com.google.protobuf.RepeatedFieldBuilder<
+          io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Builder, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegmentOrBuilder>
+          internalGetSegmentsFieldBuilder() {
+        if (segmentsBuilder_ == null) {
+          segmentsBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
+              io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegment.Builder, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathSegmentOrBuilder>(
+                  segments_,
+                  ((bitField0_ & 0x00000002) != 0),
+                  getParentForChildren(),
+                  isClean());
+          segments_ = null;
+        }
+        return segmentsBuilder_;
+      }
+
+      // @@protoc_insertion_point(builder_scope:dal_obscura.flight.v1.FieldPath)
+    }
+
+    // @@protoc_insertion_point(class_scope:dal_obscura.flight.v1.FieldPath)
+    private static final io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath DEFAULT_INSTANCE;
+    static {
+      DEFAULT_INSTANCE = new io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath();
+    }
+
+    public static io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath getDefaultInstance() {
+      return DEFAULT_INSTANCE;
+    }
+
+    private static final com.google.protobuf.Parser<FieldPath>
+        PARSER = new com.google.protobuf.AbstractParser<FieldPath>() {
+      @java.lang.Override
+      public FieldPath parsePartialFrom(
+          com.google.protobuf.CodedInputStream input,
+          com.google.protobuf.ExtensionRegistryLite extensionRegistry)
+          throws com.google.protobuf.InvalidProtocolBufferException {
+        Builder builder = newBuilder();
+        try {
+          builder.mergeFrom(input, extensionRegistry);
+        } catch (com.google.protobuf.InvalidProtocolBufferException e) {
+          throw e.setUnfinishedMessage(builder.buildPartial());
+        } catch (com.google.protobuf.UninitializedMessageException e) {
+          throw e.asInvalidProtocolBufferException().setUnfinishedMessage(builder.buildPartial());
+        } catch (java.io.IOException e) {
+          throw new com.google.protobuf.InvalidProtocolBufferException(e)
+              .setUnfinishedMessage(builder.buildPartial());
+        }
+        return builder.buildPartial();
+      }
+    };
+
+    public static com.google.protobuf.Parser<FieldPath> parser() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public com.google.protobuf.Parser<FieldPath> getParserForType() {
+      return PARSER;
+    }
+
+    @java.lang.Override
+    public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath getDefaultInstanceForType() {
+      return DEFAULT_INSTANCE;
+    }
+
+  }
+
   public interface PlanRequestOrBuilder extends
       // @@protoc_insertion_point(interface_extends:dal_obscura.flight.v1.PlanRequest)
       com.google.protobuf.MessageOrBuilder {
@@ -96,6 +1781,50 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
      */
     com.google.protobuf.ByteString
         getRowFilterBytes();
+
+    /**
+     * <pre>
+     * Canonical typed paths. When supplied, they must exactly match `columns`.
+     * </pre>
+     *
+     * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+     */
+    java.util.List<io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath>
+        getColumnPathsList();
+    /**
+     * <pre>
+     * Canonical typed paths. When supplied, they must exactly match `columns`.
+     * </pre>
+     *
+     * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+     */
+    io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath getColumnPaths(int index);
+    /**
+     * <pre>
+     * Canonical typed paths. When supplied, they must exactly match `columns`.
+     * </pre>
+     *
+     * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+     */
+    int getColumnPathsCount();
+    /**
+     * <pre>
+     * Canonical typed paths. When supplied, they must exactly match `columns`.
+     * </pre>
+     *
+     * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+     */
+    java.util.List<? extends io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathOrBuilder>
+        getColumnPathsOrBuilderList();
+    /**
+     * <pre>
+     * Canonical typed paths. When supplied, they must exactly match `columns`.
+     * </pre>
+     *
+     * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+     */
+    io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathOrBuilder getColumnPathsOrBuilder(
+        int index);
   }
   /**
    * Protobuf type {@code dal_obscura.flight.v1.PlanRequest}
@@ -124,6 +1853,7 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
       columns_ =
           com.google.protobuf.LazyStringArrayList.emptyList();
       rowFilter_ = "";
+      columnPaths_ = java.util.Collections.emptyList();
     }
 
     public static final com.google.protobuf.Descriptors.Descriptor
@@ -168,7 +1898,7 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
       if (ref instanceof java.lang.String) {
         return (java.lang.String) ref;
       } else {
-        com.google.protobuf.ByteString bs = 
+        com.google.protobuf.ByteString bs =
             (com.google.protobuf.ByteString) ref;
         java.lang.String s = bs.toStringUtf8();
         catalog_ = s;
@@ -184,7 +1914,7 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
         getCatalogBytes() {
       java.lang.Object ref = catalog_;
       if (ref instanceof java.lang.String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         catalog_ = b;
@@ -207,7 +1937,7 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
       if (ref instanceof java.lang.String) {
         return (java.lang.String) ref;
       } else {
-        com.google.protobuf.ByteString bs = 
+        com.google.protobuf.ByteString bs =
             (com.google.protobuf.ByteString) ref;
         java.lang.String s = bs.toStringUtf8();
         target_ = s;
@@ -223,7 +1953,7 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
         getTargetBytes() {
       java.lang.Object ref = target_;
       if (ref instanceof java.lang.String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         target_ = b;
@@ -283,7 +2013,7 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
       if (ref instanceof java.lang.String) {
         return (java.lang.String) ref;
       } else {
-        com.google.protobuf.ByteString bs = 
+        com.google.protobuf.ByteString bs =
             (com.google.protobuf.ByteString) ref;
         java.lang.String s = bs.toStringUtf8();
         rowFilter_ = s;
@@ -299,7 +2029,7 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
         getRowFilterBytes() {
       java.lang.Object ref = rowFilter_;
       if (ref instanceof java.lang.String) {
-        com.google.protobuf.ByteString b = 
+        com.google.protobuf.ByteString b =
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
         rowFilter_ = b;
@@ -307,6 +2037,67 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
       } else {
         return (com.google.protobuf.ByteString) ref;
       }
+    }
+
+    public static final int COLUMN_PATHS_FIELD_NUMBER = 6;
+    @SuppressWarnings("serial")
+    private java.util.List<io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath> columnPaths_;
+    /**
+     * <pre>
+     * Canonical typed paths. When supplied, they must exactly match `columns`.
+     * </pre>
+     *
+     * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+     */
+    @java.lang.Override
+    public java.util.List<io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath> getColumnPathsList() {
+      return columnPaths_;
+    }
+    /**
+     * <pre>
+     * Canonical typed paths. When supplied, they must exactly match `columns`.
+     * </pre>
+     *
+     * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+     */
+    @java.lang.Override
+    public java.util.List<? extends io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathOrBuilder>
+        getColumnPathsOrBuilderList() {
+      return columnPaths_;
+    }
+    /**
+     * <pre>
+     * Canonical typed paths. When supplied, they must exactly match `columns`.
+     * </pre>
+     *
+     * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+     */
+    @java.lang.Override
+    public int getColumnPathsCount() {
+      return columnPaths_.size();
+    }
+    /**
+     * <pre>
+     * Canonical typed paths. When supplied, they must exactly match `columns`.
+     * </pre>
+     *
+     * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+     */
+    @java.lang.Override
+    public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath getColumnPaths(int index) {
+      return columnPaths_.get(index);
+    }
+    /**
+     * <pre>
+     * Canonical typed paths. When supplied, they must exactly match `columns`.
+     * </pre>
+     *
+     * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+     */
+    @java.lang.Override
+    public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathOrBuilder getColumnPathsOrBuilder(
+        int index) {
+      return columnPaths_.get(index);
     }
 
     private byte memoizedIsInitialized = -1;
@@ -338,6 +2129,9 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
       if (!com.google.protobuf.GeneratedMessage.isStringEmpty(rowFilter_)) {
         com.google.protobuf.GeneratedMessage.writeString(output, 5, rowFilter_);
       }
+      for (int i = 0; i < columnPaths_.size(); i++) {
+        output.writeMessage(6, columnPaths_.get(i));
+      }
       getUnknownFields().writeTo(output);
     }
     private int computeSerializedSize_0() {
@@ -363,6 +2157,15 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
       if (!com.google.protobuf.GeneratedMessage.isStringEmpty(rowFilter_)) {
         size += com.google.protobuf.GeneratedMessage.computeStringSize(5, rowFilter_);
       }
+
+          {
+            final int count = columnPaths_.size();
+            for (int i = 0; i < count; i++) {
+              size += com.google.protobuf.CodedOutputStream
+                .computeMessageSizeNoTag(columnPaths_.get(i));
+            }
+            size += 1 * count;
+          }
       return size;
     }
     @java.lang.Override
@@ -397,6 +2200,8 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
           .equals(other.getColumnsList())) return false;
       if (!getRowFilter()
           .equals(other.getRowFilter())) return false;
+      if (!getColumnPathsList()
+          .equals(other.getColumnPathsList())) return false;
       if (!getUnknownFields().equals(other.getUnknownFields())) return false;
       return true;
     }
@@ -420,6 +2225,10 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
       }
       hash = (37 * hash) + ROW_FILTER_FIELD_NUMBER;
       hash = (53 * hash) + getRowFilter().hashCode();
+      if (getColumnPathsCount() > 0) {
+        hash = (37 * hash) + COLUMN_PATHS_FIELD_NUMBER;
+        hash = (53 * hash) + getColumnPathsList().hashCode();
+      }
       hash = (29 * hash) + getUnknownFields().hashCode();
       memoizedHashCode = hash;
       return hash;
@@ -557,6 +2366,13 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
         columns_ =
             com.google.protobuf.LazyStringArrayList.emptyList();
         rowFilter_ = "";
+        if (columnPathsBuilder_ == null) {
+          columnPaths_ = java.util.Collections.emptyList();
+        } else {
+          columnPaths_ = null;
+          columnPathsBuilder_.clear();
+        }
+        bitField0_ = (bitField0_ & ~0x00000020);
         return this;
       }
 
@@ -583,9 +2399,22 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
       @java.lang.Override
       public io.dalobscura.flight.v1.DalObscuraFlightProto.PlanRequest buildPartial() {
         io.dalobscura.flight.v1.DalObscuraFlightProto.PlanRequest result = new io.dalobscura.flight.v1.DalObscuraFlightProto.PlanRequest(this);
+        buildPartialRepeatedFields(result);
         if (bitField0_ != 0) { buildPartial0(result); }
         onBuilt();
         return result;
+      }
+
+      private void buildPartialRepeatedFields(io.dalobscura.flight.v1.DalObscuraFlightProto.PlanRequest result) {
+        if (columnPathsBuilder_ == null) {
+          if (((bitField0_ & 0x00000020) != 0)) {
+            columnPaths_ = java.util.Collections.unmodifiableList(columnPaths_);
+            bitField0_ = (bitField0_ & ~0x00000020);
+          }
+          result.columnPaths_ = columnPaths_;
+        } else {
+          result.columnPaths_ = columnPathsBuilder_.build();
+        }
       }
 
       private void buildPartial0(io.dalobscura.flight.v1.DalObscuraFlightProto.PlanRequest result) {
@@ -648,6 +2477,32 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
           bitField0_ |= 0x00000010;
           onChanged();
         }
+        if (columnPathsBuilder_ == null) {
+          if (!other.columnPaths_.isEmpty()) {
+            if (columnPaths_.isEmpty()) {
+              columnPaths_ = other.columnPaths_;
+              bitField0_ = (bitField0_ & ~0x00000020);
+            } else {
+              ensureColumnPathsIsMutable();
+              columnPaths_.addAll(other.columnPaths_);
+            }
+            onChanged();
+          }
+        } else {
+          if (!other.columnPaths_.isEmpty()) {
+            if (columnPathsBuilder_.isEmpty()) {
+              columnPathsBuilder_.dispose();
+              columnPathsBuilder_ = null;
+              columnPaths_ = other.columnPaths_;
+              bitField0_ = (bitField0_ & ~0x00000020);
+              columnPathsBuilder_ =
+                com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
+                   internalGetColumnPathsFieldBuilder() : null;
+            } else {
+              columnPathsBuilder_.addAllMessages(other.columnPaths_);
+            }
+          }
+        }
         this.mergeUnknownFields(other.getUnknownFields());
         onChanged();
         return this;
@@ -663,9 +2518,7 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
           com.google.protobuf.CodedInputStream input,
           com.google.protobuf.ExtensionRegistryLite extensionRegistry)
           throws java.io.IOException {
-        if (extensionRegistry == null) {
-          throw new java.lang.NullPointerException();
-        }
+        java.util.Objects.requireNonNull(extensionRegistry);
         try {
           boolean done = false;
           while (!done) {
@@ -699,6 +2552,19 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
                 bitField0_ |= 0x00000010;
                 break;
               } // case 42
+              case 50: {
+                io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath m =
+                    input.readMessage(
+                        io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath.parser(),
+                        extensionRegistry);
+                if (columnPathsBuilder_ == null) {
+                  ensureColumnPathsIsMutable();
+                  columnPaths_.add(m);
+                } else {
+                  columnPathsBuilder_.addMessage(m);
+                }
+                break;
+              } // case 50
               default: {
                 if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                   done = true; // was an endgroup tag
@@ -773,7 +2639,7 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
           getCatalogBytes() {
         java.lang.Object ref = catalog_;
         if (ref instanceof String) {
-          com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString b =
               com.google.protobuf.ByteString.copyFromUtf8(
                   (java.lang.String) ref);
           catalog_ = b;
@@ -789,7 +2655,7 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
        */
       public Builder setCatalog(
           java.lang.String value) {
-        if (value == null) { throw new NullPointerException(); }
+        java.util.Objects.requireNonNull(value);
         catalog_ = value;
         bitField0_ |= 0x00000002;
         onChanged();
@@ -812,7 +2678,7 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
        */
       public Builder setCatalogBytes(
           com.google.protobuf.ByteString value) {
-        if (value == null) { throw new NullPointerException(); }
+        java.util.Objects.requireNonNull(value);
         checkByteStringIsUtf8(value);
         catalog_ = value;
         bitField0_ |= 0x00000002;
@@ -845,7 +2711,7 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
           getTargetBytes() {
         java.lang.Object ref = target_;
         if (ref instanceof String) {
-          com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString b =
               com.google.protobuf.ByteString.copyFromUtf8(
                   (java.lang.String) ref);
           target_ = b;
@@ -861,7 +2727,7 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
        */
       public Builder setTarget(
           java.lang.String value) {
-        if (value == null) { throw new NullPointerException(); }
+        java.util.Objects.requireNonNull(value);
         target_ = value;
         bitField0_ |= 0x00000004;
         onChanged();
@@ -884,7 +2750,7 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
        */
       public Builder setTargetBytes(
           com.google.protobuf.ByteString value) {
-        if (value == null) { throw new NullPointerException(); }
+        java.util.Objects.requireNonNull(value);
         checkByteStringIsUtf8(value);
         target_ = value;
         bitField0_ |= 0x00000004;
@@ -941,7 +2807,7 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
        */
       public Builder setColumns(
           int index, java.lang.String value) {
-        if (value == null) { throw new NullPointerException(); }
+        java.util.Objects.requireNonNull(value);
         ensureColumnsIsMutable();
         columns_.set(index, value);
         bitField0_ |= 0x00000008;
@@ -955,7 +2821,7 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
        */
       public Builder addColumns(
           java.lang.String value) {
-        if (value == null) { throw new NullPointerException(); }
+        java.util.Objects.requireNonNull(value);
         ensureColumnsIsMutable();
         columns_.add(value);
         bitField0_ |= 0x00000008;
@@ -994,7 +2860,7 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
        */
       public Builder addColumnsBytes(
           com.google.protobuf.ByteString value) {
-        if (value == null) { throw new NullPointerException(); }
+        java.util.Objects.requireNonNull(value);
         checkByteStringIsUtf8(value);
         ensureColumnsIsMutable();
         columns_.add(value);
@@ -1028,7 +2894,7 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
           getRowFilterBytes() {
         java.lang.Object ref = rowFilter_;
         if (ref instanceof String) {
-          com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString b =
               com.google.protobuf.ByteString.copyFromUtf8(
                   (java.lang.String) ref);
           rowFilter_ = b;
@@ -1044,7 +2910,7 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
        */
       public Builder setRowFilter(
           java.lang.String value) {
-        if (value == null) { throw new NullPointerException(); }
+        java.util.Objects.requireNonNull(value);
         rowFilter_ = value;
         bitField0_ |= 0x00000010;
         onChanged();
@@ -1067,12 +2933,318 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
        */
       public Builder setRowFilterBytes(
           com.google.protobuf.ByteString value) {
-        if (value == null) { throw new NullPointerException(); }
+        java.util.Objects.requireNonNull(value);
         checkByteStringIsUtf8(value);
         rowFilter_ = value;
         bitField0_ |= 0x00000010;
         onChanged();
         return this;
+      }
+
+      private java.util.List<io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath> columnPaths_ =
+        java.util.Collections.emptyList();
+      private void ensureColumnPathsIsMutable() {
+        if (!((bitField0_ & 0x00000020) != 0)) {
+          columnPaths_ = new java.util.ArrayList<io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath>(columnPaths_);
+          bitField0_ |= 0x00000020;
+         }
+      }
+
+      private com.google.protobuf.RepeatedFieldBuilder<
+          io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath.Builder, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathOrBuilder> columnPathsBuilder_;
+
+      /**
+       * <pre>
+       * Canonical typed paths. When supplied, they must exactly match `columns`.
+       * </pre>
+       *
+       * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+       */
+      public java.util.List<io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath> getColumnPathsList() {
+        if (columnPathsBuilder_ == null) {
+          return java.util.Collections.unmodifiableList(columnPaths_);
+        } else {
+          return columnPathsBuilder_.getMessageList();
+        }
+      }
+      /**
+       * <pre>
+       * Canonical typed paths. When supplied, they must exactly match `columns`.
+       * </pre>
+       *
+       * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+       */
+      public int getColumnPathsCount() {
+        if (columnPathsBuilder_ == null) {
+          return columnPaths_.size();
+        } else {
+          return columnPathsBuilder_.getCount();
+        }
+      }
+      /**
+       * <pre>
+       * Canonical typed paths. When supplied, they must exactly match `columns`.
+       * </pre>
+       *
+       * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+       */
+      public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath getColumnPaths(int index) {
+        if (columnPathsBuilder_ == null) {
+          return columnPaths_.get(index);
+        } else {
+          return columnPathsBuilder_.getMessage(index);
+        }
+      }
+      /**
+       * <pre>
+       * Canonical typed paths. When supplied, they must exactly match `columns`.
+       * </pre>
+       *
+       * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+       */
+      public Builder setColumnPaths(
+          int index, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath value) {
+        if (columnPathsBuilder_ == null) {
+          java.util.Objects.requireNonNull(value);
+          ensureColumnPathsIsMutable();
+          columnPaths_.set(index, value);
+          onChanged();
+        } else {
+          columnPathsBuilder_.setMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Canonical typed paths. When supplied, they must exactly match `columns`.
+       * </pre>
+       *
+       * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+       */
+      public Builder setColumnPaths(
+          int index, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath.Builder builderForValue) {
+        if (columnPathsBuilder_ == null) {
+          ensureColumnPathsIsMutable();
+          columnPaths_.set(index, builderForValue.build());
+          onChanged();
+        } else {
+          columnPathsBuilder_.setMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Canonical typed paths. When supplied, they must exactly match `columns`.
+       * </pre>
+       *
+       * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+       */
+      public Builder addColumnPaths(io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath value) {
+        if (columnPathsBuilder_ == null) {
+          java.util.Objects.requireNonNull(value);
+          ensureColumnPathsIsMutable();
+          columnPaths_.add(value);
+          onChanged();
+        } else {
+          columnPathsBuilder_.addMessage(value);
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Canonical typed paths. When supplied, they must exactly match `columns`.
+       * </pre>
+       *
+       * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+       */
+      public Builder addColumnPaths(
+          int index, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath value) {
+        if (columnPathsBuilder_ == null) {
+          java.util.Objects.requireNonNull(value);
+          ensureColumnPathsIsMutable();
+          columnPaths_.add(index, value);
+          onChanged();
+        } else {
+          columnPathsBuilder_.addMessage(index, value);
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Canonical typed paths. When supplied, they must exactly match `columns`.
+       * </pre>
+       *
+       * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+       */
+      public Builder addColumnPaths(
+          io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath.Builder builderForValue) {
+        if (columnPathsBuilder_ == null) {
+          ensureColumnPathsIsMutable();
+          columnPaths_.add(builderForValue.build());
+          onChanged();
+        } else {
+          columnPathsBuilder_.addMessage(builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Canonical typed paths. When supplied, they must exactly match `columns`.
+       * </pre>
+       *
+       * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+       */
+      public Builder addColumnPaths(
+          int index, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath.Builder builderForValue) {
+        if (columnPathsBuilder_ == null) {
+          ensureColumnPathsIsMutable();
+          columnPaths_.add(index, builderForValue.build());
+          onChanged();
+        } else {
+          columnPathsBuilder_.addMessage(index, builderForValue.build());
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Canonical typed paths. When supplied, they must exactly match `columns`.
+       * </pre>
+       *
+       * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+       */
+      public Builder addAllColumnPaths(
+          java.lang.Iterable<? extends io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath> values) {
+        if (columnPathsBuilder_ == null) {
+          ensureColumnPathsIsMutable();
+          com.google.protobuf.AbstractMessageLite.Builder.addAll(
+              values, columnPaths_);
+          onChanged();
+        } else {
+          columnPathsBuilder_.addAllMessages(values);
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Canonical typed paths. When supplied, they must exactly match `columns`.
+       * </pre>
+       *
+       * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+       */
+      public Builder clearColumnPaths() {
+        if (columnPathsBuilder_ == null) {
+          columnPaths_ = java.util.Collections.emptyList();
+          bitField0_ = (bitField0_ & ~0x00000020);
+          onChanged();
+        } else {
+          columnPathsBuilder_.clear();
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Canonical typed paths. When supplied, they must exactly match `columns`.
+       * </pre>
+       *
+       * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+       */
+      public Builder removeColumnPaths(int index) {
+        if (columnPathsBuilder_ == null) {
+          ensureColumnPathsIsMutable();
+          columnPaths_.remove(index);
+          onChanged();
+        } else {
+          columnPathsBuilder_.remove(index);
+        }
+        return this;
+      }
+      /**
+       * <pre>
+       * Canonical typed paths. When supplied, they must exactly match `columns`.
+       * </pre>
+       *
+       * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+       */
+      public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath.Builder getColumnPathsBuilder(
+          int index) {
+        return internalGetColumnPathsFieldBuilder().getBuilder(index);
+      }
+      /**
+       * <pre>
+       * Canonical typed paths. When supplied, they must exactly match `columns`.
+       * </pre>
+       *
+       * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+       */
+      public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathOrBuilder getColumnPathsOrBuilder(
+          int index) {
+        if (columnPathsBuilder_ == null) {
+          return columnPaths_.get(index);  } else {
+          return columnPathsBuilder_.getMessageOrBuilder(index);
+        }
+      }
+      /**
+       * <pre>
+       * Canonical typed paths. When supplied, they must exactly match `columns`.
+       * </pre>
+       *
+       * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+       */
+      public java.util.List<? extends io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathOrBuilder>
+           getColumnPathsOrBuilderList() {
+        if (columnPathsBuilder_ != null) {
+          return columnPathsBuilder_.getMessageOrBuilderList();
+        } else {
+          return java.util.Collections.unmodifiableList(columnPaths_);
+        }
+      }
+      /**
+       * <pre>
+       * Canonical typed paths. When supplied, they must exactly match `columns`.
+       * </pre>
+       *
+       * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+       */
+      public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath.Builder addColumnPathsBuilder() {
+        return internalGetColumnPathsFieldBuilder().addBuilder(
+            io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath.getDefaultInstance());
+      }
+      /**
+       * <pre>
+       * Canonical typed paths. When supplied, they must exactly match `columns`.
+       * </pre>
+       *
+       * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+       */
+      public io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath.Builder addColumnPathsBuilder(
+          int index) {
+        return internalGetColumnPathsFieldBuilder().addBuilder(
+            index, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath.getDefaultInstance());
+      }
+      /**
+       * <pre>
+       * Canonical typed paths. When supplied, they must exactly match `columns`.
+       * </pre>
+       *
+       * <code>repeated .dal_obscura.flight.v1.FieldPath column_paths = 6;</code>
+       */
+      public java.util.List<io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath.Builder>
+           getColumnPathsBuilderList() {
+        return internalGetColumnPathsFieldBuilder().getBuilderList();
+      }
+      private com.google.protobuf.RepeatedFieldBuilder<
+          io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath.Builder, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathOrBuilder>
+          internalGetColumnPathsFieldBuilder() {
+        if (columnPathsBuilder_ == null) {
+          columnPathsBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
+              io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPath.Builder, io.dalobscura.flight.v1.DalObscuraFlightProto.FieldPathOrBuilder>(
+                  columnPaths_,
+                  ((bitField0_ & 0x00000020) != 0),
+                  getParentForChildren(),
+                  isClean());
+          columnPaths_ = null;
+        }
+        return columnPathsBuilder_;
       }
 
       // @@protoc_insertion_point(builder_scope:dal_obscura.flight.v1.PlanRequest)
@@ -1127,8 +3299,18 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
   }
 
   private static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_dal_obscura_flight_v1_FieldPathSegment_descriptor;
+  private static final
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_dal_obscura_flight_v1_FieldPathSegment_fieldAccessorTable;
+  private static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_dal_obscura_flight_v1_FieldPath_descriptor;
+  private static final
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_dal_obscura_flight_v1_FieldPath_fieldAccessorTable;
+  private static final com.google.protobuf.Descriptors.Descriptor
     internal_static_dal_obscura_flight_v1_PlanRequest_descriptor;
-  private static final 
+  private static final
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_dal_obscura_flight_v1_PlanRequest_fieldAccessorTable;
 
@@ -1141,22 +3323,43 @@ public final class DalObscuraFlightProto extends com.google.protobuf.GeneratedFi
   static {
     java.lang.String[] descriptorData = {
       "\n dal_obscura/flight/v1/read.proto\022\025dal_" +
-      "obscura.flight.v1\"m\n\013PlanRequest\022\030\n\020prot" +
-      "ocol_version\030\001 \001(\r\022\017\n\007catalog\030\002 \001(\t\022\016\n\006t" +
-      "arget\030\003 \001(\t\022\017\n\007columns\030\004 \003(\t\022\022\n\nrow_filt" +
-      "er\030\005 \001(\tB0\n\027io.dalobscura.flight.v1B\025Dal" +
-      "ObscuraFlightProtob\006proto3"
+      "obscura.flight.v1\"\327\001\n\020FieldPathSegment\022:" +
+      "\n\004kind\030\001 \001(\0162,.dal_obscura.flight.v1.Fie" +
+      "ldPathSegment.Kind\022\014\n\004name\030\002 \001(\t\022\025\n\010fiel" +
+      "d_id\030\003 \001(\005H\000\210\001\001\"U\n\004Kind\022\024\n\020KIND_UNSPECIF" +
+      "IED\020\000\022\t\n\005FIELD\020\001\022\020\n\014LIST_ELEMENT\020\002\022\013\n\007MA" +
+      "P_KEY\020\003\022\r\n\tMAP_VALUE\020\004B\013\n\t_field_id\"W\n\tF" +
+      "ieldPath\022\017\n\007version\030\001 \001(\r\0229\n\010segments\030\002 " +
+      "\003(\0132\'.dal_obscura.flight.v1.FieldPathSeg" +
+      "ment\"\245\001\n\013PlanRequest\022\030\n\020protocol_version" +
+      "\030\001 \001(\r\022\017\n\007catalog\030\002 \001(\t\022\016\n\006target\030\003 \001(\t\022" +
+      "\017\n\007columns\030\004 \003(\t\022\022\n\nrow_filter\030\005 \001(\t\0226\n\014" +
+      "column_paths\030\006 \003(\0132 .dal_obscura.flight." +
+      "v1.FieldPathB0\n\027io.dalobscura.flight.v1B" +
+      "\025DalObscuraFlightProtob\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
         new com.google.protobuf.Descriptors.FileDescriptor[] {
         });
-    internal_static_dal_obscura_flight_v1_PlanRequest_descriptor =
+    internal_static_dal_obscura_flight_v1_FieldPathSegment_descriptor =
       getDescriptor().getMessageType(0);
+    internal_static_dal_obscura_flight_v1_FieldPathSegment_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_dal_obscura_flight_v1_FieldPathSegment_descriptor,
+        new java.lang.String[] { "Kind", "Name", "FieldId", });
+    internal_static_dal_obscura_flight_v1_FieldPath_descriptor =
+      getDescriptor().getMessageType(1);
+    internal_static_dal_obscura_flight_v1_FieldPath_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_dal_obscura_flight_v1_FieldPath_descriptor,
+        new java.lang.String[] { "Version", "Segments", });
+    internal_static_dal_obscura_flight_v1_PlanRequest_descriptor =
+      getDescriptor().getMessageType(2);
     internal_static_dal_obscura_flight_v1_PlanRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_dal_obscura_flight_v1_PlanRequest_descriptor,
-        new java.lang.String[] { "ProtocolVersion", "Catalog", "Target", "Columns", "RowFilter", });
+        new java.lang.String[] { "ProtocolVersion", "Catalog", "Target", "Columns", "RowFilter", "ColumnPaths", });
     descriptor.resolveAllFeaturesImmutable();
   }
 

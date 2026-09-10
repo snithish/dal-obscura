@@ -2,6 +2,7 @@ import pyarrow as pa
 import pyarrow.flight as flight
 import pytest
 
+from dal_obscura.common.flight_contract import encode_plan_command
 from dal_obscura.data_plane.interfaces.flight.contracts import parse_descriptor
 from tests.support.arrow import id_region_batch, id_region_schema, metadata_batch, metadata_schema
 from tests.support.flight import (
@@ -204,6 +205,36 @@ def test_parse_descriptor_accepts_protobuf_protocol_version_one():
     assert request.catalog == "analytics"
     assert request.target == "test.table"
     assert request.columns == ["id"]
+
+
+def test_parse_descriptor_accepts_matching_typed_paths():
+    descriptor = flight.FlightDescriptor.for_command(
+        encode_plan_command(
+            catalog="analytics",
+            target="test.table",
+            columns=['["a.b"]'],
+            include_typed_paths=True,
+        )
+    )
+
+    request = parse_descriptor(descriptor)
+
+    assert request.columns == ['["a.b"]']
+
+
+def test_parse_descriptor_rejects_typed_paths_that_do_not_match_columns():
+    from dal_obscura.flight.v1.read_pb2 import PlanRequest
+
+    payload = PlanRequest(
+        protocol_version=1,
+        catalog="analytics",
+        target="test.table",
+        columns=["id"],
+        column_paths=[{"version": 1, "segments": [{"kind": "FIELD", "name": "email"}]}],
+    )
+
+    with pytest.raises(ValueError, match="must match canonical"):
+        parse_descriptor(flight.FlightDescriptor.for_command(payload.SerializeToString()))
 
 
 def test_parse_descriptor_rejects_json_command_payload():

@@ -124,11 +124,12 @@ def plan_read(
     requested_row_filter = _validate_requested_row_filter(base_schema, request.row_filter)
     requested_filter_dependencies = _extract_filter_dependencies(requested_row_filter)
 
+    authorization_columns = _build_authorization_columns(requested_columns, requested_row_filter)
     decision = flow.authorizer.authorize(
         principal=principal,
         target=request.target,
         catalog=request.catalog,
-        requested_columns=_build_authorization_columns(requested_columns, requested_row_filter),
+        requested_columns=authorization_columns,
     )
 
     visible_columns = _visible_columns(
@@ -169,6 +170,7 @@ def plan_read(
                     key: {"type": value.type, "value": value.value}
                     for key, value in decision.masks.items()
                 },
+                "authorization_columns": authorization_columns,
             },
             policy_version=decision.policy_version,
             principal_id=principal.id,

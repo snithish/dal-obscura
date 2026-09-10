@@ -10,8 +10,18 @@ from dal_obscura.common.flight_contract import (
     FLIGHT_PROTOCOL_VERSION,
     decode_plan_command,
 )
+from dal_obscura.common.query_planning.field_paths import (
+    FieldPath,
+    FieldSegment,
+    ListElementSegment,
+    MapKeySegment,
+    MapValueSegment,
+)
 from dal_obscura.common.query_planning.models import PlanRequest
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
+from dal_obscura.flight.v1.read_pb2 import FieldPath as FieldPathProto
+from dal_obscura.flight.v1.read_pb2 import FieldPathSegment as FieldPathSegmentProto
+from dal_obscura.flight.v1.read_pb2 import PlanRequest as PlanRequestProto
 
 REQUEST_HEADERS_MIDDLEWARE_KEY = "request_headers"
 SUPPORTED_PROTOCOL_VERSION = FLIGHT_PROTOCOL_VERSION
@@ -91,7 +101,7 @@ def parse_descriptor(descriptor: flight.FlightDescriptor) -> PlanRequest:
         data = decode_plan_command(descriptor.command)
         _validate_protocol_version(data.protocol_version)
         target = _required_string(data.target, "target", max_length=MAX_TARGET_LENGTH)
-        columns = _required_columns(list(data.columns))
+        columns = _canonical_descriptor_columns(data)
         return PlanRequest(
             catalog=data.catalog or None,
             target=target,
@@ -144,6 +154,45 @@ def _required_columns(raw: object) -> list[str]:
             raise ValueError("Descriptor column name is too long")
         columns.append(column)
     return columns
+
+
+def _canonical_descriptor_columns(data: PlanRequestProto) -> list[str]:
+    raw = _required_columns(list(data.columns))
+    encoded_paths = list(data.column_paths)
+    if not encoded_paths:
+        return raw
+    if len(encoded_paths) != len(raw):
+        raise ValueError("Descriptor columns and column_paths must have the same length")
+    paths = [_field_path_from_proto(path) for path in encoded_paths]
+    canonical = [path.to_human() for path in paths]
+    if raw != canonical:
+        raise ValueError("Descriptor columns must match canonical column_paths")
+    return canonical
+
+
+def _field_path_from_proto(value: FieldPathProto) -> FieldPath:
+    if value.version != 1 or not value.segments:
+        raise ValueError("Invalid descriptor field path")
+    segments = []
+    for segment in value.segments:
+        field_id = segment.field_id if segment.HasField("field_id") else None
+        if segment.kind == FieldPathSegmentProto.FIELD:
+            segments.append(FieldSegment(segment.name, field_id=field_id))
+        elif segment.kind == FieldPathSegmentProto.LIST_ELEMENT:
+            if segment.name or field_id is not None:
+                raise ValueError("Invalid descriptor list element path segment")
+            segments.append(ListElementSegment())
+        elif segment.kind == FieldPathSegmentProto.MAP_KEY:
+            if segment.name or field_id is not None:
+                raise ValueError("Invalid descriptor map key path segment")
+            segments.append(MapKeySegment())
+        elif segment.kind == FieldPathSegmentProto.MAP_VALUE:
+            if segment.name or field_id is not None:
+                raise ValueError("Invalid descriptor map value path segment")
+            segments.append(MapValueSegment())
+        else:
+            raise ValueError("Invalid descriptor field path segment")
+    return FieldPath(tuple(segments), version=value.version)
 
 
 def _reject_duplicate_security_headers(headers: Iterable[tuple[Any, Any]]) -> None:

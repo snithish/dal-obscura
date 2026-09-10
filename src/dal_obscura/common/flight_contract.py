@@ -18,6 +18,19 @@ from typing import Any
 
 from google.protobuf.message import DecodeError
 
+from dal_obscura.common.query_planning.field_paths import (
+    FieldPath,
+    FieldSegment,
+    ListElementSegment,
+    MapKeySegment,
+    parse_field_path,
+)
+from dal_obscura.flight.v1.read_pb2 import (
+    FieldPath as FieldPathProto,
+)
+from dal_obscura.flight.v1.read_pb2 import (
+    FieldPathSegment as FieldPathSegmentProto,
+)
 from dal_obscura.flight.v1.read_pb2 import PlanRequest as PlanRequestProto
 
 FLIGHT_PROTOCOL_VERSION = 1
@@ -30,6 +43,7 @@ def encode_plan_command(
     columns: list[str],
     row_filter: str | None = None,
     protocol_version: int = FLIGHT_PROTOCOL_VERSION,
+    include_typed_paths: bool = False,
 ) -> bytes:
     """Serializes a protocol v1 plan request into Flight command bytes.
 
@@ -49,6 +63,9 @@ def encode_plan_command(
         columns=columns,
         row_filter=row_filter or "",
     )
+    if include_typed_paths and columns != ["*"]:
+        for column in columns:
+            request.column_paths.append(_field_path_to_proto(parse_field_path(column)))
     return request.SerializeToString()
 
 
@@ -92,3 +109,21 @@ def encode_plan_command_from_mapping(payload: dict[str, Any]) -> bytes:
         columns=[str(column) for column in columns],
         row_filter=str(payload["row_filter"]) if payload.get("row_filter") else None,
     )
+
+
+def _field_path_to_proto(path: FieldPath) -> FieldPathProto:
+    encoded = FieldPathProto(version=path.version)
+    for segment in path.segments:
+        output = encoded.segments.add()
+        if isinstance(segment, FieldSegment):
+            output.kind = FieldPathSegmentProto.FIELD
+            output.name = segment.name
+            if segment.field_id is not None:
+                output.field_id = segment.field_id
+        elif isinstance(segment, ListElementSegment):
+            output.kind = FieldPathSegmentProto.LIST_ELEMENT
+        elif isinstance(segment, MapKeySegment):
+            output.kind = FieldPathSegmentProto.MAP_KEY
+        else:
+            output.kind = FieldPathSegmentProto.MAP_VALUE
+    return encoded

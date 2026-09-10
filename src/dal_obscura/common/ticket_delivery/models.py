@@ -24,12 +24,18 @@ class MaskPayload(TypedDict):
     value: object | None
 
 
-class ScanPayload(TypedDict):
+class ScanPayloadBase(TypedDict):
     """JSON shape for server-stored scan context referenced by a ticket."""
 
     read_payload: str
     full_row_filter: str | None
     masks: dict[str, MaskPayload]
+
+
+class ScanPayload(ScanPayloadBase, total=False):
+    """Scan payload with optional fields supported by prior ticket records."""
+
+    authorization_columns: list[str]
 
 
 @dataclass(frozen=True)
@@ -175,7 +181,10 @@ def _strict_scan_payload(raw: object) -> ScanPayload:
     if not isinstance(raw, Mapping):
         raise ValueError("Ticket payload scan must be an object")
     raw_mapping = cast(Mapping[str, object], raw)
-    _reject_unknown_fields(raw_mapping, {"read_payload", "full_row_filter", "masks"})
+    _reject_unknown_fields(
+        raw_mapping,
+        {"read_payload", "full_row_filter", "masks", "authorization_columns"},
+    )
     read_payload = raw_mapping.get("read_payload")
     full_row_filter = raw_mapping.get("full_row_filter")
     if not isinstance(read_payload, str) or not read_payload:
@@ -184,11 +193,16 @@ def _strict_scan_payload(raw: object) -> ScanPayload:
         not isinstance(full_row_filter, str) or not full_row_filter
     ):
         raise ValueError("Ticket payload full_row_filter must be a string or null")
-    return {
+    payload: ScanPayload = {
         "read_payload": read_payload,
         "full_row_filter": full_row_filter,
         "masks": _strict_masks(raw_mapping.get("masks")),
     }
+    if "authorization_columns" in raw_mapping:
+        payload["authorization_columns"] = _strict_columns(
+            raw_mapping.get("authorization_columns")
+        )
+    return payload
 
 
 def _strict_masks(raw: object) -> dict[str, MaskPayload]:

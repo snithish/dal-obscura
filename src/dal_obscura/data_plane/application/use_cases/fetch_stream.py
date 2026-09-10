@@ -46,6 +46,7 @@ class DecodedScan:
     read_payload: bytes
     full_row_filter: RowFilter | None
     masks: dict[str, MaskRule]
+    authorization_columns: list[str]
 
 
 class FetchStreamUseCase:
@@ -132,7 +133,7 @@ def fetch_read(
     if current_policy_version != payload.policy_version:
         raise PermissionError("stale policy version")
 
-    scan = _decode_scan(payload.scan)
+    scan = _decode_scan(payload.scan, fallback_authorization_columns=payload.columns)
     _require_current_authorization(flow, principal, payload, scan)
 
     now = flow.now()
@@ -181,7 +182,7 @@ def _require_current_authorization(
         principal,
         payload.target,
         payload.catalog,
-        payload.columns,
+        scan.authorization_columns,
     )
     if (
         decision.policy_version != payload.policy_version
@@ -227,7 +228,9 @@ def _decision_digest(decision: AccessDecision) -> str:
     )
 
 
-def _decode_scan(scan_info: Mapping[str, object]) -> DecodedScan:
+def _decode_scan(
+    scan_info: Mapping[str, object], *, fallback_authorization_columns: list[str]
+) -> DecodedScan:
     """Parses the format scan payload and mask metadata embedded in a ticket."""
     read_payload = scan_info.get("read_payload")
     if not read_payload:
@@ -249,10 +252,20 @@ def _decode_scan(scan_info: Mapping[str, object]) -> DecodedScan:
             value=mask_data.get("value"),
         )
 
+    authorization_columns = scan_info.get("authorization_columns", fallback_authorization_columns)
+    if (
+        not isinstance(authorization_columns, list)
+        or not authorization_columns
+        or not all(isinstance(column, str) and column for column in authorization_columns)
+        or len(authorization_columns) != len(set(authorization_columns))
+    ):
+        raise ValueError("Invalid authorization columns in ticket")
+
     return DecodedScan(
         read_payload=base64.b64decode(str(read_payload).encode("utf-8")),
         full_row_filter=_optional_row_filter(scan_info.get("full_row_filter")),
         masks=parsed_masks,
+        authorization_columns=cast(list[str], authorization_columns),
     )
 
 
