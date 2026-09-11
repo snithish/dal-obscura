@@ -82,3 +82,19 @@ def test_cors_allows_configured_ui_origin() -> None:
 
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:8821"
+
+
+def test_cors_allows_browser_csrf_header_for_configured_ui_origin() -> None:
+    client = _client(cors_origins=("http://127.0.0.1:8821",))
+
+    response = client.options(
+        "/v1/assets",
+        headers={
+            "Access-Control-Request-Method": "PUT",
+            "Access-Control-Request-Headers": "content-type,x-csrf-token",
+            "Origin": "http://127.0.0.1:8821",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "x-csrf-token" in response.headers["access-control-allow-headers"].lower()

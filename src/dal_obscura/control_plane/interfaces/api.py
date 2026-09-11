@@ -116,7 +116,7 @@ def create_app(
             CORSMiddleware,  # ty: ignore[invalid-argument-type]
             allow_origins=list(cors_origins),
             allow_methods=["GET", "POST", "PUT", "OPTIONS"],
-            allow_headers=["authorization", "content-type", "accept"],
+            allow_headers=["authorization", "content-type", "accept", "x-csrf-token"],
         )
     install_health_routes(app, session_maker)
     deps = ControlPlaneDeps(
