@@ -1,6 +1,8 @@
 # A new governance workspace
 
-Status: proposed design and implementation plan. No new UI is implemented by this document.
+Status: U00/U01 plan complete; U02 foundation implementing. The source application
+exists at `apps/governance-ui`; its production asset serving, authenticated
+session integration, browser tests, and packaging gates remain incomplete.
 
 Owner direction: policy authoring and management UI is non-negotiable. Design the experience from scratch. Existing screens, navigation, framework, and component library impose no constraints. Existing security invariants, durable authoring records, Iceberg scope, nested-schema requirements, and DuckDB/Spark/Arrow consumers remain constraints. Preserve pickle logic under the owner's separate instruction.
 
@@ -36,7 +38,7 @@ A management role does not imply permission to read underlying rows. Default pre
 - Start with persistent personal drafts and optimistic concurrency. Reuse existing durable control-plane storage; any new tables require a reviewed migration. Do not introduce another database or make the data plane stateful.
 - Use synthetic previews at launch. A separate live-preview capability is not a hidden prerequisite for the policy studio.
 - Platform administration, asset ownership, policy editing, and publication are separate capabilities. A small deployment may explicitly assign several capabilities to one person.
-- Treat a clean React/TypeScript application as the initial implementation candidate, not a dependency on the previous UI. Select and pin the exact toolchain in U02 after a short accessible-tree/editor spike; no framework migration for its own sake.
+- Treat a clean React/TypeScript application as the initial implementation candidate, not a dependency on the previous UI. The U02 source foundation uses React, TypeScript, and Vite with pinned version ranges; generate and commit the lockfile before its first release build. No framework migration for its own sake.
 
 ## What “best UI/UX” means here
 
