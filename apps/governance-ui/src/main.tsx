@@ -124,7 +124,7 @@ function App() {
             assets={assets} asset={asset} onAsset={setAsset} rules={rules} activeRule={activeRule}
             selectedRule={selectedRule} onRule={setSelectedRule} selectedField={selectedField} onField={setSelectedField}
             selectedMask={selectedMask} effectiveFields={effectiveFields} saveState={saveState} notice={notice}
-            onToggleField={toggleField} onMask={setMask} onRule={setSelectedRule} onUpdateRule={updateRule}
+            onToggleField={toggleField} onMask={setMask} onUpdateRule={updateRule}
             onSave={saveDraft} onPreview={runPreview} preview={preview}
           />
         ) : <ComingSoon page={page} />}
@@ -141,6 +141,7 @@ function AssetWorkspace(props: {
   onUpdateRule: (change: (rule: PolicyRule) => PolicyRule) => void; onSave: () => void; onPreview: () => void; preview: Preview | null;
 }) {
   const [tab, setTab] = useState<"policy" | "tests" | "history">("policy");
+  const currentPreview = props.preview;
   return <>
     <div className="asset-summary">
       <div><span className="pill">Iceberg</span><span className="muted"> {props.asset.catalog} / {props.asset.table_identifier}</span></div>
@@ -174,7 +175,7 @@ function AssetWorkspace(props: {
       </section>
       <section className="result-panel" aria-label="Effective access inspector">
         <span className="eyebrow">EFFECTIVE ACCESS</span><h2>US analyst</h2><p className="muted">Synthetic persona · not reader authentication</p>
-        {props.preview ? <><div className="result-state allowed">Test current</div><h3>Visible output</h3><ul>{props.preview.allowed_columns.map((field) => <li key={field}>{field}{props.preview.masks[field] ? <small> · {props.preview.masks[field].type} mask</small> : null}</li>)}</ul><h3>Row restriction</h3><code>{props.preview.row_filter ?? "No matching row restriction"}</code></> : <div className="empty-result"><strong>Run a policy test</strong><p>See the authorized output schema, masks, and effective row restriction for this draft.</p></div>}
+        {currentPreview ? <><div className="result-state allowed">Test current</div><h3>Visible output</h3><ul>{currentPreview.allowed_columns.map((field) => <li key={field}>{field}{currentPreview.masks[field] ? <small> · {currentPreview.masks[field].type} mask</small> : null}</li>)}</ul><h3>Row restriction</h3><code>{currentPreview.row_filter ?? "No matching row restriction"}</code></> : <div className="empty-result"><strong>Run a policy test</strong><p>See the authorized output schema, masks, and effective row restriction for this draft.</p></div>}
         <div className="result-warning"><strong>Before publishing</strong><p>Review uses the exact saved draft. Changing fields, masks, or row restrictions makes this result stale.</p></div>
       </section>
     </div> : tab === "tests" ? <TestsView onPreview={props.onPreview} preview={props.preview} /> : <HistoryView />}
