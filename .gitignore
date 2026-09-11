@@ -104,6 +104,8 @@ ipython_config.py
 #uv.lock
 
 # JavaScript frontend dependencies and local build outputs
+apps/governance-ui/node_modules/
+apps/governance-ui/dist/
 node_modules/
 ui/node_modules/
 ui/dist/
