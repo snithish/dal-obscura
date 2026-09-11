@@ -40,14 +40,18 @@ class _StreamingFlightClient:
     def __init__(self, batch):
         self._batch = batch
         self.reader = None
+        self.plan_options = []
+        self.stream_options = []
 
     def get_flight_info(self, descriptor, *, options):
-        del descriptor, options
+        del descriptor
+        self.plan_options.append(options)
         endpoint = type("Endpoint", (), {"ticket": object()})()
         return type("Info", (), {"endpoints": [endpoint], "schema": self._batch.schema})()
 
     def do_get(self, ticket, *, options):
-        del ticket, options
+        del ticket
+        self.stream_options.append(options)
         self.reader = _StreamingReader(self._batch)
         return self.reader
 
@@ -83,6 +87,28 @@ def test_python_sdk_batch_stream_closes_reader_when_consumer_stops_early():
 
     assert client.reader is not None
     assert client.reader.closed is True
+
+
+def test_python_sdk_resolves_refreshed_token_for_plan_and_ticket_stream():
+    batch = id_email_region_batch([1], ["a@example.com"], ["us"])
+    client = _StreamingFlightClient(batch)
+    tokens = iter(["plan-token", "stream-token"])
+    sdk = DalObscuraClient.from_flight_client(client, auth_token=lambda: next(tokens))
+
+    assert list(sdk.read_batches(catalog="analytics", target="users", columns=["id"])) == [batch]
+
+    assert client.plan_options[0].headers == [(b"authorization", b"Bearer plan-token")]
+    assert client.stream_options[0].headers == [(b"authorization", b"Bearer stream-token")]
+
+
+def test_python_sdk_rejects_empty_token_from_refresh_provider():
+    sdk = DalObscuraClient.from_flight_client(
+        _StreamingFlightClient(id_email_region_batch([1], ["a@example.com"], ["us"])),
+        auth_token=lambda: "",
+    )
+
+    with pytest.raises(ValueError, match="empty token"):
+        sdk.plan(catalog="analytics", target="users", columns=["id"])
 
 
 def test_python_sdk_reads_authorized_arrow_table():

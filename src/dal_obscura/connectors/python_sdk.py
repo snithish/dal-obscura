@@ -16,7 +16,7 @@ Example:
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from typing import TYPE_CHECKING, cast
 from urllib.parse import urlparse
 
@@ -30,16 +30,22 @@ if TYPE_CHECKING:
     import polars as pl
 
 PROTOCOL_VERSION = FLIGHT_PROTOCOL_VERSION
+AuthTokenProvider = Callable[[], str]
 
 
 class DalObscuraBatchStream(Iterator[pa.RecordBatch]):
     """A context-managed, sequential stream of Flight record batches."""
 
-    def __init__(self, client: flight.FlightClient, info: flight.FlightInfo, options) -> None:
+    def __init__(
+        self,
+        client: flight.FlightClient,
+        info: flight.FlightInfo,
+        options_provider: Callable[[], flight.FlightCallOptions],
+    ) -> None:
         self.schema = info.schema
         self._client = client
         self._endpoints = iter(info.endpoints)
-        self._options = options
+        self._options_provider = options_provider
         self._reader = None
         self._closed = False
 
@@ -53,7 +59,9 @@ class DalObscuraBatchStream(Iterator[pa.RecordBatch]):
             while True:
                 if self._reader is None:
                     endpoint = next(self._endpoints)
-                    self._reader = self._client.do_get(endpoint.ticket, options=self._options)
+                    self._reader = self._client.do_get(
+                        endpoint.ticket, options=self._options_provider()
+                    )
                 try:
                     chunk = self._reader.read_chunk()
                 except StopIteration:
@@ -109,9 +117,9 @@ class DalObscuraClient:
         ```
     """
 
-    def __init__(self, uri: str, *, auth_token: str) -> None:
+    def __init__(self, uri: str, *, auth_token: str | AuthTokenProvider) -> None:
         self._client = flight.FlightClient(_location_for(uri))
-        self._auth_token = auth_token
+        self._auth_token_provider = _auth_token_provider(auth_token)
         self._owns_client = True
 
     @classmethod
@@ -119,7 +127,7 @@ class DalObscuraClient:
         cls,
         client: flight.FlightClient,
         *,
-        auth_token: str,
+        auth_token: str | AuthTokenProvider,
     ) -> DalObscuraClient:
         """Wraps an existing PyArrow Flight client without taking ownership.
 
@@ -131,7 +139,7 @@ class DalObscuraClient:
         """
         instance = cls.__new__(cls)
         instance._client = client
-        instance._auth_token = auth_token
+        instance._auth_token_provider = _auth_token_provider(auth_token)
         instance._owns_client = False
         return instance
 
@@ -200,7 +208,7 @@ class DalObscuraClient:
             ```
         """
         info = self.plan(catalog=catalog, target=target, columns=columns, row_filter=row_filter)
-        return DalObscuraBatchStream(self._client, info, self._call_options())
+        return DalObscuraBatchStream(self._client, info, self._call_options)
 
     def read_table(
         self,
@@ -280,9 +288,10 @@ class DalObscuraClient:
         self.close()
 
     def _call_options(self) -> flight.FlightCallOptions:
-        return flight.FlightCallOptions(
-            headers=[(b"authorization", f"Bearer {self._auth_token}".encode())]
-        )
+        token = self._auth_token_provider()
+        if not isinstance(token, str) or not token.strip():
+            raise ValueError("Bearer token provider returned an empty token")
+        return flight.FlightCallOptions(headers=[(b"authorization", f"Bearer {token}".encode())])
 
 
 class DuckDBDalObscuraReader:
@@ -354,6 +363,16 @@ def _duckdb():
             "DuckDB support requires the optional dependency: pip install 'dal-obscura[duckdb]'"
         ) from error
     return duckdb
+
+
+def _auth_token_provider(auth_token: str | AuthTokenProvider) -> AuthTokenProvider:
+    if isinstance(auth_token, str):
+        if not auth_token.strip():
+            raise ValueError("Bearer token must not be empty")
+        return lambda: auth_token
+    if not callable(auth_token):
+        raise TypeError("auth_token must be a bearer token string or a zero-argument provider")
+    return auth_token
 
 
 def _descriptor(

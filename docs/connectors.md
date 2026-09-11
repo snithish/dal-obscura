@@ -94,6 +94,17 @@ PyArrow tables, and DuckDB relations. `read_batches()` is the streaming API:
 use it as a context manager and close it when stopping early. `read_table()`
 intentionally materializes every authorized batch.
 
+For an expiring OIDC token, pass a zero-argument provider instead of a string.
+The SDK calls it for every schema, plan, and ticket-stream RPC; providers must
+return a non-empty bearer token and must not log it:
+
+```python
+client = DalObscuraClient(
+    "grpc+tcp://localhost:8815",
+    auth_token=lambda: token_cache.current_access_token(),
+)
+```
+
 ### Polars
 
 Install Polars with `pip install 'dal-obscura[polars]'`.
