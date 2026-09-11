@@ -32,6 +32,8 @@ What happens:
 4. The `migrate` service runs `dal-obscura-migrate upgrade` against Postgres.
 5. The control plane starts on `127.0.0.1:8820` with Postgres config storage,
    Keycloak token validation, and public browser-login configuration for the UI.
+   The governance UI is built from `apps/governance-ui`, served on
+   `127.0.0.1:8821`, and proxies `/v1` to the control plane on the same origin.
 6. The `setup` service creates the Iceberg table metadata and data files from `fixtures/demo_fixture.json`.
 7. The setup service waits for the control plane and provisions it through the
    HTTP API. It configures one Iceberg SQL catalog,
@@ -58,8 +60,11 @@ Swagger docs at `http://127.0.0.1:8820/docs`. Useful demo users:
   behavior.
 - `blocked-user`: denied by policy.
 
-`./run token --as <user>` still prints a CLI access token for debugging scripted
-reads.
+Open `http://127.0.0.1:8821` and use the **Platform owner** or **Data asset owner**
+shortcut to author policy drafts. The UI receives an HttpOnly browser session;
+the access token is not returned to JavaScript. Cookie-authenticated mutations
+also require a CSRF header. `./run token --as <user>` still prints a CLI access
+token for debugging scripted reads.
 
 ## Demo Flow
 
