@@ -6,11 +6,13 @@ Canonical task order: [execution handoff](EXECUTION_HANDOFF.md).
 ## Gate status
 
 - P00 contracts, capability matrix, and migration/session design: not-started.
-- P01 installed startup and container assembly: implementing. Commit `734c018`
-  adds `dal-obscura-control-plane`, validates database/admin configuration, and
-  rejects a stale schema before starting Uvicorn. Focused CLI and health tests,
-  Ruff, Ty, and formatting checks passed. Wheel/container startup, Compose
-  execution, and the remaining packaging slices remain unverified.
+- P01 installed startup and container assembly: implementing. Commits `734c018`,
+  `02e143b`, and `5fc06a1` add a configured control-plane command, pin the UI
+  package manager for container builds, and isolate console arguments from
+  programmatic CLI calls. A migrated SQLite instance has served health and
+  readiness endpoints through the configured composition path. Wheel/container
+  startup, Compose execution, and the remaining packaging slices remain
+  unverified.
 - P02 real OIDC login and revocable sessions: not-started; demo cookie plumbing
   exists but does not satisfy the target session contract.
 - P03 complete scoped authorization: not-started; coarse existing checks require
@@ -48,7 +50,7 @@ screens.
 ## Evidence
 
 - Packet/slice: P01.1 installed control-plane command.
-- State: implemented-unverified.
+- State: partially verified.
 - Commit: `734c018`.
 - Behavior and touched modules: `pyproject.toml`,
   `control_plane/interfaces/control_plane_cli.py`, focused CLI tests.
@@ -59,15 +61,67 @@ screens.
 - Green commands and results: `uv run --no-sync pytest
   tests/interfaces/control_plane/test_control_plane_cli.py
   tests/interfaces/control_plane/test_health.py -q` → 7 passed; focused Ruff and
-  Ty checks passed. Formatting was applied by Ruff.
-- Browser/API/PostgreSQL/consumer evidence: SQLite startup construction only;
-  no bound server, wheel, Postgres, Compose, browser, or consumer evidence yet.
+  Ty checks passed. Formatting was applied by Ruff. `uv build --offline`
+  produced both the source distribution and wheel; the wheel's
+  `entry_points.txt` contains `dal-obscura-control-plane`. Calling the
+  command's `--help` parser through its module succeeded. A freshly migrated
+  temporary SQLite database then started Uvicorn at `127.0.0.1:18820`; both
+  `GET /healthz` and `GET /readyz` returned HTTP 200, with the readiness
+  database check reporting `ok`.
+- Browser/API/PostgreSQL/consumer evidence: real local HTTP health/readiness
+  evidence on SQLite only; no installed-wheel process, Postgres, Compose,
+  browser, or consumer evidence yet.
 - Manual/independent review: none.
 - Remaining limitations/blocker: pre-commit hook runner stalled after its format
   hook; manually equivalent focused quality checks passed before `--no-verify`
-  commit. Investigate hook behavior before relying on this path.
-- Next action: build/install wheel and test the installed executable; then
+  commit. The project environment is stale and does not expose the new console
+  script under `uv run --no-sync`; wheel metadata is correct, but a clean wheel
+  installation has not executed it. Container runtime availability remains
+  unresolved.
+- Next action: execute the console script from a clean wheel installation, then
   validate container assembly when a container runtime is available.
+
+- Packet/slice: P01.2 reproducible UI build inputs.
+- State: partially verified.
+- Commit: `02e143b`.
+- Behavior and touched modules: UI package manager pin, Corepack installation in
+  `ui/Dockerfile`, and local-demo packaging contract test.
+- Prerequisites/review authorization: packaging-only change; no persistence or
+  authorization contract change.
+- Red test and actual failure: no test initially required the container to honor
+  a declared package manager; the Dockerfile used whichever pnpm Corepack chose.
+- Green commands and results: local architecture contract test, Ruff, and Ty
+  passed. `apps/governance-ui/node_modules/.bin/tsc -b` and Vite build passed;
+  output JavaScript was 209.58 KiB, gzip 66.03 KiB. `pnpm run` itself waited on
+  a Corepack/environment lock after pinning, so the direct local binaries provide
+  partial build evidence only.
+- Browser/API/PostgreSQL/consumer evidence: none; Docker build and local stack
+  remain unverified.
+- Manual/independent review: none.
+- Remaining limitations/blocker: Corepack's wrapper waited on a local environment
+  lock after pinning; direct local binaries supplied partial build evidence. The
+  actual Docker build must run from a clean checkout.
+- Next action: resolve tool lock, inspect the built wheel entry point, and run
+  Compose when the local container runtime is available.
+
+- Packet/slice: P11.1 local UI smoke verifier hardening.
+- State: implemented-unverified.
+- Commit: `136b508`.
+- Behavior and touched modules: replaces optimization-removable assertions with
+  explicit safe failures in `ui_smoke.py`; adds success/failure unit coverage.
+- Prerequisites/review authorization: local verification helper only; it does
+  not change the session or authorization implementation.
+- Red test and actual failure: prior helper relied on Python `assert`, which
+  disappears under `python -O` and could report a false success.
+- Green commands and results: `uv run --no-sync pytest
+  tests/examples/test_ui_smoke.py tests/architecture/test_local_demo_ui.py -q`
+  → 3 passed; focused Ruff, Ty and formatting checks passed.
+- Browser/API/PostgreSQL/consumer evidence: mocked HTTP contract only; real stack
+  execution remains required.
+- Manual/independent review: none.
+- Remaining limitations/blocker: demo login itself remains the obsolete temporary
+  path described in P02; this verifier must change with the real login flow.
+- Next action: execute against a running local stack after P01 packaging works.
 
 ## Slice evidence template
 
