@@ -1,8 +1,8 @@
-"""Public catalog and table-format extension contracts.
+"""Catalog and executable table-format contracts for the Iceberg gateway.
 
 Example:
     ```python
-    class MyCatalog(CatalogPlugin):
+    class IcebergCatalog(CatalogPlugin):
         @property
         def name(self) -> str:
             return "analytics"
@@ -11,12 +11,12 @@ Example:
             return CatalogTableDescriptor(
                 catalog_name=self.name,
                 requested_target=target,
-                provider_id="delta",
-                location="s3://warehouse/users",
+                provider_id="iceberg",
+                metadata_location="s3://warehouse/users/metadata/v1.metadata.json",
             )
 
         def list_tables(self) -> list[CatalogTableListing]:
-            return [CatalogTableListing(name="default.users", provider_id="delta")]
+            return [CatalogTableListing(name="default.users", provider_id="iceberg")]
     ```
 """
 
@@ -108,14 +108,7 @@ class TableFormat(ABC):
 
 
 class CatalogPlugin(ABC):
-    """Catalog behavior defining dataset lookup and format identification.
-
-    Example:
-        ```python
-        descriptor = catalog.describe_table("default.users")
-        assert descriptor.provider_id in {"iceberg", "delta", "parquet"}
-        ```
-    """
+    """Catalog behavior defining configured Iceberg dataset lookup."""
 
     @property
     @abstractmethod

@@ -46,4 +46,4 @@ for now by the owner’s explicit instruction.
 | Asset physical binding ignored | W01/W05 | Regression and binding fix committed. |
 | Python SDK materializes batches | W01/W08 | Pending. |
 | Per-ticket writes | W06 | Pending. |
-| Unsupported backends/UI/plugins | W10 | Admission narrowed; deletion pending replacement entry paths. |
+| Unsupported backends/UI/plugins | W10 | Delta/file/Unity admission is removed and rejected; the retained operator CLI covers validate, preview, publish, and status. Stale docs/contracts are being removed with focused regression checks. |
