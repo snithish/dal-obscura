@@ -75,6 +75,17 @@ function App() {
     }
   }
 
+  async function logout() {
+    try {
+      await controlPlane.logout();
+    } finally {
+      setSession(null); setAsset(null); setAssets([]); setRules([]); setPreview(null);
+      setWorkspace("unavailable");
+      setAuthConfig(await controlPlane.getUiAuthConfig().catch(() => null));
+      setNotice("Signed out. No policy data remains loaded in this browser.");
+    }
+  }
+
   async function loadAsset(assetId: string, knownAssets = assets) {
     try {
       const [fullAsset, loadedRules] = await Promise.all([controlPlane.getAsset(assetId), controlPlane.listRules(assetId)]);
@@ -143,7 +154,7 @@ function App() {
       <div className="sidebar-foot"><span className={"status-dot " + workspace} /> Workspace: analytics<br /><small>{workspaceLabel(workspace)}</small></div>
     </aside>
     <main>
-      <header className="topbar"><div><span className="eyebrow">{page === "assets" ? "ASSET WORKSPACE" : page.toUpperCase()}</span><h1>{page === "assets" ? asset?.name ?? "Assets" : titleFor(page)}</h1></div><div className="actor"><span className="avatar">{session?.principal.slice(0, 1).toUpperCase() ?? "?"}</span><div><strong>{session?.principal ?? "Not signed in"}</strong><small>{session?.platform_admin ? "Platform admin" : "Policy author"}</small></div></div></header>
+      <header className="topbar"><div><span className="eyebrow">{page === "assets" ? "ASSET WORKSPACE" : page.toUpperCase()}</span><h1>{page === "assets" ? asset?.name ?? "Assets" : titleFor(page)}</h1></div><div className="actor"><span className="avatar">{session?.principal.slice(0, 1).toUpperCase() ?? "?"}</span><div><strong>{session?.principal ?? "Not signed in"}</strong><small>{session?.platform_admin ? "Platform admin" : "Policy author"}</small></div>{session && <button className="text-button" onClick={() => void logout()}>Sign out</button>}</div></header>
       {page !== "assets" ? <ComingSoon page={page} /> : workspace === "loading" ? <WorkspaceMessage title="Loading governed assets" message="Checking your workspace access and available assets." /> : workspace === "unavailable" ? <WorkspaceMessage title="Cannot load workspace" message={notice} retry={loadInitialWorkspace} authConfig={authConfig} onLogin={login} loggingIn={loggingIn} /> : !asset ? <WorkspaceMessage title="No governed assets" message={notice} /> : <AssetWorkspace assets={assets} asset={asset} onAsset={(id) => void loadAsset(id)} rules={rules} activeRule={activeRule} selectedRule={selectedRule} onRule={setSelectedRule} selectedField={selectedField} onField={setSelectedField} selectedMask={selectedMask} effectiveFields={effectiveFields} saveState={saveState} notice={notice} onToggleField={toggleField} onMask={setMask} onUpdateRule={updateRule} onAddRule={addRule} onRemoveRule={removeRule} onSave={() => void saveDraft()} onPreview={() => void runPreview()} preview={preview} />}
     </main>
   </div>;

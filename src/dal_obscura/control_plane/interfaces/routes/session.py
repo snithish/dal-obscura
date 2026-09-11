@@ -75,4 +75,14 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         )
         return {"authenticated": True}
 
+    @api.post("/v1/logout")
+    def logout(
+        response: Response,
+        _actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> object:
+        """Expires the browser session after the shared CSRF check."""
+        response.delete_cookie(key="dal_obscura_session", path="/")
+        response.delete_cookie(key="dal_obscura_csrf", path="/")
+        return {"authenticated": False}
+
     return api

@@ -178,6 +178,33 @@ def test_cookie_session_requires_csrf_header_for_mutations(monkeypatch):
     assert csrf.json()["detail"] != "CSRF validation failed"
 
 
+def test_cookie_session_logout_requires_csrf_and_expires_browser_cookies(monkeypatch):
+    client = _client_with_ui_auth_config()
+    monkeypatch.setattr(
+        api_module,
+        "_exchange_demo_password_token",
+        lambda config, username: "owner-token",
+    )
+    login = client.post("/v1/demo-login", json={"login_hint": "asset-owner"})
+    cookie_header = (
+        f"dal_obscura_session={login.cookies['dal_obscura_session']}; "
+        f"dal_obscura_csrf={login.cookies['dal_obscura_csrf']}"
+    )
+
+    rejected = client.post("/v1/logout", headers={"cookie": cookie_header})
+    logout = client.post(
+        "/v1/logout",
+        headers={"cookie": cookie_header, "x-csrf-token": login.cookies["dal_obscura_csrf"]},
+    )
+
+    assert rejected.status_code == 403
+    assert logout.status_code == 200
+    assert logout.json() == {"authenticated": False}
+    cookies = logout.headers.get_list("set-cookie")
+    assert any('dal_obscura_session=""' in cookie for cookie in cookies)
+    assert any('dal_obscura_csrf=""' in cookie for cookie in cookies)
+
+
 def test_demo_login_rejects_unknown_shortcut():
     client = _client_with_ui_auth_config()
 

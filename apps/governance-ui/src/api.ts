@@ -82,6 +82,7 @@ export const controlPlane = {
     method: "POST",
     body: JSON.stringify({ login_hint: loginHint }),
   }),
+  logout: () => request<{ authenticated: false }>("/v1/logout", { method: "POST" }),
   listAssets: async () => (await request<Asset[]>("/v1/assets")).map(normalizeAsset),
   getAsset: async (assetId: string) => normalizeAsset(await request<Asset>(`/v1/assets/${assetId}`)),
   listRules: (assetId: string) => request<PolicyRule[]>(`/v1/assets/${assetId}/policy-rules`),
