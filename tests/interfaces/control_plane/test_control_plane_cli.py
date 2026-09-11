@@ -65,3 +65,11 @@ def test_control_plane_cli_requires_current_schema(tmp_path, capsys) -> None:
         == 1
     )
     assert "Run `dal-obscura-migrate upgrade`" in capsys.readouterr().err
+
+
+def test_control_plane_cli_exposes_help_without_runtime_configuration(capsys) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        control_plane_cli.run({}, argv=("--help",))
+
+    assert exit_info.value.code == 0
+    assert "Start the dal-obscura control-plane HTTP server" in capsys.readouterr().out
