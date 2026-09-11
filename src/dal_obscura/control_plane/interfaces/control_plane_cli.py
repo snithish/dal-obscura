@@ -1,0 +1,177 @@
+"""Control-plane HTTP server command.
+
+Example:
+    ```bash
+    DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:///control-plane.db \
+    DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN=local-admin \
+    dal-obscura-control-plane
+    ```
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+from collections.abc import Mapping, Sequence
+
+import uvicorn
+
+from dal_obscura.common.config_store.db import (
+    ConfigStoreSchemaError,
+    check_config_store_schema,
+    create_engine_from_url,
+    session_factory,
+)
+from dal_obscura.control_plane.interfaces.api import create_app, create_oidc_actor_resolver
+
+
+def main() -> None:
+    """Runs the configured control-plane HTTP server."""
+
+    raise SystemExit(run())
+
+
+def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None = None) -> int:
+    """Starts the control plane from environment configuration.
+
+    The command intentionally does not migrate the database. Operators run the
+    explicit migration command before starting a service process.
+    """
+
+    del argv
+    values = os.environ if environment is None else environment
+    database_url = _required(values, "DAL_OBSCURA_DATABASE_URL")
+    admin_token = _required(values, "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN")
+    if database_url is None or admin_token is None:
+        return 2
+    try:
+        port = _port(values.get("DAL_OBSCURA_CONTROL_PLANE_PORT", "8820"))
+        engine = create_engine_from_url(database_url)
+        check_config_store_schema(engine)
+        oidc_resolver = _oidc_resolver(values)
+        app = create_app(
+            session_factory(engine),
+            admin_token=admin_token,
+            oidc_actor_resolver=oidc_resolver,
+            oidc_admin_group=_optional(values, "DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP"),
+            cors_origins=_csv(values.get("DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS", "")),
+            ui_auth_config=_ui_auth_config(values),
+        )
+    except (ConfigStoreSchemaError, ValueError, RuntimeError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    uvicorn.run(
+        app,
+        host=values.get("DAL_OBSCURA_CONTROL_PLANE_HOST", "127.0.0.1"),
+        port=port,
+        log_level=values.get("DAL_OBSCURA_CONTROL_PLANE_LOG_LEVEL", "info").lower(),
+    )
+    return 0
+
+
+def _required(values: Mapping[str, str], name: str) -> str | None:
+    value = _optional(values, name)
+    if value is None:
+        print(f"{name} is required", file=sys.stderr)
+    return value
+
+
+def _optional(values: Mapping[str, str], name: str) -> str | None:
+    value = values.get(name, "").strip()
+    return value or None
+
+
+def _port(value: str) -> int:
+    try:
+        port = int(value)
+    except ValueError as exc:
+        raise ValueError("DAL_OBSCURA_CONTROL_PLANE_PORT must be an integer") from exc
+    if not 1 <= port <= 65535:
+        raise ValueError("DAL_OBSCURA_CONTROL_PLANE_PORT must be between 1 and 65535")
+    return port
+
+
+def _csv(value: str) -> tuple[str, ...]:
+    return tuple(item.strip() for item in value.split(",") if item.strip())
+
+
+def _oidc_resolver(values: Mapping[str, str]):
+    issuer = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER")
+    if issuer is None:
+        return None
+    return create_oidc_actor_resolver(
+        issuer=issuer,
+        audience=_optional(values, "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE"),
+        jwks_url=_optional(values, "DAL_OBSCURA_CONTROL_PLANE_OIDC_JWKS_URL"),
+        subject_claim=values.get("DAL_OBSCURA_CONTROL_PLANE_OIDC_SUBJECT_CLAIM", "sub"),
+        group_claims=_csv(values.get("DAL_OBSCURA_CONTROL_PLANE_OIDC_GROUP_CLAIMS", "groups")),
+    )
+
+
+def _ui_auth_config(values: Mapping[str, str]) -> dict[str, object] | None:
+    issuer = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER")
+    client_id = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID")
+    if issuer is None and client_id is None:
+        return None
+    if issuer is None or client_id is None:
+        raise ValueError("UI OIDC issuer and client ID must be configured together")
+    config: dict[str, object] = {
+        "authority": issuer,
+        "client_id": client_id,
+        "redirect_uri": _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI"),
+        "post_logout_redirect_uri": _optional(
+            values, "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI"
+        ),
+        "scope": values.get("DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_SCOPE", "openid profile"),
+        "login_shortcuts": _login_shortcuts(
+            values.get("DAL_OBSCURA_CONTROL_PLANE_UI_LOGIN_SHORTCUTS", "")
+        ),
+    }
+    demo_login = _demo_login_config(values)
+    if demo_login:
+        config["demo_login"] = demo_login
+    return {key: value for key, value in config.items() if value is not None}
+
+
+def _login_shortcuts(value: str) -> list[dict[str, str]]:
+    shortcuts = []
+    for entry in value.split(";"):
+        if not entry.strip():
+            continue
+        label, separator, login_hint = entry.partition("=")
+        if not separator or not label.strip() or not login_hint.strip():
+            raise ValueError("UI login shortcuts must use 'label=login_hint' entries")
+        shortcuts.append({"label": label.strip(), "login_hint": login_hint.strip()})
+    return shortcuts
+
+
+def _demo_login_config(values: Mapping[str, str]) -> dict[str, object]:
+    token_url = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_TOKEN_URL")
+    client_id = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_CLIENT_ID")
+    client_secret = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_CLIENT_SECRET")
+    passwords = _key_values(values.get("DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_PASSWORDS", ""))
+    configured = (token_url, client_id, client_secret, passwords)
+    if not any(configured):
+        return {}
+    if not all(configured):
+        raise ValueError("Demo login requires token URL, client ID, secret, and passwords")
+    return {
+        "token_url": token_url,
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "passwords": passwords,
+    }
+
+
+def _key_values(value: str) -> dict[str, str]:
+    pairs: dict[str, str] = {}
+    for entry in value.split(";"):
+        if not entry.strip():
+            continue
+        key, separator, item = entry.partition("=")
+        if not separator or not key.strip() or not item.strip():
+            raise ValueError("Expected semicolon-separated key=value entries")
+        if key.strip() in pairs:
+            raise ValueError(f"Duplicate configured key {key.strip()!r}")
+        pairs[key.strip()] = item.strip()
+    return pairs

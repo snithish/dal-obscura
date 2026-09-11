@@ -1,0 +1,67 @@
+from __future__ import annotations
+
+from collections.abc import Mapping
+from typing import cast
+
+import pytest
+from fastapi import FastAPI
+
+from dal_obscura.common.config_store.db import create_engine_from_url, migrate_config_store
+from dal_obscura.control_plane.interfaces import control_plane_cli
+
+
+def test_control_plane_cli_starts_configured_app(monkeypatch, tmp_path) -> None:
+    database_url = f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
+    migrate_config_store(create_engine_from_url(database_url))
+    calls: dict[str, object] = {}
+    environment = {
+        "DAL_OBSCURA_DATABASE_URL": database_url,
+        "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "test-admin",
+        "DAL_OBSCURA_CONTROL_PLANE_HOST": "127.0.0.1",
+        "DAL_OBSCURA_CONTROL_PLANE_PORT": "8820",
+    }
+
+    monkeypatch.setattr(
+        control_plane_cli.uvicorn,
+        "run",
+        lambda app, **kwargs: calls.update({"app": app, **kwargs}),
+    )
+
+    assert control_plane_cli.run(environment) == 0
+    assert calls["host"] == "127.0.0.1"
+    assert calls["port"] == 8820
+    assert cast(FastAPI, calls["app"]).title == "dal-obscura control-plane API"
+
+
+@pytest.mark.parametrize(
+    ("environment", "message"),
+    [
+        ({}, "DAL_OBSCURA_DATABASE_URL is required"),
+        (
+            {"DAL_OBSCURA_DATABASE_URL": "sqlite+pysqlite:///:memory:"},
+            "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN is required",
+        ),
+    ],
+)
+def test_control_plane_cli_rejects_missing_required_configuration(
+    environment: Mapping[str, str],
+    message: str,
+    capsys,
+) -> None:
+    assert control_plane_cli.run(environment) == 2
+    assert message in capsys.readouterr().err
+
+
+def test_control_plane_cli_requires_current_schema(tmp_path, capsys) -> None:
+    database_url = f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
+
+    assert (
+        control_plane_cli.run(
+            {
+                "DAL_OBSCURA_DATABASE_URL": database_url,
+                "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "test-admin",
+            }
+        )
+        == 1
+    )
+    assert "Run `dal-obscura-migrate upgrade`" in capsys.readouterr().err
