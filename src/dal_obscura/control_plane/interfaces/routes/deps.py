@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
-from fastapi import Header, HTTPException
+from fastapi import Cookie, Header, HTTPException, Request
 from sqlalchemy.orm import Session, sessionmaker
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
@@ -49,14 +49,35 @@ class ControlPlaneDeps:
     ui_auth_config: Mapping[str, object] | None
     demo_token_exchange: DemoTokenExchange
 
-    def require_actor(self, authorization: str = Header(default="")) -> ControlPlaneActor:
+    def require_actor(
+        self,
+        request: Request,
+        authorization: str = Header(default=""),
+        session_token: str | None = Cookie(default=None, alias="dal_obscura_session"),
+        csrf_cookie: str | None = Cookie(default=None, alias="dal_obscura_csrf"),
+    ) -> ControlPlaneActor:
+        """Authenticates bearer clients or an HttpOnly browser session.
+
+        Cookie-authenticated state changes require a matching double-submit CSRF token.
+        Bearer-token clients retain their existing non-browser API contract.
+        """
         expected = f"Bearer {self.admin_token}"
         if authorization == expected:
             return ControlPlaneActor.for_platform_admin("platform:admin")
+        using_cookie = not authorization and session_token is not None
+        if (
+            using_cookie
+            and request.method not in {"GET", "HEAD", "OPTIONS"}
+            and (not csrf_cookie or request.headers.get("x-csrf-token") != csrf_cookie)
+        ):
+            raise HTTPException(status_code=403, detail="CSRF validation failed")
+        token = session_token if using_cookie else _bearer_value(authorization)
+        if token is None:
+            raise HTTPException(status_code=401, detail="Unauthorized")
         if self.oidc_actor_resolver is None:
             raise HTTPException(status_code=401, detail="Unauthorized")
         actor = oidc_actor_from_header(
-            authorization,
+            f"Bearer {token}",
             resolver=self.oidc_actor_resolver,
             admin_group=self.oidc_admin_group,
         )
@@ -64,8 +85,19 @@ class ControlPlaneDeps:
             raise HTTPException(status_code=401, detail="Unauthorized")
         return actor
 
-    def require_admin(self, authorization: str = Header(default="")) -> ControlPlaneActor:
-        actor = self.require_actor(authorization)
+    def require_admin(
+        self,
+        request: Request,
+        authorization: str = Header(default=""),
+        session_token: str | None = Cookie(default=None, alias="dal_obscura_session"),
+        csrf_cookie: str | None = Cookie(default=None, alias="dal_obscura_csrf"),
+    ) -> ControlPlaneActor:
+        actor = self.require_actor(
+            request=request,
+            authorization=authorization,
+            session_token=session_token,
+            csrf_cookie=csrf_cookie,
+        )
         if not actor.platform_admin:
             raise HTTPException(status_code=403, detail="Platform admin required")
         return actor
@@ -89,3 +121,10 @@ class ControlPlaneDeps:
             except Exception:
                 session.rollback()
                 raise
+
+
+def _bearer_value(authorization: str) -> str | None:
+    parts = authorization.split(" ", 1)
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return None
+    return parts[1].strip() or None

@@ -60,6 +60,8 @@ def _client_with_ui_auth_config() -> TestClient:
         create_app(
             session_factory(engine),
             admin_token="test-admin",
+            oidc_actor_resolver=_actor_for_token,
+            oidc_admin_group="platform-admins",
             ui_auth_config={
                 "authority": "http://127.0.0.1:8080/realms/dal-obscura-demo",
                 "client_id": "dal-obscura-ui",
@@ -117,21 +119,63 @@ def test_ui_auth_config_returns_public_oidc_browser_config_without_secret():
     }
 
 
-def test_demo_login_returns_token_for_configured_shortcut(monkeypatch):
+def test_demo_login_sets_http_only_session_and_csrf_cookies(monkeypatch):
     client = _client_with_ui_auth_config()
     calls = []
 
     def fake_exchange(config, username):
         calls.append((config["token_url"], config["client_id"], username))
-        return f"token-for-{username}"
+        return "owner-token"
 
     monkeypatch.setattr(api_module, "_exchange_demo_password_token", fake_exchange)
 
     response = client.post("/v1/demo-login", json={"login_hint": "asset-owner"})
 
     assert response.status_code == 200
-    assert response.json() == {"access_token": "token-for-asset-owner"}
+    assert response.json() == {"authenticated": True}
+    assert response.cookies["dal_obscura_session"] == "owner-token"
+    assert response.cookies["dal_obscura_csrf"]
+    session_cookie = next(
+        cookie
+        for cookie in response.headers.get_list("set-cookie")
+        if "dal_obscura_session" in cookie
+    )
+    assert "HttpOnly" in session_cookie
+    assert "samesite=lax" in session_cookie.lower()
     assert calls == [("http://keycloak/token", "dal-obscura-cli", "asset-owner")]
+
+
+def test_cookie_session_requires_csrf_header_for_mutations(monkeypatch):
+    client = _client_with_ui_auth_config()
+    monkeypatch.setattr(
+        api_module,
+        "_exchange_demo_password_token",
+        lambda config, username: "owner-token",
+    )
+    login = client.post("/v1/demo-login", json={"login_hint": "asset-owner"})
+
+    cookie_header = (
+        f"dal_obscura_session={login.cookies['dal_obscura_session']}; "
+        f"dal_obscura_csrf={login.cookies['dal_obscura_csrf']}"
+    )
+    session = client.get("/v1/session", headers={"cookie": cookie_header})
+    rejected = client.put(
+        "/v1/assets/00000000-0000-0000-0000-000000000000/policy-rules",
+        json={"rules": []},
+        headers={"cookie": cookie_header},
+    )
+    csrf = client.put(
+        "/v1/assets/00000000-0000-0000-0000-000000000000/policy-rules",
+        json={"rules": []},
+        headers={"cookie": cookie_header, "x-csrf-token": login.cookies["dal_obscura_csrf"]},
+    )
+
+    assert session.status_code == 200
+    assert session.json()["principal"] == "asset-owner"
+    assert rejected.status_code == 403
+    assert rejected.json()["detail"] == "CSRF validation failed"
+    assert csrf.status_code == 403
+    assert csrf.json()["detail"] != "CSRF validation failed"
 
 
 def test_demo_login_rejects_unknown_shortcut():

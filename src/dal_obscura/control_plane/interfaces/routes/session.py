@@ -8,9 +8,10 @@ Example:
 
 from __future__ import annotations
 
+import secrets
 from typing import cast
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
@@ -44,7 +45,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         return public_ui_auth_config(deps.ui_auth_config)
 
     @api.post("/v1/demo-login")
-    def demo_login(request: DemoLoginRequest) -> object:
+    def demo_login(request: DemoLoginRequest, response: Response) -> object:
         if deps.ui_auth_config is None:
             raise HTTPException(status_code=404, detail="Demo login is not configured")
         login_config = demo_login_config(deps.ui_auth_config)
@@ -54,6 +55,24 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         passwords = cast(dict[str, str], login_config["passwords"])
         if username not in passwords:
             raise HTTPException(status_code=404, detail="Demo persona is not configured")
-        return {"access_token": deps.demo_token_exchange(login_config, username)}
+        token = deps.demo_token_exchange(login_config, username)
+        secure = str(deps.ui_auth_config.get("redirect_uri", "")).startswith("https://")
+        response.set_cookie(
+            key="dal_obscura_session",
+            value=token,
+            httponly=True,
+            secure=secure,
+            samesite="lax",
+            path="/",
+        )
+        response.set_cookie(
+            key="dal_obscura_csrf",
+            value=secrets.token_urlsafe(32),
+            httponly=False,
+            secure=secure,
+            samesite="lax",
+            path="/",
+        )
+        return {"authenticated": True}
 
     return api
