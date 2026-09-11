@@ -1,6 +1,7 @@
 package io.dalobscura.connectors.spark.v3;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.dalobscura.connectors.client.DalObscuraAuth;
@@ -117,9 +118,47 @@ class DalObscuraPartitionReaderTest {
         }
     }
 
+    @Test
+    void closesClientWhenOpeningTheTicketStreamFails() {
+        FakeClient client = new FakeClient(null);
+        client.failOpen = true;
+
+        assertThrows(
+                IllegalStateException.class,
+                () ->
+                        new DalObscuraPartitionReader(
+                                client,
+                                new DalObscuraInputPartition(
+                                        new DalObscuraPlannedPartition("ticket-a"),
+                                        executorAuth(),
+                                        new org.apache.spark.sql.types.StructType())));
+        assertEquals(1, client.closeCount);
+    }
+
+    @Test
+    void closesResourcesOnceWhenCloseIsCalledRepeatedly() {
+        FakeClient client = new FakeClient(null);
+        DalObscuraPartitionReader reader =
+                new DalObscuraPartitionReader(
+                        client,
+                        new DalObscuraInputPartition(
+                                new DalObscuraPlannedPartition("ticket-a"),
+                                executorAuth(),
+                                new org.apache.spark.sql.types.StructType()));
+
+        reader.close();
+        reader.close();
+
+        assertEquals(1, client.closeCount);
+        assertEquals(1, client.streamCloseCount);
+    }
+
     private static final class FakeClient implements DalObscuraReadClient {
         private final VectorSchemaRoot root;
         private DalObscuraAuth lastStreamAuth;
+        private boolean failOpen;
+        private int closeCount;
+        private int streamCloseCount;
 
         private FakeClient(VectorSchemaRoot root) {
             this.root = root;
@@ -139,6 +178,9 @@ class DalObscuraPartitionReaderTest {
         @Override
         public DalObscuraTicketStream openStream(
                 DalObscuraPlannedPartition partition, DalObscuraAuth auth) {
+            if (failOpen) {
+                throw new IllegalStateException("stream unavailable");
+            }
             lastStreamAuth = auth;
             return new DalObscuraTicketStream() {
                 private boolean consumed;
@@ -156,12 +198,16 @@ class DalObscuraPartitionReaderTest {
                 }
 
                 @Override
-                public void close() {}
+                public void close() {
+                    streamCloseCount++;
+                }
             };
         }
 
         @Override
-        public void close() {}
+        public void close() {
+            closeCount++;
+        }
 
         DalObscuraAuth lastStreamAuth() {
             return lastStreamAuth;
