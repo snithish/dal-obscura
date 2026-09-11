@@ -64,22 +64,23 @@ screens.
   Ty checks passed. Formatting was applied by Ruff. `uv build --offline`
   produced both the source distribution and wheel; the wheel's
   `entry_points.txt` contains `dal-obscura-control-plane`. Calling the
-  command's `--help` parser through its module succeeded. A freshly migrated
+  command's `--help` parser through its module succeeded. An isolated
+  `uv tool run --from` invocation of the built wheel also ran the installed
+  `dal-obscura-control-plane --help` command successfully. A freshly migrated
   temporary SQLite database then started Uvicorn at `127.0.0.1:18820`; both
   `GET /healthz` and `GET /readyz` returned HTTP 200, with the readiness
   database check reporting `ok`.
-- Browser/API/PostgreSQL/consumer evidence: real local HTTP health/readiness
-  evidence on SQLite only; no installed-wheel process, Postgres, Compose,
-  browser, or consumer evidence yet.
+- Browser/API/PostgreSQL/consumer evidence: installed-wheel command and real
+  local HTTP health/readiness evidence on SQLite only; no installed-wheel
+  server process, Postgres, Compose, browser, or consumer evidence yet.
 - Manual/independent review: none.
 - Remaining limitations/blocker: pre-commit hook runner stalled after its format
   hook; manually equivalent focused quality checks passed before `--no-verify`
   commit. The project environment is stale and does not expose the new console
-  script under `uv run --no-sync`; wheel metadata is correct, but a clean wheel
-  installation has not executed it. Container runtime availability remains
-  unresolved.
-- Next action: execute the console script from a clean wheel installation, then
-  validate container assembly when a container runtime is available.
+  script under `uv run --no-sync`; the isolated wheel command works, but it has
+  not started a server. Container runtime availability remains unresolved.
+- Next action: start a server from the isolated wheel installation, then validate
+  container assembly when a container runtime is available.
 
 - Packet/slice: P01.2 reproducible UI build inputs.
 - State: partially verified.
