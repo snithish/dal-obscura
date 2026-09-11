@@ -3,7 +3,7 @@ import type { Asset, PolicyRule } from "./api";
 export const demoAsset: Asset = {
   id: "demo-customer-revenue",
   catalog: "analytics",
-  target: "retail.customer_revenue",
+  name: "retail.customer_revenue",
   backend: "iceberg",
   table_identifier: "retail.customer_revenue",
   owners: ["group:finance-governance"],

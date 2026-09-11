@@ -32,12 +32,13 @@ function App() {
 
   useEffect(() => {
     controlPlane.listAssets()
-      .then((loaded) => {
+      .then(async (loaded) => {
         if (loaded.length) {
+          const fullAsset = await controlPlane.getAsset(loaded[0].id);
           setAssets(loaded);
-          setAsset(loaded[0]);
+          setAsset(fullAsset);
           setIsDemo(false);
-          return controlPlane.listRules(loaded[0].id).then(setRules);
+          return controlPlane.listRules(fullAsset.id).then(setRules);
         }
       })
       .catch(() => setNotice("Demo workspace shown. Connect the control plane to load live assets."));
@@ -115,7 +116,7 @@ function App() {
       </aside>
       <main>
         <header className="topbar">
-          <div><span className="eyebrow">{page === "assets" ? "ASSET WORKSPACE" : page.toUpperCase()}</span><h1>{page === "assets" ? asset.target : titleFor(page)}</h1></div>
+          <div><span className="eyebrow">{page === "assets" ? "ASSET WORKSPACE" : page.toUpperCase()}</span><h1>{page === "assets" ? asset.name : titleFor(page)}</h1></div>
           <div className="actor"><span className="avatar">A</span><div><strong>Alex Morgan</strong><small>Policy author</small></div></div>
         </header>
         {page === "assets" ? (
