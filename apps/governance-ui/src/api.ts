@@ -36,6 +36,16 @@ export type Preview = {
   policy_version: number;
 };
 
+export type Session = {
+  principal: string;
+  groups: string[];
+  platform_admin: boolean;
+};
+
+export type UiAuthConfig = {
+  login_shortcuts?: Array<{ label: string; login_hint: string; demo_login_path?: string }>;
+};
+
 type RawPreview = {
   decision: "allow" | "deny";
   visible_columns: string[];
@@ -46,9 +56,15 @@ type RawPreview = {
 type ApiFailure = Error & { status?: number };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const csrf = readCookie("dal_obscura_csrf");
+  const headers = new Headers(init?.headers);
+  if (init?.method && !["GET", "HEAD", "OPTIONS"].includes(init.method) && csrf) {
+    headers.set("x-csrf-token", csrf);
+  }
+  if (init?.body && !headers.has("content-type")) headers.set("content-type", "application/json");
   const response = await fetch(path, {
     credentials: "same-origin",
-    headers: { "content-type": "application/json", ...init?.headers },
+    headers,
     ...init,
   });
   if (!response.ok) {
@@ -60,6 +76,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const controlPlane = {
+  getSession: () => request<Session>("/v1/session"),
+  getUiAuthConfig: () => request<UiAuthConfig>("/v1/ui-auth-config"),
+  demoLogin: (loginHint: string) => request<{ authenticated: true }>("/v1/demo-login", {
+    method: "POST",
+    body: JSON.stringify({ login_hint: loginHint }),
+  }),
   listAssets: async () => (await request<Asset[]>("/v1/assets")).map(normalizeAsset),
   getAsset: async (assetId: string) => normalizeAsset(await request<Asset>(`/v1/assets/${assetId}`)),
   listRules: (assetId: string) => request<PolicyRule[]>(`/v1/assets/${assetId}/policy-rules`),
@@ -81,6 +103,11 @@ export const controlPlane = {
     } satisfies Preview;
   },
 };
+
+function readCookie(name: string): string | undefined {
+  const prefix = `${name}=`;
+  return document.cookie.split("; ").find((cookie) => cookie.startsWith(prefix))?.slice(prefix.length);
+}
 
 function normalizeAsset(asset: Asset): Asset {
   return {

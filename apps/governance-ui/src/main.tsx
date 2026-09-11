@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import type { Asset, Mask, PolicyRule, Preview } from "./api";
+import type { Asset, Mask, PolicyRule, Preview, Session, UiAuthConfig } from "./api";
 import { controlPlane } from "./api";
 import { demoAsset, demoRules } from "./fixtures";
 import "./styles.css";
@@ -28,6 +28,9 @@ function App() {
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [preview, setPreview] = useState<Preview | null>(null);
   const [notice, setNotice] = useState("Loading workspace…");
+  const [session, setSession] = useState<Session | null>(null);
+  const [authConfig, setAuthConfig] = useState<UiAuthConfig | null>(null);
+  const [loggingIn, setLoggingIn] = useState(false);
   const isDemo = workspace === "demo";
 
   useEffect(() => {
@@ -41,6 +44,8 @@ function App() {
 
   async function loadInitialWorkspace() {
     try {
+      setWorkspace("loading");
+      setSession(await controlPlane.getSession());
       const loaded = await controlPlane.listAssets();
       setAssets(loaded);
       if (!loaded.length) {
@@ -51,7 +56,22 @@ function App() {
       setWorkspace("ready");
     } catch {
       setWorkspace("unavailable");
+      setSession(null);
+      setAuthConfig(await controlPlane.getUiAuthConfig().catch(() => null));
       setNotice("Workspace unavailable. Sign in or reconnect to the control plane; no demo data is shown automatically.");
+    }
+  }
+
+  async function login(loginHint: string) {
+    setLoggingIn(true);
+    try {
+      await controlPlane.demoLogin(loginHint);
+      await loadInitialWorkspace();
+    } catch {
+      setWorkspace("unavailable");
+      setNotice("Sign-in failed. No policy data was loaded.");
+    } finally {
+      setLoggingIn(false);
     }
   }
 
@@ -123,8 +143,8 @@ function App() {
       <div className="sidebar-foot"><span className={"status-dot " + workspace} /> Workspace: analytics<br /><small>{workspaceLabel(workspace)}</small></div>
     </aside>
     <main>
-      <header className="topbar"><div><span className="eyebrow">{page === "assets" ? "ASSET WORKSPACE" : page.toUpperCase()}</span><h1>{page === "assets" ? asset?.name ?? "Assets" : titleFor(page)}</h1></div><div className="actor"><span className="avatar">A</span><div><strong>Alex Morgan</strong><small>Policy author</small></div></div></header>
-      {page !== "assets" ? <ComingSoon page={page} /> : workspace === "loading" ? <WorkspaceMessage title="Loading governed assets" message="Checking your workspace access and available assets." /> : workspace === "unavailable" ? <WorkspaceMessage title="Cannot load workspace" message={notice} retry={loadInitialWorkspace} /> : !asset ? <WorkspaceMessage title="No governed assets" message={notice} /> : <AssetWorkspace assets={assets} asset={asset} onAsset={(id) => void loadAsset(id)} rules={rules} activeRule={activeRule} selectedRule={selectedRule} onRule={setSelectedRule} selectedField={selectedField} onField={setSelectedField} selectedMask={selectedMask} effectiveFields={effectiveFields} saveState={saveState} notice={notice} onToggleField={toggleField} onMask={setMask} onUpdateRule={updateRule} onAddRule={addRule} onRemoveRule={removeRule} onSave={() => void saveDraft()} onPreview={() => void runPreview()} preview={preview} />}
+      <header className="topbar"><div><span className="eyebrow">{page === "assets" ? "ASSET WORKSPACE" : page.toUpperCase()}</span><h1>{page === "assets" ? asset?.name ?? "Assets" : titleFor(page)}</h1></div><div className="actor"><span className="avatar">{session?.principal.slice(0, 1).toUpperCase() ?? "?"}</span><div><strong>{session?.principal ?? "Not signed in"}</strong><small>{session?.platform_admin ? "Platform admin" : "Policy author"}</small></div></div></header>
+      {page !== "assets" ? <ComingSoon page={page} /> : workspace === "loading" ? <WorkspaceMessage title="Loading governed assets" message="Checking your workspace access and available assets." /> : workspace === "unavailable" ? <WorkspaceMessage title="Cannot load workspace" message={notice} retry={loadInitialWorkspace} authConfig={authConfig} onLogin={login} loggingIn={loggingIn} /> : !asset ? <WorkspaceMessage title="No governed assets" message={notice} /> : <AssetWorkspace assets={assets} asset={asset} onAsset={(id) => void loadAsset(id)} rules={rules} activeRule={activeRule} selectedRule={selectedRule} onRule={setSelectedRule} selectedField={selectedField} onField={setSelectedField} selectedMask={selectedMask} effectiveFields={effectiveFields} saveState={saveState} notice={notice} onToggleField={toggleField} onMask={setMask} onUpdateRule={updateRule} onAddRule={addRule} onRemoveRule={removeRule} onSave={() => void saveDraft()} onPreview={() => void runPreview()} preview={preview} />}
     </main>
   </div>;
 }
@@ -144,7 +164,7 @@ function EditorSection({ label, children }: { label: string; children: ReactNode
 function MaskEditor({ mask, field, onChange }: { mask?: Mask; field: string; onChange: (mask?: Mask) => void }) { const option = maskOptions.find((candidate) => candidate.type === mask?.type); return <div className="mask-editor"><label htmlFor="mask-type">Mask for <strong>{field || "selected field"}</strong></label><select id="mask-type" value={mask?.type ?? ""} disabled={!field} onChange={(event) => { const type = event.target.value as Mask["type"] | ""; onChange(type ? { type } : undefined); }}><option value="">No mask</option>{maskOptions.map((candidate) => <option key={candidate.type} value={candidate.type}>{candidate.label}</option>)}</select>{option?.needsValue && <input aria-label="Mask value" value={mask?.value ?? ""} placeholder={mask?.type === "keep_last" ? "Characters to retain" : "Replacement value"} onChange={(event) => onChange({ ...mask!, value: mask?.type === "keep_last" ? Number(event.target.value) : event.target.value })} />}<p className="help">Mask behavior is validated by the control plane before publication.</p></div>; }
 function TestsView({ onPreview, preview }: { onPreview: () => void; preview: Preview | null }) { return <section className="tests-view"><span className="eyebrow">POLICY TESTS</span><h2>Test before review</h2><p>Simulate a representative persona. This is a policy evaluation, not an impersonated read or data preview.</p><div className="test-card"><div><strong>US analyst</strong><small>group:us-analysts</small></div><button className="primary" onClick={onPreview}>Run test</button></div>{preview && <div className="result-state allowed">Current: {preview.allowed_columns.length} fields visible</div>}</section>; }
 function HistoryView() { return <section className="tests-view"><span className="eyebrow">HISTORY</span><h2>Active policy</h2><p>Published revisions will appear here with an exact diff, publisher attribution, and a restore-as-draft action.</p><div className="empty-result"><strong>No historical revision loaded</strong><p>History requires the revision API slice.</p></div></section>; }
-function WorkspaceMessage({ title, message, retry }: { title: string; message: string; retry?: () => void }) { return <section className="coming-soon"><span className="eyebrow">WORKSPACE</span><h2>{title}</h2><p>{message}</p>{retry && <button className="secondary" onClick={() => void retry()}>Retry</button>}</section>; }
+function WorkspaceMessage({ title, message, retry, authConfig, onLogin, loggingIn }: { title: string; message: string; retry?: () => void; authConfig?: UiAuthConfig | null; onLogin?: (loginHint: string) => void; loggingIn?: boolean }) { return <section className="coming-soon"><span className="eyebrow">WORKSPACE</span><h2>{title}</h2><p>{message}</p>{authConfig?.login_shortcuts?.map((shortcut) => shortcut.demo_login_path && onLogin ? <button className="primary login-shortcut" disabled={loggingIn} key={shortcut.login_hint} onClick={() => onLogin(shortcut.login_hint)}>{loggingIn ? "Signing in…" : `Sign in as ${shortcut.label}`}</button> : null)}{retry && <button className="secondary" onClick={() => void retry()}>Retry</button>}</section>; }
 function ComingSoon({ page }: { page: Page }) { return <section className="coming-soon"><span className="eyebrow">{page.toUpperCase()}</span><h2>{titleFor(page)}</h2><p>This destination stays unavailable until its server contract and authorization checks are implemented.</p></section>; }
 function titleFor(page: Page) { return ({ changes: "Changes", activity: "Activity", connections: "Connections", settings: "Settings", assets: "Assets" })[page]; }
 function saveLabel(state: SaveState) { return ({ saved: "Saved draft", saving: "Saving draft", unsaved: "Unsaved changes", failed: "Save failed" })[state]; }
