@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -40,6 +41,8 @@ class OidcJwksConfig:
     group_claims: tuple[str, ...]
     attribute_claims: Mapping[str, str]
     leeway_seconds: int
+    jwks_refresh_interval_seconds: float
+    max_jwks_keys: int
 
 
 class OidcJwksIdentityProvider:
@@ -58,8 +61,15 @@ class OidcJwksIdentityProvider:
         group_claims: Sequence[str] | None = None,
         attribute_claims: Mapping[str, str] | None = None,
         leeway_seconds: int = 0,
+        jwks_refresh_interval_seconds: float = 30,
+        max_jwks_keys: int = 256,
         jwks_fetcher: JsonFetcher | None = None,
+        clock: Callable[[], float] | None = None,
     ) -> None:
+        if jwks_refresh_interval_seconds <= 0:
+            raise ValueError("JWKS refresh interval must be positive")
+        if max_jwks_keys <= 0:
+            raise ValueError("JWKS key limit must be positive")
         normalized_issuer = issuer.rstrip("/")
         static_jwks = _load_static_jwks(jwks, jwks_file)
         if static_jwks is not None:
@@ -75,11 +85,16 @@ class OidcJwksIdentityProvider:
             group_claims=tuple(group_claims or ()),
             attribute_claims=dict(attribute_claims or {}),
             leeway_seconds=leeway_seconds,
+            jwks_refresh_interval_seconds=jwks_refresh_interval_seconds,
+            max_jwks_keys=max_jwks_keys,
         )
         self._jwks = _JwksCache(
             resolved_jwks_url,
             jwks_fetcher or _fetch_json,
             static_jwks=static_jwks,
+            refresh_interval_seconds=jwks_refresh_interval_seconds,
+            max_keys=max_jwks_keys,
+            clock=clock or time.monotonic,
         )
         self._mapper = PrincipalClaimMapper(
             subject_claim=subject_claim,
@@ -127,10 +142,17 @@ class _JwksCache:
         fetcher: JsonFetcher,
         *,
         static_jwks: JsonObject | None = None,
+        refresh_interval_seconds: float,
+        max_keys: int,
+        clock: Callable[[], float],
     ) -> None:
         self._jwks_url = jwks_url
         self._fetcher = fetcher
         self._static_jwks = static_jwks
+        self._refresh_interval_seconds = refresh_interval_seconds
+        self._max_keys = max_keys
+        self._clock = clock
+        self._last_refresh_at: float | None = None
         self._keys_by_kid: dict[str, Any] = {}
         if static_jwks is not None:
             self._refresh_from_jwks(static_jwks)
@@ -140,7 +162,7 @@ class _JwksCache:
         kid = str(header.get("kid") or "")
         if not kid:
             raise jwt.InvalidTokenError("JWT header is missing kid")
-        if kid not in self._keys_by_kid and self._static_jwks is None:
+        if kid not in self._keys_by_kid and self._static_jwks is None and self._refresh_due():
             self._refresh()
         key = self._keys_by_kid.get(kid)
         if key is None:
@@ -152,6 +174,12 @@ class _JwksCache:
             raise jwt.InvalidTokenError("JWKS URL is not configured")
         jwks = self._fetcher(self._jwks_url)
         self._refresh_from_jwks(jwks)
+        self._last_refresh_at = self._clock()
+
+    def _refresh_due(self) -> bool:
+        if self._last_refresh_at is None:
+            return True
+        return self._clock() - self._last_refresh_at >= self._refresh_interval_seconds
 
     def _refresh_from_jwks(self, jwks: JsonObject) -> None:
         keys = jwks.get("keys")
@@ -170,6 +198,8 @@ class _JwksCache:
                 refreshed[kid] = jwt.PyJWK.from_dict(dict(item)).key
             except jwt.PyJWTError:
                 continue
+            if len(refreshed) > self._max_keys:
+                raise jwt.InvalidTokenError("JWKS response exceeds configured signing key limit")
         self._keys_by_kid = refreshed
 
 

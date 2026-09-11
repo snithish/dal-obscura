@@ -221,16 +221,19 @@ def test_refreshes_jwks_once_when_token_references_new_kid():
     def fetcher(_url: str):
         return responses.pop(0)
 
+    now = [0.0]
     provider = OidcJwksIdentityProvider(
         issuer=ISSUER,
         audience=AUDIENCE,
         jwks_url="https://keycloak.example.test/certs",
         jwks_fetcher=fetcher,
+        clock=lambda: now[0],
     )
     old_token = _token(old_private_key, kid="old-kid", subject="old-user")
     new_token = _token(new_private_key, kid="new-kid", subject="new-user")
 
     assert provider.authenticate(_auth_request(old_token)).id == "old-user"
+    now[0] = 31.0
     assert provider.authenticate(_auth_request(new_token)).id == "new-user"
     assert responses == []
 
@@ -265,9 +268,10 @@ def test_oidc_provider_accepts_jwks_file_without_discovery(tmp_path):
     assert principal.id == "file-user"
 
 
-def test_unknown_kid_triggers_at_most_one_jwks_refresh_per_request():
+def test_unknown_kids_are_refresh_rate_limited():
     known_private_key, known_jwk = _rsa_key_pair("known-kid")
     unknown_private_key, _unknown_jwk = _rsa_key_pair("unknown-kid")
+    another_private_key, _another_jwk = _rsa_key_pair("another-unknown-kid")
     calls = 0
 
     def fetcher(_url: str):
@@ -287,5 +291,22 @@ def test_unknown_kid_triggers_at_most_one_jwks_refresh_per_request():
     assert provider.authenticate(_auth_request(known_token)).id == "user-123"
     with pytest.raises(PermissionError, match="Invalid token"):
         provider.authenticate(_auth_request(unknown_token))
+    with pytest.raises(PermissionError, match="Invalid token"):
+        provider.authenticate(_auth_request(_token(another_private_key, kid="another-unknown-kid")))
 
-    assert calls == 2
+    assert calls == 1
+
+
+def test_rejects_jwks_response_above_configured_key_limit():
+    private_key, jwk = _rsa_key_pair("kid-1")
+    _second_private_key, second_jwk = _rsa_key_pair("kid-2")
+    provider = OidcJwksIdentityProvider(
+        issuer=ISSUER,
+        audience=AUDIENCE,
+        jwks_url="https://keycloak.example.test/certs",
+        jwks_fetcher=lambda _url: {"keys": [jwk, second_jwk]},
+        max_jwks_keys=1,
+    )
+
+    with pytest.raises(PermissionError, match="Invalid token"):
+        provider.authenticate(_auth_request(_token(private_key, kid="kid-1")))

@@ -50,6 +50,11 @@ is an internal boundary and is not a public connector contract.
 
 The gateway accepts one configured OIDC/JWKS provider. API keys, trusted headers,
 mTLS identity mapping, shared-secret JWTs, and composite auth are unsupported.
+Remote JWKS refreshes are rate-limited (30 seconds by default) and accept at
+most 256 usable signing keys. A newly rotated key becomes usable after that
+interval; unknown key IDs fail closed without causing one network request per
+authentication attempt. Operators can tighten both limits in the provider
+configuration when their IdP rotation policy requires it.
 
 ## Ticket Lifecycle
 
