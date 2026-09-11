@@ -113,6 +113,9 @@ explicit migration service before the control plane starts.
 
 This is a secure local demo, not a production deployment manifest. Ports are
 bound to `127.0.0.1`, secrets are generated locally, and runtime files are
-gitignored. The browser UI uses a public Keycloak client with PKCE; the
-confidential client secret is only used by the scripted CLI reads. Keycloak runs
-in development mode so the demo can start unattended.
+gitignored. The browser's demo shortcuts exchange credentials only at the
+control plane and receive an HttpOnly cookie session; neither access tokens nor
+the confidential client secret enter JavaScript. The control plane validates
+the Keycloak token and applies asset-owner or platform-admin authorization to
+every API mutation. Keycloak runs in development mode so the demo can start
+unattended.
