@@ -6,6 +6,9 @@
 .ty
 .vscode
 .venv
+node_modules
+.pnpm-store
+apps/governance-ui/dist
 __pycache__
 *.py[cod]
 .DS_Store

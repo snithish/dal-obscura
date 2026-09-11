@@ -8,6 +8,7 @@ def test_keycloak_demo_builds_the_governance_ui_and_proxies_api_same_origin() ->
     dockerfile = (REPOSITORY_ROOT / "ui/Dockerfile").read_text()
     nginx = (REPOSITORY_ROOT / "ui/nginx.conf").read_text()
     package = (REPOSITORY_ROOT / "apps/governance-ui/package.json").read_text()
+    dockerignore = (REPOSITORY_ROOT / ".dockerignore").read_text()
 
     assert "control-plane-ui:" in compose
     assert "dockerfile: ui/Dockerfile" in compose
@@ -18,3 +19,6 @@ def test_keycloak_demo_builds_the_governance_ui_and_proxies_api_same_origin() ->
     assert "location /v1/" in nginx
     assert "proxy_pass http://control-plane:8820" in nginx
     assert "Content-Security-Policy" in nginx
+    assert "node_modules" in dockerignore
+    assert "apps/governance-ui/dist" in dockerignore
+    assert ".pnpm-store" in dockerignore

@@ -132,6 +132,33 @@ screens.
 - Next action: resolve tool lock, inspect the built wheel entry point, and run
   Compose when the local container runtime is available.
 
+- Packet/slice: P01.3 UI image build-context exclusion.
+- State: partially verified.
+- Commit: pending.
+- Behavior and touched modules: the root `.dockerignore` now excludes recursive
+  JavaScript dependency directories, the pnpm store, and the generated governance
+  UI distribution from the Compose UI image context. The packaging contract test
+  asserts these exclusions.
+- Prerequisites/review authorization: independent image hygiene; no session,
+  persistence, or authorization behavior changes.
+- Red test and actual failure: the UI Dockerfile copied the full application
+  directory after install, while the repository context allowed host
+  `node_modules`, pnpm artifacts, and the prebuilt UI distribution into that
+  copy layer.
+- Green commands and results: `uv run --no-sync pytest
+  tests/architecture/test_local_demo_ui.py tests/examples/test_ui_smoke.py -q`
+  → 3 passed; focused Ruff and Ty checks passed. An attempted Ruff invocation
+  on `.dockerignore` was invalid because it is not Python; the subsequent focused
+  Python check passed.
+- Browser/API/PostgreSQL/consumer evidence: static image-context contract only;
+  Docker build remains blocked by the unavailable local Podman connection.
+- Manual/independent review: none.
+- Remaining limitations/blocker: `docker compose config --quiet` validated the
+  Compose file, but `docker info` cannot connect to the configured Podman socket
+  at `127.0.0.1:55305`; no container claim is made.
+- Next action: perform a clean Docker UI build and full Compose smoke once the
+  container runtime is available.
+
 - Packet/slice: P11.1 local UI smoke verifier hardening.
 - State: implemented-unverified.
 - Commit: `136b508`.
