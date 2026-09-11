@@ -1,8 +1,12 @@
 # A new governance workspace
 
-Status: U00/U01 plan complete; U02 foundation implementing. The source application
-exists at `apps/governance-ui`; its production asset serving, authenticated
-session integration, browser tests, and packaging gates remain incomplete.
+Status: product specification exists; implementation and validation are incomplete.
+The source application, demo cookie login/logout, and UI container packaging exist.
+Production OIDC, complete scoped authorization, canonical nested authoring, durable
+revision workflows, required management screens, and real-stack/browser evidence
+remain incomplete. The local control-plane executable is missing at baseline
+`612bb1c`; the documented startup has not been verified. Planning U00/U01 does
+not mean their inventory, prototype, or usability acceptance gates have passed.
 
 Owner direction: policy authoring and management UI is non-negotiable. Design the experience from scratch. Existing screens, navigation, framework, and component library impose no constraints. Existing security invariants, durable authoring records, Iceberg scope, nested-schema requirements, and DuckDB/Spark/Arrow consumers remain constraints. Preserve pickle logic under the owner's separate instruction.
 
@@ -10,6 +14,8 @@ This plan supersedes instructions to retire the UI or administrative authoring A
 
 Read together:
 
+- [Concrete execution handoff for a less capable coding model](EXECUTION_HANDOFF.md)
+- [Execution status and evidence ledger](EXECUTION_STATUS.md)
 - [Experience and product specification](EXPERIENCE.md)
 - [Implementation packages and acceptance gates](IMPLEMENTATION.md)
 - [Visual experience map](experience-map.html), a static planning artifact with illustrative data

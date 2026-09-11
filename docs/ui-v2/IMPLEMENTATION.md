@@ -1,5 +1,11 @@
 # Implementation and evaluation plan
 
+For the current codebase, execute the smaller ordered packets in
+[EXECUTION_HANDOFF.md](EXECUTION_HANDOFF.md) and record evidence in
+[EXECUTION_STATUS.md](EXECUTION_STATUS.md). The U00–U10 scope below remains required;
+the handoff makes the missing implementation, security decisions, and local
+runtime gates explicit rather than assuming the foundation is production-ready.
+
 This is an implementation handoff, not evidence of completed functionality. Work in atomic units; retain the owner's commit authorization. Follow applicable test-review instructions without repeatedly seeking approval already granted for a concrete packet. Do not modify pickle code. Do not infer permission to deploy or contact users from this plan.
 
 ## Architecture decisions
