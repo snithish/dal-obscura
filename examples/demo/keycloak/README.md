@@ -70,6 +70,16 @@ token for debugging scripted reads.
 
 Use `./run token --as <user>` and the read checks below to exercise the governed Flight path.
 
+Verify the browser application after `./run up`:
+
+```bash
+./run ui-smoke
+```
+
+It checks the same-origin UI, security headers, Keycloak-backed browser login,
+asset-owner session, authenticated asset inventory, CSRF-protected logout, and
+post-logout rejection without printing any token or password.
+
 ## Read Checks
 
 Run these from `examples/demo/keycloak`:

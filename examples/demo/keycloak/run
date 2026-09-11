@@ -13,6 +13,7 @@ Usage:
   ./run token --as <user>
   ./run read --as <user> [read-args...]
   ./run smoke
+  ./run ui-smoke
   ./run logs [service]
   ./run down
   ./run reset
@@ -90,6 +91,9 @@ case "$action" in
     ;;
   smoke)
     compose exec client python /workspace/demo/scripts/smoke_demo.py
+    ;;
+  ui-smoke)
+    python3 "$ROOT/scripts/ui_smoke.py"
     ;;
   logs)
     compose logs "${1:-control-plane}"
