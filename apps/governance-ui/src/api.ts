@@ -20,6 +20,7 @@ export type Mask = {
 };
 
 export type PolicyRule = {
+  ordinal: number;
   principals: string[];
   columns: string[];
   masks: Record<string, Mask>;

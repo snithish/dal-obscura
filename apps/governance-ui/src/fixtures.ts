@@ -20,6 +20,7 @@ export const demoAsset: Asset = {
 
 export const demoRules: PolicyRule[] = [
   {
+    ordinal: 10,
     effect: "allow",
     principals: ["group:us-analysts"],
     columns: ["customer_id", "region", "email"],

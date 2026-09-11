@@ -15,7 +15,7 @@ const maskOptions: Array<{ type: Mask["type"]; label: string; needsValue?: boole
   { type: "hash", label: "Hash" }, { type: "email", label: "Email" },
   { type: "keep_last", label: "Keep last", needsValue: true }, { type: "default", label: "Default", needsValue: true },
 ];
-const newRule = (field: string): PolicyRule => ({ effect: "allow", principals: [], columns: field ? [field] : [], masks: {}, row_filter: null });
+const newRule = (field: string, ordinal: number): PolicyRule => ({ ordinal, effect: "allow", principals: [], columns: field ? [field] : [], masks: {}, row_filter: null });
 
 function App() {
   const [page, setPage] = useState<Page>("assets");
@@ -75,7 +75,8 @@ function App() {
     setSaveState("unsaved"); setPreview(null); setNotice("Draft changed. Run a policy test before review.");
   }
   function addRule() {
-    setRules((current) => [...current, newRule(selectedField)]);
+    const ordinal = Math.max(0, ...rules.map((rule) => rule.ordinal)) + 10;
+    setRules((current) => [...current, newRule(selectedField, ordinal)]);
     setSelectedRule(rules.length); setSaveState("unsaved"); setPreview(null);
     setNotice("New rule added locally. Add at least one principal before saving.");
   }
