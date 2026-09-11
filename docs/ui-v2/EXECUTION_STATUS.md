@@ -5,7 +5,8 @@ Canonical task order: [execution handoff](EXECUTION_HANDOFF.md).
 
 ## Gate status
 
-- P00 contracts, capability matrix, and migration/session design: not-started.
+- P00 contracts, capability matrix, and migration/session design: review packet
+  prepared; approval remains required before P02/P03.
 - P01 installed startup and container assembly: implementing. Commits `734c018`,
   `02e143b`, and `5fc06a1` add a configured control-plane command, pin the UI
   package manager for container builds, and isolate console arguments from
@@ -48,6 +49,32 @@ before P02/P03 session or persistence changes. Do not start by adding placeholde
 screens.
 
 ## Evidence
+
+- Packet/slice: P00.1 route inventory and contract-review preparation.
+- State: review pending.
+- Commit: pending.
+- Behavior and touched modules: `P00_CONTRACT_REVIEW.md` records every current
+  OpenAPI path, its present authorization dependency, its target capability
+  direction, the session/persistence decisions requiring review, and concrete
+  negative examples. `test_control_plane_route_inventory.py` keeps the document's
+  inventory synchronized with generated OpenAPI paths.
+- Prerequisites/review authorization: documentation and an executable baseline
+  only. The handoff explicitly requires capable-owner review before P02/P03
+  session, capability, or persistence work.
+- Red test and actual failure: the route inventory was previously represented
+  only by partial endpoint checks; an endpoint could be added without updating a
+  complete reviewed inventory.
+- Green commands and results: `uv run --no-sync pytest
+  tests/architecture/test_control_plane_route_inventory.py
+  tests/interfaces/control_plane/test_ui_shell.py -q` → 7 passed; focused Ruff
+  and Ty checks passed.
+- Browser/API/PostgreSQL/consumer evidence: generated FastAPI OpenAPI inventory
+  only; no behavior change.
+- Manual/independent review: capable-owner contract review is outstanding.
+- Remaining limitations/blocker: P02/P03 implementation stays blocked by the
+  explicit session, persistence, and scoped-capability decisions.
+- Next action: obtain the required P00 decision, then add the corresponding
+  failing authorization/session tests before implementation.
 
 - Packet/slice: P01.1 installed control-plane command.
 - State: partially verified.
