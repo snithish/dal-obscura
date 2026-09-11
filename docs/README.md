@@ -22,7 +22,7 @@ Use this page as the map. The docs are grouped by what you are trying to do.
 | Operator | [Policy Authoring](policy-authoring.md) | [Concepts](concepts.md) |
 | Platform operator | [Operators](operators.md) | [Operator Runbook](operators-runbook.md) |
 | Security reviewer | [Security](security.md) | [Policy Authoring](policy-authoring.md) |
-| Contributor | [Development](development.md) | [Frontend Conventions](frontend.md) |
+| Contributor | [Development](development.md) | [New UI/UX Plan](ui-v2/README.md) |
 
 ## Docs By Need
 
@@ -63,6 +63,8 @@ Use this page as the map. The docs are grouped by what you are trying to do.
   and protocol v1 details.
 
 ### Build And Contribute
+
+- [New UI/UX Plan](ui-v2/README.md): fresh policy authoring and management experience, implementation packages, and acceptance gates. Proposed, not shipped.
 
 - [Development](development.md): repo layout, common checks, test guidance, and
   release-oriented checklist.

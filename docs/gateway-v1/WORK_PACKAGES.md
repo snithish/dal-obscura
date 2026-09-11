@@ -17,7 +17,7 @@ Produce:
 - Proposed updates to AGENTS.md: actual paths, narrowed scope, no pickle, security invariants, current commands, typed ports and test-review gate. Preserve caveman/ccc usage requirements unless owner changes them.
 - An issue ledger mapping the prior findings to correction packages or explicit removal/rejection tests. No finding silently marked fixed because a file disappeared.
 
-Checks: current full tests once, Ruff lint/format check, ty; record failures without editing expectations. If local socket binds are denied, rerun with suitable execution permissions and distinguish environment from defects. Retain and baseline the existing JVM/Spark build; UI is the retired surface. Record exact Java/Spark/Scala versions before changing compatibility.
+Checks: current full tests once, Ruff lint/format check, ty; record failures without editing expectations. If local socket binds are denied, rerun with suitable execution permissions and distinguish environment from defects. Retain and baseline the existing JVM/Spark build. UI authoring and management are required under the [new UI plan](../ui-v2/README.md). Record exact Java/Spark/Scala versions before changing compatibility.
 
 Done: baseline and deletion inventory reviewed; every known finding has an owner package; no untracked implementation changes.
 
@@ -219,22 +219,22 @@ Guard against internal queues outrunning policy checks. Do not claim bytes alrea
 
 Done: cancellation and revocation timing meet EVALUATION thresholds; resource measurements plateau under bounded concurrency. Fast path without DuckDB is deferred unless profiling shows material value and a separate equivalence test gate proves projection/schema/security preservation.
 
-## W10 — Remove expansion scope and provide minimal operator workflow
+## W10 — Remove unsupported backends and provide UI/CLI administration
 
 Depends on: W09 and renewed owner review of demand/investment evidence. Destructive DB data operations: none.
 
-Tests first: removed backend/auth/module strings return actionable unsupported errors; minimal manifest validate/preview/publish/status workflow; CLI help; no reader-facing authoring endpoint; unsupported old configs cannot start permissively.
+Tests first: removed backend/auth/module strings return actionable unsupported errors; manifest validate/preview/publish/status workflow; CLI help; U00–U10 UI authoring and management journeys; reader credentials cannot authorize admin operations; unsupported old configs cannot start permissively.
 
 Implement in small subpackages:
 
 1. Retain compiler/publication persistence behind minimal operator CLI. Proposed commands: `dal-obscura-admin validate <manifest>`, `preview <manifest> --personas <file>`, `publish <manifest> --expected-generation <id>`, `status`. Publish produces an explicit diff/summary and generation; execution requires operator credentials. Preview uses the same evaluator, with clearly labeled caller-supplied personas, and is never accepted as authentication.
-2. Remove UI/web authoring runtime, owner workflows and retired storage/auth adapters/examples after replacement CLI demo works. Retain and harden Java/Spark modules, contract fixtures, tests and release jobs; retain all six masks and nested-schema functionality.
+2. Build the fresh policy authoring and management UI from [U00–U10](../ui-v2/IMPLEMENTATION.md), with separately authorized admin APIs and shared CLI/application semantics. Retain ownership, draft recovery, review, publication, and management capabilities. Remove obsolete UI implementations only after replacement acceptance; remove retired storage/auth adapters/examples. Retain Java/Spark, all six masks, and nested schemas.
 3. Remove unused aliases/helpers/dependencies and split oversized repository responsibilities. Preserve transactions and migration history. No bulk unrelated renaming.
 4. Update docs/examples/entrypoints/AGENTS.md so only supported behavior is advertised. Include a machine-readable rejection/migration report for legacy configuration.
 
 Deletion inventory maps each removed path to retained behavior, rejection tests or Git history. Search entrypoints, imports, packaging data, CI, container files and docs. Do not repair Delta/Avro slated for removal. Partial masks and nested projection remain required repair work. Do not delete old database tables just to reduce line count.
 
-Done: clean install exposes exactly the supported commands/features; no advertised dead links or orphaned job dependencies; minimal operator path provisions synthetic data and authorizes equivalent nested reads through DuckDB, Spark and the Arrow interoperability example.
+Done: clean install exposes supported UI/admin/CLI features; no advertised dead links or orphaned job dependencies; UI and CLI operator paths provision synthetic data and authorize equivalent nested reads through DuckDB, Spark and the Arrow interoperability example. UI acceptance requires the new plan's security, usability, and accessibility evidence.
 
 ## W11 — Separate client packaging and deployment privileges
 

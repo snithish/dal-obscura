@@ -164,7 +164,7 @@ Scheduled/manual: large memory/throughput/concurrency runs, real selected REST c
 
 Required deploy checklist is evidence-oriented: no raw storage credentials for consumers; gateway cannot publish config; publisher cannot migrate schema; migration credential absent from running gateway; production TLS/auth enabled; unsupported config rejected; readiness tracks runtime fingerprint/generation; backup/restore tested; old tickets explicitly invalidated during V2 cutover; safe rollback documented.
 
-Remove frontend gates only after UI removal. Java/Spark remains a required product: retain Maven and distributed integration/retry gates plus cross-language protocol conformance. Test counts are expected to fall with scope removal; retained invariant coverage must not.
+Policy authoring and management UI is required. Add the [U09/U10 frontend, admin API, usability, accessibility, and packaging gates](../ui-v2/IMPLEMENTATION.md). Java/Spark remains required: retain Maven and distributed integration/retry gates plus cross-language protocol conformance. Removing unsupported backends must not reduce retained invariant coverage.
 
 ## 6. Product evaluation: four-week discovery window
 

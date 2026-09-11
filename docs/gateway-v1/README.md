@@ -24,7 +24,7 @@ Success has two independent gates:
 
 Passing tests does not prove demand. Customer interest does not waive a security gate. Run interviews during engineering. Do not treat the four-week customer-discovery window as a promise to finish all engineering in four weeks.
 
-Freeze unrelated expansion. Complete nested governance, existing mask capabilities and DuckDB/Spark/framework integration as required pilot scope. Do not add another storage backend, identity mechanism, server-side query engine or UI for speculative demand. Escalate requirements outside the written contract rather than narrowing an approved requirement silently.
+Freeze unrelated expansion. Complete nested governance, existing mask capabilities and DuckDB/Spark/framework integration as required pilot scope. Policy authoring and management UI is required by explicit owner direction. Follow the fresh [UI/UX plan](../ui-v2/README.md); its U00–U10 packages supersede earlier UI-removal recommendations. Do not add another storage backend, identity mechanism, or server-side query engine for speculative demand.
 
 ## 2. Fixed first-release scope
 
@@ -37,7 +37,7 @@ Freeze unrelated expansion. Complete nested governance, existing mask capabiliti
 - One production identity mechanism: OIDC JWT validation with configured issuer, audience, allowed algorithms, expiry, subject and explicit claim mappings. TLS required outside explicit local development mode.
 - One configured tenant/workspace per deployment for the pilot. Keep namespace identifiers in storage/tickets; do not infer a tenant from arbitrary token claims or silently default missing context. Multi-tenant self-service is out of scope.
 - PostgreSQL for shared deployments and atomic ticket exchange. SQLite for local demonstration and ordinary isolated tests. Services remain horizontally restartable; durable state stays in the DB. No in-process authoritative ticket store.
-- Minimal operator CLI to validate, preview, publish and inspect a versioned configuration. Reuse migration/publication logic where sound. No public authoring web service required.
+- A complete policy authoring and management UI with a separately authorized administrative API, plus an operator CLI for automation. Both use shared validation, preview, publication, and management application services. Follow the new UI plan rather than copying previous screens.
 - Explicit migration CLI, structured audit events, limits, cancellation and deployment runbook.
 
 ### Full governed-read support, with verified compatibility
@@ -55,7 +55,7 @@ Policy composition is explicitly restrictive: matching grants union permitted fi
 ### Remove from the active product
 
 - Delta, standalone Parquet/CSV/JSON/ORC/Avro/text assets, Unity Catalog adapter.
-- React control-plane UI, web authoring API, owner/approval workflows and their runtime packages.
+- Obsolete frontend implementations only after the replacement authoring/management experience passes its acceptance gates. Preserve administrative API capabilities and durable authoring records; redesign their contracts where required by the new UI plan.
 - Composite auth, trusted headers, API key auth, shared-secret JWT production paths and identity-based mTLS mapping. Keep TLS server transport and relevant TLS validation; use a local OIDC issuer for demos.
 - Dynamic Python module loading for catalogs/auth/secrets. Replace with fixed built-ins and explicit secret references to approved environment/file sources.
 - Obsolete aliases, empty test relocation modules, inactive examples, unused dependencies and docs that advertise removed behavior.
@@ -64,7 +64,7 @@ Preserve useful code in Git history, not dormant importable modules. Keep tests 
 
 ### Out of scope
 
-Server-side general SQL/joins/aggregates/writes, arbitrary UDFs, SaaS tenancy, an admin dashboard, policy approval automation and a general plugin system. Consumers may run their own SQL/joins/aggregates on governed data. Flight SQL/ADBC/JDBC are a separately evaluated compatibility option, not a claim made merely because Arrow Flight exists. Distributed task retries and speculation are required for Spark; transparent byte-offset resume of a partially consumed stream is not.
+Server-side general SQL/joins/aggregates/writes, arbitrary UDFs, SaaS tenancy, configurable policy approval automation and a general plugin system. The management UI, ownership, operator capabilities, and explicit publication review are required. Consumers may run their own SQL/joins/aggregates on governed data. Flight SQL/ADBC/JDBC are separately evaluated compatibility options. Distributed task retries and speculation are required for Spark; transparent byte-offset resume of a partially consumed stream is not.
 
 ## 3. Security contract
 

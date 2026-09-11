@@ -4,6 +4,8 @@ Audience: a lower-cost implementation LLM working under owner review. This docum
 
 ## 1. Mission
 
+Owner scope update: policy authoring and management UI is non-negotiable. Follow [the fresh UI/UX plan](../ui-v2/README.md), which supersedes previous UI/API retirement instructions. Existing screens do not constrain the new design. Preserve durable authoring records, the separate admin security boundary, and the owner's pickle-preservation instruction.
+
 Implement only the focused Iceberg gateway for DuckDB, Spark and Arrow-capable frameworks specified in [README.md](README.md). Security invariants S01–S15 are mandatory. Deletion is allowed when explicitly scheduled and verified; a wholesale rewrite is not the default method.
 
 Do not equate passing existing tests with correctness: the reviewed code passed 361 tests while containing demonstrated security/correctness failures. Do not call removed behavior fixed until the retained public surface explicitly rejects it and migration guidance exists.
