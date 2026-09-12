@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `f4aa339`.
+Implementation follow-up through `839c16f`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -227,6 +227,9 @@ open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: wire admitted registry generations into data-plane
   startup before advertising external plugin pairs.
+
+The descriptor's password field now matches the server's validated secret-reference
+option name (`839c16f`); no raw credential field is exposed.
 
 X11 package check: `tests/plugin_platform/test_plugin_api_package.py` passes and
 the package source compiles without importing the service distribution. Building
