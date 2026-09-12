@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `ccedd88`.
+Implementation follow-up through `336d2c3`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -55,7 +55,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   and fails closed on duplicate logical paths. Review tokens bind the persisted admitted-schema
   digest in addition to the live Iceberg digest. Renaming a field, even with the
   same provider ID, is an explicit reapproval event because its canonical path
-  changes.
+  changes. Schemas without provider IDs now use schema-scoped synthetic identities
+  across nested struct/list/map paths; any semantic shape change therefore
+  requires reapproval instead of inheriting a display-name grant.
 - X07 configuration/secrets/IO: **implementing**; nested dynamic class-loader options
   are rejected, and schema/evaluation/review provider calls now use the configured
   catalog egress validator. Explicit environment secret references now resolve in
@@ -316,6 +318,25 @@ option name (`839c16f`); no raw credential field is exposed.
 - Pickle compatibility: unchanged.
 - Next permitted packet: add revision/CAS validation for mutable asset bindings
   before external plugin onboarding.
+
+### X06 schema-scoped synthetic identities — `336d2c3`
+
+- State: implementing.
+- Behavior: one shared identity routine preserves provider field IDs and derives
+  bounded `synthetic:<schema-scope>:<path>` IDs for fields and collection
+  children without provider IDs. The scope includes the complete semantic schema,
+  so additions, removals, renames, type/nullability changes, and nested
+  collection changes invalidate the admitted set and return the existing
+  review-again path. Schema responses expose whether every field has a stable
+  provider ID.
+- Green evidence: published-config and schema-service tests pass (26), Ruff, Ty,
+  and `git diff --check` pass.
+- Remaining gaps: provider adapters must emit/consume these IDs, persisted
+  stable-ID mode and schema-scope metadata, explicit additive/drop evolution
+  policy, and PostgreSQL/browser/consumer evidence remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: bind stable-ID mode and schema-scope metadata into
+  compiled publication records and review evidence.
 
 X11 package check: `tests/plugin_platform/test_plugin_api_package.py` passes and
 the package source compiles without importing the service distribution. Building
