@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `4de0e78`.
+Implementation follow-up through `38f1449`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -127,7 +127,11 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   grants, and uses `/readyz` for application healthchecks. Real PostgreSQL SQL
   denial/allowance, TLS, IdP, browser, restart, and clean-artifact evidence remain
   open.
-- X20 recovery and upgrades: **not-started**.
+- X20 recovery and upgrades: **implementing**; data-plane ticket signing now
+  supports one active HMAC key plus explicitly configured retired verification
+  keys, with bounded rotation/rollback instructions and duplicate-key rejection.
+  Encrypted PostgreSQL backup/restore, restored-session invalidation evidence,
+  plugin drain/remove transitions, and mixed-version upgrade tests remain open.
 - X21 performance/observability/test efficiency: **implementing**; Flight
   schema/planning/streaming paths now emit thread-safe process-local success/error
   duration aggregates with fixed low-cardinality operation names. Dynamic
@@ -162,6 +166,23 @@ providers before Phase A's security/correctness prerequisites are accepted.
   remain open. Pickle compatibility is unchanged.
 - Next permitted packet: continue X03 PostgreSQL barriers/CAS and X06 evolution
   evidence; do not advertise external providers before Phase A acceptance.
+
+### X20 bounded ticket-key rotation — `38f1449`
+
+- State: implementing.
+- Behavior: `HmacTicketCodecAdapter` signs with the active key and verifies
+  against a finite, explicitly configured list of retired keys. Runtime config
+  parses comma-separated previous keys, rejects duplicates, and requires the
+  same production minimum length as the active key. Production Compose and its
+  runbook document rotation, expiry-window removal, and rollback. The opaque
+  ticket payload and trusted pickle task boundary are unchanged.
+- Green evidence: ticket codec and runtime-config tests (23 passed), Ruff, Ty,
+  and `git diff --check` pass.
+- Remaining gaps: encrypted PostgreSQL backup/restore, restore invalidation
+  drills, plugin drain/remove transitions, mixed-version migration tests, and
+  measured recovery objectives remain open. Pickle compatibility is unchanged.
+- Next permitted packet: add backup/restore verification and plugin lifecycle
+  state checks once PostgreSQL integration infrastructure is available.
 
 ### X19 production database privilege ordering — `18f8e64`
 
