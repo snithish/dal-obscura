@@ -203,9 +203,9 @@ function App() {
     }
   }
   async function runPreview() {
-    if (!asset || !activeRule) return;
+    if (!asset) return;
     try {
-      const result: Preview = isDemo ? { allowed_columns: activeRule.columns, masks: activeRule.masks, row_filter: activeRule.row_filter, policy_version: 1 } : await controlPlane.review(asset.id, { principal: "analyst.alex", groups: ["us-analysts"], claims: {} });
+      const result: Preview = isDemo ? { allowed_columns: activeRule?.columns ?? [], masks: activeRule?.masks ?? {}, row_filter: activeRule?.row_filter ?? null, policy_version: 1 } : await controlPlane.review(asset.id, { principal: "analyst.alex", groups: ["us-analysts"], claims: {} });
       setPreview(result); setReviewToken(result.review_token ?? null); setNotice(isDemo ? "Demo evaluation is local and cannot be published." : "Server-side review is current for this saved draft revision.");
     } catch {
       setPreview(null); setReviewToken(null); setNotice("Policy test could not run. This draft is not validated.");
