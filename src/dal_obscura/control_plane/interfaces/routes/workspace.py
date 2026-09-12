@@ -31,4 +31,10 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
     ) -> object:
         return deps.with_service(lambda service: service.get_workspace_summary(actor))
 
+    @api.get("/v1/workspace/observations")
+    def get_workspace_observations(
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> object:
+        return deps.with_service(lambda service: service.get_workspace_observations(actor))
+
     return api

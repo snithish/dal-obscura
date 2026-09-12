@@ -33,6 +33,50 @@ def test_workspace_summary_is_empty_before_setup():
     }
 
 
+def test_workspace_observations_are_truthful_before_setup():
+    client = _client()
+
+    response = client.get("/v1/workspace/observations", headers=ADMIN_HEADERS)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["available"] is False
+    assert body["source"] == "control-plane-db"
+    assert body["generation"] is None
+    assert body["data_plane"] == {
+        "status": "unobserved",
+        "reason": "workspace_not_configured",
+    }
+
+
+def test_workspace_observations_bind_to_active_generation_without_claiming_flight_health():
+    client = _client()
+    asset = _provision_draft(client)
+    owners = client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        headers=ADMIN_HEADERS,
+        json={"owners": ["platform:admin"]},
+    )
+    assert owners.status_code == 200, owners.json()
+    published = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        headers=ADMIN_HEADERS,
+    )
+    assert published.status_code == 200, published.json()
+
+    response = client.get("/v1/workspace/observations", headers=ADMIN_HEADERS)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["available"] is True
+    assert body["generation"]["publication_id"]
+    assert body["generation"]["manifest_hash"]
+    assert body["data_plane"] == {
+        "status": "unobserved",
+        "reason": "flight_health_probe_not_configured",
+    }
+
+
 def test_workspace_routes_require_admin_token():
     client = _client()
 

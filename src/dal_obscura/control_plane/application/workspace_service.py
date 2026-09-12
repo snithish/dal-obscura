@@ -8,6 +8,7 @@ Example:
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -78,6 +79,58 @@ def get_workspace_runtime_settings(store: PublicationStore) -> dict[str, object]
         "ticket_ttl_seconds": settings["ticket_ttl_seconds"],
         "max_tickets": settings["max_tickets"],
         "max_ticket_exchanges": settings["max_ticket_exchanges"],
+    }
+
+
+def get_workspace_observations(
+    store: PublicationStore,
+    actor: ControlPlaneActor,
+) -> dict[str, object]:
+    """Returns bounded control-plane observations for the current workspace.
+
+    This endpoint deliberately reports what the control-plane database knows;
+    it never presents a publication record as proof that a Flight worker is
+    healthy or serving that generation.
+    """
+
+    observed_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    context = store.get_default_workspace_context()
+    if context is None:
+        return {
+            "available": False,
+            "observed_at": observed_at,
+            "source": "control-plane-db",
+            "generation": None,
+            "data_plane": {"status": "unobserved", "reason": "workspace_not_configured"},
+        }
+    if not actor.platform_admin:
+        visible_assets = store.list_workspace_assets_for_principals(
+            context,
+            actor.owner_principals(),
+        )
+        if not visible_assets:
+            return {
+                "available": False,
+                "observed_at": observed_at,
+                "source": "control-plane-db",
+                "generation": None,
+                "data_plane": {"status": "unobserved", "reason": "no_visible_assets"},
+            }
+    try:
+        generation: dict[str, object] | None = store.get_active_publication_summary(
+            context.cell_id
+        )
+    except LookupError:
+        generation = None
+    return {
+        "available": True,
+        "observed_at": observed_at,
+        "source": "control-plane-db",
+        "generation": generation,
+        "data_plane": {
+            "status": "unobserved",
+            "reason": "flight_health_probe_not_configured",
+        },
     }
 
 

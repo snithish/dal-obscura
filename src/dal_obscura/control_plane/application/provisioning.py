@@ -108,6 +108,12 @@ class ProvisioningService:
     def get_workspace_runtime_settings(self) -> dict[str, object] | None:
         return workspace_service.get_workspace_runtime_settings(self._store)
 
+    def get_workspace_observations(
+        self,
+        actor: ControlPlaneActor,
+    ) -> dict[str, object]:
+        return workspace_service.get_workspace_observations(self._store, actor)
+
     def list_workspace_auth_providers(self) -> list[dict[str, object]]:
         return workspace_service.list_workspace_auth_providers(self._store)
 

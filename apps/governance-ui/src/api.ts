@@ -153,6 +153,14 @@ export type WorkspaceSummary = {
   enabled_auth_provider_count: number;
 };
 
+export type WorkspaceObservations = {
+  available: boolean;
+  observed_at: string;
+  source: string;
+  generation: { cell_id: string; publication_id: string; manifest_hash: string; status: string } | null;
+  data_plane: { status: string; reason: string };
+};
+
 type RawPreview = {
   decision: "allow" | "deny";
   visible_columns: string[];
@@ -210,6 +218,7 @@ export const controlPlane = {
   getRuntimeSettings: () => request<RuntimeSettings | null>("/v1/settings/runtime"),
   getAuthProviders: () => request<AuthProvider[]>("/v1/settings/auth-providers"),
   getSummary: () => request<WorkspaceSummary>("/v1/workspace/summary"),
+  getObservations: () => request<WorkspaceObservations>("/v1/workspace/observations"),
   saveCatalog: (name: string, options: Record<string, unknown>) => request<{ id: string; name: string }>(`/v1/catalogs/${encodeURIComponent(name)}`, {
     method: "PUT",
     body: JSON.stringify({ module: "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog", options }),

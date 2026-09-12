@@ -51,7 +51,8 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
         "/v1/settings/auth-providers",
         "/v1/settings/runtime",
         "/v1/ui-auth-config",
-        "/v1/workspace/summary",
+            "/v1/workspace/summary",
+            "/v1/workspace/observations",
     }
     assert set(paths["/v1/assets/{asset_id}/policy-rules"]) == {"get", "put"}
     assert set(paths["/v1/assets/{asset_id}/grants"]) == {"get", "put"}
