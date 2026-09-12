@@ -31,7 +31,7 @@ What happens:
    `127.0.0.1:8080`.
 4. The `migrate` service runs `dal-obscura-migrate upgrade` against Postgres.
 5. The control plane starts on `127.0.0.1:8820` with Postgres config storage,
-   Keycloak token validation, and public browser-login configuration for the UI.
+   Keycloak token validation, and public UI authentication configuration.
    The governance UI is built from `apps/governance-ui`, served on
    `127.0.0.1:8821`, and proxies `/v1` to the control plane on the same origin.
 6. The `setup` service creates the Iceberg table metadata and data files from `fixtures/demo_fixture.json`.
@@ -61,10 +61,12 @@ Swagger docs at `http://127.0.0.1:8820/docs`. Useful demo users:
 - `blocked-user`: denied by policy.
 
 Open `http://127.0.0.1:8821` and use the **Platform owner** or **Data asset owner**
-shortcut to author policy drafts. The UI receives an HttpOnly browser session;
-the access token is not returned to JavaScript. Cookie-authenticated mutations
-also require a CSRF header. `./run token --as <user>` still prints a CLI access
-token for debugging scripted reads.
+shortcut to exercise the current authoring UI. This shortcut is a disposable demo
+password exchange: it places a Keycloak access token in an HttpOnly cookie and
+requires a CSRF header for cookie-authenticated mutations. It is not the
+authorization-code, PKCE, opaque-session, revocation, or local-security-parity
+flow required for the supported product; do not use it outside this demo. `./run
+token --as <user>` still prints a CLI access token for debugging scripted reads.
 
 ## Demo Flow
 
@@ -76,9 +78,10 @@ Verify the browser application after `./run up`:
 ./run ui-smoke
 ```
 
-It checks the same-origin UI, security headers, Keycloak-backed browser login,
+It checks the same-origin UI, security headers, the isolated demo login,
 asset-owner session, authenticated asset inventory, CSRF-protected logout, and
-post-logout rejection without printing any token or password.
+post-logout rejection without printing any token or password. It is an HTTP
+smoke, not a browser or production-authentication acceptance test.
 
 ## Read Checks
 
@@ -121,11 +124,12 @@ explicit migration service before the control plane starts.
 
 ## Security Notes
 
-This is a secure local demo, not a production deployment manifest. Ports are
-bound to `127.0.0.1`, secrets are generated locally, and runtime files are
-gitignored. The browser's demo shortcuts exchange credentials only at the
-control plane and receive an HttpOnly cookie session; neither access tokens nor
-the confidential client secret enter JavaScript. The control plane validates
-the Keycloak token and applies asset-owner or platform-admin authorization to
-every API mutation. Keycloak runs in development mode so the demo can start
-unattended.
+This is a disposable local demo, not a supported secure-local or production
+deployment. Ports are loopback-bound, secrets are generated locally, and runtime
+files are gitignored. The browser shortcuts exchange credentials only at the
+control plane, and the client secret is not sent to JavaScript; however, the
+current cookie contains a raw provider access token and the API still uses coarse
+actor/platform-admin checks. Keycloak runs in development mode so the demo can
+start unattended. P02 and P03 must replace this path before it can claim OIDC
+authorization-code login, revocable opaque sessions, scoped administrative
+authorization, or security parity.

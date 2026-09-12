@@ -215,6 +215,28 @@ screens.
 - Next action: build the UI image and check root/deep link, a missing `/assets/`
   path, CSP, cache headers, and graceful termination when a runtime is available.
 
+- Packet/slice: P01.6 accurate local-demo security claims.
+- State: verified documentation correction.
+- Commit: pending.
+- Behavior and touched modules: the Keycloak demo guide now identifies the
+  password-exchange cookie as a disposable HTTP-demo path and states that it does
+  not satisfy authorization-code/PKCE login, opaque revocable sessions, scoped
+  administrative authorization, browser testing, or supported local-security
+  parity.
+- Prerequisites/review authorization: documentation-only correction; no runtime
+  behavior or security contract changed.
+- Red test and actual failure: the guide called the demo secure and described its
+  raw provider-token cookie as a browser session, which contradicted the P00/P02
+  handoff assessment.
+- Green commands and results: `git diff --check` passed.
+- Browser/API/PostgreSQL/consumer evidence: none; this change corrects claims to
+  match current observed limitations.
+- Manual/independent review: none.
+- Remaining limitations/blocker: P02 and P03 implementation remains gated on
+  the P00 contract review.
+- Next action: retain this disclaimer until the real local OIDC/session and
+  capability paths are independently verified.
+
 - Packet/slice: P11.1 local UI smoke verifier hardening.
 - State: implemented-unverified.
 - Commit: `136b508`.
