@@ -49,9 +49,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   literal dotted names, schema-field records carry optional stable IDs and typed
   paths through migration `20260912_0011`, and admitted identities are carried into
   immutable manifests and checked before data-plane planning. Provider-derived IDs,
-  path uniqueness migration for legacy rows, collection-path identity, and the full
-  legacy identity backfill now runs for existing rows. Provider-derived IDs,
-  collection-path identity, and the full evolution policy remain open. Review tokens bind the persisted admitted-schema
+  collection-path identity, path uniqueness constraints, and the full evolution
+  policy remain open. Migration `20260912_0013` backfills deterministic legacy IDs
+  and paths for existing rows. Review tokens bind the persisted admitted-schema
   digest in addition to the live Iceberg digest.
 - X07 configuration/secrets/IO: **implementing**; nested dynamic class-loader options
   are rejected. Typed provider configs, shared secret resolution, and IO enforcement
