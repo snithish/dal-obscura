@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `3263645`.
+Implementation follow-up through `39b447c`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -56,8 +56,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   digest in addition to the live Iceberg digest.
 - X07 configuration/secrets/IO: **implementing**; nested dynamic class-loader options
   are rejected, and schema/evaluation/review provider calls now use the configured
-  catalog egress validator. Typed provider configs, shared secret resolution, and
-  provider-returned IO enforcement remain open.
+  catalog egress validator. Explicit environment secret references now resolve in
+  discovery and schema paths. Typed provider configs, provider-returned IO
+  enforcement, and production secret-provider lifecycle evidence remain open.
 - X08 budgets and atomic reload: **implementing**; discovery now bounds provider
   iterators before materialization and checks cancellation/deadline per item while
   retaining deque traversal. Plugin admission now exposes build-then-swap reload
@@ -132,6 +133,10 @@ version tests with Ruff and Ty clean. Its provider-call regression proves a deni
 catalog host is rejected before the loader is invoked.
 
 The subsequent boundary run included catalog API coverage and passed at 100%.
+
+The secret-resolution slice added schema and catalog discovery regressions and
+passed their focused suites with Ruff clean. Secret values are supplied only to
+provider calls and are not returned in API responses.
 
 The direct-Arrow bounds regression and Ty/Ruff checks passed in
 `3263645`; the full schema byte-budget and every-entry-route acceptance matrix
