@@ -23,7 +23,10 @@ class ConformanceResult:
 
     package: str
     plugin_id: str
+    core_version: str = "0.1.0"
     arrow_version: str = pa.__version__
+    artifact_identity: str | None = None
+    capability_matrix: dict[str, bool] = field(default_factory=dict)
     checks: dict[str, str] = field(default_factory=dict)
     failures: list[str] = field(default_factory=list)
     skips: list[str] = field(default_factory=list)
@@ -39,7 +42,10 @@ class ConformanceResult:
         return {
             "package": self.package,
             "plugin_id": self.plugin_id,
+            "core_version": self.core_version,
             "arrow_version": self.arrow_version,
+            "artifact_identity": self.artifact_identity,
+            "capability_matrix": dict(self.capability_matrix),
             "checks": dict(self.checks),
             "failures": list(self.failures),
             "skips": list(self.skips),
@@ -109,6 +115,7 @@ def run_format_checks(
     row_filter: str | None = None,
     max_tasks: int = 64,
     required_capabilities: Iterable[str] = (),
+    artifact_identity: str | None = None,
 ) -> ConformanceResult:
     """Run bounded plan/schema/output checks against one admitted format plugin."""
 
@@ -116,6 +123,8 @@ def run_format_checks(
     result = ConformanceResult(
         package=descriptor.distribution,
         plugin_id=descriptor.plugin_id,
+        artifact_identity=artifact_identity,
+        capability_matrix=dict.fromkeys(sorted(descriptor.capabilities), True),
     )
     try:
         if context.deadline <= datetime.now(timezone.utc):
