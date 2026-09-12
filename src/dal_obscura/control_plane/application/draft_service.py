@@ -48,6 +48,10 @@ def save_policy_draft(
 ) -> dict[str, object]:
     ensure_asset_capability(store, asset_id, actor, "edit")
     validate_policy_rule_payloads(rules)
+    # Draft revisions participate in review validity.  Lock the same asset row
+    # used by publication so a save cannot commit between token verification and
+    # activation without forcing the publisher to observe the new revision.
+    store.lock_asset_for_publication(asset_id)
     asset = store.get_workspace_asset(asset_id)
     saved = store.save_asset_policy_draft(
         asset_id=asset_id,
@@ -81,6 +85,7 @@ def restore_policy_version(
     """Copies immutable history into a new revisioned draft."""
 
     ensure_asset_capability(store, asset_id, actor, "edit")
+    store.lock_asset_for_publication(asset_id)
     historical = store.get_published_asset_policy(
         asset_id=asset_id,
         policy_version=policy_version,
