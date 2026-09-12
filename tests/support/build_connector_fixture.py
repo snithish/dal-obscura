@@ -525,8 +525,6 @@ def _expected_metadata() -> dict[str, object]:
 def _provision_control_plane(
     output_dir: Path,
     table_id: str,
-    *,
-    jwks_file: Path,
 ) -> tuple[str, str, str]:
     database_url = f"sqlite+pysqlite:///{output_dir / 'control-plane.db'}"
     engine = create_engine_from_url(database_url)
@@ -616,7 +614,7 @@ def _provision_control_plane(
                     ),
                     "args": {
                         "issuer": "https://issuer.example",
-                        "jwks_file": str(jwks_file),
+                        "jwks_url": "https://issuer.example/.well-known/jwks.json",
                         "algorithms": ["RS256"],
                         "attribute_claims": {"tenant_id": "tenant_id"},
                     },
@@ -665,7 +663,6 @@ def main() -> None:
     database_url, cell_id, tenant_id = _provision_control_plane(
         output_dir,
         table_id,
-        jwks_file=output_dir / "fixture-jwks.json",
     )
 
     user_token = jwt.encode(
