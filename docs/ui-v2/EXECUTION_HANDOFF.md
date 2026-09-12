@@ -1,554 +1,551 @@
-# Governance application: implementation handoff
-
-Baseline inspected: `612bb1c`. This document is a plan, not implementation evidence.
-Audience: a less capable coding model executing small, explicit assignments.
-
-## 1. Objective and precedence
-
-Deliver a working governance application that can run locally with the same
-application features, authentication flow, authorization checks, and publication
-safety as the supported deployment. Complete this journey using real services:
-
-Start → sign in → register an Iceberg asset → inspect nested schema → edit a
-policy draft → evaluate synthetic personas → review → publish → verify governed
-DuckDB, Spark, and Arrow reads → restore an earlier policy as a new draft → sign out.
-
-Then complete management, diagnostics, activity, accessibility, and release gates.
-A working first journey is a milestone, not feature completion.
-
-Read these existing specifications before starting:
-
-1. `docs/ui-v2/README.md`, `EXPERIENCE.md`, and `IMPLEMENTATION.md`.
-2. `docs/gateway-v1/NESTED_AND_CONSUMER_CONTRACT.md`.
-3. `docs/gateway-v1/STATUS.md`, `WORK_PACKAGES.md`, and `AGENT_HANDOFF.md`.
-4. Applicable `AGENTS.md` files and installed skills.
-
-This handoff orders concrete execution of U00–U10. It corrects earlier claims
-about implementation readiness; it does not reduce their scope. Owner instructions
-win: UI management is required; Iceberg is the backend; nested schemas, all six
-masks, DuckDB/Spark/Arrow consumers remain required; do not touch pickle logic.
-Do not declare W06 or the full gateway complete while its separate conflict remains.
-
-This task authorizes planning only. A subsequent implementation instruction starts
-execution. Prior atomic-commit authorization persists. Do not deploy, contact
-participants, destroy durable records, or change serialization under this plan.
-
-## 2. Verified starting problems
-
-Recheck each against the current checkout before changing it. Do not blindly apply
-patches to stale line numbers. Paths below are repository-relative.
-
-- `scripts/docker-entrypoint.sh` invokes `dal-obscura-control-plane`, but
-  `pyproject.toml` does not register it and the corresponding CLI module is absent.
-  The documented Compose launch cannot be claimed working.
-- `ui/Dockerfile` and `ui/nginx.conf` now build/serve the SPA and proxy `/v1`.
-  Their container execution has not been verified. Exclude host `node_modules`,
-  `dist`, and secrets from build contexts; pin the package manager as well as the
-  lockfile. Inspect helper build contexts against `.dockerignore` too.
-- `routes/session.py` implements password-based demo impersonation shortcuts,
-  raw OIDC access tokens in HttpOnly cookies, and cookie deletion on logout.
-  This is not the required authorization-code login or a revocable application
-  session. A local URL and an HttpOnly flag do not establish production security.
-- `routes/deps.py` validates actors and uses a basic double-submit CSRF check.
-  It does not implement the complete scoped capability model. Its static admin
-  token is a privileged bootstrap path that must not become browser login.
-- Several metadata, policy, preview, history, and settings routes require only
-  an authenticated actor. `policy_version_service.py` reuses editor authorization
-  for publication. Reading and publishing require their own explicit checks.
-- `apps/governance-ui/src/main.tsx` mixes shell, data fetching, edits, sessions,
-  preview, and placeholder pages. It has no frontend behavioral test suite.
-- Preview evaluates saved server rules but the UI can call it while local edits
-  are unsaved and label its result current. Demo preview copies a selected rule
-  rather than invoking the canonical evaluator. Neither proves draft correctness.
-- Asset switches can discard unsaved edits. Concurrent loads/saves/previews can
-  update newer state. A failed load may leave old data and claim a ready workspace.
-- Logout uses `finally` to claim success even when the server failed. In-flight
-  requests can repopulate cleared state. An expired token can prevent cleanup.
-- API fetch options spread `init` after constructed headers, allowing caller
-  headers to replace the CSRF headers. Error handling loses useful safe detail.
-- Asset schema authoring exposes flat `name/type/nullable` strings. It does not
-  supply the required typed nested field tree with stable Iceberg field IDs.
-- Draft updates replace mutable rules without revision preconditions. Durable
-  draft recovery, exact evaluation binding, review, idempotent publication,
-  changes/history, management, and complete status screens remain unfinished.
-- `ui_smoke.py` is an HTTP smoke, not a browser test. An owner reading inventory
-  does not prove authorization isolation. Existing text-presence packaging tests
-  cannot prove startup, browser behavior, or security.
-- Existing README claims are stale, including automatic demo fallback and PKCE.
-  Fix documentation against measured behavior, never against desired behavior.
-
-## 3. Rules for the implementing model
-
-Execute one numbered packet at a time. Split each packet into its listed atomic
-slices. Commit a coherent behavior and its tests together after the red/green
-cycle; do not accumulate a project-wide rewrite or leave unexplained failing tests.
-Use Conventional Commits. Preserve user changes. Do not delegate unless authorized.
-
-For each slice:
-
-1. Read the named source and its callers/tests. Record current behavior.
-2. Write independent expected outcomes and executable failing tests. The failure
-   must be the missing behavior, not import/setup failure. Respect applicable
-   review requirements; record any existing authorization that satisfies them.
-3. Implement the smallest complete change. Backend permission checks remain
-   authoritative even if the UI disables an action.
-4. Run focused checks, then relevant integration checks. Record exact commands,
-   exit codes, environment, commit, and unresolved failures in `EXECUTION_STATUS.md`.
-5. Review the diff for accidental bypasses, dropped fields, secrets, and scope
-   changes. Commit only selected files. Update the packet evidence entry.
-6. Continue to the next unblocked slice. If runtime infrastructure is unavailable,
-   work on independent slices and leave the runtime gate pending.
-
-Never weaken an assertion to match actual output without explaining why the
-original expectation was wrong and obtaining the required semantic review.
-Never replace auth with a stub outside tests, suppress failing authorization,
-return fake healthy status, silently omit unsupported nested fields, skip a
-required consumer, or use local policy evaluation as authoritative evidence.
-Never call a package complete because TypeScript, a build, or pre-commit passes.
-
-A less capable model may implement mechanical work after contracts are fixed.
-It must escalate unresolved security semantics to the owner/capable reviewer,
-with a concrete proposed contract and failing examples. It must not choose a new
-security model by trial and error. Independent security evaluation is a release
-gate distinct from the implementer's own review.
-
-## 4. Fixed architecture direction and review gates
-
-Keep React/TypeScript/Vite, the Python administrative API, existing PostgreSQL
-control-plane storage, and stateless Flight workers. No extra JavaScript API
-server, new storage product, or framework rewrite is required. Browser and admin
-API share one origin. Flight readers use separate credentials and authorization.
-
-Use established OIDC authorization-code flow with PKCE, state, and nonce through
-the administrative boundary. Choose a maintained implementation during P02;
-verify current official documentation before adopting its API. Do not implement
-OAuth cryptography or token validation in custom browser code.
-
-Proposed session contract for review in P00: an opaque random HttpOnly browser
-cookie points to a revocable administrative session. Store only the minimum
-needed server-side, hash session identifiers, protect retained provider tokens,
-and enforce absolute and idle expiry. Prefer reauthentication over implementing
-refresh in the first release. Reuse the existing control-plane database; Flight
-stays stateless. New session, capability, draft, evaluation, operation, and audit
-records require an additive migration design and explicit approval under the
-repository's persistence rule before those schema changes are implemented.
-Do not infer that this plan itself grants that approval. Prepare the migration,
-retention rules, and backup/restore test proposal as the review packet first.
-
-Proposed capability contract for review in P00:
-
-- Reader identity: governed Flight reads only; no administrative access by default.
-- Metadata viewer: scoped asset/schema metadata, not policy bodies or source rows.
-- Asset owner/editor: scoped policy read, draft edit, synthetic evaluation, and
-  allowed history. Ownership does not grant publication or owner reassignment.
-- Publisher: read/evaluate/review/publish only explicitly granted asset scope;
-  editor permission is separate. No unrelated drafts bundled in initial publication.
-- Connection operator: scoped connection registration/diagnostics, secret references,
-  and asset binding; no implicit policy edits, publishing, or data reads.
-- Grant administrator: assign/revoke capabilities and ownership; no implicit source
-  reads. A deployment may explicitly assign additional publisher/editor roles.
-- Auditor: scoped audit and policy-history access, with separate sensitive-detail
-  permission; no mutation.
-
-Deny unspecified actions. Scope every action by workspace and asset/connection.
-Check list results, counts, cursors, direct IDs, history, export, preview, and
-publication impact. Only an administrator may change grants. Do not add a
-second-person approval workflow; explicit publishing capability plus review of
-an exact revision is sufficient for this scope.
-
-Local parity means the same login, session, permission, CSRF, validation,
-publication, and read enforcement code. Use local TLS and a local Keycloak issuer,
-separate admin and reader audiences/clients, generated secrets, and loopback-bound
-host ports. Different local data, hostnames, certificates, and capacity are fine.
-One-click privileged impersonation and disabled certificate verification are not
-parity. Remove shortcuts from the default supported path; any retained disposable
-prototype must be isolated, opt-in, and incapable of satisfying acceptance tests.
-
-## 5. Ordered implementation packets
-
-### P00 — Freeze contracts and build the execution baseline (U00/U03)
-
-Read all routes under `control_plane/interfaces/routes`, their application services,
-`common/config_store/orm.py`, migrations, and current local Compose/seed scripts.
-
-Slices:
-
-1. Inventory every UI action and API/CLI operation: existing, reusable, missing,
-   or unsafe. Map each to permission, scope, request, response, and error behavior.
-2. Write the final action matrix and session/migration proposal from section 4.
-   Include revocation latency, expired-session logout, trusted proxy handling,
-   cookie/CSRF/origin rules, login abuse limits, and bootstrap credential lifecycle.
-3. Define typed API contracts and synthetic fixtures; name exact new routes once.
-   Generate TS types from OpenAPI after implementation, not hand-maintained mirrors.
-
-Tests/evidence: negative permission cases written before authorization changes;
-one route inventory checked against OpenAPI and CLI entry points. A capable
-reviewer resolves the session/migration/capability contract before dependent work.
-Status: contract approval pending, not assumed. Commit `docs(ui): fix execution contracts`.
-
-### P01 — Repair installed startup and container assembly (U02/U10)
-
-Files: `pyproject.toml`, new `control_plane/interfaces/cli.py`, existing API factory,
-health routes, root Dockerfile/entrypoint, `ui/`, Compose and `prepare_demo.py`.
-
-Slices:
-
-1. Restore the control-plane CLI and entry point using existing factory/services.
-   Parse/validate explicit configuration; refuse missing auth configuration;
-   never log credentials. Check migrations at startup; run upgrade separately.
-2. Pin frontend package-manager version and build inputs. Exclude host artifacts
-   and secrets from contexts. Serve real built assets and same-origin APIs.
-3. Make Compose order migration, IdP readiness, control-plane readiness, fixture
-   provisioning, and Flight readiness deterministically with bounded waits.
-   Do not reset or reseed existing authoring state on routine startup.
-
-Tests: build/install a wheel into a clean environment; run installed CLI `--help`;
-launch actual process with fixture settings; absent configuration fails clearly;
-readiness fails with unavailable DB. Build containers from a clean checkout.
-Verify deep-link refresh, missing JS asset 404, API 404 as JSON, cache policy,
-CSP enforcement, non-root runtime, and graceful termination.
-Gate: no missing executable or missing build-context file. Container runtime
-unavailable means blocked runtime evidence, not success. Commit each slice.
-
-### P02 — Real login and revocable sessions (U03)
-
-Depends on approved P00 session/persistence contract; P01 for real-stack tests.
-Files: session routes/helpers, deps/API configuration, migrations/repository
-adapters, realm template, local proxy/TLS config. Do not touch pickle.
-
-Slices:
-
-1. Add OIDC login/callback through the chosen maintained library. Validate issuer,
-   signature, audience, state, nonce, PKCE, code replay, and bounded return URLs.
-   Use the admin audience; a reader token is not an administrative session.
-2. Implement approved opaque sessions with rotation, expiry, revocation and
-   bounded storage. Use Secure, HttpOnly, appropriate SameSite cookies, narrow
-   domain/path rules, and `Cache-Control: no-store` for private/session responses.
-3. Bind CSRF protection to the session. Validate allowed Origin where applicable,
-   enforce trusted proxy configuration, and prevent login CSRF. Preserve authorized
-   CLI bearer use without treating a cookie request as a bearer bypass.
-4. Implement logout that invalidates server state, expires cookies even when
-   authentication has expired, and reports network failure truthfully. Do not
-   claim provider-wide logout unless implemented and tested.
-5. Make local Keycloak use the same browser flow over verified local TLS.
-   Disable default password-impersonation routes. Keep secrets out of images,
-   browser storage, JSON responses, diagnostics, and test artifacts.
-
-Tests: real IdP happy path plus bad/replayed state, wrong nonce/audience/issuer,
-expired session, revoked session replay, missing/wrong CSRF, foreign Origin,
-forged forwarded headers, login downgrade, open redirect, and logout after expiry.
-Restart/revoke across two API processes; reject revoked session on the next
-administrative request. Local development must pass these without bypass flags.
-Gate: independent session review before production credentials. No claim that
-basic demo cookie tests satisfy this packet.
-
-### P03 — Enforce capabilities on every administrative operation (U03/U04/U08)
-
-Depends on approved P00 grants contract. Files: `application/access.py`, narrow
-permission service/port, route dependencies, repositories, policy/version services,
-settings/catalog/asset routes, and all CLI publication paths.
-
-Slices:
-
-1. Implement explicit grants and scoped capability queries; authorize before
-   loading sensitive records. Return only safe session/capability metadata.
-2. Apply filtering and permission checks to reads, counts, lists, pagination,
-   schema, policy/preview, history, activity, diagnostics, and exports.
-3. Separate edit, publish, owner/grant management, and connection operations.
-   Check every affected resource, including initial workspace publication and CLI.
-4. Close legacy endpoints that bypass new checks. Recheck capabilities on every
-   mutation; UI cache does not grant permission. Audit permission changes safely.
-
-Tests: full role/action matrix through real HTTP, direct-ID guessing, out-of-scope
-cursors/counts, wrong-workspace IDs, malicious names, changed grants in an open
-session, first publication with unrelated drafts, and denied CLI publication.
-Expected: reader admin requests denied; owner edits own draft but cannot publish
-without grant; publisher cannot alter rules without edit grant; revocation takes
-effect next request. No protected detail appears in errors. Gate: matrix green.
-
-### P04 — Reliable UI shell, session lifecycle, and tests (U01/U02/U03)
-
-Files: split `main.tsx` into app shell, session, API, asset workspace and policy
-features; add frontend unit/component and browser test tooling. No cosmetic
-framework migration. Use maintained versions verified at implementation time.
-
-Slices:
-
-1. Establish navigation/deep links, loading/empty/denied/expired/error states,
-   accessible forms and focus, and generated API types with safe error codes.
-2. Add abortable requests and a session epoch. Discard old responses after logout,
-   identity switch, asset switch, or a newer request. Clear all private caches and
-   headers on invalidation. Preserve unsaved edits within the authorized session.
-3. Fix header merge order, disable duplicate submissions, and show actual actor,
-   workspace, capabilities and environment. Demo must be explicit and isolated.
-4. Add route/asset-switch and tab-close unsaved-change protection. A failed logout
-   must not say the session ended; hide private state and offer retry appropriately.
-
-Tests: delayed login/load/save/preview after logout; logout failure; 401/403/409;
-rapid asset switching; empty rules; last-rule removal; user changes while save
-is in flight; malformed mask values. Tests must inspect visible behavior, not
-source text. Establish browser login over the real local stack.
-Gate: no stale identity data, false save status, or unhandled promise errors.
-
-### P05 — Schema admission and nested tree (U04/U05; W02/W07)
-
-Files: catalog discovery/asset services, canonical `common/query_planning` paths,
-Iceberg schema adapter, API schemas, schema viewer and fixtures.
-
-Slices:
-
-1. Load authoritative Iceberg schema without reading table rows. Preserve field,
-   element, key, and value IDs; types/nullability; version and fingerprint.
-2. Return typed segments and hierarchy in a bounded versioned API. Reject unknown
-   or rebound IDs; a manually supplied type string is not admission evidence.
-3. Build keyboard-accessible nested expansion, search, partial selection, inherited
-   grants/masks, and map-key dependencies. Do not derive paths by splitting dots.
-4. Detect schema drift; block stale draft evidence/publication pending explicit
-   revalidation. Added fields do not silently enter old parent/wildcard grants.
-
-Tests: literal `a.b` vs nested `a.b`; struct/list/list-of-list/map combinations;
-null/empty/null-element distinctions; stable ID rename; same-name new ID; map
-value without key grant; 5,000 fields and depth 12. Verify Arrow output, not only
-JSON labels. Depends on gateway path semantics; implement missing backend contracts
-with reviewed tests instead of declaring nested support out of scope.
-
-### P06 — Durable drafts with conflict protection (U05)
-
-Depends on approved persistence design and P03/P05. Files: new draft service and
-repository adapter/migration, draft routes/types, policy editor and recovery UI.
-
-Slices:
-
-1. Create personal drafts from active generation. Store author/resource scope,
-   base generation, schema fingerprint, canonical content digest and revision.
-   Existing authoring rows must migrate additively without loss.
-2. Require expected revision for update/discard; compare-and-swap atomically.
-   Return explicit 409 conflict with safe recovery information. Never last-write-win.
-3. Implement save/retry/reopen, compare and recover conflicts, visible active vs
-   draft state, rule add/remove/order, principals and attributes, restricted DuckDB
-   expressions, and all six masks. Preserve unsupported advanced content intact.
-4. Save remains inactive. Bind UI responses to submitted revision; newer local
-   edits remain dirty. Prevent legacy rule-replacement routes bypassing revisions.
-
-Tests: two sessions edit revision 4 → exactly one update creates revision 5;
-loser retains edits; retry after uncertain save reconciles; restart reopens draft;
-empty-rule deny-all behavior explicit; mask constants retain types/null semantics;
-no SQL rewriting or dropped `when` conditions. Gate: exact canonical round-trip.
-
-### P07 — Authoritative synthetic evaluation (U06; W03/W09)
-
-Depends on P05/P06 and canonical gateway evaluation/transform semantics.
-Files: bounded evaluation use case, API/records, shared compiler/transforms,
-persona/fixture editor and result/explanation views.
-
-Slices:
-
-1. Evaluate immutable submitted draft revision using canonical policy/Arrow/DuckDB
-   semantics and synthetic fixtures. No source credentials or source rows needed.
-2. Bind evidence to draft revision/digest, schema fingerprint, persona/fixture
-   revision, and evaluator version. Return allow/deny, output schema/values,
-   applied masks, AND restrictions, and safe rule references.
-3. Add input size, rows, depth, duration, concurrency and result-size limits;
-   cancellation/error/timeout is explicit non-success.
-4. Render results and freshness; a local edit or changed server revision invalidates
-   evidence. Remove the browser rule-copy “evaluation” from acceptance workflows.
-
-Tests: independent expected outputs for all six masks; null containers; denied
-persona; two-group AND filters; masked/hidden dependencies; conflicting masks;
-unsaved edit vs old saved preview; late response after edit; timeout/cancellation.
-Intentionally removing a mask/filter must fail these fixtures. Do not manufacture
-policy version 0/1 to suggest authoritative binding. Gate: no stale result is current.
-
-### P08 — Exact review and atomic publication (U07; W05)
-
-Depends on P03/P06/P07. Files: publication use cases/store, operation API, CLI,
-changes/review/publish UI. Reuse gateway generation CAS guarantees.
-
-Slices:
-
-1. Produce server-side active-to-proposed diff bound to exact revisions, schema,
-   evaluator evidence and expected generation. Show affected resources and
-   generation-wide ticket invalidation. Unknown impact remains explicit.
-2. Publish with reviewed digest, expected generation and idempotency key. Server
-   rechecks permissions, schema/evidence freshness, and compatibility. Atomically
-   activate and write audit/operation outcome; no client “validated=true” shortcut.
-3. Reconcile timeout-after-commit through operation lookup. Same key/same body
-   returns the original outcome; same key/different body conflicts. UI disables
-   duplicate clicks without claiming this provides server idempotency.
-4. Display committed publication separately from observed Flight readiness.
-   Update/disable old direct-publish routes and enforce the same rules in the CLI.
-
-Tests: real PostgreSQL concurrent publishers → one wins; edited-after-review;
-revoked publisher; changed schema; wrong-scope draft; unrelated bootstrap drafts;
-lost response after commit; stale generation; CLI bypass attempts. Integration:
-newly planned governed reads reflect new publication; ticket invalidation matches
-existing gateway contract. Gate: no unreviewed or concurrent overwrite.
-
-### P09 — History, restore, audit and runtime verification (U07/U08)
-
-Depends on P08. Add scoped revision/activity pagination, exact comparisons,
-restore-as-new-draft, operation status, and runtime observations with timestamp,
-source, and freshness. Audit actor/action/resource/outcome without secrets.
-
-Tests: old revision restore requires new evaluation/review/publication; denied
-history/export; inaccessible events and counts hidden; stale/unreachable Flight
-reports unknown/unavailable, never healthy; restart-required config stays pending.
-Transaction tests prove successful activation and its audit record cannot diverge.
-Gate: rollback does not directly reactivate unvalidated historical content.
-
-### P10 — Complete management and consumer handoff (U04/U08)
-
-Depends on P03/P05/P08. Split into separate commits for assets, connections,
-ownership/grants, diagnostics, and consumer guidance.
-
-Implement authorized search/pagination/onboarding, connection secret references
-and bounded diagnostics, schema drift repair, dependency-aware disable/removal,
-owner/grant administration, safe activity, and Python/DuckDB/Spark/Arrow examples.
-Use existing supported Iceberg boundaries; no retired backend resurrection.
-
-Tests: malicious endpoint/path/labels, forbidden internal metadata endpoints,
-unsupported backend, missing secret, unavailable catalog, referenced connection
-removal, revoked grants, secret redaction, and no source-data deletion. Snippets
-must execute against the supported clients without embedded bearer tokens.
-Connection disable and permission changes must explain their actual activation
-and ticket semantics. Gate: no placeholder required management destination.
-
-### P11 — Local parity and full journey (U10; W11/W12)
-
-Depends on P01–P10 for completion; run the growing first journey after P08.
-Files: Compose, realm/certificate/secret preparation, CLI, provisioning and smoke
-scripts, browser tests, Dockerfiles and operator documentation.
-
-Provide one documented startup command and one verification command. The supported
-local profile uses real OIDC with TLS, PostgreSQL, synthetic Iceberg, UI/admin,
-Flight, and real required consumers. Verify expected TLS trust in host browser,
-containers, Python and JVM; never disable verification. Local defaults bind only
-to loopback and do not display credentials on ordinary startup.
-
-Tests: clean checkout install/build/start; setup idempotence; down/up preserves
-state; readiness timeouts actionable; forbidden and unauthenticated requests;
-full journey from section 1 in browser; expected nested DuckDB/Spark/Arrow values;
-restart/expiry/revocation/conflict/outage recovery; backups restored successfully.
-HTTP smoke, browser test, and real consumer test are separate evidence lanes.
-Do not use Python `assert` alone for an operator verification tool that may run
-under optimization. Make non-success fail with safe diagnostics and nonzero exit.
-Gate: actual local stack passes. A stopped VM is an environment blocker, not a
-reason to claim “only startup remains” when feature tests are missing.
-
-### P12 — Quality, usability, independent review and release (U01/U09/U10)
-
-This packet establishes product candidate evidence. Paid-production promotion
-additionally requires P13–P16 in [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md).
-
-Depends on all earlier gates. Add CI lanes for fast frontend behavior, Python
-contracts/security, browser real-stack journeys, PostgreSQL races, packaged CLI
-and containers, and all required consumers. Use bounded waits and deterministic
-fixtures; record supported Python/Node/browser/Java/Spark versions and lockfiles.
-
-Validate keyboard-only navigation, screen-reader labels/errors/tree behavior,
-focus after navigation/modals, 200% zoom, narrow layouts, contrast and reduced
-motion. Automated accessibility is necessary but not sufficient. Obtain owner
-visual review; run the existing five-participant task protocol when authorized.
-Report participant availability separately from engineering completion.
-
-Performance corpus: 10,000 assets, 5,000-field depth-12 schema, 100 rules. Proposed
-budgets to approve in P00: initial compressed JS ≤250 KiB; local field interaction
-p95 ≤100 ms; first inventory page p95 ≤1 s; bounded 100-row synthetic evaluation
-p95 ≤2 s on a documented 4-vCPU/8-GiB reference environment after warmup. Measure
-at least 30 samples; report p50/p95, memory and cold-start separately. These are
-targets, not measured results. Use pagination/virtualization where measurements
-justify it; never improve latency by skipping authorization/validation.
-
-Independent reviewer examines auth/session/CSRF, scope and secret isolation,
-publication races, nested disclosure, migration recovery, and local/deployed
-parity. Resolve critical/high findings before release. Prepare evidence packet
-with exact candidate commit, checks, environment, screenshots, limitations,
-backup/restore proof, and open decisions. Owner accepts release; do not deploy
-merely because tests are green.
-
-### P13–P16 — Paid-production completion
-
-Execute the detailed slices and acceptance gates in
-[PRODUCTION_READINESS.md](PRODUCTION_READINESS.md): P13 supported deployment and
-startup, P14 recovery/upgrades/credential lifecycle, P15 capacity and customer
-operations, and P16 whole-product release evidence and promotion. Their backend
-workflow inventory is required scope, not optional polish. Start independent
-work early; finish P02/P03 security and P04–P10 functional dependencies before
-claiming a working customer application. The preserved pickle logic remains
-subject to trust-boundary review without being modified.
-
-## 6. Golden acceptance scenarios
-
-Use small, independently specified synthetic fixtures shared by API/browser/consumer
-tests. Each scenario must have expected decision, visible schema/values, operation
-state, and mutation side effects. Do not derive expectations from implementation.
-
-- J1: administrator registers Iceberg asset and explicitly grants owner/editor and
-  publisher separately. An ordinary Flight reader cannot open its admin metadata.
-- J2: editor grants `profile.name`; a parent read returns only name, never ssn.
-  Literal dotted names stay distinct. Collection/map variants preserve structure
-  and require map-key permission. Include all six masks and their null behavior.
-- J3: editor tests two groups with `region='US'` and `active=true`; rows satisfy
-  both. Nonmatching persona is denied. Editing the draft makes prior evidence stale.
-- J4: publisher reviews an exact revision; concurrent draft/generation change
-  blocks publishing. Lost response after successful commit reconciles to one result.
-- J5: publisher restores an older revision as a draft, reevaluates and reviews;
-  only then may it activate. Every successful publication is attributable.
-- J6: operator diagnoses unavailable catalog/secret and repairs binding without
-  receiving source rows, exposing secrets, or changing policies implicitly.
-- J7: user signs out while asset fetch is delayed; no late private data reappears.
-  Session replay is rejected. Another user sees only their authorized scope.
-- J8: restart local stack and reopen persisted draft. Complete the same real login,
-  policy, publication and nested consumer tests used for the release environment.
-
-## 7. Progress and evidence protocol
-
-Update `EXECUTION_STATUS.md` after each packet slice. Allowed states:
-`not-started`, `implementing`, `implemented-unverified`, `verified`, `blocked`.
-“Verified” requires the named acceptance evidence, not only code existence.
-A blocked test remains required. Do not count skipped tests as passes.
-
-For every slice record:
-
-- Packet/slice and commit; exact behavior changed and relevant U/W dependencies.
-- Red-phase expected failure; green-phase exact command and result.
-- Integration environment and actual observed browser/API/DB/consumer results.
-- Manual inspection/independent review, with reviewer and date when available.
-- Remaining limitations, blocker owner, safe next task and required evidence.
-
-Existing local tests use `uv run pytest`, `uv run ruff check`, `uv run ty check`;
-frontend uses `pnpm` within `apps/governance-ui`. New test commands must be added
-to package scripts/docs/CI and actually executed before citing them. Run tests at
-the appropriate scope; do not repeatedly run the full suite without a reason.
-Use `uv` for Python commands. Keep CocoIndex telemetry disabled if using `ccc`.
-
-Milestones:
-
-- M0: P00 decisions approved; P01 startup and package evidence exists.
-- M1: P02/P03 secure login and negative permission matrix verified locally.
-- M2: P04–P08 first complete nested edit/test/review/publish/read journey verified.
-- M3: P09/P10 management, restore, activity and operational workflows verified.
-- M4: P11/P12 local parity, accessibility, independent review and release accepted.
-- M5: P13–P16 production deployment, recovery, upgrades, capacity, operations, and
-  candidate-specific release evidence accepted for the supported customer model.
-
-Do not present M0/M1 as a working feature-complete application. Do not present M4
-as paid-production readiness or completion of unfinished gateway packages.
-Serving paying customers requires M5 and the applicable gateway security gates.
-
-## 8. Copy-paste prompt for the implementation model
-
-> Implement `docs/ui-v2/EXECUTION_HANDOFF.md`, using
-> `docs/ui-v2/EXECUTION_STATUS.md` as the durable progress record. Read
-> `docs/ui-v2/PRODUCTION_READINESS.md` backend inventory and P13–P16 release gates.
-> Read the UI experience and gateway nested contracts. Recheck baseline gaps. Start with
-> P00, prepare concrete decisions/tests for any required review, then perform the
-> earliest authorized unblocked slice. Finish each behavior with meaningful tests
-> and an atomic Conventional Commit. Never modify pickle logic. Never replace
-> real authentication, scoped authorization, nested semantics, or publication
-> evidence with frontend assumptions. Keep the same security flow locally and in
-> deployment. Use existing authorization; request review only where required by
-> unresolved contracts or persistence changes. Continue independent work while a
-> gate is pending. Record failures honestly; do not call missing tests or stopped
-> services successful. Do not claim feature completion until all packet gates and
-> the real browser/consumer journey pass. Do not deploy without explicit authority.
+# Remaining implementation plan
+
+Rewritten 2026-09-12 against `8e23c98`. **Implementation incomplete; paid-production
+release on hold.** This is the authoritative execution sequence. It replaces the
+previous handoff and the competing U00–U10 sequence. P00–P16 IDs remain unchanged
+so existing evidence stays traceable.
+
+Read [EXPERIENCE.md](EXPERIENCE.md) for product behavior,
+[PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) for code-backed findings,
+[P00_CONTRACT_REVIEW.md](P00_CONTRACT_REVIEW.md) for unresolved decisions, and
+[EXECUTION_STATUS.md](EXECUTION_STATUS.md) for actual progress. This plan controls
+execution order if those documents differ. Owner instructions prevail.
+
+## 1. Deliverable and fixed constraints
+
+Deliver a complete UI and backend for a governed Iceberg gateway that an operator
+can install, secure, run, upgrade, recover, and support for paying customers. The
+supported local environment must execute the same feature and security code.
+
+- Keep Iceberg as the only backend; authoritative nested struct/list/map schemas,
+  all six masks, DuckDB row restrictions, Python/DuckDB, Spark/JVM, and Arrow reads
+  are required. Individually test other frameworks before advertising support.
+- Policy authoring and management UI are required. No placeholder destinations,
+  browser-side authorization/evaluation, or mocked acceptance workflows.
+- Keep React/TypeScript/Vite and the Python control plane. Reuse PostgreSQL and
+  stateless Flight workers; no second application server or database product.
+- Preserve pickle-based logic exactly. Restrict and assess its trusted internal
+  payload/DB boundary; report blockers without changing serialization.
+- Planning scope: one workspace and isolated deployment/database/keys per customer.
+  Shared multi-customer SaaS requires an additional isolation contract. Billing
+  automation and IdP administration are outside this release.
+- Preserve records. Routine start/restart cannot reset, reseed, republish or migrate
+  implicitly. Source-data deletion is never an administrative UI action.
+- Existing implementation and atomic-commit authorization persists. This rewrite
+  is a planning task, not approval to deploy, contact participants, alter pickle,
+  or adopt unresolved persistence/security decisions.
+
+## 2. Reuse completed code; finish its missing evidence
+
+Do not recreate the control-plane CLI/entry point (`734c018`, `5fc06a1`), package
+manager pin (`02e143b`), image-context exclusions (`851d6b5`), readiness wiring
+(`789f7d1`), or unprivileged UI image/asset routing (`b5c77a7`). Keep explicit smoke
+failures (`136b508`) and server-wheel CI dependencies/command checks (`ffa69f4`).
+
+These are partial foundations. Installed-wheel server startup, actual image
+serving, Compose behavior, restart preservation, browser journeys and local
+security parity remain unverified. Fix failing behavior instead of rebuilding
+working pieces. Persistent policy rows are not personal draft revisions; cookie
+demo login is not a revocable app session; CLI CAS does not secure HTTP publication.
+
+## 3. Dependency order
+
+1. **Foundation:** P00 final contracts; P01 remaining startup/state preservation;
+   P04.1 UI test/shell extraction; P13.1 deployment specification. These bounded
+   slices can proceed independently when they do not depend on pending decisions.
+2. **Secure application:** P02 sessions → P03 capabilities → P04 remaining
+   lifecycle and P10.1 basic connection/asset onboarding. No live management screen
+   is accepted before authoritative backend permission checks pass.
+3. **First complete workflow:** P05 nested schema → P06 durable drafts → P07
+   synthetic evaluation → P08 review/publication. Run browser and consumer journeys
+   immediately; do not postpone integration until every screen exists.
+4. **Complete product:** P09 history/audit/observations and P10 remaining management.
+   Finish gateway dependencies when a vertical slice needs them.
+5. **Customer readiness:** finish P11 local parity, P12 product quality, P13
+   deployment, P14 recovery/upgrades and P15 capacity/operations; then P16 release.
+
+P10.1 precedes schema onboarding and does not depend on publication. Audit write
+primitives land with P03/P08 mutations; P09 adds query/UI views later. P13/P15
+instrumentation and P14 recovery design start early. P12 supplies candidate
+evidence, not permission to ship before P13–P16.
+
+A stopped VM blocks container evidence, not all implementation. Continue unblocked
+code/tests/operational work. Never substitute static-string assertions for runtime
+tests, or SQLite checks for PostgreSQL concurrency evidence.
+
+## 4. Atomic slice protocol
+
+For each numbered slice below:
+
+1. Inspect its implementation, callers, tests and ledger. Specify expected behavior
+   and failure outcomes. Reuse approved decisions; request review only for an
+   unresolved decision that actually needs it.
+2. Add meaningful failing tests first under applicable repository test-review
+   rules. Missing imports or matching source strings alone do not prove behavior.
+   Never weaken security expectations merely to get green tests.
+3. Implement typed backend contracts/services and UI behavior together where the
+   slice requires both. Keep services narrow and transport adapters thin.
+4. Run focused checks and required real integration. Check scope, secret handling,
+   state preservation and failure cleanup. Skipped checks remain outstanding.
+5. Commit one coherent behavior and its tests using Conventional Commits. Record
+   commit, exact commands/results, environment, evidence and gaps in the ledger.
+   A focused check or hook override is not a full-suite/hook pass.
+6. Continue the earliest unblocked slice. A packet is verified only when every
+   acceptance condition has evidence.
+
+Split a numbered slice further when it spans independent services or mutations.
+Do not combine sessions, grants, drafts and the whole UI in one commit. Do not
+delegate unless authorized. A backend response must be real before its screen
+can be called complete.
+
+## 5. Remaining packets
+
+### P00 — Final contracts and acceptance fixtures
+
+**Remaining:** proposal exists; final typed contracts, DB constraints, decisions
+and acceptance fixtures do not. This plan does not approve new schema.
+
+1. Complete the UI/API/CLI action and method inventory. Freeze issuer/subject
+   identity, capability names/scopes, readable response fields, direct-ID/list/
+   count/cursor behavior and safe errors. Separate reader, metadata viewer,
+   editor, publisher, connection operator, grant administrator and auditor.
+2. Resolve the ten corrections in `P00_CONTRACT_REVIEW.md`: single-use browser-bound
+   login transactions; expiry/rotation/revocation and group freshness; cookie/CSRF/
+   origin/proxy behavior; expired logout; bounded login abuse; bootstrap/emergency
+   access; and supported bearer CLI authentication.
+3. Deliver additive migration designs with concrete columns/types, constraints,
+   indexes, foreign keys, transaction boundaries, retention/cleanup, key references
+   and existing-data transition for login transactions, sessions, grants, drafts,
+   evaluations, reviews, operations and audit. Specify restore invalidation and
+   interruption recovery. Group migrations by dependency rather than table count.
+4. Freeze collection/item, review, publication and operation-lookup request/response
+   examples, ETags/revisions, idempotency, limits and cancellation lifecycle. Define
+   independently expected synthetic schema/policy/persona/consumer fixtures.
+
+**Acceptance:** every UI action has permission, backend contract, state owner,
+failure state and test case. Record actual contract review and existing authority;
+unresolved new-state decisions remain open. Generate TS from implemented API models.
+**Start at:** control-plane routes/services, ORM/migrations, UI API client, CLI,
+P00 proposal and gateway contracts. **Commit units:** contract examples; reviewed
+migration design; negative fixtures. No blanket security sign-off is implied.
+
+### P01 — Installation and restart-safe startup
+
+**Dependencies:** existing packaging; independent of new session design.
+
+1. Separate initialization from routine startup. Remove unconditional fixture-table
+   dropping and policy/owner/settings replacement from startup. Check authoritative
+   DB/catalog state, not only a marker file. Inconsistent/partial setup must stop
+   with recovery instructions; retry must preserve authored state. Reset stays explicit.
+2. Build/install a clean `[server,postgres]` wheel; run installed commands and a
+   real control-plane process. Verify invalid/missing config, stale schema, DB
+   outage, health/readiness and graceful stop. Preserve default client-wheel
+   dependency isolation. Resolve dependency/hook issues rather than permanently
+   disabling verification.
+3. Build both images from a clean context. Test dependency order, bounded waits,
+   actual Flight RPC admission, non-root operation, CSP, deep links, asset/API 404s,
+   private cache behavior and upgrade cache invalidation. Run the pinned tools/images.
+
+**Acceptance:** install succeeds; two restart cycles preserve changed policy,
+draft and source fixture; stale markers cannot produce readiness. Record runtime
+images/environment. Static Compose tests alone are insufficient.
+**Start at:** demo `run`, prepare/seed/provision scripts, Compose, CLI, Dockerfiles,
+NGINX and package CI. **Commit units:** non-destructive setup; installed runtime
+proof/fixes; actual image/ingress proof/fixes.
+
+### P02 — Real login and revocable sessions
+
+**Dependencies:** P00 session/migration decision; P01 for real-stack acceptance.
+
+1. Select a maintained OIDC library using current official documentation. Implement
+   code flow with PKCE, state, nonce, issuer/audience/signature validation, safe
+   return URLs and atomic single-use login transactions across API replicas.
+   Reader-audience credentials cannot create an administrative session.
+2. Implement approved session service/repository/migration, identifier rotation,
+   idle/absolute expiry and next-request revocation across processes. Retain no
+   provider token unless a feature needs it; protect retained material/key versions.
+   Bound cleanup and fail closed on session-store failure.
+3. Implement session-bound CSRF, origin/proxy validation, safe bearer CLI behavior,
+   no-store responses and truthful logout including expiry/network failure.
+   Disable demo shortcuts in supported profiles. Implement narrow bootstrap and
+   audited emergency access under the approved contract.
+
+**Acceptance:** real IdP happy path and wrong issuer/audience/nonce/state, replay,
+open redirect, forged proxy headers, expiry, CSRF/origin failure, restored/revoked
+session replay and two-process revocation. No secrets in browser-readable storage,
+app JSON, URLs, logs or artifacts. Local TLS verification stays enabled.
+**Start at:** session routes/helpers, dependencies, API/CLI config, ORM/migrations,
+realm/proxy fixtures. **Commit units:** code flow; session lifecycle; boundary/logout.
+
+### P03 — Capabilities on every backend entry point
+
+**Dependencies:** approved P00 grants; P02 for browser integration.
+
+1. Implement grant persistence and a shared capability service. Authorize before
+   protected reads. Scope lists/counts/cursors/direct IDs/history/preview/settings/
+   diagnostics/exports; split safe metadata from policy-bearing DTOs.
+2. Separate edit/publish/grant/connection/audit privileges; recheck mutations and
+   record safe audit attribution with their transaction. Close legacy bypasses.
+   Supported CLI uses the same authorized services; unavoidable DB administration
+   stays an explicitly privileged operator boundary.
+3. Return safe UI capability metadata. Handle live grant revocation, self-escalation,
+   group freshness, reassignment, final-admin removal and emergency recovery.
+
+**Acceptance:** full role/action/resource matrix through direct HTTP and supported
+CLI, including authenticated outsiders and cross-scope attempts. No protected
+detail or counts in errors. Owner/editor permission alone cannot publish.
+**Start at:** `application/access.py`, route dependencies, repositories, policy/
+version/catalog/asset/workspace services and CLI. **Commit units:** capability
+service; scoped reads; protected mutations/CLI; negative matrix.
+
+### P04 — Reliable UI lifecycle and behavioral tests
+
+**Dependencies:** P04.1 starts now; P02/P03 for final integration.
+
+1. Extract shell, session, API client, asset workspace and policy features from
+   `main.tsx`. Add maintained component/browser tooling with runnable scripts/CI.
+   Fix header merge order, safe typed errors and API-type generation. Implement
+   navigation/deep links and accessible primitives without a framework rewrite.
+2. Add abortable loads and session/asset/request epochs. Ignore obsolete responses;
+   invalidate private caches and headers. Keep edits scoped to identity/resource.
+   Show actual actor/workspace/environment/capabilities, not hardcoded labels.
+3. Implement loading/empty/denied/expired/error/conflict states, retry, duplicate
+   submission protection, unsaved navigation/tab-close guards and truthful save/
+   logout status. Hide private content while preserving failed-logout retry. Newer
+   edits remain dirty when an earlier save finishes. Isolate explicit prototype mode.
+
+**Acceptance:** visible component/browser behavior under delayed requests after
+logout, rapid asset switching, 401/403/409/412, empty rules, last-rule removal,
+malformed masks and rejected promises. Keyboard focus and recovery work.
+**Start at:** UI `src/main.tsx`, `src/api.ts`, feature modules, package scripts and
+CI. **Commit units:** harness/extraction; session/request lifecycle; editor recovery.
+
+### P05 — Authoritative nested schema and selection
+
+**Dependencies:** P03, P10.1 onboarding, gateway W02/W03/W07 semantics.
+
+1. Admit Iceberg schemas from metadata without reading source rows. Preserve
+   field/element/key/value IDs, hierarchy, types/nullability, version/fingerprint.
+   Expose a bounded typed API; flat user-entered type strings are not admission.
+2. Implement keyboard-accessible expansion/search/partial selection and inherited
+   grants/masks with typed segments. Explain map-key and masked-parent constraints.
+   Do not split field names on dots or flatten container/null structure.
+3. Detect rename, deleted/rebound IDs and new fields. Invalidate stale evidence
+   and block publication pending explicit revalidation; wildcards/parent grants
+   cannot silently admit added fields.
+
+**Acceptance:** literal `a.b` versus nested `a.b`; struct/list/list-of-list/map and
+null-element cases preserve actual Arrow output. Test stable-ID rename/new-ID
+rebinding, map values without keys, 5,000 fields and depth 12.
+**Start at:** catalog/schema/asset services and DTOs, canonical paths, Iceberg
+adapter, UI tree. **Commit units:** schema API/admission; tree; drift handling.
+
+### P06 — Revisioned drafts and complete policy editing
+
+**Dependencies:** P03/P05 and approved P00 persistence.
+
+1. Implement draft service/repository/migration: author/scope, base generation,
+   schema fingerprint, canonical digest, revision and timestamps. Transition
+   existing authoring records additively without changing policy meaning.
+2. Implement create/open/update/discard with revision preconditions and atomic CAS.
+   Recover uncertain saves and restart state; preserve local edits on conflict.
+   Disable legacy rule-replacement routes that bypass these semantics.
+3. Complete rule add/remove/order, subjects/claims, restricted DuckDB SQL, six
+   masks with typed/null values, inheritance/conflicts and advanced round-trip.
+   Make empty-rule deny-all explicitly reviewable and publishable.
+
+**Acceptance:** two writers at revision 4 yield one revision 5; loser keeps edits.
+Save never activates; newer local edits remain dirty. Test restart/discard,
+invalid masks, unsupported advanced content preservation and last-grant removal.
+**Start at:** policy models/services, repository/migrations, draft routes/editor.
+**Commit units:** draft persistence; CAS/recovery; complete editor/deny-all.
+
+### P07 — Exact synthetic evaluation and explanations
+
+**Dependencies:** P05/P06 and canonical gateway resolver/transform.
+
+1. Implement bounded synthetic evaluation with canonical resolver and DuckDB
+   transform. Return actual synthetic schema/values, decisions and explain
+   references. No source-row credential or browser-authoritative calculation.
+2. Bind evidence to actor/scope, draft revision/digest, schema fingerprint,
+   persona/fixture digest and evaluator version. Implement limits, timeout,
+   cancellation and a durable lifecycle if asynchronous work is required.
+3. Connect policy tests/effective-access inspector; distinguish deny, failed,
+   cancelled, stale and completed outcomes. Clearly label synthetic coverage.
+
+**Acceptance:** independent two-group AND, nested masks, hidden dependencies,
+conflict/null fixtures pass; deliberately skipped masks/filters fail tests.
+Changed inputs and failed/partial evaluations cannot qualify for publication.
+**Start at:** evaluation service/repository/routes and test/inspector UI; reuse
+resolver/transform. **Commit units:** evaluator; evidence binding; tests UX.
+
+### P08 — Exact review and atomic UI/CLI publication
+
+**Dependencies:** P03/P05/P06/P07; gateway W05 generation/CAS semantics.
+
+1. Implement authoritative review diff/digest over exact draft/schema/evaluation,
+   affected assets and expected generation. Show ticket invalidation and unknown
+   impact. First publication cannot bundle unrelated unreviewed drafts.
+2. Implement one publication service with scoped publisher checks, freshness,
+   expected-generation CAS and idempotency. Commit activation/audit/operation
+   outcome atomically; define permission-change races in the transaction contract.
+   Close HTTP/CLI activation bypasses and support reviewed deny-all publication.
+3. Implement review/publish/operation-status UI. Reconcile lost responses through
+   operation ID/key. Same key/body returns the same outcome; changed body conflicts.
+   Distinguish committed publication from observed worker activation.
+
+**Acceptance:** PostgreSQL concurrent publishers yield one winner. Changed draft/
+schema/permission/generation and bootstrap scope cannot bypass review. API/CLI
+behavior matches; real reads reflect publication and old tickets are invalidated
+according to the gateway contract. A client `validated=true` has no authority.
+**Start at:** version/compiler services, CAS repository, operation/audit storage,
+routes, CLI, Changes/review UI. **Commit units:** review; atomic publish; reconciliation.
+
+### P09 — History, restore, audit and runtime observations
+
+**Dependencies:** P08; audit writes already land with P03/P08 mutations.
+
+1. Expose scoped paginated history/audit and exact comparisons with safe actor/
+   action/resource/outcome detail; sensitive detail requires separate permission.
+2. Implement restore-as-new-draft via P06; require fresh validation/review before
+   publication, never direct reactivation of historical content.
+3. Implement runtime observations with generation/source/timestamp/freshness.
+   Show partial rollout, pending restart, stale/unreachable state truthfully;
+   support bounded redacted diagnostics/export where authorized.
+
+**Acceptance:** no history/count leakage; restore cannot bypass validation;
+activation/audit cannot diverge. DB readiness/Flight liveness alone cannot report
+healthy end-to-end delivery. History/activity views use real services.
+**Start at:** history/audit/observation services, routes and UI features.
+**Commit units:** history; restore; audit views; runtime status.
+
+### P10 — Management and consumer handoff
+
+**Dependencies:** P10.1 after P03, before P05; remaining slices after P05/P08/P09.
+
+1. Implement basic connection registration/diagnostics and asset inventory/binding
+   onboarding with scoped permissions. Validate modules/options, secret references,
+   endpoint/egress policy, bounded discovery and integrity. This enables a real
+   user-created asset and must not depend on publishing its first policy.
+2. Finish search/pagination, edits, dependency-aware disable/removal, schema-drift
+   repair, owners/grants, settings and diagnostics. Explain draft-versus-active
+   settings and actual activation/ticket effects of disabling connections/assets.
+3. Provide executable Python/DuckDB, Spark/JVM and Arrow setup guidance with real
+   contracts, verified TLS and separate reader credentials. Consume every ticket/
+   partition. Never embed tokens or imply administrative roles permit data reads.
+
+**Acceptance:** every required destination performs real operations. Test SSRF,
+redirect/DNS rebinding/cloud metadata, traversal, module injection, secret outage,
+in-use removal, cross-scope writes and absence of source-data deletion. Authorized
+private Iceberg endpoints use explicit egress policy, not an indiscriminate ban.
+Run examples against the supported clients.
+**Start at:** catalog/asset/workspace/grant services and UI management/connectors.
+**Commit units:** connection; asset; grants; settings; consumer guidance.
+
+### P11 — Full local feature/security parity
+
+**Dependencies:** P01–P10 and P13 security configuration; iterate after P08.
+
+1. Provide documented prepare/start/verify commands for PostgreSQL, real IdP,
+   verified local TLS, synthetic Iceberg, UI/admin, Flight and required consumers.
+   Bind host ports to loopback; ordinary startup prints no credentials.
+2. Run real API/browser journeys with the same sessions, capabilities, CSRF,
+   validation and publication as deployment. Exclude impersonation shortcuts from
+   supported startup and acceptance tests.
+3. Exercise restart, expiry/revocation, concurrency, outage, uncertain operations,
+   preservation and recovery. Keep HTTP smoke, browser and consumer evidence
+   separate. Verification failures exit nonzero even under Python optimization.
+
+**Acceptance:** clean checkout completes section 7 journeys. All clients, including
+JVM executors, trust the configured CA without bypass flags.
+**Start at:** Compose/realm/certificates/secrets, CLI/setup/smoke, browser fixtures.
+**Commit units:** parity configuration; full journey; recovery/failure scenarios.
+
+### P12 — Product quality, accessibility and usability
+
+**Dependencies:** tooling begins P04; final acceptance needs P04–P11.
+
+1. Add frontend/API/contract/browser/PostgreSQL-race/consumer CI as features land.
+   Generate/check API types, lock supported versions and retain failure artifacts.
+   Required integration runs in clean environments.
+2. Verify keyboard/screen-reader workflows, focus, labels/errors, tree, 200% zoom,
+   narrow layouts, contrast and reduced motion. Combine automated accessibility
+   with manual checks; fix failures and retest.
+3. Obtain owner visual review and five representative task sessions when authorized.
+   Target four of five completing each core task unaided, no critical access/
+   publication misunderstanding and no accidental activation. Unavailable
+   participants remain an explicit acceptance gap, not a reason to stop coding.
+
+**Acceptance:** real J1–J8 on supported browsers; no placeholders. Proposed warm
+targets on documented 4-vCPU/8-GiB hardware: initial compressed JS <=250 KiB,
+field interaction p95 <=100 ms, inventory p95 <=1 s, 100-row evaluation p95 <=2 s.
+Use at least 30 samples; report cold results and memory separately. Performance
+corpus: 10,000 assets, 5,000-field/depth-12 schema, 100 rules and adverse states.
+**Commit units:** CI lanes; accessibility fixes; measured performance fixes.
+
+### P13 — Supported production topology and startup validation
+
+**Dependencies:** design now; runtime integration needs P01/P02/P03/P11.
+
+1. Deliver one concrete reference under proposed `deployment/production/`: customer
+   isolation, immutable UI/backend digests, PostgreSQL, separate IdP audiences,
+   TLS HTTP/HTTP2 Flight ingress, secrets, capacity and operators. Specify IdP MFA
+   and audited emergency access for privileged users.
+2. Implement strict configuration validation and least-privilege migration/admin/
+   Flight DB roles. Flight needs narrow ticket-store writes, not blanket access
+   or an inaccurate read-only promise. Restrict source credentials, networks,
+   health ports, proxy trust, users/filesystems and resource limits. Reject
+   demo/insecure profiles and stale schema at production startup.
+3. Test install/migrate/bootstrap/start/drain/stop with two admin and two Flight
+   processes, rolling restart, bounded DB pools/timeouts, IdP/DB failure and actual
+   HTTP2 Flight through ingress. Separate liveness/readiness from a governed read.
+
+**Acceptance:** an operator installs exact artifacts with the supplied docs,
+completes real journeys and restarts safely. Private services stay private and
+invalid configuration fails closed. Do not claim arbitrary cloud support.
+**Commit units:** deployment specification; configuration/privilege enforcement;
+reference deployment; multi-process and upgrade smoke.
+
+### P14 — Recovery, upgrades and credential rotation
+
+**Dependencies:** design with P00; final tests need P06/P08/P09/P13.
+
+1. Implement encrypted PostgreSQL backup/PITR with IdP/config/key-version/secret
+   dependencies. Document customer Iceberg data and snapshot/metadata retention
+   responsibility separately from control-plane recovery.
+2. Restore in isolation; reconcile grants/generations/operations before ingress.
+   Invalidate restored sessions/tickets so backups cannot resurrect revoked access.
+   Use reviewed key/epoch mechanisms without modifying pickle. Verify recovered
+   drafts and actual allowed/denied consumer values, not row counts alone.
+3. Test previous-release upgrade with authored state, interrupted migrations,
+   forward recovery, N/N-1 compatibility or explicit maintenance window, and safe
+   rollback. Exercise TLS/IdP/backend/ticket/session/encryption-key rotation,
+   compromise and unavailable-key failures.
+
+**Acceptance:** timed restore meets agreed RPO/RTO; failure leaves ingress closed;
+restored credentials cannot replay. Proposed RPO <=15 minutes and RTO <=60 minutes
+are unmeasured engineering targets, not contractual promises.
+**Commit units:** backup tooling; restore/invalidation; upgrade; rotation drills.
+
+### P15 — Capacity, observability and customer operations
+
+**Dependencies:** instrumentation early; acceptance needs P07/P09/P13 and gateway.
+
+1. Bound bodies/schema/SQL/lists/login/discovery/evaluation/publication/reads by
+   size, CPU/time, memory and concurrency. Control aggregate customer load across
+   processes. Add retention cleanup with referential integrity and bounded metrics
+   labels, preserving audit policy and active references.
+2. Add redacted correlation/logging and metrics/alerts for errors/latency/auth,
+   generations, capacity, DB pools, backup age and certificate expiry. Exercise
+   alert delivery to the named operator without unapproved external messaging.
+   Write incident/export/onboarding/offboarding/support runbooks.
+3. Benchmark the UI corpus plus Iceberg bytes/files/deletes/evolution, fan-out,
+   streams and Spark partitions. Run saturation/recovery, slow-consumer, cancellation,
+   retry, OOM and 24-hour soak tests. Record hardware/versions/concurrency,
+   p50/p95/memory/throughput and operating cost envelope.
+
+**Acceptance:** bounded capacity with no unbounded growth or weakened policy;
+failures are detected and recoverable. Separate admin/read availability SLIs;
+report expected denials separately. Proposed 99.9% monthly objective needs
+measured topology/dependency budgets before any contractual SLA.
+**Commit units:** limits/cleanup; telemetry; load fixes; operational drills/docs.
+
+### P16 — Candidate-specific release qualification
+
+**Dependencies:** all preceding gates and applicable gateway obligations below.
+
+1. Make required lanes promotion dependencies for both images: client/server
+   wheels and installed process, frontend/types, real IdP/browser, PG races,
+   consumers, containers, recovery/upgrades and capacity. Scan, generate SBOM/
+   provenance and verify digests for the architectures/artifacts actually promoted.
+   Development image publication is not supported-customer release approval.
+2. Review dependencies/action/image pins, licenses and patch procedure. Map
+   applicable ASVS controls and obtain independent security evaluation of browser,
+   API/CLI, DB/task trust, nested enforcement, connectors and deployment. Resolve
+   critical/high findings; do not silently waive pickle-boundary findings.
+3. Produce proposed `evaluation/release/<candidate>/`: commit/digests, schema/config
+   versions excluding secrets, tests/skips, browser/a11y/usability, capacity,
+   restore/upgrade/rotation drills, review findings, limitations and operator/owner
+   acceptance. Promote only the same immutable tested artifacts afterward.
+
+**Acceptance:** no required workflow, backend enforcement, operational recovery or
+independent security gate is missing. Record owner release acceptance; production
+deployment still needs explicit authority. A plan or green unit suite is not proof.
+**Commit units:** promotion gates; release artifact tooling; review remediation.
+
+## 6. Gateway work remains a release dependency
+
+Track evidence in `docs/gateway-v1/STATUS.md`; UI success does not close gateway
+work. Implement required gaps alongside their dependent packet.
+
+- W02/W03: stable typed IDs, nested pruning/inheritance, six masks and row filters
+  preserve Arrow schemas/null/empty/map-key semantics. Independently expected
+  cross-language fixtures assert allowed values and forbidden fields.
+- W04/W05: issuer/subject/expiry binding, fetch reauthorization, ticket reservation,
+  consistent publication generation and in-flight revocation work across races,
+  processes and batch boundaries.
+- W07: splittable native Iceberg plans, pinned snapshots, position/equality deletes,
+  schema evolution and REST catalog have conformance evidence within the supported
+  envelope. Unproven formats/features, including v3, fail closed.
+- W08/W09: every ticket/partition is consumed; retry/speculation/cancellation,
+  credential refresh, deadlines, slow consumers, memory/admission and cleanup
+  work through actual Flight in Python/DuckDB, Spark and Arrow.
+- W11/W12/W13: least privilege, packaging/PG/consumer/capacity evidence and
+  independent evaluation cover shipped artifacts. Preserve W06 pickle restrictions;
+  escalate unresolved trust-boundary risk rather than declaring completion.
+
+## 7. Required release journeys
+
+Use independent synthetic expectations shared by HTTP/browser/consumer lanes.
+Fixtures are test data, not an alternative production implementation.
+
+- J1: real login → register connection/asset → explicitly assign editor/publisher.
+  Reader/outsider cannot retrieve administrative metadata or policy detail.
+- J2: nested schema → parent/child/list/map grants and all masks. Parent reads
+  return only permitted descendants; literal dotted names and null shapes survive.
+- J3: save draft → test two-group AND and denied persona. Any input change makes
+  evidence stale; failed or partial evaluation cannot publish.
+- J4: exact review → concurrent edit/generation conflict → recover → publish once.
+  Lost response reconciles; actual reads show committed policy.
+- J5: compare → restore-as-draft → validate/review/publish with audit attribution.
+  Empty-rule deny-all can revoke the last grant.
+- J6: repair catalog/secret outage → dependency-aware disable/remove. No leaked
+  credentials/source rows and no source-data deletion.
+- J7: logout during delayed requests → revoked replay fails → another user sees
+  only their authorized state. Failed logout is reported truthfully.
+- J8: restart → recover authored state → upgrade → restore backup → rotate keys →
+  repeat nested allowed/denied DuckDB/Spark/Arrow reads with verified TLS.
+
+## 8. Evidence and stopping rules
+
+Ledger states: `not-started`, `implementing`, `implemented-unverified`, `verified`,
+`blocked`. Historical labels require interpretation, never automatic promotion.
+Each slice records behavior/contract, authority, red failure, exact green command/
+exit code, environment, commit, artifact paths, manual/independent evidence,
+remaining risk/blocker and next action. Failed, skipped, interrupted or output-less
+commands are not success. A blocked runtime check remains required.
+
+Existing commands: `uv run pytest <focused paths>`, `uv run ruff check`,
+`uv run ruff format --check`, `uv run ty check`, and
+`mvn -f connectors/jvm/pom.xml verify`. Frontend currently has build/check scripts;
+P04 adds actual behavioral/browser scripts before anyone cites their results.
+Install appropriate server extras in CI. Package proof uses a fresh environment,
+not an editable checkout with preinstalled dependencies.
+
+Pause only dependent work for unresolved decisions requiring review, unavailable
+infrastructure or required external evaluation. Continue independent authorized
+work; do not repeatedly ask for permissions already granted. Do not contact users/
+reviewers or deploy unasked. Production remains on hold until P16 evidence exists.
+
+## 9. Implementer prompt
+
+> Implement the remaining work in `docs/ui-v2/EXECUTION_HANDOFF.md`. Read the ledger
+> and production review, then inspect real code. Preserve completed slices, data,
+> Iceberg/nested/consumer scope and pickle logic. Start P00's concrete unresolved
+> contracts and P01's restart preservation; advance P04 test tooling and P13 design
+> where independent. Follow section 3 dependencies, delivering real backend services
+> and UI behavior in atomic tested commits. Keep authorization/evaluation/publication
+> on the backend. Execute actual API/browser/PG/consumer acceptance, not mocked
+> success or static assertions. Maintain exact evidence; continue unblocked work
+> until all authorized items are complete. Release stays on hold until P16 and
+> applicable gateway gates have actual candidate-specific proof.

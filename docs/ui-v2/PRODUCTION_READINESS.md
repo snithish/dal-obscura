@@ -5,6 +5,11 @@ The product specification is broad, but the application is not feature complete
 or ready to serve paying customers. This document adds required backend and
 operational acceptance to P00–P12; it does not certify the implementation.
 
+Execution update: [EXECUTION_HANDOFF.md](EXECUTION_HANDOFF.md) now consolidates
+all remaining P00–P16 work and controls order/dependencies. The findings and
+backend coverage here remain supporting requirements; do not execute the older
+packet elaborations as a separate schedule.
+
 ## Scope and release model
 
 Keep the complete policy-authoring and management UI, nested Iceberg schemas,

@@ -6,9 +6,10 @@ Paid-production release is **on hold**. See the code-backed
 The source application, demo cookie login/logout, and UI container packaging exist.
 Production OIDC, complete scoped authorization, canonical nested authoring, durable
 revision workflows, required management screens, and real-stack/browser evidence
-remain incomplete. The local control-plane executable is missing at baseline
-`612bb1c`; the documented startup has not been verified. Planning U00/U01 does
-not mean their inventory, prototype, or usability acceptance gates have passed.
+remain incomplete. The control-plane executable now exists; clean installed-wheel
+server and container startup remain unverified. The rewritten handoff describes
+remaining work only, with one canonical sequence. Prior planning does not satisfy
+prototype or usability acceptance.
 
 Owner direction: policy authoring and management UI is non-negotiable. Design the experience from scratch. Existing screens, navigation, framework, and component library impose no constraints. Existing security invariants, durable authoring records, Iceberg scope, nested-schema requirements, and DuckDB/Spark/Arrow consumers remain constraints. Preserve pickle logic under the owner's separate instruction.
 
@@ -16,11 +17,11 @@ This plan supersedes instructions to retire the UI or administrative authoring A
 
 Read together:
 
-- [Concrete execution handoff for a less capable coding model](EXECUTION_HANDOFF.md)
+- [Authoritative remaining implementation plan](EXECUTION_HANDOFF.md)
 - [Execution status and evidence ledger](EXECUTION_STATUS.md)
 - [Backend coverage and paid-production release gates](PRODUCTION_READINESS.md)
 - [Experience and product specification](EXPERIENCE.md)
-- [Implementation packages and acceptance gates](IMPLEMENTATION.md)
+- [Plan entry point and older package mapping](IMPLEMENTATION.md)
 - [Visual experience map](experience-map.html), a static planning artifact with illustrative data
 
 ## Product thesis
@@ -52,7 +53,9 @@ P13–P16 add deployment, recovery, operations, and promotion requirements to P0
 - Start with persistent personal drafts and optimistic concurrency. Reuse existing durable control-plane storage; any new tables require a reviewed migration. Do not introduce another database or make the data plane stateful.
 - Use synthetic previews at launch. A separate live-preview capability is not a hidden prerequisite for the policy studio.
 - Platform administration, asset ownership, policy editing, and publication are separate capabilities. A small deployment may explicitly assign several capabilities to one person.
-- Treat a clean React/TypeScript application as the initial implementation candidate, not a dependency on the previous UI. The U02 source foundation uses React, TypeScript, and Vite with pinned version ranges; generate and commit the lockfile before its first release build. No framework migration for its own sake.
+- Keep the current React/TypeScript/Vite foundation and committed lockfile. Verify
+  the pinned toolchain in a clean build; organize features without an unnecessary
+  framework migration.
 
 ## What “best UI/UX” means here
 
@@ -60,4 +63,7 @@ Visual polish matters, but the release bar is measurable comprehension and safe 
 
 Validate the design with five representative authors/operators initially. Target at least four completing each core scenario without help, no critical misunderstanding of effective access or publication scope, and no accidental activation. These are proposed pilot thresholds, not results already achieved. Failed scenarios require design changes and another test round.
 
-The first implementation deliverable is a clickable prototype covering one coherent task from login through published verification, including failure paths. Do not build every screen independently and postpone workflow integration.
+Use the evolving real vertical workflow for interaction review, with prototype
+fixtures explicitly isolated. Complete login through publication verification,
+including failure paths; do not build every screen independently and defer
+integration. Owner visual and participant usability acceptance remain required.
