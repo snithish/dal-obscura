@@ -9,7 +9,7 @@ from collections.abc import Callable, Mapping
 from importlib import metadata
 from pathlib import Path
 from threading import RLock
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from dal_obscura.common.plugin_api.contracts import PluginDescriptor, PluginKind
 
@@ -30,6 +30,7 @@ FactoryLoader = Callable[[metadata.EntryPoint], object]
 BuiltinRegistration = tuple[PluginDescriptor, object]
 DescriptorLoader = Callable[[metadata.EntryPoint], PluginDescriptor]
 PluginLock = tuple[str, str, str] | tuple[str, str, str, str, str]
+PluginStatus = Literal["enabled", "not_installed", "incompatible"]
 
 
 class PluginRegistry:
@@ -102,6 +103,48 @@ class PluginRegistry:
 
         with self._snapshot_lock:
             return dict(self._snapshot)
+
+    def status_report(self) -> tuple[dict[str, object], ...]:
+        """Reports allowlisted plugin lifecycle state without importing factories.
+
+        Only operator-expected IDs are returned.  An unallowlisted installed
+        distribution therefore cannot become an enumeration or an implicit
+        capability advertisement through this diagnostic surface.
+        """
+
+        with self._snapshot_lock:
+            admitted = set(self._snapshot)
+        entry_by_key: dict[tuple[PluginKind, str], metadata.EntryPoint] = {}
+        for kind, group in ENTRY_POINT_GROUPS.items():
+            for entry in self._select(group):
+                plugin_id = str(entry.name)
+                if _PLUGIN_ID.fullmatch(plugin_id):
+                    entry_by_key[(kind, plugin_id)] = entry
+
+        rows: list[dict[str, object]] = []
+        expected = set(self._allowlist) | set(self._builtins)
+        for kind, plugin_id in sorted(expected):
+            key = (kind, plugin_id)
+            if key in admitted or key in self._builtins:
+                status: PluginStatus = "enabled"
+                reason = None
+            else:
+                entry = entry_by_key.get(key)
+                if entry is None:
+                    status = "not_installed"
+                    reason = "allowlisted distribution is not installed"
+                else:
+                    status = "incompatible"
+                    reason = _status_incompatibility(entry, self._allowlist.get(key))
+            row: dict[str, object] = {
+                "kind": kind,
+                "plugin_id": plugin_id,
+                "status": status,
+            }
+            if reason is not None:
+                row["reason"] = reason
+            rows.append(row)
+        return tuple(rows)
 
     def _select(self, group: str) -> list[metadata.EntryPoint]:
         points: Any = self._entry_points_fn()
@@ -261,6 +304,22 @@ def load_static_plugin_descriptor(entry: metadata.EntryPoint) -> PluginDescripto
         config_schema=config_schema,
         display_name=display_name,
     )
+
+
+def _status_incompatibility(
+    entry: metadata.EntryPoint,
+    lock: PluginLock | None,
+) -> str:
+    if lock is None:
+        return "plugin is installed but not allowlisted"
+    if len(lock) not in (3, 5):
+        return "plugin lock is invalid"
+    if entry.dist is None:
+        return "plugin provenance is unavailable"
+    distribution, version, _api_version, *_digests = lock
+    if (entry.dist.name, entry.dist.version) != (distribution, version):
+        return "installed distribution does not match the plugin lock"
+    return "plugin admission metadata is incompatible"
 
 
 def _descriptor_digest(descriptor: PluginDescriptor) -> str:

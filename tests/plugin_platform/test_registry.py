@@ -179,6 +179,32 @@ def test_builtin_registration_is_admitted_without_entry_point_import() -> None:
     assert registry.load("catalog", "iceberg.sql") == {"builtin": True}
 
 
+def test_status_report_distinguishes_enabled_missing_and_incompatible_without_import() -> None:
+    enabled = _entry("enabled", "dal_obscura.catalogs.v1")
+    entries = [enabled]
+    registry = PluginRegistry(
+        allowlist={
+            ("catalog", "enabled"): ("plugin-wheel", "1.2.3", "1"),
+            ("catalog", "missing"): ("missing-wheel", "1.0.0", "1"),
+            ("catalog", "wrong"): ("plugin-wheel", "9.9.9", "1"),
+        },
+        entry_points_fn=lambda: _EntryPoints(entries),
+        factory_loader=lambda _: pytest.fail("status reporting must not import factories"),
+    )
+
+    registry.reload()
+    entries.append(_entry("wrong", "dal_obscura.catalogs.v1"))
+    statuses = {
+        row["plugin_id"]: row["status"] for row in registry.status_report()
+    }
+
+    assert statuses == {
+        "enabled": "enabled",
+        "missing": "not_installed",
+        "wrong": "incompatible",
+    }
+
+
 def test_descriptor_loader_mismatch_fails_before_factory_import() -> None:
     entry = _entry("iceberg.sql", "dal_obscura.catalogs.v1")
     registry = PluginRegistry(

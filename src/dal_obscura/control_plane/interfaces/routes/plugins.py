@@ -54,9 +54,18 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
             if deps.plugin_registry is not None
             else [_BUILTIN_CATALOG, _BUILTIN_FORMAT]
         )
+        states = (
+            list(deps.plugin_registry.status_report())
+            if deps.plugin_registry is not None
+            else [
+                {"kind": item.kind, "plugin_id": item.plugin_id, "status": "enabled"}
+                for item in (_BUILTIN_CATALOG, _BUILTIN_FORMAT)
+            ]
+        )
         return {
             "plugins": [_descriptor_payload(descriptor) for descriptor in descriptors],
             "pairs": _pair_payload(descriptors),
+            "states": states,
         }
 
     return api
