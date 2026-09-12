@@ -21,11 +21,14 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
     paths = client.get("/openapi.json").json()["paths"]
 
     assert set(paths) == {
+        "/auth/callback",
+        "/auth/login",
         "/healthz",
         "/readyz",
         "/v1/assets",
         "/v1/assets/{asset_id}",
         "/v1/assets/{asset_id}/owners",
+        "/v1/assets/{asset_id}/grants",
         "/v1/assets/{asset_id}/policy-preview",
         "/v1/assets/{asset_id}/policy-rules",
         "/v1/assets/{asset_id}/policy-versions",
@@ -44,4 +47,5 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
         "/v1/workspace/summary",
     }
     assert set(paths["/v1/assets/{asset_id}/policy-rules"]) == {"get", "put"}
+    assert set(paths["/v1/assets/{asset_id}/grants"]) == {"get", "put"}
     assert set(paths["/v1/assets/{catalog}/{target}"]) == {"put"}

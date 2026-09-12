@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -102,11 +104,23 @@ class OidcJwksIdentityProvider:
             attribute_claims=attribute_claims,
         )
 
-    def authenticate(self, request: AuthenticationRequest) -> Principal:
+    def authenticate(
+        self,
+        request: AuthenticationRequest,
+        *,
+        expected_nonce_hash: str | None = None,
+    ) -> Principal:
         token = _parse_bearer(request.header("authorization"))
         if not token:
             raise MissingCredentialsError("Missing token")
         payload = self._decode(token)
+        if expected_nonce_hash is not None:
+            nonce = payload.get("nonce")
+            if not isinstance(nonce, str) or not hmac.compare_digest(
+                hashlib.sha256(nonce.encode("utf-8")).hexdigest(),
+                expected_nonce_hash,
+            ):
+                raise InvalidCredentialsError("Invalid OIDC nonce")
         expires_at = payload.get("exp")
         if isinstance(expires_at, bool) or not isinstance(expires_at, int):
             raise InvalidCredentialsError("Invalid token")

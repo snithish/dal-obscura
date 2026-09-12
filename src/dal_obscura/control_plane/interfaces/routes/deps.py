@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from typing import cast
 
 from fastapi import Cookie, Header, HTTPException, Request
 from sqlalchemy.orm import Session, sessionmaker
@@ -24,13 +25,19 @@ from sqlalchemy.orm import Session, sessionmaker
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control_plane.application.provisioning import ProvisioningService
-from dal_obscura.control_plane.infrastructure.session_store import BrowserSessionStore
+from dal_obscura.control_plane.infrastructure.session_store import (
+    BrowserSessionStore,
+    LoginTransaction,
+    LoginTransactionStore,
+)
 from dal_obscura.control_plane.interfaces.session_api import (
     OidcActorResolver,
+    OidcNonceActorResolver,
     oidc_actor_from_header,
 )
 
 DemoTokenExchange = Callable[[Mapping[str, object], str], str]
+AuthorizationCodeExchange = Callable[[Mapping[str, object], str, str], Mapping[str, object]]
 
 
 @dataclass(frozen=True)
@@ -51,6 +58,8 @@ class ControlPlaneDeps:
     demo_token_exchange: DemoTokenExchange
     session_ttl_seconds: int = 28_800
     allowed_origins: tuple[str, ...] = ()
+    oidc_nonce_actor_resolver: OidcNonceActorResolver | None = None
+    authorization_code_exchange: AuthorizationCodeExchange | None = None
 
     def require_actor(
         self,
@@ -123,6 +132,57 @@ class ControlPlaneDeps:
         with self.session_maker() as session:
             BrowserSessionStore(session).revoke(token)
             session.commit()
+
+    def issue_login_transaction(
+        self,
+        *,
+        state: str,
+        nonce: str,
+        code_verifier: str,
+        redirect_uri: str,
+    ) -> None:
+        with self.session_maker() as session:
+            LoginTransactionStore(session).issue(
+                state=state,
+                nonce=nonce,
+                code_verifier=code_verifier,
+                redirect_uri=redirect_uri,
+            )
+            session.commit()
+
+    def consume_login_transaction(self, state: str) -> LoginTransaction | None:
+        with self.session_maker() as session:
+            transaction = LoginTransactionStore(session).consume(state)
+            session.commit()
+            return transaction
+
+    def resolve_nonce_token(self, token: str, nonce_hash: str) -> ControlPlaneActor | None:
+        if self.oidc_nonce_actor_resolver is None:
+            return None
+        try:
+            resolved = self.oidc_nonce_actor_resolver(token, nonce_hash)
+        except Exception:
+            return None
+        if not isinstance(resolved, Mapping):
+            return None
+        resolved_payload = cast(Mapping[str, object], resolved)
+        principal = resolved_payload.get("principal")
+        raw_groups = resolved_payload.get("groups", ())
+        if isinstance(raw_groups, str):
+            groups = (raw_groups,)
+        elif isinstance(raw_groups, (list, tuple, set)):
+            groups = tuple(str(group) for group in raw_groups)
+        else:
+            groups = ()
+        if not principal:
+            return None
+        return ControlPlaneActor(
+            principal=str(principal),
+            groups=tuple(str(group) for group in groups if str(group).strip()),
+            platform_admin=bool(
+                self.oidc_admin_group and self.oidc_admin_group in {str(group) for group in groups}
+            ),
+        )
 
     def require_admin(
         self,

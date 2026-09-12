@@ -36,6 +36,9 @@ from dal_obscura.control_plane.interfaces.routes import (
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 from dal_obscura.control_plane.interfaces.session_api import (
     OidcActorResolver,
+    OidcNonceActorResolver,
+    create_oidc_nonce_actor_resolver,
+    exchange_authorization_code,
     exchange_demo_password_token,
 )
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
@@ -83,6 +86,10 @@ def create_oidc_actor_resolver(
     return resolve
 
 
+_create_oidc_nonce_actor_resolver = create_oidc_nonce_actor_resolver
+_exchange_authorization_code = exchange_authorization_code
+
+
 _exchange_demo_password_token = exchange_demo_password_token
 
 
@@ -95,6 +102,7 @@ def create_app(
     cors_origins: tuple[str, ...] = (),
     ui_auth_config: Mapping[str, object] | None = None,
     session_ttl_seconds: int = 28_800,
+    oidc_nonce_actor_resolver: OidcNonceActorResolver | None = None,
 ) -> FastAPI:
     """Creates the control-plane FastAPI app with all workspace routes installed.
 
@@ -132,6 +140,12 @@ def create_app(
         ),
         session_ttl_seconds=session_ttl_seconds,
         allowed_origins=cors_origins,
+        oidc_nonce_actor_resolver=oidc_nonce_actor_resolver,
+        authorization_code_exchange=lambda config, code, verifier: _exchange_authorization_code(
+            config,
+            code,
+            verifier,
+        ),
     )
 
     for route in (

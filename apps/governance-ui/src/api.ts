@@ -43,6 +43,9 @@ export type Session = {
 };
 
 export type UiAuthConfig = {
+  authority?: string;
+  client_id?: string;
+  redirect_uri?: string;
   login_shortcuts?: Array<{ label: string; login_hint: string; demo_login_path?: string }>;
 };
 
@@ -58,14 +61,15 @@ type ApiFailure = Error & { status?: number };
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const csrf = readCookie("dal_obscura_csrf");
   const headers = new Headers(init?.headers);
-  if (init?.method && !["GET", "HEAD", "OPTIONS"].includes(init.method) && csrf) {
+  const method = init?.method?.toUpperCase();
+  if (method && !["GET", "HEAD", "OPTIONS"].includes(method) && csrf) {
     headers.set("x-csrf-token", csrf);
   }
   if (init?.body && !headers.has("content-type")) headers.set("content-type", "application/json");
   const response = await fetch(path, {
+    ...init,
     credentials: "same-origin",
     headers,
-    ...init,
   });
   if (!response.ok) {
     const failure = new Error(`Request failed (${response.status})`) as ApiFailure;
@@ -76,6 +80,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const controlPlane = {
+  startLogin: () => { window.location.assign("/auth/login"); },
   getSession: () => request<Session>("/v1/session"),
   getUiAuthConfig: () => request<UiAuthConfig>("/v1/ui-auth-config"),
   demoLogin: (loginHint: string) => request<{ authenticated: true }>("/v1/demo-login", {

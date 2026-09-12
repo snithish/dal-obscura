@@ -23,7 +23,11 @@ from dal_obscura.common.config_store.db import (
     create_engine_from_url,
     session_factory,
 )
-from dal_obscura.control_plane.interfaces.api import create_app, create_oidc_actor_resolver
+from dal_obscura.control_plane.interfaces.api import (
+    _create_oidc_nonce_actor_resolver,
+    create_app,
+    create_oidc_actor_resolver,
+)
 
 
 def main() -> None:
@@ -61,6 +65,7 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
                 values.get("DAL_OBSCURA_CONTROL_PLANE_SESSION_TTL_SECONDS", "28800"),
                 "DAL_OBSCURA_CONTROL_PLANE_SESSION_TTL_SECONDS",
             ),
+            oidc_nonce_actor_resolver=_ui_nonce_resolver(values),
         )
     except (ConfigStoreSchemaError, ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)
@@ -137,7 +142,18 @@ def _ui_auth_config(values: Mapping[str, str]) -> dict[str, object] | None:
         "post_logout_redirect_uri": _optional(
             values, "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI"
         ),
+        "post_login_redirect_uri": _optional(
+            values, "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGIN_REDIRECT_URI"
+        ),
         "scope": values.get("DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_SCOPE", "openid profile"),
+        "authorization_endpoint": _optional(
+            values,
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_AUTHORIZATION_ENDPOINT",
+        ),
+        "token_endpoint": _optional(
+            values,
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_TOKEN_ENDPOINT",
+        ),
         "login_shortcuts": _login_shortcuts(
             values.get("DAL_OBSCURA_CONTROL_PLANE_UI_LOGIN_SHORTCUTS", "")
         ),
@@ -146,6 +162,34 @@ def _ui_auth_config(values: Mapping[str, str]) -> dict[str, object] | None:
     if demo_login:
         config["demo_login"] = demo_login
     return {key: value for key, value in config.items() if value is not None}
+
+
+def _ui_nonce_resolver(values: Mapping[str, str]):
+    issuer = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER")
+    client_id = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID")
+    if issuer is None or client_id is None:
+        return None
+    jwks_url = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_JWKS_URL") or _optional(
+        values,
+        "DAL_OBSCURA_CONTROL_PLANE_OIDC_JWKS_URL",
+    )
+    subject_claim = values.get(
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_SUBJECT_CLAIM",
+        values.get("DAL_OBSCURA_CONTROL_PLANE_OIDC_SUBJECT_CLAIM", "sub"),
+    )
+    group_claims = _csv(
+        values.get(
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_GROUP_CLAIMS",
+            values.get("DAL_OBSCURA_CONTROL_PLANE_OIDC_GROUP_CLAIMS", "groups"),
+        )
+    )
+    return _create_oidc_nonce_actor_resolver(
+        issuer=issuer,
+        audience=client_id,
+        jwks_url=jwks_url,
+        subject_claim=subject_claim,
+        group_claims=group_claims,
+    )
 
 
 def _login_shortcuts(value: str) -> list[dict[str, str]]:

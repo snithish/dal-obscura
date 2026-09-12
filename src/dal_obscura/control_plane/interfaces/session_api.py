@@ -24,6 +24,7 @@ from dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks import (
 )
 
 OidcActorResolver = Callable[[str], object]
+OidcNonceActorResolver = Callable[[str, str], object]
 
 
 def create_oidc_actor_resolver(
@@ -59,6 +60,34 @@ def create_oidc_actor_resolver(
     def resolve(token: str) -> dict[str, object]:
         principal = provider.authenticate(
             AuthenticationRequest(headers={"authorization": f"Bearer {token}"})
+        )
+        return {"principal": principal.id, "groups": principal.groups}
+
+    return resolve
+
+
+def create_oidc_nonce_actor_resolver(
+    *,
+    issuer: str,
+    audience: str | None,
+    jwks_url: str | None,
+    subject_claim: str,
+    group_claims: tuple[str, ...],
+) -> OidcNonceActorResolver:
+    """Builds a resolver that validates an ID-token nonce before mapping claims."""
+
+    provider = OidcJwksIdentityProvider(
+        issuer=issuer,
+        audience=audience or None,
+        jwks_url=jwks_url or None,
+        subject_claim=subject_claim,
+        group_claims=group_claims,
+    )
+
+    def resolve(token: str, nonce_hash: str) -> dict[str, object]:
+        principal = provider.authenticate(
+            AuthenticationRequest(headers={"authorization": f"Bearer {token}"}),
+            expected_nonce_hash=nonce_hash,
         )
         return {"principal": principal.id, "groups": principal.groups}
 
@@ -175,6 +204,42 @@ def exchange_demo_password_token(config: Mapping[str, object], username: str) ->
     if not token:
         raise HTTPException(status_code=502, detail="Demo identity provider did not return a token")
     return token
+
+
+def exchange_authorization_code(
+    config: Mapping[str, object],
+    code: str,
+    code_verifier: str,
+) -> Mapping[str, object]:
+    """Exchanges an authorization code using the public OIDC UI client."""
+
+    body = urlencode(
+        {
+            "grant_type": "authorization_code",
+            "client_id": str(config["client_id"]),
+            "code": code,
+            "code_verifier": code_verifier,
+            "redirect_uri": str(config["redirect_uri"]),
+        }
+    ).encode()
+    request = UrlRequest(
+        str(config["token_url"]),
+        data=body,
+        headers={"content-type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="OIDC code exchange failed") from exc
+    if not isinstance(payload, Mapping):
+        raise HTTPException(status_code=502, detail="OIDC token response was invalid")
+    if not str(payload.get("access_token", "")).strip():
+        raise HTTPException(status_code=502, detail="OIDC token response omitted access token")
+    if not str(payload.get("id_token", "")).strip():
+        raise HTTPException(status_code=502, detail="OIDC token response omitted ID token")
+    return cast(Mapping[str, object], payload)
 
 
 def oidc_actor_from_header(

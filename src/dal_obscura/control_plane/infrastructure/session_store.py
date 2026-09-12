@@ -11,13 +11,18 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+from dataclasses import dataclass
 from datetime import timedelta
 from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from dal_obscura.common.config_store.orm import BrowserSessionRecord, utcnow
+from dal_obscura.common.config_store.orm import (
+    BrowserSessionRecord,
+    LoginTransactionRecord,
+    utcnow,
+)
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 
 
@@ -83,3 +88,62 @@ class BrowserSessionStore:
 
 def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+@dataclass(frozen=True)
+class LoginTransaction:
+    """Server-held values needed to complete one OIDC callback."""
+
+    nonce_hash: str
+    code_verifier: str
+    redirect_uri: str
+
+
+class LoginTransactionStore:
+    """Persists and consumes short-lived authorization-code transactions."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def issue(
+        self,
+        *,
+        state: str,
+        nonce: str,
+        code_verifier: str,
+        redirect_uri: str,
+        ttl_seconds: int = 600,
+    ) -> None:
+        if ttl_seconds <= 0:
+            raise ValueError("login transaction TTL must be positive")
+        now = utcnow()
+        self._session.add(
+            LoginTransactionRecord(
+                id=uuid4(),
+                state_hash=_token_hash(state),
+                nonce_hash=_token_hash(nonce),
+                code_verifier=code_verifier,
+                redirect_uri=redirect_uri,
+                created_at=now,
+                expires_at=now + timedelta(seconds=ttl_seconds),
+            )
+        )
+        self._session.flush()
+
+    def consume(self, state: str) -> LoginTransaction | None:
+        record = self._session.scalar(
+            select(LoginTransactionRecord).where(
+                LoginTransactionRecord.state_hash == _token_hash(state),
+                LoginTransactionRecord.consumed_at.is_(None),
+                LoginTransactionRecord.expires_at > utcnow(),
+            )
+        )
+        if record is None:
+            return None
+        record.consumed_at = utcnow()
+        self._session.flush()
+        return LoginTransaction(
+            nonce_hash=record.nonce_hash,
+            code_verifier=record.code_verifier,
+            redirect_uri=record.redirect_uri,
+        )
