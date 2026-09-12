@@ -120,6 +120,12 @@ def test_workspace_publication_management_is_admin_scoped_and_staged():
     active = client.get("/v1/workspace/publications", headers=ADMIN_HEADERS)
     assert active.json()[0]["active"] is True
 
+    events = client.get("/v1/audit/events", headers=ADMIN_HEADERS).json()
+    assert {event["action"] for event in events} >= {
+        "workspace.publication.create",
+        "workspace.publication.activate",
+    }
+
     assert client.get("/v1/workspace/publications").status_code == 401
 
 

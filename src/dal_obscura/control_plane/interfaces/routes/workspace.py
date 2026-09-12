@@ -51,8 +51,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
     def create_workspace_publication(
         actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
     ) -> object:
-        del actor
-        return deps.with_service(lambda service: service.create_workspace_publication())
+        return deps.with_service(lambda service: service.create_workspace_publication(actor))
 
     @api.post("/v1/workspace/publications/{publication_id}/activate")
     def activate_workspace_publication(
@@ -60,13 +59,13 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         request: PublicationActivationRequest | None = None,
         actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
     ) -> object:
-        del actor
         return deps.with_service(
             lambda service: service.activate_workspace_publication(
                 publication_id,
                 expected_publication_id=(
                     None if request is None else request.expected_publication_id
                 ),
+                actor=actor,
             )
         )
 

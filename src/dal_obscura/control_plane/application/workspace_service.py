@@ -212,6 +212,7 @@ def activate_workspace_publication(
     publication_id: UUID,
     *,
     expected_publication_id: UUID | None = None,
+    actor_principal: str = "system",
 ) -> dict[str, str]:
     """Activates an existing publication for the workspace.
 
@@ -226,5 +227,6 @@ def activate_workspace_publication(
         cell_id=context.cell_id,
         publication_id=publication_id,
         expected_publication_id=expected_publication_id,
+        actor_principal=actor_principal,
     )
     return {"publication_id": activated["publication_id"]}

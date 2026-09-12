@@ -1379,6 +1379,35 @@ class PublicationStore:
         )
         self._session.flush()
 
+    def record_workspace_audit_event(
+        self,
+        *,
+        cell_id: UUID,
+        tenant_id: UUID | None,
+        actor_principal: str,
+        action: str,
+        resource_type: str,
+        resource_id: str,
+        details: dict[str, object] | None = None,
+    ) -> None:
+        """Records a tenant-scoped event for workspace-level operations."""
+
+        self._session.add(
+            AuditEventRecord(
+                id=uuid4(),
+                cell_id=cell_id,
+                tenant_id=tenant_id,
+                actor_principal=actor_principal,
+                action=action,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                outcome="success",
+                details_json=dict(details or {}),
+                correlation_id=current_request_id(),
+            )
+        )
+        self._session.flush()
+
     def list_audit_events(
         self,
         context: WorkspaceContext,

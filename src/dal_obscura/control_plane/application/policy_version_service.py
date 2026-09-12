@@ -129,6 +129,8 @@ def get_asset_policy_version(
 def create_workspace_publication(
     store: PublicationStore,
     create_publication,
+    *,
+    actor_principal: str = "system",
 ) -> dict[str, object]:
     """Creates a full workspace publication snapshot.
 
@@ -140,6 +142,19 @@ def create_workspace_publication(
 
     context = _required_workspace_context(store)
     publication = create_publication(context.cell_id)
+    store.record_workspace_audit_event(
+        cell_id=context.cell_id,
+        tenant_id=context.tenant_id,
+        actor_principal=actor_principal,
+        action="workspace.publication.create",
+        resource_type="publication",
+        resource_id=str(publication["publication_id"]),
+        details={
+            "asset_count": publication["asset_count"],
+            "catalog_count": publication["catalog_count"],
+            "manifest_hash": publication["manifest_hash"],
+        },
+    )
     return {
         "publication_id": publication["publication_id"],
         "asset_count": publication["asset_count"],
@@ -420,6 +435,7 @@ def activate_publication(
     publication_id: UUID,
     *,
     expected_publication_id: UUID | None = None,
+    actor_principal: str = "system",
 ) -> dict[str, str]:
     """Marks a publication active for one cell.
 
@@ -436,6 +452,21 @@ def activate_publication(
             cell_id=cell_id,
             publication_id=publication_id,
             expected_publication_id=expected_publication_id,
+        )
+    context_tenant = store.get_default_workspace_context()
+    if context_tenant is not None:
+        store.record_workspace_audit_event(
+            cell_id=cell_id,
+            tenant_id=context_tenant.tenant_id,
+            actor_principal=actor_principal,
+            action="workspace.publication.activate",
+            resource_type="publication",
+            resource_id=str(publication_id),
+            details={
+                "expected_publication_id": (
+                    None if expected_publication_id is None else str(expected_publication_id)
+                )
+            },
         )
     return {"cell_id": str(cell_id), "publication_id": str(publication_id)}
 

@@ -262,10 +262,14 @@ class ProvisioningService:
     def get_workspace_draft(self) -> dict[str, object]:
         return workspace_service.get_workspace_draft(self._store)
 
-    def create_workspace_publication(self) -> dict[str, object]:
+    def create_workspace_publication(
+        self,
+        actor: ControlPlaneActor | None = None,
+    ) -> dict[str, object]:
         return policy_version_service.create_workspace_publication(
             self._store,
             self.create_publication,
+            actor_principal="system" if actor is None else actor.identity_key(),
         )
 
     def create_asset_policy_version(
@@ -312,12 +316,14 @@ class ProvisioningService:
         publication_id: UUID,
         *,
         expected_publication_id: UUID | None = None,
+        actor: ControlPlaneActor | None = None,
     ) -> dict[str, str]:
         return workspace_service.activate_workspace_publication(
             self._store,
             self.activate_publication,
             publication_id,
             expected_publication_id=expected_publication_id,
+            actor_principal="system" if actor is None else actor.identity_key(),
         )
 
     def assign_tenant(self, cell_id: UUID, tenant_id: UUID, shard_key: str) -> None:
@@ -601,12 +607,14 @@ class ProvisioningService:
         publication_id: UUID,
         *,
         expected_publication_id: UUID | None = None,
+        actor_principal: str = "system",
     ) -> dict[str, str]:
         return policy_version_service.activate_publication(
             self._store,
             cell_id,
             publication_id,
             expected_publication_id=expected_publication_id,
+            actor_principal=actor_principal,
         )
 
     def _required_workspace_context(self):
