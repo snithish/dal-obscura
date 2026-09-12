@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `d4f81f0`.
+Implementation follow-up through `50d0181`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -129,7 +129,8 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   adapter capabilities and descriptor-driven configuration fields, including
   secret-reference inputs, without installation controls. The built-in
   Iceberg route remains the only writable adapter until external routing is
-  qualified; browser evidence remains open.
+  qualified; the Connections management view now also renders the authenticated
+  lifecycle status inventory. Browser evidence remains open.
 - X15 conformance kit: **implementing**; a standalone public-API-only package
   now provides nested Arrow goldens, capability-negative checks, bounded plan
   and output-schema validation, explicit cancellation checks, cleanup proof,
@@ -1288,6 +1289,18 @@ running-process probe.
 - Green evidence: workflow contract tests, Ruff, and `git diff --check` passed.
 - Remaining gaps: signed artifact/image digests, deliberately bad external fixtures,
   provider, consumer, and browser gates remain open.
+
+### X14 lifecycle status in Connections — `50d0181`
+
+- State: implementing.
+- Behavior: the UI fetches the authenticated plugin state inventory and displays
+  enabled, not-installed, or incompatible adapter status next to the admitted
+  descriptor and configuration surfaces. No installation or authority controls are
+  exposed.
+- Green evidence: Governance UI TypeScript build, Vite production build, lifecycle
+  tests (2), and `git diff --check` passed.
+- Remaining gaps: browser-driven authentication/authorization, external plugin
+  routing, and production provider/consumer gates remain open.
 
 ## Latest evidence entry
 
