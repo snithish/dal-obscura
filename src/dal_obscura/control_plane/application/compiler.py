@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import replace
 from typing import Any, cast
 from uuid import UUID
 
@@ -11,6 +12,15 @@ from dal_obscura.common.access_control.compiled_policy import (
     CompiledPolicyRule,
 )
 from dal_obscura.common.access_control.filters import deserialize_row_filter
+from dal_obscura.common.query_planning.field_paths import (
+    FieldPath,
+    FieldPathSegment,
+    FieldSegment,
+    ListElementSegment,
+    MapKeySegment,
+    MapValueSegment,
+    parse_field_path,
+)
 from dal_obscura.control_plane.application.auth_provider_validation import (
     validate_auth_provider_payloads,
 )
@@ -134,7 +144,8 @@ class PublicationCompiler:
         if not asset.table_identifier or not asset.table_identifier.strip():
             raise ValidationFailure("Asset requires a physical Iceberg identifier")
         rules = [
-            self._compile_rule(rule) for rule in sorted(asset.rules, key=lambda item: item.ordinal)
+            self._compile_rule(_expand_schema_bound_rule(rule, asset.schema_fields))
+            for rule in sorted(asset.rules, key=lambda item: item.ordinal)
         ]
         policy = CompiledPolicy(
             version=0,
@@ -215,6 +226,86 @@ def _normalize_row_filter(value: str | None) -> str | None:
     except Exception as exc:
         raise ValidationFailure(f"Invalid row_filter SQL: {normalized}") from exc
     return normalized
+
+
+def _expand_schema_bound_rule(
+    rule: PolicyRuleDraft,
+    schema_fields: list[dict[str, object]],
+) -> PolicyRuleDraft:
+    """Freezes wildcard/parent selections to the reviewed schema leaves."""
+
+    if not schema_fields:
+        return rule
+    columns = _expand_schema_bound_paths(rule.columns, schema_fields)
+    masks: dict[str, object] = {}
+    for path, mask in rule.masks.items():
+        expanded = _expand_schema_bound_paths([path], schema_fields)
+        for candidate in expanded:
+            masks[candidate] = mask
+    return replace(rule, columns=columns, masks=masks)
+
+
+def _expand_schema_bound_paths(
+    requested: list[str],
+    schema_fields: list[dict[str, object]],
+) -> list[str]:
+    admitted: list[tuple[str, tuple[FieldPathSegment, ...], str]] = []
+    aliases: dict[str, str] = {}
+    for field in schema_fields:
+        raw_path = field.get("path")
+        if not isinstance(raw_path, list) or not raw_path:
+            continue
+        path = tuple(_schema_path_segments(cast(list[object], raw_path)))
+        canonical = FieldPath(path).to_human()
+        raw_name = str(field.get("name", "")).strip()
+        admitted.append((canonical, path, raw_name))
+        if raw_name:
+            aliases[raw_name] = canonical
+
+    expanded: list[str] = []
+    seen: set[str] = set()
+    for value in requested:
+        if value == "*":
+            candidates = [item[0] for item in admitted]
+        elif value in aliases:
+            candidates = [aliases[value]]
+        else:
+            try:
+                parsed = parse_field_path(value)
+            except ValueError:
+                candidates = [value]
+            else:
+                candidates = [
+                    canonical
+                    for canonical, path, _ in admitted
+                    if len(parsed.segments) <= len(path)
+                    and tuple(parsed.segments) == path[: len(parsed.segments)]
+                ]
+                if not candidates:
+                    candidates = [value]
+        for candidate in candidates:
+            if candidate not in seen:
+                expanded.append(candidate)
+                seen.add(candidate)
+    return expanded
+
+
+def _schema_path_segments(path: list[object]) -> list[FieldPathSegment]:
+    segments: list[FieldPathSegment] = []
+    for segment in path:
+        if not isinstance(segment, str) or not segment.strip():
+            raise ValidationFailure("Schema field paths must contain non-empty strings")
+        if segment == "$element":
+            segments.append(ListElementSegment())
+        elif segment == "$key":
+            segments.append(MapKeySegment())
+        elif segment == "$value":
+            segments.append(MapValueSegment())
+        else:
+            segments.append(FieldSegment(segment))
+    if not segments or not isinstance(segments[0], FieldSegment):
+        raise ValidationFailure("Schema field paths must begin with a field segment")
+    return segments
 
 
 def _policy_rule_draft_from_payload(index: int, raw: dict[str, Any]) -> PolicyRuleDraft:

@@ -134,6 +134,63 @@ def test_compiler_carries_admitted_schema_identities_into_immutable_manifest():
     assert len(schema["digest"]) == 64
 
 
+def test_compiler_freezes_wildcard_to_reviewed_schema_paths_and_masks():
+    draft = _draft()
+    draft.assets[0].schema_fields = [
+        {
+            "name": "id",
+            "field_id": "iceberg:1",
+            "path": ["id"],
+            "type": "long",
+            "nullable": False,
+        },
+        {
+            "name": "profile.email",
+            "field_id": "iceberg:3",
+            "path": ["profile", "email"],
+            "type": "string",
+            "nullable": True,
+        },
+    ]
+    draft.assets[0].rules[0] = replace(
+        draft.assets[0].rules[0],
+        columns=["*"],
+        masks={"*": {"type": "redact", "value": "***"}},
+    )
+
+    policy = PublicationCompiler().compile(draft).assets[0].compiled_config["policy"]
+    rule = cast(dict[str, object], cast(list[object], policy["rules"])[0])
+
+    assert rule["columns"] == ["id", "profile.email"]
+    assert set(cast(dict[str, object], rule["masks"])) == {"id", "profile.email"}
+
+
+def test_compiler_expands_nested_parent_selection_to_admitted_leaves():
+    draft = _draft()
+    draft.assets[0].schema_fields = [
+        {
+            "name": "profile.email",
+            "field_id": "iceberg:3",
+            "path": ["profile", "email"],
+            "type": "string",
+            "nullable": True,
+        },
+        {
+            "name": "profile.region",
+            "field_id": "iceberg:4",
+            "path": ["profile", "region"],
+            "type": "string",
+            "nullable": True,
+        },
+    ]
+    draft.assets[0].rules[0] = replace(draft.assets[0].rules[0], columns=["profile"])
+
+    policy = PublicationCompiler().compile(draft).assets[0].compiled_config["policy"]
+    rule = cast(dict[str, object], cast(list[object], policy["rules"])[0])
+
+    assert rule["columns"] == ["profile.email", "profile.region"]
+
+
 def test_compiler_changes_policy_version_when_row_filter_changes():
     first = PublicationCompiler().compile(_draft(row_filter="region = 'us'")).assets[0]
     second = PublicationCompiler().compile(_draft(row_filter="region = 'eu'")).assets[0]
