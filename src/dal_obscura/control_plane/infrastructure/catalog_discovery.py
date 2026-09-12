@@ -1,13 +1,9 @@
 from __future__ import annotations
 
+from collections import deque
 from typing import Any
 
-from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
-    CatalogConfig,
-    CatalogRegistry,
-    CatalogType,
-    ServiceConfig,
-)
+from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import CatalogType
 
 ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
@@ -33,28 +29,18 @@ def discover_catalog_tables(
         ```
     """
 
-    registry = CatalogRegistry(
-        ServiceConfig(
-            catalogs={
-                catalog_name: CatalogConfig(
-                    name=catalog_name,
-                    type=_catalog_type(module),
-                    options=dict(options),
-                )
-            }
+    # Keep the public discoverer bounded before materializing provider results.
+    # The older registry path collected a complete listing and capped it only
+    # afterwards, allowing an untrusted catalog to consume arbitrary memory.
+    if module == ICEBERG_CATALOG_MODULE:
+        return discover_iceberg_tables(
+            catalog_name,
+            dict(options),
+            max_tables=DEFAULT_MAX_TABLES,
+            max_namespaces=DEFAULT_MAX_NAMESPACES,
         )
-    )
-    tables = list(registry.list_tables(catalog_name))
-    if len(tables) > DEFAULT_MAX_TABLES:
-        raise ValueError(f"Catalog discovery exceeded the {DEFAULT_MAX_TABLES}-table limit")
-    return [
-        {
-            "backend": table.provider_id,
-            "name": table.name,
-            "table_identifier": table.table_identifier or table.name,
-        }
-        for table in tables
-    ]
+    _catalog_type(module)
+    raise ValueError(f"Unsupported catalog module: {module}")
 
 
 def _catalog_type(module: str) -> CatalogType:
@@ -105,10 +91,10 @@ def _walk_namespaces(
     max_namespaces: int = DEFAULT_MAX_NAMESPACES,
 ) -> list[Namespace]:
     namespaces: list[Namespace] = []
-    pending: list[Namespace] = [()]
+    pending = deque([()])
     seen: set[Namespace] = set()
     while pending:
-        namespace = pending.pop(0)
+        namespace = pending.popleft()
         if namespace in seen:
             continue
         if len(seen) >= max_namespaces:
