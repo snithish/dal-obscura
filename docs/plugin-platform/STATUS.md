@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `4554f51`.
+Implementation follow-up through `9a209db`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -260,7 +260,10 @@ option name (`839c16f`); no raw credential field is exposed.
   struct/list/map goldens, capability-negative checks, bounded task planning and
   output-schema checks, and machine-readable pass/fail results. Deliberate
   negative tests prove missing capabilities and schema mutation are rejected.
-- Green evidence: package tests (4), compileall, Ruff, and Ty pass using the
+  Plan iterators are bounded before materialization, declared output schemas are
+  enforced for every batch, expired contexts fail early, and optional plugin
+  cleanup runs on success or failure.
+- Green evidence: package tests (5), compileall, Ruff, and Ty pass using the
   package-only `PYTHONPATH` lane.
 - Remaining gaps: conforming Iceberg integration, intentionally incorrect
   provider implementations, governed Flight/consumer lanes, artifact identity
