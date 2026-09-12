@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `1e43e8e`.
+Implementation follow-up through `c5cffc8`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -403,6 +403,10 @@ option name (`839c16f`); no raw credential field is exposed.
 - Pickle compatibility: unchanged.
 - Next permitted packet: add bounded provider timeout/cancellation and test
   resource cleanup at discovery and schema boundaries.
+
+The returned-location check also handles authority-wide URI roots (for example,
+`s3://bucket/`) without weakening bucket isolation; the focused path suite now
+covers that case.
 
 X11 package check: `tests/plugin_platform/test_plugin_api_package.py` passes and
 the package source compiles without importing the service distribution. Building
