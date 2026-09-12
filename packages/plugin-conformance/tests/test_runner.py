@@ -135,6 +135,23 @@ class _CleanupFormat(_MutatingFormat):
         self.closed = True
 
 
+class _CoverageFormat(_ConformingFormat):
+    def plan(self, handle, schema, context, *, projection, row_filter, max_tasks):
+        del handle, context, projection, row_filter, max_tasks
+        return ["part-a", "part-b"]
+
+    def execute(self, task, context):
+        del task, context
+        schema = pa.schema([pa.field("id", pa.int64())])
+        return schema, [pa.RecordBatch.from_pylist([{"id": 1}], schema=schema)]
+
+
+class _DuplicateCoverageFormat(_CoverageFormat):
+    def plan(self, handle, schema, context, *, projection, row_filter, max_tasks):
+        del handle, schema, context, projection, row_filter, max_tasks
+        return ["part-a", "part-a"]
+
+
 def test_runner_rejects_unbounded_plan_and_output_schema_mutation():
     table = pa.table({"id": [1]})
     schema = SchemaDescriptor(
@@ -188,7 +205,39 @@ def test_runner_closes_plugin_after_failure_and_serializes_skips():
     payload = result.to_dict()
     assert payload["checks"]["cleanup"] == "passed"
     assert payload["checks"]["provider"] == "skipped"
-    assert payload["skips"] == ["provider: provider fixture is not configured"]
+    assert "provider: provider fixture is not configured" in payload["skips"]
+
+
+def test_runner_rejects_duplicate_or_missing_task_coverage():
+    table = pa.table({"id": [1]})
+    schema = SchemaDescriptor(
+        schema_version=1,
+        fingerprint="0" * 64,
+        arrow_schema=table.schema,
+    )
+    handle = TableHandle(
+        catalog_plugin_id="fixture",
+        catalog_instance_id="fixture",
+        catalog_revision=1,
+        identifier=TableIdentifier(namespace=("default",), name="users"),
+        format_plugin_id="fixture",
+        handle_version=1,
+    )
+    kwargs = {
+        "expected_task_ids": ("part-a", "part-b"),
+        "task_identity": str,
+    }
+
+    passing = run_format_checks(
+        cast(TableFormatPlugin, _CoverageFormat()), handle, schema, _context(), **kwargs
+    )
+    duplicate = run_format_checks(
+        cast(TableFormatPlugin, _DuplicateCoverageFormat()), handle, schema, _context(), **kwargs
+    )
+
+    assert passing.checks["task_coverage"] == "passed"
+    assert duplicate.to_dict()["status"] == "failed"
+    assert any("duplicate task identities" in failure for failure in duplicate.failures)
 
 
 def test_runner_honors_cancellation_before_plugin_execution():

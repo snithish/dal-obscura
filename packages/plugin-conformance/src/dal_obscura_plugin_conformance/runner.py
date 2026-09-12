@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from itertools import islice
@@ -111,6 +111,30 @@ def check_record_batches(
         result.record_pass("record_batches")
 
 
+def _check_task_coverage(
+    tasks: Sequence[object],
+    expected_task_ids: Iterable[str] | None,
+    task_identity: Callable[[object], str] | None,
+    result: ConformanceResult,
+) -> None:
+    if expected_task_ids is None:
+        result.record_skip("task_coverage", "no expected task identities supplied")
+        return
+    if task_identity is None:
+        raise ValueError("task_identity is required when expected_task_ids are supplied")
+    expected = tuple(expected_task_ids)
+    if len(expected) != len(set(expected)):
+        raise ValueError("expected task identities must be unique")
+    actual = tuple(task_identity(task) for task in tasks)
+    if any(not isinstance(identity, str) or not identity for identity in actual):
+        raise ValueError("task identities must be non-empty strings")
+    if len(actual) != len(set(actual)):
+        raise ValueError("format returned duplicate task identities")
+    if set(actual) != set(expected):
+        raise ValueError("format task identities do not match expected coverage")
+    result.record_pass("task_coverage")
+
+
 def run_format_checks(
     plugin: TableFormatPlugin,
     handle: TableHandle,
@@ -122,6 +146,8 @@ def run_format_checks(
     max_tasks: int = 64,
     required_capabilities: Iterable[str] = (),
     artifact_identity: str | None = None,
+    expected_task_ids: Iterable[str] | None = None,
+    task_identity: Callable[[object], str] | None = None,
 ) -> ConformanceResult:
     """Run bounded plan/schema/output checks against one admitted format plugin."""
 
@@ -157,6 +183,7 @@ def run_format_checks(
         if len(tasks) > max_tasks:
             raise ValueError("format returned more tasks than requested")
         result.record_pass("bounded_plan")
+        _check_task_coverage(tasks, expected_task_ids, task_identity, result)
         for task in tasks:
             if context.cancel_check is not None and context.cancel_check():
                 raise RuntimeError("execution context was cancelled")
