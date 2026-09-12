@@ -91,6 +91,25 @@ def test_lock_mismatch_and_duplicate_ids_fail_closed() -> None:
         duplicate.discover()
 
 
+def test_allowlisted_entry_without_distribution_provenance_fails_closed() -> None:
+    entry = cast(
+        _Entry,
+        SimpleNamespace(
+            name="iceberg.sql",
+            group="dal_obscura.catalogs.v1",
+            dist=None,
+            load=lambda: {"name": "iceberg.sql"},
+        ),
+    )
+    registry = PluginRegistry(
+        allowlist={("catalog", "iceberg.sql"): ("plugin-wheel", "1.2.3", "1")},
+        entry_points_fn=lambda: _EntryPoints([entry]),
+    )
+
+    with pytest.raises(PluginAdmissionError, match="provenance is unavailable"):
+        registry.discover()
+
+
 def test_invalid_plugin_id_cannot_be_loaded() -> None:
     registry = PluginRegistry(entry_points_fn=lambda: _EntryPoints([]))
 

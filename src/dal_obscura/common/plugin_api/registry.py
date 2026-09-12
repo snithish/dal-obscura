@@ -55,13 +55,14 @@ class PluginRegistry:
                 if admitted is None:
                     continue
                 distribution, version, api_version = admitted
-                if entry.dist is not None:
-                    actual_distribution = entry.dist.name
-                    actual_version = entry.dist.version
-                    if (actual_distribution, actual_version) != (distribution, version):
-                        raise PluginAdmissionError(
-                            f"Plugin lock mismatch for {kind}:{plugin_id}"
-                        )
+                if entry.dist is None:
+                    raise PluginAdmissionError(
+                        f"Plugin provenance is unavailable for {kind}:{plugin_id}"
+                    )
+                actual_distribution = entry.dist.name
+                actual_version = entry.dist.version
+                if (actual_distribution, actual_version) != (distribution, version):
+                    raise PluginAdmissionError(f"Plugin lock mismatch for {kind}:{plugin_id}")
                 descriptors[key] = PluginDescriptor(
                     kind=kind,
                     plugin_id=plugin_id,
