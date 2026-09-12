@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `1795312`.
+Implementation follow-up through `5c17d04`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -194,6 +194,22 @@ remain open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: continue X06 explicit schema-evolution policy tests,
   while X03 PostgreSQL transaction barriers remain an external gate.
+
+### X06 duplicate identity rejection — `5c17d04`
+
+- State: implementing.
+- Behavior: published schema admission rejects a live provider schema that
+  reuses a stable field ID anywhere in its nested tree, preventing ambiguous
+  path resolution and dictionary overwrite from becoming implicit access.
+- Red/green evidence: the duplicate-ID regression in
+  `tests/infrastructure/adapters/test_published_config.py` was red before the
+  guard and passes with the collection identity suite (3 focused tests passed);
+  Ruff passed.
+- Remaining gaps: provider-specific identity guarantees, explicit rename/add
+  policy, and PostgreSQL/browser/consumer acceptance remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: continue X06 evolution policy and X03 PostgreSQL
+  transaction barriers.
 
 The combined control-plane, catalog, schema, publication, migration, plugin, and
 published-config boundary suite passed at 100% after the budget change.
