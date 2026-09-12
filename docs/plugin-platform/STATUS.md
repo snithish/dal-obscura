@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `47c7c47`.
+Implementation follow-up through `9d2789c`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -94,6 +94,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   trusted Iceberg generation at startup. Catalog construction now receives that
   generation and invokes the admitted `iceberg.sql` factory rather than selecting
   an implementation from mutable request/config strings.
+  Additive migration `20260913_0014` persists qualified catalog/format identities
+  and optional plugin revisions beside immutable published rows; reads merge those
+  identities back into legacy-compatible manifests.
   Runtime registry routing, migration of legacy manifests, and mixed-version
   rollout evidence remain open.
 - X14 plugin UI: **implementing**; standalone plugin descriptors now enforce
@@ -294,6 +297,25 @@ option name (`839c16f`); no raw credential field is exposed.
 - Pickle compatibility: unchanged.
 - Next permitted packet: bind plugin instance/config revisions into publication
   records before adding external catalog or format packages.
+
+### X13 persisted plugin bindings — `9d2789c`
+
+- State: implementing.
+- Behavior: published catalog and asset rows now carry nullable qualified plugin
+  IDs and optional revisions through additive migration `20260913_0014`. The
+  repository derives only the exact built-in mapping (`IcebergCatalog` →
+  `iceberg.sql`, Iceberg backend → `iceberg`); unknown legacy rows remain
+  nullable and use their existing compatibility interpretation. Published reads
+  merge persisted IDs into the immutable manifest before data-plane admission.
+- Green evidence: publication-store and published-config tests pass (19), Ruff,
+  Ty, and `git diff --check` pass; SQLite migration head upgrades cleanly through
+  the existing fixture setup.
+- Remaining gaps: plugin instance/config revision semantics and CAS binding
+  updates, dry-run migration tooling, external SDK factories, artifact locks, and
+  live PostgreSQL/provider/browser/consumer gates remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: add revision/CAS validation for mutable asset bindings
+  before external plugin onboarding.
 
 X11 package check: `tests/plugin_platform/test_plugin_api_package.py` passes and
 the package source compiles without importing the service distribution. Building
