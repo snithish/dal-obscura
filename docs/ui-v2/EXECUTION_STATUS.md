@@ -38,8 +38,9 @@ Required backend/production coverage: [production review](PRODUCTION_READINESS.m
 - P09 history, restore, audit, runtime observations: implemented-unverified;
   immutable history, audited restore/mutations, and explicit unobserved
   data-plane status are shipped.
-- P10 complete management and consumer handoff: partial; UI management views and
-  API contracts exist, while grant administration, operation lookup, and real
+- P10 complete management and consumer handoff: partial; UI management views,
+  bounded asset inventory, catalog discovery/onboarding, grant administration,
+  and operation lookup exist, while secret-provider diagnostics and real
   DuckDB/Spark/Flight handoff evidence remain.
 - P11 verified local feature/security parity: partial; local uses shared auth,
   CSRF, authorization, evaluation, and publication code, while a real local
@@ -115,6 +116,15 @@ do not call the release complete without those observations.
   API processes from publishing the same request twice.
 - Green evidence: publication API/idempotency and repository CAS tests pass;
   a real two-process PostgreSQL race still needs execution.
+
+### P10.2 catalog credential boundary — `42a304e`
+
+- State: implemented-unverified.
+- Behavior: catalog options reject inline password/token/credential values;
+  sensitive fields must carry an explicit secret reference. URI userinfo/query
+  secrets and non-allowlisted endpoint hosts remain rejected.
+- Green evidence: catalog API and compiler tests pass with Ruff and Ty. Real
+  secret-provider and catalog discovery diagnostics remain unverified.
 
 ### P15.2 request-boundary limits — `c2975a3`
 
