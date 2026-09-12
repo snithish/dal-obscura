@@ -69,6 +69,26 @@ def test_workspace_asset_requires_physical_iceberg_identifier():
     assert response.status_code == 422
 
 
+def test_asset_cannot_remove_its_last_owner_without_reassignment():
+    client = _client()
+    asset = _provision_draft(client)
+    assigned = client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["user:owner@example.com"]},
+        headers=ADMIN_HEADERS,
+    )
+
+    removed = client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": []},
+        headers=ADMIN_HEADERS,
+    )
+
+    assert assigned.status_code == 200
+    assert removed.status_code == 400
+    assert "last owner" in removed.json()["detail"]
+
+
 def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail():
     client = _client()
     client.put(

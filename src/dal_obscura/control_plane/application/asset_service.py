@@ -128,6 +128,13 @@ def replace_asset_owners(
 
     if actor is not None and not actor.platform_admin:
         raise AuthorizationFailure("Only platform admins may replace asset owners.")
+    existing_owners = store.list_asset_owners(asset_id)
+    normalized = [owner.strip() for owner in owners if owner.strip()]
+    if existing_owners and not normalized:
+        raise ValidationFailure(
+            "Cannot remove the last owner without assigning an asset replacement "
+            "in the same request."
+        )
     normalized = store.replace_asset_owners(asset_id=asset_id, owners=owners)
     if actor is not None:
         store.record_asset_audit_event(
