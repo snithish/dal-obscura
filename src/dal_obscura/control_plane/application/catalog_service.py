@@ -177,6 +177,7 @@ def validate_catalog_options(
     """
 
     normalized_allowlist = {item.strip().lower().rstrip(".") for item in egress_allowlist}
+    _reject_dynamic_loader_options(options)
     _reject_inline_secrets(options)
     for key, value in _walk_strings(options):
         if "://" not in value:
@@ -249,3 +250,29 @@ def _reject_inline_secrets(value: object, prefix: str = "options") -> None:
     elif isinstance(value, list):
         for index, nested in enumerate(value):
             _reject_inline_secrets(nested, f"{prefix}[{index}]")
+
+
+_DYNAMIC_LOADER_OPTION_KEYS = {
+    "py-catalog-impl",
+    "py-io-impl",
+    "catalog-impl",
+    "io-impl",
+    "class-path",
+    "implementation-class",
+}
+
+
+def _reject_dynamic_loader_options(value: object, prefix: str = "options") -> None:
+    """Rejects provider settings that select arbitrary installed Python classes."""
+
+    if isinstance(value, dict):
+        for key, nested in cast(dict[str, object], value).items():
+            path = f"{prefix}.{key}"
+            if str(key).strip().lower() in _DYNAMIC_LOADER_OPTION_KEYS:
+                raise ValidationFailure(
+                    f"Catalog option {path!r} cannot select an implementation class"
+                )
+            _reject_dynamic_loader_options(nested, path)
+    elif isinstance(value, list):
+        for index, nested in enumerate(value):
+            _reject_dynamic_loader_options(nested, f"{prefix}[{index}]")
