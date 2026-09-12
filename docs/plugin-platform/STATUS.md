@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `cbbb42c`.
+Implementation follow-up through `20c8051`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -111,8 +111,9 @@ clean. Built-in Iceberg routing and artifact-lock verification remain open.
 
 X11 package check: `tests/plugin_platform/test_plugin_api_package.py` passes and
 the package source compiles without importing the service distribution. Building
-the wheel in this offline environment is an explicit external artifact gate, not
-claimed by the test.
+the wheel with `uv build --wheel --no-build-isolation` is currently blocked because
+the isolated environment has no `setuptools`; the normal online wheel/artifact
+gate remains unverified and is not claimed by the test.
 
 Integration boundary check after the migration and lock slices:
 `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane tests/interfaces/control_plane/test_assets_api.py tests/interfaces/control_plane/test_schema_api.py tests/plugin_platform -q`
