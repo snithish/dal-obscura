@@ -312,7 +312,8 @@ export const controlPlane = {
 
 function readCookie(name: string): string | undefined {
   const prefix = `${name}=`;
-  return document.cookie.split("; ").find((cookie) => cookie.startsWith(prefix))?.slice(prefix.length);
+  return document.cookie.split("; ").find((cookie) => cookie.startsWith(`__Host-${prefix}`))?.slice(`__Host-`.length + prefix.length)
+    ?? document.cookie.split("; ").find((cookie) => cookie.startsWith(prefix))?.slice(prefix.length);
 }
 
 function normalizeAsset(asset: Asset): Asset {

@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import secrets
+from collections.abc import Mapping
 from typing import cast
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
@@ -110,8 +111,9 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         session_token, csrf_token = deps.issue_browser_session_credentials(actor)
         result = RedirectResponse(_post_login_redirect(config, redirect_uri), status_code=303)
         result.headers["cache-control"] = "no-store"
+        session_cookie, csrf_cookie = _browser_cookie_names(config)
         result.set_cookie(
-            key="dal_obscura_session",
+            key=session_cookie,
             value=session_token,
             httponly=True,
             secure=_secure_cookie(config),
@@ -119,7 +121,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             path="/",
         )
         result.set_cookie(
-            key="dal_obscura_csrf",
+            key=csrf_cookie,
             value=csrf_token,
             httponly=False,
             secure=_secure_cookie(config),
@@ -156,8 +158,9 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             raise HTTPException(status_code=401, detail="Demo identity provider token rejected")
         session_token, csrf_token = deps.issue_browser_session_credentials(actor)
         secure = str(deps.ui_auth_config.get("redirect_uri", "")).startswith("https://")
+        session_cookie, csrf_cookie = _browser_cookie_names(deps.ui_auth_config)
         response.set_cookie(
-            key="dal_obscura_session",
+            key=session_cookie,
             value=session_token,
             httponly=True,
             secure=secure,
@@ -165,7 +168,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             path="/",
         )
         response.set_cookie(
-            key="dal_obscura_csrf",
+            key=csrf_cookie,
             value=csrf_token,
             httponly=False,
             secure=secure,
@@ -180,13 +183,19 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         response: Response,
         session_token: str | None = Cookie(default=None, alias="dal_obscura_session"),
         csrf_cookie: str | None = Cookie(default=None, alias="dal_obscura_csrf"),
+        host_session_token: str | None = Cookie(default=None, alias="__Host-dal_obscura_session"),
+        host_csrf_cookie: str | None = Cookie(default=None, alias="__Host-dal_obscura_csrf"),
     ) -> object:
         """Expires browser credentials even when the server session is stale."""
+        session_token = host_session_token or session_token
+        csrf_cookie = host_csrf_cookie or csrf_cookie
         if session_token:
             deps.validate_browser_mutation(request, csrf_cookie)
             deps.revoke_browser_session(session_token)
-        response.delete_cookie(key="dal_obscura_session", path="/")
-        response.delete_cookie(key="dal_obscura_csrf", path="/")
+        for cookie_name in ("dal_obscura_session", "__Host-dal_obscura_session"):
+            response.delete_cookie(key=cookie_name, path="/")
+        for cookie_name in ("dal_obscura_csrf", "__Host-dal_obscura_csrf"):
+            response.delete_cookie(key=cookie_name, path="/")
         return {"authenticated": False}
 
     return api
@@ -220,6 +229,12 @@ def _code_challenge(verifier: str) -> str:
 
 def _secure_cookie(config: dict[str, object]) -> bool:
     return str(config.get("redirect_uri", "")).startswith("https://")
+
+
+def _browser_cookie_names(config: Mapping[str, object]) -> tuple[str, str]:
+    if _secure_cookie(dict(config)):
+        return "__Host-dal_obscura_session", "__Host-dal_obscura_csrf"
+    return "dal_obscura_session", "dal_obscura_csrf"
 
 
 def _post_login_redirect(config: dict[str, object], redirect_uri: str) -> str:

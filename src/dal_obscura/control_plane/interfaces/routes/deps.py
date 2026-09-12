@@ -76,8 +76,12 @@ class ControlPlaneDeps:
         authorization: str = Header(default=""),
         session_token: str | None = Cookie(default=None, alias="dal_obscura_session"),
         csrf_cookie: str | None = Cookie(default=None, alias="dal_obscura_csrf"),
+        host_session_token: str | None = Cookie(default=None, alias="__Host-dal_obscura_session"),
+        host_csrf_cookie: str | None = Cookie(default=None, alias="__Host-dal_obscura_csrf"),
     ) -> ControlPlaneActor:
         """Authenticates bearer clients or an HttpOnly browser session."""
+        session_token = host_session_token or session_token
+        csrf_cookie = host_csrf_cookie or csrf_cookie
         expected = f"Bearer {self.admin_token}"
         if self.bootstrap_enabled and authorization == expected:
             return ControlPlaneActor.for_platform_admin("platform:admin")
@@ -225,12 +229,14 @@ class ControlPlaneDeps:
         authorization: str = Header(default=""),
         session_token: str | None = Cookie(default=None, alias="dal_obscura_session"),
         csrf_cookie: str | None = Cookie(default=None, alias="dal_obscura_csrf"),
+        host_session_token: str | None = Cookie(default=None, alias="__Host-dal_obscura_session"),
+        host_csrf_cookie: str | None = Cookie(default=None, alias="__Host-dal_obscura_csrf"),
     ) -> ControlPlaneActor:
         actor = self.require_actor(
             request=request,
             authorization=authorization,
-            session_token=session_token,
-            csrf_cookie=csrf_cookie,
+            session_token=host_session_token or session_token,
+            csrf_cookie=host_csrf_cookie or csrf_cookie,
         )
         if not actor.platform_admin:
             raise HTTPException(status_code=403, detail="Platform admin required")
