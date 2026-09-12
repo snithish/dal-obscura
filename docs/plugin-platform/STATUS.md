@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `90934cf`.
+Implementation follow-up through `ea01654`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -386,6 +386,22 @@ remain open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: implement staged runtime/auth activation semantics or
   continue X03 PostgreSQL transaction barriers.
+
+### X03/X10 workspace audit boundary — `ea01654`
+
+- State: implementing.
+- Behavior: workspace publication audit emission is now explicit to the
+  workspace activation delegate. Asset-level policy publication continues to
+  use its existing asset audit path and cannot be mislabeled as a workspace
+  generation transition.
+- Green evidence: asset publication regression and workspace lifecycle tests
+  pass; Ruff, Ty, and `git diff --check` pass on changed paths.
+- Remaining gaps: PostgreSQL barrier/process evidence, complete operation and
+  audit rollback matrix, browser/a11y proof, real IdP/session validation, and
+  production artifact validation remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: continue X03 PostgreSQL transaction barriers and X10
+  staged runtime/auth activation semantics.
 
 The combined control-plane, catalog, schema, publication, migration, plugin, and
 published-config boundary suite passed at 100% after the budget change.
