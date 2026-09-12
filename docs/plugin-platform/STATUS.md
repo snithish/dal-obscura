@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `515cf37`.
+Implementation follow-up through `29bb743`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -322,6 +322,23 @@ remain open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: continue X10 rollback/impact semantics and X03
   PostgreSQL transaction barriers.
+
+### X10 workspace publication audit — `29bb743`
+
+- State: implementing.
+- Behavior: workspace snapshot creation and generation activation now append
+  tenant-scoped audit events in the same transaction, preserving the
+  authenticated actor identity, request correlation, publication counts, and
+  manifest hash. Stale compare-and-set activation failures emit no success
+  event because the transaction aborts before the audit write.
+- Green evidence: workspace publication lifecycle, stale-generation, and audit
+  visibility tests pass; Ruff, Ty, and `git diff --check` pass on changed paths.
+- Remaining gaps: PostgreSQL rollback and barrier/process evidence, browser and
+  accessibility journeys, real IdP/session validation, and production artifact
+  validation remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: continue X03 PostgreSQL transaction barriers and X10
+  activation impact/error UX.
 
 The combined control-plane, catalog, schema, publication, migration, plugin, and
 published-config boundary suite passed at 100% after the budget change.
