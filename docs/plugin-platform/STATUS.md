@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `839c16f`.
+Implementation follow-up through `d62392e`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -82,10 +82,15 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
 - X12 admitted loading and Iceberg adapter: **implementing**; entry-point loading now
   fails closed when a request names an unallowlisted installation, with registry
   regression coverage. Built-in Iceberg routing and artifact-lock verification
-  remain open.
+  now has an explicit immutable built-in registration and data-plane startup
+  admission path. Artifact-lock verification and full SDK adapter routing remain
+  open.
 - X13 plugin routing and migration: **implementing**; immutable compiled asset
   manifests now record explicit catalog and table-format adapter identities, and
   the data plane rejects explicit bindings it cannot honor before provider setup.
+  Published-config resolution now optionally requires both identities to exist in
+  the active admitted registry generation; the production data plane wires the
+  trusted Iceberg generation at startup.
   Runtime registry routing, migration of legacy manifests, and mixed-version
   rollout evidence remain open.
 - X14 plugin UI: **implementing**; standalone plugin descriptors now enforce
@@ -230,6 +235,27 @@ open.
 
 The descriptor's password field now matches the server's validated secret-reference
 option name (`839c16f`); no raw credential field is exposed.
+
+### X12/X13 immutable runtime admission — `d62392e`
+
+- State: implementing.
+- Behavior: the plugin registry captures entry points and trusted built-ins in one
+  reload generation. Factory loads use that captured generation instead of
+  rescanning installed packages on request. Data-plane startup admits the
+  qualified in-tree Iceberg catalog (`iceberg.sql`) and format (`iceberg`) pair;
+  published explicit bindings are rejected when either identity is absent from
+  the active snapshot. Legacy manifests without plugin metadata retain the
+  documented compatibility path.
+- Green evidence: `tests/plugin_platform/test_registry.py` (9 passed),
+  `tests/plugin_platform/test_builtin_plugins.py` (1 passed),
+  `tests/infrastructure/adapters/test_published_config.py` (16 passed), runtime
+  identity tests, Ruff, Ty, and `git diff --check` pass.
+- Remaining gaps: independent wheel descriptor/artifact locks, external plugin
+  routing through SDK factories, legacy-manifest migration tooling, and live
+  PostgreSQL/provider/browser/consumer gates remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: complete artifact/descriptor lock validation before
+  adding external REST or manifest/Parquet providers.
 
 X11 package check: `tests/plugin_platform/test_plugin_api_package.py` passes and
 the package source compiles without importing the service distribution. Building
