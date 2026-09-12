@@ -437,6 +437,12 @@ remain open.
 The combined control-plane, catalog, schema, publication, migration, plugin, and
 published-config boundary suite passed at 100% after the budget change.
 
+The post-audit boundary run passed at 100% across control-plane, asset, catalog,
+schema, policy-version, workspace, settings, plugin, migration, and
+published-config tests. Direct TypeScript and Vite production builds remain
+green; the local sandbox cannot bind an additional listener because localhost
+port 5173 is already occupied by the existing UI process.
+
 The direct-Arrow bounds regression and Ty/Ruff checks passed in
 `3263645`; the full schema byte-budget and every-entry-route acceptance matrix
 remains open.
