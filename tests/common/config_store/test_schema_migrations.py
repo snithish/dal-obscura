@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -69,7 +70,7 @@ def test_migrate_config_store_is_idempotent() -> None:
     with engine.connect() as connection:
         version = connection.scalar(text("SELECT version_num FROM alembic_version"))
 
-    assert version == "20260912_0012"
+    assert version == "20260912_0013"
 
 
 def test_migrate_config_store_upgrades_legacy_runtime_settings_column() -> None:
@@ -112,3 +113,60 @@ def test_migrate_config_store_upgrades_legacy_runtime_settings_column() -> None:
     with engine.connect() as connection:
         value = connection.scalar(text("SELECT max_ticket_exchanges FROM cell_runtime_settings"))
     assert value == 1
+
+
+def test_schema_identity_migration_backfills_legacy_rows() -> None:
+    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+    migrate_config_store(engine, "20260912_0010")
+    tenant = "00000000-0000-0000-0000-000000000001"
+    cell = "00000000-0000-0000-0000-000000000002"
+    catalog = "00000000-0000-0000-0000-000000000003"
+    asset = "00000000-0000-0000-0000-000000000004"
+    field = "00000000-0000-0000-0000-000000000005"
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO tenants (id, slug, display_name, status) "
+                "VALUES (:id, 'tenant', 'Tenant', 'active')"
+            ),
+            {"id": tenant},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO cells (id, name, region, status) "
+                "VALUES (:id, 'cell', 'local', 'active')"
+            ),
+            {"id": cell},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO catalogs (id, cell_id, tenant_id, name, module, options_json) "
+                "VALUES (:id, :cell, :tenant, 'analytics', 'IcebergCatalog', '{}')"
+            ),
+            {"id": catalog, "cell": cell, "tenant": tenant},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO assets (id, cell_id, tenant_id, catalog_id, target, backend, "
+                "table_identifier, options_json) VALUES (:id, :cell, :tenant, :catalog, "
+                "'users', 'iceberg', 'prod.users', '{}')"
+            ),
+            {"id": asset, "cell": cell, "tenant": tenant, "catalog": catalog},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO asset_schema_fields (id, asset_id, ordinal, name, type, nullable) "
+                "VALUES (:id, :asset, 1, 'profile.email', 'string', 1)"
+            ),
+            {"id": field, "asset": asset},
+        )
+
+    migrate_config_store(engine)
+
+    with engine.connect() as connection:
+        row = connection.execute(
+            text("SELECT field_id, path_json FROM asset_schema_fields WHERE id = :id"),
+            {"id": field},
+        ).mappings().one()
+    assert json.loads(row["path_json"]) == ["profile.email"]
+    assert str(row["field_id"]).startswith("legacy:")

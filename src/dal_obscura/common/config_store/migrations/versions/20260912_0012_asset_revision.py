@@ -21,7 +21,6 @@ def upgrade() -> None:
         batch.add_column(
             sa.Column("revision", sa.Integer(), nullable=False, server_default="0")
         )
-        batch.alter_column("revision", server_default=None)
 
 
 def downgrade() -> None:
