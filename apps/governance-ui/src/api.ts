@@ -52,7 +52,7 @@ export type AssetSchema = {
 
 export type Mask = {
   type: "null" | "redact" | "hash" | "email" | "keep_last" | "default";
-  value?: string | number | null;
+  value?: string | number | boolean | null;
 };
 
 export type PolicyRule = {
