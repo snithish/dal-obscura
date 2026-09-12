@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `20c8051`.
+Implementation follow-up through `75f753b`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -263,6 +263,24 @@ return the stable redacted validation response at the HTTP boundary.
   passed; Ruff passed on the changed test.
 - Scope: SQLite transaction regression only. PostgreSQL barriers, lost-response
   idempotency replay, and multi-process grant/binding races remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: PostgreSQL X03 barrier evidence, then X06 collection
+  identity and explicit schema-evolution policy tests.
+
+### X03 publication lock ordering — `75f753b`
+
+- State: implementing.
+- Behavior: active-generation activation now locks the owning cell row after the
+  selected asset row and before pointer replacement. This gives PostgreSQL
+  publication, grant, and binding operations a consistent asset-then-cell lock
+  order and serializes concurrent first activations in one cell.
+- Green evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync
+  pytest tests/control_plane/test_publication_store.py
+  tests/interfaces/control_plane/test_policy_versions_api.py -q` passed (all);
+  Ruff and `git diff --check` passed.
+- Remaining gaps: real PostgreSQL barrier interleavings, rollback under process
+  failure, idempotency replay after lost responses, and multi-process grant/
+  binding evidence remain open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: PostgreSQL X03 barrier evidence, then X06 collection
   identity and explicit schema-evolution policy tests.
