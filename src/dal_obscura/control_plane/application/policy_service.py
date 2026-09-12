@@ -76,6 +76,7 @@ def preview_asset_policy(
     claims: dict[str, object],
     actor: ControlPlaneActor | None = None,
     requested_columns: list[str] | None = None,
+    include_mask_values: bool = False,
 ) -> dict[str, object]:
     """Evaluates draft policy rules for a preview principal.
 
@@ -129,12 +130,20 @@ def preview_asset_policy(
             "masks": [],
             "row_filter": None,
         }
+    mask_payload = [
+        {
+            "column": column,
+            "type": mask.type,
+            **({"value": mask.value} if include_mask_values else {}),
+        }
+        for column, mask in sorted(masks.items())
+    ]
     return {
         "decision": "allow",
         "matched_ordinal": matched_ordinal,
         "reason": _allow_preview_reason(matched_ordinal),
         "visible_columns": visible_columns,
-        "masks": [{"column": column, "type": mask.type} for column, mask in sorted(masks.items())],
+        "masks": mask_payload,
         "row_filter": row_filter,
     }
 

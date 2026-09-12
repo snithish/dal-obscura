@@ -124,14 +124,23 @@ def test_policy_evaluation_returns_duckdb_transformed_synthetic_rows(monkeypatch
         json={
             "rules": [
                 {
+                    "ordinal": 1,
+                    "effect": "allow",
+                    "principals": ["other-reader"],
+                    "when": {},
+                    "columns": ["id", "email", "region"],
+                    "masks": {"email": {"type": "redact", "value": "[wrong]"}},
+                    "row_filter": "region = 'us'",
+                },
+                {
                     "ordinal": 10,
                     "effect": "allow",
                     "principals": ["analyst"],
                     "when": {},
                     "columns": ["id", "email", "region"],
-                    "masks": {"email": {"type": "email"}},
+                    "masks": {"email": {"type": "redact", "value": "[right]"}},
                     "row_filter": "region = 'us'",
-                }
+                },
             ]
         },
         headers=ADMIN_HEADERS,
@@ -159,7 +168,7 @@ def test_policy_evaluation_returns_duckdb_transformed_synthetic_rows(monkeypatch
     assert payload["decision"] == "allow"
     assert payload["input_rows"] == 2
     assert payload["output_rows"] == 1
-    assert payload["rows"][0]["email"] == "a***@example.com"
+    assert payload["rows"][0]["email"] == "[right]"
     assert payload["evidence"]["evaluator_version"] == "duckdb-synthetic-v1"
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any, cast
+from typing import cast
 from uuid import UUID
 
 import pyarrow as pa
@@ -48,6 +48,7 @@ def evaluate_asset_policy(
         claims=claims,
         actor=actor,
         requested_columns=requested_columns,
+        include_mask_values=True,
     )
     draft = store.get_asset_policy_draft(asset_id=asset_id, author_principal=actor.identity_key())
     revision = 0 if draft is None else int(cast(int | str, draft["revision"]))
@@ -81,18 +82,10 @@ def evaluate_asset_policy(
 
     synthetic_rows = rows or [_sample_row(arrow_schema)]
     batches = pa.Table.from_pylist(synthetic_rows, schema=arrow_schema).to_batches()
-    raw_rules = store.list_policy_rules(asset_id)
-    if draft is not None:
-        raw_rules = cast(list[dict[str, object]], draft["rules"])
-    mask_values: dict[str, object | None] = {}
-    for raw_rule in raw_rules:
-        for column, raw_mask in cast(dict[str, object], raw_rule.get("masks", {})).items():
-            if isinstance(raw_mask, dict):
-                mask_values.setdefault(column, cast(dict[str, Any], raw_mask).get("value"))
     masks = {
         str(item["column"]): MaskRule(
             type=str(item["type"]),
-            value=mask_values.get(str(item["column"])),
+            value=item.get("value"),
         )
         for item in cast(list[dict[str, object]], preview["masks"])
     }
