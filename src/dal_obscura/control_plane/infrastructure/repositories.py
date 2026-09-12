@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal, cast
@@ -648,6 +649,9 @@ class PublicationStore:
                 catalog=catalog,
                 target=target,
                 backend=backend,
+                catalog_plugin_id=_catalog_plugin_id(compiled_config),
+                format_plugin_id=_format_plugin_id(compiled_config, backend),
+                plugin_revision=_plugin_revision(compiled_config),
                 compiled_config_json=compiled_config,
                 policy_version=policy_version,
             )
@@ -672,13 +676,21 @@ class PublicationStore:
         )
         if record is None:
             raise LookupError(f"No published asset for {catalog}/{target}")
+        compiled_config = dict(record.compiled_config_json)
+        plugin_binding = dict(cast(dict[str, object], compiled_config.get("plugins", {})))
+        if record.catalog_plugin_id is not None:
+            plugin_binding.setdefault("catalog", record.catalog_plugin_id)
+        if record.format_plugin_id is not None:
+            plugin_binding.setdefault("table_format", record.format_plugin_id)
+        if plugin_binding:
+            compiled_config["plugins"] = plugin_binding
         return PublishedAsset(
             publication_id=record.publication_id,
             tenant_id=record.tenant_id,
             catalog=record.catalog,
             target=record.target,
             backend=record.backend,
-            compiled_config=dict(record.compiled_config_json),
+            compiled_config=compiled_config,
             policy_version=record.policy_version,
         )
 
@@ -1817,6 +1829,8 @@ class PublicationStore:
                     publication_id=publication_id,
                     tenant_id=catalog.tenant_id,
                     catalog=catalog.catalog,
+                    plugin_id=_catalog_plugin_id(catalog.config),
+                    plugin_revision=_plugin_revision(catalog.config),
                     config_json=catalog.config,
                 )
             )
@@ -2009,6 +2023,47 @@ def _normalize_principals(principals: list[str]) -> list[str]:
             normalized.append(value)
             seen.add(value)
     return normalized
+
+
+_ICEBERG_CATALOG_MODULE = (
+    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
+)
+
+
+def _catalog_plugin_id(config: Mapping[str, Any]) -> str | None:
+    raw_plugins = config.get("plugins")
+    if isinstance(raw_plugins, Mapping):
+        value = raw_plugins.get("catalog")
+        if value == _ICEBERG_CATALOG_MODULE or value == "iceberg.sql":
+            return "iceberg.sql"
+    catalog_config = config.get("catalog")
+    raw_module = (
+        catalog_config.get("module")
+        if isinstance(catalog_config, Mapping)
+        else config.get("module")
+    )
+    if raw_module == _ICEBERG_CATALOG_MODULE:
+        return "iceberg.sql"
+    return None
+
+
+def _format_plugin_id(config: Mapping[str, Any], backend: str) -> str | None:
+    raw_plugins = config.get("plugins")
+    if isinstance(raw_plugins, Mapping):
+        value = raw_plugins.get("table_format")
+        if isinstance(value, str) and value == "iceberg":
+            return value
+    return "iceberg" if backend == "iceberg" else None
+
+
+def _plugin_revision(config: Mapping[str, Any]) -> int | None:
+    raw_plugins = config.get("plugins")
+    if not isinstance(raw_plugins, Mapping):
+        return None
+    value = raw_plugins.get("revision")
+    if isinstance(value, int) and value >= 0:
+        return value
+    return None
 
 
 def _normalize_schema_fields(fields: list[dict[str, Any]]) -> list[dict[str, object]]:

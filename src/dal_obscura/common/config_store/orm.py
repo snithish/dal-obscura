@@ -392,6 +392,8 @@ class PublishedCatalogRecord(Base):
     )
     tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), primary_key=True)
     catalog: Mapped[str] = mapped_column(String(160), primary_key=True)
+    plugin_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    plugin_revision: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     config_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
 
 
@@ -408,6 +410,9 @@ class PublishedAssetRecord(Base):
     catalog: Mapped[str] = mapped_column(String(160), primary_key=True)
     target: Mapped[str] = mapped_column(Text, primary_key=True)
     backend: Mapped[str] = mapped_column(String(48), nullable=False)
+    catalog_plugin_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    format_plugin_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    plugin_revision: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     compiled_config_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     policy_version: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
