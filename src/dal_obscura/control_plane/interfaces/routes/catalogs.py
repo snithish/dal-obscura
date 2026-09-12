@@ -11,6 +11,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import ValidationError
 
+from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 from dal_obscura.control_plane.interfaces.routes.schemas import CatalogRequest, request_payload
 
@@ -39,7 +40,11 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         return deps.with_service(lambda service: service.diagnose_workspace_catalog(name))
 
     @api.put("/v1/catalogs/{name}", dependencies=[Depends(deps.require_admin)])
-    async def upsert_workspace_catalog(name: str, request: Request) -> object:
+    async def upsert_workspace_catalog(
+        name: str,
+        request: Request,
+        actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
+    ) -> object:
         try:
             payload = CatalogRequest.model_validate(await request_payload(request))
         except ValidationError as exc:
@@ -49,6 +54,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
                 name=name,
                 module=payload.module,
                 options=payload.options,
+                actor=actor,
             )
         )
 

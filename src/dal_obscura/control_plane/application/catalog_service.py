@@ -142,6 +142,8 @@ def upsert_workspace_catalog(
     module: str,
     options: dict[str, Any],
     egress_allowlist: tuple[str, ...] = (),
+    *,
+    actor_principal: str = "system",
 ) -> dict[str, str]:
     """Creates or updates a workspace catalog definition.
 
@@ -159,6 +161,15 @@ def upsert_workspace_catalog(
         name=name,
         module=module,
         options=options,
+    )
+    store.record_workspace_audit_event(
+        cell_id=context.cell_id,
+        tenant_id=context.tenant_id,
+        actor_principal=actor_principal,
+        action="workspace.catalog.update",
+        resource_type="catalog",
+        resource_id=str(catalog_id),
+        details={"name": name, "module": module, "option_keys": sorted(options)},
     )
     return {"id": str(catalog_id), "name": name}
 

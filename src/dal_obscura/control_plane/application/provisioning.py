@@ -384,6 +384,7 @@ class ProvisioningService:
         name: str,
         module: str,
         options: dict[str, Any],
+        actor: ControlPlaneActor | None = None,
     ) -> dict[str, str]:
         return catalog_service.upsert_workspace_catalog(
             self._store,
@@ -391,6 +392,7 @@ class ProvisioningService:
             module=module,
             options=options,
             egress_allowlist=self._catalog_egress_allowlist,
+            actor_principal="system" if actor is None else actor.identity_key(),
         )
 
     def upsert_asset(
