@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `c815aa7`.
+Implementation follow-up through `1795312`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -177,6 +177,23 @@ remain open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: continue X03 PostgreSQL/CAS transaction evidence, then
   X06 provider-derived and collection field identities.
+
+### X06 collection schema identities — `1795312`
+
+- State: implementing.
+- Behavior: published schema admission now traverses list, large-list,
+  fixed-size-list, and map children with canonical `$element`, `$key`, and
+  `$value` path segments. Stable IDs and types for nested collection leaves are
+  checked before an executable table format is returned.
+- Red/green evidence: collection element/key/value acceptance and element-ID
+  drift regressions in `tests/infrastructure/adapters/test_published_config.py`
+  pass; Ruff and `git diff --check` pass.
+- Remaining gaps: provider-derived identity rules for every backend, rename and
+  addition policy, migration uniqueness proof, and PostgreSQL/browser/consumer
+  acceptance remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: continue X06 explicit schema-evolution policy tests,
+  while X03 PostgreSQL transaction barriers remain an external gate.
 
 The combined control-plane, catalog, schema, publication, migration, plugin, and
 published-config boundary suite passed at 100% after the budget change.
