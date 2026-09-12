@@ -17,6 +17,10 @@ def test_plugin_descriptors_expose_only_admitted_bounded_capabilities() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert {item["plugin_id"] for item in payload["plugins"]} == {"iceberg.sql", "iceberg"}
+    assert payload["states"] == [
+        {"kind": "catalog", "plugin_id": "iceberg.sql", "status": "enabled"},
+        {"kind": "table_format", "plugin_id": "iceberg", "status": "enabled"},
+    ]
     assert payload["pairs"] == [
         {
             "catalog_plugin_id": "iceberg.sql",
