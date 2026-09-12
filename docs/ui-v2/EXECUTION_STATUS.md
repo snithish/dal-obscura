@@ -331,6 +331,36 @@ not all implementation. Do not add placeholder screens or call P01 complete.
   path described in P02; this verifier must change with the real login flow.
 - Next action: execute against a running local stack after P01 packaging works.
 
+- Packet/slice: P01.5 restart-safe demo initialization.
+- State: implemented-unverified.
+- Commit: `ba03170`.
+- Behavior and touched modules: existing Iceberg tables are detected and kept
+  during routine setup. The control-plane provisioner classifies the workspace
+  before issuing writes, reuses a complete fixture workspace, and stops on
+  ambiguous partial state with recovery/reset guidance. New tests cover table
+  preservation, first creation, complete-workspace reuse, and partial-state
+  refusal.
+- Prerequisites/review authorization: startup safety only; no session,
+  authorization, persistence-schema, or pickle behavior changed.
+- Red test and actual failure: the prior scripts unconditionally dropped and
+  recreated the table and sent replacement catalog/asset/policy requests on
+  every setup restart; no test protected operator-authored state.
+- Green commands and results: `uv run --no-sync pytest
+  tests/examples/test_demo_initialization.py
+  tests/examples/test_keycloak_demo_fixture.py
+  tests/architecture/test_keycloak_demo_readiness.py
+  tests/architecture/test_local_demo_ui.py tests/examples/test_ui_smoke.py -q`
+  → 10 passed. Focused Ruff lint and format checks passed.
+- Browser/API/PostgreSQL/consumer evidence: unit-level fake catalog and HTTP
+  responses only; container, PostgreSQL, browser, and consumer restart probes
+  remain unverified while the local Podman runtime is unavailable.
+- Manual/independent review: none.
+- Remaining limitations/blocker: complete-state verification relies on the
+  current summary, asset inventory, and policy-version history APIs; P01 still
+  needs clean image/wheel/Compose evidence.
+- Next action: finish the P01 runtime/packaging acceptance lane, then implement
+  the reviewed P02 session contract before changing authorization routes.
+
 ## Slice evidence template
 
 Copy this section for each slice; replace every placeholder with observed evidence.
