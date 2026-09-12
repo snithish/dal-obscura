@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `dea1a55`.
+Implementation follow-up through `18f8e64`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -102,12 +102,12 @@ Next implementation action: continue X03 with PostgreSQL barrier/CAS evidence an
 then complete X06 provider-derived and collection field identity rules. Do not add new
 providers before Phase A's security/correctness prerequisites are accepted.
 
-### X19 production database privilege ordering — `dea1a55`
+### X19 production database privilege ordering — `18f8e64`
 
 - State: implementing.
 - Behavior: production Compose now runs a one-shot `postgres-grants` service after
   migrations. It grants the data-plane role only the DML needed for
-  `public.durable_tickets`; control-plane and data-plane startup wait for that
+  `public.data_plane_tickets`; control-plane and data-plane startup wait for that
   service to complete. The first-boot role initializer remains schema/migration
   scoped and does not assume the ticket table exists yet.
 - Green evidence: `bash -n deployment/production/postgres-init/01-roles.sh`,
@@ -118,6 +118,10 @@ providers before Phase A's security/correctness prerequisites are accepted.
   TLS/IdP/browser, plugin, consumer, and production acceptance gates remain open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: continue X03 PostgreSQL barriers/CAS evidence.
+
+The initial grant slice named the ticket table incorrectly; `18f8e64` corrects the
+target to the ORM-backed `data_plane_tickets` table. The corrected deployment
+contract and Compose rendering pass.
 
 Latest implementation slices after the schema migration: X08 provider-page budget
 and cancellation checks are validated by
