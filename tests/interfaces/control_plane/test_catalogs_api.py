@@ -101,6 +101,40 @@ def test_workspace_catalog_rejects_nested_dynamic_loader_options():
     assert "cannot select an implementation class" in response.json()["detail"]
 
 
+def test_workspace_catalog_rejects_unbounded_option_shape():
+    client = _client()
+
+    deeply_nested: object = "value"
+    for _ in range(18):
+        deeply_nested = {"nested": deeply_nested}
+    response = client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"properties": deeply_nested},
+        },
+        headers=ADMIN_HEADERS,
+    )
+
+    assert response.status_code == 400
+    assert "too deeply nested" in response.json()["detail"]
+
+
+def test_workspace_catalog_rejects_oversized_option_list():
+    client = _client()
+    response = client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"properties": ["x"] * 257},
+        },
+        headers=ADMIN_HEADERS,
+    )
+
+    assert response.status_code == 400
+    assert "list is too large" in response.json()["detail"]
+
+
 def test_workspace_catalog_rejects_inline_sensitive_options_but_accepts_secret_refs():
     client = _client()
 

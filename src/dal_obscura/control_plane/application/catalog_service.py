@@ -22,6 +22,12 @@ from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
 
 CatalogDiscoverer = Any
 
+_MAX_OPTION_DEPTH = 16
+_MAX_OPTION_NODES = 1_024
+_MAX_OPTION_KEYS = 128
+_MAX_OPTION_ITEMS = 256
+_MAX_OPTION_STRING = 4_096
+
 
 def list_workspace_catalogs(store: PublicationStore) -> list[dict[str, object]]:
     """Lists catalogs configured in the default workspace.
@@ -201,6 +207,7 @@ def validate_catalog_options(
     useful for local development, while production startup requires one.
     """
 
+    _validate_option_shape(options)
     normalized_allowlist = {item.strip().lower().rstrip(".") for item in egress_allowlist}
     _reject_dynamic_loader_options(options)
     _reject_inline_secrets(options)
@@ -239,6 +246,43 @@ def _walk_strings(value: object, prefix: str = "options"):
             yield from _walk_strings(item, f"{prefix}[{index}]")
     elif isinstance(value, str):
         yield prefix, value
+
+
+def _validate_option_shape(  # noqa: C901
+    value: object,
+    *,
+    depth: int = 0,
+    nodes: list[int] | None = None,
+) -> None:
+    """Bounds provider option JSON before any recursive security checks."""
+
+    counter = nodes if nodes is not None else [0]
+    counter[0] += 1
+    if counter[0] > _MAX_OPTION_NODES:
+        raise ValidationFailure("Catalog options contain too many values")
+    if depth > _MAX_OPTION_DEPTH:
+        raise ValidationFailure("Catalog options are too deeply nested")
+    if isinstance(value, dict):
+        if len(value) > _MAX_OPTION_KEYS:
+            raise ValidationFailure("Catalog option object is too large")
+        for key, nested in value.items():
+            if not isinstance(key, str) or not key.strip() or len(key) > _MAX_OPTION_STRING:
+                raise ValidationFailure("Catalog option key is invalid or too long")
+            _validate_option_shape(nested, depth=depth + 1, nodes=counter)
+        return
+    if isinstance(value, list):
+        if len(value) > _MAX_OPTION_ITEMS:
+            raise ValidationFailure("Catalog option list is too large")
+        for nested in value:
+            _validate_option_shape(nested, depth=depth + 1, nodes=counter)
+        return
+    if isinstance(value, str):
+        if len(value) > _MAX_OPTION_STRING:
+            raise ValidationFailure("Catalog option string is too long")
+        return
+    if value is None or isinstance(value, (bool, int, float)):
+        return
+    raise ValidationFailure("Catalog options must contain JSON-compatible values")
 
 
 _SECRET_OPTION_KEYS = {
