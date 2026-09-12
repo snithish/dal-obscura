@@ -189,3 +189,14 @@ def test_descriptor_loader_mismatch_fails_before_factory_import() -> None:
 
     with pytest.raises(PluginAdmissionError, match="descriptor mismatch"):
         registry.reload()
+
+
+def test_malformed_plugin_lock_is_rejected() -> None:
+    entry = _entry("iceberg.sql", "dal_obscura.catalogs.v1")
+    registry = PluginRegistry(
+        allowlist={("catalog", "iceberg.sql"): ("plugin-wheel", "1.2.3")},  # type: ignore[dict-item]
+        entry_points_fn=lambda: _EntryPoints([entry]),
+    )
+
+    with pytest.raises(PluginAdmissionError, match="Invalid plugin lock"):
+        registry.reload()

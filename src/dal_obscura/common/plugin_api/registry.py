@@ -130,6 +130,8 @@ class PluginRegistry:
                 admitted = self._allowlist.get(key)
                 if admitted is None:
                     continue
+                if len(admitted) not in (3, 5):
+                    raise PluginAdmissionError(f"Invalid plugin lock for {kind}:{plugin_id}")
                 distribution, version, api_version, *digests = admitted
                 if entry.dist is None:
                     raise PluginAdmissionError(
