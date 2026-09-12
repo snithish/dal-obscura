@@ -16,6 +16,9 @@ from dal_obscura_plugin_api import (
     TableHandle,
 )
 
+DEFAULT_MAX_OUTPUT_BATCHES = 1_024
+DEFAULT_MAX_OUTPUT_ROWS = 1_000_000
+
 
 @dataclass
 class ConformanceResult:
@@ -96,17 +99,28 @@ def check_schema_descriptor(
 
 def check_record_batches(
     schema: pa.Schema,
-    batches: Sequence[pa.RecordBatch],
+    batches: Iterable[pa.RecordBatch],
     *,
     result: ConformanceResult | None = None,
+    max_batches: int = DEFAULT_MAX_OUTPUT_BATCHES,
+    max_rows: int = DEFAULT_MAX_OUTPUT_ROWS,
 ) -> None:
-    """Ensure execution cannot add columns or change the declared schema."""
+    """Incrementally validate output without allowing unbounded materialization."""
+
+    if max_batches <= 0 or max_rows <= 0:
+        raise ValueError("output budgets must be positive")
+    row_count = 0
 
     for index, batch in enumerate(batches):
+        if index >= max_batches:
+            raise ValueError(f"format returned more than {max_batches} output batches")
         if batch.schema != schema:
             raise ValueError(f"batch {index} schema differs from the declared output schema")
         if set(batch.schema.names) != set(schema.names):
             raise ValueError(f"batch {index} contains undeclared output columns")
+        row_count += batch.num_rows
+        if row_count > max_rows:
+            raise ValueError(f"format returned more than {max_rows} output rows")
     if result is not None:
         result.record_pass("record_batches")
 
@@ -190,7 +204,7 @@ def run_format_checks(
             output_schema, batches = plugin.execute(task, context)
             if output_schema != schema.arrow_schema:
                 raise ValueError("format output schema differs from the declared schema")
-            check_record_batches(output_schema, list(batches), result=result)
+            check_record_batches(output_schema, batches, result=result)
         result.record_pass("execution")
     except Exception as exc:
         result.record_failure("format", str(exc))

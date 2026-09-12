@@ -65,6 +65,18 @@ def test_record_batches_reject_schema_mutation():
         check_record_batches(schema, [bad])
 
 
+def test_record_batch_validation_stops_unbounded_output_generators():
+    schema = pa.schema([pa.field("id", pa.int64())])
+    batch = pa.RecordBatch.from_pylist([{"id": 1}], schema=schema)
+
+    def endless_batches():
+        while True:
+            yield batch
+
+    with pytest.raises(ValueError, match="more than 2 output batches"):
+        check_record_batches(schema, endless_batches(), max_batches=2)
+
+
 class _ConformingFormat:
     descriptor = _descriptor()
 
@@ -203,9 +215,11 @@ def test_runner_closes_plugin_after_failure_and_serializes_skips():
 
     assert plugin.closed is True
     payload = result.to_dict()
-    assert payload["checks"]["cleanup"] == "passed"
-    assert payload["checks"]["provider"] == "skipped"
-    assert "provider: provider fixture is not configured" in payload["skips"]
+    checks = cast(dict[str, str], payload["checks"])
+    skips = cast(list[str], payload["skips"])
+    assert checks["cleanup"] == "passed"
+    assert checks["provider"] == "skipped"
+    assert "provider: provider fixture is not configured" in skips
 
 
 def test_runner_rejects_duplicate_or_missing_task_coverage():
@@ -223,16 +237,21 @@ def test_runner_rejects_duplicate_or_missing_task_coverage():
         format_plugin_id="fixture",
         handle_version=1,
     )
-    kwargs = {
-        "expected_task_ids": ("part-a", "part-b"),
-        "task_identity": str,
-    }
-
     passing = run_format_checks(
-        cast(TableFormatPlugin, _CoverageFormat()), handle, schema, _context(), **kwargs
+        cast(TableFormatPlugin, _CoverageFormat()),
+        handle,
+        schema,
+        _context(),
+        expected_task_ids=("part-a", "part-b"),
+        task_identity=lambda task: str(task),
     )
     duplicate = run_format_checks(
-        cast(TableFormatPlugin, _DuplicateCoverageFormat()), handle, schema, _context(), **kwargs
+        cast(TableFormatPlugin, _DuplicateCoverageFormat()),
+        handle,
+        schema,
+        _context(),
+        expected_task_ids=("part-a", "part-b"),
+        task_identity=lambda task: str(task),
     )
 
     assert passing.checks["task_coverage"] == "passed"
@@ -261,6 +280,41 @@ def test_runner_honors_cancellation_before_plugin_execution():
         handle,
         schema,
         replace(_context(), cancel_check=lambda: True),
+    )
+
+    assert result.to_dict()["status"] == "failed"
+    assert any("cancelled" in failure for failure in result.failures)
+
+
+def test_runner_honors_cancellation_between_tasks():
+    table = pa.table({"id": [1]})
+    schema = SchemaDescriptor(
+        schema_version=1,
+        fingerprint="0" * 64,
+        arrow_schema=table.schema,
+    )
+    handle = TableHandle(
+        catalog_plugin_id="fixture",
+        catalog_instance_id="fixture",
+        catalog_revision=1,
+        identifier=TableIdentifier(namespace=("default",), name="users"),
+        format_plugin_id="fixture",
+        handle_version=1,
+    )
+    checks = 0
+
+    def cancel_after_first_task_check() -> bool:
+        nonlocal checks
+        checks += 1
+        return checks >= 3
+
+    result = run_format_checks(
+        cast(TableFormatPlugin, _CoverageFormat()),
+        handle,
+        schema,
+        replace(_context(), cancel_check=cancel_after_first_task_check),
+        expected_task_ids=("part-a", "part-b"),
+        task_identity=str,
     )
 
     assert result.to_dict()["status"] == "failed"
