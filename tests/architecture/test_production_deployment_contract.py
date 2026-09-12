@@ -10,6 +10,7 @@ def test_production_reference_contains_immutable_and_private_topology() -> None:
     compose = (PRODUCTION / "compose.yaml").read_text(encoding="utf-8")
     env_example = (PRODUCTION / ".env.example").read_text(encoding="utf-8")
     readme = (PRODUCTION / "README.md").read_text(encoding="utf-8")
+    role_init = (PRODUCTION / "postgres-init" / "01-roles.sh").read_text(encoding="utf-8")
 
     assert "${DAL_OBSCURA_IMAGE:?set DAL_OBSCURA_IMAGE}" in compose
     assert "${DAL_OBSCURA_UI_IMAGE:?set DAL_OBSCURA_UI_IMAGE}" in compose
@@ -39,6 +40,14 @@ def test_production_reference_contains_immutable_and_private_topology() -> None:
     assert "DAL_OBSCURA_CONTROL_PLANE_DATABASE_URL" in env_example
     assert "DAL_OBSCURA_DATA_PLANE_DATABASE_URL" in env_example
     assert "Provision separate PostgreSQL roles" in readme
+    assert "./postgres-init:/docker-entrypoint-initdb.d:ro" in compose
+    assert "DAL_OBSCURA_MIGRATION_DB_PASSWORD" in compose
+    assert "DAL_OBSCURA_CONTROL_PLANE_DB_PASSWORD" in compose
+    assert "DAL_OBSCURA_DATA_PLANE_DB_PASSWORD" in compose
+    assert "CREATE ROLE dal_obscura_migrator" in role_init
+    assert "CREATE ROLE dal_obscura_control" in role_init
+    assert "CREATE ROLE dal_obscura_reader" in role_init
+    assert "GRANT SELECT ON TABLES TO dal_obscura_reader" in role_init
     assert "Routine restart" in readme
     assert "does not seed" in readme
     assert "republish" in readme
