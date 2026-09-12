@@ -17,6 +17,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session, sessionmaker
 
+from dal_obscura.control_plane.infrastructure.request_context import (
+    reset_request_id,
+    set_request_id,
+)
 from dal_obscura.control_plane.interfaces.health import install_health_routes
 from dal_obscura.control_plane.interfaces.routes import (
     assets as asset_routes,
@@ -162,9 +166,13 @@ def create_app(  # noqa: C901
     async def request_correlation(request: Request, call_next):
         supplied = request.headers.get("x-request-id", "").strip()
         request_id = supplied if _REQUEST_ID.fullmatch(supplied) else uuid4().hex
-        response = await call_next(request)
-        response.headers["x-request-id"] = request_id
-        return response
+        token = set_request_id(request_id)
+        try:
+            response = await call_next(request)
+            response.headers["x-request-id"] = request_id
+            return response
+        finally:
+            reset_request_id(token)
 
     @app.middleware("http")
     async def request_size_limit(request: Request, call_next):

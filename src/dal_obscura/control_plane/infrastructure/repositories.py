@@ -46,6 +46,7 @@ from dal_obscura.control_plane.domain.models import (
     PolicyRuleDraft,
     PublishDraft,
 )
+from dal_obscura.control_plane.infrastructure.request_context import current_request_id
 
 
 @dataclass(frozen=True)
@@ -1331,7 +1332,7 @@ class PublicationStore:
                 resource_id=str(asset_id),
                 outcome=outcome,
                 details_json=dict(details or {}),
-                correlation_id=correlation_id,
+                correlation_id=correlation_id or current_request_id(),
             )
         )
         self._session.flush()
