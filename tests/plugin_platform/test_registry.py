@@ -169,3 +169,23 @@ def test_builtin_registration_is_admitted_without_entry_point_import() -> None:
 
     assert admitted[("catalog", "iceberg.sql")] == descriptor
     assert registry.load("catalog", "iceberg.sql") == {"builtin": True}
+
+
+def test_descriptor_loader_mismatch_fails_before_factory_import() -> None:
+    entry = _entry("iceberg.sql", "dal_obscura.catalogs.v1")
+    registry = PluginRegistry(
+        allowlist={("catalog", "iceberg.sql"): ("plugin-wheel", "1.2.3", "1")},
+        entry_points_fn=lambda: _EntryPoints([entry]),
+        descriptor_loader=lambda _: PluginDescriptor(
+            kind="catalog",
+            plugin_id="iceberg.sql",
+            api_version="2",
+            config_version=1,
+            distribution="plugin-wheel",
+            version="1.2.3",
+        ),
+        factory_loader=lambda _: pytest.fail("mismatched descriptor must not import"),
+    )
+
+    with pytest.raises(PluginAdmissionError, match="descriptor mismatch"):
+        registry.reload()

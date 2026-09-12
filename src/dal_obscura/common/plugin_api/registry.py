@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from collections.abc import Callable, Mapping
 from importlib import metadata
+from pathlib import Path
 from threading import RLock
 from typing import Any, cast
 
@@ -23,6 +26,8 @@ class PluginAdmissionError(ValueError):
 
 FactoryLoader = Callable[[metadata.EntryPoint], object]
 BuiltinRegistration = tuple[PluginDescriptor, object]
+DescriptorLoader = Callable[[metadata.EntryPoint], PluginDescriptor]
+PluginLock = tuple[str, str, str] | tuple[str, str, str, str, str]
 
 
 class PluginRegistry:
@@ -31,14 +36,16 @@ class PluginRegistry:
     def __init__(
         self,
         *,
-        allowlist: Mapping[tuple[PluginKind, str], tuple[str, str, str]] | None = None,
+        allowlist: Mapping[tuple[PluginKind, str], PluginLock] | None = None,
         entry_points_fn: Callable[[], metadata.EntryPoints] | None = None,
         factory_loader: FactoryLoader | None = None,
         builtins: Mapping[tuple[PluginKind, str], BuiltinRegistration] | None = None,
+        descriptor_loader: DescriptorLoader | None = None,
     ) -> None:
         self._allowlist = dict(allowlist or {})
         self._entry_points_fn = entry_points_fn or metadata.entry_points
         self._factory_loader = factory_loader or (lambda entry: entry.load())
+        self._descriptor_loader = descriptor_loader
         self._builtins = dict(builtins or {})
         for key, (descriptor, _) in self._builtins.items():
             if key != (descriptor.kind, descriptor.plugin_id):
@@ -123,7 +130,7 @@ class PluginRegistry:
                 admitted = self._allowlist.get(key)
                 if admitted is None:
                     continue
-                distribution, version, api_version = admitted
+                distribution, version, api_version, *digests = admitted
                 if entry.dist is None:
                     raise PluginAdmissionError(
                         f"Plugin provenance is unavailable for {kind}:{plugin_id}"
@@ -132,14 +139,37 @@ class PluginRegistry:
                 actual_version = entry.dist.version
                 if (actual_distribution, actual_version) != (distribution, version):
                     raise PluginAdmissionError(f"Plugin lock mismatch for {kind}:{plugin_id}")
-                descriptors[key] = PluginDescriptor(
-                    kind=kind,
-                    plugin_id=plugin_id,
-                    api_version=api_version,
-                    config_version=1,
-                    distribution=distribution,
-                    version=version,
+                descriptor = (
+                    self._descriptor_loader(entry)
+                    if self._descriptor_loader is not None
+                    else PluginDescriptor(
+                        kind=kind,
+                        plugin_id=plugin_id,
+                        api_version=api_version,
+                        config_version=1,
+                        distribution=distribution,
+                        version=version,
+                    )
                 )
+                if (
+                    descriptor.kind != kind
+                    or descriptor.plugin_id != plugin_id
+                    or descriptor.api_version != api_version
+                    or descriptor.distribution != distribution
+                    or descriptor.version != version
+                ):
+                    raise PluginAdmissionError(f"Plugin descriptor mismatch for {kind}:{plugin_id}")
+                if digests:
+                    descriptor_digest, artifact_digest = digests
+                    if _descriptor_digest(descriptor) != descriptor_digest:
+                        raise PluginAdmissionError(
+                            f"Plugin descriptor digest mismatch for {kind}:{plugin_id}"
+                        )
+                    if _artifact_digest(entry) != artifact_digest:
+                        raise PluginAdmissionError(
+                            f"Plugin artifact digest mismatch for {kind}:{plugin_id}"
+                        )
+                descriptors[key] = descriptor
                 entries[key] = entry
         return descriptors, entries, builtins
 
@@ -147,3 +177,38 @@ class PluginRegistry:
     def _validate_id(plugin_id: str) -> None:
         if not _PLUGIN_ID.fullmatch(plugin_id):
             raise PluginAdmissionError(f"Invalid plugin ID: {plugin_id!r}")
+
+
+def _descriptor_digest(descriptor: PluginDescriptor) -> str:
+    payload = {
+        "kind": descriptor.kind,
+        "plugin_id": descriptor.plugin_id,
+        "api_version": descriptor.api_version,
+        "config_version": descriptor.config_version,
+        "distribution": descriptor.distribution,
+        "version": descriptor.version,
+        "capabilities": sorted(descriptor.capabilities),
+        "config_schema": descriptor.config_schema,
+        "display_name": descriptor.display_name,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _artifact_digest(entry: metadata.EntryPoint) -> str:
+    distribution = entry.dist
+    if distribution is None or distribution.files is None:
+        raise PluginAdmissionError("Plugin artifact files are unavailable")
+    digest = hashlib.sha256()
+    try:
+        for relative in sorted(distribution.files, key=str):
+            path = Path(str(distribution.locate_file(str(relative))))
+            if not path.is_file():
+                raise PluginAdmissionError("Plugin artifact file is unavailable")
+            digest.update(str(relative).encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(path.read_bytes())
+            digest.update(b"\0")
+    except OSError as exc:
+        raise PluginAdmissionError("Plugin artifact files are unreadable") from exc
+    return digest.hexdigest()
