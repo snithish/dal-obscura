@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `101fd00`.
+Implementation follow-up through `7e4e34d`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -67,8 +67,10 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   Full editor, activation, accessibility, and browser evidence remain open.
 - X11 public SDK: **implementing**; an independently buildable
   `packages/plugin-api` wheel now contains the versioned contracts and has an
-  offline compile/metadata regression. Service-side compatibility contracts and
-  online wheel artifact evidence remain open.
+  offline compile/metadata regression. Core and SDK contracts now reject malformed
+  plugin IDs, unbounded capabilities, invalid catalog revisions, and non-canonical
+  schema fingerprints. Service-side compatibility contracts and online wheel
+  artifact evidence remain open.
 - X12 admitted loading and Iceberg adapter: **implementing**; entry-point loading now
   fails closed when a request names an unallowlisted installation, with registry
   regression coverage. Built-in Iceberg routing and artifact-lock verification
@@ -206,6 +208,22 @@ return the stable redacted validation response at the HTTP boundary.
 - Pickle compatibility: unchanged.
 - Next permitted packet: X03 PostgreSQL barrier evidence and X06 evolution rules;
   X22 remains a later release gate.
+
+### X11 contract identity validation — `7e4e34d`
+
+- State: implementing.
+- Behavior: both the service-side and independently packaged plugin contracts
+  validate bounded IDs, capability metadata, catalog generations, and canonical
+  schema digest shape before admission or execution.
+- Green evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync
+  pytest tests/plugin_platform/test_plugin_contract_validation.py
+  tests/plugin_platform/test_registry.py tests/plugin_platform/test_plugin_api_package.py -q`
+  passed (9); Ruff and Ty passed on changed Python paths.
+- Remaining gaps: clean-environment wheel build, static descriptor/artifact lock
+  verification, external package admission, and service compatibility matrix.
+- Pickle compatibility: unchanged.
+- Next permitted packet: complete X03 PostgreSQL barriers and X06 evolution rules;
+  do not advertise external plugins from this slice alone.
 
 ## Latest evidence entry
 
