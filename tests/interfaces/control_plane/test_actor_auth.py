@@ -390,6 +390,36 @@ def test_oidc_actor_resolver_builds_actor_from_validated_token(monkeypatch):
     }
 
 
+def test_oidc_actor_resolver_preserves_validated_issuer_scope(monkeypatch):
+    class FakeProvider:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        def authenticate(self, request: AuthenticationRequest) -> Principal:
+            return Principal(
+                id="asset-owner",
+                groups=["asset-owners"],
+                attributes={},
+                issuer="https://issuer.example/realms/demo",
+            )
+
+    monkeypatch.setattr(api_module, "OidcJwksIdentityProvider", FakeProvider)
+
+    resolver = create_oidc_actor_resolver(
+        issuer="https://issuer.example/realms/demo",
+        audience="dal-obscura",
+        jwks_url="https://issuer.example/realms/demo/certs",
+        subject_claim="preferred_username",
+        group_claims=("groups",),
+    )
+
+    assert resolver("token-123") == {
+        "principal": "asset-owner",
+        "groups": ["asset-owners"],
+        "issuer": "https://issuer.example/realms/demo",
+    }
+
+
 def test_asset_owner_can_replace_policy_rules_through_api():
     client = _client()
     asset = _provision_owned_asset(client)

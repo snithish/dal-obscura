@@ -215,6 +215,7 @@ class BrowserSessionRecord(Base):
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     csrf_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     principal: Mapped[str] = mapped_column(Text, nullable=False)
+    issuer: Mapped[str | None] = mapped_column(Text, nullable=True)
     groups_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     platform_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

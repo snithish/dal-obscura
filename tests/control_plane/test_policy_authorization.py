@@ -63,6 +63,32 @@ def test_outsider_cannot_replace_policy_rules(db_session):
         )
 
 
+def test_federated_asset_owner_is_scoped_to_issuer(db_session):
+    service, asset_id = _workspace_asset(db_session)
+    service.replace_asset_owners(asset_id, ["https://issuer-a.example|alice"])
+
+    service.replace_policy_rules(
+        asset_id,
+        [_allow_rule()],
+        actor=ControlPlaneActor(
+            principal="alice",
+            groups=(),
+            issuer="https://issuer-a.example/",
+        ),
+    )
+
+    with pytest.raises(AuthorizationFailure, match="lacks asset capability"):
+        service.replace_policy_rules(
+            asset_id,
+            [_allow_rule()],
+            actor=ControlPlaneActor(
+                principal="alice",
+                groups=(),
+                issuer="https://issuer-b.example",
+            ),
+        )
+
+
 def test_asset_owner_does_not_receive_publish_or_grant_implicitly(db_session):
     service, asset_id = _workspace_asset(db_session)
     service.replace_asset_owners(asset_id, ["user:alice@example.com"])

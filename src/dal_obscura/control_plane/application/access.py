@@ -17,12 +17,24 @@ class ControlPlaneActor:
     principal: str
     groups: tuple[str, ...]
     platform_admin: bool = False
+    issuer: str = ""
 
     @classmethod
     def for_platform_admin(cls, principal: str) -> ControlPlaneActor:
         return cls(principal=principal, groups=(), platform_admin=True)
 
     def owner_principals(self) -> set[str]:
-        principals = {self.principal}
-        principals.update(f"group:{group}" for group in self.groups)
+        # Federated identities are scoped by issuer so two providers cannot
+        # collide on the same subject or group display name. Local/demo actors
+        # retain the historical unscoped form for compatibility.
+        prefix = f"{self.issuer.rstrip('/')}|" if self.issuer else ""
+        principals = {f"{prefix}{self.principal}"}
+        principals.update(f"{prefix}group:{group}" for group in self.groups)
         return principals
+
+    def identity_key(self) -> str:
+        """Returns the stable storage key for this authenticated identity."""
+
+        if not self.issuer:
+            return self.principal
+        return f"{self.issuer.rstrip('/')}|{self.principal}"

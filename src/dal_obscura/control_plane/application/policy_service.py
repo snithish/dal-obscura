@@ -98,7 +98,7 @@ def preview_asset_policy(
     if actor is not None:
         draft = store.get_asset_policy_draft(
             asset_id=asset_id,
-            author_principal=actor.principal,
+            author_principal=actor.identity_key(),
         )
         if draft is not None:
             raw_rules = cast(list[dict[str, object]], draft["rules"])

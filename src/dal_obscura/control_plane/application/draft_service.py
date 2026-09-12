@@ -21,14 +21,14 @@ def get_policy_draft(
     ensure_asset_capability(store, asset_id, actor, "read")
     existing = store.get_asset_policy_draft(
         asset_id=asset_id,
-        author_principal=actor.principal,
+        author_principal=actor.identity_key(),
     )
     if existing is not None:
         return existing
     return {
         "id": None,
         "asset_id": str(asset_id),
-        "author_principal": actor.principal,
+        "author_principal": actor.identity_key(),
         "revision": 0,
         "base_policy_version": 0,
         "rules": store.list_policy_rules(asset_id),
@@ -51,7 +51,7 @@ def save_policy_draft(
     asset = store.get_workspace_asset(asset_id)
     saved = store.save_asset_policy_draft(
         asset_id=asset_id,
-        author_principal=actor.principal,
+        author_principal=actor.identity_key(),
         expected_revision=expected_revision,
         rules=rules,
         content_hash=_content_hash(rules),
@@ -59,7 +59,7 @@ def save_policy_draft(
     )
     store.record_asset_audit_event(
         asset_id=asset_id,
-        actor_principal=actor.principal,
+        actor_principal=actor.identity_key(),
         action="policy.draft.save",
         details={
             "revision": saved["revision"],
@@ -89,7 +89,7 @@ def restore_policy_version(
     validate_policy_rule_payloads(rules)
     saved = store.save_asset_policy_draft(
         asset_id=asset_id,
-        author_principal=actor.principal,
+        author_principal=actor.identity_key(),
         expected_revision=expected_revision,
         rules=rules,
         content_hash=_content_hash(rules),
@@ -97,7 +97,7 @@ def restore_policy_version(
     )
     store.record_asset_audit_event(
         asset_id=asset_id,
-        actor_principal=actor.principal,
+        actor_principal=actor.identity_key(),
         action="policy.draft.restore",
         details={
             "revision": saved["revision"],

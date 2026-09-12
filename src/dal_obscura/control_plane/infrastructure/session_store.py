@@ -64,6 +64,7 @@ class BrowserSessionStore:
                 token_hash=_token_hash(token),
                 csrf_hash=_token_hash(csrf_token),
                 principal=actor.principal,
+                issuer=actor.issuer or None,
                 groups_json=list(actor.groups),
                 platform_admin=actor.platform_admin,
                 created_at=now,
@@ -113,6 +114,7 @@ class BrowserSessionStore:
             principal=record.principal,
             groups=tuple(record.groups_json),
             platform_admin=record.platform_admin,
+            issuer=record.issuer or "",
         )
 
     def revoke(self, token: str) -> bool:

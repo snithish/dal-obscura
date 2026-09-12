@@ -95,7 +95,10 @@ def create_oidc_actor_resolver(
         principal = provider.authenticate(
             AuthenticationRequest(headers={"authorization": f"Bearer {token}"})
         )
-        return {"principal": principal.id, "groups": principal.groups}
+        payload: dict[str, object] = {"principal": principal.id, "groups": principal.groups}
+        if principal.issuer:
+            payload["issuer"] = principal.issuer
+        return payload
 
     return resolve
 

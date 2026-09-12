@@ -49,7 +49,7 @@ def evaluate_asset_policy(
         actor=actor,
         requested_columns=requested_columns,
     )
-    draft = store.get_asset_policy_draft(asset_id=asset_id, author_principal=actor.principal)
+    draft = store.get_asset_policy_draft(asset_id=asset_id, author_principal=actor.identity_key())
     revision = 0 if draft is None else int(cast(int | str, draft["revision"]))
     schema_digest = schema_service.schema_fingerprint(arrow_schema)
     evidence = {

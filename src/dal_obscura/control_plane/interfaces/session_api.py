@@ -61,7 +61,10 @@ def create_oidc_actor_resolver(
         principal = provider.authenticate(
             AuthenticationRequest(headers={"authorization": f"Bearer {token}"})
         )
-        return {"principal": principal.id, "groups": principal.groups}
+        payload: dict[str, object] = {"principal": principal.id, "groups": principal.groups}
+        if principal.issuer:
+            payload["issuer"] = principal.issuer
+        return payload
 
     return resolve
 
@@ -89,7 +92,10 @@ def create_oidc_nonce_actor_resolver(
             AuthenticationRequest(headers={"authorization": f"Bearer {token}"}),
             expected_nonce_hash=nonce_hash,
         )
-        return {"principal": principal.id, "groups": principal.groups}
+        payload: dict[str, object] = {"principal": principal.id, "groups": principal.groups}
+        if principal.issuer:
+            payload["issuer"] = principal.issuer
+        return payload
 
     return resolve
 
@@ -107,6 +113,7 @@ def actor_response(actor: ControlPlaneActor) -> dict[str, object]:
         "principal": actor.principal,
         "groups": list(actor.groups),
         "platform_admin": actor.platform_admin,
+        **({"issuer": actor.issuer} if actor.issuer else {}),
     }
 
 
@@ -275,6 +282,7 @@ def oidc_actor_from_header(
         principal=principal,
         groups=groups,
         platform_admin=bool(admin_group and admin_group in groups),
+        issuer=_attribute_text(resolved, "issuer"),
     )
 
 

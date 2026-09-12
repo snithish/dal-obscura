@@ -46,7 +46,7 @@ def issue_review_token(
         )
     draft = store.get_asset_policy_draft(
         asset_id=asset_id,
-        author_principal=actor.principal,
+        author_principal=actor.identity_key(),
     )
     revision = 0 if draft is None else int(cast(int | str, draft["revision"]))
     content_hash = None if draft is None else str(draft["content_hash"])
@@ -54,7 +54,7 @@ def issue_review_token(
     issued_at = int(time.time() if now is None else now)
     payload: dict[str, object] = {
         "asset_id": str(asset_id),
-        "actor": actor.principal,
+        "actor": actor.identity_key(),
         "draft_revision": revision,
         "draft_content_hash": content_hash,
         "active_publication_id": active_publication_id,
@@ -87,7 +87,7 @@ def verify_review_token(
     expires_at = payload.get("expires_at", 0)
     if not isinstance(expires_at, (int, str)) or int(expires_at) <= current_time:
         raise ValidationFailure("Policy review has expired; run the evaluation again.")
-    if payload.get("asset_id") != str(asset_id) or payload.get("actor") != actor.principal:
+    if payload.get("asset_id") != str(asset_id) or payload.get("actor") != actor.identity_key():
         raise ValidationFailure("Policy review is bound to another actor or asset.")
     evidence_raw = payload.get("evidence")
     if not isinstance(evidence_raw, dict):
@@ -106,7 +106,7 @@ def verify_review_token(
         raise ValidationFailure("Iceberg schema changed after review; review again.")
     draft = store.get_asset_policy_draft(
         asset_id=asset_id,
-        author_principal=actor.principal,
+        author_principal=actor.identity_key(),
     )
     revision = 0 if draft is None else int(cast(int | str, draft["revision"]))
     content_hash = None if draft is None else str(draft["content_hash"])
@@ -137,7 +137,7 @@ def _explicit_deny_all_draft(
 
     draft = store.get_asset_policy_draft(
         asset_id=asset_id,
-        author_principal=actor.principal,
+        author_principal=actor.identity_key(),
     )
     return draft is not None and not cast(list[object], draft.get("rules", []))
 

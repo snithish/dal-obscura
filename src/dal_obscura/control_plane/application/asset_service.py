@@ -139,7 +139,7 @@ def replace_asset_owners(
     if actor is not None:
         store.record_asset_audit_event(
             asset_id=asset_id,
-            actor_principal=actor.principal,
+            actor_principal=actor.identity_key(),
             action="asset.owners.replace",
             details={"owner_count": len(normalized)},
         )
@@ -163,7 +163,7 @@ def replace_asset_grants(
     if actor is not None:
         store.record_asset_audit_event(
             asset_id=asset_id,
-            actor_principal=actor.principal,
+            actor_principal=actor.identity_key(),
             action="asset.grants.replace",
             details={"grant_count": len(normalized)},
         )

@@ -187,7 +187,7 @@ def create_asset_policy_version(  # noqa: C901
     if idempotency_key:
         existing = store.get_publication_operation(
             asset_id=asset_id,
-            actor_principal=actor.principal,
+            actor_principal=actor.identity_key(),
             idempotency_key=idempotency_key,
         )
         if existing is not None:
@@ -198,7 +198,7 @@ def create_asset_policy_version(  # noqa: C901
             return cast(dict[str, object], existing["result"])
     personal_draft = store.get_asset_policy_draft(
         asset_id=asset_id,
-        author_principal=actor.principal,
+        author_principal=actor.identity_key(),
     )
     if expected_draft_revision is not None:
         current_revision = (
@@ -220,7 +220,7 @@ def create_asset_policy_version(  # noqa: C901
         )
     asset, catalog = store.load_asset_publish_draft(
         asset_id,
-        author_principal=actor.principal if personal_draft is not None else None,
+        author_principal=actor.identity_key() if personal_draft is not None else None,
     )
     if not asset.rules and personal_draft is None:
         raise ValidationFailure("Cannot publish a policy version without policy rules.")
@@ -255,7 +255,7 @@ def create_asset_policy_version(  # noqa: C901
         )
         store.record_asset_audit_event(
             asset_id=asset_id,
-            actor_principal=actor.principal,
+            actor_principal=actor.identity_key(),
             action="policy.publication.activate",
             details={
                 "policy_version": compiled_asset.policy_version,
@@ -270,7 +270,7 @@ def create_asset_policy_version(  # noqa: C901
         if idempotency_key:
             store.save_publication_operation(
                 asset_id=asset_id,
-                actor_principal=actor.principal,
+                actor_principal=actor.identity_key(),
                 idempotency_key=idempotency_key,
                 request_hash=request_hash,
                 result=result,
@@ -315,7 +315,7 @@ def create_asset_policy_version(  # noqa: C901
     )
     store.record_asset_audit_event(
         asset_id=asset_id,
-        actor_principal=actor.principal,
+        actor_principal=actor.identity_key(),
         action="policy.publication.activate",
         details={
             "policy_version": compiled_asset.policy_version,
@@ -330,7 +330,7 @@ def create_asset_policy_version(  # noqa: C901
     if idempotency_key:
         store.save_publication_operation(
             asset_id=asset_id,
-            actor_principal=actor.principal,
+            actor_principal=actor.identity_key(),
             idempotency_key=idempotency_key,
             request_hash=request_hash,
             result=result,
@@ -352,7 +352,7 @@ def get_publication_operation(
         raise ValidationFailure("Idempotency key must contain between 1 and 128 characters")
     operation = store.get_publication_operation(
         asset_id=asset_id,
-        actor_principal=actor.principal,
+        actor_principal=actor.identity_key(),
         idempotency_key=idempotency_key,
     )
     if operation is None:

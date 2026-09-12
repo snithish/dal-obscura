@@ -279,6 +279,7 @@ class ControlPlaneDeps:
             platform_admin=bool(
                 self.oidc_admin_group and self.oidc_admin_group in {str(group) for group in groups}
             ),
+            issuer=str(resolved_payload.get("issuer", "")).strip(),
         )
 
     def require_admin(
