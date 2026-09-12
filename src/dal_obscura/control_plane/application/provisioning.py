@@ -196,6 +196,14 @@ class ProvisioningService:
             egress_allowlist=self._catalog_egress_allowlist,
         )
 
+    def diagnose_workspace_catalog(self, name: str) -> dict[str, object]:
+        return catalog_service.diagnose_workspace_catalog(
+            self._store,
+            name,
+            discover=discover_catalog_tables,
+            egress_allowlist=self._catalog_egress_allowlist,
+        )
+
     def list_workspace_assets(
         self,
         actor: ControlPlaneActor | None = None,

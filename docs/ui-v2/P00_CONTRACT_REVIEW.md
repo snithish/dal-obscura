@@ -36,6 +36,7 @@ dependency.
 | GET | `/v1/catalogs` | Actor | catalog list | scope by workspace and connection visibility |
 | PUT | `/v1/catalogs/{name}` | Admin | catalog registration | connection-operator capability, scoped |
 | GET | `/v1/catalogs/{name}/tables` | Actor | catalog discovery | connection diagnostic/read capability, scoped |
+| GET | `/v1/catalogs/{name}/diagnostics` | Admin | bounded catalog readiness check | redacted result only; no credentials or provider internals |
 | GET | `/v1/assets` | Actor | asset list | metadata-viewer capability and list filtering |
 | GET | `/v1/assets/page` | Actor | bounded searchable asset inventory | stable cursor bound to the literal search and actor scope |
 | GET | `/v1/assets/{asset_id}` | Actor | asset detail | metadata-viewer capability and direct-ID scope check |

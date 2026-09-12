@@ -8,6 +8,7 @@ Example:
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, cast
 from urllib.parse import parse_qsl, urlsplit
 
@@ -78,6 +79,52 @@ def discover_workspace_catalog_tables(
             }
             for table in tables
         ],
+    }
+
+
+def diagnose_workspace_catalog(
+    store: PublicationStore,
+    name: str,
+    *,
+    discover: CatalogDiscoverer = discover_catalog_tables,
+    egress_allowlist: tuple[str, ...] = (),
+) -> dict[str, object]:
+    """Runs bounded catalog discovery and returns a redacted readiness result."""
+
+    context = _required_workspace_context(store)
+    catalog = store.get_workspace_catalog(context, name)
+    catalog_options = cast(dict[str, Any], catalog["options"])
+    validate_catalog_options(catalog_options, egress_allowlist=egress_allowlist)
+    checked_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    try:
+        tables = list(
+            discover(
+                str(catalog["name"]),
+                str(catalog["module"]),
+                catalog_options,
+            )
+        )
+    except Exception:
+        # Discovery exceptions can contain URIs, credentials, or provider
+        # internals. Return a stable operator-safe message instead.
+        return {
+            "catalog": catalog["name"],
+            "status": "unavailable",
+            "message": "Catalog discovery failed",
+            "checked_at": checked_at,
+        }
+    sample_tables = [
+        str(table["name"])
+        for table in tables[:10]
+        if isinstance(table, dict) and table.get("name")
+    ]
+    return {
+        "catalog": catalog["name"],
+        "status": "ready",
+        "message": "Catalog discovery succeeded",
+        "checked_at": checked_at,
+        "table_count": len(tables),
+        "sample_tables": sample_tables,
     }
 
 

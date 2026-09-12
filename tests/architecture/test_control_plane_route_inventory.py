@@ -46,6 +46,7 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
         "/v1/catalogs",
         "/v1/catalogs/{name}",
         "/v1/catalogs/{name}/tables",
+        "/v1/catalogs/{name}/diagnostics",
         "/v1/demo-login",
         "/v1/logout",
         "/v1/policy-versions",

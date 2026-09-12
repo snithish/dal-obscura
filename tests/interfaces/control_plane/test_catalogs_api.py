@@ -189,3 +189,55 @@ def test_workspace_catalog_tables_can_be_discovered_without_runtime_ids(monkeypa
     }
     assert "tenant" not in _keys_recursive(response.json())
     assert "cell" not in _keys_recursive(response.json())
+
+
+def test_workspace_catalog_diagnostics_are_bounded_and_redacted(monkeypatch):
+    client = _client()
+    client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+
+    def fake_discover_catalog_tables(name, module, options):
+        assert name == "analytics"
+        assert module == ICEBERG_CATALOG_MODULE
+        assert options == {"type": "sql", "uri": "sqlite:///catalog.db"}
+        return [
+            {
+                "backend": "iceberg",
+                "name": "default.users",
+                "table_identifier": "default.users",
+            }
+        ]
+
+    monkeypatch.setattr(
+        "dal_obscura.control_plane.application.provisioning.discover_catalog_tables",
+        fake_discover_catalog_tables,
+    )
+
+    ready = client.get("/v1/catalogs/analytics/diagnostics", headers=ADMIN_HEADERS)
+
+    assert ready.status_code == 200
+    assert ready.json()["status"] == "ready"
+    assert ready.json()["catalog"] == "analytics"
+    assert ready.json()["table_count"] == 1
+    assert ready.json()["sample_tables"] == ["default.users"]
+    assert "options" not in _keys_recursive(ready.json())
+
+    def failing_discover_catalog_tables(name, module, options):
+        raise RuntimeError("failed to connect with password=super-secret")
+
+    monkeypatch.setattr(
+        "dal_obscura.control_plane.application.provisioning.discover_catalog_tables",
+        failing_discover_catalog_tables,
+    )
+    failed = client.get("/v1/catalogs/analytics/diagnostics", headers=ADMIN_HEADERS)
+
+    assert failed.status_code == 200
+    assert failed.json()["status"] == "unavailable"
+    assert failed.json()["message"] == "Catalog discovery failed"
+    assert "super-secret" not in failed.text

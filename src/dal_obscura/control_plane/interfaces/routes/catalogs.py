@@ -34,6 +34,10 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
     def discover_workspace_catalog_tables(name: str) -> object:
         return deps.with_service(lambda service: service.discover_workspace_catalog_tables(name))
 
+    @api.get("/v1/catalogs/{name}/diagnostics", dependencies=[Depends(deps.require_admin)])
+    def diagnose_workspace_catalog(name: str) -> object:
+        return deps.with_service(lambda service: service.diagnose_workspace_catalog(name))
+
     @api.put("/v1/catalogs/{name}", dependencies=[Depends(deps.require_admin)])
     async def upsert_workspace_catalog(name: str, request: Request) -> object:
         try:
