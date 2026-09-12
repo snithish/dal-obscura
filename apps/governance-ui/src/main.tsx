@@ -23,6 +23,10 @@ function App() {
   const [workspace, setWorkspace] = useState<WorkspaceState>("loading");
   const [assets, setAssets] = useState<Asset[]>([]);
   const [asset, setAsset] = useState<Asset | null>(null);
+  const [assetSearch, setAssetSearch] = useState("");
+  const [assetCursor, setAssetCursor] = useState<string | null>(null);
+  const [assetHasMore, setAssetHasMore] = useState(false);
+  const [assetInventoryLoading, setAssetInventoryLoading] = useState(false);
   const [rules, setRules] = useState<PolicyRule[]>([]);
   const [draftRevision, setDraftRevision] = useState(0);
   const [selectedRule, setSelectedRule] = useState(0);
@@ -38,6 +42,8 @@ function App() {
   const [managementLoading, setManagementLoading] = useState(false);
   const [publishPending, setPublishPending] = useState(false);
   const loadEpoch = useRef(0);
+  const inventoryEpoch = useRef(0);
+  const searchTimer = useRef<number | undefined>(undefined);
   const managementEpoch = useRef(0);
   const [logoutPending, setLogoutPending] = useState(false);
   const isDemo = workspace === "demo";
@@ -49,6 +55,10 @@ function App() {
       return;
     }
     void loadInitialWorkspace();
+  }, []);
+
+  useEffect(() => () => {
+    if (searchTimer.current !== undefined) window.clearTimeout(searchTimer.current);
   }, []);
 
   useEffect(() => {
@@ -83,9 +93,12 @@ function App() {
       const loadedSession = await controlPlane.getSession();
       if (epoch !== loadEpoch.current) return;
       setSession(loadedSession);
-      const loaded = await controlPlane.listAssets();
+      const loadedPage = await controlPlane.listAssetPage({ limit: 50 });
+      const loaded = loadedPage.items;
       if (epoch !== loadEpoch.current) return;
       setAssets(loaded);
+      setAssetCursor(loadedPage.next_cursor);
+      setAssetHasMore(Boolean(loadedPage.next_cursor));
       if (!loaded.length) {
         setWorkspace("ready"); setNotice("No governed assets are available in this workspace.");
         return;
@@ -100,6 +113,34 @@ function App() {
       setAuthConfig(await controlPlane.getUiAuthConfig().catch(() => null));
       setNotice("Workspace unavailable. Sign in or reconnect to the control plane; no demo data is shown automatically.");
     }
+  }
+
+  async function refreshAssetInventory(search: string, append = false) {
+    const epoch = ++inventoryEpoch.current;
+    setAssetInventoryLoading(true);
+    try {
+      const pageResult = await controlPlane.listAssetPage({
+        limit: 50,
+        cursor: append ? assetCursor ?? undefined : undefined,
+        search: search.trim() || undefined,
+      });
+      if (epoch !== inventoryEpoch.current) return;
+      setAssets((current) => append ? [...current, ...pageResult.items] : pageResult.items);
+      setAssetCursor(pageResult.next_cursor);
+      setAssetHasMore(Boolean(pageResult.next_cursor));
+      if (!append && !pageResult.items.length) setNotice("No governed assets match this search.");
+    } catch {
+      if (epoch !== inventoryEpoch.current) return;
+      setNotice("Asset inventory could not be loaded. Your current editor state remains unchanged.");
+    } finally {
+      if (epoch === inventoryEpoch.current) setAssetInventoryLoading(false);
+    }
+  }
+
+  function searchAssets(value: string) {
+    setAssetSearch(value);
+    if (searchTimer.current !== undefined) window.clearTimeout(searchTimer.current);
+    searchTimer.current = window.setTimeout(() => void refreshAssetInventory(value), 250);
   }
 
   async function demoLogin(loginHint: string) {
@@ -260,16 +301,17 @@ function App() {
     </aside>
     <main>
       <header className="topbar"><div><span className="eyebrow">{page === "assets" ? "ASSET WORKSPACE" : page.toUpperCase()}</span><h1>{page === "assets" ? asset?.name ?? "Assets" : titleFor(page)}</h1></div><div className="actor"><span className="avatar">{session?.principal.slice(0, 1).toUpperCase() ?? "?"}</span><div><strong>{session?.principal ?? "Not signed in"}</strong><small>{session?.platform_admin ? "Platform admin" : "Policy author"}</small></div>{session && <button className="text-button" onClick={() => void logout()}>Sign out</button>}{logoutPending && <button className="text-button" onClick={() => void logout()}>Retry sign out</button>}</div></header>
-      {page !== "assets" ? <ManagementView page={page} data={managementData} loading={managementLoading} onReload={() => void loadManagement(page)} /> : workspace === "loading" ? <WorkspaceMessage title="Loading governed assets" message="Checking your workspace access and available assets." /> : workspace === "unavailable" ? <WorkspaceMessage title="Cannot load workspace" message={notice} retry={loadInitialWorkspace} authConfig={authConfig} onLogin={demoLogin} loggingIn={loggingIn} /> : !asset ? <WorkspaceMessage title="No governed assets" message={notice} /> : <AssetWorkspace assets={assets} asset={asset} history={managementData.history ?? []} grants={managementData.grants ?? []} onAsset={(id) => void loadAsset(id)} rules={rules} activeRule={activeRule} activeRevision={draftRevision} selectedRule={selectedRule} onRule={setSelectedRule} selectedField={selectedField} onField={setSelectedField} selectedMask={selectedMask} effectiveFields={effectiveFields} saveState={saveState} notice={notice} onToggleField={toggleField} onMask={setMask} onUpdateRule={updateRule} onAddRule={addRule} onRemoveRule={removeRule} onSave={() => void saveDraft()} onPreview={() => void runPreview()} onPublish={() => void publishAsset()} publishing={publishPending} onRestore={(version) => void restorePolicyVersion(version)} reviewToken={reviewToken ?? undefined} preview={preview} session={session} onReloadAccess={() => void loadAsset(asset.id)} />}
+      {page !== "assets" ? <ManagementView page={page} data={managementData} loading={managementLoading} onReload={() => void loadManagement(page)} /> : workspace === "loading" ? <WorkspaceMessage title="Loading governed assets" message="Checking your workspace access and available assets." /> : workspace === "unavailable" ? <WorkspaceMessage title="Cannot load workspace" message={notice} retry={loadInitialWorkspace} authConfig={authConfig} onLogin={demoLogin} loggingIn={loggingIn} /> : !asset ? <WorkspaceMessage title="No governed assets" message={notice} /> : <AssetWorkspace assets={assets} asset={asset} history={managementData.history ?? []} grants={managementData.grants ?? []} onAsset={(id) => void loadAsset(id)} assetSearch={assetSearch} assetHasMore={assetHasMore} assetInventoryLoading={assetInventoryLoading} onSearch={searchAssets} onLoadMore={() => void refreshAssetInventory(assetSearch, true)} rules={rules} activeRule={activeRule} activeRevision={draftRevision} selectedRule={selectedRule} onRule={setSelectedRule} selectedField={selectedField} onField={setSelectedField} selectedMask={selectedMask} effectiveFields={effectiveFields} saveState={saveState} notice={notice} onToggleField={toggleField} onMask={setMask} onUpdateRule={updateRule} onAddRule={addRule} onRemoveRule={removeRule} onSave={() => void saveDraft()} onPreview={() => void runPreview()} onPublish={() => void publishAsset()} publishing={publishPending} onRestore={(version) => void restorePolicyVersion(version)} reviewToken={reviewToken ?? undefined} preview={preview} session={session} onReloadAccess={() => void loadAsset(asset.id)} />}
     </main>
   </div>;
 }
 
-function AssetWorkspace(props: { assets: Asset[]; asset: Asset; history: PolicyVersion[]; grants: AssetGrant[]; onAsset: (id: string) => void; rules: PolicyRule[]; activeRule?: PolicyRule; activeRevision: number; selectedRule: number; onRule: (index: number) => void; selectedField: string; onField: (name: string) => void; selectedMask?: Mask; effectiveFields: Set<string>; saveState: SaveState; notice: string; onToggleField: (name: string) => void; onMask: (mask?: Mask) => void; onUpdateRule: (change: (rule: PolicyRule) => PolicyRule) => void; onAddRule: () => void; onRemoveRule: () => void; onSave: () => void; onPreview: () => void; onPublish: () => void; publishing: boolean; onRestore: (version: number) => void; reviewToken?: string; preview: Preview | null; session: Session | null; onReloadAccess: () => void }) {
+function AssetWorkspace(props: { assets: Asset[]; asset: Asset; history: PolicyVersion[]; grants: AssetGrant[]; onAsset: (id: string) => void; assetSearch: string; assetHasMore: boolean; assetInventoryLoading: boolean; onSearch: (value: string) => void; onLoadMore: () => void; rules: PolicyRule[]; activeRule?: PolicyRule; activeRevision: number; selectedRule: number; onRule: (index: number) => void; selectedField: string; onField: (name: string) => void; selectedMask?: Mask; effectiveFields: Set<string>; saveState: SaveState; notice: string; onToggleField: (name: string) => void; onMask: (mask?: Mask) => void; onUpdateRule: (change: (rule: PolicyRule) => PolicyRule) => void; onAddRule: () => void; onRemoveRule: () => void; onSave: () => void; onPreview: () => void; onPublish: () => void; publishing: boolean; onRestore: (version: number) => void; reviewToken?: string; preview: Preview | null; session: Session | null; onReloadAccess: () => void }) {
   const [tab, setTab] = useState<"policy" | "tests" | "history" | "access">("policy");
   const fields = props.asset.schema?.fields ?? props.asset.schema_fields.map((field, index) => ({ field_id: index, name: field.name, path: { version: 1, segments: [{ kind: "field" as const, name: field.name, field_id: index }] }, human_path: field.name, type: field.type, nullable: field.nullable, kind: "scalar" as const }));
   const currentPreview = props.preview;
-  return <><div className="asset-summary"><label>Asset <select value={props.asset.id} onChange={(event) => props.onAsset(event.target.value)}>{props.assets.map((item) => <option key={item.id} value={item.id}>{item.catalog} / {item.name}</option>)}</select></label><div className="save-status" aria-live="polite"><span className={"save-dot " + props.saveState} /> {saveLabel(props.saveState)}</div></div><div className="notice" role="status">{props.notice}</div><div className="asset-tabs" role="tablist" aria-label="Asset views">{(["policy", "tests", "history", "access"] as const).map((item) => <button key={item} role="tab" aria-selected={tab === item} className={tab === item ? "selected" : ""} onClick={() => setTab(item)}>{item === "policy" ? "Policy" : item === "tests" ? "Tests" : item === "history" ? "History" : "Access"}</button>)}</div>{tab === "policy" ? <div className="studio">
+  const listedAssets = props.assets.some((item) => item.id === props.asset.id) ? props.assets : [props.asset, ...props.assets];
+  return <><div className="asset-summary"><div className="asset-picker"><label htmlFor="asset-search">Find governed asset<input id="asset-search" type="search" value={props.assetSearch} onChange={(event) => props.onSearch(event.target.value)} placeholder="Search catalog or asset" /></label><label htmlFor="asset-select">Selected asset<select id="asset-select" value={props.asset.id} onChange={(event) => props.onAsset(event.target.value)}>{listedAssets.map((item) => <option key={item.id} value={item.id}>{item.catalog} / {item.name}</option>)}</select></label><div className="asset-page-actions"><small>{props.assets.length} loaded</small>{props.assetHasMore && <button className="secondary compact" disabled={props.assetInventoryLoading} onClick={props.onLoadMore}>{props.assetInventoryLoading ? "Loading…" : "Load more"}</button>}{props.assetInventoryLoading && <span className="muted" role="status">Updating inventory…</span>}</div></div><div className="save-status" aria-live="polite"><span className={"save-dot " + props.saveState} /> {saveLabel(props.saveState)}</div></div><div className="notice" role="status">{props.notice}</div><div className="asset-tabs" role="tablist" aria-label="Asset views">{(["policy", "tests", "history", "access"] as const).map((item) => <button key={item} role="tab" aria-selected={tab === item} className={tab === item ? "selected" : ""} onClick={() => setTab(item)}>{item === "policy" ? "Policy" : item === "tests" ? "Tests" : item === "history" ? "History" : "Access"}</button>)}</div>{tab === "policy" ? <div className="studio">
     <section className="schema-panel" aria-label="Schema and field selection"><div className="panel-head"><div><span className="eyebrow">SCHEMA</span><h2>Fields & access</h2></div></div><p className="help">Fields retain server-defined paths. A checked field is visible through the selected rule.</p><ul className="field-tree">{fields.map((field) => <SchemaTree key={field.human_path} node={field} depth={0} selectedField={props.selectedField} effectiveFields={props.effectiveFields} onField={props.onField} />)}</ul><div className="schema-note"><strong>Nested fields</strong><p>Struct, list, and map paths come from the control plane. Collection nodes expose explicit <code>$element</code>, <code>$key</code>, and <code>$value</code> segments.</p></div></section>
     <section className="editor-panel" aria-label="Policy rule editor"><div className="panel-head"><div><span className="eyebrow">POLICY RULES</span><h2>{props.activeRule ? "Rule " + (props.selectedRule + 1) : "No rule selected"}</h2></div><button className="text-button" onClick={props.onAddRule}>Add rule</button></div>{props.rules.length ? <><div className="rule-list" aria-label="Policy rule list">{props.rules.map((rule, index) => <button key={index} className={index === props.selectedRule ? "selected" : ""} onClick={() => props.onRule(index)}>Rule {index + 1}<small>{rule.principals.join(", ") || "No principal"}</small></button>)}</div><EditorSection label="Who"><input value={props.activeRule?.principals.join(", ") ?? ""} onChange={(event) => props.onUpdateRule((rule) => ({ ...rule, principals: event.target.value.split(",").map((value) => value.trim()).filter(Boolean) }))} aria-label="Principals or groups" placeholder="group:us-analysts" /></EditorSection><EditorSection label="Which fields"><label className="check-line"><input type="checkbox" checked={props.activeRule?.columns.includes(props.selectedField) ?? false} disabled={!props.selectedField} onChange={() => props.onToggleField(props.selectedField)} /> Include <strong>{props.selectedField || "a schema field"}</strong></label><p className="help">Parent/child conflicts and invalid nested paths are rejected by the control plane.</p></EditorSection><EditorSection label="Which rows"><textarea value={props.activeRule?.row_filter ?? ""} onChange={(event) => props.onUpdateRule((rule) => ({ ...rule, row_filter: event.target.value || null }))} aria-label="DuckDB row restriction" placeholder="region = 'US'" /><p className="help">Matching rules combine row restrictions with AND.</p></EditorSection><EditorSection label="How values appear"><MaskEditor mask={props.selectedMask} onChange={props.onMask} field={props.selectedField} /></EditorSection><div className="editor-actions"><button className="danger" onClick={props.onRemoveRule}>Remove rule</button><button className="secondary" onClick={props.onPreview}>Run policy test</button><button className="primary" onClick={props.onSave} disabled={props.saveState === "saving"}>{props.saveState === "saving" ? "Saving…" : "Save draft"}</button><button className="secondary" onClick={props.onPublish} disabled={props.saveState !== "saved" || !props.reviewToken || props.publishing}>{props.publishing ? "Publishing…" : "Publish reviewed draft"}</button></div></> : <div className="empty-result"><strong>No draft rules</strong><p>Start with one allow rule. It remains a draft until you save it and complete review.</p><button className="primary" onClick={props.onAddRule}>Add first rule</button></div>}</section>
     <section className="result-panel" aria-label="Effective access inspector"><span className="eyebrow">EFFECTIVE ACCESS</span><h2>US analyst</h2><p className="muted">Synthetic persona · not reader authentication</p>{currentPreview ? <><div className="result-state allowed">Test current</div><h3>Visible output</h3><ul>{currentPreview.allowed_columns.map((field) => <li key={field}>{field}{currentPreview.masks[field] && <small> · {currentPreview.masks[field].type} mask</small>}</li>)}</ul><h3>Row restriction</h3><code>{currentPreview.row_filter ?? "No matching row restriction"}</code></> : <div className="empty-result"><strong>Run a policy test</strong><p>See authorized output schema, masks, and row restriction for this draft.</p></div>}<div className="result-warning"><strong>Before publishing</strong><p>Review uses the exact saved draft. Changing fields, masks, or row restrictions makes this result stale.</p></div></section>
