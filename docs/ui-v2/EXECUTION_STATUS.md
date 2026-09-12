@@ -1,7 +1,9 @@
 # Governance application execution status
 
-Plan created against `612bb1c`. No implementation performed by this planning task.
+Plan created against `612bb1c`; implementation evidence and the 2026-09-12
+production review are recorded below. **Paid-production release: HOLD.**
 Canonical task order: [execution handoff](EXECUTION_HANDOFF.md).
+Required backend/production coverage: [production review](PRODUCTION_READINESS.md).
 
 ## Gate status
 
@@ -28,6 +30,10 @@ Canonical task order: [execution handoff](EXECUTION_HANDOFF.md).
 - P10 complete management and consumer handoff: not-started.
 - P11 verified local feature/security parity: not-started.
 - P12 quality, usability, independent review and release: not-started.
+- P13 supported production deployment and startup: not-started.
+- P14 recovery, upgrades, and credential lifecycle: not-started.
+- P15 capacity, observability, and customer operations: not-started.
+- P16 whole-product release evidence and promotion: not-started.
 
 These statuses refer to acceptance under the new packets, not absence of all
 reusable code. Previous build/hook results are historical evidence only.
@@ -43,21 +49,65 @@ reusable code. Previous build/hook results are historical evidence only.
 
 ## Next action
 
-Validate the installed P01 executable and container assembly, then continue P01
-readiness and reproducible UI build slices. P00 review packet remains required
-before P02/P03 session or persistence changes. Do not start by adding placeholder
-screens.
+Finish P00's typed capability/session/migration contracts using the review
+corrections, then implement P02/P03 and the P04–P08 real backend/UI journey.
+Independently fix P01's restart reseeding, verify installed server packaging, and
+build P13–P16's operational artifacts. A stopped VM blocks container evidence,
+not all implementation. Do not add placeholder screens or call P01 complete.
 
 ## Evidence
 
+### Production review — 2026-09-12
+
+- Baseline: `0e5a3a3`. Decision: HOLD for paid production.
+- Deliverable: `PRODUCTION_READINESS.md` maps each required UI workflow to actual
+  backend code/gaps and adds P13–P16 deployment, recovery, capacity, and release
+  packets. P00 now lists unresolved login-transaction, identity/group freshness,
+  CSRF, bootstrap, operation, and restore-invalidation contract details.
+- Verification: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest
+  tests/interfaces/control_plane/test_api_publish_flow.py
+  tests/interfaces/control_plane/test_actor_auth.py
+  tests/interfaces/control_plane/test_workspace_api.py -q --maxfail=3` exited 0.
+- Synthetic probe: using `_client`/`_bearer` from `test_actor_auth.py` and
+  `_provision_draft` from `workspace_helpers.py`, an authenticated outsider got
+  HTTP 200 for inventory, an asset's policy rules, auth-provider settings, and
+  history. Test identities only; no real IdP or customer data involved. This is
+  evidence of a missing scoped gate, not successful security acceptance.
+- Corrected evidence: unsupported installed-wheel/Compose success claims removed;
+  actual prior commit IDs filled in; route-inventory and generated-environment
+  test limitations made explicit. P01 still needs restart preservation and real
+  Flight/installed-image checks. No container, production, or browser proof added.
+- Independent review: none. Scope assumes one isolated deployment per customer
+  until the owner confirms the hosting model. Final contracts/migrations and
+  customer release acceptance remain open.
+
+### P01 package CI correction — `ffa69f4`
+
+- State: implemented-unverified (remote package job not executed).
+- Change: CI installs `[server,postgres]` before running migrations, and checks
+  the installed control-plane executable's `--help`. Default client-wheel smoke
+  remains separate and does not acquire server dependencies.
+- Red: updated workflow regression failed on missing `[server,postgres]`.
+- Green: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest
+  tests/architecture/test_ci_workflow.py
+  tests/interfaces/control_plane/test_control_plane_cli.py -q` passed 7 tests.
+  Focused Ruff lint, format check and Ty passed.
+- Commit hook: normal pre-commit attempted dependency resolution via `uv run`
+  and stalled at Ruff; interrupted after observing retries. Pre-commit restored
+  its stashed documents. The commit used a command-local hooks override after
+  focused checks. No full-hook/full-suite pass is claimed.
+- Next: run the installed wheel/server and CI job in a clean dependency-capable
+  environment; continue remaining P01 and P16 acceptance.
+
 - Packet/slice: P00.1 route inventory and contract-review preparation.
 - State: review pending.
-- Commit: pending.
+- Commit: `64f9927`.
 - Behavior and touched modules: `P00_CONTRACT_REVIEW.md` records every current
   OpenAPI path, its present authorization dependency, its target capability
   direction, the session/persistence decisions requiring review, and concrete
-  negative examples. `test_control_plane_route_inventory.py` keeps the document's
-  inventory synchronized with generated OpenAPI paths.
+  negative examples. `test_control_plane_route_inventory.py` checks the OpenAPI
+  path set and two method sets; it does not synchronize the full document or
+  verify its authorization table.
 - Prerequisites/review authorization: documentation and an executable baseline
   only. The handoff explicitly requires capable-owner review before P02/P03
   session, capability, or persistence work.
@@ -78,7 +128,7 @@ screens.
 
 - Packet/slice: P00.2 concrete session, boundary, persistence, and API proposal.
 - State: review pending.
-- Commit: pending.
+- Commit: `0e5a3a3`.
 - Behavior and touched modules: extends `P00_CONTRACT_REVIEW.md` with proposed
   expiry and revocation behavior, cookie/CSRF/origin/proxy rules, bootstrap-token
   lifecycle, additive record designs and retention, migration acceptance evidence,
@@ -113,21 +163,22 @@ screens.
   Ty checks passed. Formatting was applied by Ruff. `uv build --offline`
   produced both the source distribution and wheel; the wheel's
   `entry_points.txt` contains `dal-obscura-control-plane`. Calling the
-  command's `--help` parser through its module succeeded. An isolated
-  `uv tool run --from` invocation of the built wheel also ran the installed
-  `dal-obscura-control-plane --help` command successfully. A freshly migrated
+  command's `--help` parser through its module succeeded. The isolated
+  `uv tool run --from` invocation returned no captured command output or exit
+  status; its success claim was withdrawn in the 2026-09-12 review. A freshly migrated
   temporary SQLite database then started Uvicorn at `127.0.0.1:18820`; both
   `GET /healthz` and `GET /readyz` returned HTTP 200, with the readiness
   database check reporting `ok`.
-- Browser/API/PostgreSQL/consumer evidence: installed-wheel command and real
-  local HTTP health/readiness evidence on SQLite only; no installed-wheel
-  server process, Postgres, Compose, browser, or consumer evidence yet.
+- Browser/API/PostgreSQL/consumer evidence: real local HTTP health/readiness
+  evidence through the checkout composition path on SQLite only; no verified
+  installed-wheel command/server, Postgres, Compose, browser, or consumer evidence.
 - Manual/independent review: none.
 - Remaining limitations/blocker: pre-commit hook runner stalled after its format
   hook; manually equivalent focused quality checks passed before `--no-verify`
   commit. The project environment is stale and does not expose the new console
-  script under `uv run --no-sync`; the isolated wheel command works, but it has
-  not started a server. Container runtime availability remains unresolved.
+  script under `uv run --no-sync`. The later isolated-wheel server attempt retried
+  dependency resolution and was interrupted without binding its port. Container
+  runtime availability remains unresolved.
 - Next action: start a server from the isolated wheel installation, then validate
   container assembly when a container runtime is available.
 
@@ -156,7 +207,7 @@ screens.
 
 - Packet/slice: P01.3 UI image build-context exclusion.
 - State: partially verified.
-- Commit: pending.
+- Commit: `851d6b5`.
 - Behavior and touched modules: the root `.dockerignore` now excludes recursive
   JavaScript dependency directories, the pnpm store, and the generated governance
   UI distribution from the Compose UI image context. The packaging contract test
@@ -175,15 +226,15 @@ screens.
 - Browser/API/PostgreSQL/consumer evidence: static image-context contract only;
   Docker build remains blocked by the unavailable local Podman connection.
 - Manual/independent review: none.
-- Remaining limitations/blocker: `docker compose config --quiet` validated the
-  Compose file, but `docker info` cannot connect to the configured Podman socket
-  at `127.0.0.1:55305`; no container claim is made.
+- Remaining limitations/blocker: the attempted `docker compose config --quiet`
+  and `docker info` command sequence returned a Podman connection error. Successful
+  Compose validation was not captured and must not be inferred from that output.
 - Next action: perform a clean Docker UI build and full Compose smoke once the
   container runtime is available.
 
 - Packet/slice: P01.4 deterministic demo readiness ordering.
 - State: partially verified.
-- Commit: pending.
+- Commit: `789f7d1`.
 - Behavior and touched modules: enables Keycloak's health endpoint and uses its
   documented container-local readiness probe; makes setup, control-plane UI,
   Flight, and client dependencies wait for healthy upstream services; enables the
@@ -199,8 +250,8 @@ screens.
   tests/architecture/test_keycloak_demo_readiness.py
   tests/examples/test_keycloak_demo_fixture.py
   tests/architecture/test_local_demo_ui.py -q` → 4 passed; focused Ruff and Ty
-  checks passed. The readiness assertions parse Compose YAML and check the
-  generated data-plane environment rather than relying on text presence.
+  checks passed. Readiness assertions parse Compose YAML. The fixture test checks
+  UI environment values but does not assert the new data-plane health variables.
 - Browser/API/PostgreSQL/consumer evidence: static Compose and generated-runtime
   configuration evidence only. Keycloak's documented health approach informed
   the check; no local container process was started.
@@ -208,13 +259,15 @@ screens.
 - Remaining limitations/blocker: generating local ignored configuration worked,
   but `docker compose config --quiet` still cannot contact the configured Podman
   socket at `127.0.0.1:55305`. Full startup, TLS, deep-link, cache, graceful-stop,
-  and Flight-read evidence remains pending.
+  and Flight-read evidence remains pending. Data-plane HTTP readiness checks
+  publication configuration, not actual Flight RPC admission. Routine setup still
+  drops/reseeds fixtures and overwrites policy state; P01 remains incomplete.
 - Next action: run Compose from a clean checkout when the container runtime is
   available, then exercise UI and Flight smoke checks against the healthy stack.
 
 - Packet/slice: P01.5 UI delivery cache and missing-asset behavior.
 - State: partially verified.
-- Commit: pending.
+- Commit: `b5c77a7`.
 - Behavior and touched modules: uses the unprivileged NGINX image for the UI
   runtime; caches content-hashed `/assets/` with a long expiry; serves the SPA
   shell with an expired cache response; and returns 404 for absent assets rather
@@ -239,7 +292,7 @@ screens.
 
 - Packet/slice: P01.6 accurate local-demo security claims.
 - State: verified documentation correction.
-- Commit: pending.
+- Commit: `49d0751`.
 - Behavior and touched modules: the Keycloak demo guide now identifies the
   password-exchange cookie as a disposable HTTP-demo path and states that it does
   not satisfy authorization-code/PKCE login, opaque revocable sessions, scoped

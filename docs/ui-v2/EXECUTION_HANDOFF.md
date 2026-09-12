@@ -437,6 +437,9 @@ reason to claim “only startup remains” when feature tests are missing.
 
 ### P12 — Quality, usability, independent review and release (U01/U09/U10)
 
+This packet establishes product candidate evidence. Paid-production promotion
+additionally requires P13–P16 in [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md).
+
 Depends on all earlier gates. Add CI lanes for fast frontend behavior, Python
 contracts/security, browser real-stack journeys, PostgreSQL races, packaged CLI
 and containers, and all required consumers. Use bounded waits and deterministic
@@ -462,6 +465,17 @@ parity. Resolve critical/high findings before release. Prepare evidence packet
 with exact candidate commit, checks, environment, screenshots, limitations,
 backup/restore proof, and open decisions. Owner accepts release; do not deploy
 merely because tests are green.
+
+### P13–P16 — Paid-production completion
+
+Execute the detailed slices and acceptance gates in
+[PRODUCTION_READINESS.md](PRODUCTION_READINESS.md): P13 supported deployment and
+startup, P14 recovery/upgrades/credential lifecycle, P15 capacity and customer
+operations, and P16 whole-product release evidence and promotion. Their backend
+workflow inventory is required scope, not optional polish. Start independent
+work early; finish P02/P03 security and P04–P10 functional dependencies before
+claiming a working customer application. The preserved pickle logic remains
+subject to trust-boundary review without being modified.
 
 ## 6. Golden acceptance scenarios
 
@@ -515,15 +529,19 @@ Milestones:
 - M2: P04–P08 first complete nested edit/test/review/publish/read journey verified.
 - M3: P09/P10 management, restore, activity and operational workflows verified.
 - M4: P11/P12 local parity, accessibility, independent review and release accepted.
+- M5: P13–P16 production deployment, recovery, upgrades, capacity, operations, and
+  candidate-specific release evidence accepted for the supported customer model.
 
 Do not present M0/M1 as a working feature-complete application. Do not present M4
-as completion of unrelated unfinished gateway or market-validation packages.
+as paid-production readiness or completion of unfinished gateway packages.
+Serving paying customers requires M5 and the applicable gateway security gates.
 
 ## 8. Copy-paste prompt for the implementation model
 
 > Implement `docs/ui-v2/EXECUTION_HANDOFF.md`, using
-> `docs/ui-v2/EXECUTION_STATUS.md` as the durable progress record. Read the existing
-> UI experience and gateway nested contracts. Recheck baseline gaps. Start with
+> `docs/ui-v2/EXECUTION_STATUS.md` as the durable progress record. Read
+> `docs/ui-v2/PRODUCTION_READINESS.md` backend inventory and P13–P16 release gates.
+> Read the UI experience and gateway nested contracts. Recheck baseline gaps. Start with
 > P00, prepare concrete decisions/tests for any required review, then perform the
 > earliest authorized unblocked slice. Finish each behavior with meaningful tests
 > and an atomic Conventional Commit. Never modify pickle logic. Never replace

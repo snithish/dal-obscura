@@ -6,6 +6,11 @@ For the current codebase, execute the smaller ordered packets in
 the handoff makes the missing implementation, security decisions, and local
 runtime gates explicit rather than assuming the foundation is production-ready.
 
+The paid-production objective also requires P13–P16 in
+[PRODUCTION_READINESS.md](PRODUCTION_READINESS.md), including per-workflow backend
+coverage, deployment boundaries, restore/upgrade drills, and whole-product release
+evidence. U10/P12 success alone does not establish readiness to serve customers.
+
 This is an implementation handoff, not evidence of completed functionality. Work in atomic units; retain the owner's commit authorization. Follow applicable test-review instructions without repeatedly seeking approval already granted for a concrete packet. Do not modify pickle code. Do not infer permission to deploy or contact users from this plan.
 
 ## Architecture decisions

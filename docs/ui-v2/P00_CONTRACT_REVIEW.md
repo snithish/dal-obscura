@@ -5,9 +5,13 @@ durable-workflow changes. It is preparation for the review required by
 [the execution handoff](EXECUTION_HANDOFF.md), not approval to introduce new
 persistent state or select a new authorization model.
 
-The executable inventory is enforced by
-`tests/architecture/test_control_plane_route_inventory.py`. Any endpoint change
-must update this document and receive the relevant contract review.
+`tests/architecture/test_control_plane_route_inventory.py` checks the current
+OpenAPI path set and two method sets. It does not verify this document's complete
+method or authorization inventory. Endpoint changes must update this document;
+P00 must add complete method/contract coverage and P03 must test permissions.
+
+See [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) for the current release
+blockers, per-workflow backend requirements, and production gates P13–P16.
 
 ## Current route and authorization inventory
 
@@ -125,6 +129,60 @@ from silently expanding old endpoints; they are not routes yet.
 All private/session responses use `Cache-Control: no-store`. Error bodies expose
 safe machine-readable codes and a correlation ID, never provider, grant, or
 resource detail that the caller is not entitled to see.
+
+## Required corrections before contract acceptance
+
+The proposal above is not implementation-ready until these ambiguities are
+resolved in the final typed contracts and migration plan:
+
+1. Add short-lived, browser-bound, single-use OIDC login transactions containing
+   state/nonce/PKCE verifier and an allowlisted return location. Store sensitive
+   transaction material protected in the existing control-plane store; expire
+   and atomically consume it across API processes. A session table alone does
+   not provide this replay protection. Use library implementations of OIDC/PKCE.
+2. Bind every session/grant to issuer plus subject, and define group-grant
+   freshness. App-grant revocation can take effect next request; removal of an
+   IdP group embedded in a previously issued token cannot promise the same bound
+   without an implemented notification/revalidation mechanism. Specify that
+   bound and its failure behavior; do not imply IdP-wide logout.
+3. Retain provider tokens only when an implemented feature requires them. If no
+   refresh/provider logout is supported, prefer storing none after callback.
+   Provider token exchanges necessarily contain tokens; the prohibition covers
+   app/browser responses, cookies, logs and artifacts, not the secure IdP protocol.
+4. Specify how the browser obtains a session-bound CSRF token without exposing
+   the HttpOnly session identifier. Logout after session expiry still clears
+   cookies with origin/CSRF handling defined for that case. Protect login/logout
+   and their error paths against caching, redirect abuse, and information leaks.
+5. Define bounded, multi-process login limiting without enabling account lockout
+   through an unauthenticated arbitrary subject name. Separate callback attempts,
+   trusted client-IP derivation, and authenticated subject limits. Document
+   concrete thresholds, cleanup, safe errors, and recovery under saturation.
+6. Replace the unconditional static-admin bypass with explicit bootstrap state
+   and a narrow bootstrap command/service. Prevent ordinary API/CLI clients from
+   regaining bootstrap authority after it is closed; document audited emergency
+   access. Direct database administrative access cannot be constrained by API RBAC.
+7. Specify collection and item routes separately: draft creation/listing under
+   `/v1/assets/{asset_id}/drafts`; read/update/discard under
+   `/v1/assets/{asset_id}/drafts/{draft_id}`. Define review and operation lookup
+   endpoints, not just publish. Operations must be scoped by workspace, asset,
+   actor and idempotency key; payload mismatches conflict. Include safe 401/403/
+   404/409/412/413/422/429/503 contracts and their UI recovery behavior.
+8. Keep grants of management capabilities separate from data-plane policy
+   authoring. An administrator allowed to assign itself editor and publisher
+   capabilities can indirectly change read policy; document this trusted power
+   instead of claiming impossible prevention. Test that lesser roles cannot
+   self-assign or cross scope. Handle final-admin removal and emergency recovery.
+9. Model shared-table constraints, unique indexes, foreign keys, timestamps,
+   cleanup and atomic update boundaries precisely. Session identifiers/key
+   versions/CSRF material and per-draft evaluation/review/operation references need
+   explicit columns or a reviewed equivalent. Tables are grouped into coherent
+   migrations by dependency; do not require an arbitrary one-table-per-migration
+   split. Session/ticket invalidation after backup restore must prevent replay of
+   access revoked after the recovery point.
+10. Confirm first-customer isolation and production targets from P13–P16. A single
+    workspace deployment is the planning assumption; shared tenancy is a new
+    isolation requirement. Fix operation-size/time/concurrency limits, supported
+    protocol/library versions and deployment topology before load acceptance.
 
 ## Failing examples to implement after approval
 

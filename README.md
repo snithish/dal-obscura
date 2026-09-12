@@ -12,6 +12,11 @@ allowed by the active policy generation.
 dal-obscura supports governed Iceberg assets, DuckDB row filters, column masks,
 and JVM/Python connector surfaces.
 
+**Production status:** the governance UI and its administrative backend are
+incomplete. Do not treat the demo or a passing build as approval to serve paying
+customers. See the [code-backed readiness review](docs/ui-v2/PRODUCTION_READINESS.md)
+and [implementation ledger](docs/ui-v2/EXECUTION_STATUS.md) for required work.
+
 ## Contents
 
 - [Why dal-obscura](#why-dal-obscura)
@@ -35,8 +40,9 @@ and JVM/Python connector surfaces.
 
 ## Fast start
 
-Use the local Keycloak demo when you want a complete working stack with IAM,
-Postgres, control plane, Iceberg, and Flight reads:
+The local Keycloak demo assembles IAM, Postgres, control plane, Iceberg, and
+Flight reads. Its temporary login path and startup scripts do not yet satisfy
+supported local-security parity or production acceptance:
 
 ```bash
 cd examples/demo/keycloak

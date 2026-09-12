@@ -1,6 +1,8 @@
 # A new governance workspace
 
 Status: product specification exists; implementation and validation are incomplete.
+Paid-production release is **on hold**. See the code-backed
+[production readiness review and required backend/deployment work](PRODUCTION_READINESS.md).
 The source application, demo cookie login/logout, and UI container packaging exist.
 Production OIDC, complete scoped authorization, canonical nested authoring, durable
 revision workflows, required management screens, and real-stack/browser evidence
@@ -16,6 +18,7 @@ Read together:
 
 - [Concrete execution handoff for a less capable coding model](EXECUTION_HANDOFF.md)
 - [Execution status and evidence ledger](EXECUTION_STATUS.md)
+- [Backend coverage and paid-production release gates](PRODUCTION_READINESS.md)
 - [Experience and product specification](EXPERIENCE.md)
 - [Implementation packages and acceptance gates](IMPLEMENTATION.md)
 - [Visual experience map](experience-map.html), a static planning artifact with illustrative data
@@ -35,6 +38,11 @@ Required release surface: authentication; asset and connection management; neste
 Deferred until evidence supports them: live multi-user cursors, configurable approval chains, access-request marketplaces, IdP administration, multi-tenant self-service, arbitrary SQL workbenches, additional backends, and AI-generated policy changes. Basic ownership, explicit publishing permission, and human review of changes are required; a workflow automation product is not.
 
 A management role does not imply permission to read underlying rows. Default previews use synthetic fixtures. Actual data access stays governed through the gateway with a separately authenticated reader identity.
+
+Every required screen must map to a real authorized backend service, a durable
+workflow where applicable, and API/browser acceptance evidence. Mocked fixtures,
+placeholder destinations, and static build checks cannot satisfy release scope.
+P13–P16 add deployment, recovery, operations, and promotion requirements to P00–P12.
 
 ## Decisions and assumptions
 
