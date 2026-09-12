@@ -46,6 +46,7 @@ dal-obscura = "dal_obscura.data_plane.interfaces.cli:main"
 dal-obscura-control-plane = "dal_obscura.control_plane.interfaces.control_plane_cli:main"
 dal-obscura-admin = "dal_obscura.control_plane.interfaces.admin_cli:main"
 dal-obscura-migrate = "dal_obscura.common.config_store.cli:main"
+dal-obscura-maintenance = "dal_obscura.control_plane.interfaces.maintenance_cli:main"
 
 [build-system]
 requires = ["setuptools>=68.0.0", "wheel"]
