@@ -422,7 +422,12 @@ class PublishedConfigCatalogRegistry:
                 ),
                 path_enforcer=catalog_config.path_enforcer,
             )
-        registry = CatalogRegistry(ServiceConfig(catalogs={catalog: catalog_config}))
+        registry = CatalogRegistry(
+            ServiceConfig(catalogs={catalog: catalog_config}),
+            plugin_registry=self._plugin_registry
+            if isinstance(self._plugin_registry, PluginRegistry)
+            else None,
+        )
         self._registry_cache[cache_key] = registry
         table_format = registry.describe(
             catalog,
@@ -452,7 +457,12 @@ def _catalog_config_from_published_catalog(catalog: PublishedCatalog) -> Catalog
     config = _mapping(catalog.config)
     options = dict(_mapping(config.get("options")))
     options.pop("provider_modules", None)
-    return CatalogConfig(name=catalog.catalog, type=_catalog_type(config), options=options)
+    return CatalogConfig(
+        name=catalog.catalog,
+        type=_catalog_type(config),
+        options=options,
+        plugin_id="iceberg.sql",
+    )
 
 
 def _catalog_config_for_asset(

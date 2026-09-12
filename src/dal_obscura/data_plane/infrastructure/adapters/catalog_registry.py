@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from dal_obscura.common.catalog.ports import (
     CatalogPlugin,
@@ -9,6 +10,7 @@ from dal_obscura.common.catalog.ports import (
     CatalogTableListing,
     TableFormat,
 )
+from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 from dal_obscura.data_plane.infrastructure.table_formats.iceberg import IcebergTableFormat
 
@@ -23,6 +25,7 @@ class CatalogConfig:
     type: CatalogType
     options: dict[str, Any] = field(default_factory=dict)
     path_enforcer: PathRuleEnforcer | None = None
+    plugin_id: str = "iceberg.sql"
 
     def __post_init__(self) -> None:
         if not self.name.strip():
@@ -39,10 +42,17 @@ class ServiceConfig:
 class CatalogRegistry:
     """Resolves configured catalog targets into executable table formats."""
 
-    def __init__(self, config: ServiceConfig) -> None:
+    def __init__(
+        self,
+        config: ServiceConfig,
+        *,
+        plugin_registry: PluginRegistry | None = None,
+    ) -> None:
         self._config = config
+        self._plugin_registry = plugin_registry
         self._catalogs = {
-            name: _build_catalog(catalog_config) for name, catalog_config in config.catalogs.items()
+            name: _build_catalog(catalog_config, plugin_registry=plugin_registry)
+            for name, catalog_config in config.catalogs.items()
         }
 
     @property
@@ -52,7 +62,8 @@ class CatalogRegistry:
     def reload(self, config: ServiceConfig) -> None:
         self._config = config
         self._catalogs = {
-            name: _build_catalog(catalog_config) for name, catalog_config in config.catalogs.items()
+            name: _build_catalog(catalog_config, plugin_registry=self._plugin_registry)
+            for name, catalog_config in config.catalogs.items()
         }
 
     def resolve(
@@ -162,7 +173,25 @@ class IcebergCatalog(CatalogPlugin):
         ]
 
 
-def _build_catalog(config: CatalogConfig) -> CatalogPlugin:
+def _build_catalog(
+    config: CatalogConfig,
+    *,
+    plugin_registry: PluginRegistry | None = None,
+) -> CatalogPlugin:
+    if plugin_registry is not None:
+        factory = plugin_registry.load("catalog", config.plugin_id)
+        if not callable(factory):
+            raise ValueError(f"Plugin factory is invalid: {config.plugin_id}")
+        constructor = cast(
+            Callable[[str, dict[str, Any], PathRuleEnforcer | None], CatalogPlugin],
+            factory,
+        )
+        implementation = constructor(config.name, config.options, config.path_enforcer)
+        if not hasattr(implementation, "resolve_table") or not hasattr(
+            implementation, "list_tables"
+        ):
+            raise ValueError(f"Plugin factory returned an invalid catalog: {config.plugin_id}")
+        return implementation
     if config.type == "iceberg":
         return IcebergCatalog(config.name, config.options, config.path_enforcer)
     raise ValueError(f"Unsupported catalog type: {config.type}")

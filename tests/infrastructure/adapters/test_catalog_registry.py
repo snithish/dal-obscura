@@ -13,6 +13,9 @@ from dal_obscura.common.catalog.ports import (
 from dal_obscura.common.query_planning.models import PlanRequest
 from dal_obscura.common.table_format.ports import InputPartition, Plan, ScanTask
 from dal_obscura.data_plane.infrastructure.adapters import catalog_registry as registry_module
+from dal_obscura.data_plane.infrastructure.adapters.builtin_plugins import (
+    create_builtin_plugin_registry,
+)
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     CatalogConfig,
     CatalogRegistry,
@@ -185,3 +188,19 @@ class FakePyIcebergTable:
 
     class io:
         properties: ClassVar[dict[str, str]] = {"warehouse": "s3://warehouse"}
+
+
+def test_catalog_registry_constructs_iceberg_through_admitted_plugin_factory():
+    config = ServiceConfig(
+        catalogs={
+            "analytics": CatalogConfig(
+                name="analytics",
+                type="iceberg",
+                options={"uri": "sqlite:///warehouse.db"},
+            )
+        }
+    )
+
+    registry = CatalogRegistry(config, plugin_registry=create_builtin_plugin_registry())
+
+    assert isinstance(registry._catalogs["analytics"], IcebergCatalog)
