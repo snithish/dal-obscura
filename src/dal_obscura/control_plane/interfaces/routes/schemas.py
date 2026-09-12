@@ -169,6 +169,12 @@ class PolicyVersionPublishRequest(StrictModel):
     expected_publication_id: UUID | None = None
 
 
+class PolicyRestoreRequest(StrictModel):
+    """Revision-preconditioned request to restore immutable policy history."""
+
+    expected_revision: int = Field(ge=0)
+
+
 class PolicyPreviewRequest(StrictModel):
     """Policy-preview request for a candidate principal.
 

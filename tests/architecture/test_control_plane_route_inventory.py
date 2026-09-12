@@ -35,6 +35,8 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
         "/v1/assets/{asset_id}/policy-evaluate",
         "/v1/assets/{asset_id}/policy-rules",
         "/v1/assets/{asset_id}/policy-versions",
+        "/v1/assets/{asset_id}/policy-versions/{policy_version}",
+        "/v1/assets/{asset_id}/policy-versions/{policy_version}/restore",
         "/v1/assets/{asset_id}/schema-fields",
         "/v1/assets/{catalog}/{target}",
         "/v1/catalogs",

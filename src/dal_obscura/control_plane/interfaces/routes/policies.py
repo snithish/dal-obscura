@@ -18,6 +18,7 @@ from dal_obscura.control_plane.interfaces.routes.schemas import (
     PolicyDraftRequest,
     PolicyEvaluationRequest,
     PolicyPreviewRequest,
+    PolicyRestoreRequest,
     PolicyRulesRequest,
     PolicyVersionPublishRequest,
 )
@@ -127,6 +128,45 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
                 expected_publication_id=(
                     None if request is None else request.expected_publication_id
                 ),
+            )
+        )
+
+    @api.get("/v1/assets/{asset_id}/policy-versions")
+    def list_asset_policy_version_history(
+        asset_id: UUID,
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> object:
+        return deps.with_service(
+            lambda service: service.list_asset_policy_version_history(asset_id, actor=actor)
+        )
+
+    @api.get("/v1/assets/{asset_id}/policy-versions/{policy_version}")
+    def get_asset_policy_version(
+        asset_id: UUID,
+        policy_version: int,
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> object:
+        return deps.with_service(
+            lambda service: service.get_asset_policy_version(
+                asset_id,
+                policy_version,
+                actor=actor,
+            )
+        )
+
+    @api.post("/v1/assets/{asset_id}/policy-versions/{policy_version}/restore")
+    def restore_policy_version(
+        asset_id: UUID,
+        policy_version: int,
+        request: PolicyRestoreRequest,
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> object:
+        return deps.with_service(
+            lambda service: service.restore_policy_version(
+                asset_id,
+                policy_version,
+                actor=actor,
+                expected_revision=request.expected_revision,
             )
         )
 

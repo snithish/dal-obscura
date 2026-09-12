@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
@@ -56,6 +56,33 @@ def save_policy_draft(
         rules=rules,
         content_hash=_content_hash(rules),
         base_policy_version=_base_policy_version(asset),
+    )
+
+
+def restore_policy_version(
+    store: PublicationStore,
+    asset_id: UUID,
+    actor: ControlPlaneActor,
+    *,
+    policy_version: int,
+    expected_revision: int,
+) -> dict[str, object]:
+    """Copies immutable history into a new revisioned draft."""
+
+    ensure_asset_capability(store, asset_id, actor, "edit")
+    historical = store.get_published_asset_policy(
+        asset_id=asset_id,
+        policy_version=policy_version,
+    )
+    rules = cast(list[dict[str, Any]], historical["rules"])
+    validate_policy_rule_payloads(rules)
+    return store.save_asset_policy_draft(
+        asset_id=asset_id,
+        author_principal=actor.principal,
+        expected_revision=expected_revision,
+        rules=rules,
+        content_hash=_content_hash(rules),
+        base_policy_version=policy_version,
     )
 
 

@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from tests.interfaces.control_plane.test_actor_auth import (
+    _bearer,
+)
+from tests.interfaces.control_plane.test_actor_auth import (
+    _client as _actor_client,
+)
 from tests.interfaces.control_plane.workspace_helpers import (
     ADMIN_HEADERS,
     DEFAULT_AUTH_MODULE,
@@ -174,3 +180,77 @@ def test_policy_version_history_is_asset_focused():
     ]
     assert response.json()[0]["created_at"]
     assert "cell_id" not in response.json()[0]
+
+
+def test_asset_policy_history_detail_and_restore_are_revisioned():
+    client = _client()
+    asset = _provision_draft(client)
+    client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["user:owner@example.com"]},
+        headers=ADMIN_HEADERS,
+    )
+    created = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        headers=ADMIN_HEADERS,
+    ).json()
+
+    history_response = client.get(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        headers=ADMIN_HEADERS,
+    )
+    detail_response = client.get(
+        f"/v1/assets/{asset['id']}/policy-versions/{created['policy_version']}",
+        headers=ADMIN_HEADERS,
+    )
+
+    assert history_response.status_code == 200
+    assert [item["policy_version"] for item in history_response.json()] == [
+        created["policy_version"]
+    ]
+    assert detail_response.status_code == 200
+    assert detail_response.json()["asset_id"] == asset["id"]
+    assert detail_response.json()["policy_version"] == created["policy_version"]
+    assert detail_response.json()["rules"][0]["columns"] == ["id", "email"]
+    assert "compiled_config" not in detail_response.json()
+
+    restore_response = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions/{created['policy_version']}/restore",
+        json={"expected_revision": 0},
+        headers=ADMIN_HEADERS,
+    )
+
+    assert restore_response.status_code == 200
+    restored = restore_response.json()
+    assert restored["revision"] == 1
+    assert restored["base_policy_version"] == created["policy_version"]
+    assert restored["rules"][0]["columns"] == ["id", "email"]
+
+
+def test_asset_policy_history_is_capability_scoped():
+    client = _actor_client()
+    asset = _provision_draft(client)
+    client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["asset-owner"]},
+        headers=ADMIN_HEADERS,
+    )
+    created = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        headers=ADMIN_HEADERS,
+    ).json()
+
+    outsider = _bearer("outsider-token")
+    assert client.get(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        headers=outsider,
+    ).status_code == 403
+    assert client.get(
+        f"/v1/assets/{asset['id']}/policy-versions/{created['policy_version']}",
+        headers=outsider,
+    ).status_code == 403
+    assert client.post(
+        f"/v1/assets/{asset['id']}/policy-versions/{created['policy_version']}/restore",
+        json={"expected_revision": 0},
+        headers=outsider,
+    ).status_code == 403

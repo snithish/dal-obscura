@@ -102,6 +102,12 @@ export type PolicyVersion = {
   created_at: string;
 };
 
+export type PolicyVersionDetail = {
+  asset_id: string;
+  policy_version: number;
+  rules: PolicyRule[];
+};
+
 export type Catalog = {
   id: string;
   name: string;
@@ -177,6 +183,13 @@ export const controlPlane = {
   getSchema: (assetId: string) => request<AssetSchema>(`/v1/assets/${assetId}/schema`),
   listRules: (assetId: string) => request<PolicyRule[]>(`/v1/assets/${assetId}/policy-rules`),
   listHistory: () => request<PolicyVersion[]>("/v1/policy-versions"),
+  listAssetHistory: (assetId: string) => request<PolicyVersion[]>(`/v1/assets/${assetId}/policy-versions`),
+  getPolicyVersion: (assetId: string, policyVersion: number) => request<PolicyVersionDetail>(`/v1/assets/${assetId}/policy-versions/${policyVersion}`),
+  restorePolicyVersion: (assetId: string, policyVersion: number, expectedRevision: number) =>
+    request<PolicyDraft>(`/v1/assets/${assetId}/policy-versions/${policyVersion}/restore`, {
+      method: "POST",
+      body: JSON.stringify({ expected_revision: expectedRevision }),
+    }),
   listCatalogs: () => request<Catalog[]>("/v1/catalogs"),
   discoverCatalogTables: (name: string) => request<{ catalog: string; tables: Array<Record<string, unknown>> }>(`/v1/catalogs/${encodeURIComponent(name)}/tables`),
   getRuntimeSettings: () => request<RuntimeSettings | null>("/v1/settings/runtime"),

@@ -60,6 +60,43 @@ def list_policy_version_history(
     return [item for item in history if str(item.get("asset_id")) in visible_asset_ids]
 
 
+def list_asset_policy_version_history(
+    store: PublicationStore,
+    asset_id: UUID,
+    *,
+    actor: ControlPlaneActor,
+) -> list[dict[str, object]]:
+    """Lists immutable versions for one asset after capability enforcement."""
+
+    ensure_asset_capability(store, asset_id, actor, "read")
+    return [
+        item
+        for item in list_policy_version_history(store, actor=actor)
+        if str(item.get("asset_id")) == str(asset_id)
+    ]
+
+
+def get_asset_policy_version(
+    store: PublicationStore,
+    asset_id: UUID,
+    policy_version: int,
+    *,
+    actor: ControlPlaneActor,
+) -> dict[str, object]:
+    """Returns an immutable policy body without exposing compiled catalog secrets."""
+
+    ensure_asset_capability(store, asset_id, actor, "read")
+    historical = store.get_published_asset_policy(
+        asset_id=asset_id,
+        policy_version=policy_version,
+    )
+    return {
+        "asset_id": str(asset_id),
+        "policy_version": historical["policy_version"],
+        "rules": historical["rules"],
+    }
+
+
 def create_workspace_publication(
     store: PublicationStore,
     create_publication,

@@ -110,6 +110,48 @@ class ProvisioningService:
     ) -> list[dict[str, object]]:
         return policy_version_service.list_policy_version_history(self._store, actor=actor)
 
+    def list_asset_policy_version_history(
+        self,
+        asset_id: UUID,
+        *,
+        actor: ControlPlaneActor,
+    ) -> list[dict[str, object]]:
+        return policy_version_service.list_asset_policy_version_history(
+            self._store,
+            asset_id,
+            actor=actor,
+        )
+
+    def get_asset_policy_version(
+        self,
+        asset_id: UUID,
+        policy_version: int,
+        *,
+        actor: ControlPlaneActor,
+    ) -> dict[str, object]:
+        return policy_version_service.get_asset_policy_version(
+            self._store,
+            asset_id,
+            policy_version,
+            actor=actor,
+        )
+
+    def restore_policy_version(
+        self,
+        asset_id: UUID,
+        policy_version: int,
+        *,
+        actor: ControlPlaneActor,
+        expected_revision: int,
+    ) -> dict[str, object]:
+        return draft_service.restore_policy_version(
+            self._store,
+            asset_id,
+            actor,
+            policy_version=policy_version,
+            expected_revision=expected_revision,
+        )
+
     def list_workspace_catalogs(self) -> list[dict[str, object]]:
         return catalog_service.list_workspace_catalogs(self._store)
 

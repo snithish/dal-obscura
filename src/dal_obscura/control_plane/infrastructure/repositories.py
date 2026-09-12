@@ -1110,6 +1110,45 @@ class PublicationStore:
             for published, publication, asset in rows
         ]
 
+    def get_published_asset_policy(
+        self,
+        *,
+        asset_id: UUID,
+        policy_version: int,
+    ) -> dict[str, object]:
+        """Returns the immutable policy body for one asset version."""
+
+        asset = self._session.get(AssetRecord, asset_id)
+        if asset is None:
+            raise LookupError(f"No asset {asset_id}")
+        catalog = self._session.get(CatalogRecord, asset.catalog_id)
+        if catalog is None:
+            raise LookupError(f"No catalog {asset.catalog_id}")
+        record = self._session.scalar(
+            select(PublishedAssetRecord)
+            .join(
+                ConfigPublicationRecord,
+                ConfigPublicationRecord.id == PublishedAssetRecord.publication_id,
+            )
+            .where(
+                PublishedAssetRecord.tenant_id == asset.tenant_id,
+                PublishedAssetRecord.catalog == catalog.name,
+                PublishedAssetRecord.target == asset.target,
+                PublishedAssetRecord.policy_version == policy_version,
+            )
+            .order_by(ConfigPublicationRecord.created_at.desc())
+        )
+        if record is None:
+            raise LookupError(f"No published policy version {policy_version} for asset {asset_id}")
+        config = cast(dict[str, object], record.compiled_config_json)
+        policy = cast(dict[str, object], config.get("policy", {}))
+        return {
+            "asset_id": str(asset_id),
+            "policy_version": record.policy_version,
+            "rules": cast(list[dict[str, object]], policy.get("rules", [])),
+            "compiled_config": config,
+        }
+
     def get_workspace_summary(self, context: WorkspaceContext | None) -> dict[str, object]:
         if context is None:
             return _empty_workspace_summary()
