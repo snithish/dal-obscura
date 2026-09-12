@@ -13,6 +13,10 @@ from uuid import UUID
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.application.policy_service import ensure_asset_capability
+from dal_obscura.control_plane.application.schema_service import (
+    load_asset_iceberg_schema,
+    schema_fingerprint,
+)
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 
 REVIEW_TTL_SECONDS = 600
@@ -91,6 +95,15 @@ def verify_review_token(
     evidence = cast(dict[str, object], evidence_raw)
     if evidence.get("evaluator_version") != "duckdb-synthetic-v1":
         raise ValidationFailure("Policy review evidence is invalid.")
+    recorded_schema_fingerprint = evidence.get("schema_fingerprint")
+    if not isinstance(recorded_schema_fingerprint, str) or not recorded_schema_fingerprint:
+        raise ValidationFailure("Policy review evidence is invalid.")
+    current_schema = load_asset_iceberg_schema(store, asset_id, actor)
+    if not hmac.compare_digest(
+        recorded_schema_fingerprint,
+        schema_fingerprint(current_schema.as_arrow()),
+    ):
+        raise ValidationFailure("Iceberg schema changed after review; review again.")
     draft = store.get_asset_policy_draft(
         asset_id=asset_id,
         author_principal=actor.principal,

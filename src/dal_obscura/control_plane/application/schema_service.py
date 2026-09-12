@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable
 from typing import Any, cast
 from uuid import UUID
@@ -84,6 +85,12 @@ def load_asset_iceberg_schema(
     if not isinstance(schema, Schema):
         raise TypeError("Iceberg catalog returned an invalid schema")
     return schema
+
+
+def schema_fingerprint(schema: object) -> str:
+    """Returns a stable digest for an authoritative Iceberg or Arrow schema."""
+
+    return hashlib.sha256(str(schema).encode("utf-8")).hexdigest()
 
 
 def _field_node(field: NestedField, path: tuple[FieldPathSegment, ...]) -> dict[str, object]:

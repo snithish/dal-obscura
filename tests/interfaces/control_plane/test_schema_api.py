@@ -54,6 +54,21 @@ class _EvaluationCatalog:
         return _EvaluationTable()
 
 
+class _ChangedEvaluationTable:
+    def schema(self) -> Schema:
+        return Schema(
+            NestedField(field_id=1, name="id", field_type=LongType()),
+            NestedField(field_id=2, name="email", field_type=StringType()),
+            NestedField(field_id=4, name="region", field_type=StringType()),
+        )
+
+
+class _ChangedEvaluationCatalog:
+    def load_table(self, identifier: str) -> _ChangedEvaluationTable:
+        assert identifier == "prod.users"
+        return _ChangedEvaluationTable()
+
+
 def test_asset_schema_route_reads_authoritative_iceberg_schema(monkeypatch) -> None:
     client = _client()
     client.put(
@@ -251,6 +266,50 @@ def test_production_publication_requires_current_server_review(monkeypatch) -> N
     assert reviewed.status_code == 200
     assert published.status_code == 200
     assert tampered.status_code == 400
+
+
+def test_production_publication_rejects_schema_drift_after_review(monkeypatch) -> None:
+    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+    migrate_config_store(engine)
+    client = TestClient(
+        create_app(
+            session_factory(engine),
+            admin_token="test-admin",
+            require_review=True,
+            bootstrap_enabled=True,
+        )
+    )
+    asset = _provision_draft(client)
+    client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["platform:admin"]},
+        headers=ADMIN_HEADERS,
+    )
+    monkeypatch.setattr(
+        schema_service,
+        "load_catalog",
+        lambda *args, **kwargs: _EvaluationCatalog(),
+    )
+    reviewed = client.post(
+        f"/v1/assets/{asset['id']}/policy-review",
+        json={"principal": "user1", "groups": [], "claims": {"tenant": "default"}},
+        headers=ADMIN_HEADERS,
+    )
+    assert reviewed.status_code == 200, reviewed.json()
+
+    monkeypatch.setattr(
+        schema_service,
+        "load_catalog",
+        lambda *args, **kwargs: _ChangedEvaluationCatalog(),
+    )
+    published = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        json={"review_token": reviewed.json()["review_token"]},
+        headers=ADMIN_HEADERS,
+    )
+
+    assert published.status_code == 400
+    assert published.json() == {"detail": "Iceberg schema changed after review; review again."}
 
 
 def test_explicit_empty_draft_is_reviewable_and_publishable_as_deny_all(monkeypatch) -> None:

@@ -51,11 +51,11 @@ def evaluate_asset_policy(
     )
     draft = store.get_asset_policy_draft(asset_id=asset_id, author_principal=actor.principal)
     revision = 0 if draft is None else int(cast(int | str, draft["revision"]))
-    schema_fingerprint = _fingerprint(str(arrow_schema))
+    schema_digest = schema_service.schema_fingerprint(arrow_schema)
     evidence = {
         "draft_revision": revision,
         "draft_content_hash": None if draft is None else draft["content_hash"],
-        "schema_fingerprint": schema_fingerprint,
+        "schema_fingerprint": schema_digest,
         "persona_fingerprint": _fingerprint(
             json.dumps(
                 {"principal": principal, "groups": groups, "claims": claims},
