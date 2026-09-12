@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `836cd55`.
+Implementation follow-up through `2f6f933`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -490,6 +490,11 @@ The initializer now grants migrator `USAGE, CREATE` on `public` and application
 roles only `USAGE`, allowing clean-volume migrations while keeping application
 schema changes outside their privileges. Shell, contract, and Compose checks
 remain green.
+
+Production Compose healthchecks now probe `/readyz` for both control-plane and
+data-plane services, so database/runtime readiness gates service health instead
+of liveness alone. Deployment contract and Compose-render checks pass; live
+container startup remains unexecuted.
 
 The direct-Arrow bounds regression and Ty/Ruff checks passed in
 `3263645`; the full schema byte-budget and every-entry-route acceptance matrix
