@@ -72,6 +72,10 @@ def _workspace_cell_id() -> str:
 
 
 def _provision_workspace(fixture: dict[str, Any]) -> str:
+    workspace_state = _workspace_state(fixture)
+    if workspace_state == "complete":
+        return _workspace_cell_id()
+
     warehouse_path = "/workspace/demo/.runtime/warehouse"
     _request(
         "PUT",
@@ -113,6 +117,98 @@ def _provision_workspace(fixture: dict[str, Any]) -> str:
     for asset_id in asset_ids:
         _request("POST", f"/v1/assets/{asset_id}/policy-versions")
     return cell_id
+
+
+def _workspace_state(fixture: dict[str, Any]) -> str:
+    """Classify the workspace before any mutating setup request.
+
+    A fresh database is safe to initialize.  A fully provisioned database is
+    safe to reuse after checking the expected demo assets and publications.
+    Any other state is ambiguous, so setup fails instead of overwriting
+    customer-authored configuration.  Operators can use the explicit reset
+    workflow when they really intend to destroy the demo state.
+    """
+
+    summary = _request("GET", "/v1/workspace/summary")
+    if not isinstance(summary, dict):
+        raise RuntimeError("workspace summary returned an unexpected response")
+    summary_payload = cast(dict[str, Any], summary)
+    if _summary_is_empty(summary_payload):
+        return "empty"
+
+    expected_catalog_count = len(fixture["catalogs"])
+    expected_asset_count = len(fixture["tables"])
+    if not _summary_meets_expected_counts(
+        summary_payload,
+        expected_catalog_count=expected_catalog_count,
+        expected_asset_count=expected_asset_count,
+    ):
+        raise RuntimeError(
+            "demo workspace is partially configured; refusing to overwrite existing "
+            "catalogs, assets, owners, or policies. Recover the workspace or run the "
+            "explicit reset workflow before starting the demo again."
+        )
+
+    assets_response = _request("GET", "/v1/assets")
+    history_response = _request("GET", "/v1/policy-versions")
+    assets = _as_list(assets_response, "assets")
+    history = _as_list(history_response, "policy version history")
+    asset_by_target = {
+        (str(asset.get("catalog")), str(asset.get("target"))): asset for asset in assets
+    }
+    expected_targets = {
+        (str(table["catalog"]), str(table["target"])) for table in fixture["tables"]
+    }
+    expected_assets = [asset_by_target.get(target) for target in expected_targets]
+    published_asset_ids = {str(item.get("asset_id")) for item in history}
+    complete = _summary_meets_expected_counts(
+        summary_payload,
+        expected_catalog_count=len(fixture["catalogs"]),
+        expected_asset_count=len(expected_targets),
+    ) and all(
+        asset is not None and str(asset.get("id")) in published_asset_ids
+        for asset in expected_assets
+    )
+    if complete:
+        return "complete"
+    raise RuntimeError(
+        "demo workspace is partially configured; refusing to overwrite existing "
+        "catalogs, assets, owners, or policies. Recover the workspace or run the "
+        "explicit reset workflow before starting the demo again."
+    )
+
+
+def _summary_is_empty(summary: dict[str, Any]) -> bool:
+    return (
+        int(summary.get("catalog_count", 0)) == 0
+        and int(summary.get("asset_count", 0)) == 0
+        and int(summary.get("unowned_asset_count", 0)) == 0
+        and int(summary.get("missing_policy_count", 0)) == 0
+        and not bool(summary.get("runtime_configured"))
+        and int(summary.get("enabled_auth_provider_count", 0)) == 0
+    )
+
+
+def _summary_meets_expected_counts(
+    summary: dict[str, Any],
+    *,
+    expected_catalog_count: int,
+    expected_asset_count: int,
+) -> bool:
+    return (
+        int(summary.get("catalog_count", 0)) >= expected_catalog_count
+        and int(summary.get("asset_count", 0)) >= expected_asset_count
+        and int(summary.get("unowned_asset_count", 0)) == 0
+        and int(summary.get("missing_policy_count", 0)) == 0
+        and bool(summary.get("runtime_configured"))
+        and int(summary.get("enabled_auth_provider_count", 0)) > 0
+    )
+
+
+def _as_list(value: object, label: str) -> list[dict[str, Any]]:
+    if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+        raise RuntimeError(f"{label} returned an unexpected response")
+    return cast(list[dict[str, Any]], value)
 
 
 def _upsert_catalogs(fixture: dict[str, Any], warehouse_path: str) -> None:

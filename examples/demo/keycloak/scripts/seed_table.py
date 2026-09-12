@@ -46,8 +46,12 @@ def _create_iceberg_table(table_fixture: dict[str, Any]) -> None:
     with suppress(Exception):
         if namespace:
             catalog.create_namespace(namespace)
-    with suppress(Exception):
-        catalog.drop_table(target)
+    # Demo startup is intentionally restart-safe.  The warehouse is a durable
+    # volume during a normal compose restart, so replacing the table here
+    # would silently destroy data that an operator or test just wrote.  The
+    # reset workflow removes the volume and is the explicit destructive path.
+    if catalog.table_exists(target):
+        return
     iceberg_schema, arrow_schema = _schemas(table_fixture["schema"])
     created = catalog.create_table(
         target,
