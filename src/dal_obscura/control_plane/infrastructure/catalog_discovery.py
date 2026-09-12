@@ -109,7 +109,7 @@ def _walk_namespaces(
     cancel_check: Callable[[], bool] | None = None,
 ) -> list[Namespace]:
     namespaces: list[Namespace] = []
-    pending = deque([()])
+    pending: deque[Namespace] = deque([()])
     seen: set[Namespace] = set()
     while pending:
         namespace = pending.popleft()

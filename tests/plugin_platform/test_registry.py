@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Protocol, cast
 
 import pytest
 
 from dal_obscura.common.plugin_api import PluginAdmissionError, PluginRegistry
 
 
+class _Entry(Protocol):
+    group: str
+
+
 class _EntryPoints:
-    def __init__(self, entries: list[object]) -> None:
+    def __init__(self, entries: list[_Entry]) -> None:
         self.entries = entries
 
     def select(self, *, group: str) -> list[object]:
@@ -17,12 +22,12 @@ class _EntryPoints:
 
 def _entry(name: str, group: str, distribution: str = "plugin-wheel", version: str = "1.2.3"):
     loaded = {"name": name}
-    return SimpleNamespace(
+    return cast(_Entry, SimpleNamespace(
         name=name,
         group=group,
         dist=SimpleNamespace(name=distribution, version=version),
         load=lambda: loaded,
-    )
+    ))
 
 
 def test_discovery_does_not_import_unapproved_entry_points() -> None:

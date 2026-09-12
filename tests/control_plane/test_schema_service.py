@@ -125,7 +125,7 @@ def test_get_asset_schema_returns_typed_nested_paths() -> None:
     assert catalog.loaded_identifier == "default.events"
     assert result["schema_version"] == 1
     assert isinstance(result["schema_fingerprint"], str)
-    assert len(cast(str, result["schema_fingerprint"])) == 64
+    assert len(result["schema_fingerprint"]) == 64
     fields = cast(list[dict[str, object]], result["fields"])
     profile = fields[0]
     assert profile["kind"] == "struct"
@@ -305,14 +305,14 @@ def test_get_asset_schema_rejects_excessive_nesting_depth() -> None:
             NestedField(
                 field_id=index,
                 name=f"level_{index}",
-                field_type=nested,  # type: ignore[arg-type]
+                field_type=nested,
             )
         )
     schema = Schema(
         NestedField(
             field_id=MAX_SCHEMA_DEPTH + 2,
             name="root",
-            field_type=nested,  # type: ignore[arg-type]
+            field_type=nested,
         )
     )
 

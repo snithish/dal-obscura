@@ -319,8 +319,9 @@ def _scoped_demo_grants(raw_grants: object) -> list[dict[str, str]]:
     for raw_grant in raw_grants:
         if not isinstance(raw_grant, dict):
             raise ValueError("demo fixture grants must contain objects")
-        principal = str(raw_grant.get("principal", "")).strip()
-        capability = str(raw_grant.get("capability", "")).strip()
+        grant = cast(dict[str, object], raw_grant)
+        principal = str(grant.get("principal", "")).strip()
+        capability = str(grant.get("capability", "")).strip()
         if not principal or not capability:
             raise ValueError("demo fixture grants require principal and capability")
         grants.append(
