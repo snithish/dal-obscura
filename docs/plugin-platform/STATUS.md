@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `7f98ea2`.
+Implementation follow-up through `e785400`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -49,8 +49,8 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   pre-materialization namespace/table caps and uses deque traversal. Provider page
   bounds, deadlines, cancellation, and atomic reload remain open.
 - X09 UI lifecycle: **implemented-unverified**; initial-load epoch and synchronous
-  logout fencing are fixed. Deferred browser tests and save/preview operation epochs
-  remain open.
+  logout fencing plus stale history/preview/review/publish response checks are fixed.
+  Deferred browser tests and full operation-state coverage remain open.
 - X10 complete authoring/management: **implemented-unverified** for the deny-all UI
   path; controls now expose save/test/review/publish actions when rules are empty.
   Full editor, activation, accessibility, and browser evidence remain open.
