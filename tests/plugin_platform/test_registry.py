@@ -339,3 +339,22 @@ def test_static_descriptor_loader_rejects_identity_mismatch() -> None:
 
     with pytest.raises(PluginAdmissionError, match="identity mismatch"):
         load_static_plugin_descriptor(cast(metadata.EntryPoint, entry))
+
+
+def test_static_descriptor_loader_rejects_unreadable_metadata() -> None:
+    distribution = SimpleNamespace(
+        name="rest-wheel",
+        version="2.0.0",
+        read_text=lambda _: (_ for _ in ()).throw(OSError("missing")),
+    )
+    entry = cast(
+        _Entry,
+        SimpleNamespace(
+            name="rest.catalog",
+            group="dal_obscura.catalogs.v1",
+            dist=distribution,
+        ),
+    )
+
+    with pytest.raises(PluginAdmissionError, match="unreadable"):
+        load_static_plugin_descriptor(cast(metadata.EntryPoint, entry))

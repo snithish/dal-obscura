@@ -18,6 +18,7 @@ ENTRY_POINT_GROUPS: dict[PluginKind, str] = {
     "table_format": "dal_obscura.table_formats.v1",
 }
 STATIC_DESCRIPTOR_FILENAME = "dal_obscura-plugin.json"
+MAX_STATIC_DESCRIPTOR_BYTES = 65_536
 _PLUGIN_ID = re.compile(r"[a-z][a-z0-9_.-]{0,63}\Z")
 
 
@@ -182,7 +183,7 @@ class PluginRegistry:
             raise PluginAdmissionError(f"Invalid plugin ID: {plugin_id!r}")
 
 
-def load_static_plugin_descriptor(entry: metadata.EntryPoint) -> PluginDescriptor:
+def load_static_plugin_descriptor(entry: metadata.EntryPoint) -> PluginDescriptor:  # noqa: C901
     """Loads a plugin descriptor from distribution metadata without importing code.
 
     Qualified wheels may include ``dal_obscura-plugin.json`` at their root.  The
@@ -195,9 +196,14 @@ def load_static_plugin_descriptor(entry: metadata.EntryPoint) -> PluginDescripto
     distribution = entry.dist
     if distribution is None:
         raise PluginAdmissionError("Plugin provenance is unavailable")
-    raw = distribution.read_text(STATIC_DESCRIPTOR_FILENAME)
+    try:
+        raw = distribution.read_text(STATIC_DESCRIPTOR_FILENAME)
+    except (OSError, UnicodeError) as exc:
+        raise PluginAdmissionError("Plugin static descriptor is unreadable") from exc
     if raw is None:
         raise PluginAdmissionError("Plugin static descriptor is missing")
+    if len(raw.encode("utf-8")) > MAX_STATIC_DESCRIPTOR_BYTES:
+        raise PluginAdmissionError("Plugin static descriptor is too large")
     try:
         payload = json.loads(raw)
     except (TypeError, json.JSONDecodeError) as exc:
