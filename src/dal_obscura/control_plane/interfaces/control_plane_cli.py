@@ -82,6 +82,18 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
                 values.get("DAL_OBSCURA_CONTROL_PLANE_MAX_REQUEST_BYTES", "1048576"),
                 "DAL_OBSCURA_CONTROL_PLANE_MAX_REQUEST_BYTES",
             ),
+            login_rate_limit_attempts=_positive_int(
+                values.get("DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_ATTEMPTS", "20"),
+                "DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_ATTEMPTS",
+            ),
+            login_rate_limit_window_seconds=_positive_int(
+                values.get("DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_WINDOW_SECONDS", "60"),
+                "DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_WINDOW_SECONDS",
+            ),
+            login_rate_limit_block_seconds=_positive_int(
+                values.get("DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_BLOCK_SECONDS", "300"),
+                "DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_BLOCK_SECONDS",
+            ),
         )
     except (ConfigStoreSchemaError, ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)

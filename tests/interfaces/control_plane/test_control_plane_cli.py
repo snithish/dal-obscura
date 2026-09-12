@@ -33,6 +33,31 @@ def test_control_plane_cli_starts_configured_app(monkeypatch, tmp_path) -> None:
     assert cast(FastAPI, calls["app"]).title == "dal-obscura control-plane API"
 
 
+def test_control_plane_cli_passes_login_rate_limits(monkeypatch, tmp_path) -> None:
+    database_url = f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
+    migrate_config_store(create_engine_from_url(database_url))
+    captured: dict[str, object] = {}
+    environment = {
+        "DAL_OBSCURA_DATABASE_URL": database_url,
+        "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "test-admin",
+        "DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_ATTEMPTS": "5",
+        "DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_WINDOW_SECONDS": "120",
+        "DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_BLOCK_SECONDS": "42",
+    }
+
+    monkeypatch.setattr(
+        control_plane_cli,
+        "create_app",
+        lambda *args, **kwargs: captured.update(kwargs) or FastAPI(),
+    )
+    monkeypatch.setattr(control_plane_cli.uvicorn, "run", lambda app, **kwargs: None)
+
+    assert control_plane_cli.run(environment) == 0
+    assert captured["login_rate_limit_attempts"] == 5
+    assert captured["login_rate_limit_window_seconds"] == 120
+    assert captured["login_rate_limit_block_seconds"] == 42
+
+
 @pytest.mark.parametrize(
     ("environment", "message"),
     [
