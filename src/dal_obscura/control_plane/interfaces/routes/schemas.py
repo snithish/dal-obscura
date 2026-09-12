@@ -141,6 +141,7 @@ class AssetRequest(StrictModel):
     backend: Literal["iceberg"] = "iceberg"
     table_identifier: str = Field(min_length=1, max_length=1_024)
     options: dict[str, Any] = Field(default_factory=dict)
+    expected_revision: int | None = Field(default=None, ge=0)
 
 
 class PolicyRulesRequest(StrictModel):
@@ -209,6 +210,7 @@ class AssetOwnersRequest(StrictModel):
     """
 
     owners: list[str] = Field(default_factory=list, max_length=64)
+    expected_revision: int | None = Field(default=None, ge=0)
 
 
 class AssetGrantRequest(StrictModel):
@@ -222,6 +224,7 @@ class AssetGrantsRequest(StrictModel):
     """Replaces explicit capability assignments for one asset."""
 
     grants: list[AssetGrantRequest] = Field(default_factory=list, max_length=256)
+    expected_revision: int | None = Field(default=None, ge=0)
 
 
 class AssetSchemaFieldRequest(StrictModel):
@@ -250,6 +253,7 @@ class AssetSchemaFieldsRequest(StrictModel):
     """
 
     fields: list[AssetSchemaFieldRequest] = Field(default_factory=list, max_length=5_000)
+    expected_revision: int | None = Field(default=None, ge=0)
 
 
 class AuthProvidersRequest(StrictModel):

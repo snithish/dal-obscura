@@ -90,6 +90,7 @@ def upsert_workspace_asset(
     backend: str,
     table_identifier: str | None,
     options: dict[str, Any],
+    expected_revision: int | None = None,
 ) -> dict[str, str]:
     """Creates or updates a governed asset binding.
 
@@ -108,6 +109,7 @@ def upsert_workspace_asset(
         backend=backend,
         table_identifier=table_identifier,
         options=options,
+        expected_revision=expected_revision,
     )
     return {"id": str(asset_id), "catalog": catalog, "target": target}
 
@@ -116,6 +118,7 @@ def replace_asset_owners(
     store: PublicationStore,
     asset_id: UUID,
     owners: list[str],
+    expected_revision: int | None = None,
     actor: ControlPlaneActor | None = None,
 ) -> list[str]:
     """Replaces owners for one governed asset.
@@ -137,7 +140,14 @@ def replace_asset_owners(
             "Cannot remove the last owner without assigning an asset replacement "
             "in the same request."
         )
-    normalized = store.replace_asset_owners(asset_id=asset_id, owners=owners)
+    if expected_revision is None:
+        normalized = store.replace_asset_owners(asset_id=asset_id, owners=owners)
+    else:
+        normalized = store.replace_asset_owners(
+            asset_id=asset_id,
+            owners=owners,
+            expected_revision=expected_revision,
+        )
     if actor is not None:
         store.record_asset_audit_event(
             asset_id=asset_id,
@@ -156,6 +166,7 @@ def replace_asset_grants(
     store: PublicationStore,
     asset_id: UUID,
     grants: list[dict[str, str]],
+    expected_revision: int | None = None,
     actor: ControlPlaneActor | None = None,
 ) -> list[dict[str, str]]:
     allowed = {"read", "edit", "publish", "grant"}
@@ -164,7 +175,14 @@ def replace_asset_grants(
     # Grants affect who may publish or review the asset.  Use the same row lock
     # as draft and policy mutations so revocation ordered before activation wins.
     store.lock_asset_for_publication(asset_id)
-    normalized = store.replace_asset_grants(asset_id=asset_id, grants=grants)
+    if expected_revision is None:
+        normalized = store.replace_asset_grants(asset_id=asset_id, grants=grants)
+    else:
+        normalized = store.replace_asset_grants(
+            asset_id=asset_id,
+            grants=grants,
+            expected_revision=expected_revision,
+        )
     if actor is not None:
         store.record_asset_audit_event(
             asset_id=asset_id,
@@ -179,6 +197,7 @@ def replace_asset_schema_fields(
     store: PublicationStore,
     asset_id: UUID,
     fields: list[dict[str, Any]],
+    expected_revision: int | None = None,
 ) -> list[dict[str, object]]:
     """Replaces the schema-field metadata for one governed asset.
 
@@ -191,7 +210,13 @@ def replace_asset_schema_fields(
     # Admitted schema metadata participates in review identity and cannot race
     # a publication candidate.
     store.lock_asset_for_publication(asset_id)
-    return store.replace_asset_schema_fields(asset_id=asset_id, fields=fields)
+    if expected_revision is None:
+        return store.replace_asset_schema_fields(asset_id=asset_id, fields=fields)
+    return store.replace_asset_schema_fields(
+        asset_id=asset_id,
+        fields=fields,
+        expected_revision=expected_revision,
+    )
 
 
 def _required_workspace_context(store: PublicationStore):

@@ -349,6 +349,7 @@ class PublicationStore:
         backend: str,
         table_identifier: str | None,
         options: dict[str, Any],
+        expected_revision: int | None = None,
     ) -> UUID:
         catalog_record = self._catalog_by_name(cell_id=cell_id, tenant_id=tenant_id, name=catalog)
         existing = self._session.scalar(
@@ -376,10 +377,12 @@ class PublicationStore:
                 )
             )
         else:
+            _assert_asset_revision(existing, expected_revision)
             asset_id = existing.id
             existing.backend = backend
             existing.table_identifier = table_identifier
             existing.options_json = options
+            existing.revision += 1
         self._session.flush()
         return asset_id
 
@@ -406,10 +409,17 @@ class PublicationStore:
             )
         self._session.flush()
 
-    def replace_asset_owners(self, *, asset_id: UUID, owners: list[str]) -> list[str]:
+    def replace_asset_owners(
+        self,
+        *,
+        asset_id: UUID,
+        owners: list[str],
+        expected_revision: int | None = None,
+    ) -> list[str]:
         asset = self._session.get(AssetRecord, asset_id)
         if asset is None:
             raise LookupError(f"No asset {asset_id}")
+        _assert_asset_revision(asset, expected_revision)
         normalized = _normalize_principals(owners)
         for record in self._session.scalars(
             select(AssetOwnerRecord).where(AssetOwnerRecord.asset_id == asset_id)
@@ -426,6 +436,8 @@ class PublicationStore:
                 )
             )
         self._session.flush()
+        asset.revision += 1
+        self._session.flush()
         return normalized
 
     def replace_asset_schema_fields(
@@ -433,10 +445,12 @@ class PublicationStore:
         *,
         asset_id: UUID,
         fields: list[dict[str, Any]],
+        expected_revision: int | None = None,
     ) -> list[dict[str, object]]:
         asset = self._session.get(AssetRecord, asset_id)
         if asset is None:
             raise LookupError(f"No asset {asset_id}")
+        _assert_asset_revision(asset, expected_revision)
         normalized = _normalize_schema_fields(fields)
         for record in self._session.scalars(
             select(AssetSchemaFieldRecord).where(AssetSchemaFieldRecord.asset_id == asset_id)
@@ -456,6 +470,8 @@ class PublicationStore:
                     nullable=bool(field["nullable"]),
                 )
             )
+        self._session.flush()
+        asset.revision += 1
         self._session.flush()
         return normalized
 
@@ -868,6 +884,7 @@ class PublicationStore:
             raise LookupError(f"No catalog {record.catalog_id}")
         return {
             **self._workspace_asset_row(record, catalog),
+            "revision": record.revision,
             "options": dict(record.options_json),
             "schema_fields": self.list_asset_schema_fields(asset_id),
             "policy_rules": self.list_policy_rules(asset_id),
@@ -922,13 +939,18 @@ class PublicationStore:
         *,
         asset_id: UUID,
         grants: list[dict[str, str]],
+        expected_revision: int | None = None,
     ) -> list[dict[str, str]]:
-        if self._session.get(AssetRecord, asset_id) is None:
+        asset = self._session.get(AssetRecord, asset_id)
+        if asset is None:
             raise LookupError(f"No asset {asset_id}")
+        _assert_asset_revision(asset, expected_revision)
         for record in self._session.scalars(
             select(AssetGrantRecord).where(AssetGrantRecord.asset_id == asset_id)
         ):
             self._session.delete(record)
+        self._session.flush()
+        asset.revision += 1
         self._session.flush()
         normalized: list[dict[str, str]] = []
         seen: set[tuple[str, str]] = set()
@@ -1810,6 +1832,16 @@ class PublicationStore:
                 }
             )
         return rows
+
+
+def _assert_asset_revision(asset: AssetRecord, expected_revision: int | None) -> None:
+    """Rejects stale metadata/binding writes after the asset row is locked."""
+
+    if expected_revision is not None and asset.revision != expected_revision:
+        raise PublicationConflictError(
+            "Asset revision changed "
+            f"(expected {expected_revision}, current {asset.revision}); reread before writing."
+        )
 
 
 def _encode_asset_cursor(record: AssetRecord, *, search: str = "") -> str:

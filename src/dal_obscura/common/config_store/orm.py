@@ -122,6 +122,9 @@ class AssetRecord(Base):
     backend: Mapped[str] = mapped_column(String(48), nullable=False)
     table_identifier: Mapped[str | None] = mapped_column(Text, nullable=True)
     options_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    # Monotonic generation for binding and access metadata mutations.  It is
+    # used as an optimistic-concurrency precondition at the HTTP boundary.
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class AssetOwnerRecord(Base):

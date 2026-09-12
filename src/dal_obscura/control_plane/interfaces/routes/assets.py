@@ -80,6 +80,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
             lambda service: service.replace_asset_owners(
                 asset_id=asset_id,
                 owners=request.owners,
+                expected_revision=request.expected_revision,
                 actor=actor,
             )
         )
@@ -116,6 +117,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
             lambda service: service.replace_asset_schema_fields(
                 asset_id=asset_id,
                 fields=[field.model_dump() for field in request.fields],
+                expected_revision=request.expected_revision,
             )
         )
         return {"asset_id": str(asset_id), "fields": fields}
@@ -129,6 +131,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
                 backend=request.backend,
                 table_identifier=request.table_identifier,
                 options=request.options,
+                expected_revision=request.expected_revision,
             )
         )
 
@@ -168,7 +171,12 @@ def _replace_authorized_asset_grants(
         _reject_self_escalation(service, asset_id, actor, grants)
     return {
         "asset_id": str(asset_id),
-        "grants": service.replace_asset_grants(asset_id, grants, actor=actor),
+        "grants": service.replace_asset_grants(
+            asset_id,
+            grants,
+            expected_revision=request.expected_revision,
+            actor=actor,
+        ),
     }
 
 

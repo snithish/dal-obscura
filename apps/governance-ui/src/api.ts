@@ -1,5 +1,6 @@
 export type Asset = {
   id: string;
+  revision?: number;
   catalog: string;
   name: string;
   backend: "iceberg";
@@ -249,13 +250,13 @@ export const controlPlane = {
   },
   getAsset: async (assetId: string) => normalizeAsset(await request<Asset>(`/v1/assets/${assetId}`)),
   listGrants: (assetId: string) => request<AssetGrant[]>(`/v1/assets/${assetId}/grants`),
-  saveOwners: (assetId: string, owners: string[]) => request<{ asset_id: string; owners: string[] }>(`/v1/assets/${assetId}/owners`, {
+  saveOwners: (assetId: string, owners: string[], expectedRevision?: number) => request<{ asset_id: string; owners: string[] }>(`/v1/assets/${assetId}/owners`, {
     method: "PUT",
-    body: JSON.stringify({ owners }),
+    body: JSON.stringify({ owners, ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }) }),
   }),
-  saveGrants: (assetId: string, grants: AssetGrant[]) => request<{ asset_id: string; grants: AssetGrant[] }>(`/v1/assets/${assetId}/grants`, {
+  saveGrants: (assetId: string, grants: AssetGrant[], expectedRevision?: number) => request<{ asset_id: string; grants: AssetGrant[] }>(`/v1/assets/${assetId}/grants`, {
     method: "PUT",
-    body: JSON.stringify({ grants }),
+    body: JSON.stringify({ grants, ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }) }),
   }),
   getSchema: (assetId: string) => request<AssetSchema>(`/v1/assets/${assetId}/schema`),
   listRules: (assetId: string) => request<PolicyRule[]>(`/v1/assets/${assetId}/policy-rules`),

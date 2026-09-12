@@ -401,6 +401,7 @@ class ProvisioningService:
         backend: str,
         table_identifier: str | None,
         options: dict[str, Any],
+        expected_revision: int | None = None,
     ) -> dict[str, str]:
         return asset_service.upsert_workspace_asset(
             self._store,
@@ -409,6 +410,7 @@ class ProvisioningService:
             backend=backend,
             table_identifier=table_identifier,
             options=options,
+            expected_revision=expected_revision,
         )
 
     def replace_policy_rules(
@@ -429,9 +431,16 @@ class ProvisioningService:
         self,
         asset_id: UUID,
         owners: list[str],
+        expected_revision: int | None = None,
         actor: ControlPlaneActor | None = None,
     ) -> list[str]:
-        return asset_service.replace_asset_owners(self._store, asset_id, owners, actor)
+        return asset_service.replace_asset_owners(
+            self._store,
+            asset_id,
+            owners,
+            expected_revision=expected_revision,
+            actor=actor,
+        )
 
     def list_asset_grants(self, asset_id: UUID) -> list[dict[str, str]]:
         return asset_service.list_asset_grants(self._store, asset_id)
@@ -459,9 +468,16 @@ class ProvisioningService:
         self,
         asset_id: UUID,
         grants: list[dict[str, str]],
+        expected_revision: int | None = None,
         actor: ControlPlaneActor | None = None,
     ) -> list[dict[str, str]]:
-        return asset_service.replace_asset_grants(self._store, asset_id, grants, actor)
+        return asset_service.replace_asset_grants(
+            self._store,
+            asset_id,
+            grants,
+            expected_revision=expected_revision,
+            actor=actor,
+        )
 
     def ensure_asset_capability(
         self,
@@ -475,8 +491,14 @@ class ProvisioningService:
         self,
         asset_id: UUID,
         fields: list[dict[str, Any]],
+        expected_revision: int | None = None,
     ) -> list[dict[str, object]]:
-        return asset_service.replace_asset_schema_fields(self._store, asset_id, fields)
+        return asset_service.replace_asset_schema_fields(
+            self._store,
+            asset_id,
+            fields,
+            expected_revision=expected_revision,
+        )
 
     def preview_asset_policy(
         self,

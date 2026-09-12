@@ -425,6 +425,7 @@ def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
     ]
     assert asset_detail == {
         **assets[0],
+        "revision": 0,
         "options": {"snapshot": 1},
         "schema_fields": [],
         "policy_rules": [
@@ -443,6 +444,94 @@ def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
     }
     assert "tenant" not in _keys_recursive(summary | {"catalogs": catalogs, "assets": assets})
     assert "cell" not in _keys_recursive(summary | {"catalogs": catalogs, "assets": assets})
+
+
+def test_asset_metadata_precondition_rejects_stale_writer() -> None:
+    client = _client()
+    asset = _provision_draft(client)
+    current = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
+
+    first = client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["user:first"], "expected_revision": current["revision"]},
+        headers=ADMIN_HEADERS,
+    )
+    stale = client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["user:stale"], "expected_revision": current["revision"]},
+        headers=ADMIN_HEADERS,
+    )
+
+    assert first.status_code == 200
+    assert stale.status_code == 409
+    assert "Asset revision changed" in stale.json()["detail"]
+
+
+def test_asset_binding_precondition_rejects_stale_update() -> None:
+    client = _client()
+    client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+    asset = client.put(
+        "/v1/assets/analytics/default.users",
+        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
+        headers=ADMIN_HEADERS,
+    ).json()
+
+    first = client.put(
+        "/v1/assets/analytics/default.users",
+        json={
+            "backend": "iceberg",
+            "table_identifier": "prod.users-v2",
+            "options": {},
+            "expected_revision": 0,
+        },
+        headers=ADMIN_HEADERS,
+    )
+    stale = client.put(
+        "/v1/assets/analytics/default.users",
+        json={
+            "backend": "iceberg",
+            "table_identifier": "prod.users-v3",
+            "options": {},
+            "expected_revision": 0,
+        },
+        headers=ADMIN_HEADERS,
+    )
+
+    assert first.status_code == 200
+    assert stale.status_code == 409
+    detail = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
+    assert detail["table_identifier"] == "prod.users-v2"
+    assert detail["revision"] == 1
+
+
+def test_asset_grant_precondition_rejects_stale_writer() -> None:
+    client = _client()
+    asset = _provision_draft(client)
+    current = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
+
+    first = client.put(
+        f"/v1/assets/{asset['id']}/grants",
+        json={
+            "grants": [{"principal": "analyst", "capability": "read"}],
+            "expected_revision": current["revision"],
+        },
+        headers=ADMIN_HEADERS,
+    )
+    stale = client.put(
+        f"/v1/assets/{asset['id']}/grants",
+        json={"grants": [], "expected_revision": current["revision"]},
+        headers=ADMIN_HEADERS,
+    )
+
+    assert first.status_code == 200
+    assert stale.status_code == 409
 
 
 def test_workspace_asset_page_is_bounded_searchable_and_cursor_paginated():
