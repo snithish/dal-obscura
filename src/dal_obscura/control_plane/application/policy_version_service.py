@@ -160,6 +160,7 @@ def create_asset_policy_version(  # noqa: C901
     review_token: str | None = None,
     require_review: bool = False,
     review_secret: str = "",
+    catalog_egress_allowlist: tuple[str, ...] = (),
     idempotency_key: str | None = None,
 ) -> dict[str, object]:
     """Publishes and activates a new policy version for one asset.
@@ -218,6 +219,7 @@ def create_asset_policy_version(  # noqa: C901
             actor,
             review_token,
             secret=review_secret,
+            egress_allowlist=catalog_egress_allowlist,
         )
     asset, catalog = store.load_asset_publish_draft(
         asset_id,

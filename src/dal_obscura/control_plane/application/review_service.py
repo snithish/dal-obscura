@@ -31,6 +31,7 @@ def issue_review_token(
     secret: str,
     now: int | None = None,
     require_saved_draft: bool = False,
+    egress_allowlist: tuple[str, ...] = (),
 ) -> dict[str, object]:
     """Signs completed evaluation evidence for one exact draft generation."""
 
@@ -91,6 +92,7 @@ def verify_review_token(
     *,
     secret: str,
     now: int | None = None,
+    egress_allowlist: tuple[str, ...] = (),
 ) -> None:
     """Rejects stale, replayed-for-another-scope, or forged review evidence."""
 
@@ -111,7 +113,12 @@ def verify_review_token(
     recorded_schema_fingerprint = evidence.get("schema_fingerprint")
     if not isinstance(recorded_schema_fingerprint, str) or not recorded_schema_fingerprint:
         raise ValidationFailure("Policy review evidence is invalid.")
-    current_schema = load_asset_iceberg_schema(store, asset_id, actor)
+    current_schema = load_asset_iceberg_schema(
+        store,
+        asset_id,
+        actor,
+        egress_allowlist=egress_allowlist,
+    )
     if not hmac.compare_digest(
         recorded_schema_fingerprint,
         schema_fingerprint(current_schema.as_arrow()),

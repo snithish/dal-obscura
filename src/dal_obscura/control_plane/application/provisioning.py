@@ -252,7 +252,12 @@ class ProvisioningService:
         asset_id: UUID,
         actor: ControlPlaneActor,
     ) -> dict[str, object]:
-        return schema_service.get_asset_schema(self._store, asset_id, actor)
+        return schema_service.get_asset_schema(
+            self._store,
+            asset_id,
+            actor,
+            egress_allowlist=self._catalog_egress_allowlist,
+        )
 
     def get_workspace_draft(self) -> dict[str, object]:
         return workspace_service.get_workspace_draft(self._store)
@@ -282,6 +287,7 @@ class ProvisioningService:
             expected_draft_revision=expected_draft_revision,
             expected_publication_id=expected_publication_id,
             review_token=review_token,
+            catalog_egress_allowlist=self._catalog_egress_allowlist,
             idempotency_key=idempotency_key,
             require_review=self._require_review,
             review_secret=self._review_secret,
@@ -538,6 +544,7 @@ class ProvisioningService:
             groups=groups,
             claims=claims,
             rows=rows,
+            egress_allowlist=self._catalog_egress_allowlist,
         )
 
     def review_asset_policy(
@@ -558,6 +565,7 @@ class ProvisioningService:
             groups=groups,
             claims=claims,
             rows=rows,
+            egress_allowlist=self._catalog_egress_allowlist,
         )
         try:
             return review_service.issue_review_token(
@@ -567,6 +575,7 @@ class ProvisioningService:
                 evaluation,
                 secret=self._review_secret,
                 require_saved_draft=self._require_review,
+                egress_allowlist=self._catalog_egress_allowlist,
             )
         except AuthorizationFailure:
             return evaluation

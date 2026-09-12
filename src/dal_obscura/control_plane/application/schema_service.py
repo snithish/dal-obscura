@@ -22,6 +22,7 @@ from dal_obscura.common.query_planning.field_paths import (
     MapValueSegment,
 )
 from dal_obscura.control_plane.application.access import ControlPlaneActor
+from dal_obscura.control_plane.application.catalog_service import validate_catalog_options
 from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.application.policy_service import ensure_asset_capability
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
@@ -42,6 +43,7 @@ def get_asset_schema(
     actor: ControlPlaneActor,
     *,
     load_catalog_fn: CatalogLoader | None = None,
+    egress_allowlist: tuple[str, ...] = (),
 ) -> dict[str, object]:
     ensure_asset_capability(store, asset_id, actor, "read")
     schema = load_asset_iceberg_schema(
@@ -49,6 +51,7 @@ def get_asset_schema(
         asset_id,
         actor,
         load_catalog_fn=load_catalog_fn,
+        egress_allowlist=egress_allowlist,
     )
     _validate_schema_bounds(schema)
     asset = store.get_workspace_asset(asset_id)
@@ -71,6 +74,7 @@ def load_asset_iceberg_schema(
     actor: ControlPlaneActor,
     *,
     load_catalog_fn: CatalogLoader | None = None,
+    egress_allowlist: tuple[str, ...] = (),
 ) -> Schema:
     """Loads the authoritative Iceberg schema without reading table rows."""
 
@@ -84,6 +88,7 @@ def load_asset_iceberg_schema(
         str(asset["catalog"]),
     )
     options = cast(dict[str, Any], catalog["options"])
+    validate_catalog_options(options, egress_allowlist=egress_allowlist)
     table_identifier = str(asset["table_identifier"])
     loader = load_catalog if load_catalog_fn is None else load_catalog_fn
     try:

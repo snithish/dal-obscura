@@ -42,13 +42,19 @@ def evaluate_asset_policy(
     groups: list[str],
     claims: dict[str, object],
     rows: list[dict[str, object]] | None,
+    egress_allowlist: tuple[str, ...] = (),
 ) -> dict[str, object]:
     """Evaluates a policy over bounded synthetic rows and returns evidence."""
 
     if rows is not None and len(rows) > MAX_SYNTHETIC_ROWS:
         raise ValidationFailure(f"Synthetic evaluation accepts at most {MAX_SYNTHETIC_ROWS} rows")
     supplied_row_count = 0 if rows is None else len(rows)
-    arrow_schema = schema_service.load_asset_iceberg_schema(store, asset_id, actor).as_arrow()
+    arrow_schema = schema_service.load_asset_iceberg_schema(
+        store,
+        asset_id,
+        actor,
+        egress_allowlist=egress_allowlist,
+    ).as_arrow()
     requested_columns = _leaf_paths(arrow_schema)
     preview = policy_service.preview_asset_policy(
         store,

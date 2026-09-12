@@ -146,6 +146,37 @@ def test_get_asset_schema_returns_typed_nested_paths() -> None:
     ]
 
 
+def test_schema_loading_enforces_catalog_egress_before_provider_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    asset_id = uuid4()
+    store = _FakeStore(asset_id)
+    monkeypatch.setattr(
+        store,
+        "get_workspace_catalog",
+        lambda context, name: {
+            "name": name,
+            "options": {"uri": "https://blocked.example/catalog"},
+        },
+    )
+    called = False
+
+    def load_catalog(name: str, **options: Any) -> _FakeCatalog:
+        nonlocal called
+        called = True
+        raise AssertionError("provider must not be called for a denied host")
+
+    with pytest.raises(ValidationFailure, match="egress allowlist"):
+        get_asset_schema(
+            store,  # type: ignore[arg-type]
+            asset_id,
+            ControlPlaneActor.for_platform_admin("admin"),
+            load_catalog_fn=load_catalog,
+            egress_allowlist=("catalog.example",),
+        )
+    assert called is False
+
+
 def test_schema_fingerprint_includes_collection_ids_and_matches_arrow_normalization() -> None:
     original = Schema(
         NestedField(
