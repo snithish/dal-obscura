@@ -111,7 +111,16 @@ def evaluate_asset_policy(
         # Evaluator errors can include synthetic values or provider internals;
         # return a stable message at the browser boundary.
         raise ValidationFailure("Synthetic evaluation failed") from exc
-    output = pa.Table.from_batches(transformed) if transformed else pa.table({})
+    output_schema = DefaultMaskingAdapter().masked_schema(
+        arrow_schema,
+        cast(list[str], preview["visible_columns"]),
+        masks,
+    )
+    output = (
+        pa.Table.from_batches(transformed, schema=output_schema)
+        if transformed
+        else pa.Table.from_pylist([], schema=output_schema)
+    )
     return {
         "status": "completed",
         "decision": "allow",
