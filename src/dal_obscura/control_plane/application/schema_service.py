@@ -19,6 +19,7 @@ from dal_obscura.common.query_planning.field_paths import (
     MapValueSegment,
 )
 from dal_obscura.control_plane.application.access import ControlPlaneActor
+from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.application.policy_service import ensure_asset_capability
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 
@@ -73,7 +74,12 @@ def load_asset_iceberg_schema(
     options = cast(dict[str, Any], catalog["options"])
     table_identifier = str(asset["table_identifier"])
     loader = load_catalog if load_catalog_fn is None else load_catalog_fn
-    table = loader(str(catalog["name"]), **options).load_table(table_identifier)
+    try:
+        table = loader(str(catalog["name"]), **options).load_table(table_identifier)
+    except Exception as exc:
+        # Catalog/provider failures can contain URIs, credentials, and internal
+        # paths. Keep those details outside the control-plane response.
+        raise ValidationFailure("Schema discovery failed") from exc
     schema = table.schema()
     if not isinstance(schema, Schema):
         raise TypeError("Iceberg catalog returned an invalid schema")

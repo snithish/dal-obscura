@@ -15,7 +15,7 @@ from pyiceberg.types import (
 )
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
-from dal_obscura.control_plane.application.errors import AuthorizationFailure
+from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control_plane.application.schema_service import get_asset_schema
 
 
@@ -148,3 +148,20 @@ def test_get_asset_schema_requires_read_capability() -> None:
             ControlPlaneActor("outsider", ()),
             load_catalog_fn=lambda **_: pytest.fail("catalog must not be loaded"),
         )
+
+
+def test_get_asset_schema_redacts_catalog_provider_errors() -> None:
+    asset_id = uuid4()
+
+    def failing_catalog(**_: object):
+        raise ValueError("failed https://catalog-user:catalog-password@catalog.example")
+
+    with pytest.raises(ValidationFailure, match="Schema discovery failed") as failure:
+        get_asset_schema(
+            _FakeStore(asset_id),  # type: ignore[arg-type]
+            asset_id,
+            ControlPlaneActor.for_platform_admin("admin"),
+            load_catalog_fn=failing_catalog,
+        )
+
+    assert "catalog-password" not in str(failure.value)

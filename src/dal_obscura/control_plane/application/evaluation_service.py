@@ -108,7 +108,9 @@ def evaluate_asset_policy(
             )
         )
     except Exception as exc:
-        raise ValidationFailure(f"Synthetic evaluation failed: {exc}") from exc
+        # Evaluator errors can include synthetic values or provider internals;
+        # return a stable message at the browser boundary.
+        raise ValidationFailure("Synthetic evaluation failed") from exc
     output = pa.Table.from_batches(transformed) if transformed else pa.table({})
     return {
         "status": "completed",
