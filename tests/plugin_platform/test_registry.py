@@ -231,6 +231,10 @@ def test_extended_lock_accepts_matching_descriptor_and_distribution_digest(tmp_p
                 version="1.2.3",
                 files=["plugin.py"],
                 locate_file=lambda _: artifact,
+                read_text=lambda _: (
+                    '{"kind":"catalog","plugin_id":"iceberg.sql",'
+                    '"api_version":"1","config_version":1}'
+                ),
             ),
             load=lambda: {"name": "iceberg.sql"},
         ),
@@ -246,7 +250,6 @@ def test_extended_lock_accepts_matching_descriptor_and_distribution_digest(tmp_p
             )
         },
         entry_points_fn=lambda: _EntryPoints([entry]),
-        descriptor_loader=lambda _: descriptor,
     )
 
     assert registry.reload()[("catalog", "iceberg.sql")] == descriptor

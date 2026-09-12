@@ -112,7 +112,7 @@ class PluginRegistry:
         )
         return list(cast(Any, selected))
 
-    def _discover_with_entries(
+    def _discover_with_entries(  # noqa: C901
         self,
     ) -> tuple[
         dict[tuple[PluginKind, str], PluginDescriptor],
@@ -143,10 +143,16 @@ class PluginRegistry:
                 actual_version = entry.dist.version
                 if (actual_distribution, actual_version) != (distribution, version):
                     raise PluginAdmissionError(f"Plugin lock mismatch for {kind}:{plugin_id}")
-                descriptor = (
-                    self._descriptor_loader(entry)
-                    if self._descriptor_loader is not None
-                    else PluginDescriptor(
+                if self._descriptor_loader is not None:
+                    descriptor = self._descriptor_loader(entry)
+                elif digests:
+                    # Extended locks require the wheel's static descriptor;
+                    # importing the factory to discover metadata would defeat
+                    # the admission boundary.
+                    descriptor = load_static_plugin_descriptor(entry)
+                else:
+                    # Three-part locks retain the legacy descriptor fallback.
+                    descriptor = PluginDescriptor(
                         kind=kind,
                         plugin_id=plugin_id,
                         api_version=api_version,
@@ -154,7 +160,6 @@ class PluginRegistry:
                         distribution=distribution,
                         version=version,
                     )
-                )
                 if (
                     descriptor.kind != kind
                     or descriptor.plugin_id != plugin_id
