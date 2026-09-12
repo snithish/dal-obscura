@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
+from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 
 
@@ -29,7 +30,10 @@ def required_workspace_context(store: PublicationStore):
     return context
 
 
-def get_workspace_summary(store: PublicationStore) -> dict[str, object]:
+def get_workspace_summary(
+    store: PublicationStore,
+    actor: ControlPlaneActor | None = None,
+) -> dict[str, object]:
     """Returns a summary of the current workspace.
 
     Example:
@@ -39,7 +43,20 @@ def get_workspace_summary(store: PublicationStore) -> dict[str, object]:
     """
 
     context = store.get_default_workspace_context()
-    return store.get_workspace_summary(context)
+    if context is None:
+        return store.get_workspace_summary(None)
+    if actor is None or actor.platform_admin:
+        return store.get_workspace_summary(context)
+    assets = store.list_workspace_assets_for_principals(context, actor.owner_principals())
+    return {
+        "catalog_count": len({str(asset["catalog"]) for asset in assets}),
+        "asset_count": len(assets),
+        "unowned_asset_count": sum(1 for asset in assets if asset["owner_count"] == 0),
+        "missing_policy_count": sum(1 for asset in assets if asset["policy_status"] == "missing"),
+        "draft_change_count": len(assets),
+        "runtime_configured": False,
+        "enabled_auth_provider_count": 0,
+    }
 
 
 def get_workspace_runtime_settings(store: PublicationStore) -> dict[str, object] | None:

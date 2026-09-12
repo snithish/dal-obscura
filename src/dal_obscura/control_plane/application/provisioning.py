@@ -87,8 +87,11 @@ class ProvisioningService:
     def get_active_publication_summary(self, cell_id: UUID) -> dict[str, str]:
         return self._store.get_active_publication_summary(cell_id)
 
-    def get_workspace_summary(self) -> dict[str, object]:
-        return workspace_service.get_workspace_summary(self._store)
+    def get_workspace_summary(
+        self,
+        actor: ControlPlaneActor | None = None,
+    ) -> dict[str, object]:
+        return workspace_service.get_workspace_summary(self._store, actor)
 
     def get_workspace_runtime_settings(self) -> dict[str, object] | None:
         return workspace_service.get_workspace_runtime_settings(self._store)

@@ -406,6 +406,21 @@ def test_non_owner_cannot_read_asset_policy_or_preview():
     assert preview.status_code == 403
 
 
+def test_workspace_summary_is_scoped_to_visible_assets():
+    client = _client()
+    _provision_owned_asset(client)
+
+    outsider = client.get("/v1/workspace/summary", headers=_bearer("outsider-token"))
+    owner = client.get("/v1/workspace/summary", headers=_bearer("owner-token"))
+
+    assert outsider.status_code == 200
+    assert outsider.json()["asset_count"] == 0
+    assert outsider.json()["catalog_count"] == 0
+    assert owner.status_code == 200
+    assert owner.json()["asset_count"] == 1
+    assert owner.json()["enabled_auth_provider_count"] == 0
+
+
 def test_policy_history_is_scoped_to_owned_assets():
     client = _client()
     asset = _provision_owned_asset(client)
