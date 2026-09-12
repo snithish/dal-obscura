@@ -26,11 +26,11 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
 
     api = APIRouter()
 
-    @api.get("/v1/catalogs", dependencies=[Depends(deps.require_actor)])
+    @api.get("/v1/catalogs", dependencies=[Depends(deps.require_admin)])
     def list_workspace_catalogs() -> object:
         return deps.with_service(lambda service: service.list_workspace_catalogs())
 
-    @api.get("/v1/catalogs/{name}/tables", dependencies=[Depends(deps.require_actor)])
+    @api.get("/v1/catalogs/{name}/tables", dependencies=[Depends(deps.require_admin)])
     def discover_workspace_catalog_tables(name: str) -> object:
         return deps.with_service(lambda service: service.discover_workspace_catalog_tables(name))
 

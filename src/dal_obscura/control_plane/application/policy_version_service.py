@@ -33,7 +33,11 @@ def list_workspace_publications(store: PublicationStore) -> list[dict[str, objec
     return [_publication_list_response(item) for item in store.list_publications(context.cell_id)]
 
 
-def list_policy_version_history(store: PublicationStore) -> list[dict[str, object]]:
+def list_policy_version_history(
+    store: PublicationStore,
+    *,
+    actor: ControlPlaneActor | None = None,
+) -> list[dict[str, object]]:
     """Lists asset-scoped policy-version history for the workspace.
 
     Example:
@@ -45,7 +49,14 @@ def list_policy_version_history(store: PublicationStore) -> list[dict[str, objec
     context = store.get_default_workspace_context()
     if context is None:
         return []
-    return store.list_policy_version_history(context)
+    history = store.list_policy_version_history(context)
+    if actor is None or actor.platform_admin:
+        return history
+    visible_asset_ids = {
+        str(asset["id"])
+        for asset in store.list_workspace_assets_for_principals(context, actor.owner_principals())
+    }
+    return [item for item in history if str(item.get("asset_id")) in visible_asset_ids]
 
 
 def create_workspace_publication(

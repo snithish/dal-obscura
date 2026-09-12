@@ -65,8 +65,13 @@ class ProvisioningService:
     def list_assets(self, cell_id: UUID) -> list[dict[str, object]]:
         return self._store.list_assets(cell_id)
 
-    def list_policy_rules(self, asset_id: UUID) -> list[dict[str, object]]:
-        return self._store.list_policy_rules(asset_id)
+    def list_policy_rules(
+        self,
+        asset_id: UUID,
+        *,
+        actor: ControlPlaneActor | None = None,
+    ) -> list[dict[str, object]]:
+        return policy_service.list_policy_rules(self._store, asset_id, actor=actor)
 
     def list_auth_providers(self, cell_id: UUID) -> list[dict[str, object]]:
         return self._store.list_auth_providers(cell_id)
@@ -92,8 +97,12 @@ class ProvisioningService:
     def list_workspace_publications(self) -> list[dict[str, object]]:
         return policy_version_service.list_workspace_publications(self._store)
 
-    def list_policy_version_history(self) -> list[dict[str, object]]:
-        return policy_version_service.list_policy_version_history(self._store)
+    def list_policy_version_history(
+        self,
+        *,
+        actor: ControlPlaneActor | None = None,
+    ) -> list[dict[str, object]]:
+        return policy_version_service.list_policy_version_history(self._store, actor=actor)
 
     def list_workspace_catalogs(self) -> list[dict[str, object]]:
         return catalog_service.list_workspace_catalogs(self._store)
@@ -105,11 +114,18 @@ class ProvisioningService:
             discover=discover_catalog_tables,
         )
 
-    def list_workspace_assets(self) -> list[dict[str, object]]:
-        return asset_service.list_workspace_assets(self._store)
+    def list_workspace_assets(
+        self,
+        actor: ControlPlaneActor | None = None,
+    ) -> list[dict[str, object]]:
+        return asset_service.list_workspace_assets(self._store, actor)
 
-    def get_workspace_asset(self, asset_id: UUID) -> dict[str, object]:
-        return asset_service.get_workspace_asset(self._store, asset_id)
+    def get_workspace_asset(
+        self,
+        asset_id: UUID,
+        actor: ControlPlaneActor | None = None,
+    ) -> dict[str, object]:
+        return asset_service.get_workspace_asset(self._store, asset_id, actor)
 
     def get_workspace_draft(self) -> dict[str, object]:
         return workspace_service.get_workspace_draft(self._store)
@@ -274,6 +290,7 @@ class ProvisioningService:
         principal: str,
         groups: list[str],
         claims: dict[str, object],
+        actor: ControlPlaneActor | None = None,
     ) -> dict[str, object]:
         return policy_service.preview_asset_policy(
             self._store,
@@ -281,6 +298,7 @@ class ProvisioningService:
             principal=principal,
             groups=groups,
             claims=claims,
+            actor=actor,
         )
 
     def replace_auth_providers(self, cell_id: UUID, providers: list[dict[str, Any]]) -> None:

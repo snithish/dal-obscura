@@ -12,6 +12,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 
+from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 from dal_obscura.control_plane.interfaces.routes.schemas import (
     AssetOwnersRequest,
@@ -31,13 +32,18 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
 
     api = APIRouter()
 
-    @api.get("/v1/assets", dependencies=[Depends(deps.require_actor)])
-    def list_workspace_assets() -> object:
-        return deps.with_service(lambda service: service.list_workspace_assets())
+    @api.get("/v1/assets")
+    def list_workspace_assets(
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> object:
+        return deps.with_service(lambda service: service.list_workspace_assets(actor))
 
-    @api.get("/v1/assets/{asset_id}", dependencies=[Depends(deps.require_actor)])
-    def get_workspace_asset(asset_id: UUID) -> object:
-        return deps.with_service(lambda service: service.get_workspace_asset(asset_id))
+    @api.get("/v1/assets/{asset_id}")
+    def get_workspace_asset(
+        asset_id: UUID,
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> object:
+        return deps.with_service(lambda service: service.get_workspace_asset(asset_id, actor))
 
     @api.put("/v1/assets/{asset_id}/owners", dependencies=[Depends(deps.require_admin)])
     def replace_asset_owners(asset_id: UUID, request: AssetOwnersRequest) -> object:

@@ -31,9 +31,12 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
 
     api = APIRouter()
 
-    @api.get("/v1/assets/{asset_id}/policy-rules", dependencies=[Depends(deps.require_actor)])
-    def list_policy_rules(asset_id: UUID) -> object:
-        return deps.with_service(lambda service: service.list_policy_rules(asset_id))
+    @api.get("/v1/assets/{asset_id}/policy-rules")
+    def list_policy_rules(
+        asset_id: UUID,
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> object:
+        return deps.with_service(lambda service: service.list_policy_rules(asset_id, actor=actor))
 
     @api.put("/v1/assets/{asset_id}/policy-rules")
     def replace_policy_rules(
@@ -53,7 +56,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
     def preview_asset_policy(
         asset_id: UUID,
         request: PolicyPreviewRequest,
-        _actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
     ) -> object:
         return deps.with_service(
             lambda service: service.preview_asset_policy(
@@ -61,6 +64,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
                 principal=request.principal,
                 groups=request.groups,
                 claims=request.claims,
+                actor=actor,
             )
         )
 
@@ -76,8 +80,10 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
             )
         )
 
-    @api.get("/v1/policy-versions", dependencies=[Depends(deps.require_actor)])
-    def list_policy_version_history() -> object:
-        return deps.with_service(lambda service: service.list_policy_version_history())
+    @api.get("/v1/policy-versions")
+    def list_policy_version_history(
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> object:
+        return deps.with_service(lambda service: service.list_policy_version_history(actor=actor))
 
     return api

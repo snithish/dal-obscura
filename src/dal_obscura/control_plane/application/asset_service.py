@@ -11,10 +11,15 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
+from dal_obscura.control_plane.application.access import ControlPlaneActor
+from dal_obscura.control_plane.application.errors import AuthorizationFailure
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 
 
-def list_workspace_assets(store: PublicationStore) -> list[dict[str, object]]:
+def list_workspace_assets(
+    store: PublicationStore,
+    actor: ControlPlaneActor | None = None,
+) -> list[dict[str, object]]:
     """Lists governed assets in the default workspace.
 
     Example:
@@ -26,10 +31,16 @@ def list_workspace_assets(store: PublicationStore) -> list[dict[str, object]]:
     context = store.get_default_workspace_context()
     if context is None:
         return []
-    return store.list_workspace_assets(context)
+    if actor is None or actor.platform_admin:
+        return store.list_workspace_assets(context)
+    return store.list_workspace_assets_for_principals(context, actor.owner_principals())
 
 
-def get_workspace_asset(store: PublicationStore, asset_id: UUID) -> dict[str, object]:
+def get_workspace_asset(
+    store: PublicationStore,
+    asset_id: UUID,
+    actor: ControlPlaneActor | None = None,
+) -> dict[str, object]:
     """Returns one governed asset by id.
 
     Example:
@@ -38,7 +49,12 @@ def get_workspace_asset(store: PublicationStore, asset_id: UUID) -> dict[str, ob
         ```
     """
 
-    return store.get_workspace_asset(asset_id)
+    asset = store.get_workspace_asset(asset_id)
+    if actor is not None and not actor.platform_admin:
+        owners = set(store.list_asset_owners(asset_id))
+        if not owners.intersection(actor.owner_principals()):
+            raise AuthorizationFailure("The authenticated actor cannot access this asset.")
+    return asset
 
 
 def upsert_workspace_asset(

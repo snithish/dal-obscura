@@ -754,6 +754,30 @@ class PublicationStore:
         )
         return self._workspace_asset_rows(records)
 
+    def list_workspace_assets_for_principals(
+        self,
+        context: WorkspaceContext,
+        principals: set[str],
+    ) -> list[dict[str, object]]:
+        """Lists only assets owned by one of the supplied actor principals."""
+
+        if not principals:
+            return []
+        records = list(
+            self._session.scalars(
+                select(AssetRecord)
+                .join(AssetOwnerRecord, AssetOwnerRecord.asset_id == AssetRecord.id)
+                .where(
+                    AssetRecord.cell_id == context.cell_id,
+                    AssetRecord.tenant_id == context.tenant_id,
+                    AssetOwnerRecord.principal.in_(principals),
+                )
+                .distinct()
+                .order_by(AssetRecord.target, AssetRecord.id)
+            )
+        )
+        return self._workspace_asset_rows(records)
+
     def list_workspace_assets_page(
         self,
         context: WorkspaceContext,

@@ -133,7 +133,8 @@ def test_demo_login_sets_http_only_session_and_csrf_cookies(monkeypatch):
 
     assert response.status_code == 200
     assert response.json() == {"authenticated": True}
-    assert response.cookies["dal_obscura_session"] == "owner-token"
+    assert response.cookies["dal_obscura_session"] != "owner-token"
+    assert len(response.cookies["dal_obscura_session"]) >= 40
     assert response.cookies["dal_obscura_csrf"]
     session_cookie = next(
         cookie
@@ -203,6 +204,33 @@ def test_cookie_session_logout_requires_csrf_and_expires_browser_cookies(monkeyp
     cookies = logout.headers.get_list("set-cookie")
     assert any('dal_obscura_session=""' in cookie for cookie in cookies)
     assert any('dal_obscura_csrf=""' in cookie for cookie in cookies)
+    assert client.get("/v1/session", headers={"cookie": cookie_header}).status_code == 401
+
+
+def test_cookie_mutation_rejects_untrusted_origin(monkeypatch):
+    client = _client_with_ui_auth_config()
+    monkeypatch.setattr(
+        api_module,
+        "_exchange_demo_password_token",
+        lambda config, username: "owner-token",
+    )
+    login = client.post("/v1/demo-login", json={"login_hint": "asset-owner"})
+    cookie_header = (
+        f"dal_obscura_session={login.cookies['dal_obscura_session']}; "
+        f"dal_obscura_csrf={login.cookies['dal_obscura_csrf']}"
+    )
+
+    response = client.post(
+        "/v1/logout",
+        headers={
+            "cookie": cookie_header,
+            "x-csrf-token": login.cookies["dal_obscura_csrf"],
+            "origin": "https://attacker.example",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Origin validation failed"
 
 
 def test_demo_login_rejects_unknown_shortcut():
@@ -329,6 +357,57 @@ def test_non_owner_cannot_change_policy_rules_or_publish_policy_version():
 
     assert replace.status_code == 403
     assert publish.status_code == 403
+
+
+def test_non_owner_cannot_read_asset_policy_or_preview():
+    client = _client()
+    asset = _provision_owned_asset(client)
+
+    inventory = client.get("/v1/assets", headers=_bearer("outsider-token"))
+    detail = client.get(f"/v1/assets/{asset}", headers=_bearer("outsider-token"))
+    rules = client.get(f"/v1/assets/{asset}/policy-rules", headers=_bearer("outsider-token"))
+    preview = client.post(
+        f"/v1/assets/{asset}/policy-preview",
+        json={"principal": "analyst", "groups": [], "claims": {}},
+        headers=_bearer("outsider-token"),
+    )
+
+    assert inventory.status_code == 200
+    assert inventory.json() == []
+    assert detail.status_code == 403
+    assert rules.status_code == 403
+    assert preview.status_code == 403
+
+
+def test_policy_history_is_scoped_to_owned_assets():
+    client = _client()
+    asset = _provision_owned_asset(client)
+    client.put(
+        f"/v1/assets/{asset}/policy-rules",
+        json={"rules": [_allow_rule(row_filter=None)]},
+        headers=ADMIN_HEADERS,
+    )
+    client.post(f"/v1/assets/{asset}/policy-versions", headers=ADMIN_HEADERS)
+
+    outsider = client.get("/v1/policy-versions", headers=_bearer("outsider-token"))
+    owner = client.get("/v1/policy-versions", headers=_bearer("owner-token"))
+
+    assert outsider.status_code == 200
+    assert outsider.json() == []
+    assert owner.status_code == 200
+    assert owner.json()[0]["asset_id"] == str(asset)
+
+
+def test_non_admin_cannot_read_catalog_or_auth_settings():
+    client = _client()
+
+    catalogs = client.get("/v1/catalogs", headers=_bearer("outsider-token"))
+    runtime = client.get("/v1/settings/runtime", headers=_bearer("outsider-token"))
+    providers = client.get("/v1/settings/auth-providers", headers=_bearer("outsider-token"))
+
+    assert catalogs.status_code == 403
+    assert runtime.status_code == 403
+    assert providers.status_code == 403
 
 
 def test_policy_save_rejects_invalid_row_filter_before_publish():

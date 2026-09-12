@@ -11,7 +11,7 @@ from __future__ import annotations
 import secrets
 from typing import cast
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
@@ -55,11 +55,15 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         passwords = cast(dict[str, str], login_config["passwords"])
         if username not in passwords:
             raise HTTPException(status_code=404, detail="Demo persona is not configured")
-        token = deps.demo_token_exchange(login_config, username)
+        provider_token = deps.demo_token_exchange(login_config, username)
+        actor = deps.resolve_bearer_token(provider_token)
+        if actor is None:
+            raise HTTPException(status_code=401, detail="Demo identity provider token rejected")
+        session_token = deps.issue_browser_session(actor)
         secure = str(deps.ui_auth_config.get("redirect_uri", "")).startswith("https://")
         response.set_cookie(
             key="dal_obscura_session",
-            value=token,
+            value=session_token,
             httponly=True,
             secure=secure,
             samesite="lax",
@@ -78,9 +82,12 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
     @api.post("/v1/logout")
     def logout(
         response: Response,
+        session_token: str | None = Cookie(default=None, alias="dal_obscura_session"),
         _actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
     ) -> object:
         """Expires the browser session after the shared CSRF check."""
+        if session_token:
+            deps.revoke_browser_session(session_token)
         response.delete_cookie(key="dal_obscura_session", path="/")
         response.delete_cookie(key="dal_obscura_csrf", path="/")
         return {"authenticated": False}

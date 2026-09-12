@@ -181,6 +181,31 @@ class AuthProviderRecord(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
+class BrowserSessionRecord(Base):
+    """Opaque, revocable browser session record.
+
+    The provider access token is never stored in this table.  The browser only
+    receives the random session secret; the database stores its SHA-256 digest.
+    """
+
+    __tablename__ = "browser_sessions"
+    __table_args__ = (
+        UniqueConstraint("token_hash"),
+        Index("ix_browser_sessions_expires_at", "expires_at"),
+        Index("ix_browser_sessions_principal", "principal"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    principal: Mapped[str] = mapped_column(Text, nullable=False)
+    groups_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    platform_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class ConfigPublicationRecord(Base):
     """Immutable publication manifest row."""
 

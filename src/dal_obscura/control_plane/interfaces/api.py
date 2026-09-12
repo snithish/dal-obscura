@@ -94,6 +94,7 @@ def create_app(
     oidc_admin_group: str | None = None,
     cors_origins: tuple[str, ...] = (),
     ui_auth_config: Mapping[str, object] | None = None,
+    session_ttl_seconds: int = 28_800,
 ) -> FastAPI:
     """Creates the control-plane FastAPI app with all workspace routes installed.
 
@@ -129,6 +130,8 @@ def create_app(
             config,
             username,
         ),
+        session_ttl_seconds=session_ttl_seconds,
+        allowed_origins=cors_origins,
     )
 
     for route in (

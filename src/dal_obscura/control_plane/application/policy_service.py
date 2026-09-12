@@ -28,7 +28,12 @@ from dal_obscura.control_plane.application.errors import AuthorizationFailure
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 
 
-def list_policy_rules(store: PublicationStore, asset_id: UUID) -> list[dict[str, object]]:
+def list_policy_rules(
+    store: PublicationStore,
+    asset_id: UUID,
+    *,
+    actor: ControlPlaneActor | None = None,
+) -> list[dict[str, object]]:
     """Lists ordered policy rules for one asset.
 
     Example:
@@ -37,6 +42,8 @@ def list_policy_rules(store: PublicationStore, asset_id: UUID) -> list[dict[str,
         ```
     """
 
+    if actor is not None:
+        ensure_asset_reader(store, asset_id, actor)
     return store.list_policy_rules(asset_id)
 
 
@@ -67,6 +74,7 @@ def preview_asset_policy(
     principal: str,
     groups: list[str],
     claims: dict[str, object],
+    actor: ControlPlaneActor | None = None,
 ) -> dict[str, object]:
     """Evaluates draft policy rules for a preview principal.
 
@@ -82,6 +90,8 @@ def preview_asset_policy(
         ```
     """
 
+    if actor is not None:
+        ensure_asset_reader(store, asset_id, actor)
     asset = store.get_workspace_asset(asset_id)
     raw_rules = store.list_policy_rules(asset_id)
     compiled = _compiled_policy_from_response(asset, raw_rules)
@@ -140,6 +150,21 @@ def ensure_policy_editor(
     if owners.intersection(actor.owner_principals()):
         return
     raise AuthorizationFailure("Only platform admins or asset owners can change policies.")
+
+
+def ensure_asset_reader(
+    store: PublicationStore,
+    asset_id: UUID,
+    actor: ControlPlaneActor,
+) -> None:
+    """Requires an actor to be a platform admin or an owner of the asset."""
+
+    if actor.platform_admin:
+        return
+    owners = set(store.list_asset_owners(asset_id))
+    if owners.intersection(actor.owner_principals()):
+        return
+    raise AuthorizationFailure("The authenticated actor cannot access this asset.")
 
 
 def _compiled_policy_from_response(

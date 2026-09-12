@@ -57,6 +57,10 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
             oidc_admin_group=_optional(values, "DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP"),
             cors_origins=_csv(values.get("DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS", "")),
             ui_auth_config=_ui_auth_config(values),
+            session_ttl_seconds=_positive_int(
+                values.get("DAL_OBSCURA_CONTROL_PLANE_SESSION_TTL_SECONDS", "28800"),
+                "DAL_OBSCURA_CONTROL_PLANE_SESSION_TTL_SECONDS",
+            ),
         )
     except (ConfigStoreSchemaError, ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)
@@ -90,6 +94,16 @@ def _port(value: str) -> int:
     if not 1 <= port <= 65535:
         raise ValueError("DAL_OBSCURA_CONTROL_PLANE_PORT must be between 1 and 65535")
     return port
+
+
+def _positive_int(value: str, name: str) -> int:
+    try:
+        number = int(value)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    if number <= 0:
+        raise ValueError(f"{name} must be positive")
+    return number
 
 
 def _csv(value: str) -> tuple[str, ...]:

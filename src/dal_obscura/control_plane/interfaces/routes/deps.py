@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control_plane.application.provisioning import ProvisioningService
+from dal_obscura.control_plane.infrastructure.session_store import BrowserSessionStore
 from dal_obscura.control_plane.interfaces.session_api import (
     OidcActorResolver,
     oidc_actor_from_header,
@@ -48,6 +49,8 @@ class ControlPlaneDeps:
     oidc_admin_group: str | None
     ui_auth_config: Mapping[str, object] | None
     demo_token_exchange: DemoTokenExchange
+    session_ttl_seconds: int = 28_800
+    allowed_origins: tuple[str, ...] = ()
 
     def require_actor(
         self,
@@ -56,11 +59,7 @@ class ControlPlaneDeps:
         session_token: str | None = Cookie(default=None, alias="dal_obscura_session"),
         csrf_cookie: str | None = Cookie(default=None, alias="dal_obscura_csrf"),
     ) -> ControlPlaneActor:
-        """Authenticates bearer clients or an HttpOnly browser session.
-
-        Cookie-authenticated state changes require a matching double-submit CSRF token.
-        Bearer-token clients retain their existing non-browser API contract.
-        """
+        """Authenticates bearer clients or an HttpOnly browser session."""
         expected = f"Bearer {self.admin_token}"
         if authorization == expected:
             return ControlPlaneActor.for_platform_admin("platform:admin")
@@ -71,19 +70,59 @@ class ControlPlaneDeps:
             and (not csrf_cookie or request.headers.get("x-csrf-token") != csrf_cookie)
         ):
             raise HTTPException(status_code=403, detail="CSRF validation failed")
-        token = session_token if using_cookie else _bearer_value(authorization)
-        if token is None:
+        if using_cookie and request.method not in {"GET", "HEAD", "OPTIONS"}:
+            origin = request.headers.get("origin")
+            request_origin = f"{request.url.scheme}://{request.url.netloc}"
+            if origin and origin not in self.allowed_origins and origin != request_origin:
+                raise HTTPException(status_code=403, detail="Origin validation failed")
+        if using_cookie:
+            if session_token is None:
+                raise HTTPException(status_code=401, detail="Unauthorized")
+            actor = self.resolve_browser_session(session_token)
+        else:
+            token = _bearer_value(authorization)
+            actor = self.resolve_bearer_token(token) if token is not None else None
+        if actor is None:
             raise HTTPException(status_code=401, detail="Unauthorized")
+        return actor
+
+    def resolve_bearer_token(self, token: str) -> ControlPlaneActor | None:
+        """Resolves a provider bearer token into an actor."""
+
         if self.oidc_actor_resolver is None:
-            raise HTTPException(status_code=401, detail="Unauthorized")
-        actor = oidc_actor_from_header(
+            return None
+        return oidc_actor_from_header(
             f"Bearer {token}",
             resolver=self.oidc_actor_resolver,
             admin_group=self.oidc_admin_group,
         )
-        if actor is None:
-            raise HTTPException(status_code=401, detail="Unauthorized")
-        return actor
+
+    def resolve_browser_session(self, token: str) -> ControlPlaneActor | None:
+        """Loads an unexpired browser session without exposing provider tokens."""
+
+        with self.session_maker() as session:
+            actor = BrowserSessionStore(session).resolve(token)
+            if actor is not None:
+                session.commit()
+            return actor
+
+    def issue_browser_session(self, actor: ControlPlaneActor) -> str:
+        """Mints a random, durable browser session secret."""
+
+        with self.session_maker() as session:
+            token = BrowserSessionStore(session).issue(
+                actor,
+                ttl_seconds=self.session_ttl_seconds,
+            )
+            session.commit()
+            return token
+
+    def revoke_browser_session(self, token: str) -> None:
+        """Revokes a browser session secret, if it exists."""
+
+        with self.session_maker() as session:
+            BrowserSessionStore(session).revoke(token)
+            session.commit()
 
     def require_admin(
         self,
