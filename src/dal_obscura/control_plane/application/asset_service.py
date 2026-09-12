@@ -37,6 +37,33 @@ def list_workspace_assets(
     return store.list_workspace_assets_for_principals(context, actor.owner_principals())
 
 
+def list_workspace_assets_page(
+    store: PublicationStore,
+    actor: ControlPlaneActor,
+    *,
+    limit: int,
+    cursor: str | None = None,
+    search: str | None = None,
+) -> dict[str, object]:
+    """Returns a bounded, cursor-paginated asset inventory for one actor."""
+
+    context = store.get_default_workspace_context()
+    if context is None:
+        return {"items": [], "next_cursor": None}
+    principals = None if actor.platform_admin else actor.owner_principals()
+    try:
+        page = store.list_workspace_assets_page(
+            context,
+            limit=limit,
+            cursor=cursor,
+            search=search,
+            principals=principals,
+        )
+    except ValueError as exc:
+        raise ValidationFailure(str(exc)) from exc
+    return {"items": page.items, "next_cursor": page.next_cursor}
+
+
 def get_workspace_asset(
     store: PublicationStore,
     asset_id: UUID,

@@ -9,6 +9,11 @@ export type Asset = {
   schema?: AssetSchema;
 };
 
+export type AssetPage = {
+  items: Asset[];
+  next_cursor: string | null;
+};
+
 export type SchemaField = {
   name: string;
   type: string;
@@ -206,6 +211,15 @@ export const controlPlane = {
   }),
   logout: () => request<{ authenticated: false }>("/v1/logout", { method: "POST" }),
   listAssets: async () => (await request<Asset[]>("/v1/assets")).map(normalizeAsset),
+  listAssetPage: async (params: { limit?: number; cursor?: string; search?: string } = {}) => {
+    const query = new URLSearchParams();
+    if (params.limit !== undefined) query.set("limit", String(params.limit));
+    if (params.cursor) query.set("cursor", params.cursor);
+    if (params.search) query.set("search", params.search);
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    const page = await request<AssetPage>(`/v1/assets/page${suffix}`);
+    return { ...page, items: page.items.map(normalizeAsset) };
+  },
   getAsset: async (assetId: string) => normalizeAsset(await request<Asset>(`/v1/assets/${assetId}`)),
   listGrants: (assetId: string) => request<AssetGrant[]>(`/v1/assets/${assetId}/grants`),
   saveOwners: (assetId: string, owners: string[]) => request<{ asset_id: string; owners: string[] }>(`/v1/assets/${assetId}/owners`, {

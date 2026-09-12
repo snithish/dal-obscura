@@ -202,6 +202,22 @@ class ProvisioningService:
     ) -> list[dict[str, object]]:
         return asset_service.list_workspace_assets(self._store, actor)
 
+    def list_workspace_assets_page(
+        self,
+        actor: ControlPlaneActor,
+        *,
+        limit: int,
+        cursor: str | None = None,
+        search: str | None = None,
+    ) -> dict[str, object]:
+        return asset_service.list_workspace_assets_page(
+            self._store,
+            actor,
+            limit=limit,
+            cursor=cursor,
+            search=search,
+        )
+
     def get_workspace_asset(
         self,
         asset_id: UUID,

@@ -353,3 +353,45 @@ def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
     }
     assert "tenant" not in _keys_recursive(summary | {"catalogs": catalogs, "assets": assets})
     assert "cell" not in _keys_recursive(summary | {"catalogs": catalogs, "assets": assets})
+
+
+def test_workspace_asset_page_is_bounded_searchable_and_cursor_paginated():
+    client = _client()
+    client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+    for target in ("default.orders", "default.users", "prod.events"):
+        response = client.put(
+            f"/v1/assets/analytics/{target}",
+            json={"backend": "iceberg", "table_identifier": target, "options": {}},
+            headers=ADMIN_HEADERS,
+        )
+        assert response.status_code == 200, response.json()
+
+    first = client.get("/v1/assets/page?limit=2", headers=ADMIN_HEADERS)
+    assert first.status_code == 200, first.json()
+    assert [item["name"] for item in first.json()["items"]] == [
+        "default.orders",
+        "default.users",
+    ]
+    assert first.json()["next_cursor"]
+
+    second = client.get(
+        "/v1/assets/page?limit=2&cursor=" + first.json()["next_cursor"],
+        headers=ADMIN_HEADERS,
+    )
+    assert second.status_code == 200, second.json()
+    assert [item["name"] for item in second.json()["items"]] == ["prod.events"]
+    assert second.json()["next_cursor"] is None
+
+    searched = client.get("/v1/assets/page?limit=1&search=orders", headers=ADMIN_HEADERS)
+    assert searched.status_code == 200, searched.json()
+    assert [item["name"] for item in searched.json()["items"]] == ["default.orders"]
+
+    invalid = client.get("/v1/assets/page?cursor=garbage", headers=ADMIN_HEADERS)
+    assert invalid.status_code == 400

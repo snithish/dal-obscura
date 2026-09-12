@@ -797,12 +797,29 @@ class PublicationStore:
         limit: int,
         cursor: str | None = None,
         search: str | None = None,
+        principals: set[str] | None = None,
     ) -> AssetPage:
+        if limit <= 0:
+            raise ValueError("Asset page limit must be positive")
         after = _decode_asset_cursor(cursor) if cursor else None
         query = select(AssetRecord).where(
             AssetRecord.cell_id == context.cell_id,
             AssetRecord.tenant_id == context.tenant_id,
         )
+        if principals is not None:
+            if not principals:
+                return AssetPage(items=[], next_cursor=None)
+            query = query.outerjoin(AssetOwnerRecord, AssetOwnerRecord.asset_id == AssetRecord.id)
+            query = query.outerjoin(AssetGrantRecord, AssetGrantRecord.asset_id == AssetRecord.id)
+            query = query.where(
+                or_(
+                    AssetOwnerRecord.principal.in_(principals),
+                    and_(
+                        AssetGrantRecord.principal.in_(principals),
+                        AssetGrantRecord.capability == "read",
+                    ),
+                )
+            ).distinct()
         if search:
             pattern = f"%{search.strip()}%"
             query = query.where(

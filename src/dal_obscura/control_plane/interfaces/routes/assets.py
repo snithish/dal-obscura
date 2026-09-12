@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.errors import AuthorizationFailure
@@ -39,6 +39,22 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
     ) -> object:
         return deps.with_service(lambda service: service.list_workspace_assets(actor))
+
+    @api.get("/v1/assets/page")
+    def list_workspace_assets_page(
+        limit: int = Query(default=50, ge=1, le=200),
+        cursor: str | None = Query(default=None, max_length=512),
+        search: str | None = Query(default=None, max_length=200),
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> object:
+        return deps.with_service(
+            lambda service: service.list_workspace_assets_page(
+                actor,
+                limit=limit,
+                cursor=cursor,
+                search=search,
+            )
+        )
 
     @api.get("/v1/assets/{asset_id}")
     def get_workspace_asset(
