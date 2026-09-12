@@ -30,8 +30,16 @@ def issue_review_token(
     """Signs completed evaluation evidence for one exact draft generation."""
 
     ensure_asset_capability(store, asset_id, actor, "publish")
-    if evaluation.get("status") != "completed" or evaluation.get("decision") != "allow":
-        raise ValidationFailure("Only a completed allowed evaluation can be reviewed.")
+    if evaluation.get("status") != "completed":
+        raise ValidationFailure("Only a completed evaluation can be reviewed.")
+    if evaluation.get("decision") != "allow" and not _explicit_deny_all_draft(
+        store,
+        asset_id,
+        actor,
+    ):
+        raise ValidationFailure(
+            "Only an allowed evaluation or explicit deny-all draft can be reviewed."
+        )
     draft = store.get_asset_policy_draft(
         asset_id=asset_id,
         author_principal=actor.principal,
@@ -105,6 +113,20 @@ def _active_publication_id(store: PublicationStore, asset_id: UUID) -> str | Non
     except LookupError:
         return None
     return str(active.publication_id)
+
+
+def _explicit_deny_all_draft(
+    store: PublicationStore,
+    asset_id: UUID,
+    actor: ControlPlaneActor,
+) -> bool:
+    """Returns true only when this actor saved an intentional empty draft."""
+
+    draft = store.get_asset_policy_draft(
+        asset_id=asset_id,
+        author_principal=actor.principal,
+    )
+    return draft is not None and not cast(list[object], draft.get("rules", []))
 
 
 def _encode_signed(payload: dict[str, object], secret: str) -> str:

@@ -15,6 +15,7 @@ from tests.interfaces.control_plane.workspace_helpers import (
     ADMIN_HEADERS,
     ICEBERG_CATALOG_MODULE,
     _client,
+    _provision_draft,
 )
 
 
@@ -249,3 +250,48 @@ def test_production_publication_requires_current_server_review(monkeypatch) -> N
     assert reviewed.status_code == 200
     assert published.status_code == 200
     assert tampered.status_code == 400
+
+
+def test_explicit_empty_draft_is_reviewable_and_publishable_as_deny_all(monkeypatch) -> None:
+    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+    migrate_config_store(engine)
+    client = TestClient(
+        create_app(
+            session_factory(engine),
+            admin_token="test-admin",
+            require_review=True,
+        )
+    )
+    asset = _provision_draft(client)
+    client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["platform:admin"]},
+        headers=ADMIN_HEADERS,
+    )
+    saved = client.put(
+        f"/v1/assets/{asset['id']}/draft",
+        json={"expected_revision": 0, "rules": []},
+        headers=ADMIN_HEADERS,
+    )
+    assert saved.status_code == 200, saved.json()
+    monkeypatch.setattr(
+        schema_service,
+        "load_catalog",
+        lambda *args, **kwargs: _EvaluationCatalog(),
+    )
+
+    reviewed = client.post(
+        f"/v1/assets/{asset['id']}/policy-review",
+        json={"principal": "analyst", "groups": [], "claims": {}},
+        headers=ADMIN_HEADERS,
+    )
+    assert reviewed.status_code == 200, reviewed.json()
+    assert reviewed.json()["decision"] == "deny"
+    assert reviewed.json()["review_token"]
+
+    published = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        json={"review_token": reviewed.json()["review_token"]},
+        headers=ADMIN_HEADERS,
+    )
+    assert published.status_code == 200, published.json()

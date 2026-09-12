@@ -213,7 +213,11 @@ def create_asset_policy_version(  # noqa: C901
                 "Asset is not part of the workspace publication draft."
             ) from None
         selected.rules = list(asset.rules)
-        _validate_publish_readiness(store, draft)
+        _validate_publish_readiness(
+            store,
+            draft,
+            explicit_deny_all_asset_ids={asset.id} if personal_draft is not None else set(),
+        )
         compiled = compiler.compile(draft)
         publication_id = uuid4()
         store.insert_compiled_publication(publication_id=publication_id, compiled=compiled)
@@ -402,7 +406,12 @@ def _catalogs_with_selected(active_catalogs, catalog):
     ]
 
 
-def _validate_publish_readiness(store: PublicationStore, draft) -> None:
+def _validate_publish_readiness(
+    store: PublicationStore,
+    draft,
+    *,
+    explicit_deny_all_asset_ids: set[UUID] | None = None,
+) -> None:
     if len(draft.catalogs) == 0:
         raise ValidationFailure("Cannot publish until at least one catalog is configured.")
     if len(draft.assets) == 0:
@@ -415,7 +424,12 @@ def _validate_publish_readiness(store: PublicationStore, draft) -> None:
             f"Cannot publish until {missing_owner_count} "
             f"{_plural(missing_owner_count, 'asset has', 'assets have')} an assigned owner."
         )
-    missing_policy_count = sum(1 for asset in draft.assets if not asset.rules)
+    explicit_deny_all_asset_ids = explicit_deny_all_asset_ids or set()
+    missing_policy_count = sum(
+        1
+        for asset in draft.assets
+        if not asset.rules and asset.id not in explicit_deny_all_asset_ids
+    )
     if missing_policy_count:
         raise ValidationFailure(
             f"Cannot publish until {missing_policy_count} "
