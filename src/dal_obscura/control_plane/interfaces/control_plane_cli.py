@@ -17,6 +17,7 @@ from collections.abc import Mapping, Sequence
 from urllib.parse import urlsplit
 
 import uvicorn
+from sqlalchemy.exc import SQLAlchemyError
 
 from dal_obscura.common.config_store.db import (
     ConfigStoreSchemaError,
@@ -99,6 +100,9 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
         )
     except (ConfigStoreSchemaError, ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)
+        return 1
+    except SQLAlchemyError:
+        print("Control-plane database unavailable", file=sys.stderr)
         return 1
     uvicorn.run(
         app,

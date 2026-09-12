@@ -5,6 +5,7 @@ from typing import cast
 
 import pytest
 from fastapi import FastAPI
+from sqlalchemy.exc import SQLAlchemyError
 
 from dal_obscura.common.config_store.db import create_engine_from_url, migrate_config_store
 from dal_obscura.control_plane.interfaces import control_plane_cli
@@ -111,6 +112,29 @@ def test_control_plane_cli_requires_current_schema(tmp_path, capsys) -> None:
         == 1
     )
     assert "Run `dal-obscura-migrate upgrade`" in capsys.readouterr().err
+
+
+def test_control_plane_cli_redacts_database_startup_errors(monkeypatch, tmp_path, capsys) -> None:
+    database_url = f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
+    monkeypatch.setattr(
+        control_plane_cli,
+        "check_config_store_schema",
+        lambda _engine: (_ for _ in ()).throw(
+            SQLAlchemyError("postgresql://user:secret@db.internal/control_plane")
+        ),
+    )
+
+    result = control_plane_cli.run(
+        {
+            "DAL_OBSCURA_DATABASE_URL": database_url,
+            "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "test-admin",
+        }
+    )
+
+    assert result == 1
+    error = capsys.readouterr().err
+    assert error.strip() == "Control-plane database unavailable"
+    assert "secret" not in error
 
 
 def test_control_plane_cli_exposes_help_without_runtime_configuration(capsys) -> None:
