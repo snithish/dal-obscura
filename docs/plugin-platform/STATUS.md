@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `1dc1703`.
+Implementation follow-up through `4ab9031`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -108,6 +108,29 @@ Integration boundary check after the migration and lock slices:
 `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane tests/interfaces/control_plane/test_assets_api.py tests/interfaces/control_plane/test_schema_api.py tests/plugin_platform -q`
 passed after the X13 manifest metadata change. Ruff passed on every changed Python path and `git diff --check`
 is clean. Browser, PostgreSQL, Flight, consumer, and production lanes remain open.
+
+### X04 synthetic fixture semantics — `4ab9031`
+
+- State: implemented-unverified.
+- Behavior: policy evaluation now distinguishes omitted rows from an explicit
+  zero-row input, preserves the authorized output schema for empty results,
+  validates supplied rows at the Arrow boundary, and records a digest of the
+  exact schema-bound fixture. Generated fixtures cover typed dates, timestamps,
+  times, decimals, binary values, nested structs, and non-string map keys;
+  unsupported types fail with a safe validation error.
+- Green evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync
+  pytest tests/control_plane/test_evaluation_service.py
+  tests/interfaces/control_plane/test_schema_api.py -q` passed (8); Ruff and
+  Ty passed on changed paths; TypeScript remains unchanged from the prior UI
+  slice.
+- Environment/dependency: Darwin arm64, repository `.venv`, no external
+  catalog, IdP, Flight server, or customer data.
+- Pickle compatibility: no pickle modules, serializers, or payloads changed.
+- Remaining gaps: full mask/type golden matrix, provider-call assertions,
+  process-wide evaluation admission, real Iceberg/Flight parity, and the
+  PostgreSQL race gates remain open.
+- Next permitted packet: X03 PostgreSQL CAS/barrier slice, then X06 schema
+  evolution rules.
 
 ## Latest evidence entry
 
