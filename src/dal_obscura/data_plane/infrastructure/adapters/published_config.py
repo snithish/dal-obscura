@@ -512,6 +512,13 @@ def _schema_identities(schema: pa.Schema) -> dict[tuple[tuple[str, ...], str], s
         if pa.types.is_struct(field.type):
             for child in field.type:
                 visit(child, (*path, child.name))
+        elif pa.types.is_list(field.type) or pa.types.is_large_list(field.type):
+            visit(field.type.value_field, (*path, "$element"))
+        elif pa.types.is_map(field.type):
+            visit(field.type.key_field, (*path, "$key"))
+            visit(field.type.item_field, (*path, "$value"))
+        elif pa.types.is_fixed_size_list(field.type):
+            visit(field.type.value_field, (*path, "$element"))
 
     for field in schema:
         visit(field, (field.name,))

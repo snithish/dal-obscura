@@ -262,6 +262,130 @@ def test_published_schema_admission_accepts_iceberg_numeric_metadata_and_aliases
     )
 
 
+def test_published_schema_admission_tracks_collection_element_and_map_value_paths():
+    asset = PublishedAsset(
+        publication_id=uuid4(),
+        tenant_id=uuid4(),
+        catalog="analytics",
+        target="default.nested",
+        backend="iceberg",
+        compiled_config={
+            "schema": {
+                "encoding": 1,
+                "fields": [
+                    {
+                        "name": "tags.$element",
+                        "field_id": "iceberg:11",
+                        "path": ["tags", "$element"],
+                        "type": "string",
+                        "nullable": True,
+                    },
+                    {
+                        "name": "attributes.$key",
+                        "field_id": "iceberg:12",
+                        "path": ["attributes", "$key"],
+                        "type": "string",
+                        "nullable": False,
+                    },
+                    {
+                        "name": "attributes.$value.label",
+                        "field_id": "iceberg:14",
+                        "path": ["attributes", "$value", "label"],
+                        "type": "string",
+                        "nullable": True,
+                    },
+                ],
+            }
+        },
+        policy_version=1,
+    )
+    schema = pa.schema(
+        [
+            pa.field(
+                "tags",
+                pa.list_(
+                    pa.field(
+                        "element",
+                        pa.string(),
+                        metadata={b"PARQUET:field_id": b"11"},
+                    )
+                ),
+                metadata={b"PARQUET:field_id": b"10"},
+            ),
+            pa.field(
+                "attributes",
+                pa.map_(
+                    pa.field(
+                        "key",
+                        pa.string(),
+                        nullable=False,
+                        metadata={b"PARQUET:field_id": b"12"},
+                    ),
+                    pa.field(
+                        "value",
+                        pa.struct(
+                            [
+                                pa.field(
+                                    "label",
+                                    pa.string(),
+                                    metadata={b"PARQUET:field_id": b"14"},
+                                )
+                            ]
+                        ),
+                        metadata={b"PARQUET:field_id": b"13"},
+                    ),
+                ),
+                metadata={b"PARQUET:field_id": b"9"},
+            ),
+        ]
+    )
+
+    _validate_schema_admission(asset, schema)
+
+
+def test_published_schema_admission_rejects_collection_identity_drift():
+    asset = PublishedAsset(
+        publication_id=uuid4(),
+        tenant_id=uuid4(),
+        catalog="analytics",
+        target="default.nested",
+        backend="iceberg",
+        compiled_config={
+            "schema": {
+                "encoding": 1,
+                "fields": [
+                    {
+                        "name": "tags.$element",
+                        "field_id": "iceberg:11",
+                        "path": ["tags", "$element"],
+                        "type": "string",
+                        "nullable": True,
+                    }
+                ],
+            }
+        },
+        policy_version=1,
+    )
+    schema = pa.schema(
+        [
+            pa.field(
+                "tags",
+                pa.list_(
+                    pa.field(
+                        "element",
+                        pa.string(),
+                        metadata={b"PARQUET:field_id": b"99"},
+                    )
+                ),
+                metadata={b"PARQUET:field_id": b"10"},
+            )
+        ]
+    )
+
+    with pytest.raises(ValueError, match="no longer matches"):
+        _validate_schema_admission(asset, schema)
+
+
 def _publish_asset(
     session: Session,
     *,
