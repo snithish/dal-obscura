@@ -153,6 +153,12 @@ class PublicationCompiler:
             "catalog": {"module": catalog.module, "options": dict(catalog.options)},
             "target": target_config,
             "policy": policy_json,
+            # Keep the selected adapter identities explicit in the immutable
+            # manifest so future plugin routing never infers them from options.
+            "plugins": {
+                "catalog": catalog.module,
+                "table_format": asset.backend,
+            },
         }
         policy_version = _stable_int63(policy_json)
         compiled_config["policy"]["version"] = policy_version

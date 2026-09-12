@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `757715f`.
+Implementation follow-up through `757715f` (next X13 routing metadata slice uncommitted).
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -70,7 +70,10 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   fails closed when a request names an unallowlisted installation, with registry
   regression coverage. Built-in Iceberg routing and artifact-lock verification
   remain open.
-- X13 plugin routing and migration: **not-started**.
+- X13 plugin routing and migration: **implementing**; immutable compiled asset
+  manifests now record explicit catalog and table-format adapter identities.
+  Runtime registry routing, migration of legacy manifests, and mixed-version
+  rollout evidence remain open.
 - X14 plugin UI: **not-started**.
 - X15 conformance kit: **not-started**.
 - X16 REST Iceberg qualification: **not-started**.
