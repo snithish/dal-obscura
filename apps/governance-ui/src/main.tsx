@@ -46,6 +46,7 @@ function App() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [publishPending, setPublishPending] = useState(false);
   const loadEpoch = useRef(0);
+  const draftEditEpoch = useRef(0);
   const inventoryEpoch = useRef(0);
   const searchTimer = useRef<number | undefined>(undefined);
   const managementEpoch = useRef(0);
@@ -208,6 +209,7 @@ function App() {
   }
 
   function clearPrivateState() {
+    draftEditEpoch.current += 1;
     setSession(null); setAsset(null); setAssets([]); setRules([]); setPreview(null);
     setManagementData({}); setAssetCursor(null); setAssetHasMore(false); setAssetSearch("");
     setDraftRevision(0); setReviewToken(null); setSaveState("saved");
@@ -239,6 +241,7 @@ function App() {
       const effectiveRules = draft?.rules ?? loadedRules;
       setManagementData((current) => ({ ...current, history, grants }));
       setAssets(knownAssets); setAsset(fullAsset); setRules(effectiveRules); setDraftRevision(draft?.revision ?? 0); setSelectedRule(0); setReviewToken(null);
+      draftEditEpoch.current += 1;
       setSelectedField(schema.fields[0]?.human_path ?? fullAsset.schema_fields[0]?.name ?? ""); setPreview(null); setSaveState("saved");
       setNotice(effectiveRules.length ? "Loaded your policy draft." : "No policy draft exists yet. Add a rule to begin authoring.");
     } catch {
@@ -253,17 +256,20 @@ function App() {
   function updateRule(change: (rule: PolicyRule) => PolicyRule) {
     if (!activeRule) return;
     setRules((current) => current.map((rule, index) => index === selectedRule ? change(rule) : rule));
+    draftEditEpoch.current += 1;
     setSaveState("unsaved"); setPreview(null); setReviewToken(null); setNotice("Draft changed. Run a policy test before review.");
   }
   function addRule() {
     const ordinal = Math.max(0, ...rules.map((rule) => rule.ordinal)) + 10;
     setRules((current) => [...current, newRule(selectedField, ordinal)]);
+    draftEditEpoch.current += 1;
     setSelectedRule(rules.length); setSaveState("unsaved"); setPreview(null);
     setNotice("New rule added locally. Add at least one principal before saving.");
   }
   function removeRule() {
     if (!activeRule) return;
     setRules((current) => current.filter((_, index) => index !== selectedRule));
+    draftEditEpoch.current += 1;
     setSelectedRule(Math.max(0, selectedRule - 1)); setSaveState("unsaved"); setPreview(null);
     setNotice("Rule removed locally. Save the draft to persist the change.");
   }
@@ -279,14 +285,27 @@ function App() {
   }
   async function saveDraft() {
     if (!asset) return;
+    const assetId = asset.id;
+    const editEpoch = draftEditEpoch.current;
+    const revision = draftRevision;
+    const loadScope = loadEpoch.current;
     setSaveState("saving");
     try {
       if (!isDemo) {
-        const saved = await controlPlane.saveDraft(asset.id, draftRevision, rules);
+        const saved = await controlPlane.saveDraft(assetId, revision, rules);
+        if (loadScope !== loadEpoch.current || editEpoch !== draftEditEpoch.current) {
+          if (loadScope === loadEpoch.current) setSaveState("unsaved");
+          return;
+        }
         setDraftRevision(saved.revision);
+      }
+      if (loadScope !== loadEpoch.current || editEpoch !== draftEditEpoch.current) {
+        if (loadScope === loadEpoch.current) setSaveState("unsaved");
+        return;
       }
       setSaveState("saved"); setReviewToken(null); setNotice(isDemo ? "Demo draft resets when this page closes." : "Policy draft saved to the control plane.");
     } catch {
+      if (loadScope !== loadEpoch.current || editEpoch !== draftEditEpoch.current) return;
       setSaveState("failed"); setNotice("Save failed. The unsaved draft remains in this browser.");
     }
   }
