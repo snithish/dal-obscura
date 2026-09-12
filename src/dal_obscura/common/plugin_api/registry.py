@@ -203,7 +203,7 @@ def load_static_plugin_descriptor(entry: metadata.EntryPoint) -> PluginDescripto
         raise PluginAdmissionError("Plugin provenance is unavailable")
     try:
         raw = distribution.read_text(STATIC_DESCRIPTOR_FILENAME)
-    except (OSError, UnicodeError) as exc:
+    except (AttributeError, OSError, UnicodeError) as exc:
         raise PluginAdmissionError("Plugin static descriptor is unreadable") from exc
     if raw is None:
         raise PluginAdmissionError("Plugin static descriptor is missing")
