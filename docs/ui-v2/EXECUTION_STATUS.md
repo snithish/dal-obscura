@@ -39,9 +39,10 @@ Required backend/production coverage: [production review](PRODUCTION_READINESS.m
   immutable history, audited restore/mutations, and explicit unobserved
   data-plane status are shipped.
 - P10 complete management and consumer handoff: partial; UI management views,
-  bounded asset inventory, catalog discovery/onboarding, grant administration,
-  operation lookup, and bounded catalog discovery exist, while secret-provider
-  diagnostics and real DuckDB/Spark/Flight handoff evidence remain.
+  bounded asset inventory/history, catalog discovery/onboarding and redacted
+  diagnostics, grant administration, operation lookup, and consumer snippets
+  exist, while secret-provider and real DuckDB/Spark/Flight handoff evidence
+  remain.
 - P11 verified local feature/security parity: partial; local uses shared auth,
   CSRF, authorization, evaluation, and publication code, while a real local
   OIDC/browser stack is unverified.
@@ -56,7 +57,8 @@ Required backend/production coverage: [production review](PRODUCTION_READINESS.m
   tickets after restore. Encrypted backup/PITR, isolated restore evidence,
   upgrades, and key-rotation drills remain.
 - P15 capacity, observability, and customer operations: partial; bounded
-  request bodies/collections, evaluation, explicit runtime observations,
+  declared/streamed request bodies and collections, cursor-paginated inventory
+  and history, evaluation, explicit runtime observations, request correlation,
   durable ticket cleanup, and restore invalidation exist, while aggregate
   limits, metrics/alerts, load, and customer runbooks remain.
 - P16 whole-product release evidence and promotion: not-started.

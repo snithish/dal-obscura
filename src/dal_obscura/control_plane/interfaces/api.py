@@ -8,7 +8,9 @@ Example:
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
+from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -50,6 +52,9 @@ from dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks import (
 
 class _RequestBodyTooLarge(Exception):
     """Raised by the receive wrapper when a streamed request exceeds its bound."""
+
+
+_REQUEST_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
 
 def create_oidc_actor_resolver(
@@ -142,6 +147,14 @@ def create_app(  # noqa: C901
             response.headers["pragma"] = "no-cache"
         response.headers.setdefault("x-content-type-options", "nosniff")
         response.headers.setdefault("referrer-policy", "no-referrer")
+        return response
+
+    @app.middleware("http")
+    async def request_correlation(request: Request, call_next):
+        supplied = request.headers.get("x-request-id", "").strip()
+        request_id = supplied if _REQUEST_ID.fullmatch(supplied) else uuid4().hex
+        response = await call_next(request)
+        response.headers["x-request-id"] = request_id
         return response
 
     @app.middleware("http")

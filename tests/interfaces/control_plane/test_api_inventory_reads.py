@@ -42,6 +42,17 @@ def test_control_plane_healthz_is_public():
     assert response.json() == {"status": "ok"}
 
 
+def test_control_plane_returns_bounded_request_correlation_id():
+    client = _client()
+
+    supplied = client.get("/healthz", headers={"x-request-id": "support-42"})
+    generated = client.get("/healthz", headers={"x-request-id": "bad/id"})
+
+    assert supplied.headers["x-request-id"] == "support-42"
+    assert len(generated.headers["x-request-id"]) == 32
+    assert generated.headers["x-request-id"].isalnum()
+
+
 def test_control_plane_readyz_checks_database():
     client = _client()
 
