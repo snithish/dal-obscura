@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `b19e1c8`.
+Implementation follow-up through `1e43e8e`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -388,6 +388,21 @@ option name (`839c16f`); no raw credential field is exposed.
 - Pickle compatibility: unchanged.
 - Next permitted packet: add provider-returned location checks at catalog
   resolution and Iceberg task planning boundaries.
+
+### X07 provider-returned location enforcement — `1e43e8e`
+
+- State: implementing.
+- Behavior: Iceberg catalog resolution now validates returned metadata locations
+  and URI storage properties against the published path enforcer before exposing
+  a table descriptor. Empty metadata locations and locations outside governed
+  roots fail before schema/planning work.
+- Green evidence: catalog-registry and path-rule suites pass (12), Ruff, Ty, and
+  `git diff --check` pass.
+- Remaining gaps: redirect/DNS enforcement, supervised provider cancellation,
+  secret lifecycle, PostgreSQL and live deployment evidence remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: add bounded provider timeout/cancellation and test
+  resource cleanup at discovery and schema boundaries.
 
 X11 package check: `tests/plugin_platform/test_plugin_api_package.py` passes and
 the package source compiles without importing the service distribution. Building
