@@ -482,6 +482,10 @@ least-privilege default table/sequence grants. Shell syntax and deployment
 contract tests pass; live role permission probes and migration/runtime startup
 remain unexecuted.
 
+`docker compose --env-file deployment/production/.env.example -f
+deployment/production/compose.yaml config --quiet` also passes, confirming the
+role-initializer mount and required variables render as valid Compose.
+
 The direct-Arrow bounds regression and Ty/Ruff checks passed in
 `3263645`; the full schema byte-budget and every-entry-route acceptance matrix
 remains open.
