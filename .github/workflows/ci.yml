@@ -55,7 +55,10 @@ jobs:
         run: uv run ruff check .
 
       - name: Type check
-        run: uv run ty check
+        run: >-
+          uv run ty check
+          --extra-search-path packages/plugin-api/src
+          --extra-search-path packages/plugin-conformance/src
 
   python-contract-tests:
     name: Python contract and security tests
