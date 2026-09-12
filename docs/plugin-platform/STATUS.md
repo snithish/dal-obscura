@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `499571f`.
+Implementation follow-up through `c815aa7`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -160,6 +160,23 @@ remain open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: complete X03 PostgreSQL barriers and X06 evolution rules;
   keep browser acceptance open until the real authenticated lane runs.
+
+### X03 asset binding creation CAS — `c815aa7`
+
+- State: implementing.
+- Behavior: asset upsert now treats a missing binding as implicit revision zero.
+  A nonzero `expected_revision` is rejected with a conflict before any row is
+  inserted, closing a compare-and-set hole on first creation.
+- Red/green evidence: the new API regression was red with a 200 response before
+  the fix and passes with the stale-update and stale-grant regressions in
+  `tests/interfaces/control_plane/test_assets_api.py` (3 passed).
+- Exact checks: focused pytest and Ruff checks passed; `git diff --check` passed.
+- Remaining gaps: independent PostgreSQL barriers/processes, publication
+  rollback/idempotency under lost responses, and binding/grant race evidence
+  remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: continue X03 PostgreSQL/CAS transaction evidence, then
+  X06 provider-derived and collection field identities.
 
 The combined control-plane, catalog, schema, publication, migration, plugin, and
 published-config boundary suite passed at 100% after the budget change.
