@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `2ee6549`.
+Implementation follow-up through `62efa88`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -54,8 +54,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   and fails closed on duplicate logical paths. Review tokens bind the persisted admitted-schema
   digest in addition to the live Iceberg digest.
 - X07 configuration/secrets/IO: **implementing**; nested dynamic class-loader options
-  are rejected. Typed provider configs, shared secret resolution, and IO enforcement
-  remain open.
+  are rejected, and schema/evaluation/review provider calls now use the configured
+  catalog egress validator. Typed provider configs, shared secret resolution, and
+  provider-returned IO enforcement remain open.
 - X08 budgets and atomic reload: **implementing**; discovery now bounds provider
   iterators before materialization and checks cancellation/deadline per item while
   retaining deque traversal. Plugin admission now exposes build-then-swap reload
@@ -124,6 +125,10 @@ browser, PostgreSQL, Flight, consumer, and production lanes remain open.
 After the cell lock-order slice, the same expanded boundary suite passed again,
 including publication-store, policy-version, schema migration, plugin, and
 published-config adapter tests.
+
+The schema/review egress slice also passed schema-service, schema API, and policy
+version tests with Ruff and Ty clean. Its provider-call regression proves a denied
+catalog host is rejected before the loader is invoked.
 
 ### X04 synthetic fixture semantics — `4ab9031`
 
