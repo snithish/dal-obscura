@@ -90,3 +90,8 @@ td small { display: block; color: #61736e; margin-top: 4px; }
 .tree-toggle.spacer { display: block; }
 .schema-search { display: grid; gap: 5px; color: #52635e; font-size: 12px; font-weight: 700; }
 .schema-search input { border: 1px solid #bbc8c0; border-radius: 4px; padding: 8px 9px; background: #fff; color: inherit; }
+.plugin-list { display: grid; gap: 10px; }
+.plugin-card { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 12px 14px; border: 1px solid #d7dcd5; border-radius: 6px; background: #fbfdf9; }
+.plugin-card small { display: block; color: #61736e; margin-top: 4px; }
+.capability-list { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
+@media (max-width: 760px) { .plugin-card { align-items: flex-start; flex-direction: column; } .capability-list { justify-content: flex-start; } }

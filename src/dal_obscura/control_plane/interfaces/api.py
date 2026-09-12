@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session, sessionmaker
 
+from dal_obscura.common.plugin_api.registry import PluginRegistry
 from dal_obscura.control_plane.infrastructure.request_context import (
     reset_request_id,
     set_request_id,
@@ -27,6 +28,9 @@ from dal_obscura.control_plane.interfaces.routes import (
 )
 from dal_obscura.control_plane.interfaces.routes import (
     catalogs as catalog_routes,
+)
+from dal_obscura.control_plane.interfaces.routes import (
+    plugins as plugin_routes,
 )
 from dal_obscura.control_plane.interfaces.routes import (
     policies as policy_routes,
@@ -129,6 +133,7 @@ def create_app(  # noqa: C901
     login_rate_limit_attempts: int = 20,
     login_rate_limit_window_seconds: int = 60,
     login_rate_limit_block_seconds: int = 300,
+    plugin_registry: PluginRegistry | None = None,
 ) -> FastAPI:
     """Creates the control-plane FastAPI app with all workspace routes installed.
 
@@ -247,6 +252,7 @@ def create_app(  # noqa: C901
             code,
             verifier,
         ),
+        plugin_registry=plugin_registry,
     )
 
     for route in (
@@ -256,6 +262,7 @@ def create_app(  # noqa: C901
         policy_routes.router,
         asset_routes.router,
         settings_routes.router,
+        plugin_routes.router,
     ):
         app.include_router(route(deps))
     return app

@@ -179,6 +179,19 @@ export type RuntimeSettings = {
   max_ticket_exchanges: number;
 };
 
+export type PluginDescriptor = {
+  kind: "catalog" | "table_format";
+  plugin_id: string;
+  api_version: string;
+  config_version: number;
+  distribution: string;
+  version: string;
+  display_name: string;
+  capabilities: string[];
+  config_schema: Record<string, unknown>;
+  status: "admitted";
+};
+
 export type AuthProvider = {
   id: string;
   ordinal: number;
@@ -299,6 +312,7 @@ export const controlPlane = {
   diagnoseCatalog: (name: string) => request<CatalogDiagnostic>(`/v1/catalogs/${encodeURIComponent(name)}/diagnostics`),
   getRuntimeSettings: () => request<RuntimeSettings | null>("/v1/settings/runtime"),
   getAuthProviders: () => request<AuthProvider[]>("/v1/settings/auth-providers"),
+  listPlugins: () => request<{ plugins: PluginDescriptor[] }>("/v1/plugins"),
   getSummary: () => request<WorkspaceSummary>("/v1/workspace/summary"),
   getObservations: () => request<WorkspaceObservations>("/v1/workspace/observations"),
   saveCatalog: (name: string, options: Record<string, unknown>) => request<{ id: string; name: string }>(`/v1/catalogs/${encodeURIComponent(name)}`, {

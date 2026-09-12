@@ -23,6 +23,7 @@ from urllib.parse import urlsplit
 from fastapi import Cookie, Header, HTTPException, Request
 from sqlalchemy.orm import Session, sessionmaker
 
+from dal_obscura.common.plugin_api.registry import PluginRegistry
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.errors import (
     AuthorizationFailure,
@@ -75,6 +76,7 @@ class ControlPlaneDeps:
     login_rate_limit_attempts: int = 20
     login_rate_limit_window_seconds: int = 60
     login_rate_limit_block_seconds: int = 300
+    plugin_registry: PluginRegistry | None = None
 
     def require_actor(
         self,
