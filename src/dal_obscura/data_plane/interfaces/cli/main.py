@@ -189,7 +189,9 @@ def _start_ticket_cleanup(ticket_store: SqlAlchemyTicketStore, interval_seconds:
                 if deleted:
                     LOGGER.info("ticket_cleanup", extra={"deleted": deleted})
             except Exception:
-                LOGGER.exception("ticket_cleanup_failed")
+                # Cleanup runs outside request handling; do not emit provider or
+                # database exception text into logs that may be user-visible.
+                LOGGER.warning("ticket_cleanup_failed")
 
     threading.Thread(
         target=cleanup_loop,
