@@ -373,8 +373,13 @@ class ProvisioningService:
             actor=actor,
         )
 
-    def replace_asset_owners(self, asset_id: UUID, owners: list[str]) -> list[str]:
-        return asset_service.replace_asset_owners(self._store, asset_id, owners)
+    def replace_asset_owners(
+        self,
+        asset_id: UUID,
+        owners: list[str],
+        actor: ControlPlaneActor | None = None,
+    ) -> list[str]:
+        return asset_service.replace_asset_owners(self._store, asset_id, owners, actor)
 
     def list_asset_grants(self, asset_id: UUID) -> list[dict[str, str]]:
         return asset_service.list_asset_grants(self._store, asset_id)
@@ -402,8 +407,9 @@ class ProvisioningService:
         self,
         asset_id: UUID,
         grants: list[dict[str, str]],
+        actor: ControlPlaneActor | None = None,
     ) -> list[dict[str, str]]:
-        return asset_service.replace_asset_grants(self._store, asset_id, grants)
+        return asset_service.replace_asset_grants(self._store, asset_id, grants, actor)
 
     def ensure_asset_capability(
         self,

@@ -42,4 +42,10 @@ td small { display: block; color: #61736e; margin-top: 4px; }
 .activity-list small, .provider-list small { color: #61736e; }
 .activity-list time { color: #61736e; font-size: 12px; }
 .field-tree.nested { margin: 0 0 0 8px; }
+.form-label { display: grid; gap: 6px; color: #52635e; font-size: 13px; font-weight: 700; margin-bottom: 12px; }
+.form-label input { width: 100%; border: 1px solid #bbc8c0; border-radius: 4px; padding: 9px 10px; background: #fff; color: inherit; font-weight: 400; }
+.grant-editor { display: grid; gap: 9px; }
+.grant-row { display: grid; grid-template-columns: minmax(180px, 1fr) 180px auto; gap: 9px; align-items: center; }
+.grant-row input, .grant-row select { width: 100%; border: 1px solid #bbc8c0; border-radius: 4px; padding: 9px 10px; background: #fff; color: inherit; }
+.access-view { max-width: 900px; }
 @media (max-width: 760px) { .management-head { flex-direction: column; } .form-grid, .form-grid.three, .metric-grid { grid-template-columns: 1fr; } .management-card { align-items: flex-start; flex-direction: column; } table { min-width: 620px; } }

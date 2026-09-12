@@ -54,10 +54,18 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
     ) -> object:
         return deps.with_service(lambda service: service.get_asset_schema(asset_id, actor))
 
-    @api.put("/v1/assets/{asset_id}/owners", dependencies=[Depends(deps.require_admin)])
-    def replace_asset_owners(asset_id: UUID, request: AssetOwnersRequest) -> object:
+    @api.put("/v1/assets/{asset_id}/owners")
+    def replace_asset_owners(
+        asset_id: UUID,
+        request: AssetOwnersRequest,
+        actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
+    ) -> object:
         owners = deps.with_service(
-            lambda service: service.replace_asset_owners(asset_id=asset_id, owners=request.owners)
+            lambda service: service.replace_asset_owners(
+                asset_id=asset_id,
+                owners=request.owners,
+                actor=actor,
+            )
         )
         return {"asset_id": str(asset_id), "owners": owners}
 
@@ -130,7 +138,10 @@ def _replace_authorized_asset_grants(
     grants = [item.model_dump() for item in request.grants]
     if any(item["capability"] == "grant" for item in grants) and not actor.platform_admin:
         raise AuthorizationFailure("Only platform admins may delegate grant-management capability.")
-    return {"asset_id": str(asset_id), "grants": service.replace_asset_grants(asset_id, grants)}
+    return {
+        "asset_id": str(asset_id),
+        "grants": service.replace_asset_grants(asset_id, grants, actor=actor),
+    }
 
 
 def _ensure_grant_manager(service, asset_id: UUID, actor: ControlPlaneActor) -> None:

@@ -48,7 +48,8 @@ def test_audit_events_are_transactional_redacted_and_scoped() -> None:
     owner_events = client.get("/v1/audit/events", headers=_bearer("owner-token"))
     outsider_events = client.get("/v1/audit/events", headers=_bearer("outsider-token"))
     assert owner_events.status_code == 200
-    assert len(owner_events.json()) == 2
+    assert len(owner_events.json()) == 3
+    assert owner_events.json()[-1]["action"] == "asset.owners.replace"
     assert outsider_events.status_code == 200
     assert outsider_events.json() == []
 

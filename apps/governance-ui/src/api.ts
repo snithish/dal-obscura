@@ -129,6 +129,11 @@ export type Catalog = {
   options: Record<string, unknown>;
 };
 
+export type AssetGrant = {
+  principal: string;
+  capability: "read" | "edit" | "publish" | "grant";
+};
+
 export type RuntimeSettings = {
   ticket_ttl_seconds: number;
   max_tickets: number;
@@ -202,6 +207,15 @@ export const controlPlane = {
   logout: () => request<{ authenticated: false }>("/v1/logout", { method: "POST" }),
   listAssets: async () => (await request<Asset[]>("/v1/assets")).map(normalizeAsset),
   getAsset: async (assetId: string) => normalizeAsset(await request<Asset>(`/v1/assets/${assetId}`)),
+  listGrants: (assetId: string) => request<AssetGrant[]>(`/v1/assets/${assetId}/grants`),
+  saveOwners: (assetId: string, owners: string[]) => request<{ asset_id: string; owners: string[] }>(`/v1/assets/${assetId}/owners`, {
+    method: "PUT",
+    body: JSON.stringify({ owners }),
+  }),
+  saveGrants: (assetId: string, grants: AssetGrant[]) => request<{ asset_id: string; grants: AssetGrant[] }>(`/v1/assets/${assetId}/grants`, {
+    method: "PUT",
+    body: JSON.stringify({ grants }),
+  }),
   getSchema: (assetId: string) => request<AssetSchema>(`/v1/assets/${assetId}/schema`),
   listRules: (assetId: string) => request<PolicyRule[]>(`/v1/assets/${assetId}/policy-rules`),
   listHistory: () => request<PolicyVersion[]>("/v1/policy-versions"),

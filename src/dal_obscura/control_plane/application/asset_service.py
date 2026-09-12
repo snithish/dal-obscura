@@ -12,7 +12,7 @@ from typing import Any
 from uuid import UUID
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
-from dal_obscura.control_plane.application.errors import ValidationFailure
+from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control_plane.application.policy_service import ensure_asset_capability
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 
@@ -89,6 +89,7 @@ def replace_asset_owners(
     store: PublicationStore,
     asset_id: UUID,
     owners: list[str],
+    actor: ControlPlaneActor | None = None,
 ) -> list[str]:
     """Replaces owners for one governed asset.
 
@@ -98,7 +99,17 @@ def replace_asset_owners(
         ```
     """
 
-    return store.replace_asset_owners(asset_id=asset_id, owners=owners)
+    if actor is not None and not actor.platform_admin:
+        raise AuthorizationFailure("Only platform admins may replace asset owners.")
+    normalized = store.replace_asset_owners(asset_id=asset_id, owners=owners)
+    if actor is not None:
+        store.record_asset_audit_event(
+            asset_id=asset_id,
+            actor_principal=actor.principal,
+            action="asset.owners.replace",
+            details={"owner_count": len(normalized)},
+        )
+    return normalized
 
 
 def list_asset_grants(store: PublicationStore, asset_id: UUID) -> list[dict[str, str]]:
@@ -109,11 +120,20 @@ def replace_asset_grants(
     store: PublicationStore,
     asset_id: UUID,
     grants: list[dict[str, str]],
+    actor: ControlPlaneActor | None = None,
 ) -> list[dict[str, str]]:
     allowed = {"read", "edit", "publish", "grant"}
     if any(str(grant.get("capability")) not in allowed for grant in grants):
         raise ValidationFailure("Unsupported asset capability")
-    return store.replace_asset_grants(asset_id=asset_id, grants=grants)
+    normalized = store.replace_asset_grants(asset_id=asset_id, grants=grants)
+    if actor is not None:
+        store.record_asset_audit_event(
+            asset_id=asset_id,
+            actor_principal=actor.principal,
+            action="asset.grants.replace",
+            details={"grant_count": len(normalized)},
+        )
+    return normalized
 
 
 def replace_asset_schema_fields(
