@@ -1,0 +1,47 @@
+from __future__ import annotations
+
+from unittest.mock import Mock
+from uuid import uuid4
+
+from dal_obscura.control_plane.application import asset_service
+
+
+def test_owner_replacement_locks_before_read_and_write() -> None:
+    store = Mock()
+    store.list_asset_owners.return_value = []
+    store.replace_asset_owners.return_value = ["user:owner"]
+    asset_id = uuid4()
+
+    assert asset_service.replace_asset_owners(store, asset_id, ["user:owner"]) == ["user:owner"]
+
+    assert store.method_calls[:3] == [
+        ("lock_asset_for_publication", (asset_id,), {}),
+        ("list_asset_owners", (asset_id,), {}),
+        ("replace_asset_owners", (), {"asset_id": asset_id, "owners": ["user:owner"]}),
+    ]
+
+
+def test_grant_replacement_locks_before_write() -> None:
+    store = Mock()
+    store.replace_asset_grants.return_value = []
+    asset_id = uuid4()
+
+    assert asset_service.replace_asset_grants(store, asset_id, []) == []
+
+    assert store.method_calls == [
+        ("lock_asset_for_publication", (asset_id,), {}),
+        ("replace_asset_grants", (), {"asset_id": asset_id, "grants": []}),
+    ]
+
+
+def test_schema_admission_replacement_locks_before_write() -> None:
+    store = Mock()
+    store.replace_asset_schema_fields.return_value = []
+    asset_id = uuid4()
+
+    assert asset_service.replace_asset_schema_fields(store, asset_id, []) == []
+
+    assert store.method_calls == [
+        ("lock_asset_for_publication", (asset_id,), {}),
+        ("replace_asset_schema_fields", (), {"asset_id": asset_id, "fields": []}),
+    ]

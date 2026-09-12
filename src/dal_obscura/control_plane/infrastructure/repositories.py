@@ -351,12 +351,14 @@ class PublicationStore:
     ) -> UUID:
         catalog_record = self._catalog_by_name(cell_id=cell_id, tenant_id=tenant_id, name=catalog)
         existing = self._session.scalar(
-            select(AssetRecord).where(
+            select(AssetRecord)
+            .where(
                 AssetRecord.cell_id == cell_id,
                 AssetRecord.tenant_id == tenant_id,
                 AssetRecord.catalog_id == catalog_record.id,
                 AssetRecord.target == target,
             )
+            .with_for_update()
         )
         if existing is None:
             asset_id = uuid4()

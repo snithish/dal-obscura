@@ -128,6 +128,8 @@ def replace_asset_owners(
 
     if actor is not None and not actor.platform_admin:
         raise AuthorizationFailure("Only platform admins may replace asset owners.")
+    # Owner changes affect review validity and must serialize with publication.
+    store.lock_asset_for_publication(asset_id)
     existing_owners = store.list_asset_owners(asset_id)
     normalized = [owner.strip() for owner in owners if owner.strip()]
     if existing_owners and not normalized:
@@ -159,6 +161,9 @@ def replace_asset_grants(
     allowed = {"read", "edit", "publish", "grant"}
     if any(str(grant.get("capability")) not in allowed for grant in grants):
         raise ValidationFailure("Unsupported asset capability")
+    # Grants affect who may publish or review the asset.  Use the same row lock
+    # as draft and policy mutations so revocation ordered before activation wins.
+    store.lock_asset_for_publication(asset_id)
     normalized = store.replace_asset_grants(asset_id=asset_id, grants=grants)
     if actor is not None:
         store.record_asset_audit_event(
@@ -183,6 +188,9 @@ def replace_asset_schema_fields(
         ```
     """
 
+    # Admitted schema metadata participates in review identity and cannot race
+    # a publication candidate.
+    store.lock_asset_for_publication(asset_id)
     return store.replace_asset_schema_fields(asset_id=asset_id, fields=fields)
 
 
