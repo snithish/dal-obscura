@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `9fbeb51`.
+Implementation follow-up through `7fcf6b9`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -85,7 +85,10 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
 - X19 secure deployment and identity lifecycle: **not-started**.
 - X20 recovery and upgrades: **not-started**.
 - X21 performance/observability/test efficiency: **not-started**.
-- X22 exact-artifact CI: **not-started**.
+- X22 exact-artifact CI: **implementing**; the container publication job now
+  depends on a pinned governance-UI install/type-check/build lane. Artifact
+  digest, browser, provider, consumer, recovery, and mandatory-security gates
+  remain open.
 - X23 independent review/release decision: **not-started**.
 
 Next implementation action: continue X03 with PostgreSQL barrier/CAS evidence and
@@ -173,6 +176,21 @@ return the stable redacted validation response at the HTTP boundary.
   evidence remain open.
 - Next permitted packet: X03 PostgreSQL CAS/barrier slice, then X06 evolution
   rules.
+
+### X22 governance UI CI gate — `7fcf6b9`
+
+- State: implementing.
+- Behavior: CI installs `apps/governance-ui` from its pinned pnpm lockfile,
+  runs the TypeScript build, and blocks image scanning/publication until that
+  lane passes.
+- Green evidence: local `pnpm --dir apps/governance-ui check` and `build` pass;
+  workflow syntax was updated without changing runtime behavior.
+- Remaining gaps: exact tested image/server/UI digest promotion, browser and
+  accessibility journeys, provider/consumer/recovery lanes, and mandatory
+  security-failure blocking remain open under X22.
+- Pickle compatibility: unchanged.
+- Next permitted packet: X03 PostgreSQL barrier evidence and X06 evolution rules;
+  X22 remains a later release gate.
 
 ## Latest evidence entry
 
