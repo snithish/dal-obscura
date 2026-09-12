@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `69375e4` (next X08 slice uncommitted).
+Implementation follow-up through `0fe6471` (next X12 slice uncommitted).
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -59,8 +59,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   Full editor, activation, accessibility, and browser evidence remain open.
 - X11 public SDK: **implementing**; versioned contracts are present under
   `src/dal_obscura/common/plugin_api`, but independent wheel extraction remains open.
-- X12 admitted loading and Iceberg adapter: **implementing**; allowlisted entry-point
-  registry tests pass, while built-in Iceberg routing and artifact-lock verification
+- X12 admitted loading and Iceberg adapter: **implementing**; entry-point loading now
+  fails closed when a request names an unallowlisted installation, with registry
+  regression coverage. Built-in Iceberg routing and artifact-lock verification
   remain open.
 - X13 plugin routing and migration: **not-started**.
 - X14 plugin UI: **not-started**.

@@ -50,6 +50,19 @@ def test_admitted_entry_point_loads_only_after_lock_match() -> None:
     assert registry.load("catalog", "iceberg.sql") == {"name": "iceberg.sql"}
 
 
+def test_unapproved_entry_point_cannot_be_loaded_on_request() -> None:
+    registry = PluginRegistry(
+        allowlist={},
+        entry_points_fn=lambda: _EntryPoints(
+            [_entry("unapproved", "dal_obscura.catalogs.v1")]
+        ),
+        factory_loader=lambda _: pytest.fail("unapproved factory must not load"),
+    )
+
+    with pytest.raises(PluginAdmissionError, match="not admitted"):
+        registry.load("catalog", "unapproved")
+
+
 def test_lock_mismatch_and_duplicate_ids_fail_closed() -> None:
     mismatched = PluginRegistry(
         allowlist={("catalog", "iceberg.sql"): ("plugin-wheel", "9.9.9", "1")},

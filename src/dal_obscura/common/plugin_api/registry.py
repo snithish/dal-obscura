@@ -77,7 +77,8 @@ class PluginRegistry:
         matches = [entry for entry in self._select(group) if entry.name == plugin_id]
         if len(matches) != 1:
             raise PluginAdmissionError(f"Plugin is not uniquely installed: {kind}:{plugin_id}")
-        self.discover()
+        if (kind, plugin_id) not in self.discover():
+            raise PluginAdmissionError(f"Plugin is not admitted: {kind}:{plugin_id}")
         return self._factory_loader(matches[0])
 
     def _select(self, group: str) -> list[metadata.EntryPoint]:
