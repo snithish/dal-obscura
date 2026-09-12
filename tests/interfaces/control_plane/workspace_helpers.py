@@ -29,12 +29,6 @@ def _client() -> TestClient:
     return TestClient(create_app(session_factory(engine), admin_token="test-admin"))
 
 
-def _client() -> TestClient:
-    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
-    migrate_config_store(engine)
-    return TestClient(create_app(session_factory(engine), admin_token="test-admin"))
-
-
 def _active_policy_versions(factory) -> dict[tuple[str, str], int]:
     with factory() as session:
         active = session.scalar(select(ActivePublicationRecord))
