@@ -123,6 +123,7 @@ def main() -> None:
         ),
         verify_client=runtime_config.tls_verify_client,
         root_certificates=_tls_root_certificates(runtime_config.tls_client_ca),
+        health_check=lambda: _published_runtime_readiness(session_maker, runtime_config),
     )
     server.serve()
 
@@ -153,12 +154,7 @@ def _start_health_server(
     health_socket = _bind_health_socket(runtime_config.health_host, runtime_config.health_port)
 
     def readiness() -> dict[str, object]:
-        with session_maker() as health_session:
-            store = PublishedConfigStore(
-                health_session,
-                cell_id=runtime_config.cell_id,
-            )
-            return published_runtime_readiness(store)
+        return _published_runtime_readiness(session_maker, runtime_config)
 
     app = create_health_app(readiness=readiness)
     config = uvicorn.Config(
@@ -174,6 +170,18 @@ def _start_health_server(
         daemon=True,
     )
     thread.start()
+
+
+def _published_runtime_readiness(
+    session_maker: sessionmaker[Session],
+    runtime_config: DataPlaneRuntimeConfig,
+) -> dict[str, object]:
+    with session_maker() as health_session:
+        store = PublishedConfigStore(
+            health_session,
+            cell_id=runtime_config.cell_id,
+        )
+        return published_runtime_readiness(store)
 
 
 def _bind_health_socket(host: str, port: int) -> socket.socket:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable, Mapping
 
 import pyarrow.flight as flight
 
@@ -45,6 +46,7 @@ class DataAccessFlightService(flight.FlightServerBase):
         tls_certificates: list[flight.CertKeyPair] | None = None,
         verify_client: bool = False,
         root_certificates: bytes | None = None,
+        health_check: Callable[[], Mapping[str, object]] | None = None,
     ) -> None:
         super().__init__(
             location,
@@ -56,6 +58,7 @@ class DataAccessFlightService(flight.FlightServerBase):
         self._get_schema_use_case = get_schema_use_case
         self._plan_access_use_case = plan_access_use_case or _PlanReadAdapter(access_flow)
         self._fetch_stream_use_case = fetch_stream_use_case or _FetchReadAdapter(access_flow)
+        self._health_check = health_check
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def list_actions(self, context: flight.ServerCallContext) -> list[flight.ActionType]:
@@ -70,7 +73,8 @@ class DataAccessFlightService(flight.FlightServerBase):
         del context
         if action.type != HEALTH_ACTION:
             raise flight.FlightInternalError(f"Unsupported action: {action.type}")
-        body = json.dumps({"status": "ok", "service": "data-plane"}, separators=(",", ":"))
+        payload = _health_payload(self._health_check, self._logger)
+        body = json.dumps(payload, separators=(",", ":"))
         return [flight.Result(body.encode("utf-8"))]
 
     def get_schema(
@@ -167,6 +171,29 @@ class DataAccessFlightService(flight.FlightServerBase):
     def _log_extra(self, **extra: object) -> dict[str, object]:
         """Adds process-level telemetry to every structured log line."""
         return {"resident_memory_bytes": get_resident_memory_bytes(), **extra}
+
+
+def _health_payload(
+    health_check: Callable[[], Mapping[str, object]] | None,
+    logger: logging.Logger,
+) -> dict[str, object]:
+    """Builds the Flight health response and fails closed on readiness errors."""
+
+    payload: dict[str, object] = {"status": "ok", "service": "data-plane"}
+    if health_check is None:
+        return payload
+    try:
+        observed = dict(health_check())
+    except Exception as exc:
+        logger.warning("flight_health_check_failed", extra={"reason": str(exc)})
+        raise flight.FlightUnavailableError("Data plane is not ready") from exc
+    if observed.get("status") != "ready":
+        logger.warning("flight_health_check_not_ready", extra={"health": observed})
+        raise flight.FlightUnavailableError("Data plane is not ready")
+    payload["checks"] = observed.get("checks", {})
+    if observed.get("publication_id"):
+        payload["publication_id"] = observed["publication_id"]
+    return payload
 
 
 class _PlanReadAdapter:
