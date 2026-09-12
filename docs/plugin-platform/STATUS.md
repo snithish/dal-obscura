@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `395122d`.
+Implementation follow-up through `90934cf`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -370,6 +370,22 @@ remain open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: continue X03 PostgreSQL transaction barriers and X10
   staged runtime/auth activation semantics.
+
+### X10 settings generation state — `90934cf`
+
+- State: implementing.
+- Behavior: the Settings UI now reports the serving configuration generation,
+  its asset/catalog scope, and the number of staged generations waiting for
+  explicit activation. Runtime and identity edits therefore have visible
+  staged-versus-serving state instead of implying an immediate worker change.
+- Green evidence: direct TypeScript check, Vite production build, and
+  `git diff --check` pass.
+- Remaining gaps: backend revisioned runtime/auth activation and bootstrap
+  recovery, browser/a11y proof, PostgreSQL barriers, real IdP/session evidence,
+  and release artifact validation remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: implement staged runtime/auth activation semantics or
+  continue X03 PostgreSQL transaction barriers.
 
 The combined control-plane, catalog, schema, publication, migration, plugin, and
 published-config boundary suite passed at 100% after the budget change.
