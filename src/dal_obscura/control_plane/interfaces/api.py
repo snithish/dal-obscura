@@ -106,7 +106,7 @@ def create_app(
     oidc_nonce_actor_resolver: OidcNonceActorResolver | None = None,
     require_review: bool = False,
     catalog_egress_allowlist: tuple[str, ...] = (),
-    bootstrap_enabled: bool = True,
+    bootstrap_enabled: bool | None = None,
 ) -> FastAPI:
     """Creates the control-plane FastAPI app with all workspace routes installed.
 
@@ -158,7 +158,7 @@ def create_app(
         require_review=require_review,
         review_secret=admin_token if require_review else "",
         catalog_egress_allowlist=catalog_egress_allowlist,
-        bootstrap_enabled=bootstrap_enabled,
+        bootstrap_enabled=(not require_review if bootstrap_enabled is None else bootstrap_enabled),
         allowed_origins=cors_origins,
         oidc_nonce_actor_resolver=oidc_nonce_actor_resolver,
         authorization_code_exchange=lambda config, code, verifier: _exchange_authorization_code(

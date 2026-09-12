@@ -156,6 +156,7 @@ def test_production_publication_requires_current_server_review(monkeypatch) -> N
             session_factory(engine),
             admin_token="review-secret-for-test",
             require_review=True,
+            bootstrap_enabled=True,
         )
     )
     client.put(
@@ -260,6 +261,7 @@ def test_explicit_empty_draft_is_reviewable_and_publishable_as_deny_all(monkeypa
             session_factory(engine),
             admin_token="test-admin",
             require_review=True,
+            bootstrap_enabled=True,
         )
     )
     asset = _provision_draft(client)
