@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `d62392e`.
+Implementation follow-up through `df8c98b`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -83,8 +83,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   fails closed when a request names an unallowlisted installation, with registry
   regression coverage. Built-in Iceberg routing and artifact-lock verification
   now has an explicit immutable built-in registration and data-plane startup
-  admission path. Artifact-lock verification and full SDK adapter routing remain
-  open.
+  admission path. Static descriptor identity/API checks and optional descriptor /
+  distribution digest locks are enforced before factory import. Full SDK adapter
+  routing and clean-wheel artifact evidence remain open.
 - X13 plugin routing and migration: **implementing**; immutable compiled asset
   manifests now record explicit catalog and table-format adapter identities, and
   the data plane rejects explicit bindings it cannot honor before provider setup.
@@ -256,6 +257,24 @@ option name (`839c16f`); no raw credential field is exposed.
 - Pickle compatibility: unchanged.
 - Next permitted packet: complete artifact/descriptor lock validation before
   adding external REST or manifest/Parquet providers.
+
+### X12 descriptor and artifact lock validation — `df8c98b`
+
+- State: implementing.
+- Behavior: entry-point admission supports an optional static descriptor loader
+  and validates kind, ID, API version, distribution, and version before import.
+  Extended five-part locks can additionally pin the canonical descriptor digest
+  and a deterministic digest of installed distribution files; malformed lock
+  records fail closed. Existing three-part distribution/version/API locks remain
+  compatible.
+- Green evidence: `tests/plugin_platform/test_registry.py` (11 passed), Ruff, Ty,
+  and `git diff --check` pass.
+- Remaining gaps: production-generated lock files, clean wheel artifact
+  provenance, editable-install detection, external SDK factories, and live
+  provider/browser/consumer gates remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: generate and verify immutable lock artifacts in the build
+  lane before qualifying an external provider.
 
 X11 package check: `tests/plugin_platform/test_plugin_api_package.py` passes and
 the package source compiles without importing the service distribution. Building
