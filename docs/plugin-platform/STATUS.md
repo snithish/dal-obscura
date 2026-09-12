@@ -1,13 +1,13 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `6fbb028`.
+Implementation follow-up through `b4b068c`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
-This task produced review/planning documents only. No runtime, UI, plugin, dependency,
-database, or pickle implementation has changed as part of this review. Local probes
-are recorded in [the review](IMPLEMENTATION_REVIEW.md). Earlier implementation
-evidence remains in [the UI ledger](../ui-v2/EXECUTION_STATUS.md).
+This task began with review/planning documents and now includes incremental runtime,
+UI, and plugin-contract slices. Database migrations, external plugin wheels, and
+pickle serialization remain unchanged. Local probes are recorded in [the review](IMPLEMENTATION_REVIEW.md).
+Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_STATUS.md).
 
 ## State meanings
 
@@ -37,11 +37,15 @@ evidence remains in [the UI ledger](../ui-v2/EXECUTION_STATUS.md).
 - X05 canonical bounded schemas: **implemented-unverified**; canonical Arrow schema
   encoding includes nested metadata/IDs and direct loader bounds. Migration and all
   entry-route/byte-budget evidence remain open.
-- X06 safe schema evolution: **not-started**.
+- X06 safe schema evolution: **implementing**; typed evaluation paths now preserve
+  literal dotted names. Persisted admitted field identities and evolution policy
+  remain open.
 - X07 configuration/secrets/IO: **implementing**; nested dynamic class-loader options
   are rejected. Typed provider configs, shared secret resolution, and IO enforcement
   remain open.
-- X08 budgets and atomic reload: **not-started**.
+- X08 budgets and atomic reload: **implementing**; real discovery now routes through
+  pre-materialization namespace/table caps and uses deque traversal. Provider page
+  bounds, deadlines, cancellation, and atomic reload remain open.
 - X09 UI lifecycle: **implemented-unverified**; initial-load epoch and synchronous
   logout fencing are fixed. Deferred browser tests and save/preview operation epochs
   remain open.
