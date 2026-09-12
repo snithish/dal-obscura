@@ -12,3 +12,34 @@
 .rule-list button.selected { background: #e3f2eb; border-color: #207565; }
 .rule-list small { display: block; overflow: hidden; max-width: 130px; margin-top: 3px; color: #61736e; text-overflow: ellipsis; white-space: nowrap; }
 .asset-summary select { max-width: 380px; margin-left: 7px; border: 1px solid #bbc8c0; border-radius: 4px; padding: 6px; background: #fff; color: inherit; }
+.management-view { padding: 38px 0; max-width: 1120px; }
+.management-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; margin-bottom: 24px; }
+.management-head h2 { margin-bottom: 8px; }
+.table-wrap { overflow-x: auto; background: #fffefa; border: 1px solid #d7dcd5; border-radius: 7px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { padding: 13px 15px; text-align: left; border-bottom: 1px solid #e1e6e0; vertical-align: top; }
+th { color: #61736e; text-transform: uppercase; letter-spacing: .08em; font-size: 11px; }
+td small { display: block; color: #61736e; margin-top: 4px; }
+.form-card { background: #fffefa; border: 1px solid #d7dcd5; border-radius: 7px; padding: 20px; margin-bottom: 18px; }
+.form-card h3 { margin-bottom: 16px; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 16px; }
+.form-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.form-grid label { display: grid; gap: 6px; color: #52635e; font-size: 13px; font-weight: 700; }
+.form-grid input { width: 100%; border: 1px solid #bbc8c0; border-radius: 4px; padding: 9px 10px; background: #fff; color: inherit; font-weight: 400; }
+.form-card .notice { margin: 16px 0 0; }
+.card-list { display: grid; gap: 10px; margin-bottom: 18px; }
+.management-card { display: flex; justify-content: space-between; align-items: center; gap: 14px; background: #fffefa; border: 1px solid #d7dcd5; border-radius: 7px; padding: 16px 18px; }
+.management-card h3 { margin: 0 0 3px; text-transform: none; letter-spacing: 0; font-size: 17px; }
+.management-card p { margin: 0; }
+.metric-grid { display: grid; grid-template-columns: repeat(5, minmax(100px, 1fr)); gap: 10px; margin: 25px 0 34px; }
+.metric-card { display: grid; gap: 5px; padding: 17px; background: #fffefa; border: 1px solid #d7dcd5; border-radius: 7px; }
+.metric-card strong { font: 500 29px Georgia, serif; color: #174f47; }
+.metric-card span { color: #61736e; font-size: 12px; }
+.activity-title { margin-top: 14px; }
+.activity-list, .provider-list { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 2px; }
+.activity-list li, .provider-list li { display: flex; align-items: center; gap: 10px; padding: 13px 0; border-bottom: 1px solid #e1e6e0; }
+.activity-list li > div, .provider-list li > div { display: grid; gap: 3px; flex: 1; }
+.activity-list small, .provider-list small { color: #61736e; }
+.activity-list time { color: #61736e; font-size: 12px; }
+.field-tree.nested { margin: 0 0 0 8px; }
+@media (max-width: 760px) { .management-head { flex-direction: column; } .form-grid, .form-grid.three, .metric-grid { grid-template-columns: 1fr; } .management-card { align-items: flex-start; flex-direction: column; } table { min-width: 620px; } }

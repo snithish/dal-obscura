@@ -88,6 +88,47 @@ export type UiAuthConfig = {
   login_shortcuts?: Array<{ label: string; login_hint: string; demo_login_path?: string }>;
 };
 
+export type PolicyVersion = {
+  asset_id: string;
+  asset_name: string;
+  catalog: string;
+  target: string;
+  policy_version: number;
+  active: boolean;
+  created_at: string;
+};
+
+export type Catalog = {
+  id: string;
+  name: string;
+  module: string;
+  options: Record<string, unknown>;
+};
+
+export type RuntimeSettings = {
+  ticket_ttl_seconds: number;
+  max_tickets: number;
+  max_ticket_exchanges: number;
+};
+
+export type AuthProvider = {
+  id: string;
+  ordinal: number;
+  module: string;
+  args: Record<string, unknown>;
+  enabled: boolean;
+};
+
+export type WorkspaceSummary = {
+  catalog_count: number;
+  asset_count: number;
+  unowned_asset_count: number;
+  missing_policy_count: number;
+  draft_change_count: number;
+  runtime_configured: boolean;
+  enabled_auth_provider_count: number;
+};
+
 type RawPreview = {
   decision: "allow" | "deny";
   visible_columns: string[];
@@ -131,6 +172,24 @@ export const controlPlane = {
   getAsset: async (assetId: string) => normalizeAsset(await request<Asset>(`/v1/assets/${assetId}`)),
   getSchema: (assetId: string) => request<AssetSchema>(`/v1/assets/${assetId}/schema`),
   listRules: (assetId: string) => request<PolicyRule[]>(`/v1/assets/${assetId}/policy-rules`),
+  listHistory: () => request<PolicyVersion[]>("/v1/policy-versions"),
+  listCatalogs: () => request<Catalog[]>("/v1/catalogs"),
+  discoverCatalogTables: (name: string) => request<{ catalog: string; tables: Array<Record<string, unknown>> }>(`/v1/catalogs/${encodeURIComponent(name)}/tables`),
+  getRuntimeSettings: () => request<RuntimeSettings | null>("/v1/settings/runtime"),
+  getAuthProviders: () => request<AuthProvider[]>("/v1/settings/auth-providers"),
+  getSummary: () => request<WorkspaceSummary>("/v1/workspace/summary"),
+  saveCatalog: (name: string, options: Record<string, unknown>) => request<{ id: string; name: string }>(`/v1/catalogs/${encodeURIComponent(name)}`, {
+    method: "PUT",
+    body: JSON.stringify({ module: "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog", options }),
+  }),
+  saveRuntimeSettings: (settings: RuntimeSettings) => request<RuntimeSettings>("/v1/settings/runtime", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  }),
+  publishAsset: (assetId: string, expectedDraftRevision?: number) => request<{ asset_id: string; policy_version: number }>(`/v1/assets/${assetId}/policy-versions`, {
+    method: "POST",
+    body: JSON.stringify(expectedDraftRevision === undefined ? {} : { expected_draft_revision: expectedDraftRevision }),
+  }),
   getDraft: (assetId: string) => request<PolicyDraft>(`/v1/assets/${assetId}/draft`),
   saveDraft: (assetId: string, expectedRevision: number, rules: PolicyRule[]) =>
     request<PolicyDraft>(`/v1/assets/${assetId}/draft`, {
