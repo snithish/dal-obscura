@@ -608,6 +608,7 @@ class ProvisioningService:
         *,
         expected_publication_id: UUID | None = None,
         actor_principal: str = "system",
+        audit_workspace: bool = False,
     ) -> dict[str, str]:
         return policy_version_service.activate_publication(
             self._store,
@@ -615,6 +616,7 @@ class ProvisioningService:
             publication_id,
             expected_publication_id=expected_publication_id,
             actor_principal=actor_principal,
+            audit_workspace=audit_workspace,
         )
 
     def _required_workspace_context(self):

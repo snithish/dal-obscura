@@ -228,5 +228,6 @@ def activate_workspace_publication(
         publication_id=publication_id,
         expected_publication_id=expected_publication_id,
         actor_principal=actor_principal,
+        audit_workspace=True,
     )
     return {"publication_id": activated["publication_id"]}

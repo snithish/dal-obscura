@@ -436,6 +436,7 @@ def activate_publication(
     *,
     expected_publication_id: UUID | None = None,
     actor_principal: str = "system",
+    audit_workspace: bool = False,
 ) -> dict[str, str]:
     """Marks a publication active for one cell.
 
@@ -454,7 +455,7 @@ def activate_publication(
             expected_publication_id=expected_publication_id,
         )
     context_tenant = store.get_default_workspace_context()
-    if context_tenant is not None:
+    if audit_workspace and context_tenant is not None and context_tenant.cell_id == cell_id:
         store.record_workspace_audit_event(
             cell_id=cell_id,
             tenant_id=context_tenant.tenant_id,
