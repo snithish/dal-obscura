@@ -17,6 +17,35 @@ const maskOptions: Array<{ type: Mask["type"]; label: string; needsValue?: boole
   { type: "hash", label: "Hash" }, { type: "email", label: "Email" },
   { type: "keep_last", label: "Keep last", needsValue: true }, { type: "default", label: "Default", needsValue: true },
 ];
+type PluginConfigField = { name: string; type: string; required: boolean; secret: boolean; options?: string[] };
+const defaultCatalogFields: PluginConfigField[] = [
+  { name: "uri", type: "string", required: true, secret: false },
+  { name: "warehouse", type: "string", required: false, secret: false },
+  { name: "user", type: "string", required: false, secret: false },
+  { name: "password", type: "secret_reference", required: false, secret: true },
+];
+
+function configFields(plugin?: PluginDescriptor): PluginConfigField[] {
+  const raw = plugin?.config_schema?.fields;
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const value = item as Record<string, unknown>;
+    const name = typeof value.name === "string" ? value.name.trim() : "";
+    const type = typeof value.type === "string" ? value.type : "string";
+    if (!name || name.length > 128 || !/^[A-Za-z][A-Za-z0-9_.-]*$/.test(name)) return [];
+    const options = Array.isArray(value.options) ? value.options.filter((option): option is string => typeof option === "string" && option.length <= 128) : undefined;
+    return [{ name, type, required: value.required === true, secret: value.secret === true || type === "secret_reference", options }];
+  });
+}
+
+function configFieldLabel(name: string): string {
+  if (name === "uri") return "SQL catalog URI";
+  if (name === "user") return "Database username";
+  if (name === "password") return "Password secret reference";
+  return name.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 const newRule = (field: string, ordinal: number): PolicyRule => ({ ordinal, effect: "allow", principals: [], columns: field ? [field] : [], masks: {}, row_filter: null });
 
 function App() {
@@ -561,21 +590,36 @@ function ActivityView({ history, events, summary, observations }: { history: Pol
 
 function ConnectionsView({ catalogs, publications, plugins, canActivate, onReload }: { catalogs: Catalog[]; publications: WorkspacePublication[]; plugins: PluginDescriptor[]; canActivate: boolean; onReload: () => void }) {
   const [name, setName] = useState("");
-  const [uri, setUri] = useState("");
-  const [username, setUsername] = useState("");
-  const [passwordSecret, setPasswordSecret] = useState("");
+  const catalogPlugins = plugins.filter((plugin) => plugin.kind === "catalog");
+  const [pluginId, setPluginId] = useState(catalogPlugins[0]?.plugin_id ?? "iceberg.sql");
+  const selectedPlugin = catalogPlugins.find((plugin) => plugin.plugin_id === pluginId);
+  const fields = configFields(selectedPlugin);
+  const effectiveFields = fields.length ? fields : (pluginId === "iceberg.sql" ? defaultCatalogFields : []);
+  const [config, setConfig] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
   const [tables, setTables] = useState<Array<Record<string, unknown>>>([]);
   const [discoveredCatalog, setDiscoveredCatalog] = useState("");
   const [diagnostics, setDiagnostics] = useState<Record<string, CatalogDiagnostic>>({});
   const [diagnosing, setDiagnosing] = useState("");
   const [publishing, setPublishing] = useState(false);
+  useEffect(() => {
+    setPluginId((current) => catalogPlugins.some((plugin) => plugin.plugin_id === current) ? current : (catalogPlugins[0]?.plugin_id ?? "iceberg.sql"));
+  }, [plugins]);
+  useEffect(() => {
+    setConfig((current) => Object.fromEntries(effectiveFields.map((field) => [field.name, current[field.name] ?? ""])));
+  }, [pluginId]);
   async function save() {
-    if (!name.trim() || !uri.trim()) return setMessage("Connection name and catalog URI are required.");
-    const options: Record<string, unknown> = { type: "sql", uri: uri.trim() };
-    if (username.trim()) options.user = username.trim();
-    if (passwordSecret.trim()) options.password = { secret: passwordSecret.trim() };
-    try { await controlPlane.saveCatalog(name.trim(), options); setMessage("Connection saved. Discovery remains bounded to this configured catalog."); setName(""); setUri(""); setUsername(""); setPasswordSecret(""); onReload(); } catch { setMessage("Connection was rejected by the control plane."); }
+    if (!name.trim()) return setMessage("Connection name is required.");
+    if (pluginId !== "iceberg.sql") return setMessage("This adapter is advertised but its write route is not enabled in this server.");
+    const missing = effectiveFields.filter((field) => field.required && !config[field.name]?.trim());
+    if (missing.length) return setMessage(`Required configuration missing: ${missing.map((field) => field.name).join(", ")}.`);
+    const options: Record<string, unknown> = { type: "sql" };
+    for (const field of effectiveFields) {
+      const value = config[field.name]?.trim();
+      if (!value) continue;
+      options[field.name] = field.secret ? { secret: value } : value;
+    }
+    try { await controlPlane.saveCatalog(name.trim(), options); setMessage("Connection saved. Discovery remains bounded to this configured catalog."); setName(""); setConfig({}); onReload(); } catch { setMessage("Connection was rejected by the control plane."); }
   }
   async function discover(catalog: string) {
     try { setDiscoveredCatalog(catalog); setTables((await controlPlane.discoverCatalogTables(catalog)).tables); setMessage(`Loaded table inventory for ${catalog}.`); } catch { setTables([]); setMessage("Discovery failed; source credentials and endpoint policy were not changed."); }
@@ -609,7 +653,7 @@ function ConnectionsView({ catalogs, publications, plugins, canActivate, onReloa
     try { await controlPlane.activateWorkspacePublication(id, current); setMessage("Configuration snapshot activated for new data-plane requests."); onReload(); } catch (error) { setMessage((error as { status?: number })?.status === 409 ? "Activation conflict: another administrator changed the serving generation. Refresh to compare impact before retrying." : "Activation was rejected; the current generation remains active. Refresh before retrying."); } finally { setPublishing(false); }
   }
   const pluginCards = plugins.length > 0 && <div className="form-card"><h3>Admitted adapters</h3><div className="plugin-list">{plugins.map((plugin) => <article className="plugin-card" key={`${plugin.kind}:${plugin.plugin_id}`}><div><strong>{plugin.display_name}</strong><small>{plugin.kind === "catalog" ? "Catalog" : "Table format"} · {plugin.plugin_id} · v{plugin.version}</small></div><div className="capability-list">{plugin.capabilities.map((capability) => <span className="pill" key={capability}>{capability.replaceAll("_", " ")}</span>)}</div></article>)}</div></div>;
-  return <section className="management-view"><div className="management-head"><div><span className="eyebrow">CONNECTIONS</span><h2>Catalog connections</h2><p className="muted">Choose from adapters admitted by the control plane. Credentials stay in server configuration and are never rendered.</p></div><button className="secondary" onClick={onReload}>Refresh</button></div>{pluginCards}<div className="form-card"><h3>Add or update catalog</h3><div className="form-grid"><label>Name<input value={name} onChange={(event) => setName(event.target.value)} placeholder="analytics" /></label><label>SQL catalog URI<input value={uri} onChange={(event) => setUri(event.target.value)} placeholder="postgresql+psycopg://catalog.internal:5432/catalog" type="text" /></label><label>Database username <span className="muted">(optional)<input value={username} onChange={(event) => setUsername(event.target.value)} placeholder="catalog_reader" /></span></label><label>Password secret reference <span className="muted">(optional)<input value={passwordSecret} onChange={(event) => setPasswordSecret(event.target.value)} placeholder="prod/catalog/password" /></span></label></div><p className="help connection-note">Use a URI without userinfo or query credentials. The password field is a name resolved by the deployment secret provider; never paste a password or token here.</p><button className="primary" onClick={() => void save()}>Save connection</button>{message && <p className="notice">{message}</p>}</div>{canActivate && <div className="form-card"><div className="management-head"><div><h3>Configuration generations</h3><p className="help">Catalog, runtime, identity, and asset drafts become data-plane state only after an explicit snapshot activation.</p></div><button className="primary" disabled={publishing} onClick={() => void createPublication()}>{publishing ? "Working…" : "Create snapshot"}</button></div>{publications.length ? <div className="table-wrap"><table><thead><tr><th>Generation</th><th>State</th><th>Impact</th><th>Manifest</th><th>Created</th><th>Action</th></tr></thead><tbody>{publications.map((publication) => <tr key={publication.id}><td><code>{publication.id.slice(0, 12)}</code></td><td>{publication.active ? "Active" : "Staged"}</td><td>{publication.asset_count} assets · {publication.catalog_count} catalogs</td><td><code>{publication.manifest_hash.slice(0, 12)}</code></td><td>{new Date(publication.created_at).toLocaleString()}</td><td>{publication.active ? <span className="pill">Serving</span> : <button className="secondary compact" disabled={publishing} onClick={() => void activatePublication(publication.id)}>Activate</button>}</td></tr>)}</tbody></table></div> : <p className="muted">No staged generations exist yet.</p>}</div>}{catalogs.length ? <div className="card-list">{catalogs.map((catalog) => { const diagnostic = diagnostics[catalog.name]; return <article className="management-card" key={catalog.id}><div><h3>{catalog.name}</h3><p className="muted">Iceberg catalog adapter</p>{diagnostic && <p className={diagnostic.status === "ready" ? "diagnostic ready" : "diagnostic unavailable"} role="status">{diagnostic.message}{diagnostic.table_count !== undefined ? ` · ${diagnostic.table_count} tables` : ""}</p>}</div><div className="card-actions"><button className="secondary" disabled={diagnosing === catalog.name} onClick={() => void diagnose(catalog.name)}>{diagnosing === catalog.name ? "Checking…" : "Check connection"}</button><button className="secondary" onClick={() => void discover(catalog.name)}>Discover tables</button></div></article>; })}</div> : <div className="empty-result"><strong>No catalogs configured</strong><p>Connect an Iceberg catalog to begin asset onboarding.</p></div>}{tables.length > 0 && <div className="table-wrap"><table><thead><tr><th>Table</th><th>Backend</th><th>Governed</th><th>Action</th></tr></thead><tbody>{tables.map((table, index) => <tr key={String(table.name ?? index)}><td>{String(table.name ?? "Unknown")}</td><td>{String(table.backend ?? "iceberg")}</td><td>{table.governed ? "Yes" : "No"}</td><td>{table.governed ? <span className="pill">Registered</span> : <button className="secondary compact" onClick={() => void govern(discoveredCatalog, table)}>Govern table</button>}</td></tr>)}</tbody></table></div>}</section>;
+  return <section className="management-view"><div className="management-head"><div><span className="eyebrow">CONNECTIONS</span><h2>Catalog connections</h2><p className="muted">Choose from adapters admitted by the control plane. Credentials stay in server configuration and are never rendered.</p></div><button className="secondary" onClick={onReload}>Refresh</button></div>{pluginCards}<div className="form-card"><h3>Add or update catalog</h3><div className="form-grid"><label>Name<input value={name} onChange={(event) => setName(event.target.value)} placeholder="analytics" /></label><>{catalogPlugins.length > 1 && <label>Catalog adapter<select value={pluginId} onChange={(event) => setPluginId(event.target.value)}>{catalogPlugins.map((plugin) => <option key={plugin.plugin_id} value={plugin.plugin_id}>{plugin.display_name || plugin.plugin_id}</option>)}</select></label>}{effectiveFields.map((field) => <label key={field.name}>{configFieldLabel(field.name)}{field.required ? "" : <span className="muted"> (optional)</span>}<input value={config[field.name] ?? ""} onChange={(event) => setConfig((current) => ({ ...current, [field.name]: event.target.value }))} placeholder={field.name === "uri" ? "postgresql+psycopg://catalog.internal:5432/catalog" : field.name === "password" ? "prod/catalog/password" : undefined} type={field.secret ? "password" : field.type === "number" ? "number" : "text"} /></label>)}</></div><p className="help connection-note">Use a URI without userinfo or query credentials. The password field is a name resolved by the deployment secret provider; never paste a password or token here.</p><button className="primary" onClick={() => void save()}>Save connection</button>{message && <p className="notice">{message}</p>}</div>{canActivate && <div className="form-card"><div className="management-head"><div><h3>Configuration generations</h3><p className="help">Catalog, runtime, identity, and asset drafts become data-plane state only after an explicit snapshot activation.</p></div><button className="primary" disabled={publishing} onClick={() => void createPublication()}>{publishing ? "Working…" : "Create snapshot"}</button></div>{publications.length ? <div className="table-wrap"><table><thead><tr><th>Generation</th><th>State</th><th>Impact</th><th>Manifest</th><th>Created</th><th>Action</th></tr></thead><tbody>{publications.map((publication) => <tr key={publication.id}><td><code>{publication.id.slice(0, 12)}</code></td><td>{publication.active ? "Active" : "Staged"}</td><td>{publication.asset_count} assets · {publication.catalog_count} catalogs</td><td><code>{publication.manifest_hash.slice(0, 12)}</code></td><td>{new Date(publication.created_at).toLocaleString()}</td><td>{publication.active ? <span className="pill">Serving</span> : <button className="secondary compact" disabled={publishing} onClick={() => void activatePublication(publication.id)}>Activate</button>}</td></tr>)}</tbody></table></div> : <p className="muted">No staged generations exist yet.</p>}</div>}{catalogs.length ? <div className="card-list">{catalogs.map((catalog) => { const diagnostic = diagnostics[catalog.name]; return <article className="management-card" key={catalog.id}><div><h3>{catalog.name}</h3><p className="muted">Iceberg catalog adapter</p>{diagnostic && <p className={diagnostic.status === "ready" ? "diagnostic ready" : "diagnostic unavailable"} role="status">{diagnostic.message}{diagnostic.table_count !== undefined ? ` · ${diagnostic.table_count} tables` : ""}</p>}</div><div className="card-actions"><button className="secondary" disabled={diagnosing === catalog.name} onClick={() => void diagnose(catalog.name)}>{diagnosing === catalog.name ? "Checking…" : "Check connection"}</button><button className="secondary" onClick={() => void discover(catalog.name)}>Discover tables</button></div></article>; })}</div> : <div className="empty-result"><strong>No catalogs configured</strong><p>Connect an Iceberg catalog to begin asset onboarding.</p></div>}{tables.length > 0 && <div className="table-wrap"><table><thead><tr><th>Table</th><th>Backend</th><th>Governed</th><th>Action</th></tr></thead><tbody>{tables.map((table, index) => <tr key={String(table.name ?? index)}><td>{String(table.name ?? "Unknown")}</td><td>{String(table.backend ?? "iceberg")}</td><td>{table.governed ? "Yes" : "No"}</td><td>{table.governed ? <span className="pill">Registered</span> : <button className="secondary compact" onClick={() => void govern(discoveredCatalog, table)}>Govern table</button>}</td></tr>)}</tbody></table></div>}</section>;
 }
 
 function SettingsView({ runtime, providers, publications, onReload }: { runtime?: RuntimeSettings | null; providers: AuthProvider[]; publications: WorkspacePublication[]; onReload: () => void }) {

@@ -33,7 +33,7 @@ def create_builtin_plugin_registry() -> PluginRegistry:
             "fields": [
                 {"name": "uri", "type": "string", "required": True, "secret": False},
                 {"name": "warehouse", "type": "string", "required": False, "secret": False},
-                {"name": "username", "type": "string", "required": False, "secret": False},
+                {"name": "user", "type": "string", "required": False, "secret": False},
                 {
                     "name": "password",
                     "type": "secret_reference",
@@ -61,4 +61,3 @@ def create_builtin_plugin_registry() -> PluginRegistry:
     )
     registry.reload()
     return registry
-
