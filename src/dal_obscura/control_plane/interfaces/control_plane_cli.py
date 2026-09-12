@@ -73,6 +73,9 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
             oidc_nonce_actor_resolver=_ui_nonce_resolver(values),
             require_review=values.get("DAL_OBSCURA_CONTROL_PLANE_PROFILE", "local").strip().lower()
             == "production",
+            catalog_egress_allowlist=_csv(
+                values.get("DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST", "")
+            ),
         )
     except (ConfigStoreSchemaError, ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)
@@ -153,6 +156,8 @@ def _validate_profile(
     origins = _csv(values.get("DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS", ""))
     if not origins or any(not origin.startswith("https://") for origin in origins):
         raise ValueError("Production requires at least one HTTPS CORS origin")
+    if not _csv(values.get("DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST", "")):
+        raise ValueError("Production requires an explicit catalog egress allowlist")
     if any(
         _optional(values, name)
         for name in (

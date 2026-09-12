@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+from fastapi.testclient import TestClient
+
+from dal_obscura.common.config_store.db import (
+    create_engine_from_url,
+    migrate_config_store,
+    session_factory,
+)
+from dal_obscura.control_plane.interfaces.api import create_app
 from tests.interfaces.control_plane.workspace_helpers import (
     ADMIN_HEADERS,
     ICEBERG_CATALOG_MODULE,
@@ -51,6 +59,55 @@ def test_workspace_catalog_rejects_non_iceberg_module():
     )
 
     assert response.status_code == 422
+
+
+def test_workspace_catalog_rejects_credentials_embedded_in_uri():
+    client = _client()
+
+    response = client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"uri": "https://catalog-user:catalog-password@catalog.example/api"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+
+    assert response.status_code == 400
+    assert "secret reference" in response.json()["detail"]
+
+
+def test_workspace_catalog_enforces_configured_egress_allowlist():
+    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+    migrate_config_store(engine)
+    client = TestClient(
+        create_app(
+            session_factory(engine),
+            admin_token="test-admin",
+            catalog_egress_allowlist=("catalog.example",),
+        )
+    )
+
+    rejected = client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"uri": "https://other.example/api"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+    accepted = client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"uri": "https://catalog.example/api"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+
+    assert rejected.status_code == 400
+    assert "egress allowlist" in rejected.json()["detail"]
+    assert accepted.status_code == 200, accepted.json()
 
 
 def test_workspace_catalog_tables_can_be_discovered_without_runtime_ids(monkeypatch):

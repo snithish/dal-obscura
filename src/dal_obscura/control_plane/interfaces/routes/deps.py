@@ -67,6 +67,7 @@ class ControlPlaneDeps:
     authorization_code_exchange: AuthorizationCodeExchange | None = None
     require_review: bool = False
     review_secret: str = ""
+    catalog_egress_allowlist: tuple[str, ...] = ()
 
     def require_actor(
         self,
@@ -240,6 +241,7 @@ class ControlPlaneDeps:
                 session,
                 review_secret=self.review_secret,
                 require_review=self.require_review,
+                catalog_egress_allowlist=self.catalog_egress_allowlist,
             )
             try:
                 result = callback(service)

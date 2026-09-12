@@ -14,7 +14,7 @@ ingress. Replace every image tag with a verified immutable digest.
 2. Set the external governance hostname and Flight HTTP/2 hostname in the IdP,
    ingress, and redirect configuration. The control-plane production profile
    rejects non-TLS OIDC and browser redirect settings, weak bootstrap tokens,
-   missing audiences, and demo login shortcuts.
+   missing audiences, missing catalog egress policy, and demo login shortcuts.
 3. Verify the image signatures/digests and the PostgreSQL backup policy, then
    run `docker compose --env-file .env config` and review the rendered topology.
 4. Run `docker compose --env-file .env up migrate` and require exit code 0.
@@ -38,7 +38,9 @@ or readiness check keeps ingress closed until the operator resolves it.
   trusted ticket or publication rows.
 - The UI container is unprivileged, read-only, and has no source-data access.
   The UI never receives database, catalog, IdP client-secret, or ticket-secret
-  values. Catalog credentials and egress policy belong to the secret manager.
+  values. Catalog credentials belong to the secret manager; configure
+  `DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST` with exact approved
+  catalog/object-store hostnames. Private endpoints require explicit entries.
 - Configure ingress rate limits, request/body limits, trusted proxy handling,
   HSTS, CSP, and HTTP/2 Flight forwarding. Keep PostgreSQL, migration, and
   health ports off the public interface.

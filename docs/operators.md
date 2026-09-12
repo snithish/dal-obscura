@@ -77,6 +77,7 @@ it can load the correct internal runtime partition.
 | `DAL_OBSCURA_CELL_ID` | Data plane | Internal runtime cell identifier. |
 | `DAL_OBSCURA_LOCATION` | Data plane | Advertised Flight endpoint location. |
 | `DAL_OBSCURA_TICKET_SECRET` | Data plane | HMAC secret for opaque tickets. |
+| `DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST` | Control plane | Comma-separated exact catalog/object-store hostnames allowed in production. |
 
 See [Security](security.md) and the runnable [OIDC example](../examples/auth/keycloak-oidc/README.md).
 

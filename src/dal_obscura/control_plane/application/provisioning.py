@@ -32,10 +32,12 @@ class ProvisioningService:
         *,
         review_secret: str = "",
         require_review: bool = False,
+        catalog_egress_allowlist: tuple[str, ...] = (),
     ) -> None:
         self._store = PublicationStore(session)
         self._review_secret = review_secret
         self._require_review = require_review
+        self._catalog_egress_allowlist = catalog_egress_allowlist
 
     def create_tenant(self, slug: str, display_name: str) -> dict[str, str]:
         tenant_id = uuid4()
@@ -191,6 +193,7 @@ class ProvisioningService:
             self._store,
             name,
             discover=discover_catalog_tables,
+            egress_allowlist=self._catalog_egress_allowlist,
         )
 
     def list_workspace_assets(
@@ -315,6 +318,7 @@ class ProvisioningService:
             name=name,
             module=module,
             options=options,
+            egress_allowlist=self._catalog_egress_allowlist,
         )
 
     def upsert_asset(
