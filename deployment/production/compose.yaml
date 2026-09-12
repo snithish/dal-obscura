@@ -54,6 +54,34 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  postgres-grants:
+    image: postgres:16.4-alpine
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:?set POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:?set POSTGRES_DB}
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        psql -v ON_ERROR_STOP=1 -c \
+          'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.durable_tickets TO dal_obscura_reader;'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - backend
+    restart: "no"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+
   control-plane:
     image: ${DAL_OBSCURA_IMAGE:?set DAL_OBSCURA_IMAGE}
     environment:
@@ -81,6 +109,11 @@ services:
       DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_SCOPE: ${DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_SCOPE:-openid profile email}
       DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_JWKS_URL: ${DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_JWKS_URL:-}
     command: ["control-plane"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postgres-grants:
+        condition: service_completed_successfully
     expose:
       - "8820"
     networks:
@@ -132,6 +165,11 @@ services:
       - source: client_ca
         target: client-ca.crt
     command: ["data-plane"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      postgres-grants:
+        condition: service_completed_successfully
     expose:
       - "8815"
       - "8816"

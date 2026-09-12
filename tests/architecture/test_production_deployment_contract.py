@@ -17,8 +17,13 @@ def test_production_reference_contains_immutable_and_private_topology() -> None:
     assert '"127.0.0.1:8080:8080"' in compose
     control_block = compose.split("  control-plane:", 1)[1].split("  data-plane:", 1)[0]
     data_block = compose.split("  data-plane:", 1)[1].split("  ui:", 1)[0]
-    assert "condition: service_completed_successfully" not in control_block
-    assert "condition: service_completed_successfully" not in data_block
+    assert "condition: service_completed_successfully" in control_block
+    assert "condition: service_completed_successfully" in data_block
+    assert "postgres-grants:" in compose
+    assert (
+        "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.durable_tickets "
+        "TO dal_obscura_reader"
+    ) in compose
     assert "read_only: true" in compose
     assert 'cap_drop: ["ALL"]' in compose
     assert "internal: true" in compose

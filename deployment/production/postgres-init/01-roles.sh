@@ -49,4 +49,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE dal_obscura_migrator IN SCHEMA public
   GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO dal_obscura_control;
 ALTER DEFAULT PRIVILEGES FOR ROLE dal_obscura_migrator IN SCHEMA public
   GRANT USAGE, SELECT ON SEQUENCES TO dal_obscura_reader;
+
 SQL
