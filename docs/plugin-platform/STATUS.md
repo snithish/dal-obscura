@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `6fe4596`.
+Implementation follow-up through `463c759`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -160,7 +160,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   Capacity profiling, benchmark thresholds, test-lane timing, and dead-code
   inventory remain open.
 - X22 exact-artifact CI: **implementing**; the container publication job now
-  depends on a pinned governance-UI install/type-check/build lane. Artifact
+  depends on a pinned governance-UI install/type-check/build lane, and the Python
+  type-check lane now resolves both independently buildable plugin package source
+  roots explicitly. Artifact
   digest, browser, provider, consumer, recovery, and mandatory-security gates
   remain open.
 - X23 independent review/release decision: **not-started**.
@@ -1250,6 +1252,29 @@ running-process probe.
   `git diff --check` passed.
 - Remaining gaps: clean-wheel artifact provenance, external lifecycle transitions,
   and live browser/provider gates remain open.
+
+### X19 OIDC fixture boundary correction — `69055e1`
+
+- State: implementing.
+- Behavior: the heavyweight connector fixture now persists only a remote JWKS URL,
+  matching the production OIDC contract. Static JWKS material remains rejected at
+  the control-plane boundary; local fixture signing is retained solely for test
+  token generation.
+- Green evidence: connector fixture tests passed (3), Ruff and `git diff --check`
+  passed.
+- Remaining gaps: live IdP, TLS, browser, and production PostgreSQL evidence remain
+  open. Pickle compatibility is unchanged.
+
+### X22 plugin package type-check wiring — `463c759`
+
+- State: implementing.
+- Behavior: CI's root Ty invocation includes the public plugin API and conformance
+  package source roots, so independently buildable package imports are checked in
+  the same quality lane without requiring unpublished wheels in the environment.
+- Green evidence: CI workflow contract tests, full Ruff, Ty with both extra search
+  paths, and `git diff --check` passed.
+- Remaining gaps: exact wheel/image digests, external artifact, provider, consumer,
+  browser, and mandatory-security gates remain open.
 
 ## Latest evidence entry
 
