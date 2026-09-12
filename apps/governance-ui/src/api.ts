@@ -75,6 +75,7 @@ export type PolicyDraft = {
 };
 
 export type Preview = {
+  decision?: "allow" | "deny";
   allowed_columns: string[];
   masks: Record<string, Mask>;
   row_filter: string | null;
@@ -91,6 +92,7 @@ export type Session = {
   principal: string;
   groups: string[];
   platform_admin: boolean;
+  issuer?: string;
 };
 
 export type UiAuthConfig = {
@@ -305,18 +307,20 @@ export const controlPlane = {
       body: JSON.stringify(persona),
     });
     return {
+      decision: raw.decision,
       allowed_columns: raw.decision === "allow" ? raw.visible_columns : [],
       masks: Object.fromEntries(raw.masks.map((mask) => [mask.column, { type: mask.type }])),
       row_filter: raw.row_filter,
       policy_version: 0,
     } satisfies Preview;
   },
-  evaluate: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, object> }) => {
+  evaluate: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, unknown> }) => {
     const raw = await request<{ decision: "allow" | "deny"; allowed_columns: string[]; masks: Array<{ column: string; type: Mask["type"] }>; row_filter: string | null; output_rows: number; rows: Array<Record<string, unknown>>; evidence: Record<string, unknown> }>(`/v1/assets/${assetId}/policy-evaluate`, {
       method: "POST",
       body: JSON.stringify(persona),
     });
     return {
+      decision: raw.decision,
       allowed_columns: raw.allowed_columns,
       masks: Object.fromEntries(raw.masks.map((mask) => [mask.column, { type: mask.type }])),
       row_filter: raw.row_filter,
@@ -333,6 +337,7 @@ export const controlPlane = {
       body: JSON.stringify(persona),
     });
     return {
+      decision: raw.decision,
       allowed_columns: raw.allowed_columns,
       masks: Object.fromEntries(raw.masks.map((mask) => [mask.column, { type: mask.type }])),
       row_filter: raw.row_filter,
