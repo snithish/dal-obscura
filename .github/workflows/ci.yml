@@ -165,6 +165,46 @@ jobs:
           dal-obscura-migrate upgrade --database-url sqlite+pysqlite:///"$smoke_env/config-store.db"
           dal-obscura-migrate check --database-url sqlite+pysqlite:///"$smoke_env/config-store.db"
 
+  python-plugin-contract:
+    name: Plugin contract wheel smoke
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Build plugin API wheel
+        run: |
+          mkdir -p "$RUNNER_TEMP/plugin-api-dist"
+          uv build --wheel --out-dir "$RUNNER_TEMP/plugin-api-dist" packages/plugin-api
+
+      - name: Build conformance wheel
+        run: |
+          mkdir -p "$RUNNER_TEMP/plugin-conformance-dist"
+          uv build --wheel --out-dir "$RUNNER_TEMP/plugin-conformance-dist" packages/plugin-conformance
+
+      - name: Install exact wheels and run conformance tests
+        run: |
+          uv venv "$RUNNER_TEMP/plugin-env"
+          uv pip install --python "$RUNNER_TEMP/plugin-env/bin/python" pytest \
+            "$RUNNER_TEMP/plugin-api-dist"/*.whl \
+            "$RUNNER_TEMP/plugin-conformance-dist"/*.whl
+          "$RUNNER_TEMP/plugin-env/bin/python" -m pytest packages/plugin-conformance/tests -q
+
   python-native-iceberg:
     name: Native Iceberg conformance
     runs-on: ubuntu-24.04
@@ -258,6 +298,7 @@ jobs:
       - python-contract-tests
       - python-integration-tests
       - python-package
+      - python-plugin-contract
       - python-native-iceberg
       - jvm
       - governance-ui
