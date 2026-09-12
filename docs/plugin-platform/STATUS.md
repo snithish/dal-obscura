@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `463c759`.
+Implementation follow-up through `d4f81f0`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -137,7 +137,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   results. Output validation now consumes batches incrementally with fixed batch
   and row budgets, and cancellation is checked between planned tasks. Deliberately
   bad fixture plugins, provider/Flight/consumer lanes, and external distribution
-  evidence remain open.
+  evidence remain open. CI now builds both standalone plugin wheels, installs those
+  exact artifacts in an isolated environment, and runs the conformance suite before
+  image publication.
 - X16 REST Iceberg qualification: **not-started**.
 - X17 independent manifest/Parquet plugin: **not-started**.
 - X18 consumer qualification: **not-started**.
@@ -162,7 +164,8 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
 - X22 exact-artifact CI: **implementing**; the container publication job now
   depends on a pinned governance-UI install/type-check/build lane, and the Python
   type-check lane now resolves both independently buildable plugin package source
-  roots explicitly. Artifact
+  roots explicitly, and standalone plugin wheel conformance now gates image
+  publication. Artifact
   digest, browser, provider, consumer, recovery, and mandatory-security gates
   remain open.
 - X23 independent review/release decision: **not-started**.
@@ -1275,6 +1278,16 @@ running-process probe.
   paths, and `git diff --check` passed.
 - Remaining gaps: exact wheel/image digests, external artifact, provider, consumer,
   browser, and mandatory-security gates remain open.
+
+### X15 standalone wheel CI qualification — `d4f81f0`
+
+- State: implementing.
+- Behavior: CI builds the public plugin API and conformance wheels independently,
+  installs the exact artifacts into a clean virtual environment, executes the
+  conformance tests, and makes the container job depend on that result.
+- Green evidence: workflow contract tests, Ruff, and `git diff --check` passed.
+- Remaining gaps: signed artifact/image digests, deliberately bad external fixtures,
+  provider, consumer, and browser gates remain open.
 
 ## Latest evidence entry
 
