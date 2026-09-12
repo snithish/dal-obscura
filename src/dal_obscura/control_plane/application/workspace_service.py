@@ -117,7 +117,7 @@ def get_workspace_observations(
                 "data_plane": {"status": "unobserved", "reason": "no_visible_assets"},
             }
     try:
-        generation: dict[str, object] | None = store.get_active_publication_summary(
+        generation: dict[str, str] | None = store.get_active_publication_summary(
             context.cell_id
         )
     except LookupError:
