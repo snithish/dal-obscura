@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 
 @dataclass(frozen=True)
@@ -69,8 +71,52 @@ def _normalize_path(value: object) -> str:
     text = str(value or "").strip()
     if text == "/":
         return text
-    return text.rstrip("/")
+    if not text:
+        return ""
+    parsed = urlsplit(text)
+    if parsed.scheme:
+        if not parsed.netloc or parsed.username or parsed.password:
+            raise ValueError("Path roots must not contain credentials or missing authority")
+        if parsed.query or parsed.fragment:
+            raise ValueError("Path roots must not contain query or fragment components")
+        normalized_path = _normalize_uri_path(parsed.path)
+        return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), normalized_path, "", ""))
+    if "?" in text or "#" in text:
+        raise ValueError("Path roots must not contain query or fragment components")
+    return str(Path(text).resolve(strict=False))
 
 
 def _path_is_under_root(path: str, root: str) -> bool:
-    return path == root or path.startswith(f"{root}/")
+    root_parts = urlsplit(root)
+    path_parts = urlsplit(path)
+    if bool(root_parts.scheme) != bool(path_parts.scheme):
+        return False
+    if root_parts.scheme:
+        if (path_parts.scheme.lower(), path_parts.netloc.lower()) != (
+            root_parts.scheme.lower(),
+            root_parts.netloc.lower(),
+        ):
+            return False
+        root_path = _normalize_uri_path(root_parts.path)
+        path_path = _normalize_uri_path(path_parts.path)
+        return path_path == root_path or path_path.startswith(f"{root_path}/")
+    try:
+        Path(path).relative_to(Path(root))
+    except ValueError:
+        return False
+    return True
+
+
+def _normalize_uri_path(value: str) -> str:
+    decoded = unquote(value or "/")
+    parts = [part for part in decoded.split("/") if part not in ("", ".")]
+    normalized: list[str] = []
+    for part in parts:
+        if part == "..":
+            if normalized:
+                normalized.pop()
+            else:
+                raise ValueError("Path cannot traverse above its URI root")
+        else:
+            normalized.append(part)
+    return "/" + "/".join(normalized) if normalized else "/"

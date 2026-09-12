@@ -40,3 +40,19 @@ def test_path_rule_enforcer_is_disabled_when_no_roots_are_published():
 
     enforcer.check("s3://any-bucket/any/path.parquet")
     enforcer.check("/local/dev/path.parquet")
+
+
+def test_path_rule_enforcer_normalizes_uri_traversal_before_root_check():
+    enforcer = PathRuleEnforcer([{"root": "s3://analytics-demo/delta"}])
+
+    with pytest.raises(PermissionError, match="Path is not allowed"):
+        enforcer.check("s3://analytics-demo/delta/part/../../secrets.parquet")
+    with pytest.raises(PermissionError, match="Path is not allowed"):
+        enforcer.check("s3://analytics-demo/delta%2F..%2Fsecrets.parquet")
+
+
+def test_path_rule_enforcer_rejects_credential_and_query_roots():
+    with pytest.raises(ValueError, match="credentials"):
+        PathRuleEnforcer([{"root": "s3://user:password@analytics-demo/delta"}])
+    with pytest.raises(ValueError, match="query or fragment"):
+        PathRuleEnforcer([{"root": "s3://analytics-demo/delta?token=secret"}])
