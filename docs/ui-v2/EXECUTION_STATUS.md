@@ -76,6 +76,28 @@ screens.
 - Next action: obtain the required P00 decision, then add the corresponding
   failing authorization/session tests before implementation.
 
+- Packet/slice: P00.2 concrete session, boundary, persistence, and API proposal.
+- State: review pending.
+- Commit: pending.
+- Behavior and touched modules: extends `P00_CONTRACT_REVIEW.md` with proposed
+  expiry and revocation behavior, cookie/CSRF/origin/proxy rules, bootstrap-token
+  lifecycle, additive record designs and retention, migration acceptance evidence,
+  and a candidate replacement API map.
+- Prerequisites/review authorization: review material only. The proposals are
+  deliberately marked unimplemented and do not authorize migration or security
+  behavior changes.
+- Red test and actual failure: the prior packet named the required decisions but
+  did not give a low-ambiguity default for tests, records, retention, or API
+  replacement boundaries.
+- Green commands and results: `git diff --check` passed.
+- Browser/API/PostgreSQL/consumer evidence: none; no code path changed.
+- Manual/independent review: capable-owner decision remains outstanding.
+- Remaining limitations/blocker: P02/P03 cannot select, implement, or test a
+  session/grant/migration contract until the reviewer accepts or revises these
+  proposals.
+- Next action: record the reviewer decision against the proposal table, then
+  write negative security tests before the first P02/P03 implementation slice.
+
 - Packet/slice: P01.1 installed control-plane command.
 - State: partially verified.
 - Commit: `734c018`.
