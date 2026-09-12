@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `df8c98b`.
+Implementation follow-up through `47c7c47`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -91,7 +91,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   the data plane rejects explicit bindings it cannot honor before provider setup.
   Published-config resolution now optionally requires both identities to exist in
   the active admitted registry generation; the production data plane wires the
-  trusted Iceberg generation at startup.
+  trusted Iceberg generation at startup. Catalog construction now receives that
+  generation and invokes the admitted `iceberg.sql` factory rather than selecting
+  an implementation from mutable request/config strings.
   Runtime registry routing, migration of legacy manifests, and mixed-version
   rollout evidence remain open.
 - X14 plugin UI: **implementing**; standalone plugin descriptors now enforce
@@ -275,6 +277,23 @@ option name (`839c16f`); no raw credential field is exposed.
 - Pickle compatibility: unchanged.
 - Next permitted packet: generate and verify immutable lock artifacts in the build
   lane before qualifying an external provider.
+
+### X13 admitted catalog routing — `47c7c47`
+
+- State: implementing.
+- Behavior: published-config resolution passes the active plugin registry into
+  catalog construction. Configured catalogs carry the qualified `iceberg.sql`
+  identity, and the registry loads its admitted factory to construct the existing
+  Iceberg adapter. Callers without a registry retain the exact compatibility
+  path; no pickle task class or payload changed.
+- Green evidence: catalog-registry, published-config, and built-in-plugin tests
+  pass (23 combined), Ruff, Ty, and `git diff --check` pass.
+- Remaining gaps: SDK-native external factory adapters, plugin/config revision
+  persistence, legacy-manifest migration, real artifact locks, and live
+  PostgreSQL/provider/browser/consumer gates remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: bind plugin instance/config revisions into publication
+  records before adding external catalog or format packages.
 
 X11 package check: `tests/plugin_platform/test_plugin_api_package.py` passes and
 the package source compiles without importing the service distribution. Building
