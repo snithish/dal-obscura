@@ -89,6 +89,11 @@ X12 admission loading now rejects unallowlisted entry points before invoking a
 factory; `tests/plugin_platform/test_registry.py` passes all 5 cases with Ruff
 clean. Built-in Iceberg routing and artifact-lock verification remain open.
 
+Integration boundary check after the migration and lock slices:
+`UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane tests/interfaces/control_plane/test_assets_api.py tests/interfaces/control_plane/test_schema_api.py tests/plugin_platform -q`
+passed (84 tests). Ruff passed on every changed Python path and `git diff --check`
+is clean. Browser, PostgreSQL, Flight, consumer, and production lanes remain open.
+
 ## Latest evidence entry
 
 Packet/slice: X00 compatibility inventory and X03 mutation lock boundary
