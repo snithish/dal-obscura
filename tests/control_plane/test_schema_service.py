@@ -20,6 +20,7 @@ from dal_obscura.control_plane.application.schema_service import (
     MAX_SCHEMA_DEPTH,
     MAX_SCHEMA_NODES,
     get_asset_schema,
+    schema_fingerprint,
 )
 
 
@@ -143,6 +144,36 @@ def test_get_asset_schema_returns_typed_nested_paths() -> None:
         "attributes.$key",
         "attributes.$value",
     ]
+
+
+def test_schema_fingerprint_includes_collection_ids_and_matches_arrow_normalization() -> None:
+    original = Schema(
+        NestedField(
+            field_id=1,
+            name="items",
+            field_type=ListType(
+                element_id=2,
+                element_type=StructType(
+                    NestedField(field_id=3, name="value", field_type=StringType())
+                ),
+            ),
+        )
+    )
+    changed_element = Schema(
+        NestedField(
+            field_id=1,
+            name="items",
+            field_type=ListType(
+                element_id=99,
+                element_type=StructType(
+                    NestedField(field_id=3, name="value", field_type=StringType())
+                ),
+            ),
+        )
+    )
+
+    assert schema_fingerprint(original) == schema_fingerprint(original.as_arrow())
+    assert schema_fingerprint(original) != schema_fingerprint(changed_element)
 
 
 def test_get_asset_schema_requires_read_capability() -> None:

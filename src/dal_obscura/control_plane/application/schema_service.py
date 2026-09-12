@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Callable
 from typing import Any, cast
 from uuid import UUID
 
+import pyarrow as pa
 from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
 from pyiceberg.types import ListType, MapType, NestedField, StructType
@@ -31,6 +33,7 @@ CatalogLoader = Callable[..., Any]
 # recursively materializing an untrusted catalog response in one request.
 MAX_SCHEMA_NODES = 10_000
 MAX_SCHEMA_DEPTH = 64
+MAX_SCHEMA_ENCODING_BYTES = 2 * 1024 * 1024
 
 
 def get_asset_schema(
@@ -92,13 +95,79 @@ def load_asset_iceberg_schema(
     schema = table.schema()
     if not isinstance(schema, Schema):
         raise TypeError("Iceberg catalog returned an invalid schema")
+    _validate_schema_bounds(schema)
     return schema
 
 
 def schema_fingerprint(schema: object) -> str:
-    """Returns a stable digest for an authoritative Iceberg or Arrow schema."""
+    """Returns a stable digest for an authoritative Iceberg or Arrow schema.
 
-    return hashlib.sha256(str(schema).encode("utf-8")).hexdigest()
+    Iceberg schemas are normalized through their Arrow representation so API,
+    evaluation, and review use one encoding.  Field and collection IDs are
+    carried in Arrow metadata and included in the canonical bytes; ``repr`` is
+    intentionally never used as schema identity.
+    """
+
+    arrow_schema = schema.as_arrow() if isinstance(schema, Schema) else schema
+    if not isinstance(arrow_schema, pa.Schema):
+        raise TypeError("schema_fingerprint expects an Iceberg or Arrow schema")
+    encoded = json.dumps(
+        _canonical_arrow_schema(arrow_schema),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    if len(encoded) > MAX_SCHEMA_ENCODING_BYTES:
+        raise ValidationFailure(
+            f"Schema encoding exceeds the {MAX_SCHEMA_ENCODING_BYTES}-byte limit"
+        )
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _canonical_arrow_schema(schema: pa.Schema) -> dict[str, object]:
+    return {
+        "encoding": 1,
+        "metadata": _canonical_metadata(schema.metadata),
+        "fields": [_canonical_arrow_field(field) for field in schema],
+    }
+
+
+def _canonical_arrow_field(field: pa.Field) -> dict[str, object]:
+    return {
+        "name": field.name,
+        "nullable": field.nullable,
+        "metadata": _canonical_metadata(field.metadata),
+        "type": _canonical_arrow_type(field.type),
+    }
+
+
+def _canonical_arrow_type(data_type: pa.DataType) -> object:
+    value: dict[str, object] = {"id": str(data_type)}
+    if pa.types.is_struct(data_type):
+        value["children"] = [_canonical_arrow_field(field) for field in data_type]
+    elif pa.types.is_list(data_type) or pa.types.is_large_list(data_type):
+        value["value_field"] = _canonical_arrow_field(data_type.value_field)
+    elif pa.types.is_map(data_type):
+        value["key_field"] = _canonical_arrow_field(data_type.key_field)
+        value["item_field"] = _canonical_arrow_field(data_type.item_field)
+    elif pa.types.is_fixed_size_list(data_type):
+        value["list_size"] = data_type.list_size
+        value["value_field"] = _canonical_arrow_field(data_type.value_field)
+    return value
+
+
+def _canonical_metadata(metadata: dict[bytes, bytes] | None) -> list[list[str]]:
+    if not metadata:
+        return []
+    return sorted(
+        [
+            [
+                key.decode("utf-8", "backslashreplace"),
+                value.decode("utf-8", "backslashreplace"),
+            ]
+            for key, value in metadata.items()
+        ]
+    )
 
 
 def _validate_schema_bounds(schema: Schema) -> None:
