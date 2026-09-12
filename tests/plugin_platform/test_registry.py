@@ -11,6 +11,7 @@ from dal_obscura.common.plugin_api import (
     PluginDescriptor,
     PluginRegistry,
     build_plugin_lock,
+    load_static_plugin_descriptor,
 )
 from dal_obscura.common.plugin_api.registry import _artifact_digest, _descriptor_digest
 
@@ -285,3 +286,56 @@ def test_build_plugin_lock_derives_the_exact_verified_five_part_lock(tmp_path) -
         _descriptor_digest(descriptor),
         _artifact_digest(entry),
     )
+
+
+def test_static_descriptor_loader_reads_metadata_without_factory_import() -> None:
+    descriptor_json = (
+        '{"kind":"catalog","plugin_id":"rest.catalog","api_version":"1",'
+        '"config_version":1,"capabilities":["nested"],'
+        '"config_schema":{"fields":[]},"display_name":"REST Catalog"}'
+    )
+    distribution = SimpleNamespace(
+        name="rest-wheel",
+        version="2.0.0",
+        read_text=lambda filename: descriptor_json
+        if filename == "dal_obscura-plugin.json"
+        else None,
+    )
+    entry = cast(
+        _Entry,
+        SimpleNamespace(
+            name="rest.catalog",
+            group="dal_obscura.catalogs.v1",
+            dist=distribution,
+        ),
+    )
+
+    descriptor = load_static_plugin_descriptor(cast(metadata.EntryPoint, entry))
+
+    assert descriptor.kind == "catalog"
+    assert descriptor.plugin_id == "rest.catalog"
+    assert descriptor.distribution == "rest-wheel"
+    assert descriptor.version == "2.0.0"
+    assert descriptor.capabilities == frozenset({"nested"})
+
+
+def test_static_descriptor_loader_rejects_identity_mismatch() -> None:
+    distribution = SimpleNamespace(
+        name="rest-wheel",
+        version="2.0.0",
+        read_text=lambda _: (
+            '{"kind":"catalog","plugin_id":"other","api_version":"1",'
+            '"config_version":1}'
+        ),
+    )
+    entry = cast(
+        _Entry,
+        SimpleNamespace(
+            name="rest.catalog",
+            group="dal_obscura.catalogs.v1",
+            dist=distribution,
+        ),
+    )
+
+    with pytest.raises(PluginAdmissionError, match="identity mismatch"):
+        load_static_plugin_descriptor(cast(metadata.EntryPoint, entry))

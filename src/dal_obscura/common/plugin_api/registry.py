@@ -17,6 +17,7 @@ ENTRY_POINT_GROUPS: dict[PluginKind, str] = {
     "catalog": "dal_obscura.catalogs.v1",
     "table_format": "dal_obscura.table_formats.v1",
 }
+STATIC_DESCRIPTOR_FILENAME = "dal_obscura-plugin.json"
 _PLUGIN_ID = re.compile(r"[a-z][a-z0-9_.-]{0,63}\Z")
 
 
@@ -179,6 +180,76 @@ class PluginRegistry:
     def _validate_id(plugin_id: str) -> None:
         if not _PLUGIN_ID.fullmatch(plugin_id):
             raise PluginAdmissionError(f"Invalid plugin ID: {plugin_id!r}")
+
+
+def load_static_plugin_descriptor(entry: metadata.EntryPoint) -> PluginDescriptor:
+    """Loads a plugin descriptor from distribution metadata without importing code.
+
+    Qualified wheels may include ``dal_obscura-plugin.json`` at their root.  The
+    descriptor is parsed from the installed distribution's metadata and its
+    identity is tied to the entry-point group/name and package provenance.  A
+    missing or malformed file fails closed; callers that need legacy entry-point
+    compatibility can continue to provide an explicit fallback loader.
+    """
+
+    distribution = entry.dist
+    if distribution is None:
+        raise PluginAdmissionError("Plugin provenance is unavailable")
+    raw = distribution.read_text(STATIC_DESCRIPTOR_FILENAME)
+    if raw is None:
+        raise PluginAdmissionError("Plugin static descriptor is missing")
+    try:
+        payload = json.loads(raw)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise PluginAdmissionError("Plugin static descriptor is invalid JSON") from exc
+    if not isinstance(payload, dict):
+        raise PluginAdmissionError("Plugin static descriptor must be an object")
+    expected_kind = next(
+        (kind for kind, group in ENTRY_POINT_GROUPS.items() if group == entry.group),
+        None,
+    )
+    if expected_kind is None:
+        raise PluginAdmissionError("Plugin entry-point group is unsupported")
+    allowed = {
+        "kind",
+        "plugin_id",
+        "api_version",
+        "config_version",
+        "capabilities",
+        "config_schema",
+        "display_name",
+    }
+    if set(payload) - allowed:
+        raise PluginAdmissionError("Plugin static descriptor contains unknown fields")
+    kind = payload.get("kind")
+    plugin_id = payload.get("plugin_id")
+    api_version = payload.get("api_version")
+    config_version = payload.get("config_version")
+    capabilities = payload.get("capabilities", [])
+    config_schema = payload.get("config_schema", {})
+    display_name = payload.get("display_name", "")
+    if kind != expected_kind or plugin_id != str(entry.name):
+        raise PluginAdmissionError("Plugin static descriptor identity mismatch")
+    if not isinstance(api_version, str) or not isinstance(config_version, int):
+        raise PluginAdmissionError("Plugin static descriptor version fields are invalid")
+    if not isinstance(capabilities, list) or any(
+        not isinstance(item, str) for item in capabilities
+    ):
+        raise PluginAdmissionError("Plugin static descriptor capabilities are invalid")
+    if not isinstance(config_schema, Mapping) or not isinstance(display_name, str):
+        raise PluginAdmissionError("Plugin static descriptor fields are invalid")
+    capability_values = cast(list[str], capabilities)
+    return PluginDescriptor(
+        kind=cast(PluginKind, kind),
+        plugin_id=plugin_id,
+        api_version=api_version,
+        config_version=config_version,
+        distribution=distribution.name,
+        version=distribution.version,
+        capabilities=frozenset(capability_values),
+        config_schema=config_schema,
+        display_name=display_name,
+    )
 
 
 def _descriptor_digest(descriptor: PluginDescriptor) -> str:

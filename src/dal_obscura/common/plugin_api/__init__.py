@@ -21,6 +21,7 @@ from dal_obscura.common.plugin_api.registry import (
     PluginLock,
     PluginRegistry,
     build_plugin_lock,
+    load_static_plugin_descriptor,
 )
 
 __all__ = [
@@ -38,4 +39,5 @@ __all__ = [
     "TableHandle",
     "TableIdentifier",
     "build_plugin_lock",
+    "load_static_plugin_descriptor",
 ]
