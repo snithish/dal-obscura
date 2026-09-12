@@ -159,6 +159,37 @@ screens.
 - Next action: perform a clean Docker UI build and full Compose smoke once the
   container runtime is available.
 
+- Packet/slice: P01.4 deterministic demo readiness ordering.
+- State: partially verified.
+- Commit: pending.
+- Behavior and touched modules: enables Keycloak's health endpoint and uses its
+  documented container-local readiness probe; makes setup, control-plane UI,
+  Flight, and client dependencies wait for healthy upstream services; enables the
+  data-plane's existing HTTP readiness server on the internal port `8816` and
+  checks it after setup publishes runtime configuration.
+- Prerequisites/review authorization: local startup orchestration only; no
+  session, persistence, authorization, or pickle behavior change.
+- Red test and actual failure: the parsed Compose baseline showed Keycloak,
+  control-plane, Flight, and client consumers depending on mere
+  `service_started`, allowing provisioning or use before an upstream service was
+  ready.
+- Green commands and results: `uv run --no-sync pytest
+  tests/architecture/test_keycloak_demo_readiness.py
+  tests/examples/test_keycloak_demo_fixture.py
+  tests/architecture/test_local_demo_ui.py -q` → 4 passed; focused Ruff and Ty
+  checks passed. The readiness assertions parse Compose YAML and check the
+  generated data-plane environment rather than relying on text presence.
+- Browser/API/PostgreSQL/consumer evidence: static Compose and generated-runtime
+  configuration evidence only. Keycloak's documented health approach informed
+  the check; no local container process was started.
+- Manual/independent review: none.
+- Remaining limitations/blocker: generating local ignored configuration worked,
+  but `docker compose config --quiet` still cannot contact the configured Podman
+  socket at `127.0.0.1:55305`. Full startup, TLS, deep-link, cache, graceful-stop,
+  and Flight-read evidence remains pending.
+- Next action: run Compose from a clean checkout when the container runtime is
+  available, then exercise UI and Flight smoke checks against the healthy stack.
+
 - Packet/slice: P11.1 local UI smoke verifier hardening.
 - State: implemented-unverified.
 - Commit: `136b508`.

@@ -12,10 +12,17 @@ services:
       - --import-realm
       - --http-port=8080
       - --hostname-strict=false
+      - --health-enabled=true
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
       - ./.runtime/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "{ printf 'HEAD /health/ready HTTP/1.0\\r\\n\\r\\n' >&0; grep 'HTTP/1.0 200'; } 0<>/dev/tcp/localhost/9000"]
+      interval: 2s
+      timeout: 3s
+      retries: 45
+      start_period: 10s
 
   postgres:
     image: postgres:17-alpine
@@ -50,9 +57,9 @@ services:
       - .runtime/setup.env
     depends_on:
       control-plane:
-        condition: service_started
+        condition: service_healthy
       keycloak:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - .:/workspace/demo:rw
     command:
@@ -69,7 +76,7 @@ services:
     image: ${DAL_OBSCURA_IMAGE:-ghcr.io/snithish/dal-obscura:latest}
     depends_on:
       keycloak:
-        condition: service_started
+        condition: service_healthy
       postgres:
         condition: service_healthy
       migrate:
@@ -81,6 +88,11 @@ services:
     volumes:
       - .:/workspace/demo:rw
     command: ["control-plane"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"from urllib.request import urlopen; raise SystemExit(urlopen('http://127.0.0.1:8820/readyz', timeout=2).status != 200)\""]
+      interval: 2s
+      timeout: 3s
+      retries: 30
 
   control-plane-ui:
     build:
@@ -88,7 +100,7 @@ services:
       dockerfile: ui/Dockerfile
     depends_on:
       control-plane:
-        condition: service_started
+        condition: service_healthy
     env_file:
       - .runtime/ui.env
     ports:
@@ -100,7 +112,7 @@ services:
       setup:
         condition: service_healthy
       keycloak:
-        condition: service_started
+        condition: service_healthy
       postgres:
         condition: service_healthy
       migrate:
@@ -113,6 +125,11 @@ services:
       - sh
       - -c
       - set -a && . /workspace/demo/.runtime/data-plane.env && set +a && exec dal-obscura-entrypoint data-plane
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"from urllib.request import urlopen; raise SystemExit(urlopen('http://127.0.0.1:8816/readyz', timeout=2).status != 200)\""]
+      interval: 2s
+      timeout: 3s
+      retries: 45
 
   client:
     build:
@@ -122,9 +139,9 @@ services:
         DAL_OBSCURA_IMAGE: ${DAL_OBSCURA_IMAGE:-ghcr.io/snithish/dal-obscura:latest}
     depends_on:
       dal-obscura:
-        condition: service_started
+        condition: service_healthy
       keycloak:
-        condition: service_started
+        condition: service_healthy
     env_file:
       - .runtime/client.env
     volumes:
