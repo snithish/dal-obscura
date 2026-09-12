@@ -132,6 +132,9 @@ is clean. Browser, PostgreSQL, Flight, consumer, and production lanes remain ope
 - Next permitted packet: X03 PostgreSQL CAS/barrier slice, then X06 schema
   evolution rules.
 
+Follow-up regression coverage in `1c6c97e` asserts invalid user-supplied rows
+return the stable redacted validation response at the HTTP boundary.
+
 ## Latest evidence entry
 
 Packet/slice: X00 compatibility inventory and X03 mutation lock boundary
