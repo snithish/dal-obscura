@@ -151,13 +151,14 @@ jobs:
           uv pip install --python "$client_env/bin/python" "$wheel_path"
           "$client_env/bin/python" -c 'from dal_obscura.connectors import DalObscuraClient; print(DalObscuraClient.__name__)'
 
-      - name: Install wheel with Postgres extra
+      - name: Install server wheel with Postgres and verify commands
         run: |
           smoke_env="$(mktemp -d)"
           uv venv "$smoke_env"
           wheel_path="$(ls dist/dal_obscura-*-py3-none-any.whl)"
-          uv pip install --python "$smoke_env/bin/python" "${wheel_path}[postgres]"
+          uv pip install --python "$smoke_env/bin/python" "${wheel_path}[server,postgres]"
           PATH="$smoke_env/bin:$PATH"
+          dal-obscura-control-plane --help
           dal-obscura-migrate upgrade --database-url sqlite+pysqlite:///"$smoke_env/config-store.db"
           dal-obscura-migrate check --database-url sqlite+pysqlite:///"$smoke_env/config-store.db"
 

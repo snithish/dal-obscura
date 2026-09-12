@@ -9,7 +9,8 @@ def test_ci_exercises_packaged_migration_and_driver_extras() -> None:
     assert "name: Python package smoke" in workflow
     assert "uv build" in workflow
     assert "wheel_path" in workflow
-    assert "[postgres]" in workflow
+    assert "[server,postgres]" in workflow
+    assert "dal-obscura-control-plane --help" in workflow
     assert "dal-obscura-migrate upgrade" in workflow
     assert "dal-obscura-migrate check" in workflow
 
