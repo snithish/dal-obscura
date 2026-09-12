@@ -467,6 +467,16 @@ class ProvisioningService:
     def list_asset_grants(self, asset_id: UUID) -> list[dict[str, str]]:
         return asset_service.list_asset_grants(self._store, asset_id)
 
+    def lock_asset_for_publication(self, asset_id: UUID) -> None:
+        """Locks an asset before authorization that participates in a mutation.
+
+        Grant-manager authorization must observe the same asset generation that
+        the subsequent replacement writes.  Exposing the repository lock through
+        the application service keeps that ordering out of the route adapter.
+        """
+
+        self._store.lock_asset_for_publication(asset_id)
+
     def get_policy_draft(self, asset_id: UUID, actor: ControlPlaneActor) -> dict[str, object]:
         return draft_service.get_policy_draft(self._store, asset_id, actor)
 

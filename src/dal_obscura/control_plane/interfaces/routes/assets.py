@@ -153,6 +153,10 @@ def _replace_authorized_asset_grants(
     request: AssetGrantsRequest,
     actor: ControlPlaneActor,
 ) -> object:
+    # Lock before reading delegated authority or the current grant set.  The
+    # replacement service takes the same lock before writing, so authorization
+    # and the CAS mutation share one asset generation.
+    service.lock_asset_for_publication(asset_id)
     _ensure_grant_manager(service, asset_id, actor)
     grants = [item.model_dump() for item in request.grants]
     if not actor.platform_admin:
