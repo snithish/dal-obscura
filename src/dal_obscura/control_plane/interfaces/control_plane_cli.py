@@ -51,6 +51,7 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
         return 2
     try:
         _validate_profile(values, admin_token, database_url)
+        profile = values.get("DAL_OBSCURA_CONTROL_PLANE_PROFILE", "local").strip().lower()
         port = _port(values.get("DAL_OBSCURA_CONTROL_PLANE_PORT", "8820"))
         engine = create_engine_from_url(database_url)
         check_config_store_schema(engine)
@@ -76,6 +77,7 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
             catalog_egress_allowlist=_csv(
                 values.get("DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST", "")
             ),
+            bootstrap_enabled=_bootstrap_enabled(values, profile),
         )
     except (ConfigStoreSchemaError, ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)
@@ -158,6 +160,12 @@ def _validate_profile(
         raise ValueError("Production requires at least one HTTPS CORS origin")
     if not _csv(values.get("DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST", "")):
         raise ValueError("Production requires an explicit catalog egress allowlist")
+    bootstrap_enabled = values.get(
+        "DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED",
+        "false",
+    ).strip().lower()
+    if bootstrap_enabled != "false":
+        raise ValueError("Static bootstrap admin access must be disabled in production")
     if any(
         _optional(values, name)
         for name in (
@@ -182,6 +190,16 @@ def _oidc_resolver(values: Mapping[str, str]):
         subject_claim=values.get("DAL_OBSCURA_CONTROL_PLANE_OIDC_SUBJECT_CLAIM", "sub"),
         group_claims=_csv(values.get("DAL_OBSCURA_CONTROL_PLANE_OIDC_GROUP_CLAIMS", "groups")),
     )
+
+
+def _bootstrap_enabled(values: Mapping[str, str], profile: str) -> bool:
+    raw = values.get(
+        "DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED",
+        "true" if profile == "local" else "false",
+    ).strip().lower()
+    if raw not in {"true", "false"}:
+        raise ValueError("DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED must be true or false")
+    return raw == "true"
 
 
 def _ui_auth_config(values: Mapping[str, str]) -> dict[str, object] | None:

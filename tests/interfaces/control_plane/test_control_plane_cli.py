@@ -121,3 +121,24 @@ def test_control_plane_cli_rejects_sqlite_in_production(capsys):
 
     assert result == 1
     assert "PostgreSQL" in capsys.readouterr().err
+
+
+def test_control_plane_cli_rejects_enabled_static_bootstrap_in_production(capsys):
+    result = control_plane_cli.run(
+        {
+            "DAL_OBSCURA_CONTROL_PLANE_PROFILE": "production",
+            "DAL_OBSCURA_DATABASE_URL": "postgresql+psycopg://user:pass@db.example/control_plane",
+            "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "x" * 40,
+            "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER": "https://issuer.example",
+            "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE": "dal-obscura-admin",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": "https://issuer.example",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "dal-obscura-ui",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": "https://console.example/auth/callback",
+            "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": "https://console.example",
+            "DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST": "catalog.example",
+            "DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED": "true",
+        }
+    )
+
+    assert result == 1
+    assert "bootstrap admin access" in capsys.readouterr().err

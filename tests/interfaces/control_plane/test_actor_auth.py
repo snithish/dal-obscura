@@ -267,6 +267,32 @@ def test_demo_login_rejects_unknown_shortcut():
     assert response.status_code == 404
 
 
+def test_static_bootstrap_token_can_be_disabled_when_oidc_admin_is_available():
+    from dal_obscura.common.config_store.db import (
+        create_engine_from_url,
+        migrate_config_store,
+        session_factory,
+    )
+    from dal_obscura.control_plane.interfaces.api import create_app
+
+    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+    migrate_config_store(engine)
+    client = TestClient(
+        create_app(
+            session_factory(engine),
+            admin_token="test-admin",
+            oidc_actor_resolver=_actor_for_token,
+            oidc_admin_group="platform-admins",
+            bootstrap_enabled=False,
+        )
+    )
+
+    assert client.get("/v1/session", headers=ADMIN_HEADERS).status_code == 401
+    oidc_admin = client.get("/v1/session", headers=_bearer("admin-oidc-token"))
+    assert oidc_admin.status_code == 200
+    assert oidc_admin.json()["platform_admin"] is True
+
+
 def test_ui_auth_config_is_404_when_browser_oidc_is_not_configured():
     client = _client()
 

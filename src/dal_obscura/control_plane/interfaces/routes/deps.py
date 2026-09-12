@@ -68,6 +68,7 @@ class ControlPlaneDeps:
     require_review: bool = False
     review_secret: str = ""
     catalog_egress_allowlist: tuple[str, ...] = ()
+    bootstrap_enabled: bool = True
 
     def require_actor(
         self,
@@ -78,7 +79,7 @@ class ControlPlaneDeps:
     ) -> ControlPlaneActor:
         """Authenticates bearer clients or an HttpOnly browser session."""
         expected = f"Bearer {self.admin_token}"
-        if authorization == expected:
+        if self.bootstrap_enabled and authorization == expected:
             return ControlPlaneActor.for_platform_admin("platform:admin")
         using_cookie = not authorization and session_token is not None
         if using_cookie and request.method not in {"GET", "HEAD", "OPTIONS"}:
