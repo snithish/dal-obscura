@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `4ab9031`.
+Implementation follow-up through `6aac008`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -35,8 +35,10 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   full snapshot binding remain open.
 - X03 publication/grant/binding transactions: **implementing**; asset-row locks now
   serialize shared-rule, draft, restore, owner, grant, and admitted-schema
-  mutations with publication, and existing-asset binding upserts use row locks.
-  Grant, binding, and PostgreSQL barrier evidence remain open.
+  mutations with publication, and binding/access writes expose an optional
+  monotonic asset revision precondition that returns 409 on stale writers.
+  PostgreSQL barrier evidence, full transaction rollback/idempotency, and
+  multi-process grant/binding evidence remain open.
 - X04 canonical evaluation: **implemented-unverified**; resolved mask values now
   flow from canonical preview and an unmatched-principal regression passes.
 - X05 canonical bounded schemas: **implemented-unverified**; canonical Arrow schema
@@ -134,6 +136,26 @@ is clean. Browser, PostgreSQL, Flight, consumer, and production lanes remain ope
 
 Follow-up regression coverage in `1c6c97e` asserts invalid user-supplied rows
 return the stable redacted validation response at the HTTP boundary.
+
+### X03 asset revision preconditions — `6aac008`
+
+- State: implementing.
+- Behavior: asset bindings, owners, grants, and admitted schema metadata now
+  advance a monotonic revision. API callers may send `expected_revision`; after
+  the publication row lock, stale values fail with HTTP 409 and cannot overwrite
+  the committed value. Asset detail exposes the current revision and the UI sends
+  it for owner and grant edits.
+- Green evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync
+  pytest tests/interfaces/control_plane/test_assets_api.py
+  tests/control_plane/test_asset_mutation_locks.py -q` passed (16); migration
+  tests passed after updating the head assertion; Ruff, Ty, TypeScript, and
+  `git diff --check` passed.
+- Migration: additive `20260912_0012` adds `assets.revision` with a zero default.
+- Pickle compatibility: no pickle modules, serializers, or payloads changed.
+- Remaining gaps: PostgreSQL barrier-controlled races, operation/audit atomicity,
+  and independent multi-process evidence remain required before acceptance.
+- Next permitted packet: X03 PostgreSQL CAS/barrier slice, then X06 admitted
+  schema identity and evolution rules.
 
 ## Latest evidence entry
 
