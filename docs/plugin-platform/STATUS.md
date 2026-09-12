@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `ad62fea`.
+Implementation follow-up through `e3160f7`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -92,8 +92,10 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   regression coverage. Built-in Iceberg routing and artifact-lock verification
   now has an explicit immutable built-in registration and data-plane startup
   admission path. Static descriptor identity/API checks and optional descriptor /
-  distribution digest locks are enforced before factory import. Full SDK adapter
-  routing and clean-wheel artifact evidence remain open.
+  distribution digest locks are enforced before factory import. Build tooling now
+  exposes `build_plugin_lock` to generate the exact immutable lock tuple from a
+  validated entry point and descriptor. Full SDK adapter routing and clean-wheel
+  artifact evidence remain open.
 - X13 plugin routing and migration: **implementing**; immutable compiled asset
   manifests now record explicit catalog and table-format adapter identities, and
   the data plane rejects explicit bindings it cannot honor before provider setup.
@@ -388,6 +390,22 @@ option name (`839c16f`); no raw credential field is exposed.
 - Pickle compatibility: unchanged.
 - Next permitted packet: generate and verify immutable lock artifacts in the build
   lane before qualifying an external provider.
+
+### X12 build-time immutable lock generation — `e3160f7`
+
+- State: implementing.
+- Behavior: `build_plugin_lock` creates the exact five-part immutable lock from a
+  validated entry point and static descriptor: distribution, version, API version,
+  descriptor digest, and installed-artifact digest. It rejects descriptor identity
+  mismatches and missing or conflicting entry-point provenance before a lock can be
+  written, so generated locks cannot silently describe a different wheel.
+- Green evidence: `tests/plugin_platform/test_registry.py` (13 passed), Ruff, Ty,
+  and `git diff --check` pass.
+- Remaining gaps: checked-in/generated lock-file workflow, clean-wheel provenance,
+  editable-install rejection, external SDK factories, and live provider,
+  browser, and consumer gates remain open. Pickle compatibility is unchanged.
+- Next permitted packet: wire lock generation into the release/build lane and add
+  a clean-wheel verification job before external provider qualification.
 
 ### X13 admitted catalog routing — `47c7c47`
 
