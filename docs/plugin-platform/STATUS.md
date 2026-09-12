@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `121b1a2`.
+Implementation follow-up through `3263645`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -43,7 +43,8 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
 - X04 canonical evaluation: **implemented-unverified**; resolved mask values now
   flow from canonical preview and an unmatched-principal regression passes.
 - X05 canonical bounded schemas: **implemented-unverified**; canonical Arrow schema
-  encoding includes nested metadata/IDs and direct loader bounds. Migration and all
+  encoding includes nested metadata/IDs and direct loader bounds. Direct Arrow
+  fingerprint calls now enforce node/depth limits too. Migration and all
   entry-route/byte-budget evidence remain open.
 - X06 safe schema evolution: **implementing**; typed evaluation paths now preserve
   literal dotted names, schema-field records carry optional stable IDs and typed
@@ -131,6 +132,10 @@ version tests with Ruff and Ty clean. Its provider-call regression proves a deni
 catalog host is rejected before the loader is invoked.
 
 The subsequent boundary run included catalog API coverage and passed at 100%.
+
+The direct-Arrow bounds regression and Ty/Ruff checks passed in
+`3263645`; the full schema byte-budget and every-entry-route acceptance matrix
+remains open.
 
 ### X04 synthetic fixture semantics — `4ab9031`
 
