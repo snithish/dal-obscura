@@ -50,7 +50,7 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
     if database_url is None or admin_token is None:
         return 2
     try:
-        _validate_profile(values, admin_token)
+        _validate_profile(values, admin_token, database_url)
         port = _port(values.get("DAL_OBSCURA_CONTROL_PLANE_PORT", "8820"))
         engine = create_engine_from_url(database_url)
         check_config_store_schema(engine)
@@ -122,7 +122,11 @@ def _csv(value: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in value.split(",") if item.strip())
 
 
-def _validate_profile(values: Mapping[str, str], admin_token: str) -> None:
+def _validate_profile(
+    values: Mapping[str, str],
+    admin_token: str,
+    database_url: str | None = None,
+) -> None:
     profile = values.get("DAL_OBSCURA_CONTROL_PLANE_PROFILE", "local").strip().lower()
     if profile not in {"local", "production"}:
         raise ValueError("DAL_OBSCURA_CONTROL_PLANE_PROFILE must be local or production")
@@ -133,6 +137,8 @@ def _validate_profile(values: Mapping[str, str], admin_token: str) -> None:
             "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN must contain at least 32 "
             "characters in production"
         )
+    if database_url is not None and not database_url.lower().startswith("postgresql"):
+        raise ValueError("Production requires a PostgreSQL control-plane database")
     oidc_issuer = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER")
     oidc_audience = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE")
     ui_issuer = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER")

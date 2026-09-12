@@ -88,9 +88,8 @@ def test_control_plane_cli_rejects_insecure_production_profile(capsys):
     assert "at least 32 characters" in capsys.readouterr().err
 
 
-def test_control_plane_cli_requires_real_tls_oidc_in_production(tmp_path, capsys):
-    database_url = f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
-    migrate_config_store(create_engine_from_url(database_url))
+def test_control_plane_cli_requires_real_tls_oidc_in_production(capsys):
+    database_url = "postgresql+psycopg://user:pass@db.example/control_plane"
     environment = {
         "DAL_OBSCURA_CONTROL_PLANE_PROFILE": "production",
         "DAL_OBSCURA_DATABASE_URL": database_url,
@@ -103,3 +102,22 @@ def test_control_plane_cli_requires_real_tls_oidc_in_production(tmp_path, capsys
 
     assert result == 1
     assert "HTTPS bearer OIDC issuer" in capsys.readouterr().err
+
+
+def test_control_plane_cli_rejects_sqlite_in_production(capsys):
+    result = control_plane_cli.run(
+        {
+            "DAL_OBSCURA_CONTROL_PLANE_PROFILE": "production",
+            "DAL_OBSCURA_DATABASE_URL": "sqlite+pysqlite:///:memory:",
+            "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "x" * 40,
+            "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER": "https://issuer.example",
+            "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE": "dal-obscura-admin",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": "https://issuer.example",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "dal-obscura-ui",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": "https://console.example/auth/callback",
+            "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": "https://console.example",
+        }
+    )
+
+    assert result == 1
+    assert "PostgreSQL" in capsys.readouterr().err
