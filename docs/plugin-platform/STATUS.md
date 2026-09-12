@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `9ed158e`.
+Implementation follow-up through `6fe4596`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -105,6 +105,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   artifact evidence remain open. Extended five-part locks now load the bounded
   static descriptor by default and normalize descriptor read/parse failures before
   factory import; legacy three-part locks keep their compatibility fallback.
+  Authenticated plugin diagnostics also expose enabled, not-installed, and
+  incompatible states for operator-expected IDs without importing factories or
+  enumerating unapproved installations.
 - X13 plugin routing and migration: **implementing**; immutable compiled asset
   manifests now record explicit catalog and table-format adapter identities, and
   the data plane rejects explicit bindings it cannot honor before provider setup.
@@ -1236,6 +1239,17 @@ running-process probe.
 - Remaining gaps: external plugin mappings, runtime registry routing, mixed-version
   rollout, PostgreSQL migration evidence, and end-to-end manifest migration remain
   open. Pickle compatibility is unchanged.
+
+### X12 safe lifecycle status — `6fe4596`
+
+- State: implementing.
+- Behavior: the authenticated plugin inventory reports enabled, not-installed, and
+  incompatible states for allowlisted or built-in IDs. Status collection reads only
+  entry-point metadata and never imports a factory or enumerates unapproved IDs.
+- Green evidence: registry and plugin API tests passed (19), Ruff, Ty, and
+  `git diff --check` passed.
+- Remaining gaps: clean-wheel artifact provenance, external lifecycle transitions,
+  and live browser/provider gates remain open.
 
 ## Latest evidence entry
 
