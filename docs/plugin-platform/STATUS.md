@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `62efa88`.
+Implementation follow-up through `121b1a2`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -129,6 +129,8 @@ published-config adapter tests.
 The schema/review egress slice also passed schema-service, schema API, and policy
 version tests with Ruff and Ty clean. Its provider-call regression proves a denied
 catalog host is rejected before the loader is invoked.
+
+The subsequent boundary run included catalog API coverage and passed at 100%.
 
 ### X04 synthetic fixture semantics — `4ab9031`
 
