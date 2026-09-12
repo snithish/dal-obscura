@@ -78,6 +78,10 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
                 values.get("DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST", "")
             ),
             bootstrap_enabled=_bootstrap_enabled(values, profile),
+            max_request_bytes=_positive_int(
+                values.get("DAL_OBSCURA_CONTROL_PLANE_MAX_REQUEST_BYTES", "1048576"),
+                "DAL_OBSCURA_CONTROL_PLANE_MAX_REQUEST_BYTES",
+            ),
         )
     except (ConfigStoreSchemaError, ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)

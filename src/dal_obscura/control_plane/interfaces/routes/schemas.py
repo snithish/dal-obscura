@@ -152,14 +152,14 @@ class PolicyRulesRequest(StrictModel):
         ```
     """
 
-    rules: list[dict[str, Any]]
+    rules: list[dict[str, Any]] = Field(max_length=100)
 
 
 class PolicyDraftRequest(StrictModel):
     """Revision-preconditioned policy draft replacement."""
 
     expected_revision: int = Field(ge=0)
-    rules: list[dict[str, Any]]
+    rules: list[dict[str, Any]] = Field(max_length=100)
 
 
 class PolicyVersionPublishRequest(StrictModel):
@@ -186,7 +186,7 @@ class PolicyPreviewRequest(StrictModel):
     """
 
     principal: str = Field(min_length=1)
-    groups: list[str] = Field(default_factory=list)
+    groups: list[str] = Field(default_factory=list, max_length=64)
     claims: dict[str, object] = Field(default_factory=dict)
     columns: list[str] = Field(default_factory=list, max_length=512)
 
@@ -206,7 +206,7 @@ class AssetOwnersRequest(StrictModel):
         ```
     """
 
-    owners: list[str] = Field(default_factory=list)
+    owners: list[str] = Field(default_factory=list, max_length=64)
 
 
 class AssetGrantRequest(StrictModel):
@@ -219,7 +219,7 @@ class AssetGrantRequest(StrictModel):
 class AssetGrantsRequest(StrictModel):
     """Replaces explicit capability assignments for one asset."""
 
-    grants: list[AssetGrantRequest] = Field(default_factory=list)
+    grants: list[AssetGrantRequest] = Field(default_factory=list, max_length=256)
 
 
 class AssetSchemaFieldRequest(StrictModel):
@@ -245,7 +245,7 @@ class AssetSchemaFieldsRequest(StrictModel):
         ```
     """
 
-    fields: list[AssetSchemaFieldRequest] = Field(default_factory=list)
+    fields: list[AssetSchemaFieldRequest] = Field(default_factory=list, max_length=5_000)
 
 
 class AuthProvidersRequest(StrictModel):
@@ -257,7 +257,7 @@ class AuthProvidersRequest(StrictModel):
         ```
     """
 
-    providers: list[dict[str, Any]]
+    providers: list[dict[str, Any]] = Field(max_length=16)
 
 
 class DemoLoginRequest(StrictModel):

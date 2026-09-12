@@ -47,6 +47,23 @@ def test_control_plane_readyz_checks_database():
     assert response.json() == {"status": "ready", "checks": {"database": "ok"}}
 
 
+def test_control_plane_rejects_oversized_requests_before_authentication():
+    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+    migrate_config_store(engine)
+    client = TestClient(
+        create_app(
+            session_factory(engine),
+            admin_token="test-admin",
+            max_request_bytes=64,
+        )
+    )
+
+    response = client.post("/v1/logout", content=b"x" * 65)
+
+    assert response.status_code == 413
+    assert response.json() == {"detail": "Request body too large"}
+
+
 ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )

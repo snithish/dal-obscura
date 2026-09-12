@@ -10,8 +10,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session, sessionmaker
 
 from dal_obscura.control_plane.interfaces.health import install_health_routes
@@ -107,6 +108,7 @@ def create_app(
     require_review: bool = False,
     catalog_egress_allowlist: tuple[str, ...] = (),
     bootstrap_enabled: bool | None = None,
+    max_request_bytes: int = 1_048_576,
 ) -> FastAPI:
     """Creates the control-plane FastAPI app with all workspace routes installed.
 
@@ -115,6 +117,9 @@ def create_app(
         app = create_app(session_factory(engine), admin_token="dev-admin")
         ```
     """
+
+    if max_request_bytes <= 0:
+        raise ValueError("max_request_bytes must be positive")
 
     app = FastAPI(
         title="dal-obscura control-plane API",
@@ -134,6 +139,18 @@ def create_app(
         response.headers.setdefault("x-content-type-options", "nosniff")
         response.headers.setdefault("referrer-policy", "no-referrer")
         return response
+
+    @app.middleware("http")
+    async def request_size_limit(request: Request, call_next):
+        raw_length = request.headers.get("content-length")
+        if raw_length:
+            try:
+                content_length = int(raw_length)
+            except ValueError:
+                return JSONResponse(status_code=400, content={"detail": "Invalid content length"})
+            if content_length > max_request_bytes:
+                return JSONResponse(status_code=413, content={"detail": "Request body too large"})
+        return await call_next(request)
 
     if cors_origins:
         app.add_middleware(
