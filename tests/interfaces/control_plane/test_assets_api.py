@@ -393,5 +393,11 @@ def test_workspace_asset_page_is_bounded_searchable_and_cursor_paginated():
     assert searched.status_code == 200, searched.json()
     assert [item["name"] for item in searched.json()["items"]] == ["default.orders"]
 
+    mismatched = client.get(
+        "/v1/assets/page?search=users&cursor=" + first.json()["next_cursor"],
+        headers=ADMIN_HEADERS,
+    )
+    assert mismatched.status_code == 400
+
     invalid = client.get("/v1/assets/page?cursor=garbage", headers=ADMIN_HEADERS)
     assert invalid.status_code == 400

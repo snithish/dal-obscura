@@ -801,7 +801,8 @@ class PublicationStore:
     ) -> AssetPage:
         if limit <= 0:
             raise ValueError("Asset page limit must be positive")
-        after = _decode_asset_cursor(cursor) if cursor else None
+        normalized_search = search.strip() if search else ""
+        after = _decode_asset_cursor(cursor, expected_search=normalized_search) if cursor else None
         query = select(AssetRecord).where(
             AssetRecord.cell_id == context.cell_id,
             AssetRecord.tenant_id == context.tenant_id,
@@ -820,13 +821,14 @@ class PublicationStore:
                     ),
                 )
             ).distinct()
-        if search:
-            pattern = f"%{search.strip()}%"
+        if normalized_search:
+            escaped_search = _escape_like(normalized_search)
+            pattern = f"%{escaped_search}%"
             query = query.where(
                 or_(
-                    AssetRecord.target.ilike(pattern),
-                    AssetRecord.table_identifier.ilike(pattern),
-                    AssetRecord.backend.ilike(pattern),
+                    AssetRecord.target.ilike(pattern, escape="\\"),
+                    AssetRecord.table_identifier.ilike(pattern, escape="\\"),
+                    AssetRecord.backend.ilike(pattern, escape="\\"),
                 )
             )
         if after is not None:
@@ -839,7 +841,7 @@ class PublicationStore:
         next_cursor = None
         if len(records) > limit:
             records = records[:limit]
-            next_cursor = _encode_asset_cursor(records[-1])
+            next_cursor = _encode_asset_cursor(records[-1], search=normalized_search)
         return AssetPage(items=self._workspace_asset_rows(records), next_cursor=next_cursor)
 
     def get_workspace_asset(self, asset_id: UUID) -> dict[str, object]:
@@ -1675,19 +1677,30 @@ class PublicationStore:
         return rows
 
 
-def _encode_asset_cursor(record: AssetRecord) -> str:
-    raw = json.dumps({"target": record.target, "id": str(record.id)}, separators=(",", ":"))
+def _encode_asset_cursor(record: AssetRecord, *, search: str = "") -> str:
+    raw = json.dumps(
+        {"target": record.target, "id": str(record.id), "search": search},
+        separators=(",", ":"),
+    )
     return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
 
 
-def _decode_asset_cursor(value: str) -> tuple[str, UUID]:
+def _decode_asset_cursor(value: str, *, expected_search: str = "") -> tuple[str, UUID]:
     try:
         padded = value + "=" * (-len(value) % 4)
         raw = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
         data = json.loads(raw)
+        if str(data.get("search", "")) != expected_search:
+            raise ValueError("Asset cursor does not match the requested search")
         return str(data["target"]), UUID(str(data["id"]))
     except Exception as exc:
         raise ValueError("Invalid asset cursor") from exc
+
+
+def _escape_like(value: str) -> str:
+    """Escapes SQL LIKE metacharacters so search remains literal and bounded."""
+
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _empty_workspace_summary() -> dict[str, object]:
