@@ -858,6 +858,17 @@ class PublicationStore:
             "policy_rules": self.list_policy_rules(asset_id),
         }
 
+    def lock_asset_for_publication(self, asset_id: UUID) -> None:
+        """Locks one asset row for the duration of a publication transaction."""
+
+        record = self._session.scalar(
+            select(AssetRecord)
+            .where(AssetRecord.id == asset_id)
+            .with_for_update()
+        )
+        if record is None:
+            raise LookupError(f"No asset {asset_id}")
+
     def get_asset_workspace_context(self, asset_id: UUID) -> WorkspaceContext:
         """Returns the internal workspace scope for one asset."""
 

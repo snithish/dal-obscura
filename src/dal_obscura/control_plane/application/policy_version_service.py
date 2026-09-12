@@ -151,6 +151,9 @@ def create_asset_policy_version(  # noqa: C901
     """
 
     ensure_asset_capability(store, asset_id, actor, "publish")
+    # Serialize publication attempts for this asset in PostgreSQL. This closes
+    # the read-then-create idempotency race across independent API processes.
+    store.lock_asset_for_publication(asset_id)
     request_hash = _publication_request_hash(
         expected_draft_revision=expected_draft_revision,
         expected_publication_id=expected_publication_id,
