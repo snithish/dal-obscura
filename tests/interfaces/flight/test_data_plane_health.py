@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import socket
 from typing import cast
 from uuid import UUID
@@ -10,6 +11,7 @@ from fastapi.testclient import TestClient
 from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
 from dal_obscura.data_plane.infrastructure.adapters.runtime_config import DataPlaneRuntimeConfig
 from dal_obscura.data_plane.interfaces.cli.main import _start_health_server
+from dal_obscura.data_plane.interfaces.flight.server import _health_payload
 from dal_obscura.data_plane.interfaces.health import (
     create_health_app,
     published_runtime_readiness,
@@ -46,6 +48,19 @@ def test_data_plane_readyz_redacts_readiness_exceptions():
     assert response.status_code == 503
     assert response.json() == {"status": "not_ready", "reason": "readiness check failed"}
     assert "secret" not in response.text
+
+
+def test_flight_health_logs_do_not_include_provider_exception_details(caplog):
+    secret = "sentinel-health-provider-secret"
+
+    def readiness():
+        raise RuntimeError(f"catalog URI contains {secret}")
+
+    with caplog.at_level(logging.WARNING), pytest.raises(Exception) as error:
+        _health_payload(readiness, logging.getLogger("test-flight-health"))
+
+    assert str(error.value) == "Data plane is not ready"
+    assert secret not in caplog.text
 
 
 def test_data_plane_runtime_readiness_requires_active_auth_chain():

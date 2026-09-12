@@ -185,7 +185,7 @@ def _health_payload(
     try:
         observed = dict(health_check())
     except Exception as exc:
-        logger.warning("flight_health_check_failed", extra={"reason": str(exc)})
+        logger.warning("flight_health_check_failed")
         raise flight.FlightUnavailableError("Data plane is not ready") from exc
     if observed.get("status") != "ready":
         logger.warning("flight_health_check_not_ready", extra={"health": observed})
