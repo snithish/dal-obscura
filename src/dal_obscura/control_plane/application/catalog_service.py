@@ -52,11 +52,14 @@ def discover_workspace_catalog_tables(
     catalog = store.get_workspace_catalog(context, name)
     catalog_options = cast(dict[str, Any], catalog["options"])
     validate_catalog_options(catalog_options, egress_allowlist=egress_allowlist)
-    tables = discover(
-        str(catalog["name"]),
-        str(catalog["module"]),
-        catalog_options,
-    )
+    try:
+        tables = discover(
+            str(catalog["name"]),
+            str(catalog["module"]),
+            catalog_options,
+        )
+    except ValueError as exc:
+        raise ValidationFailure(f"Catalog discovery rejected: {exc}") from exc
     governed_targets = {
         value
         for asset in store.list_workspace_assets(context)

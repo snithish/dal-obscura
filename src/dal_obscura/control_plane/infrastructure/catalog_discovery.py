@@ -16,6 +16,8 @@ ICEBERG_CATALOG_MODULE = (
 CatalogTable = dict[str, object]
 LoadCatalogFn = Any
 Namespace = tuple[str, ...]
+DEFAULT_MAX_NAMESPACES = 1_000
+DEFAULT_MAX_TABLES = 10_000
 
 
 def discover_catalog_tables(
@@ -42,13 +44,16 @@ def discover_catalog_tables(
             }
         )
     )
+    tables = list(registry.list_tables(catalog_name))
+    if len(tables) > DEFAULT_MAX_TABLES:
+        raise ValueError(f"Catalog discovery exceeded the {DEFAULT_MAX_TABLES}-table limit")
     return [
         {
             "backend": table.provider_id,
             "name": table.name,
             "table_identifier": table.table_identifier or table.name,
         }
-        for table in registry.list_tables(catalog_name)
+        for table in tables
     ]
 
 
@@ -63,6 +68,8 @@ def discover_iceberg_tables(
     options: dict[str, Any],
     *,
     load_catalog_fn: LoadCatalogFn | None = None,
+    max_namespaces: int = DEFAULT_MAX_NAMESPACES,
+    max_tables: int = DEFAULT_MAX_TABLES,
 ) -> list[CatalogTable]:
     """Lists every table reachable through a PyIceberg catalog.
 
@@ -72,15 +79,16 @@ def discover_iceberg_tables(
         ```
     """
 
+    if max_namespaces <= 0 or max_tables <= 0:
+        raise ValueError("Catalog discovery limits must be positive")
     loader = load_catalog_fn or _load_catalog
     catalog = loader(catalog_name, **options)
-    table_names = sorted(
-        {
-            _identifier_to_name(identifier)
-            for namespace in _walk_namespaces(catalog)
-            for identifier in _list_tables(catalog, namespace)
-        }
-    )
+    table_names: set[str] = set()
+    for namespace in _walk_namespaces(catalog, max_namespaces=max_namespaces):
+        for identifier in _list_tables(catalog, namespace):
+            table_names.add(_identifier_to_name(identifier))
+            if len(table_names) > max_tables:
+                raise ValueError(f"Catalog discovery exceeded the {max_tables}-table limit")
     return [
         {
             "backend": "iceberg",
@@ -91,7 +99,11 @@ def discover_iceberg_tables(
     ]
 
 
-def _walk_namespaces(catalog: Any) -> list[Namespace]:
+def _walk_namespaces(
+    catalog: Any,
+    *,
+    max_namespaces: int = DEFAULT_MAX_NAMESPACES,
+) -> list[Namespace]:
     namespaces: list[Namespace] = []
     pending: list[Namespace] = [()]
     seen: set[Namespace] = set()
@@ -99,6 +111,8 @@ def _walk_namespaces(catalog: Any) -> list[Namespace]:
         namespace = pending.pop(0)
         if namespace in seen:
             continue
+        if len(seen) >= max_namespaces:
+            raise ValueError(f"Catalog discovery exceeded the {max_namespaces}-namespace limit")
         seen.add(namespace)
         namespaces.append(namespace)
         for child in _list_namespaces(catalog, namespace):
