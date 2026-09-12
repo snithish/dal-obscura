@@ -325,6 +325,12 @@ def test_production_publication_rejects_schema_drift_after_review(monkeypatch) -
         headers=ADMIN_HEADERS,
     )
     assert saved_draft.status_code == 200, saved_draft.json()
+    admitted = client.put(
+        f"/v1/assets/{asset['id']}/schema-fields",
+        json={"fields": [{"name": "id", "field_id": "iceberg:1", "path": ["id"]}]},
+        headers=ADMIN_HEADERS,
+    )
+    assert admitted.status_code == 200, admitted.json()
     monkeypatch.setattr(
         schema_service,
         "load_catalog",
@@ -337,11 +343,13 @@ def test_production_publication_rejects_schema_drift_after_review(monkeypatch) -
     )
     assert reviewed.status_code == 200, reviewed.json()
 
-    monkeypatch.setattr(
-        schema_service,
-        "load_catalog",
-        lambda *args, **kwargs: _ChangedEvaluationCatalog(),
+    changed_admitted = client.put(
+        f"/v1/assets/{asset['id']}/schema-fields",
+        json={"fields": [{"name": "id", "field_id": "iceberg:99", "path": ["id"]}]},
+        headers=ADMIN_HEADERS,
     )
+    assert changed_admitted.status_code == 200, changed_admitted.json()
+
     published = client.post(
         f"/v1/assets/{asset['id']}/policy-versions",
         json={"review_token": reviewed.json()["review_token"]},
@@ -349,7 +357,36 @@ def test_production_publication_rejects_schema_drift_after_review(monkeypatch) -
     )
 
     assert published.status_code == 400
-    assert published.json() == {"detail": "Iceberg schema changed after review; review again."}
+    assert published.json() == {
+        "detail": "Admitted schema fields changed after review; review again."
+    }
+
+    reset_admitted = client.put(
+        f"/v1/assets/{asset['id']}/schema-fields",
+        json={"fields": [{"name": "id", "field_id": "iceberg:1", "path": ["id"]}]},
+        headers=ADMIN_HEADERS,
+    )
+    assert reset_admitted.status_code == 200, reset_admitted.json()
+    re_reviewed = client.post(
+        f"/v1/assets/{asset['id']}/policy-review",
+        json={"principal": "user1", "groups": [], "claims": {"tenant": "default"}},
+        headers=ADMIN_HEADERS,
+    )
+    assert re_reviewed.status_code == 200, re_reviewed.json()
+    monkeypatch.setattr(
+        schema_service,
+        "load_catalog",
+        lambda *args, **kwargs: _ChangedEvaluationCatalog(),
+    )
+    live_schema_drift = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        json={"review_token": re_reviewed.json()["review_token"]},
+        headers=ADMIN_HEADERS,
+    )
+    assert live_schema_drift.status_code == 400
+    assert live_schema_drift.json() == {
+        "detail": "Iceberg schema changed after review; review again."
+    }
 
 
 def test_explicit_empty_draft_is_reviewable_and_publishable_as_deny_all(monkeypatch) -> None:

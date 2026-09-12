@@ -59,6 +59,7 @@ def issue_review_token(
         _rules_hash(store.list_policy_rules(asset_id)) if draft is None else None
     )
     active_publication_id = _active_publication_id(store, asset_id)
+    admitted_schema_hash = _admitted_schema_hash(store, asset_id)
     issued_at = int(time.time() if now is None else now)
     payload: dict[str, object] = {
         "asset_id": str(asset_id),
@@ -67,6 +68,7 @@ def issue_review_token(
         "draft_content_hash": content_hash,
         "shared_rules_hash": shared_rules_hash,
         "active_publication_id": active_publication_id,
+        "admitted_schema_hash": admitted_schema_hash,
         "evidence": cast(dict[str, object], evaluation.get("evidence", {})),
         "issued_at": issued_at,
         "expires_at": issued_at + REVIEW_TTL_SECONDS,
@@ -113,6 +115,8 @@ def verify_review_token(
         schema_fingerprint(current_schema.as_arrow()),
     ):
         raise ValidationFailure("Iceberg schema changed after review; review again.")
+    if payload.get("admitted_schema_hash") != _admitted_schema_hash(store, asset_id):
+        raise ValidationFailure("Admitted schema fields changed after review; review again.")
     draft = store.get_asset_policy_draft(
         asset_id=asset_id,
         author_principal=actor.identity_key(),
@@ -157,6 +161,19 @@ def _explicit_deny_all_draft(
 
 def _rules_hash(rules: list[dict[str, object]]) -> str:
     encoded = json.dumps(rules, sort_keys=True, separators=(",", ":"), default=str).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _admitted_schema_hash(store: PublicationStore, asset_id: UUID) -> str | None:
+    """Hashes persisted field identities so reviews cannot expand on drift."""
+
+    list_fields = getattr(store, "list_asset_schema_fields", None)
+    if list_fields is None:
+        return None
+    fields = list_fields(asset_id)
+    if not fields:
+        return None
+    encoded = json.dumps(fields, sort_keys=True, separators=(",", ":"), default=str).encode()
     return hashlib.sha256(encoded).hexdigest()
 
 
