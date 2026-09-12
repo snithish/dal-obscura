@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `29bb743`.
+Implementation follow-up through `af40e51`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -339,6 +339,22 @@ remain open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: continue X03 PostgreSQL transaction barriers and X10
   activation impact/error UX.
+
+### X10 publication impact display — `af40e51`
+
+- State: implementing.
+- Behavior: staged and serving workspace generations now expose immutable asset
+  and catalog counts plus creation time. The Connections UI shows this impact
+  beside each generation before an administrator activates it.
+- Green evidence: workspace publication API tests pass with scope-count and
+  timestamp assertions; direct TypeScript check, Vite production build, Node
+  lifecycle tests, Ruff, and `git diff --check` pass.
+- Remaining gaps: safe rollback and failed-activation impact UX, browser and
+  accessibility journeys, real IdP/session validation, PostgreSQL barriers, and
+  production artifact validation remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: continue X10 activation rollback/error UX and X03
+  PostgreSQL transaction barriers.
 
 The combined control-plane, catalog, schema, publication, migration, plugin, and
 published-config boundary suite passed at 100% after the budget change.
