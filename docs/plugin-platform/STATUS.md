@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `449d586`.
+Implementation follow-up through `f552660`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -355,6 +355,20 @@ option name (`839c16f`); no raw credential field is exposed.
 - Pickle compatibility: unchanged.
 - Next permitted packet: bind schema scope digest and plugin/config revisions to
   review evidence and publication identity.
+
+### X06 UI schema reapproval state — `f552660`
+
+- State: implementing.
+- Behavior: the asset editor consumes the schema response's `stable_field_ids`
+  signal and clearly warns operators when schema-scoped identities require
+  reapproval. The warning is informational; authorization remains server-side.
+- Green evidence: governance UI TypeScript compilation and Vite production build
+  pass; UI lifecycle tests remain green.
+- Remaining gaps: browser accessibility/IdP evidence and backend schema-scope
+  migration remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: continue X03 transaction evidence and X07 provider IO
+  enforcement before onboarding external adapters.
 
 X11 package check: `tests/plugin_platform/test_plugin_api_package.py` passes and
 the package source compiles without importing the service distribution. Building
