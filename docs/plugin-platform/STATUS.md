@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `7e4e34d`.
+Implementation follow-up through `32a7fa0`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -46,11 +46,12 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   encoding includes nested metadata/IDs and direct loader bounds. Migration and all
   entry-route/byte-budget evidence remain open.
 - X06 safe schema evolution: **implementing**; typed evaluation paths now preserve
-  literal dotted names, and schema-field records now carry optional stable IDs and
-  typed path segments through migration `20260912_0011`. Provider-derived IDs,
-  path uniqueness migration for legacy rows, and evolution policy remain open.
-  Review tokens now bind the persisted admitted-schema digest in addition to the
-  live Iceberg digest.
+  literal dotted names, schema-field records carry optional stable IDs and typed
+  paths through migration `20260912_0011`, and admitted identities are carried into
+  immutable manifests and checked before data-plane planning. Provider-derived IDs,
+  path uniqueness migration for legacy rows, collection-path identity, and the full
+  evolution policy remain open. Review tokens bind the persisted admitted-schema
+  digest in addition to the live Iceberg digest.
 - X07 configuration/secrets/IO: **implementing**; nested dynamic class-loader options
   are rejected. Typed provider configs, shared secret resolution, and IO enforcement
   remain open.
@@ -94,7 +95,7 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
 - X23 independent review/release decision: **not-started**.
 
 Next implementation action: continue X03 with PostgreSQL barrier/CAS evidence and
-then complete X06 persisted field identities/evolution rules. Do not add new
+then complete X06 provider-derived and collection field identity rules. Do not add new
 providers before Phase A's security/correctness prerequisites are accepted.
 
 Latest implementation slices after the schema migration: X08 provider-page budget
@@ -224,6 +225,28 @@ return the stable redacted validation response at the HTTP boundary.
 - Pickle compatibility: unchanged.
 - Next permitted packet: complete X03 PostgreSQL barriers and X06 evolution rules;
   do not advertise external plugins from this slice alone.
+
+### X06 runtime schema admission — `32a7fa0`
+
+- State: implementing.
+- Behavior: persisted admitted schema fields are included in immutable compiled
+  asset manifests with a canonical digest. The published data-plane catalog
+  registry checks each admitted path and stable field ID against the live Arrow
+  schema before returning an executable table format, rejecting rebound or removed
+  fields so schema drift cannot expand access.
+- Green evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync
+  pytest tests/control_plane/test_publication_compiler.py
+  tests/infrastructure/adapters/test_published_config.py
+  tests/control_plane/test_policy_authorization.py
+  tests/control_plane/test_schema_service.py -q` passed (53); Ruff and Ty passed
+  on changed paths.
+- Compatibility: publications without an admitted schema remain supported;
+  pickle modules, serializers, and task payloads are unchanged.
+- Remaining gaps: provider-derived IDs for all collection nodes, typed collection
+  path encoding, legacy-row migration/uniqueness proof, and PostgreSQL/browser/
+  consumer acceptance evidence remain open.
+- Next permitted packet: X03 PostgreSQL barrier evidence, then X06 collection
+  identity and explicit schema-evolution policy tests.
 
 ## Latest evidence entry
 
