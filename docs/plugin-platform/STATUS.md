@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `fd20e72`.
+Implementation follow-up through `ad62fea`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -136,7 +136,8 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   plugin drain/remove transitions, and mixed-version upgrade tests remain open.
 - X21 performance/observability/test efficiency: **implementing**; Flight
   schema/planning/streaming paths now emit thread-safe process-local success/error
-  duration aggregates with fixed low-cardinality operation names. Dynamic
+  duration aggregates with fixed low-cardinality operation names, and the Flight
+  health action can expose a bounded copy of those aggregates. Dynamic
   principals, tables, URIs, and correlation IDs cannot become metric labels.
   Capacity profiling, benchmark thresholds, test-lane timing, and dead-code
   inventory remain open.
@@ -167,15 +168,17 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Next permitted packet: continue X03 PostgreSQL barriers/CAS and X06 provider
   identity evidence.
 
-### X21 bounded Flight metrics — `4de0e78`
+### X21 bounded Flight metrics — `ad62fea`
 
 - State: implementing.
 - Behavior: `ServiceMetrics` provides bounded, thread-safe operation/outcome
   counters and elapsed-duration totals. Flight `get_schema`, `get_flight_info`,
   and `do_get` paths record success or error without exposing request-specific
   labels. Invalid/high-cardinality operation names and unsupported outcomes are
-  rejected. A snapshot is copy-on-read for health/metrics integration.
-- Green evidence: `tests/test_observability.py` (2 passed), Ruff, Ty, and
+  rejected. The authenticated Flight health action exposes a copy-on-read
+  snapshot only when aggregates exist.
+- Green evidence: `tests/test_observability.py` (2 passed) plus Flight health
+  action coverage (4 passed), Ruff, Ty, and
   `git diff --check` pass. Existing Flight integration tests were attempted but
   cannot bind their ephemeral `0.0.0.0:0` listener in this restricted sandbox;
   the failure is recorded as an environment gate and requires a network-enabled
