@@ -239,6 +239,30 @@ def test_production_publication_requires_current_server_review(monkeypatch) -> N
         "load_catalog",
         lambda *args, **kwargs: _EvaluationCatalog(),
     )
+    missing_draft_review = client.post(
+        f"/v1/assets/{asset['id']}/policy-review",
+        json={"principal": "analyst", "groups": [], "claims": {}},
+        headers={"authorization": "Bearer review-secret-for-test"},
+    )
+    assert missing_draft_review.status_code == 400
+    assert missing_draft_review.json() == {
+        "detail": "Save an explicit policy draft before requesting server review."
+    }
+    draft = client.get(
+        f"/v1/assets/{asset['id']}/draft",
+        headers={"authorization": "Bearer review-secret-for-test"},
+    ).json()
+    saved_draft = client.put(
+        f"/v1/assets/{asset['id']}/draft",
+        json={"expected_revision": draft["revision"], "rules": draft["rules"]},
+        headers={"authorization": "Bearer review-secret-for-test"},
+    )
+    assert saved_draft.status_code == 200, saved_draft.json()
+    monkeypatch.setattr(
+        schema_service,
+        "load_catalog",
+        lambda *args, **kwargs: _EvaluationCatalog(),
+    )
 
     missing = client.post(
         f"/v1/assets/{asset['id']}/policy-versions",
@@ -285,6 +309,13 @@ def test_production_publication_rejects_schema_drift_after_review(monkeypatch) -
         json={"owners": ["platform:admin"]},
         headers=ADMIN_HEADERS,
     )
+    draft = client.get(f"/v1/assets/{asset['id']}/draft", headers=ADMIN_HEADERS).json()
+    saved_draft = client.put(
+        f"/v1/assets/{asset['id']}/draft",
+        json={"expected_revision": draft["revision"], "rules": draft["rules"]},
+        headers=ADMIN_HEADERS,
+    )
+    assert saved_draft.status_code == 200, saved_draft.json()
     monkeypatch.setattr(
         schema_service,
         "load_catalog",

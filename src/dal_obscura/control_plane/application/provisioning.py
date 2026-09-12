@@ -544,6 +544,7 @@ class ProvisioningService:
                 actor,
                 evaluation,
                 secret=self._review_secret,
+                require_saved_draft=self._require_review,
             )
         except AuthorizationFailure:
             return evaluation

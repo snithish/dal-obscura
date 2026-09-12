@@ -30,6 +30,7 @@ def issue_review_token(
     *,
     secret: str,
     now: int | None = None,
+    require_saved_draft: bool = False,
 ) -> dict[str, object]:
     """Signs completed evaluation evidence for one exact draft generation."""
 
@@ -48,6 +49,10 @@ def issue_review_token(
         asset_id=asset_id,
         author_principal=actor.identity_key(),
     )
+    if require_saved_draft and draft is None:
+        raise ValidationFailure(
+            "Save an explicit policy draft before requesting server review."
+        )
     revision = 0 if draft is None else int(cast(int | str, draft["revision"]))
     content_hash = None if draft is None else str(draft["content_hash"])
     active_publication_id = _active_publication_id(store, asset_id)
