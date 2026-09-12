@@ -76,3 +76,9 @@ td small { display: block; color: #61736e; margin-top: 4px; }
 .grant-row input, .grant-row select { width: 100%; border: 1px solid #bbc8c0; border-radius: 4px; padding: 9px 10px; background: #fff; color: inherit; }
 .access-view { max-width: 900px; }
 @media (max-width: 760px) { .management-head { flex-direction: column; } .form-grid, .form-grid.three, .metric-grid { grid-template-columns: 1fr; } .management-card { align-items: flex-start; flex-direction: column; } table { min-width: 620px; } }
+.field-row-wrap { display: flex; align-items: stretch; min-width: 0; }
+.tree-toggle { flex: 0 0 28px; border: 0; background: transparent; color: #526c63; border-radius: 4px; font-size: 14px; }
+.tree-toggle:hover, .tree-toggle:focus-visible { background: #e3f2eb; }
+.tree-toggle.spacer { display: block; }
+.schema-search { display: grid; gap: 5px; color: #52635e; font-size: 12px; font-weight: 700; }
+.schema-search input { border: 1px solid #bbc8c0; border-radius: 4px; padding: 8px 9px; background: #fff; color: inherit; }
