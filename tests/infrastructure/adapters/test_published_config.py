@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from uuid import uuid4
 
+import pyarrow as pa
 import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -20,8 +21,10 @@ from dal_obscura.common.config_store.orm import (
 )
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 from dal_obscura.data_plane.infrastructure.adapters.published_config import (
+    PublishedAsset,
     PublishedConfigAuthorizer,
     PublishedConfigStore,
+    _validate_schema_admission,
 )
 
 ICEBERG_CATALOG_MODULE = (
@@ -178,6 +181,51 @@ def test_published_authorizer_rejects_corrupt_mask_instead_of_dropping_it(
             catalog="analytics",
             requested_columns=["email"],
         )
+
+
+def test_published_schema_admission_rejects_rebound_or_added_field():
+    asset = PublishedAsset(
+        publication_id=uuid4(),
+        tenant_id=uuid4(),
+        catalog="analytics",
+        target="default.users",
+        backend="iceberg",
+        compiled_config={
+            "schema": {
+                "encoding": 1,
+                "fields": [
+                    {
+                        "name": "profile.email",
+                        "field_id": "iceberg:3",
+                        "path": ["profile", "email"],
+                        "type": "string",
+                        "nullable": True,
+                    }
+                ],
+            }
+        },
+        policy_version=1,
+    )
+    schema = pa.schema(
+        [
+            pa.field(
+                "profile",
+                pa.struct(
+                    [
+                        pa.field(
+                            "email",
+                            pa.string(),
+                            metadata={b"PARQUET:field_id": b"iceberg:99"},
+                        )
+                    ]
+                ),
+                metadata={b"PARQUET:field_id": b"iceberg:2"},
+            )
+        ]
+    )
+
+    with pytest.raises(ValueError, match="no longer matches"):
+        _validate_schema_admission(asset, schema)
 
 
 def _publish_asset(

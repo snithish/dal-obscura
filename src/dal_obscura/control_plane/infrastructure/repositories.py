@@ -1574,6 +1574,7 @@ class PublicationStore:
                     table_identifier=asset.table_identifier,
                     options=dict(asset.options_json),
                     rules=rules,
+                    schema_fields=self.list_asset_schema_fields(asset.id),
                 )
             )
 
@@ -1659,6 +1660,7 @@ class PublicationStore:
                 table_identifier=asset.table_identifier,
                 options=dict(asset.options_json),
                 rules=rules,
+                schema_fields=self.list_asset_schema_fields(asset.id),
             ),
             catalog_draft,
         )

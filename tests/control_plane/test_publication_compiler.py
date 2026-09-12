@@ -108,6 +108,32 @@ def test_compiler_publishes_asset_policy_version_and_runtime():
     assert isinstance(asset.policy_version, int)
 
 
+def test_compiler_carries_admitted_schema_identities_into_immutable_manifest():
+    draft = _draft()
+    draft.assets[0].schema_fields = [
+        {
+            "name": "id",
+            "field_id": "iceberg:1",
+            "path": ["id"],
+            "type": "long",
+            "nullable": False,
+        },
+        {
+            "name": "profile.email",
+            "field_id": "iceberg:3",
+            "path": ["profile", "email"],
+            "type": "string",
+            "nullable": True,
+        },
+    ]
+
+    schema = PublicationCompiler().compile(draft).assets[0].compiled_config["schema"]
+
+    assert schema["encoding"] == 1
+    assert schema["fields"] == draft.assets[0].schema_fields
+    assert len(schema["digest"]) == 64
+
+
 def test_compiler_changes_policy_version_when_row_filter_changes():
     first = PublicationCompiler().compile(_draft(row_filter="region = 'us'")).assets[0]
     second = PublicationCompiler().compile(_draft(row_filter="region = 'eu'")).assets[0]

@@ -8,6 +8,7 @@ from threading import RLock
 from typing import Any, cast
 from uuid import UUID
 
+import pyarrow as pa
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -389,7 +390,13 @@ class PublishedConfigCatalogRegistry:
         cache_key = (asset.publication_id, asset.tenant_id, asset.catalog, asset.target)
         registry = self._registry_cache.get(cache_key)
         if registry is not None:
-            return registry.describe(catalog, _asset_table_identifier(asset), tenant_id=tenant_id)
+            table_format = registry.describe(
+                catalog,
+                _asset_table_identifier(asset),
+                tenant_id=tenant_id,
+            )
+            _validate_schema_admission(asset, table_format.get_schema())
+            return table_format
         catalog_config = _catalog_config_for_asset(published_catalog, asset)
         if self._secret_provider is not None:
             catalog_config = CatalogConfig(
@@ -403,7 +410,13 @@ class PublishedConfigCatalogRegistry:
             )
         registry = CatalogRegistry(ServiceConfig(catalogs={catalog: catalog_config}))
         self._registry_cache[cache_key] = registry
-        return registry.describe(catalog, _asset_table_identifier(asset), tenant_id=tenant_id)
+        table_format = registry.describe(
+            catalog,
+            _asset_table_identifier(asset),
+            tenant_id=tenant_id,
+        )
+        _validate_schema_admission(asset, table_format.get_schema())
+        return table_format
 
 
 def _effective_policy_version(asset: PublishedAsset) -> int:
@@ -446,6 +459,57 @@ def _asset_table_identifier(asset: PublishedAsset) -> str:
     if not isinstance(table, str) or not table.strip():
         raise ValueError(f"Published asset {asset.catalog}/{asset.target} has no table identifier")
     return table
+
+
+def _validate_schema_admission(asset: PublishedAsset, schema: pa.Schema) -> None:
+    """Rejects a published asset when an admitted field identity has drifted."""
+
+    admission = _mapping(asset.compiled_config.get("schema"))
+    fields = admission.get("fields")
+    if not isinstance(fields, list) or not fields:
+        return
+    identities = _schema_identities(schema)
+    for raw in fields:
+        if not isinstance(raw, dict):
+            raise ValueError("Published schema admission is invalid")
+        path = raw.get("path")
+        field_id = raw.get("field_id")
+        if (
+            not isinstance(path, list)
+            or not path
+            or any(not isinstance(segment, str) for segment in path)
+            or not isinstance(field_id, str)
+        ):
+            raise ValueError("Published schema admission is invalid")
+        identity = (tuple(path), field_id)
+        actual = identities.get(identity)
+        if actual is None:
+            raise ValueError(
+                "Published schema admission no longer matches the live table; review again."
+            )
+        expected_type = raw.get("type")
+        if isinstance(expected_type, str) and expected_type and expected_type != actual:
+            raise ValueError(
+                "Published schema field type changed after review; review again."
+            )
+
+
+def _schema_identities(schema: pa.Schema) -> dict[tuple[tuple[str, ...], str], str]:
+    result: dict[tuple[tuple[str, ...], str], str] = {}
+
+    def visit(field: pa.Field, path: tuple[str, ...]) -> None:
+        metadata = field.metadata or {}
+        raw_id = metadata.get(b"PARQUET:field_id") or metadata.get(b"iceberg.field.id")
+        if raw_id is not None:
+            field_id = raw_id.decode("utf-8", "replace")
+            result[(path, field_id)] = str(field.type)
+        if pa.types.is_struct(field.type):
+            for child in field.type:
+                visit(child, (*path, child.name))
+
+    for field in schema:
+        visit(field, (field.name,))
+    return result
 
 
 def _tenant_id(principal: Principal) -> str:

@@ -69,6 +69,7 @@ class AssetDraft:
     table_identifier: str | None
     options: dict[str, Any]
     rules: list[PolicyRuleDraft] = field(default_factory=list)
+    schema_fields: list[dict[str, object]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

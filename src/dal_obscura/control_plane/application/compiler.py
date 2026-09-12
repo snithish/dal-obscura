@@ -160,6 +160,22 @@ class PublicationCompiler:
                 "table_format": asset.backend,
             },
         }
+        if asset.schema_fields:
+            schema_fields = [
+                {
+                    "name": str(field["name"]),
+                    "field_id": str(field["field_id"]),
+                    "path": [str(segment) for segment in cast(list[object], field["path"])],
+                    "type": str(field["type"]),
+                    "nullable": bool(field["nullable"]),
+                }
+                for field in asset.schema_fields
+            ]
+            compiled_config["schema"] = {
+                "encoding": 1,
+                "fields": schema_fields,
+                "digest": _stable_hash(schema_fields),
+            }
         policy_version = _stable_int63(policy_json)
         compiled_config["policy"]["version"] = policy_version
         return CompiledAsset(
