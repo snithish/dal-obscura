@@ -16,10 +16,12 @@ Required backend/production coverage: [production review](PRODUCTION_READINESS.m
   readiness endpoints through the configured composition path. Wheel/container
   startup, Compose execution, and the remaining packaging slices remain
   unverified.
-- P02 real OIDC login and revocable sessions: not-started; demo cookie plumbing
-  exists but does not satisfy the target session contract.
-- P03 complete scoped authorization: not-started; coarse existing checks require
-  replacement or extension and negative matrix coverage.
+- P02 real OIDC login and revocable sessions: partial; browser sessions are now
+  opaque, durable, expiring, and revocable, while authorization-code/PKCE
+  callback handling remains open.
+- P03 complete scoped authorization: partial; asset reads, policy reads,
+  previews, and history are owner-scoped, while grants, drafts, operations,
+  and full management capabilities remain open.
 - P04 reliable UI lifecycle and behavioral tests: not-started; source shell exists.
 - P05 canonical nested schema API/tree: not-started; gateway primitives exist.
 - P06 durable drafts and conflict protection: not-started.
@@ -360,6 +362,62 @@ not all implementation. Do not add placeholder screens or call P01 complete.
   needs clean image/wheel/Compose evidence.
 - Next action: finish the P01 runtime/packaging acceptance lane, then implement
   the reviewed P02 session contract before changing authorization routes.
+
+- Packet/slice: P02.1 opaque browser sessions.
+- State: implemented-unverified.
+- Commit: `21d43b8`.
+- Behavior and touched modules: adds a migrated `browser_sessions` table that
+  stores only SHA-256 token digests, actor identity, groups, expiry, last-seen,
+  and revocation state. Demo password exchange now resolves the provider token
+  once and mints a random HttpOnly session secret; logout revokes it. Unsafe
+  cookie requests retain double-submit CSRF checks and reject untrusted Origin
+  headers.
+- Prerequisites/review authorization: the P00 proposed session defaults were
+  used for this additive slice; no pickle path changed. Authorization-code
+  transaction storage, PKCE callback, nonce validation, and session cleanup are
+  still required before production acceptance.
+- Red test and actual failure: the browser cookie previously contained the raw
+  provider access token and logout only expired the client cookie, leaving no
+  server-side revocation path.
+- Green commands and results: control-plane, migration, and browser-session
+  tests passed (including expiry, digest-only persistence, revocation, CSRF,
+  Origin, and logout); focused Ruff and Ty checks passed.
+- Browser/API/PostgreSQL/consumer evidence: in-process FastAPI and SQLite
+  migration tests only; no real IdP, Postgres, browser, or deployed stack proof.
+- Manual/independent review: none.
+- Remaining limitations/blocker: bearer admin bypass remains an operator
+  bootstrap mechanism; the UI still exposes a demo-login shortcut and does not
+  start an authorization-code flow.
+- Next action: implement and test the OIDC authorization-code/PKCE login
+  transaction and wire the UI to it before removing the demo-only path.
+
+- Packet/slice: P03.1 scoped inventory and policy reads.
+- State: implemented-unverified.
+- Commit: `21d43b8`.
+- Behavior and touched modules: non-admin actors see only assets whose owner
+  principal or group matches their identity; asset detail, policy rules,
+  previews, and policy-version history enforce the same owner boundary. Catalog
+  inventory and runtime/auth-provider settings are admin-only. The repository
+  uses a principal-filtered join for asset inventory instead of per-asset
+  authorization queries.
+- Prerequisites/review authorization: additive least-privilege enforcement on
+  existing routes; no migration or pickle behavior outside the session table.
+- Red test and actual failure: the production review's authenticated outsider
+  probe returned 200 for all inventory and policy reads, exposing workspace
+  configuration across owners.
+- Green commands and results: negative actor tests now assert empty scoped
+  inventory or HTTP 403 for foreign assets and admin-only settings; the full
+  control-plane, architecture, migration, and service test lanes passed with
+  focused Ruff and Ty checks.
+- Browser/API/PostgreSQL/consumer evidence: in-process FastAPI and SQLite only;
+  no multi-tenant Postgres or browser authorization matrix has been run.
+- Manual/independent review: none.
+- Remaining limitations/blocker: write capability separation, drafts,
+  evaluations, direct-ID pagination, operations, audit, and tenant/cell grant
+  records remain to be implemented. Historical baseline text above records the
+  pre-fix outsider probe and should not be read as current behavior.
+- Next action: add durable capability/grant records and thread actor context
+  through every management and publication route.
 
 ## Slice evidence template
 
