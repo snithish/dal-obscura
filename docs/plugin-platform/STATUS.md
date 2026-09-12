@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `50d0181`.
+Implementation follow-up through `229cd6d`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -41,7 +41,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   PostgreSQL barrier evidence, full transaction rollback/idempotency, and
   multi-process grant/binding evidence remain open. Delegated grant mutations now
   lock the asset before checking grant-manager authority, eliminating a stale
-  authorization snapshot between revocation and replacement.
+  authorization snapshot between revocation and replacement. Publication
+  capability checks now also run after acquiring that asset lock, so revocations
+  ordered before activation cannot be bypassed by a pre-lock authorization read.
 - X04 canonical evaluation: **implemented-unverified**; resolved mask values now
   flow from canonical preview and an unmatched-principal regression passes.
 - X05 canonical bounded schemas: **implemented-unverified**; canonical Arrow schema
@@ -1301,6 +1303,17 @@ running-process probe.
   tests (2), and `git diff --check` passed.
 - Remaining gaps: browser-driven authentication/authorization, external plugin
   routing, and production provider/consumer gates remain open.
+
+### X03 publication authorization lock ordering — `229cd6d`
+
+- State: implementing.
+- Behavior: publication capability authorization is evaluated after the asset row
+  lock, using the same transaction generation as grant revocation and candidate
+  activation. This closes the stale pre-lock authorization window.
+- Green evidence: ordering regression, idempotency publication regression, Ruff,
+  Ty, and `git diff --check` passed.
+- Remaining gaps: real PostgreSQL barrier/process interleavings, rollback after
+  process failure, and full recovery evidence remain open.
 
 ## Latest evidence entry
 
