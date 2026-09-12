@@ -286,7 +286,7 @@ export const controlPlane = {
       method: "PUT",
       body: JSON.stringify({ rules }),
     }),
-  preview: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, object> }) => {
+  preview: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, unknown> }) => {
     const raw = await request<RawPreview>(`/v1/assets/${assetId}/policy-preview`, {
       method: "POST",
       body: JSON.stringify(persona),
@@ -314,7 +314,7 @@ export const controlPlane = {
       evidence: raw.evidence,
     } satisfies Preview;
   },
-  review: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, object> }) => {
+  review: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, unknown> }) => {
     const raw = await request<{ decision: "allow" | "deny"; allowed_columns: string[]; masks: Array<{ column: string; type: Mask["type"] }>; row_filter: string | null; output_rows: number; rows: Array<Record<string, unknown>>; evidence: Record<string, unknown>; review_token: string; review_expires_at: number }>("/v1/assets/" + assetId + "/policy-review", {
       method: "POST",
       body: JSON.stringify(persona),
