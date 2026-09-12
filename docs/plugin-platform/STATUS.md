@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `336d2c3`.
+Implementation follow-up through `449d586`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -58,6 +58,8 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   changes. Schemas without provider IDs now use schema-scoped synthetic identities
   across nested struct/list/map paths; any semantic shape change therefore
   requires reapproval instead of inheriting a display-name grant.
+  Compiled schema metadata now records `stable_ids`; planning rejects a stable
+  publication when the live schema no longer exposes provider IDs.
 - X07 configuration/secrets/IO: **implementing**; nested dynamic class-loader options
   are rejected, and schema/evaluation/review provider calls now use the configured
   catalog egress validator. Explicit environment secret references now resolve in
@@ -337,6 +339,22 @@ option name (`839c16f`); no raw credential field is exposed.
 - Pickle compatibility: unchanged.
 - Next permitted packet: bind stable-ID mode and schema-scope metadata into
   compiled publication records and review evidence.
+
+### X06 persisted identity stability mode — `449d586`
+
+- State: implementing.
+- Behavior: compiled schema admissions now persist a `stable_ids` flag derived
+  from their reviewed identities. The data plane rejects a publication marked
+  stable when a live schema has missing provider IDs, while synthetic/legacy
+  admissions remain on the explicit reapproval path.
+- Green evidence: publication-compiler and published-config suites pass (53),
+  Ruff, Ty, and `git diff --check` pass.
+- Remaining gaps: plugin-native schema adapters, persisted scope digest and
+  migration metadata, explicit additive/drop policy, PostgreSQL/provider/browser/
+  consumer evidence remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: bind schema scope digest and plugin/config revisions to
+  review evidence and publication identity.
 
 X11 package check: `tests/plugin_platform/test_plugin_api_package.py` passes and
 the package source compiles without importing the service distribution. Building
