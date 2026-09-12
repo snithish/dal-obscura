@@ -163,6 +163,15 @@ def _is_https_origin(value: str) -> bool:
     return _is_https_url(value) and not parsed.path.rstrip("/") and not parsed.query
 
 
+def _origin(value: str | None) -> str:
+    if not value:
+        return ""
+    parsed = urlsplit(value.strip())
+    if not parsed.scheme or not parsed.netloc:
+        return ""
+    return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}"
+
+
 def _validate_optional_https(values: Mapping[str, str], name: str, label: str) -> None:
     value = _optional(values, name)
     if value is not None and not _is_https_url(value):
@@ -188,11 +197,14 @@ def _validate_profile(  # noqa: C901
         raise ValueError("Production requires a PostgreSQL control-plane database")
     oidc_issuer = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER")
     oidc_audience = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE")
+    oidc_admin_group = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP")
     ui_issuer = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER")
     ui_client = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID")
     redirect_uri = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI")
-    if not _is_https_url(oidc_issuer) or not oidc_audience:
-        raise ValueError("Production requires an HTTPS bearer OIDC issuer and audience")
+    if not _is_https_url(oidc_issuer) or not oidc_audience or not oidc_admin_group:
+        raise ValueError(
+            "Production requires an HTTPS bearer OIDC issuer, audience, and admin group"
+        )
     if not _is_https_url(ui_issuer) or not ui_client:
         raise ValueError("Production requires an HTTPS browser OIDC issuer and client ID")
     if not _is_https_url(redirect_uri):
@@ -228,10 +240,14 @@ def _validate_profile(  # noqa: C901
     )
     if not _csv(values.get("DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST", "")):
         raise ValueError("Production requires an explicit catalog egress allowlist")
-    bootstrap_enabled = values.get(
-        "DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED",
-        "false",
-    ).strip().lower()
+    bootstrap_enabled = (
+        values.get(
+            "DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED",
+            "false",
+        )
+        .strip()
+        .lower()
+    )
     if bootstrap_enabled != "false":
         raise ValueError("Static bootstrap admin access must be disabled in production")
     if any(
@@ -251,6 +267,18 @@ def _validate_profile(  # noqa: C901
             "DAL_OBSCURA_CONTROL_PLANE_REVIEW_SECRET must contain at least 32 "
             "characters in production"
         )
+    post_logout_redirect_uri = _optional(
+        values,
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI",
+    )
+    if not _is_https_url(post_logout_redirect_uri):
+        raise ValueError("Production requires an HTTPS browser post-logout redirect URI")
+    allowed_origins = {_origin(origin) for origin in origins}
+    if (
+        _origin(redirect_uri) not in allowed_origins
+        or _origin(post_logout_redirect_uri) not in allowed_origins
+    ):
+        raise ValueError("Production OIDC redirect origins must be listed in CORS origins")
 
 
 def _oidc_resolver(values: Mapping[str, str]):
@@ -267,10 +295,14 @@ def _oidc_resolver(values: Mapping[str, str]):
 
 
 def _bootstrap_enabled(values: Mapping[str, str], profile: str) -> bool:
-    raw = values.get(
-        "DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED",
-        "true" if profile == "local" else "false",
-    ).strip().lower()
+    raw = (
+        values.get(
+            "DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED",
+            "true" if profile == "local" else "false",
+        )
+        .strip()
+        .lower()
+    )
     if raw not in {"true", "false"}:
         raise ValueError("DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED must be true or false")
     return raw == "true"

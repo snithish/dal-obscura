@@ -158,6 +158,7 @@ def test_control_plane_cli_rejects_sqlite_in_production(capsys):
             "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "x" * 40,
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER": "https://issuer.example",
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE": "dal-obscura-admin",
+            "DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP": "platform-admins",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": "https://issuer.example",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "dal-obscura-ui",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": "https://console.example/auth/callback",
@@ -177,6 +178,7 @@ def test_control_plane_cli_rejects_enabled_static_bootstrap_in_production(capsys
             "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "x" * 40,
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER": "https://issuer.example",
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE": "dal-obscura-admin",
+            "DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP": "platform-admins",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": "https://issuer.example",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "dal-obscura-ui",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": "https://console.example/auth/callback",
@@ -198,6 +200,7 @@ def test_control_plane_cli_requires_separate_review_secret_in_production(capsys)
             "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "x" * 40,
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER": "https://issuer.example",
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE": "dal-obscura-admin",
+            "DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP": "platform-admins",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": "https://issuer.example",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "dal-obscura-ui",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": "https://console.example/auth/callback",
@@ -208,6 +211,51 @@ def test_control_plane_cli_requires_separate_review_secret_in_production(capsys)
 
     assert result == 1
     assert "REVIEW_SECRET" in capsys.readouterr().err
+
+
+def test_control_plane_cli_requires_production_admin_group(capsys):
+    result = control_plane_cli.run(
+        {
+            "DAL_OBSCURA_CONTROL_PLANE_PROFILE": "production",
+            "DAL_OBSCURA_DATABASE_URL": "postgresql+psycopg://user:pass@db.example/control_plane",
+            "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "x" * 40,
+            "DAL_OBSCURA_CONTROL_PLANE_REVIEW_SECRET": "r" * 40,
+            "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER": "https://issuer.example",
+            "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE": "dal-obscura-admin",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": "https://issuer.example",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "dal-obscura-ui",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": "https://console.example/auth/callback",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI": "https://console.example/",
+            "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": "https://console.example",
+            "DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST": "catalog.example",
+        }
+    )
+
+    assert result == 1
+    assert "admin group" in capsys.readouterr().err
+
+
+def test_control_plane_cli_requires_oidc_redirect_origins_in_cors(capsys):
+    result = control_plane_cli.run(
+        {
+            "DAL_OBSCURA_CONTROL_PLANE_PROFILE": "production",
+            "DAL_OBSCURA_DATABASE_URL": "postgresql+psycopg://user:pass@db.example/control_plane",
+            "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "x" * 40,
+            "DAL_OBSCURA_CONTROL_PLANE_REVIEW_SECRET": "r" * 40,
+            "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER": "https://issuer.example",
+            "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE": "dal-obscura-admin",
+            "DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP": "platform-admins",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": "https://issuer.example",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "dal-obscura-ui",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": "https://other.example/auth/callback",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI": "https://console.example/",
+            "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": "https://console.example",
+            "DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST": "catalog.example",
+        }
+    )
+
+    assert result == 1
+    assert "redirect origins" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
@@ -243,6 +291,7 @@ def test_control_plane_cli_rejects_insecure_explicit_oidc_endpoints(name, value,
         "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "x" * 40,
         "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER": "https://issuer.example",
         "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE": "dal-obscura-admin",
+        "DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP": "platform-admins",
         "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": "https://issuer.example",
         "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "dal-obscura-ui",
         "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": "https://console.example/auth/callback",
