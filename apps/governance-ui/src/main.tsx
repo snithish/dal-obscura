@@ -66,6 +66,16 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (saveState !== "unsaved") return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [saveState]);
+
+  useEffect(() => {
     if (page === "assets" || !session || isDemo) return;
     void loadManagement(page);
   }, [page, session, isDemo]);
@@ -177,7 +187,12 @@ function App() {
 
   async function logout() {
     loadEpoch.current += 1;
+    inventoryEpoch.current += 1;
     managementEpoch.current += 1;
+    if (searchTimer.current !== undefined) {
+      window.clearTimeout(searchTimer.current);
+      searchTimer.current = undefined;
+    }
     try {
       await controlPlane.logout();
       clearPrivateState();
@@ -192,13 +207,19 @@ function App() {
 
   function clearPrivateState() {
     setSession(null); setAsset(null); setAssets([]); setRules([]); setPreview(null);
+    setManagementData({}); setAssetCursor(null); setAssetHasMore(false); setAssetSearch("");
+    setDraftRevision(0); setReviewToken(null); setSaveState("saved");
     setWorkspace("unavailable");
     void controlPlane.getUiAuthConfig().then(setAuthConfig).catch(() => setAuthConfig(null));
   }
 
   function navigateTo(next: Page) {
-    if (saveState === "unsaved" && !window.confirm("You have unsaved policy changes. Leave this editor?")) return;
+    if (!confirmDiscardUnsaved()) return;
     setPage(next);
+  }
+
+  function confirmDiscardUnsaved() {
+    return saveState !== "unsaved" || window.confirm("You have unsaved policy changes. Leave this editor?");
   }
 
   async function loadAsset(assetId: string, knownAssets = assets) {
@@ -208,6 +229,7 @@ function App() {
       if (epoch !== loadEpoch.current) return;
       fullAsset.schema = schema;
       const draft = isDemo ? null : await controlPlane.getDraft(assetId);
+      if (epoch !== loadEpoch.current) return;
       const effectiveRules = draft?.rules ?? loadedRules;
       setManagementData((current) => ({ ...current, history, grants }));
       setAssets(knownAssets); setAsset(fullAsset); setRules(effectiveRules); setDraftRevision(draft?.revision ?? 0); setSelectedRule(0); setReviewToken(null);
@@ -341,7 +363,7 @@ function App() {
     </aside>
     <main>
       <header className="topbar"><div><span className="eyebrow">{page === "assets" ? "ASSET WORKSPACE" : page.toUpperCase()}</span><h1>{page === "assets" ? asset?.name ?? "Assets" : titleFor(page)}</h1></div><div className="actor"><span className="avatar">{session?.principal.slice(0, 1).toUpperCase() ?? "?"}</span><div><strong>{session?.principal ?? "Not signed in"}</strong><small>{session?.platform_admin ? "Platform admin" : "Authenticated user"}{session?.issuer ? ` · ${session.issuer}` : ""}</small></div>{session && <button className="text-button" onClick={() => void logout()}>Sign out</button>}{logoutPending && <button className="text-button" onClick={() => void logout()}>Retry sign out</button>}</div></header>
-      {page !== "assets" ? <ManagementView page={page} data={managementData} loading={managementLoading} onReload={() => void loadManagement(page)} onLoadMore={page === "changes" ? () => void loadMoreHistory() : undefined} historyLoading={historyLoading} /> : workspace === "loading" ? <WorkspaceMessage title="Loading governed assets" message="Checking your workspace access and available assets." /> : workspace === "unavailable" ? <WorkspaceMessage title="Cannot load workspace" message={notice} retry={loadInitialWorkspace} authConfig={authConfig} onLogin={demoLogin} loggingIn={loggingIn} /> : !asset ? <WorkspaceMessage title="No governed assets" message={notice} /> : <AssetWorkspace assets={assets} asset={asset} history={managementData.history ?? []} grants={managementData.grants ?? []} onAsset={(id) => void loadAsset(id)} assetSearch={assetSearch} assetHasMore={assetHasMore} assetInventoryLoading={assetInventoryLoading} onSearch={searchAssets} onLoadMore={() => void refreshAssetInventory(assetSearch, true)} rules={rules} activeRule={activeRule} activeRevision={draftRevision} selectedRule={selectedRule} onRule={setSelectedRule} selectedField={selectedField} onField={setSelectedField} selectedMask={selectedMask} effectiveFields={effectiveFields} saveState={saveState} notice={notice} onToggleField={toggleField} onMask={setMask} onUpdateRule={updateRule} onAddRule={addRule} onRemoveRule={removeRule} onSave={() => void saveDraft()} onPreview={() => void runPreview()} onReview={() => void requestReview()} previewPrincipal={previewPrincipal} previewGroups={previewGroups} previewClaims={previewClaims} onPreviewPrincipal={setPreviewPrincipal} onPreviewGroups={setPreviewGroups} onPreviewClaims={setPreviewClaims} onPublish={() => void publishAsset()} publishing={publishPending} onRestore={(version) => void restorePolicyVersion(version)} reviewToken={reviewToken ?? undefined} preview={preview} session={session} onReloadAccess={() => void loadAsset(asset.id)} />}
+      {page !== "assets" ? <ManagementView page={page} data={managementData} loading={managementLoading} onReload={() => void loadManagement(page)} onLoadMore={page === "changes" ? () => void loadMoreHistory() : undefined} historyLoading={historyLoading} /> : workspace === "loading" ? <WorkspaceMessage title="Loading governed assets" message="Checking your workspace access and available assets." /> : workspace === "unavailable" ? <WorkspaceMessage title="Cannot load workspace" message={notice} retry={loadInitialWorkspace} authConfig={authConfig} onLogin={demoLogin} loggingIn={loggingIn} /> : !asset ? <WorkspaceMessage title="No governed assets" message={notice} /> : <AssetWorkspace assets={assets} asset={asset} history={managementData.history ?? []} grants={managementData.grants ?? []} onAsset={(id) => { if (confirmDiscardUnsaved()) void loadAsset(id); }} assetSearch={assetSearch} assetHasMore={assetHasMore} assetInventoryLoading={assetInventoryLoading} onSearch={searchAssets} onLoadMore={() => void refreshAssetInventory(assetSearch, true)} rules={rules} activeRule={activeRule} activeRevision={draftRevision} selectedRule={selectedRule} onRule={setSelectedRule} selectedField={selectedField} onField={setSelectedField} selectedMask={selectedMask} effectiveFields={effectiveFields} saveState={saveState} notice={notice} onToggleField={toggleField} onMask={setMask} onUpdateRule={updateRule} onAddRule={addRule} onRemoveRule={removeRule} onSave={() => void saveDraft()} onPreview={() => void runPreview()} onReview={() => void requestReview()} previewPrincipal={previewPrincipal} previewGroups={previewGroups} previewClaims={previewClaims} onPreviewPrincipal={setPreviewPrincipal} onPreviewGroups={setPreviewGroups} onPreviewClaims={setPreviewClaims} onPublish={() => void publishAsset()} publishing={publishPending} onRestore={(version) => void restorePolicyVersion(version)} reviewToken={reviewToken ?? undefined} preview={preview} session={session} onReloadAccess={() => void loadAsset(asset.id)} />}
     </main>
   </div>;
 }
