@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `209d630`.
+Implementation follow-up through `ccb00bc`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -239,7 +239,8 @@ return the stable redacted validation response at the HTTP boundary.
 - Behavior: persisted admitted schema fields are included in immutable compiled
   asset manifests with a canonical digest. The published data-plane catalog
   registry checks each admitted path and stable field ID against the live Arrow
-  schema before returning an executable table format, rejecting rebound or removed
+  schema before returning an executable table format, normalizing numeric
+  PyIceberg IDs and common Iceberg type aliases, and rejecting rebound or removed
   fields so schema drift cannot expand access.
 - Green evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync
   pytest tests/control_plane/test_publication_compiler.py
@@ -254,6 +255,10 @@ return the stable redacted validation response at the HTTP boundary.
   consumer acceptance evidence remain open.
 - Next permitted packet: X03 PostgreSQL barrier evidence, then X06 collection
   identity and explicit schema-evolution policy tests.
+
+Follow-up compatibility regression in `ccb00bc` proves a namespaced admitted
+`iceberg:1` identity matches PyIceberg's numeric `PARQUET:field_id=1` metadata,
+while a rebound numeric ID remains rejected.
 
 ### X03 replacement rollback regression — `5420249`
 
