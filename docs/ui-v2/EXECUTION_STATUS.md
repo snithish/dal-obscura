@@ -40,8 +40,8 @@ Required backend/production coverage: [production review](PRODUCTION_READINESS.m
   data-plane status are shipped.
 - P10 complete management and consumer handoff: partial; UI management views,
   bounded asset inventory, catalog discovery/onboarding, grant administration,
-  and operation lookup exist, while secret-provider diagnostics and real
-  DuckDB/Spark/Flight handoff evidence remain.
+  operation lookup, and bounded catalog discovery exist, while secret-provider
+  diagnostics and real DuckDB/Spark/Flight handoff evidence remain.
 - P11 verified local feature/security parity: partial; local uses shared auth,
   CSRF, authorization, evaluation, and publication code, while a real local
   OIDC/browser stack is unverified.
@@ -125,6 +125,15 @@ do not call the release complete without those observations.
   secrets and non-allowlisted endpoint hosts remain rejected.
 - Green evidence: catalog API and compiler tests pass with Ruff and Ty. Real
   secret-provider and catalog discovery diagnostics remain unverified.
+
+### P10.3 bounded catalog discovery — `3489a80`
+
+- State: implemented-unverified.
+- Behavior: namespace traversal and table enumeration stop at explicit bounded
+  limits; overflow is returned as a safe validation error instead of allowing
+  an unbounded catalog walk to monopolize an API worker.
+- Green evidence: discovery and catalog API tests pass with Ruff and Ty. Real
+  catalog latency/timeout and object-store probes remain unverified.
 
 ### P15.2 request-boundary limits — `c2975a3`
 
