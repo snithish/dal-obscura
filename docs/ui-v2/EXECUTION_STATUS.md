@@ -1,8 +1,16 @@
 # Governance application execution status
 
+**Latest review, baseline `5208eee`:** see the
+[implementation findings](../plugin-platform/IMPLEMENTATION_REVIEW.md) and
+[new execution ledger](../plugin-platform/STATUS.md). Confirmed publication/review
+defects and remaining UI/schema/plugin gaps mean earlier “implemented-unverified”
+entries below must not be interpreted as acceptance. Existing deny-all backend and
+operation lookup code now exists; full UI/race/live evidence remains incomplete.
+The new handoff owns next task order; this ledger preserves historical evidence.
+
 Plan created against `612bb1c`; implementation evidence and the 2026-09-12
 production review are recorded below. **Paid-production release: HOLD.**
-Canonical task order: [execution handoff](EXECUTION_HANDOFF.md).
+Earlier task order: [execution handoff](EXECUTION_HANDOFF.md).
 Required backend/production coverage: [production review](PRODUCTION_READINESS.md).
 
 ## Gate status

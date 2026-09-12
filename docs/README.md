@@ -64,6 +64,8 @@ Use this page as the map. The docs are grouped by what you are trying to do.
 
 ### Build And Contribute
 
+- [Plugin Platform Review and Handoff](plugin-platform/README.md): current implementation gaps, secure catalog/format plugin architecture, ordered implementation packets, and strict acceptance gates. Planning only; production release remains on hold.
+
 - [New UI/UX Plan](ui-v2/README.md): fresh policy authoring and management experience, implementation packages, and acceptance gates. Proposed, not shipped.
 
 - [Development](development.md): repo layout, common checks, test guidance, and

@@ -1,7 +1,14 @@
 # Remaining implementation plan
 
+**2026-09-12 follow-up:** the owner requested a multi-catalog/multi-format plugin
+architecture. The [plugin-platform handoff](../plugin-platform/README.md) now controls
+the next execution sequence and supersedes this document's Iceberg-only planning
+restriction. P00–P16 requirements and historical evidence remain applicable through
+its explicit task mapping. The new review does not certify earlier work complete.
+
 Rewritten 2026-09-12 against `8e23c98`. **Implementation incomplete; paid-production
-release on hold.** This is the authoritative execution sequence. It replaces the
+release on hold.** This was the authoritative execution sequence before the plugin
+follow-up above. It replaces the
 previous handoff and the competing U00–U10 sequence. P00–P16 IDs remain unchanged
 so existing evidence stays traceable.
 
