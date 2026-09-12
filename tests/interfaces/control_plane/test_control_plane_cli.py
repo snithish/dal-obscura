@@ -167,3 +167,50 @@ def test_control_plane_cli_rejects_enabled_static_bootstrap_in_production(capsys
 
     assert result == 1
     assert "bootstrap admin access" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("name", "value", "message"),
+    [
+        (
+            "DAL_OBSCURA_CONTROL_PLANE_OIDC_JWKS_URL",
+            "http://issuer.example/jwks",
+            "HTTPS OIDC JWKS URL",
+        ),
+        (
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_AUTHORIZATION_ENDPOINT",
+            "http://issuer.example/auth",
+            "HTTPS browser authorization endpoint",
+        ),
+        (
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_TOKEN_ENDPOINT",
+            "http://issuer.example/token",
+            "HTTPS browser token endpoint",
+        ),
+        (
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI",
+            "http://console.example",
+            "HTTPS browser post-logout redirect URI",
+        ),
+    ],
+)
+def test_control_plane_cli_rejects_insecure_explicit_oidc_endpoints(name, value, message, capsys):
+    database_url = "postgresql+psycopg://user:pass@db.example/control_plane"
+    environment = {
+        "DAL_OBSCURA_CONTROL_PLANE_PROFILE": "production",
+        "DAL_OBSCURA_DATABASE_URL": database_url,
+        "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "x" * 40,
+        "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER": "https://issuer.example",
+        "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE": "dal-obscura-admin",
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": "https://issuer.example",
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "dal-obscura-ui",
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": "https://console.example/auth/callback",
+        "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": "https://console.example",
+        "DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST": "catalog.example",
+        name: value,
+    }
+
+    result = control_plane_cli.run(environment)
+
+    assert result == 1
+    assert message in capsys.readouterr().err

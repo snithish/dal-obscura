@@ -14,6 +14,7 @@ import argparse
 import os
 import sys
 from collections.abc import Mapping, Sequence
+from urllib.parse import urlsplit
 
 import uvicorn
 
@@ -143,6 +144,30 @@ def _csv(value: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in value.split(",") if item.strip())
 
 
+def _is_https_url(value: str | None) -> bool:
+    if not value:
+        return False
+    parsed = urlsplit(value.strip())
+    return (
+        parsed.scheme.lower() == "https"
+        and bool(parsed.hostname)
+        and parsed.username is None
+        and parsed.password is None
+        and not parsed.fragment
+    )
+
+
+def _is_https_origin(value: str) -> bool:
+    parsed = urlsplit(value.strip())
+    return _is_https_url(value) and not parsed.path.rstrip("/") and not parsed.query
+
+
+def _validate_optional_https(values: Mapping[str, str], name: str, label: str) -> None:
+    value = _optional(values, name)
+    if value is not None and not _is_https_url(value):
+        raise ValueError(f"Production requires an HTTPS {label}")
+
+
 def _validate_profile(
     values: Mapping[str, str],
     admin_token: str,
@@ -165,15 +190,41 @@ def _validate_profile(
     ui_issuer = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER")
     ui_client = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID")
     redirect_uri = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI")
-    if not oidc_issuer or not oidc_issuer.startswith("https://") or not oidc_audience:
+    if not _is_https_url(oidc_issuer) or not oidc_audience:
         raise ValueError("Production requires an HTTPS bearer OIDC issuer and audience")
-    if not ui_issuer or not ui_issuer.startswith("https://") or not ui_client:
+    if not _is_https_url(ui_issuer) or not ui_client:
         raise ValueError("Production requires an HTTPS browser OIDC issuer and client ID")
-    if not redirect_uri or not redirect_uri.startswith("https://"):
+    if not _is_https_url(redirect_uri):
         raise ValueError("Production requires an HTTPS browser redirect URI")
     origins = _csv(values.get("DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS", ""))
-    if not origins or any(not origin.startswith("https://") for origin in origins):
+    if not origins or any(not _is_https_origin(origin) for origin in origins):
         raise ValueError("Production requires at least one HTTPS CORS origin")
+    _validate_optional_https(values, "DAL_OBSCURA_CONTROL_PLANE_OIDC_JWKS_URL", "OIDC JWKS URL")
+    _validate_optional_https(
+        values,
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_JWKS_URL",
+        "browser OIDC JWKS URL",
+    )
+    _validate_optional_https(
+        values,
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_AUTHORIZATION_ENDPOINT",
+        "browser authorization endpoint",
+    )
+    _validate_optional_https(
+        values,
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_TOKEN_ENDPOINT",
+        "browser token endpoint",
+    )
+    _validate_optional_https(
+        values,
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGIN_REDIRECT_URI",
+        "browser post-login redirect URI",
+    )
+    _validate_optional_https(
+        values,
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI",
+        "browser post-logout redirect URI",
+    )
     if not _csv(values.get("DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST", "")):
         raise ValueError("Production requires an explicit catalog egress allowlist")
     bootstrap_enabled = values.get(
