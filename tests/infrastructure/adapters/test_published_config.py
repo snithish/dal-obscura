@@ -228,6 +228,51 @@ def test_published_schema_admission_rejects_rebound_or_added_field():
         _validate_schema_admission(asset, schema)
 
 
+def test_published_schema_admission_requires_reapproval_for_renamed_field():
+    asset = PublishedAsset(
+        publication_id=uuid4(),
+        tenant_id=uuid4(),
+        catalog="analytics",
+        target="default.users",
+        backend="iceberg",
+        compiled_config={
+            "schema": {
+                "encoding": 1,
+                "fields": [
+                    {
+                        "name": "profile.email",
+                        "field_id": "iceberg:3",
+                        "path": ["profile", "email"],
+                        "type": "string",
+                        "nullable": True,
+                    }
+                ],
+            }
+        },
+        policy_version=1,
+    )
+    schema = pa.schema(
+        [
+            pa.field(
+                "profile",
+                pa.struct(
+                    [
+                        pa.field(
+                            "contact_email",
+                            pa.string(),
+                            metadata={b"PARQUET:field_id": b"3"},
+                        )
+                    ]
+                ),
+                metadata={b"PARQUET:field_id": b"2"},
+            )
+        ]
+    )
+
+    with pytest.raises(ValueError, match="no longer matches"):
+        _validate_schema_admission(asset, schema)
+
+
 def test_published_schema_admission_accepts_iceberg_numeric_metadata_and_aliases():
     asset = PublishedAsset(
         publication_id=uuid4(),
