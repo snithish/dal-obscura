@@ -91,7 +91,12 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
 - X16 REST Iceberg qualification: **not-started**.
 - X17 independent manifest/Parquet plugin: **not-started**.
 - X18 consumer qualification: **not-started**.
-- X19 secure deployment and identity lifecycle: **not-started**.
+- X19 secure deployment and identity lifecycle: **implementing**; production
+  Compose now separates migration/control/data credentials, provisions isolated
+  PostgreSQL roles, orders readiness through migration and post-migration ticket
+  grants, and uses `/readyz` for application healthchecks. Real PostgreSQL SQL
+  denial/allowance, TLS, IdP, browser, restart, and clean-artifact evidence remain
+  open.
 - X20 recovery and upgrades: **not-started**.
 - X21 performance/observability/test efficiency: **not-started**.
 - X22 exact-artifact CI: **implementing**; the container publication job now
