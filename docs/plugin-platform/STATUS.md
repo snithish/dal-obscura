@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `7687761`.
+Implementation follow-up through `9721706`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -281,6 +281,14 @@ return the stable redacted validation response at the HTTP boundary.
 - Pickle compatibility: unchanged.
 - Next permitted packet: PostgreSQL X03 barrier evidence, then X06 collection
   identity and schema-evolution policy tests.
+
+Local parity check: the running development database at
+`/private/tmp/dal-obscura-ui-dev-8821.db` was upgraded with
+`DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:////private/tmp/dal-obscura-ui-dev-8821.db
+uv run --no-sync dal-obscura-migrate upgrade`, which reported
+`config-store schema upgraded to head`. Direct sandbox HTTP probing is blocked
+by the local network boundary; no production readiness claim is made from the
+running-process probe.
 
 ## Latest evidence entry
 
