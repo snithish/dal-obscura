@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `20b579c`.
+Implementation follow-up through `f320ed9`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -49,6 +49,8 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   calls under a long database row lock.
   Shared policy edits and personal draft save/restore now authorize after the same
   asset lock, closing revocation windows across all review-affecting mutations.
+  Grant capability is also enforced in the application service after locking, so
+  direct service callers cannot bypass route-level authorization.
 - X04 canonical evaluation: **implemented-unverified**; resolved mask values now
   flow from canonical preview and an unmatched-principal regression passes.
 - X05 canonical bounded schemas: **implemented-unverified**; canonical Arrow schema
@@ -1341,6 +1343,17 @@ running-process probe.
   Ruff, Ty, and `git diff --check` passed.
 - Remaining gaps: PostgreSQL multi-process barriers, rollback/idempotency recovery,
   and live deployment evidence remain open.
+
+### X03 service-boundary grant authorization — `f320ed9`
+
+- State: implementing.
+- Behavior: grant replacement enforces the caller's grant capability inside the
+  application service after acquiring the asset lock, preserving the same invariant
+  for non-HTTP callers and background workflows.
+- Green evidence: asset grant API/authorization tests, Ruff, Ty, and
+  `git diff --check` passed.
+- Remaining gaps: PostgreSQL interleavings, transaction recovery, and production
+  identity evidence remain open.
 
 ## Latest evidence entry
 
