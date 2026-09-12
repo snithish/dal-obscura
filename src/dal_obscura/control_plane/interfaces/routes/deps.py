@@ -18,6 +18,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import cast
+from urllib.parse import urlsplit
 
 from fastapi import Cookie, Header, HTTPException, Request
 from sqlalchemy.orm import Session, sessionmaker
@@ -124,10 +125,25 @@ class ControlPlaneDeps:
 
         if not csrf_cookie or request.headers.get("x-csrf-token") != csrf_cookie:
             raise HTTPException(status_code=403, detail="CSRF validation failed")
-        origin = request.headers.get("origin")
-        request_origin = f"{request.url.scheme}://{request.url.netloc}"
-        if origin and origin not in self.allowed_origins and origin != request_origin:
+        origin = request.headers.get("origin", "").strip()
+        if origin and _canonical_origin(origin) not in self._allowed_browser_origins():
             raise HTTPException(status_code=403, detail="Origin validation failed")
+
+    def _allowed_browser_origins(self) -> set[str]:
+        origins = {
+            normalized
+            for value in self.allowed_origins
+            if (normalized := _canonical_origin(value))
+        }
+        if self.ui_auth_config is None:
+            return origins
+        for key in ("redirect_uri", "post_login_redirect_uri", "post_logout_redirect_uri"):
+            value = self.ui_auth_config.get(key)
+            if isinstance(value, str):
+                normalized = _canonical_origin(value)
+                if normalized:
+                    origins.add(normalized)
+        return origins
 
     def resolve_bearer_token(self, token: str) -> ControlPlaneActor | None:
         """Resolves a provider bearer token into an actor."""
@@ -326,3 +342,24 @@ def _cookie_text(value: object) -> str | None:
     if isinstance(value, str):
         return value or None
     return None
+
+
+def _canonical_origin(value: str) -> str | None:
+    """Normalizes an origin or URL without trusting request Host headers."""
+
+    parsed = urlsplit(value.strip())
+    if not parsed.scheme or not parsed.netloc or parsed.username or parsed.password:
+        return None
+    try:
+        port = parsed.port
+    except ValueError:
+        return None
+    scheme = parsed.scheme.lower()
+    hostname = parsed.hostname
+    if not hostname:
+        return None
+    host = hostname.lower()
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    default_port = (scheme == "http" and port == 80) or (scheme == "https" and port == 443)
+    return f"{scheme}://{host}{'' if port is None or default_port else f':{port}'}"

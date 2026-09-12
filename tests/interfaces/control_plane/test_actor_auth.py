@@ -259,6 +259,33 @@ def test_cookie_mutation_rejects_untrusted_origin(monkeypatch):
     assert response.json()["detail"] == "Origin validation failed"
 
 
+def test_cookie_mutation_cannot_trust_forged_host_and_matching_origin(monkeypatch):
+    client = _client_with_ui_auth_config()
+    monkeypatch.setattr(
+        api_module,
+        "_exchange_demo_password_token",
+        lambda config, username: "owner-token",
+    )
+    login = client.post("/v1/demo-login", json={"login_hint": "asset-owner"})
+    cookie_header = (
+        f"dal_obscura_session={login.cookies['dal_obscura_session']}; "
+        f"dal_obscura_csrf={login.cookies['dal_obscura_csrf']}"
+    )
+
+    response = client.post(
+        "/v1/logout",
+        headers={
+            "cookie": cookie_header,
+            "x-csrf-token": login.cookies["dal_obscura_csrf"],
+            "host": "attacker.example",
+            "origin": "http://attacker.example",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Origin validation failed"
+
+
 def test_demo_login_rejects_unknown_shortcut():
     client = _client_with_ui_auth_config()
 
