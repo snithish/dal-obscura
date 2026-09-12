@@ -6,12 +6,41 @@ export type Asset = {
   table_identifier: string;
   owners: string[];
   schema_fields: SchemaField[];
+  schema?: AssetSchema;
 };
 
 export type SchemaField = {
   name: string;
   type: string;
   nullable: boolean;
+};
+
+export type SchemaPath = {
+  version: number;
+  segments: Array<{
+    kind: "field" | "list_element" | "map_key" | "map_value";
+    name?: string;
+    field_id?: number;
+  }>;
+};
+
+export type SchemaNode = {
+  field_id: number;
+  name: string;
+  path: SchemaPath;
+  human_path: string;
+  type: string;
+  nullable: boolean;
+  kind: "scalar" | "struct" | "list" | "map";
+  children?: SchemaNode[];
+};
+
+export type AssetSchema = {
+  asset_id: string;
+  catalog: string;
+  target: string;
+  schema_version: number;
+  fields: SchemaNode[];
 };
 
 export type Mask = {
@@ -100,6 +129,7 @@ export const controlPlane = {
   logout: () => request<{ authenticated: false }>("/v1/logout", { method: "POST" }),
   listAssets: async () => (await request<Asset[]>("/v1/assets")).map(normalizeAsset),
   getAsset: async (assetId: string) => normalizeAsset(await request<Asset>(`/v1/assets/${assetId}`)),
+  getSchema: (assetId: string) => request<AssetSchema>(`/v1/assets/${assetId}/schema`),
   listRules: (assetId: string) => request<PolicyRule[]>(`/v1/assets/${assetId}/policy-rules`),
   getDraft: (assetId: string) => request<PolicyDraft>(`/v1/assets/${assetId}/draft`),
   saveDraft: (assetId: string, expectedRevision: number, rules: PolicyRule[]) =>
