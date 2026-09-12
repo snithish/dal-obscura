@@ -500,6 +500,7 @@ def _validate_schema_admission(asset: PublishedAsset, schema: pa.Schema) -> None
 
 def _schema_identities(schema: pa.Schema) -> dict[tuple[tuple[str, ...], str], str]:
     result: dict[tuple[tuple[str, ...], str], str] = {}
+    seen_ids: set[str] = set()
 
     def visit(field: pa.Field, path: tuple[str, ...]) -> None:
         metadata = field.metadata or {}
@@ -508,6 +509,9 @@ def _schema_identities(schema: pa.Schema) -> dict[tuple[tuple[str, ...], str], s
             field_id = raw_id.decode("utf-8", "replace")
             if ":" not in field_id:
                 field_id = f"iceberg:{field_id}"
+            if field_id in seen_ids:
+                raise ValueError("Live schema contains a duplicate field identity")
+            seen_ids.add(field_id)
             result[(path, field_id)] = str(field.type)
         if pa.types.is_struct(field.type):
             for child in field.type:
