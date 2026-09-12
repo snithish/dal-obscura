@@ -59,6 +59,7 @@ def issue_review_token(
         _rules_hash(store.list_policy_rules(asset_id)) if draft is None else None
     )
     active_publication_id = _active_publication_id(store, asset_id)
+    asset_revision = _asset_revision(store, asset_id)
     admitted_schema_hash = _admitted_schema_hash(store, asset_id)
     issued_at = int(time.time() if now is None else now)
     payload: dict[str, object] = {
@@ -68,6 +69,7 @@ def issue_review_token(
         "draft_content_hash": content_hash,
         "shared_rules_hash": shared_rules_hash,
         "active_publication_id": active_publication_id,
+        "asset_revision": asset_revision,
         "admitted_schema_hash": admitted_schema_hash,
         "evidence": cast(dict[str, object], evaluation.get("evidence", {})),
         "issued_at": issued_at,
@@ -117,6 +119,8 @@ def verify_review_token(
         raise ValidationFailure("Iceberg schema changed after review; review again.")
     if payload.get("admitted_schema_hash") != _admitted_schema_hash(store, asset_id):
         raise ValidationFailure("Admitted schema fields changed after review; review again.")
+    if payload.get("asset_revision") != _asset_revision(store, asset_id):
+        raise ValidationFailure("Asset configuration changed after review; review again.")
     draft = store.get_asset_policy_draft(
         asset_id=asset_id,
         author_principal=actor.identity_key(),
@@ -143,6 +147,17 @@ def _active_publication_id(store: PublicationStore, asset_id: UUID) -> str | Non
     except LookupError:
         return None
     return str(active.publication_id)
+
+
+def _asset_revision(store: PublicationStore, asset_id: UUID) -> int:
+    """Returns the binding/access generation captured by review evidence."""
+
+    asset = store.get_workspace_asset(asset_id)
+    raw_revision = asset.get("revision", 0)
+    try:
+        return int(cast(int | str, raw_revision))
+    except (TypeError, ValueError):
+        raise ValidationFailure("Asset configuration revision is invalid.") from None
 
 
 def _explicit_deny_all_draft(

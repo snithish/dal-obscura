@@ -69,6 +69,51 @@ class _ChangedEvaluationCatalog:
         return _ChangedEvaluationTable()
 
 
+def _provision_reviewable_asset(client: TestClient) -> dict[str, object]:
+    client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+    asset = client.put(
+        "/v1/assets/analytics/default.users",
+        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
+        headers=ADMIN_HEADERS,
+    ).json()
+    client.put(
+        f"/v1/assets/{asset['id']}/policy-rules",
+        json={
+            "rules": [
+                {
+                    "ordinal": 10,
+                    "effect": "allow",
+                    "principals": ["user1"],
+                    "columns": ["id"],
+                    "masks": {},
+                    "row_filter": None,
+                }
+            ]
+        },
+        headers=ADMIN_HEADERS,
+    )
+    client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["user1"]},
+        headers=ADMIN_HEADERS,
+    )
+    draft = client.get(f"/v1/assets/{asset['id']}/draft", headers=ADMIN_HEADERS).json()
+    saved = client.put(
+        f"/v1/assets/{asset['id']}/draft",
+        json={"expected_revision": draft["revision"], "rules": draft["rules"]},
+        headers=ADMIN_HEADERS,
+    )
+    assert saved.status_code == 200, saved.json()
+    return asset
+
+
 def test_asset_schema_route_reads_authoritative_iceberg_schema(monkeypatch) -> None:
     client = _client()
     client.put(
@@ -408,6 +453,44 @@ def test_production_publication_rejects_schema_drift_after_review(monkeypatch) -
     assert live_schema_drift.status_code == 400
     assert live_schema_drift.json() == {
         "detail": "Iceberg schema changed after review; review again."
+    }
+
+
+def test_production_publication_rejects_asset_metadata_change_after_review(monkeypatch) -> None:
+    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+    migrate_config_store(engine)
+    client = TestClient(
+        create_app(
+            session_factory(engine),
+            admin_token="test-admin",
+            require_review=True,
+            review_secret="review-secret",
+            bootstrap_enabled=True,
+        )
+    )
+    asset = _provision_reviewable_asset(client)
+    monkeypatch.setattr(schema_service, "load_catalog", lambda *args, **kwargs: _EvaluationCatalog())
+    reviewed = client.post(
+        f"/v1/assets/{asset['id']}/policy-review",
+        json={"principal": "user1", "groups": [], "claims": {}},
+        headers=ADMIN_HEADERS,
+    )
+    changed = client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["new-owner"]},
+        headers=ADMIN_HEADERS,
+    )
+    published = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        json={"review_token": reviewed.json()["review_token"]},
+        headers=ADMIN_HEADERS,
+    )
+
+    assert reviewed.status_code == 200, reviewed.json()
+    assert changed.status_code == 200, changed.json()
+    assert published.status_code == 400
+    assert published.json() == {
+        "detail": "Asset configuration changed after review; review again."
     }
 
 
