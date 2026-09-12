@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `4528943`.
+Implementation follow-up through `20b579c`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -47,6 +47,8 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   Review issuance follows the same lock ordering, while publish performs live schema
   I/O before the lock and rechecks persisted evidence after it, avoiding provider
   calls under a long database row lock.
+  Shared policy edits and personal draft save/restore now authorize after the same
+  asset lock, closing revocation windows across all review-affecting mutations.
 - X04 canonical evaluation: **implemented-unverified**; resolved mask values now
   flow from canonical preview and an unmatched-principal regression passes.
 - X05 canonical bounded schemas: **implemented-unverified**; canonical Arrow schema
@@ -1328,6 +1330,17 @@ running-process probe.
   passed.
 - Remaining gaps: PostgreSQL barriers/processes, provider change races, rollback,
   idempotency recovery, and live deployment evidence remain open.
+
+### X03 post-lock policy mutation authorization — `20b579c`
+
+- State: implementing.
+- Behavior: shared policy replacement and personal draft save/restore perform edit
+  capability checks after locking the publication asset row, so revocations that
+  commit before the mutation are observed before any write.
+- Green evidence: policy authorization, draft, grant, and publication tests passed;
+  Ruff, Ty, and `git diff --check` passed.
+- Remaining gaps: PostgreSQL multi-process barriers, rollback/idempotency recovery,
+  and live deployment evidence remain open.
 
 ## Latest evidence entry
 
