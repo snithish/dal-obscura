@@ -1,5 +1,16 @@
 from __future__ import annotations
 
+from fastapi.testclient import TestClient
+from sqlalchemy import func, select
+
+from dal_obscura.common.config_store.db import (
+    create_engine_from_url,
+    migrate_config_store,
+    session_factory,
+)
+from dal_obscura.common.config_store.orm import AuditEventRecord, ConfigPublicationRecord
+from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
+from dal_obscura.control_plane.interfaces.api import create_app
 from tests.interfaces.control_plane.test_actor_auth import (
     _bearer,
 )
@@ -326,3 +337,40 @@ def test_publish_idempotency_key_replays_committed_result_and_rejects_mismatch()
     assert operation.json()["result"] == first.json()
     assert "request_hash" not in operation.json()
     assert missing.status_code == 404
+
+
+def test_publication_failure_after_activation_rolls_back_audit_and_generation(monkeypatch):
+    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+    migrate_config_store(engine)
+    client = TestClient(
+        create_app(session_factory(engine), admin_token="test-admin"),
+        raise_server_exceptions=False,
+    )
+    asset = _provision_draft(client)
+    client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["owner"]},
+        headers=ADMIN_HEADERS,
+    )
+    with session_factory(engine)() as session:
+        publication_count = session.scalar(
+            select(func.count()).select_from(ConfigPublicationRecord)
+        )
+        audit_count = session.scalar(select(func.count()).select_from(AuditEventRecord))
+
+    def fail_audit(self, **kwargs):
+        raise RuntimeError("injected audit failure")
+
+    monkeypatch.setattr(PublicationStore, "record_asset_audit_event", fail_audit)
+    response = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        headers=ADMIN_HEADERS,
+    )
+
+    assert response.status_code == 500
+    with session_factory(engine)() as session:
+        assert (
+            session.scalar(select(func.count()).select_from(ConfigPublicationRecord))
+            == publication_count
+        )
+        assert session.scalar(select(func.count()).select_from(AuditEventRecord)) == audit_count
