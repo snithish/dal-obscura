@@ -8,6 +8,7 @@ Example:
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Mapping
 from typing import Any, Protocol, cast
 
@@ -28,6 +29,7 @@ class RuntimeStore(Protocol):
 
 
 HealthPayload = Mapping[str, object]
+LOGGER = logging.getLogger(__name__)
 
 
 def create_health_app(*, readiness: Callable[[], HealthPayload]) -> FastAPI:
@@ -49,8 +51,9 @@ def create_health_app(*, readiness: Callable[[], HealthPayload]) -> FastAPI:
     def readyz() -> HealthPayload | JSONResponse:
         try:
             payload = dict(readiness())
-        except Exception as exc:
-            payload = {"status": "not_ready", "reason": str(exc)}
+        except Exception:
+            LOGGER.exception("data_plane_readiness_failed")
+            payload = {"status": "not_ready", "reason": "readiness check failed"}
         if payload.get("status") != "ready":
             return JSONResponse(status_code=503, content=payload)
         return payload
@@ -71,7 +74,8 @@ def published_runtime_readiness(store: RuntimeStore) -> dict[str, object]:
     checks: dict[str, str] = {}
     try:
         runtime = store.get_runtime()
-    except Exception as exc:
+    except Exception:
+        LOGGER.exception("published_runtime_readiness_failed")
         return {
             "status": "not_ready",
             "checks": {
@@ -79,7 +83,7 @@ def published_runtime_readiness(store: RuntimeStore) -> dict[str, object]:
                 "runtime": "failed",
                 "auth_chain": "unknown",
             },
-            "reason": str(exc),
+            "reason": "published runtime unavailable",
         }
 
     publication_id = getattr(runtime, "publication_id", None)

@@ -34,6 +34,20 @@ def test_data_plane_readyz_returns_503_when_runtime_not_loaded():
     assert response.json() == {"status": "not_ready", "reason": "no runtime"}
 
 
+def test_data_plane_readyz_redacts_readiness_exceptions():
+    app = create_health_app(
+        readiness=lambda: (_ for _ in ()).throw(
+            RuntimeError("postgres://user:secret@db.internal/path")
+        )
+    )
+
+    response = TestClient(app).get("/readyz")
+
+    assert response.status_code == 503
+    assert response.json() == {"status": "not_ready", "reason": "readiness check failed"}
+    assert "secret" not in response.text
+
+
 def test_data_plane_runtime_readiness_requires_active_auth_chain():
     readiness = published_runtime_readiness(_RuntimeStore(auth_chain={"providers": []}))
     checks = cast(dict[str, str], readiness["checks"])
@@ -90,6 +104,17 @@ class _RuntimeStore:
             auth_chain=self._auth_chain,
             ticket=self._ticket,
         )
+
+
+def test_published_runtime_readiness_redacts_store_exceptions():
+    class BrokenStore:
+        def get_runtime(self) -> object:
+            raise RuntimeError("postgres://user:secret@db.internal/path")
+
+    readiness = published_runtime_readiness(BrokenStore())
+
+    assert readiness["reason"] == "published runtime unavailable"
+    assert "secret" not in str(readiness)
 
 
 class _Runtime:
