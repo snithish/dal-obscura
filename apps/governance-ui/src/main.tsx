@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import type { Asset, AuthProvider, Catalog, Mask, PolicyRule, PolicyVersion, Preview, RuntimeSettings, SchemaNode, Session, UiAuthConfig, WorkspaceSummary } from "./api";
+import type { Asset, AuditEvent, AuthProvider, Catalog, Mask, PolicyRule, PolicyVersion, Preview, RuntimeSettings, SchemaNode, Session, UiAuthConfig, WorkspaceSummary } from "./api";
 import { controlPlane } from "./api";
 import { demoAsset, demoRules } from "./fixtures";
 import "./styles.css";
@@ -9,7 +9,7 @@ import "./styles.css";
 type Page = "assets" | "changes" | "activity" | "connections" | "settings";
 type SaveState = "saved" | "saving" | "unsaved" | "failed";
 type WorkspaceState = "loading" | "ready" | "demo" | "unavailable";
-type ManagementData = { history?: PolicyVersion[]; catalogs?: Catalog[]; tables?: Array<Record<string, unknown>>; runtime?: RuntimeSettings | null; providers?: AuthProvider[]; summary?: WorkspaceSummary };
+type ManagementData = { history?: PolicyVersion[]; events?: AuditEvent[]; catalogs?: Catalog[]; tables?: Array<Record<string, unknown>>; runtime?: RuntimeSettings | null; providers?: AuthProvider[]; summary?: WorkspaceSummary };
 
 const maskOptions: Array<{ type: Mask["type"]; label: string; needsValue?: boolean }> = [
   { type: "null", label: "Null" }, { type: "redact", label: "Redact", needsValue: true },
@@ -57,7 +57,7 @@ function App() {
     setManagementLoading(true);
     try {
       if (destination === "changes") setManagementData({ history: await controlPlane.listHistory() });
-      if (destination === "activity") setManagementData({ history: await controlPlane.listHistory(), summary: await controlPlane.getSummary() });
+      if (destination === "activity") setManagementData({ history: await controlPlane.listHistory(), events: await controlPlane.listAuditEvents(), summary: await controlPlane.getSummary() });
       if (destination === "connections") setManagementData({ catalogs: await controlPlane.listCatalogs() });
       if (destination === "settings") setManagementData({ runtime: await controlPlane.getRuntimeSettings(), providers: await controlPlane.getAuthProviders() });
     } catch {
@@ -249,7 +249,7 @@ function HistoryView({ history, onRestore, disabled }: { history: PolicyVersion[
 function ManagementView({ page, data, loading, onReload }: { page: Exclude<Page, "assets">; data: ManagementData; loading: boolean; onReload: () => void }) {
   if (loading) return <section className="coming-soon"><span className="eyebrow">{page.toUpperCase()}</span><h2>Loading {page}</h2><p>Checking the current workspace state and your capabilities.</p></section>;
   if (page === "changes") return <ChangesView history={data.history ?? []} onReload={onReload} />;
-  if (page === "activity") return <ActivityView history={data.history ?? []} summary={data.summary} />;
+  if (page === "activity") return <ActivityView history={data.history ?? []} events={data.events ?? []} summary={data.summary} />;
   if (page === "connections") return <ConnectionsView catalogs={data.catalogs ?? []} onReload={onReload} />;
   return <SettingsView runtime={data.runtime} providers={data.providers ?? []} onReload={onReload} />;
 }
@@ -258,8 +258,8 @@ function ChangesView({ history, onReload }: { history: PolicyVersion[]; onReload
   return <section className="management-view"><div className="management-head"><div><span className="eyebrow">CHANGES</span><h2>Published policy history</h2><p className="muted">Immutable versions returned by the control plane. A publication is active only when the server says so.</p></div><button className="secondary" onClick={onReload}>Refresh</button></div>{history.length ? <div className="table-wrap"><table><thead><tr><th>Asset</th><th>Version</th><th>State</th><th>Created</th></tr></thead><tbody>{history.map((item) => <tr key={`${item.asset_id}-${item.policy_version}`}><td><strong>{item.asset_name}</strong><small>{item.catalog} / {item.target}</small></td><td><code>{item.policy_version}</code></td><td><span className={item.active ? "result-state allowed" : "pill"}>{item.active ? "Active" : "Published"}</span></td><td>{new Date(item.created_at).toLocaleString()}</td></tr>)}</tbody></table></div> : <div className="empty-result"><strong>No published changes</strong><p>Save and publish an asset draft to create an immutable version.</p></div>}</section>;
 }
 
-function ActivityView({ history, summary }: { history: PolicyVersion[]; summary?: WorkspaceSummary }) {
-  return <section className="management-view"><span className="eyebrow">ACTIVITY</span><h2>Workspace status</h2><p className="muted">Live counts and publication observations from the control plane. Unknown or unavailable data is shown as an error.</p>{summary ? <div className="metric-grid">{[["Assets", summary.asset_count], ["Catalogs", summary.catalog_count], ["Draft changes", summary.draft_change_count], ["Missing policy", summary.missing_policy_count], ["Enabled auth", summary.enabled_auth_provider_count]].map(([label, value]) => <div className="metric-card" key={String(label)}><strong>{String(value)}</strong><span>{label}</span></div>)}</div> : <div className="empty-result"><strong>Status unavailable</strong><p>Reconnect with a session that can read workspace observations.</p></div>}<h3 className="activity-title">Recent publications</h3>{history.length ? <ul className="activity-list">{history.slice(-8).reverse().map((item) => <li key={`${item.asset_id}-${item.policy_version}`}><span className="status-dot ready" /><div><strong>{item.asset_name}</strong><small>Policy version {item.policy_version} · {item.active ? "active" : "published"}</small></div><time>{new Date(item.created_at).toLocaleString()}</time></li>)}</ul> : <div className="empty-result"><strong>No activity yet</strong><p>Publication and audit activity will appear here after the first governed change.</p></div>}</section>;
+function ActivityView({ history, events, summary }: { history: PolicyVersion[]; events: AuditEvent[]; summary?: WorkspaceSummary }) {
+  return <section className="management-view"><span className="eyebrow">ACTIVITY</span><h2>Workspace status</h2><p className="muted">Live counts and redacted audit observations from the control plane. Data is limited to the assets your session can see.</p>{summary ? <div className="metric-grid">{[["Assets", summary.asset_count], ["Catalogs", summary.catalog_count], ["Draft changes", summary.draft_change_count], ["Missing policy", summary.missing_policy_count], ["Enabled auth", summary.enabled_auth_provider_count]].map(([label, value]) => <div className="metric-card" key={String(label)}><strong>{String(value)}</strong><span>{label}</span></div>)}</div> : <div className="empty-result"><strong>Status unavailable</strong><p>Reconnect with a session that can read workspace observations.</p></div>}<h3 className="activity-title">Recent governed actions</h3>{events.length ? <ul className="activity-list">{events.slice(0, 8).map((event) => <li key={event.id}><span className={"status-dot " + (event.outcome === "success" ? "ready" : "unavailable")} /><div><strong>{event.action}</strong><small>{event.actor} · {event.resource_type} {event.resource_id.slice(0, 8)}</small></div><time>{new Date(event.created_at).toLocaleString()}</time></li>)}</ul> : history.length ? <ul className="activity-list">{history.slice(-8).reverse().map((item) => <li key={`${item.asset_id}-${item.policy_version}`}><span className="status-dot ready" /><div><strong>{item.asset_name}</strong><small>Policy version {item.policy_version} · {item.active ? "active" : "published"}</small></div><time>{new Date(item.created_at).toLocaleString()}</time></li>)}</ul> : <div className="empty-result"><strong>No activity yet</strong><p>Draft, restore, and publication actions will appear here after the first governed change.</p></div>}</section>;
 }
 
 function ConnectionsView({ catalogs, onReload }: { catalogs: Catalog[]; onReload: () => void }) {

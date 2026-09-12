@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
@@ -24,7 +24,7 @@ from dal_obscura.control_plane.interfaces.routes.schemas import (
 )
 
 
-def router(deps: ControlPlaneDeps) -> APIRouter:
+def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
     """Builds asset policy routes.
 
     Example:
@@ -175,5 +175,19 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
     ) -> object:
         return deps.with_service(lambda service: service.list_policy_version_history(actor=actor))
+
+    @api.get("/v1/audit/events")
+    def list_audit_events(
+        asset_id: UUID | None = None,
+        limit: int = Query(default=100, ge=1, le=200),
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> object:
+        return deps.with_service(
+            lambda service: service.list_audit_events(
+                actor=actor,
+                asset_id=asset_id,
+                limit=limit,
+            )
+        )
 
     return api

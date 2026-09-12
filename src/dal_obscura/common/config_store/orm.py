@@ -262,6 +262,32 @@ class AssetPolicyDraftRecord(Base):
     discarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class AuditEventRecord(Base):
+    """Append-only safe attribution for control-plane mutations and outcomes."""
+
+    __tablename__ = "audit_events"
+    __table_args__ = (
+        Index("ix_audit_events_cell_created", "cell_id", "created_at"),
+        Index("ix_audit_events_tenant_created", "tenant_id", "created_at"),
+        Index("ix_audit_events_resource", "resource_type", "resource_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    cell_id: Mapped[UUID] = mapped_column(ForeignKey("cells.id"), nullable=False)
+    tenant_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("tenants.id"),
+        nullable=True,
+    )
+    actor_principal: Mapped[str] = mapped_column(Text, nullable=False)
+    action: Mapped[str] = mapped_column(String(96), nullable=False)
+    resource_type: Mapped[str] = mapped_column(String(48), nullable=False)
+    resource_id: Mapped[str] = mapped_column(Text, nullable=False)
+    outcome: Mapped[str] = mapped_column(String(24), nullable=False)
+    details_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    correlation_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class ConfigPublicationRecord(Base):
     """Immutable publication manifest row."""
 

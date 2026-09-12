@@ -108,6 +108,18 @@ export type PolicyVersionDetail = {
   rules: PolicyRule[];
 };
 
+export type AuditEvent = {
+  id: string;
+  actor: string;
+  action: string;
+  resource_type: string;
+  resource_id: string;
+  outcome: string;
+  details: Record<string, unknown>;
+  correlation_id: string | null;
+  created_at: string;
+};
+
 export type Catalog = {
   id: string;
   name: string;
@@ -183,6 +195,7 @@ export const controlPlane = {
   getSchema: (assetId: string) => request<AssetSchema>(`/v1/assets/${assetId}/schema`),
   listRules: (assetId: string) => request<PolicyRule[]>(`/v1/assets/${assetId}/policy-rules`),
   listHistory: () => request<PolicyVersion[]>("/v1/policy-versions"),
+  listAuditEvents: (assetId?: string) => request<AuditEvent[]>("/v1/audit/events" + (assetId ? "?asset_id=" + encodeURIComponent(assetId) : "")),
   listAssetHistory: (assetId: string) => request<PolicyVersion[]>(`/v1/assets/${assetId}/policy-versions`),
   getPolicyVersion: (assetId: string, policyVersion: number) => request<PolicyVersionDetail>(`/v1/assets/${assetId}/policy-versions/${policyVersion}`),
   restorePolicyVersion: (assetId: string, policyVersion: number, expectedRevision: number) =>

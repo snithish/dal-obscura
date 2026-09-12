@@ -17,6 +17,7 @@ from dal_obscura.common.config_store.orm import (
     AssetPolicyDraftRecord,
     AssetRecord,
     AssetSchemaFieldRecord,
+    AuditEventRecord,
     AuthProviderRecord,
     CatalogRecord,
     CellRecord,
@@ -1148,6 +1149,76 @@ class PublicationStore:
             "rules": cast(list[dict[str, object]], policy.get("rules", [])),
             "compiled_config": config,
         }
+
+    def record_asset_audit_event(
+        self,
+        *,
+        asset_id: UUID,
+        actor_principal: str,
+        action: str,
+        outcome: str = "success",
+        details: dict[str, object] | None = None,
+        correlation_id: str | None = None,
+    ) -> None:
+        """Records a safe asset-scoped event in the current transaction."""
+
+        asset = self._session.get(AssetRecord, asset_id)
+        if asset is None:
+            raise LookupError(f"No asset {asset_id}")
+        self._session.add(
+            AuditEventRecord(
+                id=uuid4(),
+                cell_id=asset.cell_id,
+                tenant_id=asset.tenant_id,
+                actor_principal=actor_principal,
+                action=action,
+                resource_type="asset",
+                resource_id=str(asset_id),
+                outcome=outcome,
+                details_json=dict(details or {}),
+                correlation_id=correlation_id,
+            )
+        )
+        self._session.flush()
+
+    def list_audit_events(
+        self,
+        context: WorkspaceContext,
+        *,
+        asset_ids: set[str] | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, object]]:
+        """Returns bounded, tenant-scoped audit events with safe details."""
+
+        bounded_limit = max(1, min(limit, 200))
+        query = select(AuditEventRecord).where(
+            AuditEventRecord.cell_id == context.cell_id,
+            AuditEventRecord.tenant_id == context.tenant_id,
+        )
+        if asset_ids is not None:
+            if not asset_ids:
+                return []
+            query = query.where(
+                AuditEventRecord.resource_type == "asset",
+                AuditEventRecord.resource_id.in_(asset_ids),
+            )
+        records = self._session.scalars(
+            query.order_by(AuditEventRecord.created_at.desc()).limit(bounded_limit)
+        )
+        return [
+            {
+                "id": str(record.id),
+                "actor": record.actor_principal,
+                "action": record.action,
+                "resource_type": record.resource_type,
+                "resource_id": record.resource_id,
+                "outcome": record.outcome,
+                "details": dict(record.details_json),
+                "correlation_id": record.correlation_id,
+                "created_at": _isoformat(record.created_at),
+            }
+            for record in records
+        ]
 
     def get_workspace_summary(self, context: WorkspaceContext | None) -> dict[str, object]:
         if context is None:

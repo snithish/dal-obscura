@@ -49,7 +49,7 @@ def save_policy_draft(
     ensure_asset_capability(store, asset_id, actor, "edit")
     validate_policy_rule_payloads(rules)
     asset = store.get_workspace_asset(asset_id)
-    return store.save_asset_policy_draft(
+    saved = store.save_asset_policy_draft(
         asset_id=asset_id,
         author_principal=actor.principal,
         expected_revision=expected_revision,
@@ -57,6 +57,17 @@ def save_policy_draft(
         content_hash=_content_hash(rules),
         base_policy_version=_base_policy_version(asset),
     )
+    store.record_asset_audit_event(
+        asset_id=asset_id,
+        actor_principal=actor.principal,
+        action="policy.draft.save",
+        details={
+            "revision": saved["revision"],
+            "base_policy_version": saved["base_policy_version"],
+            "content_hash": saved["content_hash"],
+        },
+    )
+    return saved
 
 
 def restore_policy_version(
@@ -76,7 +87,7 @@ def restore_policy_version(
     )
     rules = cast(list[dict[str, Any]], historical["rules"])
     validate_policy_rule_payloads(rules)
-    return store.save_asset_policy_draft(
+    saved = store.save_asset_policy_draft(
         asset_id=asset_id,
         author_principal=actor.principal,
         expected_revision=expected_revision,
@@ -84,6 +95,17 @@ def restore_policy_version(
         content_hash=_content_hash(rules),
         base_policy_version=policy_version,
     )
+    store.record_asset_audit_event(
+        asset_id=asset_id,
+        actor_principal=actor.principal,
+        action="policy.draft.restore",
+        details={
+            "revision": saved["revision"],
+            "base_policy_version": policy_version,
+            "content_hash": saved["content_hash"],
+        },
+    )
+    return saved
 
 
 def _content_hash(rules: list[dict[str, object]]) -> str:

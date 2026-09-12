@@ -187,6 +187,16 @@ def create_asset_policy_version(
             cell_id=asset.cell_id,
             publication_id=publication_id,
         )
+        store.record_asset_audit_event(
+            asset_id=asset_id,
+            actor_principal=actor.principal,
+            action="policy.publication.activate",
+            details={
+                "policy_version": compiled_asset.policy_version,
+                "publication_id": str(publication_id),
+                "initial": True,
+            },
+        )
         return {"asset_id": str(asset.id), "policy_version": compiled_asset.policy_version}
     if (
         expected_publication_id is not None
@@ -224,6 +234,16 @@ def create_asset_policy_version(
         cell_id=asset.cell_id,
         publication_id=publication_id,
         expected_publication_id=active_pointer.publication_id,
+    )
+    store.record_asset_audit_event(
+        asset_id=asset_id,
+        actor_principal=actor.principal,
+        action="policy.publication.activate",
+        details={
+            "policy_version": compiled_asset.policy_version,
+            "publication_id": str(publication_id),
+            "initial": False,
+        },
     )
     return {
         "asset_id": str(asset.id),

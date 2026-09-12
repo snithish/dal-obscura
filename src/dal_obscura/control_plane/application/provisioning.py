@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from dal_obscura.control_plane.application import (
     asset_service,
+    audit_service,
     catalog_service,
     draft_service,
     evaluation_service,
@@ -109,6 +110,20 @@ class ProvisioningService:
         actor: ControlPlaneActor | None = None,
     ) -> list[dict[str, object]]:
         return policy_version_service.list_policy_version_history(self._store, actor=actor)
+
+    def list_audit_events(
+        self,
+        *,
+        actor: ControlPlaneActor,
+        asset_id: UUID | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, object]]:
+        return audit_service.list_audit_events(
+            self._store,
+            actor=actor,
+            asset_id=asset_id,
+            limit=limit,
+        )
 
     def list_asset_policy_version_history(
         self,
