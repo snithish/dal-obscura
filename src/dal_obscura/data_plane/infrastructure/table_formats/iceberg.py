@@ -32,6 +32,7 @@ from dal_obscura.common.access_control.filters import (
 )
 from dal_obscura.common.catalog.ports import TableFormat
 from dal_obscura.common.query_planning.models import PlanRequest
+from dal_obscura.common.schema_bounds import validate_arrow_schema_bounds
 from dal_obscura.common.table_format.ports import InputPartition, Plan, ScanTask
 from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 
@@ -59,7 +60,9 @@ class IcebergTableFormat(TableFormat):
     def get_schema(self) -> pa.Schema:
         """Loads the Iceberg table schema used by planning and validation."""
         pyiceberg_table = self._load_table()
-        return pyiceberg_table.schema().as_arrow()
+        schema = pyiceberg_table.schema().as_arrow()
+        validate_arrow_schema_bounds(schema)
+        return schema
 
     def plan(self, request: PlanRequest, max_tickets: int) -> Plan:
         """Plans file tasks and distributes them across the available tickets."""
@@ -67,6 +70,7 @@ class IcebergTableFormat(TableFormat):
 
         column_tuple = tuple(_execution_columns(request.columns))
         base_schema = pyiceberg_table.schema().as_arrow()
+        validate_arrow_schema_bounds(base_schema)
         pushdown_row_filter, residual_row_filter = _split_row_filter(request.row_filter)
         LOGGER.debug(
             "iceberg_filter_split",
@@ -133,6 +137,7 @@ class IcebergTableFormat(TableFormat):
             projected_schema = projected_schema.select(*column_tuple)
 
         arrow_schema = projected_schema.as_arrow()
+        validate_arrow_schema_bounds(arrow_schema)
 
         if not file_tasks:
             return arrow_schema, iter(())

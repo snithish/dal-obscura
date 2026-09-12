@@ -21,6 +21,12 @@ from dal_obscura.common.query_planning.field_paths import (
     MapKeySegment,
     MapValueSegment,
 )
+from dal_obscura.common.schema_bounds import (
+    MAX_SCHEMA_DEPTH,
+    MAX_SCHEMA_ENCODING_BYTES,
+    MAX_SCHEMA_NODES,
+    validate_arrow_schema_bounds,
+)
 from dal_obscura.common.schema_identity import schema_has_stable_ids
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.catalog_service import validate_catalog_options
@@ -33,14 +39,6 @@ from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
 )
 
 CatalogLoader = Callable[..., Any]
-
-# The response is intentionally bounded even though Iceberg itself permits
-# substantially larger schemas.  This protects the control plane from
-# recursively materializing an untrusted catalog response in one request.
-MAX_SCHEMA_NODES = 10_000
-MAX_SCHEMA_DEPTH = 64
-MAX_SCHEMA_ENCODING_BYTES = 2 * 1024 * 1024
-
 
 def get_asset_schema(
     store: PublicationStore,
@@ -217,32 +215,15 @@ def _validate_schema_bounds(schema: Schema) -> None:
 
 
 def _validate_arrow_schema_bounds(schema: pa.Schema) -> None:
-    nodes = 0
-
-    def visit(field: pa.Field, depth: int) -> None:
-        nonlocal nodes
-        nodes += 1
-        if nodes > MAX_SCHEMA_NODES:
-            raise ValidationFailure(
-                f"Arrow schema exceeds the {MAX_SCHEMA_NODES} field-node limit"
-            )
-        if depth > MAX_SCHEMA_DEPTH:
-            raise ValidationFailure(
-                f"Arrow schema exceeds the {MAX_SCHEMA_DEPTH} nesting-depth limit"
-            )
-        if pa.types.is_struct(field.type):
-            for child in field.type:
-                visit(child, depth + 1)
-        elif pa.types.is_list(field.type) or pa.types.is_large_list(field.type):
-            visit(field.type.value_field, depth + 1)
-        elif pa.types.is_map(field.type):
-            visit(field.type.key_field, depth + 1)
-            visit(field.type.item_field, depth + 1)
-        elif pa.types.is_fixed_size_list(field.type):
-            visit(field.type.value_field, depth + 1)
-
-    for field in schema:
-        visit(field, 1)
+    try:
+        validate_arrow_schema_bounds(
+            schema,
+            max_nodes=MAX_SCHEMA_NODES,
+            max_depth=MAX_SCHEMA_DEPTH,
+            max_encoding_bytes=MAX_SCHEMA_ENCODING_BYTES,
+        )
+    except ValueError as exc:
+        raise ValidationFailure(str(exc)) from exc
 
 
 def _field_node(field: NestedField, path: tuple[FieldPathSegment, ...]) -> dict[str, object]:
