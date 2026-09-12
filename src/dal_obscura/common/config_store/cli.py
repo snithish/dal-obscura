@@ -9,17 +9,23 @@ Example:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from collections.abc import Sequence
 
 from alembic.runtime.migration import MigrationContext
+from sqlalchemy.orm import Session
 
 from dal_obscura.common.config_store.db import (
     ConfigStoreMigrationRequired,
     check_config_store_schema,
     create_engine_from_url,
     migrate_config_store,
+)
+from dal_obscura.common.config_store.plugin_bindings import (
+    apply_plugin_bindings,
+    inspect_plugin_bindings,
 )
 
 
@@ -73,6 +79,19 @@ def run(argv: Sequence[str] | None = None) -> int:
             heads = tuple(sorted(context.get_current_heads()))
         print(", ".join(heads) if heads else "none")
         return 0
+    if args.command == "plugin-bindings":
+        with Session(engine) as session:
+            if args.apply:
+                with session.begin():
+                    report = inspect_plugin_bindings(session)
+                    applied = apply_plugin_bindings(session, report)
+            else:
+                report = inspect_plugin_bindings(session)
+                applied = 0
+        payload = report.to_dict()
+        payload["applied"] = applied
+        print(json.dumps(payload, sort_keys=True, separators=(",", ":")))
+        return 0
     parser.error(f"unsupported command {args.command!r}")
     return 2
 
@@ -90,5 +109,16 @@ def _parser() -> argparse.ArgumentParser:
 
     current = subparsers.add_parser("current", help="print current database revision")
     current.add_argument("--database-url", help="SQLAlchemy database URL")
+
+    bindings = subparsers.add_parser(
+        "plugin-bindings",
+        help="report or explicitly populate exact built-in plugin identities",
+    )
+    bindings.add_argument("--database-url", help="SQLAlchemy database URL")
+    bindings.add_argument(
+        "--apply",
+        action="store_true",
+        help="apply only exact built-in mappings from the dry-run report",
+    )
 
     return parser
