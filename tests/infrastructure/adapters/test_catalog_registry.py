@@ -208,6 +208,39 @@ def test_catalog_registry_constructs_iceberg_through_admitted_plugin_factory():
     assert isinstance(registry._catalogs["analytics"], IcebergCatalog)
 
 
+def test_catalog_registry_reload_failure_keeps_previous_generation(monkeypatch):
+    initial = ServiceConfig(
+        catalogs={
+            "analytics": CatalogConfig(
+                name="analytics",
+                type="iceberg",
+                options={"uri": "sqlite:///warehouse.db"},
+            )
+        }
+    )
+    registry = CatalogRegistry(initial)
+    replacement = ServiceConfig(
+        catalogs={
+            "replacement": CatalogConfig(
+                name="replacement",
+                type="iceberg",
+                options={"uri": "sqlite:///replacement.db"},
+            )
+        }
+    )
+    monkeypatch.setattr(
+        registry_module,
+        "_build_catalog",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("factory failed")),
+    )
+
+    with pytest.raises(ValueError, match="factory failed"):
+        registry.reload(replacement)
+
+    assert registry.current_config == initial
+    assert set(registry._catalogs) == {"analytics"}
+
+
 def test_catalog_registry_rejects_provider_returned_metadata_outside_storage_roots():
     class UnsafeTable:
         metadata_location = "s3://other-bucket/metadata.json"

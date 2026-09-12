@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from threading import RLock
 from typing import Any, Literal, cast
 
 from dal_obscura.common.catalog.ports import (
@@ -54,17 +55,24 @@ class CatalogRegistry:
             name: _build_catalog(catalog_config, plugin_registry=plugin_registry)
             for name, catalog_config in config.catalogs.items()
         }
+        self._swap_lock = RLock()
 
     @property
     def current_config(self) -> ServiceConfig:
-        return self._config
+        with self._swap_lock:
+            return self._config
 
     def reload(self, config: ServiceConfig) -> None:
-        self._config = config
-        self._catalogs = {
+        # Build the complete candidate generation before exposing either its
+        # metadata or executable adapters. A factory failure therefore leaves
+        # both views on the previous generation.
+        candidate_catalogs = {
             name: _build_catalog(catalog_config, plugin_registry=self._plugin_registry)
             for name, catalog_config in config.catalogs.items()
         }
+        with self._swap_lock:
+            self._config = config
+            self._catalogs = candidate_catalogs
 
     def resolve(
         self,
@@ -76,7 +84,8 @@ class CatalogRegistry:
         del tenant_id
         if catalog is None:
             raise ValueError("Catalog name is required to resolve a target")
-        implementation = self._catalogs.get(catalog)
+        with self._swap_lock:
+            implementation = self._catalogs.get(catalog)
         if implementation is None:
             raise ValueError(f"Unknown catalog: {catalog}")
         return implementation.resolve_table(target)
@@ -94,7 +103,8 @@ class CatalogRegistry:
         return self.resolve(catalog_name, target)
 
     def list_tables(self, catalog_name: str) -> list[CatalogTableListing]:
-        implementation = self._catalogs.get(catalog_name)
+        with self._swap_lock:
+            implementation = self._catalogs.get(catalog_name)
         if implementation is None:
             raise ValueError(f"Unknown catalog: {catalog_name}")
         return implementation.list_tables()
