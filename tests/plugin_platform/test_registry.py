@@ -91,3 +91,20 @@ def test_invalid_plugin_id_cannot_be_loaded() -> None:
 
     with pytest.raises(PluginAdmissionError, match="Invalid plugin ID"):
         registry.load("catalog", "../../import-anything")
+
+
+def test_failed_reload_keeps_last_valid_admission_snapshot() -> None:
+    entries = [_entry("iceberg.sql", "dal_obscura.catalogs.v1")]
+    registry = PluginRegistry(
+        allowlist={("catalog", "iceberg.sql"): ("plugin-wheel", "1.2.3", "1")},
+        entry_points_fn=lambda: _EntryPoints(entries),
+    )
+
+    initial = registry.reload()
+    assert set(registry.admitted()) == {("catalog", "iceberg.sql")}
+
+    entries[:] = [_entry("iceberg.sql", "dal_obscura.catalogs.v1", version="9.9.9")]
+    with pytest.raises(PluginAdmissionError, match="lock mismatch"):
+        registry.reload()
+
+    assert registry.admitted() == initial

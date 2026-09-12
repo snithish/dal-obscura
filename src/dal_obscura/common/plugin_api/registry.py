@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Mapping
 from importlib import metadata
+from threading import RLock
 from typing import Any, cast
 
 from dal_obscura.common.plugin_api.contracts import PluginDescriptor, PluginKind
@@ -36,6 +37,8 @@ class PluginRegistry:
         self._allowlist = dict(allowlist or {})
         self._entry_points_fn = entry_points_fn or metadata.entry_points
         self._factory_loader = factory_loader or (lambda entry: entry.load())
+        self._snapshot: dict[tuple[PluginKind, str], PluginDescriptor] = {}
+        self._snapshot_lock = RLock()
 
     def discover(self) -> dict[tuple[PluginKind, str], PluginDescriptor]:
         """Reads entry-point metadata without importing factories."""
@@ -80,6 +83,20 @@ class PluginRegistry:
         if (kind, plugin_id) not in self.discover():
             raise PluginAdmissionError(f"Plugin is not admitted: {kind}:{plugin_id}")
         return self._factory_loader(matches[0])
+
+    def reload(self) -> dict[tuple[PluginKind, str], PluginDescriptor]:
+        """Builds a complete admission snapshot before atomically swapping it."""
+
+        candidate = self.discover()
+        with self._snapshot_lock:
+            self._snapshot = dict(candidate)
+            return dict(self._snapshot)
+
+    def admitted(self) -> dict[tuple[PluginKind, str], PluginDescriptor]:
+        """Returns the last valid snapshot without rebuilding or importing factories."""
+
+        with self._snapshot_lock:
+            return dict(self._snapshot)
 
     def _select(self, group: str) -> list[metadata.EntryPoint]:
         points: Any = self._entry_points_fn()

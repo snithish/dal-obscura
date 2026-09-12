@@ -53,8 +53,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   remain open.
 - X08 budgets and atomic reload: **implementing**; discovery now bounds provider
   iterators before materialization and checks cancellation/deadline per item while
-  retaining deque traversal. Provider-specific transport timeouts and atomic
-  registry reload remain open.
+  retaining deque traversal. Plugin admission now exposes build-then-swap reload
+  snapshots; provider-specific transport timeouts and multi-worker capacity remain
+  open.
 - X09 UI lifecycle: **implemented-unverified**; initial-load epoch and synchronous
   logout fencing plus stale history/preview/review/publish response checks are fixed.
   Deferred browser tests and full operation-state coverage remain open.
