@@ -17,9 +17,9 @@ Required backend/production coverage: [production review](PRODUCTION_READINESS.m
   readiness endpoints through the configured composition path. Wheel/container
   startup, Compose execution, and the remaining packaging slices remain
   unverified.
-- P02 real OIDC login and revocable sessions: implemented-unverified; rate
-  limits, proxy trust, provider logout/reauthentication, and real IdP evidence
-  remain.
+- P02 real OIDC login and revocable sessions: implemented-unverified; durable
+  per-client login limits and configured-origin enforcement are shipped, while
+  proxy trust, provider logout/reauthentication, and real IdP evidence remain.
 - P03 complete scoped authorization: implemented-unverified for asset owner and
   delegated capabilities; tenant isolation, bootstrap lifecycle, and a full
   PostgreSQL matrix remain.
@@ -58,9 +58,10 @@ Required backend/production coverage: [production review](PRODUCTION_READINESS.m
   upgrades, and key-rotation drills remain.
 - P15 capacity, observability, and customer operations: partial; bounded
   declared/streamed request bodies and collections, cursor-paginated inventory
-  and history, evaluation, explicit runtime observations, request correlation,
-  durable ticket cleanup, and restore invalidation exist, while aggregate
-  limits, metrics/alerts, load, and customer runbooks remain.
+  and history, durable login limits, evaluation, explicit runtime observations,
+  request-to-audit correlation, durable ticket cleanup, and restore invalidation
+  exist, while aggregate limits, metrics/alerts, load, and customer runbooks
+  remain.
 - P16 whole-product release evidence and promotion: not-started.
 
 These statuses refer to acceptance under the new packets, not absence of all

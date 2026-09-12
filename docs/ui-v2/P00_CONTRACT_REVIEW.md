@@ -96,7 +96,7 @@ identity evidence into production acceptance.
 
 | Boundary | Shipped behavior | Evidence still required |
 | --- | --- | --- |
-| Browser identity | OIDC authorization-code/PKCE callback, nonce/JWKS validation, opaque server session, bound CSRF, idle/absolute expiry, revocation, and stale-session-safe logout | real IdP/browser flow, login abuse limits, trusted proxy policy, cookie `__Host-` production validation |
+| Browser identity | OIDC authorization-code/PKCE callback, nonce/JWKS validation, opaque server session, bound CSRF, idle/absolute expiry, revocation, stale-session-safe logout, durable per-client login window, and configured-origin enforcement | real IdP/browser flow, trusted proxy policy, cookie `__Host-` production validation |
 | Asset authorization | owner and delegated `read`/`edit`/`publish`/`grant` capabilities scope inventory, reads, drafts, review, publication, history, restore, and audit | PostgreSQL multi-process matrix, grant lifecycle and emergency bootstrap review |
 | Draft and publication | revision CAS drafts, bounded evaluation, server-signed exact-draft review, explicit publish capability, restore audit, and idempotency replay/mismatch handling | concurrent PostgreSQL race test, deny-all publication decision, operation lookup/retention |
 | Nested schema | authoritative recursive Iceberg schema with typed field/list/map paths rendered by the UI | real Iceberg catalog/object-store and Spark/DuckDB consumer probes |

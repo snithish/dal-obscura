@@ -69,6 +69,11 @@ readiness, or synthetic read check fails.
 - Configure ingress rate limits, request/body limits, trusted proxy handling,
   HSTS, CSP, and HTTP/2 Flight forwarding. Keep PostgreSQL, migration, and
   health ports off the public interface.
+- Keep the control-plane login limiter enabled with bounded attempts, window,
+  and block settings. It hashes direct client keys, applies across API
+  processes through PostgreSQL, and returns generic retryable failures. Only
+  configured UI/CORS origins may mutate a cookie-authenticated session; do not
+  use a forged `Host` or forwarded header as an origin trust signal.
 - Establish a named operator for certificate/key rotation, backups, incident
   response, and emergency bootstrap-token retirement. Platform-admin MFA must
   be enforced by the IdP.
