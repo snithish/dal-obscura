@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `38f1449`.
+Implementation follow-up through `fd20e72`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -43,9 +43,11 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
 - X04 canonical evaluation: **implemented-unverified**; resolved mask values now
   flow from canonical preview and an unmatched-principal regression passes.
 - X05 canonical bounded schemas: **implemented-unverified**; canonical Arrow schema
-  encoding includes nested metadata/IDs and direct loader bounds. Direct Arrow
-  fingerprint calls now enforce node/depth limits too. Migration and all
-  entry-route/byte-budget evidence remain open.
+  encoding includes nested metadata/IDs and a shared node/depth/serialized-byte
+  guard. Iceberg schema return, planning, and projected execution paths now
+  enforce the same limits before recursive work. Direct Arrow fingerprint calls
+  use that guard too. Migration and full entry-route/byte-budget evidence remain
+  open.
 - X06 safe schema evolution: **implementing**; typed evaluation paths now preserve
   literal dotted names, schema-field records carry optional stable IDs and typed
   paths through migration `20260912_0011`, and admitted identities are carried into
@@ -147,6 +149,23 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
 Next implementation action: continue X03 with PostgreSQL barrier/CAS evidence and
 then complete X06 provider-derived and collection field identity rules. Do not add new
 providers before Phase A's security/correctness prerequisites are accepted.
+
+### X05 shared Arrow schema bounds — `fd20e72`
+
+- State: implemented-unverified.
+- Behavior: `common.schema_bounds.validate_arrow_schema_bounds` is the shared
+  guard for Arrow node count, nesting depth, and serialized schema size. The
+  control-plane fingerprint path and Iceberg format adapter apply it to schema
+  returns, planning inputs, and projected execution schemas. Traversal is
+  iterative and bounded; oversized or deeply nested schemas fail before policy
+  admission can recurse over them.
+- Green evidence: schema-bound, schema-service, and Iceberg regression tests (20
+  passed), Ruff, Ty, and `git diff --check` pass.
+- Remaining gaps: PostgreSQL migration/compatibility evidence and every live
+  API/Flight entry-route budget scenario remain unverified. Pickle compatibility
+  is unchanged.
+- Next permitted packet: continue X03 PostgreSQL barriers/CAS and X06 provider
+  identity evidence.
 
 ### X21 bounded Flight metrics — `4de0e78`
 
