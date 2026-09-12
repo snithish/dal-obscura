@@ -15,6 +15,10 @@ ingress. Replace every image tag with a verified immutable digest.
    ingress, and redirect configuration. The control-plane production profile
    rejects non-TLS OIDC and browser redirect settings, weak bootstrap tokens,
    missing audiences, missing catalog egress policy, and demo login shortcuts.
+   Set `DAL_OBSCURA_CELL_ID` to the UUID selected for the published data-plane
+   cell and keep `DAL_OBSCURA_DATA_PLANE_PROFILE=production`; the data plane
+   rejects an insecure Flight location, weak ticket secret, or non-PostgreSQL
+   control-plane store.
 3. Verify the image signatures/digests and the PostgreSQL backup policy, then
    run `docker compose --env-file .env config` and review the rendered topology.
 4. Run `docker compose --env-file .env up migrate` and require exit code 0.

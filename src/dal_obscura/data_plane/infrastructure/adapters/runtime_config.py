@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass, field
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
@@ -54,6 +55,7 @@ class DataPlaneRuntimeConfig:
     max_ticket_payload_bytes: int = 16 * 1024 * 1024
     max_stream_seconds: int = 300
     secret_provider: SecretProviderConfig = field(default_factory=SecretProviderConfig)
+    profile: str = "local"
 
 
 def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
@@ -64,14 +66,16 @@ def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
     cell_id = UUID(_required_env("DAL_OBSCURA_CELL_ID"))
     location = os.getenv("DAL_OBSCURA_LOCATION", "grpc://0.0.0.0:8815").strip()
     ticket_secret = _required_env("DAL_OBSCURA_TICKET_SECRET")
+    profile = os.getenv("DAL_OBSCURA_DATA_PLANE_PROFILE", "local").strip().lower()
     log_level = os.getenv("DAL_OBSCURA_LOG_LEVEL", "INFO").strip() or "INFO"
     json_logs = _bool_env(os.getenv("DAL_OBSCURA_JSON_LOGS"))
     tls_verify_client = _bool_env(os.getenv("DAL_OBSCURA_TLS_VERIFY_CLIENT"))
-    return DataPlaneRuntimeConfig(
+    config = DataPlaneRuntimeConfig(
         database_url=database_url,
         cell_id=cell_id,
         location=location,
         ticket_secret=ticket_secret,
+        profile=profile,
         log_level=log_level,
         json_logs=json_logs,
         tls_cert=_optional_env("DAL_OBSCURA_TLS_CERT"),
@@ -95,6 +99,31 @@ def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
         max_stream_seconds=_positive_int_env("DAL_OBSCURA_MAX_STREAM_SECONDS", default=300),
         secret_provider=_secret_provider_config(),
     )
+    _validate_profile(config)
+    return config
+
+
+def _validate_profile(config: DataPlaneRuntimeConfig) -> None:
+    if config.profile not in {"local", "production"}:
+        raise ValueError("DAL_OBSCURA_DATA_PLANE_PROFILE must be local or production")
+    if config.profile != "production":
+        return
+    if not config.database_url.lower().startswith("postgresql"):
+        raise ValueError("Production data plane requires a PostgreSQL control-plane database")
+    if len(config.ticket_secret) < 32:
+        raise ValueError(
+            "DAL_OBSCURA_TICKET_SECRET must contain at least 32 characters in production"
+        )
+    if urlsplit(config.location).scheme != "grpc+tls":
+        raise ValueError("Production data plane requires a grpc+tls location")
+    if not config.tls_cert or not config.tls_key:
+        raise ValueError(
+            "Production data plane requires DAL_OBSCURA_TLS_CERT and DAL_OBSCURA_TLS_KEY"
+        )
+    if config.tls_verify_client and not config.tls_client_ca:
+        raise ValueError(
+            "DAL_OBSCURA_TLS_CLIENT_CA is required when client verification is enabled"
+        )
 
 
 def _required_env(name: str) -> str:

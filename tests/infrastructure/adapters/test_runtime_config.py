@@ -5,6 +5,7 @@ import pytest
 from dal_obscura.data_plane.infrastructure.adapters.runtime_config import (
     load_data_plane_runtime_config,
 )
+from dal_obscura.data_plane.interfaces.cli.main import _tls_material
 
 
 def test_runtime_config_reads_required_database_and_cell(monkeypatch: pytest.MonkeyPatch):
@@ -110,3 +111,35 @@ def test_runtime_config_rejects_missing_database_url(monkeypatch: pytest.MonkeyP
 
     with pytest.raises(ValueError, match="DAL_OBSCURA_DATABASE_URL"):
         load_data_plane_runtime_config()
+
+
+def test_runtime_config_requires_secure_production_data_plane(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "postgresql+psycopg://db/app")
+    monkeypatch.setenv("DAL_OBSCURA_CELL_ID", "00000000-0000-0000-0000-000000000001")
+    monkeypatch.setenv("DAL_OBSCURA_TICKET_SECRET", "t" * 32)
+    monkeypatch.setenv("DAL_OBSCURA_DATA_PLANE_PROFILE", "production")
+    monkeypatch.setenv("DAL_OBSCURA_LOCATION", "grpc://flight:8815")
+
+    with pytest.raises(ValueError, match="grpc\\+tls"):
+        load_data_plane_runtime_config()
+
+
+def test_runtime_config_accepts_secure_production_data_plane(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "postgresql+psycopg://db/app")
+    monkeypatch.setenv("DAL_OBSCURA_CELL_ID", "00000000-0000-0000-0000-000000000001")
+    monkeypatch.setenv("DAL_OBSCURA_TICKET_SECRET", "t" * 32)
+    monkeypatch.setenv("DAL_OBSCURA_DATA_PLANE_PROFILE", "production")
+    monkeypatch.setenv("DAL_OBSCURA_LOCATION", "grpc+tls://flight:8815")
+    monkeypatch.setenv("DAL_OBSCURA_TLS_CERT", "server-cert")
+    monkeypatch.setenv("DAL_OBSCURA_TLS_KEY", "server-key")
+
+    config = load_data_plane_runtime_config()
+
+    assert config.profile == "production"
+
+
+def test_tls_material_reads_bounded_file_contents(tmp_path):
+    certificate = tmp_path / "server.crt"
+    certificate.write_bytes(b"PEM-CERTIFICATE")
+
+    assert _tls_material(str(certificate), "certificate") == b"PEM-CERTIFICATE"
