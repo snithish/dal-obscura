@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `daf84cf`.
+Implementation follow-up through `4de0e78`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -128,7 +128,12 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   denial/allowance, TLS, IdP, browser, restart, and clean-artifact evidence remain
   open.
 - X20 recovery and upgrades: **not-started**.
-- X21 performance/observability/test efficiency: **not-started**.
+- X21 performance/observability/test efficiency: **implementing**; Flight
+  schema/planning/streaming paths now emit thread-safe process-local success/error
+  duration aggregates with fixed low-cardinality operation names. Dynamic
+  principals, tables, URIs, and correlation IDs cannot become metric labels.
+  Capacity profiling, benchmark thresholds, test-lane timing, and dead-code
+  inventory remain open.
 - X22 exact-artifact CI: **implementing**; the container publication job now
   depends on a pinned governance-UI install/type-check/build lane. Artifact
   digest, browser, provider, consumer, recovery, and mandatory-security gates
@@ -138,6 +143,25 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
 Next implementation action: continue X03 with PostgreSQL barrier/CAS evidence and
 then complete X06 provider-derived and collection field identity rules. Do not add new
 providers before Phase A's security/correctness prerequisites are accepted.
+
+### X21 bounded Flight metrics — `4de0e78`
+
+- State: implementing.
+- Behavior: `ServiceMetrics` provides bounded, thread-safe operation/outcome
+  counters and elapsed-duration totals. Flight `get_schema`, `get_flight_info`,
+  and `do_get` paths record success or error without exposing request-specific
+  labels. Invalid/high-cardinality operation names and unsupported outcomes are
+  rejected. A snapshot is copy-on-read for health/metrics integration.
+- Green evidence: `tests/test_observability.py` (2 passed), Ruff, Ty, and
+  `git diff --check` pass. Existing Flight integration tests were attempted but
+  cannot bind their ephemeral `0.0.0.0:0` listener in this restricted sandbox;
+  the failure is recorded as an environment gate and requires a network-enabled
+  runner for transport evidence.
+- Remaining gaps: exporter/endpoint integration, workload capacity thresholds,
+  memory/stream profiling, timing-separated test lanes, and dead-code removal
+  remain open. Pickle compatibility is unchanged.
+- Next permitted packet: continue X03 PostgreSQL barriers/CAS and X06 evolution
+  evidence; do not advertise external providers before Phase A acceptance.
 
 ### X19 production database privilege ordering — `18f8e64`
 
