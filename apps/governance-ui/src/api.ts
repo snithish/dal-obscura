@@ -218,8 +218,9 @@ export const controlPlane = {
     method: "PUT",
     body: JSON.stringify(settings),
   }),
-  publishAsset: (assetId: string, expectedDraftRevision?: number, reviewToken?: string) => request<{ asset_id: string; policy_version: number }>(`/v1/assets/${assetId}/policy-versions`, {
+  publishAsset: (assetId: string, expectedDraftRevision?: number, reviewToken?: string, idempotencyKey?: string) => request<{ asset_id: string; policy_version: number }>(`/v1/assets/${assetId}/policy-versions`, {
     method: "POST",
+    headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
     body: JSON.stringify({ ...(expectedDraftRevision === undefined ? {} : { expected_draft_revision: expectedDraftRevision }), ...(reviewToken ? { review_token: reviewToken } : {}) }),
   }),
   getDraft: (assetId: string) => request<PolicyDraft>(`/v1/assets/${assetId}/draft`),
