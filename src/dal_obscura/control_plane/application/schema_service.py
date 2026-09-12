@@ -26,6 +26,10 @@ from dal_obscura.control_plane.application.catalog_service import validate_catal
 from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.application.policy_service import ensure_asset_capability
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
+from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
+    EnvSecretProvider,
+    resolve_secret_refs,
+)
 
 CatalogLoader = Callable[..., Any]
 
@@ -89,6 +93,10 @@ def load_asset_iceberg_schema(
     )
     options = cast(dict[str, Any], catalog["options"])
     validate_catalog_options(options, egress_allowlist=egress_allowlist)
+    options = cast(
+        dict[str, Any],
+        resolve_secret_refs(options, provider=EnvSecretProvider()),
+    )
     table_identifier = str(asset["table_identifier"])
     loader = load_catalog if load_catalog_fn is None else load_catalog_fn
     try:

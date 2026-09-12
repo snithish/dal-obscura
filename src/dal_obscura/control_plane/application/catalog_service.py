@@ -15,6 +15,10 @@ from urllib.parse import parse_qsl, urlsplit
 from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.infrastructure.catalog_discovery import discover_catalog_tables
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
+from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
+    EnvSecretProvider,
+    resolve_secret_refs,
+)
 
 CatalogDiscoverer = Any
 
@@ -53,6 +57,7 @@ def discover_workspace_catalog_tables(
     catalog = store.get_workspace_catalog(context, name)
     catalog_options = cast(dict[str, Any], catalog["options"])
     validate_catalog_options(catalog_options, egress_allowlist=egress_allowlist)
+    catalog_options = _resolve_catalog_secrets(catalog_options)
     try:
         tables = discover(
             str(catalog["name"]),
@@ -97,6 +102,7 @@ def diagnose_workspace_catalog(
     catalog = store.get_workspace_catalog(context, name)
     catalog_options = cast(dict[str, Any], catalog["options"])
     validate_catalog_options(catalog_options, egress_allowlist=egress_allowlist)
+    catalog_options = _resolve_catalog_secrets(catalog_options)
     checked_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     try:
         tables = list(
@@ -162,6 +168,14 @@ def _required_workspace_context(store: PublicationStore):
     if context is None:
         raise LookupError("No workspace has been configured")
     return context
+
+
+def _resolve_catalog_secrets(options: dict[str, Any]) -> dict[str, Any]:
+    try:
+        resolved = resolve_secret_refs(options, provider=EnvSecretProvider())
+    except ValueError as exc:
+        raise ValidationFailure("Catalog secret could not be resolved") from exc
+    return cast(dict[str, Any], resolved)
 
 
 def validate_catalog_options(

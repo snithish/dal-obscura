@@ -206,6 +206,37 @@ def test_workspace_catalog_tables_can_be_discovered_without_runtime_ids(monkeypa
     assert "tenant" not in _keys_recursive(response.json())
 
 
+def test_workspace_catalog_discovery_resolves_secret_references(monkeypatch):
+    client = _client()
+    monkeypatch.setenv("CATALOG_TOKEN", "sentinel-secret")
+    client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {
+                "uri": "https://catalog.example/api",
+                "token": {"secret": "CATALOG_TOKEN"},
+            },
+        },
+        headers=ADMIN_HEADERS,
+    )
+    received: dict[str, object] = {}
+
+    def fake_discover_catalog_tables(name, module, options):
+        received.update(options)
+        return []
+
+    monkeypatch.setattr(
+        "dal_obscura.control_plane.application.provisioning.discover_catalog_tables",
+        fake_discover_catalog_tables,
+    )
+
+    response = client.get("/v1/catalogs/analytics/tables", headers=ADMIN_HEADERS)
+
+    assert response.status_code == 200
+    assert received["token"] == "sentinel-secret"
+
+
 def test_workspace_catalog_discovery_does_not_echo_provider_errors(monkeypatch):
     client = _client()
     client.put(

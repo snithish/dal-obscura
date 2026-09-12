@@ -178,6 +178,40 @@ def test_schema_loading_enforces_catalog_egress_before_provider_call(
     assert called is False
 
 
+def test_schema_loading_resolves_secret_references_before_provider_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    asset_id = uuid4()
+    store = _FakeStore(asset_id)
+    monkeypatch.setenv("CATALOG_TOKEN", "sentinel-secret")
+    monkeypatch.setattr(
+        store,
+        "get_workspace_catalog",
+        lambda context, name: {
+            "name": name,
+            "options": {
+                "uri": "https://catalog.example/api",
+                "token": {"secret": "CATALOG_TOKEN"},
+            },
+        },
+    )
+    received: dict[str, Any] = {}
+
+    def load_catalog(name: str, **options: Any) -> _FakeCatalog:
+        received.update(options)
+        return _FakeCatalog(_FakeTable(_nested_schema()))
+
+    get_asset_schema(
+        store,  # type: ignore[arg-type]
+        asset_id,
+        ControlPlaneActor.for_platform_admin("admin"),
+        load_catalog_fn=load_catalog,
+        egress_allowlist=("catalog.example",),
+    )
+
+    assert received["token"] == "sentinel-secret"
+
+
 def test_schema_fingerprint_includes_collection_ids_and_matches_arrow_normalization() -> None:
     original = Schema(
         NestedField(
