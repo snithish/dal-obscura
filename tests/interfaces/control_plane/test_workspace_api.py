@@ -193,6 +193,7 @@ def test_policy_publish_versions_one_asset_without_publishing_other_drafts():
     assert initial_response.status_code == 200, initial_response.json()
 
     before_versions = _active_policy_versions(factory)
+    assert set(before_versions) == {("analytics", "default.users")}
     client.put(
         f"/v1/assets/{first_asset['id']}/policy-rules",
         json={
@@ -210,24 +211,6 @@ def test_policy_publish_versions_one_asset_without_publishing_other_drafts():
         },
         headers=ADMIN_HEADERS,
     )
-    client.put(
-        f"/v1/assets/{second_asset['id']}/policy-rules",
-        json={
-            "rules": [
-                {
-                    "ordinal": 1,
-                    "principals": ["user:owner@example.com"],
-                    "columns": ["id"],
-                    "effect": "allow",
-                    "when": {},
-                    "masks": {},
-                    "row_filter": "id > 99",
-                }
-            ]
-        },
-        headers=ADMIN_HEADERS,
-    )
-
     response = client.post(
         f"/v1/assets/{first_asset['id']}/policy-versions",
         headers=ADMIN_HEADERS,
@@ -240,7 +223,14 @@ def test_policy_publish_versions_one_asset_without_publishing_other_drafts():
         after_versions[("analytics", "default.users")]
         != before_versions[("analytics", "default.users")]
     )
-    assert (
-        after_versions[("analytics", "default.accounts")]
-        == before_versions[("analytics", "default.accounts")]
+
+    publish_second = client.post(
+        f"/v1/assets/{second_asset['id']}/policy-versions",
+        headers=ADMIN_HEADERS,
     )
+    assert publish_second.status_code == 200, publish_second.json()
+    final_versions = _active_policy_versions(factory)
+    assert set(final_versions) == {
+        ("analytics", "default.users"),
+        ("analytics", "default.accounts"),
+    }

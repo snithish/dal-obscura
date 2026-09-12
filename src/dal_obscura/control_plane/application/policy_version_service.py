@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import replace
 from typing import cast
 from uuid import UUID, uuid4
 
@@ -234,13 +235,22 @@ def create_asset_policy_version(  # noqa: C901
             raise PublicationConflictError(
                 "No active publication matches the requested generation."
             ) from None
-        draft = store.load_publish_draft(asset.cell_id)
-        selected = next((item for item in draft.assets if item.id == asset.id), None)
+        # The first activation is asset-scoped.  Do not bootstrap every other
+        # workspace draft merely because this asset is the first one to publish.
+        # Runtime/auth settings are shared serving prerequisites; catalog and asset
+        # records are narrowed to the selected binding before readiness/compile.
+        workspace_draft = store.load_publish_draft(asset.cell_id)
+        selected = next((item for item in workspace_draft.assets if item.id == asset.id), None)
         if selected is None:
             raise ValidationFailure(
                 "Asset is not part of the workspace publication draft."
             ) from None
         selected.rules = list(asset.rules)
+        draft = replace(
+            workspace_draft,
+            catalogs=[catalog],
+            assets=[selected],
+        )
         _validate_publish_readiness(
             store,
             draft,
