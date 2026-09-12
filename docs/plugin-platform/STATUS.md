@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `9d2789c`.
+Implementation follow-up through `ccedd88`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -272,7 +272,7 @@ option name (`839c16f`); no raw credential field is exposed.
   and a deterministic digest of installed distribution files; malformed lock
   records fail closed. Existing three-part distribution/version/API locks remain
   compatible.
-- Green evidence: `tests/plugin_platform/test_registry.py` (11 passed), Ruff, Ty,
+- Green evidence: `tests/plugin_platform/test_registry.py` (12 passed), Ruff, Ty,
   and `git diff --check` pass.
 - Remaining gaps: production-generated lock files, clean wheel artifact
   provenance, editable-install detection, external SDK factories, and live
