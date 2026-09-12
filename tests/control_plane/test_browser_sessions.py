@@ -62,3 +62,24 @@ def test_browser_session_expiry_is_enforced(monkeypatch) -> None:
     )
     with factory() as session:
         assert BrowserSessionStore(session).resolve(token) is None
+
+
+def test_browser_session_csrf_secret_is_bound_to_session() -> None:
+    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+    migrate_config_store(engine)
+    actor = ControlPlaneActor.for_platform_admin("admin")
+    factory = session_factory(engine)
+
+    with factory() as session:
+        token, csrf = BrowserSessionStore(session).issue_with_csrf(actor, ttl_seconds=3600)
+        session.commit()
+
+    with factory() as session:
+        store = BrowserSessionStore(session)
+        assert store.resolve(token, csrf_token=csrf) == actor
+        try:
+            store.resolve(token, csrf_token="wrong")
+        except ValueError as exc:
+            assert "CSRF" in str(exc)
+        else:
+            raise AssertionError("a CSRF secret from another session must be rejected")

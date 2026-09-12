@@ -179,6 +179,25 @@ def test_cookie_session_requires_csrf_header_for_mutations(monkeypatch):
     assert csrf.json()["detail"] != "CSRF validation failed"
 
 
+def test_cookie_session_rejects_a_forged_csrf_cookie(monkeypatch):
+    client = _client_with_ui_auth_config()
+    monkeypatch.setattr(
+        api_module,
+        "_exchange_demo_password_token",
+        lambda config, username: "owner-token",
+    )
+    login = client.post("/v1/demo-login", json={"login_hint": "asset-owner"})
+    cookie_header = (
+        f"dal_obscura_session={login.cookies['dal_obscura_session']}; "
+        "dal_obscura_csrf=forged"
+    )
+
+    response = client.get("/v1/session", headers={"cookie": cookie_header})
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "CSRF validation failed"
+
+
 def test_cookie_session_logout_requires_csrf_and_expires_browser_cookies(monkeypatch):
     client = _client_with_ui_auth_config()
     monkeypatch.setattr(
@@ -255,6 +274,8 @@ def test_session_reports_admin_token_actor():
     response = client.get("/v1/session", headers=ADMIN_HEADERS)
 
     assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["x-content-type-options"] == "nosniff"
     assert response.json() == {
         "principal": "platform:admin",
         "groups": [],

@@ -102,6 +102,7 @@ def create_app(
     cors_origins: tuple[str, ...] = (),
     ui_auth_config: Mapping[str, object] | None = None,
     session_ttl_seconds: int = 28_800,
+    session_idle_ttl_seconds: int = 1_800,
     oidc_nonce_actor_resolver: OidcNonceActorResolver | None = None,
 ) -> FastAPI:
     """Creates the control-plane FastAPI app with all workspace routes installed.
@@ -120,6 +121,17 @@ def create_app(
         redoc_url="/redoc",
         openapi_url="/openapi.json",
     )
+
+    @app.middleware("http")
+    async def security_headers(request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith(("/v1/", "/auth/")):
+            response.headers["cache-control"] = "no-store"
+            response.headers["pragma"] = "no-cache"
+        response.headers.setdefault("x-content-type-options", "nosniff")
+        response.headers.setdefault("referrer-policy", "no-referrer")
+        return response
+
     if cors_origins:
         app.add_middleware(
             CORSMiddleware,  # ty: ignore[invalid-argument-type]
@@ -139,6 +151,7 @@ def create_app(
             username,
         ),
         session_ttl_seconds=session_ttl_seconds,
+        session_idle_ttl_seconds=session_idle_ttl_seconds,
         allowed_origins=cors_origins,
         oidc_nonce_actor_resolver=oidc_nonce_actor_resolver,
         authorization_code_exchange=lambda config, code, verifier: _exchange_authorization_code(

@@ -107,7 +107,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         actor = deps.resolve_nonce_token(id_token, transaction.nonce_hash)
         if actor is None:
             raise HTTPException(status_code=401, detail="OIDC ID token was rejected")
-        session_token = deps.issue_browser_session(actor)
+        session_token, csrf_token = deps.issue_browser_session_credentials(actor)
         result = RedirectResponse(_post_login_redirect(config, redirect_uri), status_code=303)
         result.headers["cache-control"] = "no-store"
         result.set_cookie(
@@ -120,7 +120,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         )
         result.set_cookie(
             key="dal_obscura_csrf",
-            value=secrets.token_urlsafe(32),
+            value=csrf_token,
             httponly=False,
             secure=_secure_cookie(config),
             samesite="lax",
@@ -154,7 +154,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         actor = deps.resolve_bearer_token(provider_token)
         if actor is None:
             raise HTTPException(status_code=401, detail="Demo identity provider token rejected")
-        session_token = deps.issue_browser_session(actor)
+        session_token, csrf_token = deps.issue_browser_session_credentials(actor)
         secure = str(deps.ui_auth_config.get("redirect_uri", "")).startswith("https://")
         response.set_cookie(
             key="dal_obscura_session",
@@ -166,7 +166,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         )
         response.set_cookie(
             key="dal_obscura_csrf",
-            value=secrets.token_urlsafe(32),
+            value=csrf_token,
             httponly=False,
             secure=secure,
             samesite="lax",

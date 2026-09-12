@@ -61,6 +61,7 @@ class ControlPlaneDeps:
     ui_auth_config: Mapping[str, object] | None
     demo_token_exchange: DemoTokenExchange
     session_ttl_seconds: int = 28_800
+    session_idle_ttl_seconds: int = 1_800
     allowed_origins: tuple[str, ...] = ()
     oidc_nonce_actor_resolver: OidcNonceActorResolver | None = None
     authorization_code_exchange: AuthorizationCodeExchange | None = None
@@ -91,7 +92,10 @@ class ControlPlaneDeps:
         if using_cookie:
             if session_token is None:
                 raise HTTPException(status_code=401, detail="Unauthorized")
-            actor = self.resolve_browser_session(session_token)
+            try:
+                actor = self.resolve_browser_session(session_token, csrf_cookie)
+            except ValueError as exc:
+                raise HTTPException(status_code=403, detail="CSRF validation failed") from exc
         else:
             token = _bearer_value(authorization)
             actor = self.resolve_bearer_token(token) if token is not None else None
@@ -110,11 +114,19 @@ class ControlPlaneDeps:
             admin_group=self.oidc_admin_group,
         )
 
-    def resolve_browser_session(self, token: str) -> ControlPlaneActor | None:
+    def resolve_browser_session(
+        self,
+        token: str,
+        csrf_token: str | None = None,
+    ) -> ControlPlaneActor | None:
         """Loads an unexpired browser session without exposing provider tokens."""
 
         with self.session_maker() as session:
-            actor = BrowserSessionStore(session).resolve(token)
+            actor = BrowserSessionStore(session).resolve(
+                token,
+                csrf_token=csrf_token,
+                idle_ttl_seconds=self.session_idle_ttl_seconds,
+            )
             if actor is not None:
                 session.commit()
             return actor
@@ -122,13 +134,19 @@ class ControlPlaneDeps:
     def issue_browser_session(self, actor: ControlPlaneActor) -> str:
         """Mints a random, durable browser session secret."""
 
+        token, _csrf_token = self.issue_browser_session_credentials(actor)
+        return token
+
+    def issue_browser_session_credentials(self, actor: ControlPlaneActor) -> tuple[str, str]:
+        """Mints the session and its browser-readable, session-bound CSRF secret."""
+
         with self.session_maker() as session:
-            token = BrowserSessionStore(session).issue(
+            credentials = BrowserSessionStore(session).issue_with_csrf(
                 actor,
                 ttl_seconds=self.session_ttl_seconds,
             )
             session.commit()
-            return token
+            return credentials
 
     def revoke_browser_session(self, token: str) -> None:
         """Revokes a browser session secret, if it exists."""

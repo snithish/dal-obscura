@@ -66,6 +66,10 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
                 values.get("DAL_OBSCURA_CONTROL_PLANE_SESSION_TTL_SECONDS", "28800"),
                 "DAL_OBSCURA_CONTROL_PLANE_SESSION_TTL_SECONDS",
             ),
+            session_idle_ttl_seconds=_positive_int(
+                values.get("DAL_OBSCURA_CONTROL_PLANE_SESSION_IDLE_TTL_SECONDS", "1800"),
+                "DAL_OBSCURA_CONTROL_PLANE_SESSION_IDLE_TTL_SECONDS",
+            ),
             oidc_nonce_actor_resolver=_ui_nonce_resolver(values),
         )
     except (ConfigStoreSchemaError, ValueError, RuntimeError) as exc:

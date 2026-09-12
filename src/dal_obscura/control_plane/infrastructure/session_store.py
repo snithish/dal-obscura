@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 import secrets
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import timedelta, timezone
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -33,14 +33,25 @@ class BrowserSessionStore:
         self._session = session
 
     def issue(self, actor: ControlPlaneActor, *, ttl_seconds: int) -> str:
+        token, _csrf_token = self.issue_with_csrf(actor, ttl_seconds=ttl_seconds)
+        return token
+
+    def issue_with_csrf(
+        self,
+        actor: ControlPlaneActor,
+        *,
+        ttl_seconds: int,
+    ) -> tuple[str, str]:
         if ttl_seconds <= 0:
             raise ValueError("session TTL must be positive")
         token = secrets.token_urlsafe(32)
+        csrf_token = secrets.token_urlsafe(32)
         now = utcnow()
         self._session.add(
             BrowserSessionRecord(
                 id=uuid4(),
                 token_hash=_token_hash(token),
+                csrf_hash=_token_hash(csrf_token),
                 principal=actor.principal,
                 groups_json=list(actor.groups),
                 platform_admin=actor.platform_admin,
@@ -50,9 +61,15 @@ class BrowserSessionStore:
             )
         )
         self._session.flush()
-        return token
+        return token, csrf_token
 
-    def resolve(self, token: str) -> ControlPlaneActor | None:
+    def resolve(
+        self,
+        token: str,
+        *,
+        csrf_token: str | None = None,
+        idle_ttl_seconds: int | None = None,
+    ) -> ControlPlaneActor | None:
         digest = _token_hash(token)
         now = utcnow()
         record = self._session.scalar(
@@ -64,6 +81,21 @@ class BrowserSessionStore:
         )
         if record is None:
             return None
+        if csrf_token is not None and (
+            record.csrf_hash is None
+            or not secrets.compare_digest(record.csrf_hash, _token_hash(csrf_token))
+        ):
+            raise ValueError("CSRF secret is not bound to this browser session")
+        if idle_ttl_seconds is not None:
+            if idle_ttl_seconds <= 0:
+                raise ValueError("idle session TTL must be positive")
+            last_seen_at = record.last_seen_at
+            if last_seen_at.tzinfo is None:
+                last_seen_at = last_seen_at.replace(tzinfo=timezone.utc)
+            if last_seen_at + timedelta(seconds=idle_ttl_seconds) <= now:
+                record.revoked_at = now
+                self._session.flush()
+                return None
         record.last_seen_at = now
         self._session.flush()
         return ControlPlaneActor(
