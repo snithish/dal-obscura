@@ -27,7 +27,7 @@ from dal_obscura.data_plane.interfaces.flight.contracts import (
     parse_descriptor,
 )
 from dal_obscura.data_plane.interfaces.flight.streaming import make_stream
-from dal_obscura.observability import get_resident_memory_bytes
+from dal_obscura.observability import ServiceMetrics, get_resident_memory_bytes
 
 HEALTH_ACTION = "healthz"
 
@@ -47,6 +47,7 @@ class DataAccessFlightService(flight.FlightServerBase):
         verify_client: bool = False,
         root_certificates: bytes | None = None,
         health_check: Callable[[], Mapping[str, object]] | None = None,
+        metrics: ServiceMetrics | None = None,
     ) -> None:
         super().__init__(
             location,
@@ -59,7 +60,14 @@ class DataAccessFlightService(flight.FlightServerBase):
         self._plan_access_use_case = plan_access_use_case or _PlanReadAdapter(access_flow)
         self._fetch_stream_use_case = fetch_stream_use_case or _FetchReadAdapter(access_flow)
         self._health_check = health_check
+        self._metrics = metrics or ServiceMetrics()
         self._logger = logging.getLogger(self.__class__.__name__)
+
+    @property
+    def metrics(self) -> ServiceMetrics:
+        """Returns the bounded process-local metrics collector."""
+
+        return self._metrics
 
     def list_actions(self, context: flight.ServerCallContext) -> list[flight.ActionType]:
         del context
@@ -81,92 +89,97 @@ class DataAccessFlightService(flight.FlightServerBase):
         self, context: flight.ServerCallContext, descriptor: flight.FlightDescriptor
     ) -> flight.SchemaResult:
         """Returns the caller-visible masked schema without minting read tickets."""
-        try:
-            auth_request = authentication_request_from_context(context, method="get_schema")
-            request = parse_descriptor(descriptor)
-            result = self._get_schema_use_case.execute(request, auth_request)
-        except PermissionError as exc:
-            self._logger.warning("auth_or_authz_failed", extra=self._log_extra())
-            raise flight.FlightUnauthorizedError("Unauthorized") from exc
-        except ValueError as exc:
-            self._logger.warning("invalid_request", extra=self._log_extra())
-            raise flight.FlightInternalError("Invalid request") from exc
+        with self._metrics.measure("flight.get_schema"):
+            try:
+                auth_request = authentication_request_from_context(context, method="get_schema")
+                request = parse_descriptor(descriptor)
+                result = self._get_schema_use_case.execute(request, auth_request)
+            except PermissionError as exc:
+                self._logger.warning("auth_or_authz_failed", extra=self._log_extra())
+                raise flight.FlightUnauthorizedError("Unauthorized") from exc
+            except ValueError as exc:
+                self._logger.warning("invalid_request", extra=self._log_extra())
+                raise flight.FlightInternalError("Invalid request") from exc
 
-        self._logger.info(
-            "schema_request",
-            extra=self._log_extra(
-                target=result.target,
-                catalog=result.catalog,
-                principal=result.principal_id,
-                columns=result.columns,
-                policy_version=result.policy_version,
-            ),
-        )
-        return flight.SchemaResult(result.output_schema)
+            self._logger.info(
+                "schema_request",
+                extra=self._log_extra(
+                    target=result.target,
+                    catalog=result.catalog,
+                    principal=result.principal_id,
+                    columns=result.columns,
+                    policy_version=result.policy_version,
+                ),
+            )
+            return flight.SchemaResult(result.output_schema)
 
     def get_flight_info(
         self, context: flight.ServerCallContext, descriptor: flight.FlightDescriptor
     ) -> flight.FlightInfo:
         """Plans a dataset read and returns one endpoint per signed ticket."""
-        try:
-            auth_request = authentication_request_from_context(context, method="get_flight_info")
-            request = parse_descriptor(descriptor)
-            result = self._plan_access_use_case.execute(request, auth_request)
-        except PermissionError as exc:
-            self._logger.warning("auth_or_authz_failed", extra=self._log_extra())
-            raise flight.FlightUnauthorizedError("Unauthorized") from exc
-        except ValueError as exc:
-            self._logger.warning("invalid_request", extra=self._log_extra())
-            raise flight.FlightInternalError("Invalid request") from exc
+        with self._metrics.measure("flight.get_flight_info"):
+            try:
+                auth_request = authentication_request_from_context(
+                    context, method="get_flight_info"
+                )
+                request = parse_descriptor(descriptor)
+                result = self._plan_access_use_case.execute(request, auth_request)
+            except PermissionError as exc:
+                self._logger.warning("auth_or_authz_failed", extra=self._log_extra())
+                raise flight.FlightUnauthorizedError("Unauthorized") from exc
+            except ValueError as exc:
+                self._logger.warning("invalid_request", extra=self._log_extra())
+                raise flight.FlightInternalError("Invalid request") from exc
 
-        self._logger.info(
-            "plan_request",
-            extra=self._log_extra(
-                target=result.target,
-                catalog=result.catalog,
-                principal=result.principal_id,
-                columns=result.columns,
-                policy_version=result.policy_version,
-                requested_row_filter_present=result.requested_row_filter_present,
-                requested_row_filter_dependency_count=result.requested_row_filter_dependency_count,
-                full_row_filter_present=result.full_row_filter_present,
-                backend_pushdown_row_filter_present=result.backend_pushdown_row_filter_present,
-                residual_row_filter_present=result.residual_row_filter_present,
-                visible_column_count=result.visible_column_count,
-                execution_column_count=result.execution_column_count,
-            ),
-        )
-        endpoints = [
-            flight.FlightEndpoint(flight.Ticket(token.encode("utf-8")), [])
-            for token in result.ticket_tokens
-        ]
-        return flight.FlightInfo(result.output_schema, descriptor, endpoints, -1, -1)
+            self._logger.info(
+                "plan_request",
+                extra=self._log_extra(
+                    target=result.target,
+                    catalog=result.catalog,
+                    principal=result.principal_id,
+                    columns=result.columns,
+                    policy_version=result.policy_version,
+                    requested_row_filter_present=result.requested_row_filter_present,
+                    requested_row_filter_dependency_count=result.requested_row_filter_dependency_count,
+                    full_row_filter_present=result.full_row_filter_present,
+                    backend_pushdown_row_filter_present=result.backend_pushdown_row_filter_present,
+                    residual_row_filter_present=result.residual_row_filter_present,
+                    visible_column_count=result.visible_column_count,
+                    execution_column_count=result.execution_column_count,
+                ),
+            )
+            endpoints = [
+                flight.FlightEndpoint(flight.Ticket(token.encode("utf-8")), [])
+                for token in result.ticket_tokens
+            ]
+            return flight.FlightInfo(result.output_schema, descriptor, endpoints, -1, -1)
 
     def do_get(
         self, context: flight.ServerCallContext, ticket: flight.Ticket
     ) -> flight.RecordBatchStream:
         """Executes a previously planned read and streams the masked result batches."""
-        auth_request = authentication_request_from_context(context, method="do_get")
-        token = ticket.ticket.decode("utf-8")
-        try:
-            result = self._fetch_stream_use_case.execute(token, auth_request)
-        except PermissionError as exc:
-            self._logger.warning("unauthorized", extra=self._log_extra())
-            raise flight.FlightUnauthorizedError("Unauthorized") from exc
-        except ValueError as exc:
-            self._logger.error("ticket_payload_mismatch", extra=self._log_extra())
-            raise flight.FlightInternalError("Ticket payload mismatch") from exc
+        with self._metrics.measure("flight.do_get"):
+            auth_request = authentication_request_from_context(context, method="do_get")
+            token = ticket.ticket.decode("utf-8")
+            try:
+                result = self._fetch_stream_use_case.execute(token, auth_request)
+            except PermissionError as exc:
+                self._logger.warning("unauthorized", extra=self._log_extra())
+                raise flight.FlightUnauthorizedError("Unauthorized") from exc
+            except ValueError as exc:
+                self._logger.error("ticket_payload_mismatch", extra=self._log_extra())
+                raise flight.FlightInternalError("Ticket payload mismatch") from exc
 
-        self._logger.info(
-            "do_get",
-            extra=self._log_extra(
-                target=result.target,
-                catalog=result.catalog,
-                principal=result.principal_id,
-                columns=result.columns,
-            ),
-        )
-        return make_stream(result.output_schema, result.result_batches)
+            self._logger.info(
+                "do_get",
+                extra=self._log_extra(
+                    target=result.target,
+                    catalog=result.catalog,
+                    principal=result.principal_id,
+                    columns=result.columns,
+                ),
+            )
+            return make_stream(result.output_schema, result.result_batches)
 
     def _log_extra(self, **extra: object) -> dict[str, object]:
         """Adds process-level telemetry to every structured log line."""
