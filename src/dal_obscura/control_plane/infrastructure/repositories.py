@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 from dataclasses import dataclass
 from datetime import datetime
@@ -449,6 +450,8 @@ class PublicationStore:
                     asset_id=asset_id,
                     ordinal=ordinal,
                     name=str(field["name"]),
+                    field_id=str(field["field_id"]),
+                    path_json=list(cast(list[str], field["path"])),
                     type=str(field["type"]),
                     nullable=bool(field["nullable"]),
                 )
@@ -952,6 +955,8 @@ class PublicationStore:
         return [
             {
                 "name": record.name,
+                "field_id": record.field_id or _legacy_field_id(record.name),
+                "path": list(record.path_json) if record.path_json else [record.name],
                 "type": record.type,
                 "nullable": record.nullable,
             }
@@ -1897,20 +1902,52 @@ def _normalize_principals(principals: list[str]) -> list[str]:
 
 def _normalize_schema_fields(fields: list[dict[str, Any]]) -> list[dict[str, object]]:
     normalized: list[dict[str, object]] = []
-    seen: set[str] = set()
+    seen_paths: set[tuple[str, ...]] = set()
+    seen_ids: set[str] = set()
     for field in fields:
         name = str(field.get("name", "")).strip()
-        if not name or name in seen:
+        if not name:
             continue
+        raw_path = field.get("path")
+        if raw_path is None:
+            path = [name]
+        elif (
+            not isinstance(raw_path, list)
+            or not raw_path
+            or any(not isinstance(segment, str) or not segment.strip() for segment in raw_path)
+        ):
+            raise ValueError("Schema field path must be a non-empty string list")
+        else:
+            path = [segment.strip() for segment in raw_path]
+        path_key = tuple(path)
+        if path_key in seen_paths:
+            raise ValueError("Schema field paths must be unique")
+        raw_field_id = field.get("field_id")
+        field_id = (
+            str(raw_field_id).strip()
+            if raw_field_id is not None
+            else _legacy_field_id(json.dumps(path, separators=(",", ":")))
+        )
+        if not field_id:
+            raise ValueError("Schema field id must be non-empty")
+        if field_id in seen_ids:
+            raise ValueError("Schema field ids must be unique")
         normalized.append(
             {
                 "name": name,
+                "field_id": field_id,
+                "path": path,
                 "type": str(field.get("type", "string")).strip() or "string",
                 "nullable": bool(field.get("nullable", True)),
             }
         )
-        seen.add(name)
+        seen_paths.add(path_key)
+        seen_ids.add(field_id)
     return normalized
+
+
+def _legacy_field_id(value: str) -> str:
+    return "legacy:" + hashlib.sha256(value.encode("utf-8")).hexdigest()[:32]
 
 
 def _normalize_policy_rule(raw: dict[str, Any]) -> dict[str, Any]:

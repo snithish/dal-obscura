@@ -162,6 +162,8 @@ class AssetSchemaFieldRecord(Base):
     asset_id: Mapped[UUID] = mapped_column(ForeignKey("assets.id"), nullable=False, index=True)
     ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
+    field_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    path_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     type: Mapped[str] = mapped_column(String(120), nullable=False)
     nullable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 

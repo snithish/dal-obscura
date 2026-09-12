@@ -129,16 +129,86 @@ def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail():
 
     assert response.status_code == 200
     assert response.json() == {
-        "asset_id": asset["id"],
-        "fields": [
-            {"name": "id", "type": "long", "nullable": False},
-            {"name": "email", "type": "string", "nullable": True},
-        ],
-    }
+            "asset_id": asset["id"],
+            "fields": [
+                {
+                    "name": "id",
+                    "field_id": "legacy:fc949a4dac6b077d1c847c8706688fbb",
+                    "path": ["id"],
+                    "type": "long",
+                    "nullable": False,
+                },
+                {
+                    "name": "email",
+                    "field_id": "legacy:663d341058bb4332eba62bf5887ed38d",
+                    "path": ["email"],
+                    "type": "string",
+                    "nullable": True,
+                },
+            ],
+        }
     assert second_response.status_code == 200
     assert detail["schema_fields"] == [
-        {"name": "id", "type": "long", "nullable": False},
-        {"name": "email", "type": "string", "nullable": False},
+        {
+            "name": "id",
+            "field_id": "legacy:fc949a4dac6b077d1c847c8706688fbb",
+            "path": ["id"],
+            "type": "long",
+            "nullable": False,
+        },
+        {
+            "name": "email",
+            "field_id": "legacy:663d341058bb4332eba62bf5887ed38d",
+            "path": ["email"],
+            "type": "string",
+            "nullable": False,
+        },
+    ]
+
+
+def test_schema_fields_preserve_literal_dotted_and_nested_paths():
+    client = _client()
+    client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+    asset = client.put(
+        "/v1/assets/analytics/default.users",
+        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
+        headers=ADMIN_HEADERS,
+    ).json()
+
+    response = client.put(
+        f"/v1/assets/{asset['id']}/schema-fields",
+        json={
+            "fields": [
+                {"name": "a.b", "path": ["a.b"], "field_id": "literal-1"},
+                {"name": "b", "path": ["a", "b"], "field_id": "nested-2"},
+            ]
+        },
+        headers=ADMIN_HEADERS,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["fields"] == [
+        {
+            "name": "a.b",
+            "field_id": "literal-1",
+            "path": ["a.b"],
+            "type": "string",
+            "nullable": True,
+        },
+        {
+            "name": "b",
+            "field_id": "nested-2",
+            "path": ["a", "b"],
+            "type": "string",
+            "nullable": True,
+        },
     ]
 
 

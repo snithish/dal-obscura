@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `014d205`.
+Implementation follow-up through `014d205` (next X06 slice uncommitted).
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -41,8 +41,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   encoding includes nested metadata/IDs and direct loader bounds. Migration and all
   entry-route/byte-budget evidence remain open.
 - X06 safe schema evolution: **implementing**; typed evaluation paths now preserve
-  literal dotted names. Persisted admitted field identities and evolution policy
-  remain open.
+  literal dotted names, and schema-field records now carry optional stable IDs and
+  typed path segments through migration `20260912_0011`. Provider-derived IDs,
+  path uniqueness migration for legacy rows, and evolution policy remain open.
 - X07 configuration/secrets/IO: **implementing**; nested dynamic class-loader options
   are rejected. Typed provider configs, shared secret resolution, and IO enforcement
   remain open.

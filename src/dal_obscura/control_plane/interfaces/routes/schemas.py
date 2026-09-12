@@ -232,6 +232,8 @@ class AssetSchemaFieldRequest(StrictModel):
     """
 
     name: str = Field(min_length=1)
+    field_id: str | None = Field(default=None, min_length=1, max_length=128)
+    path: list[str] | None = Field(default=None, min_length=1, max_length=64)
     type: str = Field(default="string", min_length=1)
     nullable: bool = True
 
