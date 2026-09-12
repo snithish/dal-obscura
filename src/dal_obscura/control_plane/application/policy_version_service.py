@@ -8,11 +8,12 @@ Example:
 
 from __future__ import annotations
 
+from typing import cast
 from uuid import UUID, uuid4
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.compiler import PublicationCompiler
-from dal_obscura.control_plane.application.errors import ValidationFailure
+from dal_obscura.control_plane.application.errors import PublicationConflictError, ValidationFailure
 from dal_obscura.control_plane.application.policy_service import ensure_asset_capability
 from dal_obscura.control_plane.domain.models import CompiledCatalog, CompiledPublication
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
@@ -88,6 +89,8 @@ def create_asset_policy_version(
     actor: ControlPlaneActor,
     create_publication,
     activate_publication,
+    expected_draft_revision: int | None = None,
+    expected_publication_id: UUID | None = None,
 ) -> dict[str, object]:
     """Publishes and activates a new policy version for one asset.
 
@@ -104,23 +107,55 @@ def create_asset_policy_version(
     """
 
     ensure_asset_capability(store, asset_id, actor, "publish")
-    asset, catalog = store.load_asset_publish_draft(asset_id)
-    if not asset.rules:
+    personal_draft = store.get_asset_policy_draft(
+        asset_id=asset_id,
+        author_principal=actor.principal,
+    )
+    if expected_draft_revision is not None:
+        current_revision = (
+            0 if personal_draft is None else int(cast(int | str, personal_draft["revision"]))
+        )
+        if current_revision != expected_draft_revision:
+            raise PublicationConflictError(
+                "Policy draft revision changed; reread the draft before publishing."
+            )
+    asset, catalog = store.load_asset_publish_draft(
+        asset_id,
+        author_principal=actor.principal if personal_draft is not None else None,
+    )
+    if not asset.rules and personal_draft is None:
         raise ValidationFailure("Cannot publish a policy version without policy rules.")
     compiler = PublicationCompiler()
     compiled_asset = compiler.compile_asset(asset, catalog)
     try:
         active = store.load_active_compiled_publication_config(asset.cell_id)
+        active_pointer = store.get_active_publication(asset.cell_id)
     except LookupError:
-        publication = create_publication(asset.cell_id)
-        activate_publication(
+        if expected_publication_id is not None:
+            raise PublicationConflictError(
+                "No active publication matches the requested generation."
+            ) from None
+        draft = store.load_publish_draft(asset.cell_id)
+        selected = next((item for item in draft.assets if item.id == asset.id), None)
+        if selected is None:
+            raise ValidationFailure(
+                "Asset is not part of the workspace publication draft."
+            ) from None
+        selected.rules = list(asset.rules)
+        _validate_publish_readiness(store, draft)
+        compiled = compiler.compile(draft)
+        publication_id = uuid4()
+        store.insert_compiled_publication(publication_id=publication_id, compiled=compiled)
+        store.activate_initial_publication(
             cell_id=asset.cell_id,
-            publication_id=UUID(str(publication["publication_id"])),
+            publication_id=publication_id,
         )
-        return {
-            "asset_id": str(asset.id),
-            "policy_version": compiled_asset.policy_version,
-        }
+        return {"asset_id": str(asset.id), "policy_version": compiled_asset.policy_version}
+    if (
+        expected_publication_id is not None
+        and expected_publication_id != active_pointer.publication_id
+    ):
+        raise PublicationConflictError("Active publication changed; reread before publishing.")
 
     replaced = False
     assets = []
@@ -148,7 +183,11 @@ def create_asset_policy_version(
         publication_id=publication_id,
         compiled=compiled,
     )
-    store.activate_publication(cell_id=asset.cell_id, publication_id=publication_id)
+    store.activate_publication_if_current(
+        cell_id=asset.cell_id,
+        publication_id=publication_id,
+        expected_publication_id=active_pointer.publication_id,
+    )
     return {
         "asset_id": str(asset.id),
         "policy_version": compiled_asset.policy_version,

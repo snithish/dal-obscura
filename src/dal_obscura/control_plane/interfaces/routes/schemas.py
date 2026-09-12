@@ -162,6 +162,13 @@ class PolicyDraftRequest(StrictModel):
     rules: list[dict[str, Any]]
 
 
+class PolicyVersionPublishRequest(StrictModel):
+    """Optional generation preconditions for publishing one asset draft."""
+
+    expected_draft_revision: int | None = Field(default=None, ge=0)
+    expected_publication_id: UUID | None = None
+
+
 class PolicyPreviewRequest(StrictModel):
     """Policy-preview request for a candidate principal.
 

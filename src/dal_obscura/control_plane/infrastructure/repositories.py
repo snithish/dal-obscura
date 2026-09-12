@@ -1241,7 +1241,12 @@ class PublicationStore:
             assets=assets,
         )
 
-    def load_asset_publish_draft(self, asset_id: UUID) -> tuple[AssetDraft, CatalogDraft]:
+    def load_asset_publish_draft(
+        self,
+        asset_id: UUID,
+        *,
+        author_principal: str | None = None,
+    ) -> tuple[AssetDraft, CatalogDraft]:
         asset = self._session.get(AssetRecord, asset_id)
         if asset is None:
             raise LookupError(f"No asset {asset_id}")
@@ -1272,6 +1277,27 @@ class PublicationStore:
                 .order_by(PolicyRuleRecord.ordinal)
             )
         ]
+        if author_principal is not None:
+            personal_draft = self._session.scalar(
+                select(AssetPolicyDraftRecord).where(
+                    AssetPolicyDraftRecord.asset_id == asset_id,
+                    AssetPolicyDraftRecord.author_principal == author_principal,
+                    AssetPolicyDraftRecord.discarded_at.is_(None),
+                )
+            )
+            if personal_draft is not None:
+                rules = [
+                    PolicyRuleDraft(
+                        ordinal=int(raw.get("ordinal", 0)),
+                        effect="allow",
+                        principals=[str(item) for item in raw.get("principals", [])],
+                        when=cast(dict[str, str | list[str]], dict(raw.get("when", {}))),
+                        columns=[str(item) for item in raw.get("columns", [])],
+                        masks=dict(raw.get("masks", {})),
+                        row_filter=cast(str | None, raw.get("row_filter")),
+                    )
+                    for raw in personal_draft.rules_json
+                ]
         return (
             AssetDraft(
                 id=asset.id,

@@ -341,6 +341,33 @@ def test_group_owner_can_publish_policy_version_through_api():
     assert response.json()["policy_version"] > 0
 
 
+def test_publish_uses_saved_draft_and_rejects_stale_draft_revision():
+    client = _client()
+    asset = _provision_owned_asset(client)
+    owner = _bearer("owner-token")
+
+    saved = client.put(
+        f"/v1/assets/{asset}/draft",
+        json={"expected_revision": 0, "rules": [_allow_rule(row_filter="region = 'eu'")]},
+        headers=owner,
+    )
+    published = client.post(
+        f"/v1/assets/{asset}/policy-versions",
+        json={"expected_draft_revision": 1},
+        headers=owner,
+    )
+    stale = client.post(
+        f"/v1/assets/{asset}/policy-versions",
+        json={"expected_draft_revision": 0},
+        headers=owner,
+    )
+
+    assert saved.status_code == 200
+    assert published.status_code == 200
+    assert published.json()["policy_version"] != 0
+    assert stale.status_code == 409
+
+
 def test_non_owner_cannot_change_policy_rules_or_publish_policy_version():
     client = _client()
     asset = _provision_owned_asset(client)

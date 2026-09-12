@@ -150,6 +150,8 @@ class ProvisioningService:
         asset_id: UUID,
         *,
         actor: ControlPlaneActor,
+        expected_draft_revision: int | None = None,
+        expected_publication_id: UUID | None = None,
     ) -> dict[str, object]:
         return policy_version_service.create_asset_policy_version(
             self._store,
@@ -157,6 +159,8 @@ class ProvisioningService:
             actor=actor,
             create_publication=self.create_publication,
             activate_publication=self.activate_publication,
+            expected_draft_revision=expected_draft_revision,
+            expected_publication_id=expected_publication_id,
         )
 
     def activate_workspace_publication(self, publication_id: UUID) -> dict[str, str]:

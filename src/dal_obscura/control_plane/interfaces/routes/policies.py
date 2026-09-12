@@ -18,6 +18,7 @@ from dal_obscura.control_plane.interfaces.routes.schemas import (
     PolicyDraftRequest,
     PolicyPreviewRequest,
     PolicyRulesRequest,
+    PolicyVersionPublishRequest,
 )
 
 
@@ -94,12 +95,19 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
     @api.post("/v1/assets/{asset_id}/policy-versions")
     def create_asset_policy_version(
         asset_id: UUID,
+        request: PolicyVersionPublishRequest | None = None,
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
     ) -> object:
         return deps.with_service(
             lambda service: service.create_asset_policy_version(
                 asset_id=asset_id,
                 actor=actor,
+                expected_draft_revision=(
+                    None if request is None else request.expected_draft_revision
+                ),
+                expected_publication_id=(
+                    None if request is None else request.expected_publication_id
+                ),
             )
         )
 
