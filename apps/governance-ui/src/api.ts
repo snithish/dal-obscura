@@ -193,6 +193,13 @@ export type PluginDescriptor = {
   status: "admitted";
 };
 
+export type PluginState = {
+  kind: "catalog" | "table_format";
+  plugin_id: string;
+  status: "enabled" | "not_installed" | "incompatible";
+  reason?: string;
+};
+
 export type AuthProvider = {
   id: string;
   ordinal: number;
@@ -313,7 +320,7 @@ export const controlPlane = {
   diagnoseCatalog: (name: string) => request<CatalogDiagnostic>(`/v1/catalogs/${encodeURIComponent(name)}/diagnostics`),
   getRuntimeSettings: () => request<RuntimeSettings | null>("/v1/settings/runtime"),
   getAuthProviders: () => request<AuthProvider[]>("/v1/settings/auth-providers"),
-  listPlugins: () => request<{ plugins: PluginDescriptor[] }>("/v1/plugins"),
+  listPlugins: () => request<{ plugins: PluginDescriptor[]; states: PluginState[] }>("/v1/plugins"),
   getSummary: () => request<WorkspaceSummary>("/v1/workspace/summary"),
   getObservations: () => request<WorkspaceObservations>("/v1/workspace/observations"),
   saveCatalog: (name: string, options: Record<string, unknown>) => request<{ id: string; name: string }>(`/v1/catalogs/${encodeURIComponent(name)}`, {
