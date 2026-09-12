@@ -26,6 +26,12 @@ from dal_obscura.control_plane.infrastructure.repositories import PublicationSto
 
 CatalogLoader = Callable[..., Any]
 
+# The response is intentionally bounded even though Iceberg itself permits
+# substantially larger schemas.  This protects the control plane from
+# recursively materializing an untrusted catalog response in one request.
+MAX_SCHEMA_NODES = 10_000
+MAX_SCHEMA_DEPTH = 64
+
 
 def get_asset_schema(
     store: PublicationStore,
@@ -41,6 +47,7 @@ def get_asset_schema(
         actor,
         load_catalog_fn=load_catalog_fn,
     )
+    _validate_schema_bounds(schema)
     asset = store.get_workspace_asset(asset_id)
     return {
         "asset_id": str(asset_id),
@@ -92,6 +99,36 @@ def schema_fingerprint(schema: object) -> str:
     """Returns a stable digest for an authoritative Iceberg or Arrow schema."""
 
     return hashlib.sha256(str(schema).encode("utf-8")).hexdigest()
+
+
+def _validate_schema_bounds(schema: Schema) -> None:
+    nodes = 0
+    max_depth = 0
+
+    def visit(field: NestedField, depth: int) -> None:
+        nonlocal nodes, max_depth
+        nodes += 1
+        max_depth = max(max_depth, depth)
+        if nodes > MAX_SCHEMA_NODES:
+            raise ValidationFailure(
+                f"Iceberg schema exceeds the {MAX_SCHEMA_NODES} field-node limit"
+            )
+        if depth > MAX_SCHEMA_DEPTH:
+            raise ValidationFailure(
+                f"Iceberg schema exceeds the {MAX_SCHEMA_DEPTH} nesting-depth limit"
+            )
+        field_type = field.field_type
+        if isinstance(field_type, StructType):
+            for child in field_type.fields:
+                visit(child, depth + 1)
+        elif isinstance(field_type, ListType):
+            visit(field_type.element_field, depth + 1)
+        elif isinstance(field_type, MapType):
+            visit(field_type.key_field, depth + 1)
+            visit(field_type.value_field, depth + 1)
+
+    for field in schema.fields:
+        visit(field, 1)
 
 
 def _field_node(field: NestedField, path: tuple[FieldPathSegment, ...]) -> dict[str, object]:

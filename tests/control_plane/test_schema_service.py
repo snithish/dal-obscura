@@ -16,7 +16,11 @@ from pyiceberg.types import (
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
-from dal_obscura.control_plane.application.schema_service import get_asset_schema
+from dal_obscura.control_plane.application.schema_service import (
+    MAX_SCHEMA_DEPTH,
+    MAX_SCHEMA_NODES,
+    get_asset_schema,
+)
 
 
 class _FakeTable:
@@ -167,3 +171,49 @@ def test_get_asset_schema_redacts_catalog_provider_errors() -> None:
         )
 
     assert "catalog-password" not in str(failure.value)
+
+
+def test_get_asset_schema_rejects_excessive_node_count() -> None:
+    asset_id = uuid4()
+    schema = Schema(
+        *(
+            NestedField(field_id=index, name=f"field_{index}", field_type=StringType())
+            for index in range(1, MAX_SCHEMA_NODES + 2)
+        )
+    )
+
+    with pytest.raises(ValidationFailure, match="field-node limit"):
+        get_asset_schema(
+            _FakeStore(asset_id),  # type: ignore[arg-type]
+            asset_id,
+            ControlPlaneActor.for_platform_admin("admin"),
+            load_catalog_fn=lambda *_args, **_: _FakeCatalog(_FakeTable(schema)),
+        )
+
+
+def test_get_asset_schema_rejects_excessive_nesting_depth() -> None:
+    asset_id = uuid4()
+    nested: object = StringType()
+    for index in range(MAX_SCHEMA_DEPTH + 1, 0, -1):
+        nested = StructType(
+            NestedField(
+                field_id=index,
+                name=f"level_{index}",
+                field_type=nested,  # type: ignore[arg-type]
+            )
+        )
+    schema = Schema(
+        NestedField(
+            field_id=MAX_SCHEMA_DEPTH + 2,
+            name="root",
+            field_type=nested,  # type: ignore[arg-type]
+        )
+    )
+
+    with pytest.raises(ValidationFailure, match="nesting-depth limit"):
+        get_asset_schema(
+            _FakeStore(asset_id),  # type: ignore[arg-type]
+            asset_id,
+            ControlPlaneActor.for_platform_admin("admin"),
+            load_catalog_fn=lambda *_args, **_: _FakeCatalog(_FakeTable(schema)),
+        )
