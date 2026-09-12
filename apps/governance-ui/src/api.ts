@@ -118,6 +118,14 @@ export type PolicyVersion = {
   created_at: string;
 };
 
+export type WorkspacePublication = {
+  id: string;
+  schema_version: number;
+  status: string;
+  manifest_hash: string;
+  active: boolean;
+};
+
 export type PolicyVersionPage = {
   items: PolicyVersion[];
   next_cursor: string | null;
@@ -278,6 +286,9 @@ export const controlPlane = {
       body: JSON.stringify({ expected_revision: expectedRevision }),
     }),
   listCatalogs: () => request<Catalog[]>("/v1/catalogs"),
+  listWorkspacePublications: () => request<WorkspacePublication[]>("/v1/workspace/publications"),
+  createWorkspacePublication: () => request<{ publication_id: string; asset_count: number; catalog_count: number; manifest_hash: string }>("/v1/workspace/publications", { method: "POST" }),
+  activateWorkspacePublication: (publicationId: string) => request<{ publication_id: string }>(`/v1/workspace/publications/${encodeURIComponent(publicationId)}/activate`, { method: "POST" }),
   discoverCatalogTables: (name: string) => request<{ catalog: string; tables: Array<Record<string, unknown>> }>(`/v1/catalogs/${encodeURIComponent(name)}/tables`),
   diagnoseCatalog: (name: string) => request<CatalogDiagnostic>(`/v1/catalogs/${encodeURIComponent(name)}/diagnostics`),
   getRuntimeSettings: () => request<RuntimeSettings | null>("/v1/settings/runtime"),

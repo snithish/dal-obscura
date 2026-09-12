@@ -90,6 +90,39 @@ def test_workspace_routes_require_admin_token():
     assert client.get("/v1/settings/auth-providers").status_code == 401
 
 
+def test_workspace_publication_management_is_admin_scoped_and_staged():
+    client = _client()
+    asset = _provision_draft(client)
+    assert client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        headers=ADMIN_HEADERS,
+        json={"owners": ["platform:admin"]},
+    ).status_code == 200
+
+    created = client.post("/v1/workspace/publications", headers=ADMIN_HEADERS)
+    assert created.status_code == 200, created.json()
+    publication = created.json()
+    assert publication["asset_count"] == 1
+    assert publication["catalog_count"] == 1
+    assert publication["manifest_hash"]
+
+    listed = client.get("/v1/workspace/publications", headers=ADMIN_HEADERS)
+    assert listed.status_code == 200
+    assert listed.json()[0]["id"] == publication["publication_id"]
+    assert listed.json()[0]["active"] is False
+
+    activated = client.post(
+        f"/v1/workspace/publications/{publication['publication_id']}/activate",
+        headers=ADMIN_HEADERS,
+    )
+    assert activated.status_code == 200
+    assert activated.json() == {"publication_id": publication["publication_id"]}
+    active = client.get("/v1/workspace/publications", headers=ADMIN_HEADERS)
+    assert active.json()[0]["active"] is True
+
+    assert client.get("/v1/workspace/publications").status_code == 401
+
+
 def test_tenant_and_cell_routes_are_not_public_workspace_api():
     client = _client()
 

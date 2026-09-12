@@ -8,6 +8,8 @@ Example:
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi import APIRouter, Depends
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
@@ -36,5 +38,29 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
     ) -> object:
         return deps.with_service(lambda service: service.get_workspace_observations(actor))
+
+    @api.get("/v1/workspace/publications")
+    def list_workspace_publications(
+        actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
+    ) -> object:
+        del actor
+        return deps.with_service(lambda service: service.list_workspace_publications())
+
+    @api.post("/v1/workspace/publications")
+    def create_workspace_publication(
+        actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
+    ) -> object:
+        del actor
+        return deps.with_service(lambda service: service.create_workspace_publication())
+
+    @api.post("/v1/workspace/publications/{publication_id}/activate")
+    def activate_workspace_publication(
+        publication_id: UUID,
+        actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
+    ) -> object:
+        del actor
+        return deps.with_service(
+            lambda service: service.activate_workspace_publication(publication_id)
+        )
 
     return api
