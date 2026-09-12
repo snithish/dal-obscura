@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `9cbb9e7`.
+Implementation follow-up through `a4d648f`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -442,6 +442,10 @@ schema, policy-version, workspace, settings, plugin, migration, and
 published-config tests. Direct TypeScript and Vite production builds remain
 green; the local sandbox cannot bind an additional listener because localhost
 port 5173 is already occupied by the existing UI process.
+
+The publication-impact aggregation was then explicitly typed and passed its
+repository Ty/Ruff checks; full-project Ty still reports unrelated existing
+fixture/discovery diagnostics and remains an open release gate.
 
 The direct-Arrow bounds regression and Ty/Ruff checks passed in
 `3263645`; the full schema byte-budget and every-entry-route acceptance matrix
