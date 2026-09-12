@@ -152,8 +152,20 @@ def _replace_authorized_asset_grants(
 ) -> object:
     _ensure_grant_manager(service, asset_id, actor)
     grants = [item.model_dump() for item in request.grants]
-    if any(item["capability"] == "grant" for item in grants) and not actor.platform_admin:
-        raise AuthorizationFailure("Only platform admins may delegate grant-management capability.")
+    if not actor.platform_admin:
+        existing_grants = {
+            (item["principal"], item["capability"])
+            for item in service.list_asset_grants(asset_id)
+        }
+        if any(
+            item["capability"] == "grant"
+            and (item["principal"], item["capability"]) not in existing_grants
+            for item in grants
+        ):
+            raise AuthorizationFailure(
+                "Only platform admins may delegate grant-management capability."
+            )
+        _reject_self_escalation(service, asset_id, actor, grants)
     return {
         "asset_id": str(asset_id),
         "grants": service.replace_asset_grants(asset_id, grants, actor=actor),
@@ -162,3 +174,23 @@ def _replace_authorized_asset_grants(
 
 def _ensure_grant_manager(service, asset_id: UUID, actor: ControlPlaneActor) -> None:
     service.ensure_asset_capability(asset_id, actor, "grant")
+
+
+def _reject_self_escalation(
+    service,
+    asset_id: UUID,
+    actor: ControlPlaneActor,
+    grants: list[dict[str, str]],
+) -> None:
+    """Prevents delegated grant managers from adding authority to themselves."""
+
+    principals = actor.owner_principals()
+    for grant in grants:
+        if grant["principal"] not in principals:
+            continue
+        try:
+            service.ensure_asset_capability(asset_id, actor, grant["capability"])
+        except AuthorizationFailure as exc:
+            raise AuthorizationFailure(
+                "Cannot grant yourself a capability you do not already hold."
+            ) from exc

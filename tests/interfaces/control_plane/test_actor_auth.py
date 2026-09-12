@@ -33,6 +33,8 @@ class DemoToken:
 def _actor_for_token(token: str) -> DemoToken:
     if token == "owner-token":
         return DemoToken("asset-owner", ("asset-owners",))
+    if token == "grant-manager-token":
+        return DemoToken("grant-manager", ())
     if token == "outsider-token":
         return DemoToken("outsider", ("analysts",))
     if token == "admin-oidc-token":
@@ -573,6 +575,42 @@ def test_asset_owner_cannot_delegate_grant_management():
 
     assert response.status_code == 403
     assert "Only platform admins" in response.json()["detail"]
+
+
+def test_grant_manager_cannot_self_escalate_but_can_delegate_held_authority():
+    client = _client()
+    asset = _provision_owned_asset(client)
+
+    delegated = client.put(
+        f"/v1/assets/{asset}/grants",
+        json={"grants": [{"principal": "grant-manager", "capability": "grant"}]},
+        headers=ADMIN_HEADERS,
+    )
+    self_escalation = client.put(
+        f"/v1/assets/{asset}/grants",
+        json={
+            "grants": [
+                {"principal": "grant-manager", "capability": "grant"},
+                {"principal": "grant-manager", "capability": "edit"},
+            ]
+        },
+        headers=_bearer("grant-manager-token"),
+    )
+    delegation = client.put(
+        f"/v1/assets/{asset}/grants",
+        json={
+            "grants": [
+                {"principal": "grant-manager", "capability": "grant"},
+                {"principal": "outsider", "capability": "edit"},
+            ]
+        },
+        headers=_bearer("grant-manager-token"),
+    )
+
+    assert delegated.status_code == 200
+    assert self_escalation.status_code == 403
+    assert "already hold" in self_escalation.json()["detail"]
+    assert delegation.status_code == 200
 
 
 def test_policy_save_rejects_invalid_row_filter_before_publish():
