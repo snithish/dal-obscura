@@ -9,6 +9,7 @@ from dal_obscura.control_plane.application import (
     asset_service,
     catalog_service,
     draft_service,
+    evaluation_service,
     policy_service,
     policy_version_service,
     schema_service,
@@ -344,6 +345,7 @@ class ProvisioningService:
         groups: list[str],
         claims: dict[str, object],
         actor: ControlPlaneActor | None = None,
+        requested_columns: list[str] | None = None,
     ) -> dict[str, object]:
         return policy_service.preview_asset_policy(
             self._store,
@@ -352,6 +354,27 @@ class ProvisioningService:
             groups=groups,
             claims=claims,
             actor=actor,
+            requested_columns=requested_columns,
+        )
+
+    def evaluate_asset_policy(
+        self,
+        asset_id: UUID,
+        actor: ControlPlaneActor,
+        *,
+        principal: str,
+        groups: list[str],
+        claims: dict[str, object],
+        rows: list[dict[str, object]],
+    ) -> dict[str, object]:
+        return evaluation_service.evaluate_asset_policy(
+            self._store,
+            asset_id,
+            actor,
+            principal=principal,
+            groups=groups,
+            claims=claims,
+            rows=rows,
         )
 
     def replace_auth_providers(self, cell_id: UUID, providers: list[dict[str, Any]]) -> None:

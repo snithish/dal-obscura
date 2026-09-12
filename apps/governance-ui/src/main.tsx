@@ -171,8 +171,8 @@ function App() {
   async function runPreview() {
     if (!asset || !activeRule) return;
     try {
-      const result = isDemo ? { allowed_columns: activeRule.columns, masks: activeRule.masks, row_filter: activeRule.row_filter, policy_version: 1 } : await controlPlane.preview(asset.id, { principal: "analyst.alex", groups: ["us-analysts"], claims: {} });
-      setPreview(result); setNotice("Policy test is current for this saved draft revision.");
+      const result = isDemo ? { allowed_columns: activeRule.columns, masks: activeRule.masks, row_filter: activeRule.row_filter, policy_version: 1 } : await controlPlane.evaluate(asset.id, { principal: "analyst.alex", groups: ["us-analysts"], claims: {} });
+      setPreview(result); setNotice("Server-side DuckDB evaluation is current for this saved draft revision.");
     } catch {
       setPreview(null); setNotice("Policy test could not run. This draft is not validated.");
     }

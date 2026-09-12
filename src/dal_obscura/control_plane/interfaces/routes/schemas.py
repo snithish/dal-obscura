@@ -181,6 +181,13 @@ class PolicyPreviewRequest(StrictModel):
     principal: str = Field(min_length=1)
     groups: list[str] = Field(default_factory=list)
     claims: dict[str, object] = Field(default_factory=dict)
+    columns: list[str] = Field(default_factory=list, max_length=512)
+
+
+class PolicyEvaluationRequest(PolicyPreviewRequest):
+    """Bounded synthetic rows for server-side DuckDB policy evaluation."""
+
+    rows: list[dict[str, object]] = Field(default_factory=list, max_length=100)
 
 
 class AssetOwnersRequest(StrictModel):

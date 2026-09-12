@@ -16,6 +16,7 @@ from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 from dal_obscura.control_plane.interfaces.routes.schemas import (
     PolicyDraftRequest,
+    PolicyEvaluationRequest,
     PolicyPreviewRequest,
     PolicyRulesRequest,
     PolicyVersionPublishRequest,
@@ -89,6 +90,24 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
                 groups=request.groups,
                 claims=request.claims,
                 actor=actor,
+                requested_columns=request.columns or None,
+            )
+        )
+
+    @api.post("/v1/assets/{asset_id}/policy-evaluate")
+    def evaluate_asset_policy(
+        asset_id: UUID,
+        request: PolicyEvaluationRequest,
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> object:
+        return deps.with_service(
+            lambda service: service.evaluate_asset_policy(
+                asset_id,
+                actor,
+                principal=request.principal,
+                groups=request.groups,
+                claims=request.claims,
+                rows=request.rows,
             )
         )
 

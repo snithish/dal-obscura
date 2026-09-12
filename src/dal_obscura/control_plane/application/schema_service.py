@@ -33,6 +33,35 @@ def get_asset_schema(
     load_catalog_fn: CatalogLoader | None = None,
 ) -> dict[str, object]:
     ensure_asset_capability(store, asset_id, actor, "read")
+    schema = load_asset_iceberg_schema(
+        store,
+        asset_id,
+        actor,
+        load_catalog_fn=load_catalog_fn,
+    )
+    asset = store.get_workspace_asset(asset_id)
+    return {
+        "asset_id": str(asset_id),
+        "catalog": asset["catalog"],
+        "target": asset["name"],
+        "schema_version": 1,
+        "fields": [
+            _field_node(field, (FieldSegment(field.name, field.field_id),))
+            for field in schema.fields
+        ],
+    }
+
+
+def load_asset_iceberg_schema(
+    store: PublicationStore,
+    asset_id: UUID,
+    actor: ControlPlaneActor,
+    *,
+    load_catalog_fn: CatalogLoader | None = None,
+) -> Schema:
+    """Loads the authoritative Iceberg schema without reading table rows."""
+
+    ensure_asset_capability(store, asset_id, actor, "read")
     asset = store.get_workspace_asset(asset_id)
     context = store.get_default_workspace_context()
     if context is None:
@@ -48,16 +77,7 @@ def get_asset_schema(
     schema = table.schema()
     if not isinstance(schema, Schema):
         raise TypeError("Iceberg catalog returned an invalid schema")
-    return {
-        "asset_id": str(asset_id),
-        "catalog": asset["catalog"],
-        "target": asset["name"],
-        "schema_version": 1,
-        "fields": [
-            _field_node(field, (FieldSegment(field.name, field.field_id),))
-            for field in schema.fields
-        ],
-    }
+    return schema
 
 
 def _field_node(field: NestedField, path: tuple[FieldPathSegment, ...]) -> dict[str, object]:

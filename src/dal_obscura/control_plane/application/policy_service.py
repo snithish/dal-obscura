@@ -75,6 +75,7 @@ def preview_asset_policy(
     groups: list[str],
     claims: dict[str, object],
     actor: ControlPlaneActor | None = None,
+    requested_columns: list[str] | None = None,
 ) -> dict[str, object]:
     """Evaluates draft policy rules for a preview principal.
 
@@ -94,6 +95,13 @@ def preview_asset_policy(
         ensure_asset_capability(store, asset_id, actor, "read")
     asset = store.get_workspace_asset(asset_id)
     raw_rules = store.list_policy_rules(asset_id)
+    if actor is not None:
+        draft = store.get_asset_policy_draft(
+            asset_id=asset_id,
+            author_principal=actor.principal,
+        )
+        if draft is not None:
+            raw_rules = cast(list[dict[str, object]], draft["rules"])
     compiled = _compiled_policy_from_response(asset, raw_rules)
     policy = compiled.to_policy()
     rules = policy.datasets[0].rules
@@ -102,7 +110,7 @@ def preview_asset_policy(
         groups=groups,
         attributes=_principal_attributes(claims),
     )
-    requested_columns = _preview_columns(asset, rules)
+    requested = requested_columns or _preview_columns(asset, rules)
     matched_ordinal = _first_matching_rule_ordinal(raw_rules, preview_principal)
     try:
         visible_columns, masks, row_filter = resolve_access(
@@ -110,7 +118,7 @@ def preview_asset_policy(
             preview_principal,
             str(asset["name"]),
             str(asset["catalog"]),
-            requested_columns,
+            requested,
         )
     except PermissionError:
         return {
@@ -176,7 +184,10 @@ def ensure_asset_capability(
         for grant in store.list_asset_grants(asset_id)
     ):
         return
-    raise AuthorizationFailure(f"The authenticated actor lacks asset capability {capability!r}.")
+    raise AuthorizationFailure(
+        "Only platform admins or asset owners with the required capability may access this asset; "
+        f"the authenticated actor lacks asset capability {capability!r}."
+    )
 
 
 def _compiled_policy_from_response(
