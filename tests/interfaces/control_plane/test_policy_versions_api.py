@@ -374,3 +374,56 @@ def test_publication_failure_after_activation_rolls_back_audit_and_generation(mo
             == publication_count
         )
         assert session.scalar(select(func.count()).select_from(AuditEventRecord)) == audit_count
+
+
+def test_replacement_publication_failure_preserves_previous_active_generation(monkeypatch):
+    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+    migrate_config_store(engine)
+    client = TestClient(
+        create_app(session_factory(engine), admin_token="test-admin"),
+        raise_server_exceptions=False,
+    )
+    asset = _provision_draft(client)
+    client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["owner"]},
+        headers=ADMIN_HEADERS,
+    )
+    first = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        headers=ADMIN_HEADERS,
+    )
+    assert first.status_code == 200
+    draft = client.get(f"/v1/assets/{asset['id']}/draft", headers=ADMIN_HEADERS).json()
+    changed_rules = [dict(draft["rules"][0], row_filter="id > 10")]
+    saved = client.put(
+        f"/v1/assets/{asset['id']}/draft",
+        json={"expected_revision": draft["revision"], "rules": changed_rules},
+        headers=ADMIN_HEADERS,
+    )
+    assert saved.status_code == 200, saved.json()
+    with session_factory(engine)() as session:
+        publication_count = session.scalar(
+            select(func.count()).select_from(ConfigPublicationRecord)
+        )
+        audit_count = session.scalar(select(func.count()).select_from(AuditEventRecord))
+
+    def fail_audit(self, **kwargs):
+        raise RuntimeError("injected replacement audit failure")
+
+    monkeypatch.setattr(PublicationStore, "record_asset_audit_event", fail_audit)
+    response = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        headers=ADMIN_HEADERS,
+    )
+
+    assert response.status_code == 500
+    history = client.get(f"/v1/assets/{asset['id']}/policy-versions", headers=ADMIN_HEADERS)
+    assert history.status_code == 200
+    assert [item["policy_version"] for item in history.json()] == [first.json()["policy_version"]]
+    with session_factory(engine)() as session:
+        assert (
+            session.scalar(select(func.count()).select_from(ConfigPublicationRecord))
+            == publication_count
+        )
+        assert session.scalar(select(func.count()).select_from(AuditEventRecord)) == audit_count
