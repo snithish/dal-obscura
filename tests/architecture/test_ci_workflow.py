@@ -24,3 +24,9 @@ def test_ci_python_jobs_have_single_clear_responsibilities() -> None:
     assert "timeout-minutes: 20" in workflow
     assert "name: Python package smoke" in workflow
     assert "name: Build, scan, and publish image" in workflow
+
+
+def test_ci_governance_ui_runs_lifecycle_tests_before_build() -> None:
+    workflow = Path(".github/workflows/ci.yml").read_text()
+
+    assert "pnpm --dir apps/governance-ui test" in workflow

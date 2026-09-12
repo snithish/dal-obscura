@@ -243,7 +243,9 @@ jobs:
         run: pnpm --dir apps/governance-ui install --frozen-lockfile
 
       - name: Type-check and build UI
-        run: pnpm --dir apps/governance-ui build
+        run: |
+          pnpm --dir apps/governance-ui test
+          pnpm --dir apps/governance-ui build
 
   container:
     name: Build, scan, and publish image
