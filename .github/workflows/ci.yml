@@ -218,6 +218,33 @@ jobs:
       - name: Verify JVM workspace
         run: mvn -f connectors/jvm/pom.xml verify
 
+  governance-ui:
+    name: Governance UI build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: apps/governance-ui/pnpm-lock.yaml
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install UI dependencies
+        run: pnpm --dir apps/governance-ui install --frozen-lockfile
+
+      - name: Type-check and build UI
+        run: pnpm --dir apps/governance-ui build
+
   container:
     name: Build, scan, and publish image
     runs-on: ubuntu-24.04
@@ -228,6 +255,7 @@ jobs:
       - python-package
       - python-native-iceberg
       - jvm
+      - governance-ui
     permissions:
       contents: read
       packages: write
