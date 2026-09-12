@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `79c3642`.
+Implementation follow-up through `3c8869f`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -465,6 +465,10 @@ provider-error regression confirms the secret is absent from logs while the
 stable unavailable error remains intact; focused Ruff/Ty checks pass. The
 existing bind-failure test remains unexecutable in this sandbox because socket
 bind is denied by the environment.
+
+Ticket cleanup now emits an opaque warning instead of an exception traceback,
+keeping asynchronous database/provider errors out of logs. Ruff and Ty pass on
+the changed path; pickle and ticket payload formats are unchanged.
 
 The direct-Arrow bounds regression and Ty/Ruff checks passed in
 `3263645`; the full schema byte-budget and every-entry-route acceptance matrix
