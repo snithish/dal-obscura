@@ -215,7 +215,7 @@ def test_published_schema_admission_rejects_rebound_or_added_field():
                         pa.field(
                             "email",
                             pa.string(),
-                            metadata={b"PARQUET:field_id": b"iceberg:99"},
+                            metadata={b"PARQUET:field_id": b"99"},
                         )
                     ]
                 ),
@@ -226,6 +226,40 @@ def test_published_schema_admission_rejects_rebound_or_added_field():
 
     with pytest.raises(ValueError, match="no longer matches"):
         _validate_schema_admission(asset, schema)
+
+
+def test_published_schema_admission_accepts_iceberg_numeric_metadata_and_aliases():
+    asset = PublishedAsset(
+        publication_id=uuid4(),
+        tenant_id=uuid4(),
+        catalog="analytics",
+        target="default.users",
+        backend="iceberg",
+        compiled_config={
+            "schema": {
+                "encoding": 1,
+                "fields": [
+                    {
+                        "name": "id",
+                        "field_id": "iceberg:1",
+                        "path": ["id"],
+                        "type": "long",
+                        "nullable": False,
+                    }
+                ],
+            }
+        },
+        policy_version=1,
+    )
+
+    _validate_schema_admission(
+        asset,
+        pa.schema(
+            [
+                pa.field("id", pa.int64(), metadata={b"PARQUET:field_id": b"1"}),
+            ]
+        ),
+    )
 
 
 def _publish_asset(

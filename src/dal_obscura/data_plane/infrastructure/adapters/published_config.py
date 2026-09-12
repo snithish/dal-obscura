@@ -488,7 +488,11 @@ def _validate_schema_admission(asset: PublishedAsset, schema: pa.Schema) -> None
                 "Published schema admission no longer matches the live table; review again."
             )
         expected_type = raw.get("type")
-        if isinstance(expected_type, str) and expected_type and expected_type != actual:
+        if (
+            isinstance(expected_type, str)
+            and expected_type
+            and _canonical_type_name(expected_type) != _canonical_type_name(actual)
+        ):
             raise ValueError(
                 "Published schema field type changed after review; review again."
             )
@@ -502,6 +506,8 @@ def _schema_identities(schema: pa.Schema) -> dict[tuple[tuple[str, ...], str], s
         raw_id = metadata.get(b"PARQUET:field_id") or metadata.get(b"iceberg.field.id")
         if raw_id is not None:
             field_id = raw_id.decode("utf-8", "replace")
+            if ":" not in field_id:
+                field_id = f"iceberg:{field_id}"
             result[(path, field_id)] = str(field.type)
         if pa.types.is_struct(field.type):
             for child in field.type:
@@ -510,6 +516,17 @@ def _schema_identities(schema: pa.Schema) -> dict[tuple[tuple[str, ...], str], s
     for field in schema:
         visit(field, (field.name,))
     return result
+
+
+def _canonical_type_name(value: str) -> str:
+    aliases = {
+        "long": "int64",
+        "integer": "int32",
+        "float": "float32",
+        "double": "double",
+        "boolean": "bool",
+    }
+    return aliases.get(value.strip().lower(), value.strip().lower())
 
 
 def _tenant_id(principal: Principal) -> str:
