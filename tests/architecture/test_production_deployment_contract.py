@@ -21,7 +21,7 @@ def test_production_reference_contains_immutable_and_private_topology() -> None:
     assert "condition: service_completed_successfully" in data_block
     assert "postgres-grants:" in compose
     assert (
-        "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.durable_tickets "
+        "GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.data_plane_tickets "
         "TO dal_obscura_reader"
     ) in compose
     assert "read_only: true" in compose
