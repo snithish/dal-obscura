@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `75f753b`.
+Implementation follow-up through `209d630`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -120,6 +120,10 @@ Integration boundary check after the migration and lock slices:
 passed after the X13 manifest metadata change. Ruff passed on every changed Python path and `git diff --check`
 is clean. The expanded migration/schema/publication boundary suite also passes;
 browser, PostgreSQL, Flight, consumer, and production lanes remain open.
+
+After the cell lock-order slice, the same expanded boundary suite passed again,
+including publication-store, policy-version, schema migration, plugin, and
+published-config adapter tests.
 
 ### X04 synthetic fixture semantics — `4ab9031`
 
