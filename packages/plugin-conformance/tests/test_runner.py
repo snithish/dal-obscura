@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from typing import cast
 
@@ -154,3 +155,30 @@ def test_runner_rejects_unbounded_plan_and_output_schema_mutation():
     assert any("more tasks" in failure for failure in endless.failures)
     assert mutated.to_dict()["status"] == "failed"
     assert any("output schema" in failure for failure in mutated.failures)
+
+
+def test_runner_honors_cancellation_before_plugin_execution():
+    table = pa.table({"id": [1]})
+    schema = SchemaDescriptor(
+        schema_version=1,
+        fingerprint="0" * 64,
+        arrow_schema=table.schema,
+    )
+    handle = TableHandle(
+        catalog_plugin_id="fixture",
+        catalog_instance_id="fixture",
+        catalog_revision=1,
+        identifier=TableIdentifier(namespace=("default",), name="users"),
+        format_plugin_id="fixture",
+        handle_version=1,
+    )
+
+    result = run_format_checks(
+        cast(TableFormatPlugin, _ConformingFormat()),
+        handle,
+        schema,
+        replace(_context(), cancel_check=lambda: True),
+    )
+
+    assert result.to_dict()["status"] == "failed"
+    assert any("cancelled" in failure for failure in result.failures)

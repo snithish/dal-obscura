@@ -129,6 +129,8 @@ def run_format_checks(
     try:
         if context.deadline <= datetime.now(timezone.utc):
             raise TimeoutError("execution context deadline has expired")
+        if context.cancel_check is not None and context.cancel_check():
+            raise RuntimeError("execution context was cancelled")
         check_capabilities(
             descriptor.capabilities,
             required_capabilities,
@@ -150,6 +152,8 @@ def run_format_checks(
             raise ValueError("format returned more tasks than requested")
         result.record_pass("bounded_plan")
         for task in tasks:
+            if context.cancel_check is not None and context.cancel_check():
+                raise RuntimeError("execution context was cancelled")
             output_schema, batches = plugin.execute(task, context)
             if output_schema != schema.arrow_schema:
                 raise ValueError("format output schema differs from the declared schema")

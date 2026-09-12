@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from math import isfinite
@@ -116,6 +116,7 @@ class ExecutionContext:
     deadline: datetime
     correlation_id: str
     capabilities: frozenset[str] = frozenset()
+    cancel_check: Callable[[], bool] | None = None
 
 
 @dataclass(frozen=True, slots=True)
