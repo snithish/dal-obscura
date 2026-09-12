@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `0fe6471` (next X12 slice uncommitted).
+Implementation follow-up through `13ce6ae`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -79,11 +79,15 @@ Next implementation action: continue X03 with PostgreSQL barrier/CAS evidence an
 then complete X06 persisted field identities/evolution rules. Do not add new
 providers before Phase A's security/correctness prerequisites are accepted.
 
-Latest implementation slice after the schema migration: X08 provider-page budget
+Latest implementation slices after the schema migration: X08 provider-page budget
 and cancellation checks are validated by
 `tests/control_plane/test_catalog_discovery.py` (5 passed) with Ruff clean. The
 slice is intentionally not marked accepted because live provider timeout,
 multi-worker capacity, and atomic reload evidence are still required.
+
+X12 admission loading now rejects unallowlisted entry points before invoking a
+factory; `tests/plugin_platform/test_registry.py` passes all 5 cases with Ruff
+clean. Built-in Iceberg routing and artifact-lock verification remain open.
 
 ## Latest evidence entry
 
