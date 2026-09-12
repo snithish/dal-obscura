@@ -65,6 +65,8 @@ class ControlPlaneDeps:
     allowed_origins: tuple[str, ...] = ()
     oidc_nonce_actor_resolver: OidcNonceActorResolver | None = None
     authorization_code_exchange: AuthorizationCodeExchange | None = None
+    require_review: bool = False
+    review_secret: str = ""
 
     def require_actor(
         self,
@@ -225,7 +227,11 @@ class ControlPlaneDeps:
 
     def with_service(self, callback: Callable[[ProvisioningService], object]) -> object:
         with self.session_maker() as session:
-            service = ProvisioningService(session)
+            service = ProvisioningService(
+                session,
+                review_secret=self.review_secret,
+                require_review=self.require_review,
+            )
             try:
                 result = callback(service)
                 session.commit()

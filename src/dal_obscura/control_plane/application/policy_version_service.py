@@ -15,6 +15,7 @@ from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.compiler import PublicationCompiler
 from dal_obscura.control_plane.application.errors import PublicationConflictError, ValidationFailure
 from dal_obscura.control_plane.application.policy_service import ensure_asset_capability
+from dal_obscura.control_plane.application.review_service import verify_review_token
 from dal_obscura.control_plane.domain.models import CompiledCatalog, CompiledPublication
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 
@@ -119,7 +120,7 @@ def create_workspace_publication(
     }
 
 
-def create_asset_policy_version(
+def create_asset_policy_version(  # noqa: C901
     store: PublicationStore,
     asset_id: UUID,
     *,
@@ -128,6 +129,9 @@ def create_asset_policy_version(
     activate_publication,
     expected_draft_revision: int | None = None,
     expected_publication_id: UUID | None = None,
+    review_token: str | None = None,
+    require_review: bool = False,
+    review_secret: str = "",
 ) -> dict[str, object]:
     """Publishes and activates a new policy version for one asset.
 
@@ -156,6 +160,16 @@ def create_asset_policy_version(
             raise PublicationConflictError(
                 "Policy draft revision changed; reread the draft before publishing."
             )
+    if require_review:
+        if not review_token:
+            raise ValidationFailure("A current server review is required before publishing.")
+        verify_review_token(
+            store,
+            asset_id,
+            actor,
+            review_token,
+            secret=review_secret,
+        )
     asset, catalog = store.load_asset_publish_draft(
         asset_id,
         author_principal=actor.principal if personal_draft is not None else None,

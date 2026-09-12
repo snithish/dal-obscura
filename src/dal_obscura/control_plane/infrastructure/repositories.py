@@ -838,6 +838,14 @@ class PublicationStore:
             "policy_rules": self.list_policy_rules(asset_id),
         }
 
+    def get_asset_workspace_context(self, asset_id: UUID) -> WorkspaceContext:
+        """Returns the internal workspace scope for one asset."""
+
+        record = self._session.get(AssetRecord, asset_id)
+        if record is None:
+            raise LookupError(f"No asset {asset_id}")
+        return WorkspaceContext(cell_id=record.cell_id, tenant_id=record.tenant_id)
+
     def list_asset_owners(self, asset_id: UUID) -> list[str]:
         return [
             record.principal

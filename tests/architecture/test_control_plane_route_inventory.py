@@ -33,6 +33,7 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
         "/v1/assets/{asset_id}/schema",
         "/v1/assets/{asset_id}/policy-preview",
         "/v1/assets/{asset_id}/policy-evaluate",
+        "/v1/assets/{asset_id}/policy-review",
         "/v1/assets/{asset_id}/policy-rules",
         "/v1/assets/{asset_id}/policy-versions",
         "/v1/assets/{asset_id}/policy-versions/{policy_version}",

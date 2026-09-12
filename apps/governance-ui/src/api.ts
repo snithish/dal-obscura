@@ -77,6 +77,8 @@ export type Preview = {
   rows?: Array<Record<string, unknown>>;
   output_rows?: number;
   evidence?: Record<string, unknown>;
+  review_token?: string;
+  review_expires_at?: number;
 };
 
 export type Session = {
@@ -216,9 +218,9 @@ export const controlPlane = {
     method: "PUT",
     body: JSON.stringify(settings),
   }),
-  publishAsset: (assetId: string, expectedDraftRevision?: number) => request<{ asset_id: string; policy_version: number }>(`/v1/assets/${assetId}/policy-versions`, {
+  publishAsset: (assetId: string, expectedDraftRevision?: number, reviewToken?: string) => request<{ asset_id: string; policy_version: number }>(`/v1/assets/${assetId}/policy-versions`, {
     method: "POST",
-    body: JSON.stringify(expectedDraftRevision === undefined ? {} : { expected_draft_revision: expectedDraftRevision }),
+    body: JSON.stringify({ ...(expectedDraftRevision === undefined ? {} : { expected_draft_revision: expectedDraftRevision }), ...(reviewToken ? { review_token: reviewToken } : {}) }),
   }),
   getDraft: (assetId: string) => request<PolicyDraft>(`/v1/assets/${assetId}/draft`),
   saveDraft: (assetId: string, expectedRevision: number, rules: PolicyRule[]) =>
@@ -257,6 +259,24 @@ export const controlPlane = {
       rows: raw.rows,
       output_rows: raw.output_rows,
       evidence: raw.evidence,
+    } satisfies Preview;
+  },
+  review: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, object> }) => {
+    const raw = await request<{ decision: "allow" | "deny"; allowed_columns: string[]; masks: Array<{ column: string; type: Mask["type"] }>; row_filter: string | null; output_rows: number; rows: Array<Record<string, unknown>>; evidence: Record<string, unknown>; review_token: string; review_expires_at: number }>("/v1/assets/" + assetId + "/policy-review", {
+      method: "POST",
+      body: JSON.stringify(persona),
+    });
+    return {
+      allowed_columns: raw.allowed_columns,
+      masks: Object.fromEntries(raw.masks.map((mask) => [mask.column, { type: mask.type }])),
+      row_filter: raw.row_filter,
+      policy_version: 0,
+      status: "completed",
+      rows: raw.rows,
+      output_rows: raw.output_rows,
+      evidence: raw.evidence,
+      review_token: raw.review_token,
+      review_expires_at: raw.review_expires_at,
     } satisfies Preview;
   },
 };

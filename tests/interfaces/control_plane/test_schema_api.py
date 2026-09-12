@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+from fastapi.testclient import TestClient
 from pyiceberg.schema import Schema
 from pyiceberg.types import LongType, NestedField, StringType, StructType
 
+from dal_obscura.common.config_store.db import (
+    create_engine_from_url,
+    migrate_config_store,
+    session_factory,
+)
 from dal_obscura.control_plane.application import schema_service
+from dal_obscura.control_plane.interfaces.api import create_app
 from tests.interfaces.control_plane.workspace_helpers import (
     ADMIN_HEADERS,
     ICEBERG_CATALOG_MODULE,
@@ -138,3 +145,107 @@ def test_policy_evaluation_returns_duckdb_transformed_synthetic_rows(monkeypatch
     assert payload["output_rows"] == 1
     assert payload["rows"][0]["email"] == "a***@example.com"
     assert payload["evidence"]["evaluator_version"] == "duckdb-synthetic-v1"
+
+
+def test_production_publication_requires_current_server_review(monkeypatch) -> None:
+    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+    migrate_config_store(engine)
+    client = TestClient(
+        create_app(
+            session_factory(engine),
+            admin_token="review-secret-for-test",
+            require_review=True,
+        )
+    )
+    client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+        },
+        headers={"authorization": "Bearer review-secret-for-test"},
+    )
+    client.put(
+        "/v1/settings/runtime",
+        json={
+            "ticket_ttl_seconds": 900,
+            "max_tickets": 64,
+            "max_ticket_exchanges": 2,
+        },
+        headers={"authorization": "Bearer review-secret-for-test"},
+    )
+    client.put(
+        "/v1/settings/auth-providers",
+        json={
+            "providers": [
+                {
+                    "ordinal": 1,
+                    "module": (
+                        "dal_obscura.data_plane.infrastructure.adapters."
+                        "identity_oidc_jwks.OidcJwksIdentityProvider"
+                    ),
+                    "args": {"issuer": "https://issuer.example"},
+                    "enabled": True,
+                }
+            ]
+        },
+        headers={"authorization": "Bearer review-secret-for-test"},
+    )
+    asset = client.put(
+        "/v1/assets/analytics/default.users",
+        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
+        headers={"authorization": "Bearer review-secret-for-test"},
+    ).json()
+    client.put(
+        f"/v1/assets/{asset['id']}/policy-rules",
+        json={
+            "rules": [
+                {
+                    "ordinal": 10,
+                    "effect": "allow",
+                    "principals": ["analyst"],
+                    "columns": ["id"],
+                    "masks": {},
+                    "row_filter": None,
+                }
+            ]
+        },
+        headers={"authorization": "Bearer review-secret-for-test"},
+    )
+    client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["analyst"]},
+        headers={"authorization": "Bearer review-secret-for-test"},
+    )
+    monkeypatch.setattr(
+        schema_service,
+        "load_catalog",
+        lambda *args, **kwargs: _EvaluationCatalog(),
+    )
+
+    missing = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        headers={"authorization": "Bearer review-secret-for-test"},
+    )
+    reviewed = client.post(
+        f"/v1/assets/{asset['id']}/policy-review",
+        json={"principal": "analyst", "groups": [], "claims": {}},
+        headers={"authorization": "Bearer review-secret-for-test"},
+    )
+    token = reviewed.json()["review_token"]
+    published = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        json={"review_token": token},
+        headers={"authorization": "Bearer review-secret-for-test"},
+    )
+    tampered = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        json={"review_token": token[:-1] + ("a" if token[-1] != "a" else "b")},
+        headers={"authorization": "Bearer review-secret-for-test"},
+    )
+
+    assert missing.status_code == 400
+    assert "server review" in missing.json()["detail"]
+    assert reviewed.status_code == 200
+    assert published.status_code == 200
+    assert tampered.status_code == 400

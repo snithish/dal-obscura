@@ -13,10 +13,12 @@ from dal_obscura.control_plane.application import (
     evaluation_service,
     policy_service,
     policy_version_service,
+    review_service,
     schema_service,
     workspace_service,
 )
 from dal_obscura.control_plane.application.access import ControlPlaneActor
+from dal_obscura.control_plane.application.errors import AuthorizationFailure
 from dal_obscura.control_plane.infrastructure.catalog_discovery import discover_catalog_tables
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 
@@ -24,8 +26,16 @@ from dal_obscura.control_plane.infrastructure.repositories import PublicationSto
 class ProvisioningService:
     """Application service used by the FastAPI control-plane routes."""
 
-    def __init__(self, session: Session) -> None:
+    def __init__(
+        self,
+        session: Session,
+        *,
+        review_secret: str = "",
+        require_review: bool = False,
+    ) -> None:
         self._store = PublicationStore(session)
+        self._review_secret = review_secret
+        self._require_review = require_review
 
     def create_tenant(self, slug: str, display_name: str) -> dict[str, str]:
         tenant_id = uuid4()
@@ -213,6 +223,7 @@ class ProvisioningService:
         actor: ControlPlaneActor,
         expected_draft_revision: int | None = None,
         expected_publication_id: UUID | None = None,
+        review_token: str | None = None,
     ) -> dict[str, object]:
         return policy_version_service.create_asset_policy_version(
             self._store,
@@ -222,6 +233,9 @@ class ProvisioningService:
             activate_publication=self.activate_publication,
             expected_draft_revision=expected_draft_revision,
             expected_publication_id=expected_publication_id,
+            review_token=review_token,
+            require_review=self._require_review,
+            review_secret=self._review_secret,
         )
 
     def activate_workspace_publication(self, publication_id: UUID) -> dict[str, str]:
@@ -433,6 +447,36 @@ class ProvisioningService:
             claims=claims,
             rows=rows,
         )
+
+    def review_asset_policy(
+        self,
+        asset_id: UUID,
+        actor: ControlPlaneActor,
+        *,
+        principal: str,
+        groups: list[str],
+        claims: dict[str, object],
+        rows: list[dict[str, object]],
+    ) -> dict[str, object]:
+        evaluation = evaluation_service.evaluate_asset_policy(
+            self._store,
+            asset_id,
+            actor,
+            principal=principal,
+            groups=groups,
+            claims=claims,
+            rows=rows,
+        )
+        try:
+            return review_service.issue_review_token(
+                self._store,
+                asset_id,
+                actor,
+                evaluation,
+                secret=self._review_secret,
+            )
+        except AuthorizationFailure:
+            return evaluation
 
     def replace_auth_providers(self, cell_id: UUID, providers: list[dict[str, Any]]) -> None:
         self._store.replace_auth_providers(cell_id=cell_id, providers=providers)

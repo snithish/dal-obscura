@@ -104,6 +104,7 @@ def create_app(
     session_ttl_seconds: int = 28_800,
     session_idle_ttl_seconds: int = 1_800,
     oidc_nonce_actor_resolver: OidcNonceActorResolver | None = None,
+    require_review: bool = False,
 ) -> FastAPI:
     """Creates the control-plane FastAPI app with all workspace routes installed.
 
@@ -152,6 +153,8 @@ def create_app(
         ),
         session_ttl_seconds=session_ttl_seconds,
         session_idle_ttl_seconds=session_idle_ttl_seconds,
+        require_review=require_review,
+        review_secret=admin_token if require_review else "",
         allowed_origins=cors_origins,
         oidc_nonce_actor_resolver=oidc_nonce_actor_resolver,
         authorization_code_exchange=lambda config, code, verifier: _exchange_authorization_code(

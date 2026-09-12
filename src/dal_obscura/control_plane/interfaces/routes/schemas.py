@@ -167,6 +167,7 @@ class PolicyVersionPublishRequest(StrictModel):
 
     expected_draft_revision: int | None = Field(default=None, ge=0)
     expected_publication_id: UUID | None = None
+    review_token: str | None = Field(default=None, min_length=16, max_length=4096)
 
 
 class PolicyRestoreRequest(StrictModel):

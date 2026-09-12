@@ -112,6 +112,23 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             )
         )
 
+    @api.post("/v1/assets/{asset_id}/policy-review")
+    def review_asset_policy(
+        asset_id: UUID,
+        request: PolicyEvaluationRequest,
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> object:
+        return deps.with_service(
+            lambda service: service.review_asset_policy(
+                asset_id,
+                actor,
+                principal=request.principal,
+                groups=request.groups,
+                claims=request.claims,
+                rows=request.rows,
+            )
+        )
+
     @api.post("/v1/assets/{asset_id}/policy-versions")
     def create_asset_policy_version(
         asset_id: UUID,
@@ -128,6 +145,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
                 expected_publication_id=(
                     None if request is None else request.expected_publication_id
                 ),
+                review_token=None if request is None else request.review_token,
             )
         )
 

@@ -71,6 +71,8 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
                 "DAL_OBSCURA_CONTROL_PLANE_SESSION_IDLE_TTL_SECONDS",
             ),
             oidc_nonce_actor_resolver=_ui_nonce_resolver(values),
+            require_review=values.get("DAL_OBSCURA_CONTROL_PLANE_PROFILE", "local").strip().lower()
+            == "production",
         )
     except (ConfigStoreSchemaError, ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)
