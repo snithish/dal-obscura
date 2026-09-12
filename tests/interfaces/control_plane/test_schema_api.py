@@ -185,6 +185,14 @@ def test_policy_evaluation_returns_duckdb_transformed_synthetic_rows(monkeypatch
         != payload["evidence"]["fixture_fingerprint"]
     )
 
+    invalid = client.post(
+        f"/v1/assets/{asset['id']}/policy-evaluate",
+        json={"principal": "analyst", "rows": [{"id": "not-a-long"}]},
+        headers=ADMIN_HEADERS,
+    )
+    assert invalid.status_code == 400
+    assert invalid.json() == {"detail": "Synthetic evaluation rows are invalid"}
+
 
 def test_production_publication_requires_current_server_review(monkeypatch) -> None:
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
