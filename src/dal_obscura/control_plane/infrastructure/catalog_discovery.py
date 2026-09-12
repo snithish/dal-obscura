@@ -95,7 +95,7 @@ def discover_iceberg_tables(
             "name": table_name,
             "table_identifier": table_name,
         }
-        for table_name in table_names
+        for table_name in sorted(table_names)
     ]
 
 
