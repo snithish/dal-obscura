@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `2f6f933`.
+Implementation follow-up through `dea1a55`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -101,6 +101,23 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
 Next implementation action: continue X03 with PostgreSQL barrier/CAS evidence and
 then complete X06 provider-derived and collection field identity rules. Do not add new
 providers before Phase A's security/correctness prerequisites are accepted.
+
+### X19 production database privilege ordering — `dea1a55`
+
+- State: implementing.
+- Behavior: production Compose now runs a one-shot `postgres-grants` service after
+  migrations. It grants the data-plane role only the DML needed for
+  `public.durable_tickets`; control-plane and data-plane startup wait for that
+  service to complete. The first-boot role initializer remains schema/migration
+  scoped and does not assume the ticket table exists yet.
+- Green evidence: `bash -n deployment/production/postgres-init/01-roles.sh`,
+  `tests/architecture/test_production_deployment_contract.py` (1 passed),
+  `docker compose --env-file deployment/production/.env.example -f
+  deployment/production/compose.yaml config --quiet`, and `git diff --check`.
+- Remaining gaps: real PostgreSQL role/rollback/process evidence, backup/restore,
+  TLS/IdP/browser, plugin, consumer, and production acceptance gates remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: continue X03 PostgreSQL barriers/CAS evidence.
 
 Latest implementation slices after the schema migration: X08 provider-page budget
 and cancellation checks are validated by
