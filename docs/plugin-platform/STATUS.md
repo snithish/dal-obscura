@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `c5cffc8`.
+Implementation follow-up through `4554f51`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -110,7 +110,11 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   authenticated `/v1/plugins` endpoint and Connections view render admitted
   adapter capabilities without installation controls. Dynamic external-plugin
   routing and browser evidence remain open.
-- X15 conformance kit: **not-started**.
+- X15 conformance kit: **implementing**; a standalone public-API-only package
+  now provides nested Arrow goldens, capability-negative checks, bounded plan
+  and output-schema validation, and machine-readable results. Deliberately bad
+  fixture plugins, provider/Flight/consumer lanes, and external distribution
+  evidence remain open.
 - X16 REST Iceberg qualification: **not-started**.
 - X17 independent manifest/Parquet plugin: **not-started**.
 - X18 consumer qualification: **not-started**.
@@ -247,6 +251,23 @@ open.
 
 The descriptor's password field now matches the server's validated secret-reference
 option name (`839c16f`); no raw credential field is exposed.
+
+### X15 public conformance kit — `4554f51`
+
+- State: implementing.
+- Behavior: `packages/plugin-conformance` is independently importable with only
+  the public plugin API and PyArrow. It supplies deterministic nested
+  struct/list/map goldens, capability-negative checks, bounded task planning and
+  output-schema checks, and machine-readable pass/fail results. Deliberate
+  negative tests prove missing capabilities and schema mutation are rejected.
+- Green evidence: package tests (4), compileall, Ruff, and Ty pass using the
+  package-only `PYTHONPATH` lane.
+- Remaining gaps: conforming Iceberg integration, intentionally incorrect
+  provider implementations, governed Flight/consumer lanes, artifact identity
+  output, and external distribution evidence remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: expand the kit with cancellation/cleanup, coverage
+  counters, and provider lifecycle fixtures before qualifying REST Iceberg.
 
 ### X12/X13 immutable runtime admission — `d62392e`
 
