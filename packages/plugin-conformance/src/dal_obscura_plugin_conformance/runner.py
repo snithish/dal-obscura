@@ -38,6 +38,12 @@ class ConformanceResult:
         self.checks[name] = "failed"
         self.failures.append(f"{name}: {message}")
 
+    def record_skip(self, name: str, reason: str) -> None:
+        """Record an intentionally unrun check without making it pass."""
+
+        self.checks[name] = "skipped"
+        self.skips.append(f"{name}: {reason}")
+
     def to_dict(self) -> dict[str, object]:
         return {
             "package": self.package,
@@ -166,6 +172,7 @@ def run_format_checks(
         if callable(close):
             try:
                 close()
+                result.record_pass("cleanup")
             except Exception as exc:
                 result.record_failure("cleanup", str(exc))
         else:
