@@ -40,6 +40,7 @@ class DataPlaneRuntimeConfig:
     cell_id: UUID
     location: str
     ticket_secret: str
+    ticket_previous_secrets: tuple[str, ...] = ()
     log_level: str = "INFO"
     json_logs: bool = False
     tls_cert: str | None = None
@@ -67,6 +68,7 @@ def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
     cell_id = UUID(_required_env("DAL_OBSCURA_CELL_ID"))
     location = os.getenv("DAL_OBSCURA_LOCATION", "grpc://0.0.0.0:8815").strip()
     ticket_secret = _required_env("DAL_OBSCURA_TICKET_SECRET")
+    ticket_previous_secrets = _secret_list_env("DAL_OBSCURA_TICKET_PREVIOUS_SECRETS")
     profile = os.getenv("DAL_OBSCURA_DATA_PLANE_PROFILE", "local").strip().lower()
     log_level = os.getenv("DAL_OBSCURA_LOG_LEVEL", "INFO").strip() or "INFO"
     json_logs = _bool_env(os.getenv("DAL_OBSCURA_JSON_LOGS"))
@@ -76,6 +78,7 @@ def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
         cell_id=cell_id,
         location=location,
         ticket_secret=ticket_secret,
+        ticket_previous_secrets=ticket_previous_secrets,
         profile=profile,
         log_level=log_level,
         json_logs=json_logs,
@@ -119,6 +122,11 @@ def _validate_profile(config: DataPlaneRuntimeConfig) -> None:
         raise ValueError(
             "DAL_OBSCURA_TICKET_SECRET must contain at least 32 characters in production"
         )
+    if any(len(secret) < 32 for secret in config.ticket_previous_secrets):
+        raise ValueError(
+            "DAL_OBSCURA_TICKET_PREVIOUS_SECRETS entries must contain at least "
+            "32 characters in production"
+        )
     if urlsplit(config.location).scheme != "grpc+tls":
         raise ValueError("Production data plane requires a grpc+tls location")
     if not config.tls_cert or not config.tls_key:
@@ -143,6 +151,16 @@ def _optional_env(name: str) -> str | None:
     if value is None or not value.strip():
         return None
     return value
+
+
+def _secret_list_env(name: str) -> tuple[str, ...]:
+    value = os.getenv(name, "")
+    if not value.strip():
+        return ()
+    entries = tuple(item.strip() for item in value.split(",") if item.strip())
+    if len(set(entries)) != len(entries):
+        raise ValueError(f"{name} entries must be unique")
+    return entries
 
 
 def _bool_env(value: str | None) -> bool:

@@ -34,6 +34,35 @@ def test_ticket_sign_and_verify():
     assert verified.columns == []
 
 
+def test_ticket_key_rotation_accepts_previous_keys_but_signs_with_current_key():
+    payload = TicketPayload(
+        ticket_id="00000000-0000-0000-0000-000000000001",
+        catalog="catalog1",
+        target="catalog.db.table",
+        columns=["id"],
+        scan=_scan_payload(),
+        policy_version=1,
+        principal_id="user1",
+        expires_at=2**31,
+        nonce="rotation",
+    )
+    old = HmacTicketCodecAdapter("old-secret")
+    rotated = HmacTicketCodecAdapter("new-secret", previous_secrets=("old-secret",))
+
+    old_ticket = old.sign_payload(payload)
+    new_ticket = rotated.sign_payload(payload)
+
+    assert rotated.verify(old_ticket).ticket_id == payload.ticket_id
+    assert rotated.verify(new_ticket).ticket_id == payload.ticket_id
+    with pytest.raises(PermissionError):
+        old.verify(new_ticket)
+
+
+def test_ticket_key_rotation_rejects_duplicate_keys():
+    with pytest.raises(ValueError, match="unique"):
+        HmacTicketCodecAdapter("same", previous_secrets=("same",))
+
+
 def test_signed_ticket_is_opaque_and_does_not_embed_scan_payload():
     codec = HmacTicketCodecAdapter("secret")
     payload = TicketPayload(

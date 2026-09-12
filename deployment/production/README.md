@@ -65,6 +65,17 @@ cell. Verify denied and allowed synthetic reads after invalidation, then open
 the TLS ingress. Keep the restored environment closed if any reconciliation,
 readiness, or synthetic read check fails.
 
+## Ticket-signing key rotation
+
+Set a new `DAL_OBSCURA_TICKET_SECRET` and place the retired key(s), comma
+separated, in `DAL_OBSCURA_TICKET_PREVIOUS_SECRETS`. Workers sign only with the
+new key while accepting existing tickets signed by the retired keys. Keep the
+old keys only until the maximum ticket lifetime and exchange window have
+elapsed, then remove them and restart all workers. This rotation is additive:
+ticket payloads and the trusted pickle task boundary are unchanged. If a
+rotation must be rolled back, restore the prior key as the active secret and
+keep the newer key in the previous-key list for the same bounded window.
+
 ## Boundary and operating requirements
 
 - PostgreSQL is internal-only. Give migration jobs schema-change rights, the

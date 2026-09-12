@@ -99,7 +99,10 @@ def main() -> None:
         max_input_batch_bytes=runtime_config.max_input_batch_bytes,
         max_output_batch_bytes=runtime_config.max_output_batch_bytes,
     )
-    ticket_codec = HmacTicketCodecAdapter(runtime_config.ticket_secret)
+    ticket_codec = HmacTicketCodecAdapter(
+        runtime_config.ticket_secret,
+        previous_secrets=runtime_config.ticket_previous_secrets,
+    )
     ticket_store = SqlAlchemyTicketStore(session_maker, cell_id=runtime_config.cell_id)
     _start_ticket_cleanup(ticket_store, runtime_config.ticket_cleanup_interval_seconds)
     ticket_settings = published_runtime.ticket

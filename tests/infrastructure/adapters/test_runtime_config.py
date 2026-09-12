@@ -20,6 +20,7 @@ def test_runtime_config_reads_required_database_and_cell(monkeypatch: pytest.Mon
     assert str(config.cell_id) == "00000000-0000-0000-0000-000000000001"
     assert config.location == "grpc://127.0.0.1:8815"
     assert config.ticket_secret == "ticket-secret"
+    assert config.ticket_previous_secrets == ()
     assert config.max_active_streams == 16
     assert config.duckdb_memory_limit == "512MB"
     assert config.max_input_batch_bytes == 64 * 1024 * 1024
@@ -27,6 +28,29 @@ def test_runtime_config_reads_required_database_and_cell(monkeypatch: pytest.Mon
     assert config.max_ticket_payload_bytes == 16 * 1024 * 1024
     assert config.max_stream_seconds == 300
     assert config.ticket_cleanup_interval_seconds == 60
+
+
+def test_runtime_config_reads_previous_ticket_secrets(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
+    monkeypatch.setenv("DAL_OBSCURA_CELL_ID", "00000000-0000-0000-0000-000000000001")
+    monkeypatch.setenv("DAL_OBSCURA_TICKET_SECRET", "ticket-secret")
+    monkeypatch.setenv("DAL_OBSCURA_TICKET_PREVIOUS_SECRETS", "old-one, old-two")
+
+    config = load_data_plane_runtime_config()
+
+    assert config.ticket_previous_secrets == ("old-one", "old-two")
+
+
+def test_runtime_config_rejects_duplicate_previous_ticket_secrets(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
+    monkeypatch.setenv("DAL_OBSCURA_CELL_ID", "00000000-0000-0000-0000-000000000001")
+    monkeypatch.setenv("DAL_OBSCURA_TICKET_SECRET", "ticket-secret")
+    monkeypatch.setenv("DAL_OBSCURA_TICKET_PREVIOUS_SECRETS", "old,old")
+
+    with pytest.raises(ValueError, match="unique"):
+        load_data_plane_runtime_config()
 
 
 def test_runtime_config_reads_stream_resource_limits(monkeypatch: pytest.MonkeyPatch):
