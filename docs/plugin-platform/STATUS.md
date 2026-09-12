@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `80e90ed`.
+Implementation follow-up through `836cd55`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -485,6 +485,11 @@ remain unexecuted.
 `docker compose --env-file deployment/production/.env.example -f
 deployment/production/compose.yaml config --quiet` also passes, confirming the
 role-initializer mount and required variables render as valid Compose.
+
+The initializer now grants migrator `USAGE, CREATE` on `public` and application
+roles only `USAGE`, allowing clean-volume migrations while keeping application
+schema changes outside their privileges. Shell, contract, and Compose checks
+remain green.
 
 The direct-Arrow bounds regression and Ty/Ruff checks passed in
 `3263645`; the full schema byte-budget and every-entry-route acceptance matrix
