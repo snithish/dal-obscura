@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from collections.abc import Callable, Iterable, Iterator
+from threading import BoundedSemaphore
 from time import monotonic
 from typing import Any
 
@@ -17,6 +18,8 @@ Namespace = tuple[str, ...]
 DEFAULT_MAX_NAMESPACES = 1_000
 DEFAULT_MAX_TABLES = 10_000
 DEFAULT_DEADLINE_SECONDS = 30.0
+DEFAULT_MAX_ACTIVE_DISCOVERIES = 8
+_DISCOVERY_SLOTS = BoundedSemaphore(DEFAULT_MAX_ACTIVE_DISCOVERIES)
 
 
 def discover_catalog_tables(
@@ -54,6 +57,34 @@ def _catalog_type(module: str) -> CatalogType:
 
 
 def discover_iceberg_tables(
+    catalog_name: str,
+    options: dict[str, Any],
+    *,
+    load_catalog_fn: LoadCatalogFn | None = None,
+    max_namespaces: int = DEFAULT_MAX_NAMESPACES,
+    max_tables: int = DEFAULT_MAX_TABLES,
+    deadline_at: float | None = None,
+    cancel_check: Callable[[], bool] | None = None,
+) -> list[CatalogTable]:
+    """Admit one bounded discovery operation and release its slot on every exit."""
+
+    if not _DISCOVERY_SLOTS.acquire(blocking=False):
+        raise RuntimeError("Catalog discovery capacity is exhausted; retry later")
+    try:
+        return _discover_iceberg_tables(
+            catalog_name,
+            options,
+            load_catalog_fn=load_catalog_fn,
+            max_namespaces=max_namespaces,
+            max_tables=max_tables,
+            deadline_at=deadline_at,
+            cancel_check=cancel_check,
+        )
+    finally:
+        _DISCOVERY_SLOTS.release()
+
+
+def _discover_iceberg_tables(
     catalog_name: str,
     options: dict[str, Any],
     *,
