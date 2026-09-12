@@ -283,3 +283,18 @@ def test_publish_idempotency_key_replays_committed_result_and_rejects_mismatch()
     assert replay.status_code == 200
     assert replay.json() == first.json()
     assert mismatch.status_code == 409
+
+    operation = client.get(
+        f"/v1/assets/{asset['id']}/policy-operations/publish-once",
+        headers=ADMIN_HEADERS,
+    )
+    missing = client.get(
+        f"/v1/assets/{asset['id']}/policy-operations/unknown",
+        headers=ADMIN_HEADERS,
+    )
+
+    assert operation.status_code == 200
+    assert operation.json()["status"] == "committed"
+    assert operation.json()["result"] == first.json()
+    assert "request_hash" not in operation.json()
+    assert missing.status_code == 404

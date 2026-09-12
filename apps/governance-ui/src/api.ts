@@ -221,6 +221,7 @@ export const controlPlane = {
   listHistory: () => request<PolicyVersion[]>("/v1/policy-versions"),
   listAuditEvents: (assetId?: string) => request<AuditEvent[]>("/v1/audit/events" + (assetId ? "?asset_id=" + encodeURIComponent(assetId) : "")),
   listAssetHistory: (assetId: string) => request<PolicyVersion[]>(`/v1/assets/${assetId}/policy-versions`),
+  getPublicationOperation: (assetId: string, idempotencyKey: string) => request<{ id: string; status: string; result: { asset_id: string; policy_version: number } }>(`/v1/assets/${assetId}/policy-operations/${encodeURIComponent(idempotencyKey)}`),
   getPolicyVersion: (assetId: string, policyVersion: number) => request<PolicyVersionDetail>(`/v1/assets/${assetId}/policy-versions/${policyVersion}`),
   restorePolicyVersion: (assetId: string, policyVersion: number, expectedRevision: number) =>
     request<PolicyDraft>(`/v1/assets/${assetId}/policy-versions/${policyVersion}/restore`, {

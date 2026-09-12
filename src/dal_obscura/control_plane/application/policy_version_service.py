@@ -310,6 +310,32 @@ def create_asset_policy_version(  # noqa: C901
     return result
 
 
+def get_publication_operation(
+    store: PublicationStore,
+    asset_id: UUID,
+    idempotency_key: str,
+    *,
+    actor: ControlPlaneActor,
+) -> dict[str, object]:
+    """Returns a caller-scoped committed publication operation."""
+
+    ensure_asset_capability(store, asset_id, actor, "publish")
+    if not 1 <= len(idempotency_key) <= 128:
+        raise ValidationFailure("Idempotency key must contain between 1 and 128 characters")
+    operation = store.get_publication_operation(
+        asset_id=asset_id,
+        actor_principal=actor.principal,
+        idempotency_key=idempotency_key,
+    )
+    if operation is None:
+        raise LookupError("No publication operation exists for this idempotency key")
+    return {
+        "id": operation["id"],
+        "status": operation["status"],
+        "result": operation["result"],
+    }
+
+
 def _publication_request_hash(
     *,
     expected_draft_revision: int | None,

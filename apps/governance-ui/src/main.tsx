@@ -214,13 +214,24 @@ function App() {
 
   async function publishAsset() {
     if (!asset || isDemo || !reviewToken || publishPending) return;
+    const idempotencyKey = crypto.randomUUID();
     setPublishPending(true);
     try {
-      await controlPlane.publishAsset(asset.id, draftRevision, reviewToken, crypto.randomUUID());
+      await controlPlane.publishAsset(asset.id, draftRevision, reviewToken, idempotencyKey);
       setReviewToken(null);
       setNotice("Published the saved draft.");
     } catch {
-      setNotice("Publish failed. Review the saved draft and active generation.");
+      try {
+        const operation = await controlPlane.getPublicationOperation(asset.id, idempotencyKey);
+        if (operation.status === "committed") {
+          setReviewToken(null);
+          setNotice(`Publish committed as policy version ${operation.result.policy_version}.`);
+        } else {
+          setNotice("Publish outcome is still pending. Refresh Activity before retrying.");
+        }
+      } catch {
+        setNotice("Publish failed. Review the saved draft and active generation.");
+      }
     } finally {
       setPublishPending(false);
     }

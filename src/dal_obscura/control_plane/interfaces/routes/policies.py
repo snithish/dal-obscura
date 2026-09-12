@@ -162,6 +162,26 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             lambda service: service.list_asset_policy_version_history(asset_id, actor=actor)
         )
 
+    @api.get("/v1/assets/{asset_id}/policy-operations/{idempotency_key}")
+    def get_policy_operation(
+        asset_id: UUID,
+        idempotency_key: str,
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> object:
+        key = idempotency_key.strip()
+        if not 1 <= len(key) <= 128:
+            raise HTTPException(
+                status_code=422,
+                detail="Idempotency key must contain 1-128 characters",
+            )
+        return deps.with_service(
+            lambda service: service.get_publication_operation(
+                asset_id,
+                key,
+                actor=actor,
+            )
+        )
+
     @api.get("/v1/assets/{asset_id}/policy-versions/{policy_version}")
     def get_asset_policy_version(
         asset_id: UUID,

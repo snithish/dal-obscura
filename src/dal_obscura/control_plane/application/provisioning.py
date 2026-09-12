@@ -249,6 +249,20 @@ class ProvisioningService:
             review_secret=self._review_secret,
         )
 
+    def get_publication_operation(
+        self,
+        asset_id: UUID,
+        idempotency_key: str,
+        *,
+        actor: ControlPlaneActor,
+    ) -> dict[str, object]:
+        return policy_version_service.get_publication_operation(
+            self._store,
+            asset_id,
+            idempotency_key,
+            actor=actor,
+        )
+
     def activate_workspace_publication(self, publication_id: UUID) -> dict[str, str]:
         return workspace_service.activate_workspace_publication(
             self._store,
