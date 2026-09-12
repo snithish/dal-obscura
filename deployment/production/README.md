@@ -8,7 +8,10 @@ ingress. Replace every image tag with a verified immutable digest.
 
 ## Install and start
 
-1. Copy `.env.example` to `.env` and load every secret from the deployment's
+1. Provision separate PostgreSQL roles for migrations, control-plane writes,
+   and data-plane ticket/runtime reads. Grant schema-change rights only to the
+   migration role; the application roles must not be interchangeable. Copy
+   `.env.example` to `.env` and load every secret from the deployment's
    secret manager. Place the referenced certificate, private key, and client-CA
    files at the three `*_SOURCE` paths with mode `0400`; Compose mounts them as
    read-only secrets only into the data-plane workers. Do not put provider
@@ -49,7 +52,7 @@ database:
 
 ```bash
 dal-obscura-maintenance invalidate-access \
-  --database-url "$DAL_OBSCURA_DATABASE_URL" \
+  --database-url "$DAL_OBSCURA_CONTROL_PLANE_DATABASE_URL" \
   --cell-id "$DAL_OBSCURA_CELL_ID"
 ```
 

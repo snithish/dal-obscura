@@ -32,6 +32,13 @@ def test_production_reference_contains_immutable_and_private_topology() -> None:
     assert "DAL_OBSCURA_CONTROL_PLANE_REVIEW_SECRET=" in env_example
     assert "DAL_OBSCURA_CONTROL_PLANE_REVIEW_SECRET" in compose
     assert "DAL_OBSCURA_TLS_VERIFY_CLIENT=true" in env_example
+    assert "DAL_OBSCURA_MIGRATION_DATABASE_URL" in compose
+    assert "DAL_OBSCURA_CONTROL_PLANE_DATABASE_URL" in compose
+    assert "DAL_OBSCURA_DATA_PLANE_DATABASE_URL" in compose
+    assert "DAL_OBSCURA_MIGRATION_DATABASE_URL" in env_example
+    assert "DAL_OBSCURA_CONTROL_PLANE_DATABASE_URL" in env_example
+    assert "DAL_OBSCURA_DATA_PLANE_DATABASE_URL" in env_example
+    assert "Provision separate PostgreSQL roles" in readme
     assert "Routine restart" in readme
     assert "does not seed" in readme
     assert "republish" in readme
