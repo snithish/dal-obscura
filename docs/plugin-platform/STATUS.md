@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `18f8e64`.
+Implementation follow-up through `524bb6a`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -130,8 +130,24 @@ slice is intentionally not marked accepted because live provider timeout,
 multi-worker capacity, and atomic reload evidence are still required.
 
 X12 admission loading now rejects unallowlisted entry points before invoking a
-factory; `tests/plugin_platform/test_registry.py` passes all 5 cases with Ruff
-clean. Built-in Iceberg routing and artifact-lock verification remain open.
+factory, and allowlisted entries without distribution provenance fail closed
+before import; `tests/plugin_platform/test_registry.py` passes all 7 cases with
+Ruff and Ty clean. Built-in Iceberg routing and artifact-lock verification remain
+open.
+
+### X12 distribution provenance gate — `524bb6a`
+
+- State: implementing.
+- Behavior: an allowlisted entry point must expose distribution name and version
+  metadata matching the immutable plugin lock. Missing provenance is rejected
+  before any factory import, so an unverified installation cannot inherit the
+  admission allowlist.
+- Green evidence: `tests/plugin_platform/test_registry.py` (7 passed), Ruff,
+  Ty, and `git diff --check` all pass.
+- Remaining gaps: built-wheel artifact provenance, duplicate distribution
+  conflicts, runtime routing, and external plugin conformance remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: continue X12 artifact-lock and built-in adapter wiring.
 
 X11 package check: `tests/plugin_platform/test_plugin_api_package.py` passes and
 the package source compiles without importing the service distribution. Building
