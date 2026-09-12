@@ -56,6 +56,7 @@ class DataPlaneRuntimeConfig:
     max_stream_seconds: int = 300
     secret_provider: SecretProviderConfig = field(default_factory=SecretProviderConfig)
     profile: str = "local"
+    ticket_cleanup_interval_seconds: int = 60
 
 
 def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
@@ -97,6 +98,10 @@ def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
             "DAL_OBSCURA_MAX_TICKET_PAYLOAD_BYTES", default=16 * 1024 * 1024
         ),
         max_stream_seconds=_positive_int_env("DAL_OBSCURA_MAX_STREAM_SECONDS", default=300),
+        ticket_cleanup_interval_seconds=_positive_int_env(
+            "DAL_OBSCURA_TICKET_CLEANUP_INTERVAL_SECONDS",
+            default=60,
+        ),
         secret_provider=_secret_provider_config(),
     )
     _validate_profile(config)

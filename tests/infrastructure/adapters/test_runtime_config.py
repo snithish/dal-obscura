@@ -26,6 +26,7 @@ def test_runtime_config_reads_required_database_and_cell(monkeypatch: pytest.Mon
     assert config.max_output_batch_bytes == 64 * 1024 * 1024
     assert config.max_ticket_payload_bytes == 16 * 1024 * 1024
     assert config.max_stream_seconds == 300
+    assert config.ticket_cleanup_interval_seconds == 60
 
 
 def test_runtime_config_reads_stream_resource_limits(monkeypatch: pytest.MonkeyPatch):
@@ -38,6 +39,7 @@ def test_runtime_config_reads_stream_resource_limits(monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("DAL_OBSCURA_MAX_OUTPUT_BATCH_BYTES", "2097152")
     monkeypatch.setenv("DAL_OBSCURA_MAX_TICKET_PAYLOAD_BYTES", "524288")
     monkeypatch.setenv("DAL_OBSCURA_MAX_STREAM_SECONDS", "45")
+    monkeypatch.setenv("DAL_OBSCURA_TICKET_CLEANUP_INTERVAL_SECONDS", "15")
 
     config = load_data_plane_runtime_config()
 
@@ -47,6 +49,7 @@ def test_runtime_config_reads_stream_resource_limits(monkeypatch: pytest.MonkeyP
     assert config.max_output_batch_bytes == 2097152
     assert config.max_ticket_payload_bytes == 524288
     assert config.max_stream_seconds == 45
+    assert config.ticket_cleanup_interval_seconds == 15
 
 
 def test_runtime_config_rejects_stale_config_window(monkeypatch: pytest.MonkeyPatch):

@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import timedelta, timezone
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from dal_obscura.common.config_store.orm import (
@@ -47,6 +47,14 @@ class BrowserSessionStore:
         token = secrets.token_urlsafe(32)
         csrf_token = secrets.token_urlsafe(32)
         now = utcnow()
+        self._session.execute(
+            delete(BrowserSessionRecord).where(
+                or_(
+                    BrowserSessionRecord.revoked_at.is_not(None),
+                    BrowserSessionRecord.expires_at <= now,
+                )
+            )
+        )
         self._session.add(
             BrowserSessionRecord(
                 id=uuid4(),
@@ -149,6 +157,14 @@ class LoginTransactionStore:
         if ttl_seconds <= 0:
             raise ValueError("login transaction TTL must be positive")
         now = utcnow()
+        self._session.execute(
+            delete(LoginTransactionRecord).where(
+                or_(
+                    LoginTransactionRecord.consumed_at.is_not(None),
+                    LoginTransactionRecord.expires_at <= now,
+                )
+            )
+        )
         self._session.add(
             LoginTransactionRecord(
                 id=uuid4(),

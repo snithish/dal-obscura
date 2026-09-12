@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import socket
 import threading
+import time
 from pathlib import Path
 from typing import Any, cast
 
@@ -92,6 +93,7 @@ def main() -> None:
     )
     ticket_codec = HmacTicketCodecAdapter(runtime_config.ticket_secret)
     ticket_store = SqlAlchemyTicketStore(session_maker, cell_id=runtime_config.cell_id)
+    _start_ticket_cleanup(ticket_store, runtime_config.ticket_cleanup_interval_seconds)
     ticket_settings = published_runtime.ticket
     access_flow = AccessFlow(
         identity=identity,
@@ -171,6 +173,29 @@ def _start_health_server(
         daemon=True,
     )
     thread.start()
+
+
+def _start_ticket_cleanup(ticket_store: SqlAlchemyTicketStore, interval_seconds: int) -> None:
+    """Runs bounded durable-ticket cleanup in a daemon worker."""
+
+    if interval_seconds <= 0:
+        raise ValueError("ticket cleanup interval must be positive")
+
+    def cleanup_loop() -> None:
+        while True:
+            time.sleep(interval_seconds)
+            try:
+                deleted = ticket_store.cleanup_expired_and_exhausted(now=int(time.time()))
+                if deleted:
+                    LOGGER.info("ticket_cleanup", extra={"deleted": deleted})
+            except Exception:
+                LOGGER.exception("ticket_cleanup_failed")
+
+    threading.Thread(
+        target=cleanup_loop,
+        name="dal-obscura-ticket-cleanup",
+        daemon=True,
+    ).start()
 
 
 def _published_runtime_readiness(
