@@ -36,6 +36,7 @@ function App() {
   const [managementData, setManagementData] = useState<ManagementData>({});
   const [managementLoading, setManagementLoading] = useState(false);
   const loadEpoch = useRef(0);
+  const managementEpoch = useRef(0);
   const [logoutPending, setLogoutPending] = useState(false);
   const isDemo = workspace === "demo";
 
@@ -54,35 +55,44 @@ function App() {
   }, [page, session, isDemo]);
 
   async function loadManagement(destination: Page) {
+    const epoch = ++managementEpoch.current;
     setManagementLoading(true);
     try {
-      if (destination === "changes") setManagementData({ history: await controlPlane.listHistory() });
-      if (destination === "activity") setManagementData({ history: await controlPlane.listHistory(), events: await controlPlane.listAuditEvents(), summary: await controlPlane.getSummary() });
-      if (destination === "connections") setManagementData({ catalogs: await controlPlane.listCatalogs() });
-      if (destination === "settings") setManagementData({ runtime: await controlPlane.getRuntimeSettings(), providers: await controlPlane.getAuthProviders() });
+      let next: ManagementData = {};
+      if (destination === "changes") next = { history: await controlPlane.listHistory() };
+      if (destination === "activity") next = { history: await controlPlane.listHistory(), events: await controlPlane.listAuditEvents(), summary: await controlPlane.getSummary() };
+      if (destination === "connections") next = { catalogs: await controlPlane.listCatalogs() };
+      if (destination === "settings") next = { runtime: await controlPlane.getRuntimeSettings(), providers: await controlPlane.getAuthProviders() };
+      if (epoch !== managementEpoch.current) return;
+      setManagementData(next);
     } catch {
+      if (epoch !== managementEpoch.current) return;
       setManagementData({});
       setNotice("This management view is unavailable for your current session or workspace.");
     } finally {
-      setManagementLoading(false);
+      if (epoch === managementEpoch.current) setManagementLoading(false);
     }
   }
 
   async function loadInitialWorkspace() {
+    const epoch = ++loadEpoch.current;
+    setWorkspace("loading");
     try {
-      const epoch = ++loadEpoch.current;
-      setWorkspace("loading");
-      setSession(await controlPlane.getSession());
+      const loadedSession = await controlPlane.getSession();
       if (epoch !== loadEpoch.current) return;
+      setSession(loadedSession);
       const loaded = await controlPlane.listAssets();
+      if (epoch !== loadEpoch.current) return;
       setAssets(loaded);
       if (!loaded.length) {
         setWorkspace("ready"); setNotice("No governed assets are available in this workspace.");
         return;
       }
       await loadAsset(loaded[0].id, loaded);
+      if (epoch !== loadEpoch.current) return;
       setWorkspace("ready");
     } catch {
+      if (epoch !== loadEpoch.current) return;
       setWorkspace("unavailable");
       setSession(null);
       setAuthConfig(await controlPlane.getUiAuthConfig().catch(() => null));
@@ -106,6 +116,7 @@ function App() {
 
   async function logout() {
     loadEpoch.current += 1;
+    managementEpoch.current += 1;
     try {
       await controlPlane.logout();
       clearPrivateState();
@@ -218,7 +229,7 @@ function App() {
     <aside className="sidebar" aria-label="Primary navigation">
       <a className="brand" href="#assets" onClick={() => navigateTo("assets")}>DAL OBSCURA<span>GOVERNANCE</span></a>
       <nav>{(["assets", "changes", "activity", "connections", "settings"] as Page[]).map((item) => <button key={item} className={page === item ? "nav-item active" : "nav-item"} onClick={() => navigateTo(item)}>{item}</button>)}</nav>
-      <div className="sidebar-foot"><span className={"status-dot " + workspace} /> Workspace: analytics<br /><small>{workspaceLabel(workspace)}</small></div>
+      <div className="sidebar-foot"><span className={"status-dot " + workspace} /> Workspace: {asset?.catalog ?? "unavailable"}<br /><small>{workspaceLabel(workspace)}</small></div>
     </aside>
     <main>
       <header className="topbar"><div><span className="eyebrow">{page === "assets" ? "ASSET WORKSPACE" : page.toUpperCase()}</span><h1>{page === "assets" ? asset?.name ?? "Assets" : titleFor(page)}</h1></div><div className="actor"><span className="avatar">{session?.principal.slice(0, 1).toUpperCase() ?? "?"}</span><div><strong>{session?.principal ?? "Not signed in"}</strong><small>{session?.platform_admin ? "Platform admin" : "Policy author"}</small></div>{session && <button className="text-button" onClick={() => void logout()}>Sign out</button>}{logoutPending && <button className="text-button" onClick={() => void logout()}>Retry sign out</button>}</div></header>
