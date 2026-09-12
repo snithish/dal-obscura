@@ -182,9 +182,14 @@ class PublicationCompiler:
                 }
                 for field in asset.schema_fields
             ]
+            stable_ids = not any(
+                str(field["field_id"]).startswith(("synthetic:", "legacy:"))
+                for field in schema_fields
+            )
             compiled_config["schema"] = {
                 "encoding": 1,
                 "fields": schema_fields,
+                "stable_ids": stable_ids,
                 "digest": _stable_hash(schema_fields),
             }
         policy_version = _stable_int63(policy_json)

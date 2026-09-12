@@ -29,7 +29,11 @@ from dal_obscura.common.config_store.orm import (
     TenantRecord,
 )
 from dal_obscura.common.plugin_api import PluginRegistry
-from dal_obscura.common.schema_identity import schema_field_id, schema_scope_digest
+from dal_obscura.common.schema_identity import (
+    schema_field_id,
+    schema_has_stable_ids,
+    schema_scope_digest,
+)
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     CatalogConfig,
     CatalogRegistry,
@@ -535,6 +539,11 @@ def _validate_schema_admission(asset: PublishedAsset, schema: pa.Schema) -> None
     fields = admission.get("fields")
     if not isinstance(fields, list) or not fields:
         return
+    stable_ids = admission.get("stable_ids")
+    if stable_ids is True and not schema_has_stable_ids(schema):
+        raise ValueError(
+            "Published schema requires stable provider field IDs; review again."
+        )
     digest = admission.get("digest")
     if digest is not None:
         if not isinstance(digest, str):

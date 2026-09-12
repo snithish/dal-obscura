@@ -213,6 +213,28 @@ def test_schema_without_provider_ids_uses_schema_scoped_nested_synthetic_ids():
         _validate_schema_admission(asset, changed)
 
 
+def test_schema_admission_rejects_unstable_live_schema_for_stable_publication():
+    schema = pa.schema([pa.field("email", pa.string())])
+    field_id = "iceberg:1"
+    asset = PublishedAsset(
+        publication_id=uuid4(),
+        tenant_id=uuid4(),
+        catalog="analytics",
+        target="default.users",
+        backend="iceberg",
+        compiled_config={
+            "schema": {
+                "stable_ids": True,
+                "fields": [{"path": ["email"], "field_id": field_id, "type": "string"}],
+            }
+        },
+        policy_version=1,
+    )
+
+    with pytest.raises(ValueError, match="stable provider field IDs"):
+        _validate_schema_admission(asset, schema)
+
+
 def test_published_store_fails_closed_by_default_after_transient_failure(
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,

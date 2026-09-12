@@ -131,7 +131,25 @@ def test_compiler_carries_admitted_schema_identities_into_immutable_manifest():
 
     assert schema["encoding"] == 1
     assert schema["fields"] == draft.assets[0].schema_fields
+    assert schema["stable_ids"] is True
     assert len(schema["digest"]) == 64
+
+
+def test_compiler_marks_schema_with_synthetic_ids_as_unstable():
+    draft = _draft()
+    draft.assets[0].schema_fields = [
+        {
+            "name": "id",
+            "field_id": "synthetic:scope:path",
+            "path": ["id"],
+            "type": "long",
+            "nullable": False,
+        }
+    ]
+
+    schema = PublicationCompiler().compile(draft).assets[0].compiled_config["schema"]
+
+    assert schema["stable_ids"] is False
 
 
 def test_compiler_freezes_wildcard_to_reviewed_schema_paths_and_masks():
