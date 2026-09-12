@@ -177,7 +177,7 @@ def ensure_asset_capability(
         return
     principals = actor.owner_principals()
     owners = set(store.list_asset_owners(asset_id))
-    if owners.intersection(principals) and capability in {"read", "edit", "publish", "grant"}:
+    if owners.intersection(principals) and capability in {"read", "edit"}:
         return
     if any(
         grant["principal"] in principals and grant["capability"] == capability

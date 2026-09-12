@@ -408,6 +408,11 @@ def test_asset_owner_can_replace_policy_rules_through_api():
 def test_group_owner_can_publish_policy_version_through_api():
     client = _client()
     asset = _provision_owned_asset(client)
+    grant = client.put(
+        f"/v1/assets/{asset}/grants",
+        json={"grants": [{"principal": "group:asset-owners", "capability": "publish"}]},
+        headers=ADMIN_HEADERS,
+    )
     client.put(
         f"/v1/assets/{asset}/policy-rules",
         json={"rules": [_allow_rule(row_filter="region = 'eu'")]},
@@ -419,6 +424,7 @@ def test_group_owner_can_publish_policy_version_through_api():
         headers=_bearer("owner-token"),
     )
 
+    assert grant.status_code == 200
     assert response.status_code == 200
     assert UUID(response.json()["asset_id"]) == asset
     assert response.json()["policy_version"] > 0
@@ -428,6 +434,11 @@ def test_publish_uses_saved_draft_and_rejects_stale_draft_revision():
     client = _client()
     asset = _provision_owned_asset(client)
     owner = _bearer("owner-token")
+    grant = client.put(
+        f"/v1/assets/{asset}/grants",
+        json={"grants": [{"principal": "group:asset-owners", "capability": "publish"}]},
+        headers=ADMIN_HEADERS,
+    )
 
     saved = client.put(
         f"/v1/assets/{asset}/draft",
@@ -446,6 +457,7 @@ def test_publish_uses_saved_draft_and_rejects_stale_draft_revision():
     )
 
     assert saved.status_code == 200
+    assert grant.status_code == 200
     assert published.status_code == 200
     assert published.json()["policy_version"] != 0
     assert stale.status_code == 409
@@ -538,6 +550,11 @@ def test_non_admin_cannot_read_catalog_or_auth_settings():
 def test_asset_owner_can_delegate_read_without_edit_or_publish():
     client = _client()
     asset = _provision_owned_asset(client)
+    grant = client.put(
+        f"/v1/assets/{asset}/grants",
+        json={"grants": [{"principal": "group:asset-owners", "capability": "grant"}]},
+        headers=ADMIN_HEADERS,
+    )
     grants = client.put(
         f"/v1/assets/{asset}/grants",
         json={"grants": [{"principal": "outsider", "capability": "read"}]},
@@ -553,6 +570,7 @@ def test_asset_owner_can_delegate_read_without_edit_or_publish():
         headers=_bearer("outsider-token"),
     )
 
+    assert grant.status_code == 200
     assert grants.status_code == 200
     assert grants.json()["grants"] == [{"principal": "outsider", "capability": "read"}]
     assert inventory.status_code == 200
@@ -566,6 +584,11 @@ def test_asset_owner_can_delegate_read_without_edit_or_publish():
 def test_asset_owner_cannot_delegate_grant_management():
     client = _client()
     asset = _provision_owned_asset(client)
+    grant = client.put(
+        f"/v1/assets/{asset}/grants",
+        json={"grants": [{"principal": "group:asset-owners", "capability": "grant"}]},
+        headers=ADMIN_HEADERS,
+    )
 
     response = client.put(
         f"/v1/assets/{asset}/grants",
@@ -573,6 +596,7 @@ def test_asset_owner_cannot_delegate_grant_management():
         headers=_bearer("owner-token"),
     )
 
+    assert grant.status_code == 200
     assert response.status_code == 403
     assert "Only platform admins" in response.json()["detail"]
 

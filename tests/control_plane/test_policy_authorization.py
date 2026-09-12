@@ -63,6 +63,21 @@ def test_outsider_cannot_replace_policy_rules(db_session):
         )
 
 
+def test_asset_owner_does_not_receive_publish_or_grant_implicitly(db_session):
+    service, asset_id = _workspace_asset(db_session)
+    service.replace_asset_owners(asset_id, ["user:alice@example.com"])
+    owner = ControlPlaneActor(
+        principal="user:alice@example.com",
+        groups=(),
+        platform_admin=False,
+    )
+
+    with pytest.raises(AuthorizationFailure, match="lacks asset capability 'publish'"):
+        service.ensure_asset_capability(asset_id, owner, "publish")
+    with pytest.raises(AuthorizationFailure, match="lacks asset capability 'grant'"):
+        service.ensure_asset_capability(asset_id, owner, "grant")
+
+
 def test_platform_admin_can_replace_policy_rules_without_asset_owner(db_session):
     service, asset_id = _workspace_asset(db_session)
 

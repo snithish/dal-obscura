@@ -545,10 +545,10 @@ do not call the release complete without those observations.
 - Commit: `e654165`.
 - Behavior and touched modules: adds an `asset_grants` migration and repository
   support for explicit `read`, `edit`, `publish`, and `grant` capabilities.
-  Asset owners retain broad compatibility capabilities; owners can delegate a
-  narrower read grant through the new authenticated grants API. Inventory uses
-  a filtered owner/grant join, policy editing requires `edit`, publication
-  requires `publish`, and grant management requires `grant`.
+  Asset owners retain implicit `read` and `edit` scope only; publication and
+  grant management require explicit capabilities. Inventory uses a filtered
+  owner/grant join, policy editing requires `edit`, publication requires
+  `publish`, and grant management requires `grant`.
 - Prerequisites/review authorization: additive authorization hardening on the
   reviewed single-workspace model; no pickle path changed.
 - Red test and actual failure: an authenticated outsider could not be safely
@@ -559,10 +559,8 @@ do not call the release complete without those observations.
 - Browser/API/PostgreSQL/consumer evidence: in-process FastAPI and SQLite only;
   Postgres migration and browser grant-management probes remain open.
 - Manual/independent review: none.
-- Remaining limitations/blocker: tenant/cell grants, management capability
-  separation, drafts, evaluations, operations, and audit are still incomplete.
-  Existing owner rows remain an intentional compatibility broad grant until
-  migration tooling can make them explicit.
+- Remaining limitations/blocker: tenant/cell grants, PostgreSQL/browser
+  acceptance, drafts, evaluations, operations, and audit evidence remain open.
 - Next action: implement the OIDC authorization-code/PKCE transaction and
   connect the UI to the scoped asset API.
 
