@@ -18,6 +18,10 @@
 .consumer-card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .consumer-card h3 { margin: 0; }
 .consumer-card pre { margin: 12px 0 0; padding: 12px; overflow: auto; background: #f0f4ef; border: 1px solid #d7dcd5; border-radius: 4px; font: 12px/1.55 "SFMono-Regular", Consolas, monospace; white-space: pre-wrap; }
+.card-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.diagnostic { margin: 7px 0 0; font-size: 12px; }
+.diagnostic.ready { color: #1c725f; }
+.diagnostic.unavailable { color: #a13d38; }
 @media (max-width: 760px) { .consumer-grid { grid-template-columns: 1fr; } }
 @media (max-width: 1120px) { .studio { grid-template-columns: 1fr 1fr; } .result-panel { grid-column: 1 / -1; border-left: 0 !important; border-top: 1px solid #d7dcd5; } } @media (max-width: 760px) { .app-shell { display: block; } .sidebar { padding: 16px; } .brand { padding: 0 0 16px; } nav { display: flex; overflow-x: auto; } .nav-item { white-space: nowrap; } .sidebar-foot { display: none; } main { padding: 24px 18px 50px; } .topbar { align-items: start; } .actor { display: none; } .studio { display: block; } .studio > section + section { border-left: 0; border-top: 1px solid #d7dcd5; } .asset-summary { align-items: start; gap: 10px; flex-direction: column; } .asset-tabs { gap: 16px; overflow-x: auto; } }
 

@@ -134,6 +134,15 @@ export type Catalog = {
   options: Record<string, unknown>;
 };
 
+export type CatalogDiagnostic = {
+  catalog: string;
+  status: "ready" | "unavailable";
+  message: string;
+  checked_at: string;
+  table_count?: number;
+  sample_tables?: string[];
+};
+
 export type AssetGrant = {
   principal: string;
   capability: "read" | "edit" | "publish" | "grant";
@@ -244,6 +253,7 @@ export const controlPlane = {
     }),
   listCatalogs: () => request<Catalog[]>("/v1/catalogs"),
   discoverCatalogTables: (name: string) => request<{ catalog: string; tables: Array<Record<string, unknown>> }>(`/v1/catalogs/${encodeURIComponent(name)}/tables`),
+  diagnoseCatalog: (name: string) => request<CatalogDiagnostic>(`/v1/catalogs/${encodeURIComponent(name)}/diagnostics`),
   getRuntimeSettings: () => request<RuntimeSettings | null>("/v1/settings/runtime"),
   getAuthProviders: () => request<AuthProvider[]>("/v1/settings/auth-providers"),
   getSummary: () => request<WorkspaceSummary>("/v1/workspace/summary"),

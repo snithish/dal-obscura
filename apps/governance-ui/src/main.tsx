@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import type { Asset, AssetGrant, AuditEvent, AuthProvider, Catalog, Mask, PolicyRule, PolicyVersion, Preview, RuntimeSettings, SchemaNode, Session, UiAuthConfig, WorkspaceObservations, WorkspaceSummary } from "./api";
+import type { Asset, AssetGrant, AuditEvent, AuthProvider, Catalog, CatalogDiagnostic, Mask, PolicyRule, PolicyVersion, Preview, RuntimeSettings, SchemaNode, Session, UiAuthConfig, WorkspaceObservations, WorkspaceSummary } from "./api";
 import { controlPlane } from "./api";
 import { demoAsset, demoRules } from "./fixtures";
 import "./styles.css";
@@ -388,6 +388,8 @@ function ConnectionsView({ catalogs, onReload }: { catalogs: Catalog[]; onReload
   const [message, setMessage] = useState("");
   const [tables, setTables] = useState<Array<Record<string, unknown>>>([]);
   const [discoveredCatalog, setDiscoveredCatalog] = useState("");
+  const [diagnostics, setDiagnostics] = useState<Record<string, CatalogDiagnostic>>({});
+  const [diagnosing, setDiagnosing] = useState("");
   async function save() {
     if (!name.trim() || !uri.trim()) return setMessage("Connection name and catalog URI are required.");
     try { await controlPlane.saveCatalog(name.trim(), { type: "sql", uri: uri.trim() }); setMessage("Connection saved. Discovery remains bounded to this configured catalog."); setName(""); setUri(""); onReload(); } catch { setMessage("Connection was rejected by the control plane."); }
@@ -395,13 +397,24 @@ function ConnectionsView({ catalogs, onReload }: { catalogs: Catalog[]; onReload
   async function discover(catalog: string) {
     try { setDiscoveredCatalog(catalog); setTables((await controlPlane.discoverCatalogTables(catalog)).tables); setMessage(`Loaded table inventory for ${catalog}.`); } catch { setTables([]); setMessage("Discovery failed; source credentials and endpoint policy were not changed."); }
   }
+  async function diagnose(catalog: string) {
+    setDiagnosing(catalog);
+    try {
+      const result = await controlPlane.diagnoseCatalog(catalog);
+      setDiagnostics((current) => ({ ...current, [catalog]: result }));
+    } catch {
+      setDiagnostics((current) => ({ ...current, [catalog]: { catalog, status: "unavailable", message: "Diagnostic request failed", checked_at: new Date().toISOString() } }));
+    } finally {
+      setDiagnosing("");
+    }
+  }
   async function govern(catalog: string, table: Record<string, unknown>) {
     const target = String(table.target ?? table.name ?? "").trim();
     const identifier = String(table.table_identifier ?? target).trim();
     if (!target || !identifier) return setMessage("The discovered table has no safe identifier.");
     try { await controlPlane.saveAsset(catalog, target, identifier); setMessage(`Governed asset ${target} registered. Assign owners and author a policy in Assets.`); await discover(catalog); } catch { setMessage("Asset registration was rejected; the source table was not changed."); }
   }
-  return <section className="management-view"><div className="management-head"><div><span className="eyebrow">CONNECTIONS</span><h2>Iceberg catalogs</h2><p className="muted">Register only the supported Iceberg catalog adapter. Credentials stay in server configuration and are never rendered.</p></div><button className="secondary" onClick={onReload}>Refresh</button></div><div className="form-card"><h3>Add or update catalog</h3><div className="form-grid"><label>Name<input value={name} onChange={(event) => setName(event.target.value)} placeholder="analytics" /></label><label>SQL catalog URI<input value={uri} onChange={(event) => setUri(event.target.value)} placeholder="postgresql+psycopg://…" type="text" /></label></div><button className="primary" onClick={() => void save()}>Save connection</button>{message && <p className="notice">{message}</p>}</div>{catalogs.length ? <div className="card-list">{catalogs.map((catalog) => <article className="management-card" key={catalog.id}><div><h3>{catalog.name}</h3><p className="muted">Iceberg catalog adapter</p></div><button className="secondary" onClick={() => void discover(catalog.name)}>Discover tables</button></article>)}</div> : <div className="empty-result"><strong>No catalogs configured</strong><p>Connect an Iceberg catalog to begin asset onboarding.</p></div>}{tables.length > 0 && <div className="table-wrap"><table><thead><tr><th>Table</th><th>Backend</th><th>Governed</th><th>Action</th></tr></thead><tbody>{tables.map((table, index) => <tr key={String(table.name ?? index)}><td>{String(table.name ?? "Unknown")}</td><td>{String(table.backend ?? "iceberg")}</td><td>{table.governed ? "Yes" : "No"}</td><td>{table.governed ? <span className="pill">Registered</span> : <button className="secondary compact" onClick={() => void govern(discoveredCatalog, table)}>Govern table</button>}</td></tr>)}</tbody></table></div>}</section>;
+  return <section className="management-view"><div className="management-head"><div><span className="eyebrow">CONNECTIONS</span><h2>Iceberg catalogs</h2><p className="muted">Register only the supported Iceberg catalog adapter. Credentials stay in server configuration and are never rendered.</p></div><button className="secondary" onClick={onReload}>Refresh</button></div><div className="form-card"><h3>Add or update catalog</h3><div className="form-grid"><label>Name<input value={name} onChange={(event) => setName(event.target.value)} placeholder="analytics" /></label><label>SQL catalog URI<input value={uri} onChange={(event) => setUri(event.target.value)} placeholder="postgresql+psycopg://…" type="text" /></label></div><button className="primary" onClick={() => void save()}>Save connection</button>{message && <p className="notice">{message}</p>}</div>{catalogs.length ? <div className="card-list">{catalogs.map((catalog) => { const diagnostic = diagnostics[catalog.name]; return <article className="management-card" key={catalog.id}><div><h3>{catalog.name}</h3><p className="muted">Iceberg catalog adapter</p>{diagnostic && <p className={diagnostic.status === "ready" ? "diagnostic ready" : "diagnostic unavailable"} role="status">{diagnostic.message}{diagnostic.table_count !== undefined ? ` · ${diagnostic.table_count} tables` : ""}</p>}</div><div className="card-actions"><button className="secondary" disabled={diagnosing === catalog.name} onClick={() => void diagnose(catalog.name)}>{diagnosing === catalog.name ? "Checking…" : "Check connection"}</button><button className="secondary" onClick={() => void discover(catalog.name)}>Discover tables</button></div></article>; })}</div> : <div className="empty-result"><strong>No catalogs configured</strong><p>Connect an Iceberg catalog to begin asset onboarding.</p></div>}{tables.length > 0 && <div className="table-wrap"><table><thead><tr><th>Table</th><th>Backend</th><th>Governed</th><th>Action</th></tr></thead><tbody>{tables.map((table, index) => <tr key={String(table.name ?? index)}><td>{String(table.name ?? "Unknown")}</td><td>{String(table.backend ?? "iceberg")}</td><td>{table.governed ? "Yes" : "No"}</td><td>{table.governed ? <span className="pill">Registered</span> : <button className="secondary compact" onClick={() => void govern(discoveredCatalog, table)}>Govern table</button>}</td></tr>)}</tbody></table></div>}</section>;
 }
 
 function SettingsView({ runtime, providers, onReload }: { runtime?: RuntimeSettings | null; providers: AuthProvider[]; onReload: () => void }) {
