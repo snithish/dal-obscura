@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `5420249`.
+Implementation follow-up through `5c0f89d`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -50,7 +50,8 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   paths through migration `20260912_0011`, and admitted identities are carried into
   immutable manifests and checked before data-plane planning. Provider-derived IDs,
   path uniqueness migration for legacy rows, collection-path identity, and the full
-  evolution policy remain open. Review tokens bind the persisted admitted-schema
+  legacy identity backfill now runs for existing rows. Provider-derived IDs,
+  collection-path identity, and the full evolution policy remain open. Review tokens bind the persisted admitted-schema
   digest in addition to the live Iceberg digest.
 - X07 configuration/secrets/IO: **implementing**; nested dynamic class-loader options
   are rejected. Typed provider configs, shared secret resolution, and IO enforcement
@@ -263,6 +264,22 @@ return the stable redacted validation response at the HTTP boundary.
 - Pickle compatibility: unchanged.
 - Next permitted packet: PostgreSQL X03 barrier evidence, then X06 collection
   identity and explicit schema-evolution policy tests.
+
+### X06 legacy identity migration — `5c0f89d`
+
+- State: implementing.
+- Behavior: migration `20260912_0013` backfills deterministic `legacy:` field IDs
+  and canonical single-name paths for rows created before schema identity columns
+  existed. The preceding asset revision migration retains its non-null server
+  default so SQLite and PostgreSQL upgrades preserve existing asset rows.
+- Green evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync
+  pytest tests/common/config_store/test_schema_migrations.py -q` passed (7);
+  Ruff passed on migration and test paths.
+- Remaining gaps: provider-derived IDs for all collection nodes, typed collection
+  path encoding, and explicit rename/addition evolution policy remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: PostgreSQL X03 barrier evidence, then X06 collection
+  identity and schema-evolution policy tests.
 
 ## Latest evidence entry
 
