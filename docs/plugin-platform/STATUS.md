@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `7fcf6b9`.
+Implementation follow-up through `101fd00`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -176,6 +176,21 @@ return the stable redacted validation response at the HTTP boundary.
   evidence remain open.
 - Next permitted packet: X03 PostgreSQL CAS/barrier slice, then X06 evolution
   rules.
+
+### X03 publication rollback evidence — `101fd00`
+
+- State: implementing.
+- Behavior: an injected failure after the initial publication pointer update
+  rolls back the immutable publication and audit event together; no partial
+  generation remains visible to a retry.
+- Green evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync
+  pytest tests/interfaces/control_plane/test_policy_versions_api.py::test_publication_failure_after_activation_rolls_back_audit_and_generation -q`
+  passed; Ruff passed on the changed test.
+- Scope: SQLite transaction evidence only. PostgreSQL barrier interleavings,
+  idempotency replay after a lost response, and multi-process grant/binding
+  races remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: PostgreSQL X03 barriers, then X06 evolution rules.
 
 ### X22 governance UI CI gate — `7fcf6b9`
 
