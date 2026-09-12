@@ -27,6 +27,7 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
         "/readyz",
         "/v1/assets",
         "/v1/assets/{asset_id}",
+        "/v1/assets/{asset_id}/draft",
         "/v1/assets/{asset_id}/owners",
         "/v1/assets/{asset_id}/grants",
         "/v1/assets/{asset_id}/policy-preview",

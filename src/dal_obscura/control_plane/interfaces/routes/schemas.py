@@ -155,6 +155,13 @@ class PolicyRulesRequest(StrictModel):
     rules: list[dict[str, Any]]
 
 
+class PolicyDraftRequest(StrictModel):
+    """Revision-preconditioned policy draft replacement."""
+
+    expected_revision: int = Field(ge=0)
+    rules: list[dict[str, Any]]
+
+
 class PolicyPreviewRequest(StrictModel):
     """Policy-preview request for a candidate principal.
 

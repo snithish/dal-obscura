@@ -23,7 +23,11 @@ from fastapi import Cookie, Header, HTTPException, Request
 from sqlalchemy.orm import Session, sessionmaker
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
-from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
+from dal_obscura.control_plane.application.errors import (
+    AuthorizationFailure,
+    PublicationConflictError,
+    ValidationFailure,
+)
 from dal_obscura.control_plane.application.provisioning import ProvisioningService
 from dal_obscura.control_plane.infrastructure.session_store import (
     BrowserSessionStore,
@@ -214,6 +218,9 @@ class ControlPlaneDeps:
             except AuthorizationFailure as exc:
                 session.rollback()
                 raise HTTPException(status_code=403, detail=str(exc)) from exc
+            except PublicationConflictError as exc:
+                session.rollback()
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
             except LookupError as exc:
                 session.rollback()
                 raise HTTPException(status_code=404, detail=str(exc)) from exc

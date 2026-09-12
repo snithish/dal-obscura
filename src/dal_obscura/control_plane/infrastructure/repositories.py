@@ -14,6 +14,7 @@ from dal_obscura.common.config_store.orm import (
     ActivePublishedAssetRecord,
     AssetGrantRecord,
     AssetOwnerRecord,
+    AssetPolicyDraftRecord,
     AssetRecord,
     AssetSchemaFieldRecord,
     AuthProviderRecord,
@@ -27,6 +28,7 @@ from dal_obscura.common.config_store.orm import (
     PublishedCatalogRecord,
     PublishedCellRuntimeRecord,
     TenantRecord,
+    utcnow,
 )
 from dal_obscura.control_plane.application.errors import PublicationConflictError
 from dal_obscura.control_plane.domain.models import (
@@ -927,6 +929,88 @@ class PublicationStore:
                 .order_by(PolicyRuleRecord.ordinal)
             )
         ]
+
+    def get_asset_policy_draft(
+        self,
+        *,
+        asset_id: UUID,
+        author_principal: str,
+    ) -> dict[str, object] | None:
+        record = self._session.scalar(
+            select(AssetPolicyDraftRecord).where(
+                AssetPolicyDraftRecord.asset_id == asset_id,
+                AssetPolicyDraftRecord.author_principal == author_principal,
+                AssetPolicyDraftRecord.discarded_at.is_(None),
+            )
+        )
+        if record is None:
+            return None
+        return {
+            "id": str(record.id),
+            "asset_id": str(record.asset_id),
+            "author_principal": record.author_principal,
+            "revision": record.revision,
+            "base_policy_version": record.base_policy_version,
+            "rules": [dict(rule) for rule in record.rules_json],
+            "content_hash": record.content_hash,
+            "created_at": _isoformat(record.created_at),
+            "updated_at": _isoformat(record.updated_at),
+        }
+
+    def save_asset_policy_draft(
+        self,
+        *,
+        asset_id: UUID,
+        author_principal: str,
+        expected_revision: int,
+        rules: list[dict[str, object]],
+        content_hash: str,
+        base_policy_version: int,
+    ) -> dict[str, object]:
+        record = self._session.scalar(
+            select(AssetPolicyDraftRecord).where(
+                AssetPolicyDraftRecord.asset_id == asset_id,
+                AssetPolicyDraftRecord.author_principal == author_principal,
+                AssetPolicyDraftRecord.discarded_at.is_(None),
+            )
+        )
+        current_revision = 0 if record is None else record.revision
+        if current_revision != expected_revision:
+            raise PublicationConflictError(
+                "Policy draft revision changed "
+                f"(expected {expected_revision}, current {current_revision})."
+            )
+        now = utcnow()
+        if record is None:
+            record = AssetPolicyDraftRecord(
+                id=uuid4(),
+                asset_id=asset_id,
+                author_principal=author_principal,
+                revision=1,
+                base_policy_version=base_policy_version,
+                rules_json=[dict(rule) for rule in rules],
+                content_hash=content_hash,
+                created_at=now,
+                updated_at=now,
+            )
+            self._session.add(record)
+        else:
+            record.revision += 1
+            record.rules_json = [dict(rule) for rule in rules]
+            record.content_hash = content_hash
+            record.updated_at = now
+        self._session.flush()
+        return {
+            "id": str(record.id),
+            "asset_id": str(record.asset_id),
+            "author_principal": record.author_principal,
+            "revision": record.revision,
+            "base_policy_version": record.base_policy_version,
+            "rules": [dict(rule) for rule in record.rules_json],
+            "content_hash": record.content_hash,
+            "created_at": _isoformat(record.created_at),
+            "updated_at": _isoformat(record.updated_at),
+        }
 
     def list_auth_providers(self, cell_id: UUID) -> list[dict[str, object]]:
         return [

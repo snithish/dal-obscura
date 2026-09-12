@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 from dal_obscura.control_plane.interfaces.routes.schemas import (
+    PolicyDraftRequest,
     PolicyPreviewRequest,
     PolicyRulesRequest,
 )
@@ -30,6 +31,28 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
     """
 
     api = APIRouter()
+
+    @api.get("/v1/assets/{asset_id}/draft")
+    def get_policy_draft(
+        asset_id: UUID,
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> object:
+        return deps.with_service(lambda service: service.get_policy_draft(asset_id, actor))
+
+    @api.put("/v1/assets/{asset_id}/draft")
+    def save_policy_draft(
+        asset_id: UUID,
+        request: PolicyDraftRequest,
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> object:
+        return deps.with_service(
+            lambda service: service.save_policy_draft(
+                asset_id,
+                actor,
+                expected_revision=request.expected_revision,
+                rules=request.rules,
+            )
+        )
 
     @api.get("/v1/assets/{asset_id}/policy-rules")
     def list_policy_rules(

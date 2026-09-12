@@ -29,6 +29,16 @@ export type PolicyRule = {
   when?: Record<string, string | string[]>;
 };
 
+export type PolicyDraft = {
+  id: string | null;
+  asset_id: string;
+  author_principal: string;
+  revision: number;
+  base_policy_version: number;
+  rules: PolicyRule[];
+  content_hash: string;
+};
+
 export type Preview = {
   allowed_columns: string[];
   masks: Record<string, Mask>;
@@ -91,6 +101,12 @@ export const controlPlane = {
   listAssets: async () => (await request<Asset[]>("/v1/assets")).map(normalizeAsset),
   getAsset: async (assetId: string) => normalizeAsset(await request<Asset>(`/v1/assets/${assetId}`)),
   listRules: (assetId: string) => request<PolicyRule[]>(`/v1/assets/${assetId}/policy-rules`),
+  getDraft: (assetId: string) => request<PolicyDraft>(`/v1/assets/${assetId}/draft`),
+  saveDraft: (assetId: string, expectedRevision: number, rules: PolicyRule[]) =>
+    request<PolicyDraft>(`/v1/assets/${assetId}/draft`, {
+      method: "PUT",
+      body: JSON.stringify({ expected_revision: expectedRevision, rules }),
+    }),
   saveRules: (assetId: string, rules: PolicyRule[]) =>
     request(`/v1/assets/${assetId}/policy-rules`, {
       method: "PUT",

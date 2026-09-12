@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from dal_obscura.control_plane.application import (
     asset_service,
     catalog_service,
+    draft_service,
     policy_service,
     policy_version_service,
     workspace_service,
@@ -278,6 +279,25 @@ class ProvisioningService:
 
     def list_asset_grants(self, asset_id: UUID) -> list[dict[str, str]]:
         return asset_service.list_asset_grants(self._store, asset_id)
+
+    def get_policy_draft(self, asset_id: UUID, actor: ControlPlaneActor) -> dict[str, object]:
+        return draft_service.get_policy_draft(self._store, asset_id, actor)
+
+    def save_policy_draft(
+        self,
+        asset_id: UUID,
+        actor: ControlPlaneActor,
+        *,
+        expected_revision: int,
+        rules: list[dict[str, Any]],
+    ) -> dict[str, object]:
+        return draft_service.save_policy_draft(
+            self._store,
+            asset_id,
+            actor,
+            expected_revision=expected_revision,
+            rules=rules,
+        )
 
     def replace_asset_grants(
         self,

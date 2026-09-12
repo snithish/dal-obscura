@@ -241,6 +241,27 @@ class LoginTransactionRecord(Base):
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class AssetPolicyDraftRecord(Base):
+    """Revisioned personal policy draft for one asset."""
+
+    __tablename__ = "asset_policy_drafts"
+    __table_args__ = (
+        UniqueConstraint("asset_id", "author_principal"),
+        Index("ix_asset_policy_drafts_author", "author_principal"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    asset_id: Mapped[UUID] = mapped_column(ForeignKey("assets.id"), nullable=False)
+    author_principal: Mapped[str] = mapped_column(Text, nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    base_policy_version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    rules_json: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    discarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class ConfigPublicationRecord(Base):
     """Immutable publication manifest row."""
 

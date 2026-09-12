@@ -23,6 +23,7 @@ function App() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [asset, setAsset] = useState<Asset | null>(null);
   const [rules, setRules] = useState<PolicyRule[]>([]);
+  const [draftRevision, setDraftRevision] = useState(0);
   const [selectedRule, setSelectedRule] = useState(0);
   const [selectedField, setSelectedField] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("saved");
@@ -89,9 +90,11 @@ function App() {
   async function loadAsset(assetId: string, knownAssets = assets) {
     try {
       const [fullAsset, loadedRules] = await Promise.all([controlPlane.getAsset(assetId), controlPlane.listRules(assetId)]);
-      setAssets(knownAssets); setAsset(fullAsset); setRules(loadedRules); setSelectedRule(0);
+      const draft = isDemo ? null : await controlPlane.getDraft(assetId);
+      const effectiveRules = draft?.rules ?? loadedRules;
+      setAssets(knownAssets); setAsset(fullAsset); setRules(effectiveRules); setDraftRevision(draft?.revision ?? 0); setSelectedRule(0);
       setSelectedField(fullAsset.schema_fields[0]?.name ?? ""); setPreview(null); setSaveState("saved");
-      setNotice(loadedRules.length ? "Loaded saved policy draft." : "No policy draft exists yet. Add a rule to begin authoring.");
+      setNotice(effectiveRules.length ? "Loaded your policy draft." : "No policy draft exists yet. Add a rule to begin authoring.");
     } catch {
       setNotice("Could not load this asset. Your previous editor state remains unchanged.");
     }
@@ -131,7 +134,10 @@ function App() {
     if (!asset) return;
     setSaveState("saving");
     try {
-      if (!isDemo) await controlPlane.saveRules(asset.id, rules);
+      if (!isDemo) {
+        const saved = await controlPlane.saveDraft(asset.id, draftRevision, rules);
+        setDraftRevision(saved.revision);
+      }
       setSaveState("saved"); setNotice(isDemo ? "Demo draft resets when this page closes." : "Policy draft saved to the control plane.");
     } catch {
       setSaveState("failed"); setNotice("Save failed. The unsaved draft remains in this browser.");
