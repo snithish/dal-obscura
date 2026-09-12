@@ -6,6 +6,7 @@ import json
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from itertools import islice
 
 import pyarrow as pa
 from dal_obscura_plugin_api import (
@@ -117,6 +118,8 @@ def run_format_checks(
         plugin_id=descriptor.plugin_id,
     )
     try:
+        if context.deadline <= datetime.now(timezone.utc):
+            raise TimeoutError("execution context deadline has expired")
         check_capabilities(
             descriptor.capabilities,
             required_capabilities,
@@ -125,23 +128,33 @@ def run_format_checks(
         check_schema_descriptor(schema, result=result)
         if max_tasks <= 0:
             raise ValueError("max_tasks must be positive")
-        tasks = list(
-            plugin.plan(
-                handle,
-                schema,
-                context,
-                projection=projection,
-                row_filter=row_filter,
-                max_tasks=max_tasks,
-            )
+        planned = plugin.plan(
+            handle,
+            schema,
+            context,
+            projection=projection,
+            row_filter=row_filter,
+            max_tasks=max_tasks,
         )
+        tasks = list(islice(planned, max_tasks + 1))
         if len(tasks) > max_tasks:
             raise ValueError("format returned more tasks than requested")
         result.record_pass("bounded_plan")
         for task in tasks:
             output_schema, batches = plugin.execute(task, context)
+            if output_schema != schema.arrow_schema:
+                raise ValueError("format output schema differs from the declared schema")
             check_record_batches(output_schema, list(batches), result=result)
         result.record_pass("execution")
     except Exception as exc:
         result.record_failure("format", str(exc))
+    finally:
+        close = getattr(plugin, "close", None)
+        if callable(close):
+            try:
+                close()
+            except Exception as exc:
+                result.record_failure("cleanup", str(exc))
+        else:
+            result.record_pass("cleanup")
     return result

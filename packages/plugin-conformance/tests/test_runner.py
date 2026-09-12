@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import cast
 
 import pyarrow as pa
@@ -35,7 +35,7 @@ def _descriptor() -> PluginDescriptor:
 
 def _context() -> ExecutionContext:
     return ExecutionContext(
-        deadline=datetime.now(timezone.utc),
+        deadline=datetime.now(timezone.utc) + timedelta(minutes=1),
         correlation_id="fixture",
     )
 
@@ -103,3 +103,46 @@ def test_runner_returns_machine_readable_passing_result():
 
     assert result.to_dict()["status"] == "passed"
     assert result.checks["bounded_plan"] == "passed"
+
+
+class _EndlessFormat(_ConformingFormat):
+    def plan(self, handle, schema, context, *, projection, row_filter, max_tasks):
+        del handle, context, projection, row_filter, max_tasks
+        while True:
+            yield schema
+
+
+class _MutatingFormat(_ConformingFormat):
+    def execute(self, task, context):
+        del context
+        schema = pa.schema([pa.field("secret", pa.string())])
+        return schema, [pa.RecordBatch.from_pylist([{"secret": "x"}], schema=schema)]
+
+
+def test_runner_rejects_unbounded_plan_and_output_schema_mutation():
+    table = pa.table({"id": [1]})
+    schema = SchemaDescriptor(
+        schema_version=1,
+        fingerprint="0" * 64,
+        arrow_schema=table.schema,
+    )
+    handle = TableHandle(
+        catalog_plugin_id="fixture",
+        catalog_instance_id="fixture",
+        catalog_revision=1,
+        identifier=TableIdentifier(namespace=("default",), name="users"),
+        format_plugin_id="fixture",
+        handle_version=1,
+    )
+
+    endless = run_format_checks(
+        cast(TableFormatPlugin, _EndlessFormat()), handle, schema, _context(), max_tasks=2
+    )
+    mutated = run_format_checks(
+        cast(TableFormatPlugin, _MutatingFormat()), handle, schema, _context()
+    )
+
+    assert endless.to_dict()["status"] == "failed"
+    assert any("more tasks" in failure for failure in endless.failures)
+    assert mutated.to_dict()["status"] == "failed"
+    assert any("output schema" in failure for failure in mutated.failures)
