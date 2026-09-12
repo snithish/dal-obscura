@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `e3160f7`.
+Implementation follow-up through `5e640bc`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -39,7 +39,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   mutations with publication, and binding/access writes expose an optional
   monotonic asset revision precondition that returns 409 on stale writers.
   PostgreSQL barrier evidence, full transaction rollback/idempotency, and
-  multi-process grant/binding evidence remain open.
+  multi-process grant/binding evidence remain open. Delegated grant mutations now
+  lock the asset before checking grant-manager authority, eliminating a stale
+  authorization snapshot between revocation and replacement.
 - X04 canonical evaluation: **implemented-unverified**; resolved mask values now
   flow from canonical preview and an unmatched-principal regression passes.
 - X05 canonical bounded schemas: **implemented-unverified**; canonical Arrow schema
@@ -69,11 +71,15 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   enforcement, and production secret-provider lifecycle evidence remain open.
   Storage paths now canonicalize local roots and URI authorities/decoded segments
   before every root check; credential-bearing and query/fragment roots are rejected.
+  Catalog option payloads are also bounded by depth, node count, collection width,
+  key length, string length, and JSON-compatible value types before provider calls.
 - X08 budgets and atomic reload: **implementing**; discovery now bounds provider
   iterators before materialization and checks cancellation/deadline per item while
   retaining deque traversal. Synthetic evaluation now bounds encoded fixture bytes
   before provider work. Plugin admission exposes build-then-swap reload snapshots;
-  provider-specific transport timeouts and multi-worker capacity remain open.
+  catalog registries build complete candidates before a locked metadata/adapter swap,
+  so failed reloads cannot expose mixed generations. Provider-specific transport
+  timeouts and multi-worker capacity remain open.
 - X09 UI lifecycle: **implemented-unverified**; initial-load epoch and synchronous
   logout fencing plus stale history/preview/review/publish response checks are fixed.
   Deferred browser tests and full operation-state coverage remain open.
@@ -120,8 +126,10 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   now provides nested Arrow goldens, capability-negative checks, bounded plan
   and output-schema validation, explicit cancellation checks, cleanup proof,
   optional expected-task coverage validation, skip semantics, and machine-readable
-  results. Deliberately bad fixture plugins, provider/Flight/consumer lanes, and
-  external distribution evidence remain open.
+  results. Output validation now consumes batches incrementally with fixed batch
+  and row budgets, and cancellation is checked between planned tasks. Deliberately
+  bad fixture plugins, provider/Flight/consumer lanes, and external distribution
+  evidence remain open.
 - X16 REST Iceberg qualification: **not-started**.
 - X17 independent manifest/Parquet plugin: **not-started**.
 - X18 consumer qualification: **not-started**.
@@ -1116,6 +1124,68 @@ uv run --no-sync dal-obscura-migrate upgrade`, which reported
 `config-store schema upgraded to head`. Direct sandbox HTTP probing is blocked
 by the local network boundary; no production readiness claim is made from the
 running-process probe.
+
+### X03 delegated grant authorization lock — `88704f6`
+
+- State: implementing.
+- Behavior: delegated grant-manager authorization now takes the publication asset
+  row lock before reading current authority or replacing the full grant list. The
+  authorization snapshot and revisioned write therefore share one transaction
+  generation, preventing a concurrent revocation from being bypassed.
+- Green evidence: `tests/control_plane/test_asset_grant_authorization.py` and
+  `tests/interfaces/control_plane/test_assets_api.py` passed (16); Ruff, Ty, and
+  `git diff --check` passed.
+- Remaining gaps: PostgreSQL barrier/process evidence and full idempotency/recovery
+  drills remain open. Pickle compatibility is unchanged.
+
+### X07 bounded catalog option payloads — `b969dba`
+
+- State: implementing.
+- Behavior: catalog options are validated as bounded JSON before secret resolution
+  or provider calls, with fixed limits for nesting, node count, object keys,
+  collection width, key length, and string length. Unsupported runtime values fail
+  closed.
+- Green evidence: catalog API tests passed (12), Ruff, Ty, and `git diff --check`
+  passed.
+- Remaining gaps: typed per-provider option schemas, DNS/redirect enforcement, and
+  production secret-provider lifecycle evidence remain open. Pickle compatibility
+  is unchanged.
+
+### X08 atomic catalog registry reload — `5013f99`
+
+- State: implementing.
+- Behavior: catalog adapters are fully constructed before a locked two-field swap of
+  executable catalogs and configuration metadata. A failed factory leaves the prior
+  generation intact; readers take the same lock when observing or resolving it.
+- Green evidence: catalog registry tests passed (8), Ruff, Ty, and
+  `git diff --check` passed.
+- Remaining gaps: provider transport cancellation/timeouts, multi-worker capacity,
+  and external registry-generation evidence remain open.
+
+### X12 static wheel descriptor boundary — `5e640bc`
+
+- State: implementing.
+- Behavior: qualified distributions may ship a bounded `dal_obscura-plugin.json`
+  descriptor. The loader reads metadata without importing factory code, binds kind
+  and plugin ID to the entry point, derives distribution provenance from the wheel,
+  rejects unknown fields/unreadable or oversized files, and preserves fail-closed
+  behavior for malformed descriptors.
+- Green evidence: `tests/plugin_platform/test_registry.py` (16 passed), Ruff, Ty,
+  and `git diff --check` passed.
+- Remaining gaps: generated lock-file workflow, clean-wheel artifact provenance,
+  external SDK factories, and live provider/browser/consumer gates remain open.
+
+### X15 bounded conformance output — `ab32d53`
+
+- State: implementing.
+- Behavior: public conformance checks consume record batches incrementally and stop
+  at fixed batch and row budgets instead of materializing an unbounded iterable.
+  Format execution checks cancellation before every task, with regression coverage
+  for cancellation between tasks.
+- Green evidence: package conformance tests passed (10); package-only Ruff, Ty, and
+  `git diff --check` passed.
+- Remaining gaps: deliberately incorrect provider fixtures, conforming Iceberg and
+  consumer lanes, and external wheel evidence remain open.
 
 ## Latest evidence entry
 
