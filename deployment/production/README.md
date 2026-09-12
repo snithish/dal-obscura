@@ -27,6 +27,9 @@ ingress. Replace every image tag with a verified immutable digest.
    Migrations are explicit and separate from routine service startup.
 5. Start the service processes with
    `docker compose --env-file .env up -d postgres control-plane data-plane ui`.
+   The application processes intentionally do not depend on the migration
+   container; if the schema is missing or stale they fail closed and report the
+   explicit migration command instead of migrating during startup.
 6. Verify `GET /healthz` and `GET /readyz` through the private control-plane
    network, complete the real OIDC login, and run an authenticated synthetic
    Flight read through the TLS ingress before opening customer traffic.

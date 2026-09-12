@@ -77,9 +77,6 @@ services:
       DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_SCOPE: ${DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_SCOPE:-openid profile email}
       DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_JWKS_URL: ${DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_JWKS_URL:-}
     command: ["control-plane"]
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
     expose:
       - "8820"
     networks:
@@ -131,9 +128,6 @@ services:
       - source: client_ca
         target: client-ca.crt
     command: ["data-plane"]
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
     expose:
       - "8815"
       - "8816"
