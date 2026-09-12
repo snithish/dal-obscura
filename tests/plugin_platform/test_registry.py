@@ -5,7 +5,7 @@ from typing import Any, Protocol, cast
 
 import pytest
 
-from dal_obscura.common.plugin_api import PluginAdmissionError, PluginRegistry
+from dal_obscura.common.plugin_api import PluginAdmissionError, PluginDescriptor, PluginRegistry
 
 
 class _Entry(Protocol):
@@ -149,3 +149,23 @@ def test_load_uses_entry_point_captured_by_admitted_generation() -> None:
     entries[:] = [replacement]
 
     assert registry.load("catalog", "iceberg.sql") == {"name": "iceberg.sql"}
+
+
+def test_builtin_registration_is_admitted_without_entry_point_import() -> None:
+    descriptor = PluginDescriptor(
+        kind="catalog",
+        plugin_id="iceberg.sql",
+        api_version="1",
+        config_version=1,
+        distribution="dal-obscura",
+        version="0.1.0",
+    )
+    registry = PluginRegistry(
+        entry_points_fn=lambda: _EntryPoints([]),
+        builtins={("catalog", "iceberg.sql"): (descriptor, {"builtin": True})},
+    )
+
+    admitted = registry.reload()
+
+    assert admitted[("catalog", "iceberg.sql")] == descriptor
+    assert registry.load("catalog", "iceberg.sql") == {"builtin": True}

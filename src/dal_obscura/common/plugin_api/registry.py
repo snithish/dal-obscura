@@ -22,6 +22,7 @@ class PluginAdmissionError(ValueError):
 
 
 FactoryLoader = Callable[[metadata.EntryPoint], object]
+BuiltinRegistration = tuple[PluginDescriptor, object]
 
 
 class PluginRegistry:
@@ -33,17 +34,23 @@ class PluginRegistry:
         allowlist: Mapping[tuple[PluginKind, str], tuple[str, str, str]] | None = None,
         entry_points_fn: Callable[[], metadata.EntryPoints] | None = None,
         factory_loader: FactoryLoader | None = None,
+        builtins: Mapping[tuple[PluginKind, str], BuiltinRegistration] | None = None,
     ) -> None:
         self._allowlist = dict(allowlist or {})
         self._entry_points_fn = entry_points_fn or metadata.entry_points
         self._factory_loader = factory_loader or (lambda entry: entry.load())
+        self._builtins = dict(builtins or {})
+        for key, (descriptor, _) in self._builtins.items():
+            if key != (descriptor.kind, descriptor.plugin_id):
+                raise ValueError("Built-in plugin registration key does not match descriptor")
         self._snapshot: dict[tuple[PluginKind, str], PluginDescriptor] = {}
         self._snapshot_entries: dict[tuple[PluginKind, str], metadata.EntryPoint] = {}
+        self._snapshot_builtins: dict[tuple[PluginKind, str], object] = {}
         self._snapshot_lock = RLock()
 
     def discover(self) -> dict[tuple[PluginKind, str], PluginDescriptor]:
         """Reads entry-point metadata without importing factories."""
-        descriptors, _ = self._discover_with_entries()
+        descriptors, _, _ = self._discover_with_entries()
         return descriptors
 
     def load(self, kind: PluginKind, plugin_id: str) -> object:
@@ -53,6 +60,7 @@ class PluginRegistry:
         key = (kind, plugin_id)
         with self._snapshot_lock:
             entry = self._snapshot_entries.get(key)
+            builtin = self._snapshot_builtins.get(key)
             admitted = key in self._snapshot
         if entry is None and not admitted:
             # Preserve the convenient first-use behavior while still making
@@ -60,18 +68,24 @@ class PluginRegistry:
             self.reload()
             with self._snapshot_lock:
                 entry = self._snapshot_entries.get(key)
+                builtin = self._snapshot_builtins.get(key)
                 admitted = key in self._snapshot
         if entry is None or not admitted:
+            if builtin is not None:
+                return builtin
             raise PluginAdmissionError(f"Plugin is not admitted: {kind}:{plugin_id}")
+        if builtin is not None:
+            return builtin
         return self._factory_loader(entry)
 
     def reload(self) -> dict[tuple[PluginKind, str], PluginDescriptor]:
         """Builds a complete admission snapshot before atomically swapping it."""
 
-        candidate, entries = self._discover_with_entries()
+        candidate, entries, builtins = self._discover_with_entries()
         with self._snapshot_lock:
             self._snapshot = dict(candidate)
             self._snapshot_entries = dict(entries)
+            self._snapshot_builtins = dict(builtins)
             return dict(self._snapshot)
 
     def admitted(self) -> dict[tuple[PluginKind, str], PluginDescriptor]:
@@ -94,9 +108,11 @@ class PluginRegistry:
     ) -> tuple[
         dict[tuple[PluginKind, str], PluginDescriptor],
         dict[tuple[PluginKind, str], metadata.EntryPoint],
+        dict[tuple[PluginKind, str], object],
     ]:
-        descriptors: dict[tuple[PluginKind, str], PluginDescriptor] = {}
+        descriptors = {key: descriptor for key, (descriptor, _) in self._builtins.items()}
         entries: dict[tuple[PluginKind, str], metadata.EntryPoint] = {}
+        builtins = {key: factory for key, (_, factory) in self._builtins.items()}
         for kind, group in ENTRY_POINT_GROUPS.items():
             for entry in self._select(group):
                 plugin_id = str(entry.name)
@@ -125,7 +141,7 @@ class PluginRegistry:
                     version=version,
                 )
                 entries[key] = entry
-        return descriptors, entries
+        return descriptors, entries, builtins
 
     @staticmethod
     def _validate_id(plugin_id: str) -> None:

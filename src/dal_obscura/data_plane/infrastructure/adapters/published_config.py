@@ -28,6 +28,7 @@ from dal_obscura.common.config_store.orm import (
     PublishedCellRuntimeRecord,
     TenantRecord,
 )
+from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     CatalogConfig,
     CatalogRegistry,
@@ -381,7 +382,7 @@ class PublishedConfigCatalogRegistry:
         store: PublishedConfigStore,
         *,
         secret_provider: SecretProvider | None = None,
-        plugin_registry: AdmittedPluginSnapshot | None = None,
+        plugin_registry: PluginRegistry | AdmittedPluginSnapshot | None = None,
     ) -> None:
         self._store = store
         self._secret_provider = secret_provider
@@ -458,7 +459,7 @@ def _catalog_config_for_asset(
     catalog: PublishedCatalog,
     asset: PublishedAsset,
     *,
-    plugin_registry: AdmittedPluginSnapshot | None = None,
+    plugin_registry: PluginRegistry | AdmittedPluginSnapshot | None = None,
 ) -> CatalogConfig:
     """Build the runtime catalog config with the published asset as its source of truth."""
     _validate_plugin_binding(asset, plugin_registry=plugin_registry)
@@ -480,7 +481,7 @@ _ICEBERG_CATALOG_MODULE = (
 def _validate_plugin_binding(
     asset: PublishedAsset,
     *,
-    plugin_registry: AdmittedPluginSnapshot | None = None,
+    plugin_registry: PluginRegistry | AdmittedPluginSnapshot | None = None,
 ) -> None:
     """Rejects an explicit manifest plugin binding the runtime cannot honor.
 

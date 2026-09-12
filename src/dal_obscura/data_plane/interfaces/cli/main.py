@@ -19,6 +19,9 @@ from dal_obscura.common.config_store.db import (
 from dal_obscura.data_plane.application.access_flow import AccessFlow
 from dal_obscura.data_plane.application.ports.identity import IdentityPort
 from dal_obscura.data_plane.application.use_cases.get_schema import GetSchemaUseCase
+from dal_obscura.data_plane.infrastructure.adapters.builtin_plugins import (
+    create_builtin_plugin_registry,
+)
 from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
@@ -82,7 +85,12 @@ def main() -> None:
 
     identity = _identity_from_runtime(published_runtime, secret_provider=secret_provider)
     authorizer = PublishedConfigAuthorizer(config_store)
-    catalog_registry = PublishedConfigCatalogRegistry(config_store, secret_provider=secret_provider)
+    plugin_registry = create_builtin_plugin_registry()
+    catalog_registry = PublishedConfigCatalogRegistry(
+        config_store,
+        secret_provider=secret_provider,
+        plugin_registry=plugin_registry,
+    )
     masking = DefaultMaskingAdapter()
     row_transform = DuckDBRowTransformAdapter(
         masking,
