@@ -16,6 +16,7 @@ def test_keycloak_demo_fixture_declares_catalog_backed_iceberg_tables():
     assert all("table_path" not in table for table in fixture["tables"])
     assert all(table["rows"] for table in fixture["tables"])
     assert fixture["owners"] == ["group:asset-owners"]
+    assert fixture["grants"] == [{"principal": "group:asset-owners", "capability": "publish"}]
     assert len(fixture["policies"]) == 3
 
 

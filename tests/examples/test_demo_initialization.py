@@ -160,3 +160,18 @@ def test_demo_owner_keys_require_an_owner(monkeypatch) -> None:
 
     with pytest.raises(ValueError, match="at least one owner"):
         module._scoped_demo_owners([])
+
+
+def test_demo_grant_keys_are_scoped_to_oidc_issuer(monkeypatch) -> None:
+    monkeypatch.setenv("DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN", "test-admin")
+    monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
+    module = _load_script("provision_demo")
+
+    assert module._scoped_demo_grants(
+        [{"principal": "group:asset-owners", "capability": "publish"}]
+    ) == [
+        {
+            "principal": "http://127.0.0.1:8080/realms/dal-obscura-demo|group:asset-owners",
+            "capability": "publish",
+        }
+    ]

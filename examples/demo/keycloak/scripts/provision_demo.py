@@ -277,6 +277,11 @@ def _promote_table(fixture: dict[str, Any], table_fixture: dict[str, Any]) -> st
         f"/v1/assets/{asset_id}/owners",
         {"owners": _scoped_demo_owners(fixture["owners"])},
     )
+    _request(
+        "PUT",
+        f"/v1/assets/{asset_id}/grants",
+        {"grants": _scoped_demo_grants(fixture.get("grants", []))},
+    )
     _request("PUT", f"/v1/assets/{asset_id}/policy-rules", {"rules": fixture["policies"]})
     return asset_id
 
@@ -302,6 +307,29 @@ def _scoped_demo_owners(raw_owners: object) -> list[str]:
     if not owners:
         raise ValueError("demo fixture must define at least one owner")
     return owners
+
+
+def _scoped_demo_grants(raw_grants: object) -> list[dict[str, str]]:
+    """Scope fixture capability grants to the demo OIDC issuer."""
+
+    if not isinstance(raw_grants, list):
+        raise ValueError("demo fixture grants must be a list")
+    prefix = f"{DEMO_OIDC_ISSUER.rstrip('/')}|"
+    grants: list[dict[str, str]] = []
+    for raw_grant in raw_grants:
+        if not isinstance(raw_grant, dict):
+            raise ValueError("demo fixture grants must contain objects")
+        principal = str(raw_grant.get("principal", "")).strip()
+        capability = str(raw_grant.get("capability", "")).strip()
+        if not principal or not capability:
+            raise ValueError("demo fixture grants require principal and capability")
+        grants.append(
+            {
+                "principal": principal if "|" in principal else f"{prefix}{principal}",
+                "capability": capability,
+            }
+        )
+    return grants
 
 
 def _request(method: str, path: str, body: object | None = None) -> object:
