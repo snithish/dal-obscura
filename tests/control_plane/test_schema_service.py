@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, cast
 from uuid import UUID, uuid4
 
+import pyarrow as pa
 import pytest
 from pyiceberg.schema import Schema
 from pyiceberg.types import (
@@ -205,6 +206,15 @@ def test_schema_fingerprint_includes_collection_ids_and_matches_arrow_normalizat
 
     assert schema_fingerprint(original) == schema_fingerprint(original.as_arrow())
     assert schema_fingerprint(original) != schema_fingerprint(changed_element)
+
+
+def test_schema_fingerprint_rejects_excessive_arrow_nesting() -> None:
+    nested: pa.DataType = pa.string()
+    for _ in range(MAX_SCHEMA_DEPTH + 1):
+        nested = pa.struct([pa.field("child", nested)])
+
+    with pytest.raises(ValidationFailure, match="Arrow schema exceeds"):
+        schema_fingerprint(pa.schema([pa.field("root", nested)]))
 
 
 def test_get_asset_schema_requires_read_capability() -> None:

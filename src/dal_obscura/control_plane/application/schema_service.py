@@ -116,6 +116,7 @@ def schema_fingerprint(schema: object) -> str:
     arrow_schema = schema.as_arrow() if isinstance(schema, Schema) else schema
     if not isinstance(arrow_schema, pa.Schema):
         raise TypeError("schema_fingerprint expects an Iceberg or Arrow schema")
+    _validate_arrow_schema_bounds(arrow_schema)
     encoded = json.dumps(
         _canonical_arrow_schema(arrow_schema),
         sort_keys=True,
@@ -202,6 +203,35 @@ def _validate_schema_bounds(schema: Schema) -> None:
             visit(field_type.value_field, depth + 1)
 
     for field in schema.fields:
+        visit(field, 1)
+
+
+def _validate_arrow_schema_bounds(schema: pa.Schema) -> None:
+    nodes = 0
+
+    def visit(field: pa.Field, depth: int) -> None:
+        nonlocal nodes
+        nodes += 1
+        if nodes > MAX_SCHEMA_NODES:
+            raise ValidationFailure(
+                f"Arrow schema exceeds the {MAX_SCHEMA_NODES} field-node limit"
+            )
+        if depth > MAX_SCHEMA_DEPTH:
+            raise ValidationFailure(
+                f"Arrow schema exceeds the {MAX_SCHEMA_DEPTH} nesting-depth limit"
+            )
+        if pa.types.is_struct(field.type):
+            for child in field.type:
+                visit(child, depth + 1)
+        elif pa.types.is_list(field.type) or pa.types.is_large_list(field.type):
+            visit(field.type.value_field, depth + 1)
+        elif pa.types.is_map(field.type):
+            visit(field.type.key_field, depth + 1)
+            visit(field.type.item_field, depth + 1)
+        elif pa.types.is_fixed_size_list(field.type):
+            visit(field.type.value_field, depth + 1)
+
+    for field in schema:
         visit(field, 1)
 
 
