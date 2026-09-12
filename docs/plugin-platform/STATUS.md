@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `ea01654`.
+Implementation follow-up through `96cc34e`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -399,6 +399,22 @@ remain open.
 - Remaining gaps: PostgreSQL barrier/process evidence, complete operation and
   audit rollback matrix, browser/a11y proof, real IdP/session validation, and
   production artifact validation remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: continue X03 PostgreSQL transaction barriers and X10
+  staged runtime/auth activation semantics.
+
+### X10 staged settings audit — `96cc34e`
+
+- State: implementing.
+- Behavior: runtime ticket-limit and authentication-provider draft updates now
+  record the authenticated actor, workspace tenant, request correlation, and
+  bounded non-secret change details. Settings remain draft state until a
+  publication is explicitly created and activated.
+- Green evidence: settings API tests assert audit actions, actor identity, and
+  redacted details; Ruff and Ty pass on changed paths.
+- Remaining gaps: revisioned settings activation/rollback and bootstrap
+  recovery, browser/a11y proof, PostgreSQL barriers, real IdP/session evidence,
+  and production artifact validation remain open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: continue X03 PostgreSQL transaction barriers and X10
   staged runtime/auth activation semantics.
