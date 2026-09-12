@@ -124,6 +124,9 @@ export type WorkspacePublication = {
   status: string;
   manifest_hash: string;
   active: boolean;
+  asset_count: number;
+  catalog_count: number;
+  created_at: string;
 };
 
 export type PolicyVersionPage = {

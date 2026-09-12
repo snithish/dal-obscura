@@ -110,6 +110,9 @@ def test_workspace_publication_management_is_admin_scoped_and_staged():
     assert listed.status_code == 200
     assert listed.json()[0]["id"] == publication["publication_id"]
     assert listed.json()[0]["active"] is False
+    assert listed.json()[0]["asset_count"] == 1
+    assert listed.json()[0]["catalog_count"] == 1
+    assert listed.json()[0]["created_at"]
 
     activated = client.post(
         f"/v1/workspace/publications/{publication['publication_id']}/activate",

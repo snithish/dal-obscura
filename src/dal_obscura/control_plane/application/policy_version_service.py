@@ -495,6 +495,9 @@ def _publication_list_response(publication: dict[str, object]) -> dict[str, obje
         "status": publication["status"],
         "manifest_hash": publication["manifest_hash"],
         "active": publication["active"],
+        "asset_count": publication["asset_count"],
+        "catalog_count": publication["catalog_count"],
+        "created_at": publication["created_at"],
     }
 
 

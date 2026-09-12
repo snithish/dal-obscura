@@ -1142,6 +1142,30 @@ class PublicationStore:
     def list_publications(self, cell_id: UUID) -> list[dict[str, object]]:
         active = self._session.get(ActivePublicationRecord, cell_id)
         active_publication_id = active.publication_id if active is not None else None
+        records = list(
+            self._session.scalars(
+                select(ConfigPublicationRecord)
+                .where(ConfigPublicationRecord.cell_id == cell_id)
+                .order_by(ConfigPublicationRecord.created_at)
+            )
+        )
+        publication_ids = [record.id for record in records]
+        if not publication_ids:
+            return []
+        asset_counts = dict(
+            self._session.execute(
+                select(PublishedAssetRecord.publication_id, func.count())
+                .where(PublishedAssetRecord.publication_id.in_(publication_ids))
+                .group_by(PublishedAssetRecord.publication_id)
+            ).all()
+        )
+        catalog_counts = dict(
+            self._session.execute(
+                select(PublishedCatalogRecord.publication_id, func.count())
+                .where(PublishedCatalogRecord.publication_id.in_(publication_ids))
+                .group_by(PublishedCatalogRecord.publication_id)
+            ).all()
+        )
         return [
             {
                 "id": str(record.id),
@@ -1150,12 +1174,11 @@ class PublicationStore:
                 "status": record.status,
                 "manifest_hash": record.manifest_hash,
                 "active": record.id == active_publication_id,
+                "asset_count": int(asset_counts.get(record.id, 0)),
+                "catalog_count": int(catalog_counts.get(record.id, 0)),
+                "created_at": _isoformat(record.created_at),
             }
-            for record in self._session.scalars(
-                select(ConfigPublicationRecord)
-                .where(ConfigPublicationRecord.cell_id == cell_id)
-                .order_by(ConfigPublicationRecord.created_at)
-            )
+            for record in records
         ]
 
     def list_policy_version_history(self, context: WorkspaceContext) -> list[dict[str, object]]:
