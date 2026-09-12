@@ -55,9 +55,9 @@ Required backend/production coverage: [production review](PRODUCTION_READINESS.m
   tickets after restore. Encrypted backup/PITR, isolated restore evidence,
   upgrades, and key-rotation drills remain.
 - P15 capacity, observability, and customer operations: partial; bounded
-  evaluation, explicit runtime observations, durable ticket cleanup, and
-  restore invalidation exist, while aggregate limits, metrics/alerts, load,
-  and customer runbooks remain.
+  request bodies/collections, evaluation, explicit runtime observations,
+  durable ticket cleanup, and restore invalidation exist, while aggregate
+  limits, metrics/alerts, load, and customer runbooks remain.
 - P16 whole-product release evidence and promotion: not-started.
 
 These statuses refer to acceptance under the new packets, not absence of all
@@ -115,6 +115,16 @@ do not call the release complete without those observations.
   API processes from publishing the same request twice.
 - Green evidence: publication API/idempotency and repository CAS tests pass;
   a real two-process PostgreSQL race still needs execution.
+
+### P15.2 request-boundary limits — `c2975a3`
+
+- State: partial.
+- Behavior: control-plane requests with a declared body over 1 MiB are
+  rejected before authentication, and policy, identity, grant, provider, and
+  legacy schema collections have explicit cardinality caps.
+- Green evidence: oversized-request, asset, policy, and inventory tests pass;
+  streamed-body enforcement, aggregate per-customer quotas, and load evidence
+  remain open.
 
 ### Production review — 2026-09-12
 
