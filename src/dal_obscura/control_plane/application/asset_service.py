@@ -175,6 +175,8 @@ def replace_asset_grants(
     # Grants affect who may publish or review the asset.  Use the same row lock
     # as draft and policy mutations so revocation ordered before activation wins.
     store.lock_asset_for_publication(asset_id)
+    if actor is not None:
+        ensure_asset_capability(store, asset_id, actor, "grant")
     if expected_revision is None:
         normalized = store.replace_asset_grants(asset_id=asset_id, grants=grants)
     else:
