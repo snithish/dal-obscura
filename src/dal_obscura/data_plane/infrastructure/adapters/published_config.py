@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -468,6 +469,18 @@ def _validate_schema_admission(asset: PublishedAsset, schema: pa.Schema) -> None
     fields = admission.get("fields")
     if not isinstance(fields, list) or not fields:
         return
+    digest = admission.get("digest")
+    if digest is not None:
+        if not isinstance(digest, str):
+            raise ValueError("Published schema admission digest is invalid")
+        encoded = json.dumps(
+            fields,
+            sort_keys=True,
+            default=str,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        if sha256(encoded).hexdigest() != digest:
+            raise ValueError("Published schema admission digest does not match fields")
     identities = _schema_identities(schema)
     for raw in fields:
         if not isinstance(raw, dict):

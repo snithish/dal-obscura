@@ -420,6 +420,37 @@ def test_published_schema_admission_rejects_duplicate_live_field_ids():
         _validate_schema_admission(asset, schema)
 
 
+def test_published_schema_admission_rejects_tampered_admission_digest():
+    fields = [
+        {
+            "name": "id",
+            "field_id": "iceberg:1",
+            "path": ["id"],
+            "type": "int64",
+            "nullable": False,
+        }
+    ]
+    asset = PublishedAsset(
+        publication_id=uuid4(),
+        tenant_id=uuid4(),
+        catalog="analytics",
+        target="default.tampered",
+        backend="iceberg",
+        compiled_config={
+            "schema": {"encoding": 1, "fields": fields, "digest": "0" * 64}
+        },
+        policy_version=1,
+    )
+
+    with pytest.raises(ValueError, match="admission digest"):
+        _validate_schema_admission(
+            asset,
+            pa.schema(
+                [pa.field("id", pa.int64(), metadata={b"PARQUET:field_id": b"1"})]
+            ),
+        )
+
+
 def _publish_asset(
     session: Session,
     *,
