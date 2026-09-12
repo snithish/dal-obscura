@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `757715f` (next X13 routing metadata slice uncommitted).
+Implementation follow-up through `1dc1703`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -106,7 +106,7 @@ claimed by the test.
 
 Integration boundary check after the migration and lock slices:
 `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane tests/interfaces/control_plane/test_assets_api.py tests/interfaces/control_plane/test_schema_api.py tests/plugin_platform -q`
-passed (84 tests). Ruff passed on every changed Python path and `git diff --check`
+passed after the X13 manifest metadata change. Ruff passed on every changed Python path and `git diff --check`
 is clean. Browser, PostgreSQL, Flight, consumer, and production lanes remain open.
 
 ## Latest evidence entry
