@@ -13,6 +13,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
+from dal_obscura.control_plane.application.errors import AuthorizationFailure
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 from dal_obscura.control_plane.interfaces.routes.schemas import (
     AssetGrantsRequest,
@@ -127,6 +128,8 @@ def _replace_authorized_asset_grants(
 ) -> object:
     _ensure_grant_manager(service, asset_id, actor)
     grants = [item.model_dump() for item in request.grants]
+    if any(item["capability"] == "grant" for item in grants) and not actor.platform_admin:
+        raise AuthorizationFailure("Only platform admins may delegate grant-management capability.")
     return {"asset_id": str(asset_id), "grants": service.replace_asset_grants(asset_id, grants)}
 
 

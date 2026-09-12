@@ -477,6 +477,20 @@ def test_asset_owner_can_delegate_read_without_edit_or_publish():
     assert replace.status_code == 403
 
 
+def test_asset_owner_cannot_delegate_grant_management():
+    client = _client()
+    asset = _provision_owned_asset(client)
+
+    response = client.put(
+        f"/v1/assets/{asset}/grants",
+        json={"grants": [{"principal": "outsider", "capability": "grant"}]},
+        headers=_bearer("owner-token"),
+    )
+
+    assert response.status_code == 403
+    assert "Only platform admins" in response.json()["detail"]
+
+
 def test_policy_save_rejects_invalid_row_filter_before_publish():
     client = _client()
     asset = _provision_owned_asset(client)
