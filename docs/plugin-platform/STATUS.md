@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `e1de2af`.
+Implementation follow-up through `80e90ed`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -475,6 +475,12 @@ control-plane, and data-plane PostgreSQL URLs, with least-privilege role
 provisioning documented and enforced by the deployment contract test. This is
 configuration hardening only; live role grants and PostgreSQL race evidence
 remain unexecuted release gates.
+
+The bundled PostgreSQL reference now creates those three roles on first volume
+initialization, sets unique passwords from dedicated secrets, and applies
+least-privilege default table/sequence grants. Shell syntax and deployment
+contract tests pass; live role permission probes and migration/runtime startup
+remain unexecuted.
 
 The direct-Arrow bounds regression and Ty/Ruff checks passed in
 `3263645`; the full schema byte-budget and every-entry-route acceptance matrix
