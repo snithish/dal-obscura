@@ -4,8 +4,15 @@ from datetime import date, datetime, time
 from decimal import Decimal
 
 import pyarrow as pa
+import pytest
 
-from dal_obscura.control_plane.application.evaluation_service import _leaf_paths, _sample_row
+from dal_obscura.control_plane.application.errors import ValidationFailure
+from dal_obscura.control_plane.application.evaluation_service import (
+    MAX_SYNTHETIC_BYTES,
+    _leaf_paths,
+    _sample_row,
+    _validate_synthetic_rows,
+)
 
 
 def test_leaf_paths_keep_literal_dotted_names_distinct_from_nested_fields() -> None:
@@ -51,3 +58,8 @@ def test_sample_row_rejects_unsupported_types_instead_of_inventing_values() -> N
         assert "does not support Arrow type duration" in str(exc)
     else:
         raise AssertionError("unsupported synthetic type must fail closed")
+
+
+def test_synthetic_row_budget_rejects_encoded_payload_explosion() -> None:
+    with pytest.raises(ValidationFailure, match="encoded bytes"):
+        _validate_synthetic_rows([{"payload": "x" * MAX_SYNTHETIC_BYTES}])

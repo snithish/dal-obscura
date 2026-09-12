@@ -30,6 +30,7 @@ from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
 )
 
 MAX_SYNTHETIC_ROWS = 100
+MAX_SYNTHETIC_BYTES = 2 * 1024 * 1024
 EVALUATOR_VERSION = "duckdb-synthetic-v1"
 
 
@@ -46,8 +47,7 @@ def evaluate_asset_policy(
 ) -> dict[str, object]:
     """Evaluates a policy over bounded synthetic rows and returns evidence."""
 
-    if rows is not None and len(rows) > MAX_SYNTHETIC_ROWS:
-        raise ValidationFailure(f"Synthetic evaluation accepts at most {MAX_SYNTHETIC_ROWS} rows")
+    _validate_synthetic_rows(rows)
     supplied_row_count = 0 if rows is None else len(rows)
     arrow_schema = schema_service.load_asset_iceberg_schema(
         store,
@@ -234,6 +234,26 @@ def _sample_value(name: str, data_type: pa.DataType) -> object:  # noqa: C901
     if pa.types.is_string(data_type) or pa.types.is_large_string(data_type):
         return "synthetic"
     raise ValidationFailure(f"Synthetic evaluation does not support Arrow type {data_type}")
+
+
+def _validate_synthetic_rows(rows: list[dict[str, object]] | None) -> None:
+    if rows is None:
+        return
+    if len(rows) > MAX_SYNTHETIC_ROWS:
+        raise ValidationFailure(f"Synthetic evaluation accepts at most {MAX_SYNTHETIC_ROWS} rows")
+    try:
+        encoded = json.dumps(
+            rows,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValidationFailure("Synthetic evaluation rows are invalid") from exc
+    if len(encoded) > MAX_SYNTHETIC_BYTES:
+        raise ValidationFailure(
+            f"Synthetic evaluation accepts at most {MAX_SYNTHETIC_BYTES} encoded bytes"
+        )
 
 
 def _fingerprint(value: str) -> str:
