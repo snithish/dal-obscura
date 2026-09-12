@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `6d5b107`.
+Implementation follow-up through `e7144a9`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -454,6 +454,11 @@ the cleanup; no runtime or pickle paths changed.
 Project-wide Ty diagnostics were then cleared by annotating bounded namespace
 traversal and demo/plugin fixture mappings and removing stale test suppressions.
 `uv run --no-sync ty check`, Ruff, and the affected focused suites all pass.
+
+Full pytest exposed and fixed a route-inventory drift for the workspace
+publication endpoints. The remaining full-suite failures are environment-gated
+Flight socket binds, heavyweight benchmark subprocesses, and connector fixture
+assumptions; they remain release evidence gaps rather than being suppressed.
 
 The direct-Arrow bounds regression and Ty/Ruff checks passed in
 `3263645`; the full schema byte-budget and every-entry-route acceptance matrix
