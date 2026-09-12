@@ -14,7 +14,7 @@ import secrets
 from typing import cast
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
@@ -176,12 +176,14 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
 
     @api.post("/v1/logout")
     def logout(
+        request: Request,
         response: Response,
         session_token: str | None = Cookie(default=None, alias="dal_obscura_session"),
-        _actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+        csrf_cookie: str | None = Cookie(default=None, alias="dal_obscura_csrf"),
     ) -> object:
-        """Expires the browser session after the shared CSRF check."""
+        """Expires browser credentials even when the server session is stale."""
         if session_token:
+            deps.validate_browser_mutation(request, csrf_cookie)
             deps.revoke_browser_session(session_token)
         response.delete_cookie(key="dal_obscura_session", path="/")
         response.delete_cookie(key="dal_obscura_csrf", path="/")

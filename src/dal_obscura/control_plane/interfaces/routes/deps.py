@@ -80,17 +80,8 @@ class ControlPlaneDeps:
         if authorization == expected:
             return ControlPlaneActor.for_platform_admin("platform:admin")
         using_cookie = not authorization and session_token is not None
-        if (
-            using_cookie
-            and request.method not in {"GET", "HEAD", "OPTIONS"}
-            and (not csrf_cookie or request.headers.get("x-csrf-token") != csrf_cookie)
-        ):
-            raise HTTPException(status_code=403, detail="CSRF validation failed")
         if using_cookie and request.method not in {"GET", "HEAD", "OPTIONS"}:
-            origin = request.headers.get("origin")
-            request_origin = f"{request.url.scheme}://{request.url.netloc}"
-            if origin and origin not in self.allowed_origins and origin != request_origin:
-                raise HTTPException(status_code=403, detail="Origin validation failed")
+            self.validate_browser_mutation(request, csrf_cookie)
         if using_cookie:
             if session_token is None:
                 raise HTTPException(status_code=401, detail="Unauthorized")
@@ -104,6 +95,24 @@ class ControlPlaneDeps:
         if actor is None:
             raise HTTPException(status_code=401, detail="Unauthorized")
         return actor
+
+    def validate_browser_mutation(
+        self,
+        request: Request,
+        csrf_cookie: str | None,
+    ) -> None:
+        """Checks CSRF and origin before a browser state mutation.
+
+        Logout uses this check even when the server session has already
+        expired, so a stale browser can clear its credentials idempotently.
+        """
+
+        if not csrf_cookie or request.headers.get("x-csrf-token") != csrf_cookie:
+            raise HTTPException(status_code=403, detail="CSRF validation failed")
+        origin = request.headers.get("origin")
+        request_origin = f"{request.url.scheme}://{request.url.netloc}"
+        if origin and origin not in self.allowed_origins and origin != request_origin:
+            raise HTTPException(status_code=403, detail="Origin validation failed")
 
     def resolve_bearer_token(self, token: str) -> ControlPlaneActor | None:
         """Resolves a provider bearer token into an actor."""

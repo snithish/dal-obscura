@@ -225,6 +225,13 @@ def test_cookie_session_logout_requires_csrf_and_expires_browser_cookies(monkeyp
     assert any('dal_obscura_csrf=""' in cookie for cookie in cookies)
     assert client.get("/v1/session", headers={"cookie": cookie_header}).status_code == 401
 
+    repeated = client.post(
+        "/v1/logout",
+        headers={"cookie": cookie_header, "x-csrf-token": login.cookies["dal_obscura_csrf"]},
+    )
+    assert repeated.status_code == 200
+    assert repeated.json() == {"authenticated": False}
+
 
 def test_cookie_mutation_rejects_untrusted_origin(monkeypatch):
     client = _client_with_ui_auth_config()
