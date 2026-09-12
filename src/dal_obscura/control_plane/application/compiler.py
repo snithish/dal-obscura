@@ -11,6 +11,9 @@ from dal_obscura.common.access_control.compiled_policy import (
     CompiledPolicyRule,
 )
 from dal_obscura.common.access_control.filters import deserialize_row_filter
+from dal_obscura.control_plane.application.auth_provider_validation import (
+    validate_auth_provider_payloads,
+)
 from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.domain.models import (
     AssetDraft,
@@ -28,11 +31,6 @@ _MASK_TYPES = frozenset({"null", "redact", "hash", "email", "keep_last", "defaul
 _ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )
-_OIDC_IDENTITY_MODULE = (
-    "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider"
-)
-
-
 def validate_policy_rule_payloads(rules: list[dict[str, Any]]) -> None:
     """Validate mutable policy-rule payloads before storing draft policy state."""
     compiler = PublicationCompiler()
@@ -94,11 +92,17 @@ class PublicationCompiler:
         for catalog in draft.catalogs:
             if catalog.module != _ICEBERG_CATALOG_MODULE:
                 raise ValidationFailure("Unsupported catalog module; only Iceberg is supported")
-        for provider in draft.auth_providers:
-            if provider.enabled and provider.module != _OIDC_IDENTITY_MODULE:
-                raise ValidationFailure(
-                    "Unsupported identity provider; only built-in OIDC is supported"
-                )
+        validate_auth_provider_payloads(
+            [
+                {
+                    "ordinal": provider.ordinal,
+                    "module": provider.module,
+                    "args": provider.args,
+                    "enabled": provider.enabled,
+                }
+                for provider in draft.auth_providers
+            ]
+        )
 
     def compile_asset(self, asset: AssetDraft, catalog: CatalogDraft) -> CompiledAsset:
         return self._compile_asset(asset, catalog)

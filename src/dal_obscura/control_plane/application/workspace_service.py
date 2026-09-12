@@ -13,6 +13,10 @@ from typing import Any
 from uuid import UUID
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
+from dal_obscura.control_plane.application.auth_provider_validation import (
+    redact_auth_provider,
+    validate_auth_provider_payloads,
+)
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 
 
@@ -159,7 +163,7 @@ def list_workspace_auth_providers(store: PublicationStore) -> list[dict[str, obj
     context = store.get_default_workspace_context()
     if context is None:
         return []
-    return [_auth_provider_response(item) for item in store.list_auth_providers(context.cell_id)]
+    return [redact_auth_provider(item) for item in store.list_auth_providers(context.cell_id)]
 
 
 def replace_workspace_auth_providers(
@@ -174,6 +178,7 @@ def replace_workspace_auth_providers(
         ```
     """
 
+    validate_auth_provider_payloads(providers)
     context = store.ensure_default_workspace_context()
     store.replace_auth_providers(cell_id=context.cell_id, providers=providers)
 
@@ -217,13 +222,3 @@ def activate_workspace_publication(
     context = required_workspace_context(store)
     activated = activate_publication(cell_id=context.cell_id, publication_id=publication_id)
     return {"publication_id": activated["publication_id"]}
-
-
-def _auth_provider_response(provider: dict[str, object]) -> dict[str, object]:
-    return {
-        "id": provider["id"],
-        "ordinal": provider["ordinal"],
-        "module": provider["module"],
-        "args": provider["args"],
-        "enabled": provider["enabled"],
-    }

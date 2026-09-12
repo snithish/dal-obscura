@@ -61,7 +61,7 @@ def test_workspace_auth_providers_can_be_configured_without_cell_ids():
                 {
                     "ordinal": 1,
                     "module": DEFAULT_AUTH_MODULE,
-                    "args": {"jwt_secret": {"secret": "DAL_OBSCURA_JWT_SECRET"}},
+                    "args": {"issuer": "https://issuer.example"},
                     "enabled": True,
                 }
             ]
@@ -78,8 +78,44 @@ def test_workspace_auth_providers_can_be_configured_without_cell_ids():
             "id": after_setup.json()[0]["id"],
             "ordinal": 1,
             "module": DEFAULT_AUTH_MODULE,
-            "args": {"jwt_secret": {"secret": "DAL_OBSCURA_JWT_SECRET"}},
+            "args": {"issuer": "https://issuer.example"},
             "enabled": True,
         }
     ]
     assert "cell" not in _keys_recursive(after_setup.json())
+
+
+def test_workspace_auth_providers_reject_unsupported_modules_and_inline_key_material():
+    client = _client()
+
+    unsupported = client.put(
+        "/v1/settings/auth-providers",
+        json={
+            "providers": [
+                {"ordinal": 1, "module": "untrusted.Provider", "args": {}, "enabled": True}
+            ]
+        },
+        headers=ADMIN_HEADERS,
+    )
+    inline_secret = client.put(
+        "/v1/settings/auth-providers",
+        json={
+            "providers": [
+                {
+                    "ordinal": 1,
+                    "module": DEFAULT_AUTH_MODULE,
+                    "args": {
+                        "issuer": "https://issuer.example",
+                        "jwks": {"keys": [{"kty": "RSA", "n": "private"}]},
+                    },
+                    "enabled": True,
+                }
+            ]
+        },
+        headers=ADMIN_HEADERS,
+    )
+
+    assert unsupported.status_code == 400
+    assert "only built-in OIDC" in unsupported.json()["detail"]
+    assert inline_secret.status_code == 400
+    assert "static JWKS" in inline_secret.json()["detail"]

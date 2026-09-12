@@ -152,6 +152,14 @@ def test_compiler_rejects_dynamic_runtime_modules():
         PublicationCompiler().compile(identity_draft)
 
 
+def test_compiler_rejects_static_jwks_material_in_identity_provider():
+    draft = _draft()
+    draft.auth_providers[0].args["jwks"] = {"keys": [{"kty": "RSA"}]}
+
+    with pytest.raises(ValidationFailure, match="static JWKS"):
+        PublicationCompiler().compile(draft)
+
+
 def test_compiler_rejects_custom_backend_with_provider_module():
     draft = _draft()
     draft.catalogs[0].options["provider_modules"] = ["example.PostgresProviderFactory"]
