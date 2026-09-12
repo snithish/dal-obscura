@@ -56,3 +56,11 @@ def test_path_rule_enforcer_rejects_credential_and_query_roots():
         PathRuleEnforcer([{"root": "s3://user:password@analytics-demo/delta"}])
     with pytest.raises(ValueError, match="query or fragment"):
         PathRuleEnforcer([{"root": "s3://analytics-demo/delta?token=secret"}])
+
+
+def test_path_rule_enforcer_allows_all_paths_within_uri_authority_root():
+    enforcer = PathRuleEnforcer([{"root": "s3://analytics-demo/"}])
+
+    enforcer.check("s3://analytics-demo/warehouse/data.parquet")
+    with pytest.raises(PermissionError, match="Path is not allowed"):
+        enforcer.check("s3://other-bucket/warehouse/data.parquet")

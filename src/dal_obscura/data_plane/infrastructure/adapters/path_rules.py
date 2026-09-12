@@ -99,6 +99,8 @@ def _path_is_under_root(path: str, root: str) -> bool:
             return False
         root_path = _normalize_uri_path(root_parts.path)
         path_path = _normalize_uri_path(path_parts.path)
+        if root_path == "/":
+            return True
         return path_path == root_path or path_path.startswith(f"{root_path}/")
     try:
         Path(path).relative_to(Path(root))
