@@ -59,8 +59,10 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
 - X10 complete authoring/management: **implemented-unverified** for the deny-all UI
   path; controls now expose save/test/review/publish actions when rules are empty.
   Full editor, activation, accessibility, and browser evidence remain open.
-- X11 public SDK: **implementing**; versioned contracts are present under
-  `src/dal_obscura/common/plugin_api`, but independent wheel extraction remains open.
+- X11 public SDK: **implementing**; an independently buildable
+  `packages/plugin-api` wheel now contains the versioned contracts and has an
+  offline compile/metadata regression. Service-side compatibility contracts and
+  online wheel artifact evidence remain open.
 - X12 admitted loading and Iceberg adapter: **implementing**; entry-point loading now
   fails closed when a request names an unallowlisted installation, with registry
   regression coverage. Built-in Iceberg routing and artifact-lock verification
@@ -90,6 +92,11 @@ multi-worker capacity, and atomic reload evidence are still required.
 X12 admission loading now rejects unallowlisted entry points before invoking a
 factory; `tests/plugin_platform/test_registry.py` passes all 5 cases with Ruff
 clean. Built-in Iceberg routing and artifact-lock verification remain open.
+
+X11 package check: `tests/plugin_platform/test_plugin_api_package.py` passes and
+the package source compiles without importing the service distribution. Building
+the wheel in this offline environment is an explicit external artifact gate, not
+claimed by the test.
 
 Integration boundary check after the migration and lock slices:
 `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane tests/interfaces/control_plane/test_assets_api.py tests/interfaces/control_plane/test_schema_api.py tests/plugin_platform -q`
