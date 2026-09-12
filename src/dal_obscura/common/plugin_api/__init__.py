@@ -16,7 +16,12 @@ from dal_obscura.common.plugin_api.contracts import (
     TableHandle,
     TableIdentifier,
 )
-from dal_obscura.common.plugin_api.registry import PluginAdmissionError, PluginLock, PluginRegistry
+from dal_obscura.common.plugin_api.registry import (
+    PluginAdmissionError,
+    PluginLock,
+    PluginRegistry,
+    build_plugin_lock,
+)
 
 __all__ = [
     "CatalogConfig",
@@ -32,4 +37,5 @@ __all__ = [
     "TableFormatPlugin",
     "TableHandle",
     "TableIdentifier",
+    "build_plugin_lock",
 ]

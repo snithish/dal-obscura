@@ -197,6 +197,36 @@ def _descriptor_digest(descriptor: PluginDescriptor) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def build_plugin_lock(
+    kind: PluginKind,
+    entry: metadata.EntryPoint,
+    descriptor: PluginDescriptor,
+) -> PluginLock:
+    """Build a descriptor/artifact-pinned lock for a qualified entry point.
+
+    Release tooling should call this against the built distribution, then
+    persist the returned five-part tuple in its immutable admission manifest.
+    It refuses to generate a lock when provenance or descriptor identity does
+    not match the entry point.
+    """
+
+    if descriptor.kind != kind or descriptor.plugin_id != str(entry.name):
+        raise PluginAdmissionError("Plugin descriptor does not match entry point")
+    if entry.dist is None:
+        raise PluginAdmissionError("Plugin provenance is unavailable")
+    distribution = entry.dist.name
+    version = entry.dist.version
+    if descriptor.distribution != distribution or descriptor.version != version:
+        raise PluginAdmissionError("Plugin descriptor provenance does not match entry point")
+    return (
+        distribution,
+        version,
+        descriptor.api_version,
+        _descriptor_digest(descriptor),
+        _artifact_digest(entry),
+    )
+
+
 def _artifact_digest(entry: metadata.EntryPoint) -> str:
     distribution = entry.dist
     if distribution is None or distribution.files is None:

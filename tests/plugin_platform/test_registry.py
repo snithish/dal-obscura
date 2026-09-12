@@ -6,7 +6,12 @@ from typing import Any, Protocol, cast
 
 import pytest
 
-from dal_obscura.common.plugin_api import PluginAdmissionError, PluginDescriptor, PluginRegistry
+from dal_obscura.common.plugin_api import (
+    PluginAdmissionError,
+    PluginDescriptor,
+    PluginRegistry,
+    build_plugin_lock,
+)
 from dal_obscura.common.plugin_api.registry import _artifact_digest, _descriptor_digest
 
 
@@ -244,3 +249,39 @@ def test_extended_lock_accepts_matching_descriptor_and_distribution_digest(tmp_p
     )
 
     assert registry.reload()[("catalog", "iceberg.sql")] == descriptor
+
+
+def test_build_plugin_lock_derives_the_exact_verified_five_part_lock(tmp_path) -> None:
+    artifact = tmp_path / "plugin.py"
+    artifact.write_text("trusted = True\n")
+    descriptor = PluginDescriptor(
+        kind="catalog",
+        plugin_id="iceberg.sql",
+        api_version="1",
+        config_version=1,
+        distribution="plugin-wheel",
+        version="1.2.3",
+    )
+    entry = cast(
+        metadata.EntryPoint,
+        SimpleNamespace(
+            name="iceberg.sql",
+            group="dal_obscura.catalogs.v1",
+            dist=SimpleNamespace(
+                name="plugin-wheel",
+                version="1.2.3",
+                files=["plugin.py"],
+                locate_file=lambda _: artifact,
+            ),
+        ),
+    )
+
+    lock = build_plugin_lock("catalog", entry, descriptor)
+
+    assert lock == (
+        "plugin-wheel",
+        "1.2.3",
+        "1",
+        _descriptor_digest(descriptor),
+        _artifact_digest(entry),
+    )
