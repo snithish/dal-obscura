@@ -1152,20 +1152,22 @@ class PublicationStore:
         publication_ids = [record.id for record in records]
         if not publication_ids:
             return []
-        asset_counts = dict(
-            self._session.execute(
+        asset_counts: dict[UUID, int] = {
+            publication_id: int(count)
+            for publication_id, count in self._session.execute(
                 select(PublishedAssetRecord.publication_id, func.count())
                 .where(PublishedAssetRecord.publication_id.in_(publication_ids))
                 .group_by(PublishedAssetRecord.publication_id)
             ).all()
-        )
-        catalog_counts = dict(
-            self._session.execute(
+        }
+        catalog_counts: dict[UUID, int] = {
+            publication_id: int(count)
+            for publication_id, count in self._session.execute(
                 select(PublishedCatalogRecord.publication_id, func.count())
                 .where(PublishedCatalogRecord.publication_id.in_(publication_ids))
                 .group_by(PublishedCatalogRecord.publication_id)
             ).all()
-        )
+        }
         return [
             {
                 "id": str(record.id),
