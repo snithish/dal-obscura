@@ -12,7 +12,7 @@ from typing import Any
 from uuid import UUID
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
-from dal_obscura.control_plane.application.errors import AuthorizationFailure
+from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 
 
@@ -100,6 +100,21 @@ def replace_asset_owners(
     """
 
     return store.replace_asset_owners(asset_id=asset_id, owners=owners)
+
+
+def list_asset_grants(store: PublicationStore, asset_id: UUID) -> list[dict[str, str]]:
+    return store.list_asset_grants(asset_id)
+
+
+def replace_asset_grants(
+    store: PublicationStore,
+    asset_id: UUID,
+    grants: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    allowed = {"read", "edit", "publish", "grant"}
+    if any(str(grant.get("capability")) not in allowed for grant in grants):
+        raise ValidationFailure("Unsupported asset capability")
+    return store.replace_asset_grants(asset_id=asset_id, grants=grants)
 
 
 def replace_asset_schema_fields(

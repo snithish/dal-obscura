@@ -43,7 +43,7 @@ def list_policy_rules(
     """
 
     if actor is not None:
-        ensure_asset_reader(store, asset_id, actor)
+        ensure_asset_capability(store, asset_id, actor, "read")
     return store.list_policy_rules(asset_id)
 
 
@@ -62,7 +62,7 @@ def replace_policy_rules(
         ```
     """
 
-    ensure_policy_editor(store, asset_id, actor)
+    ensure_asset_capability(store, asset_id, actor, "edit")
     validate_policy_rule_payloads(rules)
     store.replace_policy_rules(asset_id=asset_id, rules=rules)
 
@@ -91,7 +91,7 @@ def preview_asset_policy(
     """
 
     if actor is not None:
-        ensure_asset_reader(store, asset_id, actor)
+        ensure_asset_capability(store, asset_id, actor, "read")
     asset = store.get_workspace_asset(asset_id)
     raw_rules = store.list_policy_rules(asset_id)
     compiled = _compiled_policy_from_response(asset, raw_rules)
@@ -144,12 +144,7 @@ def ensure_policy_editor(
         ```
     """
 
-    if actor.platform_admin:
-        return
-    owners = set(store.list_asset_owners(asset_id))
-    if owners.intersection(actor.owner_principals()):
-        return
-    raise AuthorizationFailure("Only platform admins or asset owners can change policies.")
+    ensure_asset_capability(store, asset_id, actor, "edit")
 
 
 def ensure_asset_reader(
@@ -159,12 +154,29 @@ def ensure_asset_reader(
 ) -> None:
     """Requires an actor to be a platform admin or an owner of the asset."""
 
+    ensure_asset_capability(store, asset_id, actor, "read")
+
+
+def ensure_asset_capability(
+    store: PublicationStore,
+    asset_id: UUID,
+    actor: ControlPlaneActor,
+    capability: str,
+) -> None:
+    """Requires an actor to hold an asset capability or be its owner."""
+
     if actor.platform_admin:
         return
+    principals = actor.owner_principals()
     owners = set(store.list_asset_owners(asset_id))
-    if owners.intersection(actor.owner_principals()):
+    if owners.intersection(principals) and capability in {"read", "edit", "publish", "grant"}:
         return
-    raise AuthorizationFailure("The authenticated actor cannot access this asset.")
+    if any(
+        grant["principal"] in principals and grant["capability"] == capability
+        for grant in store.list_asset_grants(asset_id)
+    ):
+        return
+    raise AuthorizationFailure(f"The authenticated actor lacks asset capability {capability!r}.")
 
 
 def _compiled_policy_from_response(

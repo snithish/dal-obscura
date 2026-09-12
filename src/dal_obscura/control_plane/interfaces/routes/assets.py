@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 from dal_obscura.control_plane.interfaces.routes.schemas import (
+    AssetGrantsRequest,
     AssetOwnersRequest,
     AssetRequest,
     AssetSchemaFieldsRequest,
@@ -52,6 +53,28 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         )
         return {"asset_id": str(asset_id), "owners": owners}
 
+    @api.get("/v1/assets/{asset_id}/grants")
+    def list_asset_grants(
+        asset_id: UUID,
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> object:
+        return deps.with_service(lambda service: _authorized_asset_grants(service, asset_id, actor))
+
+    @api.put("/v1/assets/{asset_id}/grants")
+    def replace_asset_grants(
+        asset_id: UUID,
+        request: AssetGrantsRequest,
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> object:
+        return deps.with_service(
+            lambda service: _replace_authorized_asset_grants(
+                service,
+                asset_id,
+                request,
+                actor,
+            )
+        )
+
     @api.put("/v1/assets/{asset_id}/schema-fields", dependencies=[Depends(deps.require_admin)])
     def replace_asset_schema_fields(
         asset_id: UUID,
@@ -78,3 +101,27 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         )
 
     return api
+
+
+def _authorized_asset_grants(
+    service,
+    asset_id: UUID,
+    actor: ControlPlaneActor,
+) -> object:
+    _ensure_grant_manager(service, asset_id, actor)
+    return service.list_asset_grants(asset_id)
+
+
+def _replace_authorized_asset_grants(
+    service,
+    asset_id: UUID,
+    request: AssetGrantsRequest,
+    actor: ControlPlaneActor,
+) -> object:
+    _ensure_grant_manager(service, asset_id, actor)
+    grants = [item.model_dump() for item in request.grants]
+    return {"asset_id": str(asset_id), "grants": service.replace_asset_grants(asset_id, grants)}
+
+
+def _ensure_grant_manager(service, asset_id: UUID, actor: ControlPlaneActor) -> None:
+    service.ensure_asset_capability(asset_id, actor, "grant")

@@ -181,6 +181,19 @@ class AssetOwnersRequest(StrictModel):
     owners: list[str] = Field(default_factory=list)
 
 
+class AssetGrantRequest(StrictModel):
+    """Single explicit asset capability assignment."""
+
+    principal: str = Field(min_length=1)
+    capability: Literal["read", "edit", "publish", "grant"]
+
+
+class AssetGrantsRequest(StrictModel):
+    """Replaces explicit capability assignments for one asset."""
+
+    grants: list[AssetGrantRequest] = Field(default_factory=list)
+
+
 class AssetSchemaFieldRequest(StrictModel):
     """Single asset schema-field request.
 

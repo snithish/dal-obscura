@@ -276,6 +276,24 @@ class ProvisioningService:
     def replace_asset_owners(self, asset_id: UUID, owners: list[str]) -> list[str]:
         return asset_service.replace_asset_owners(self._store, asset_id, owners)
 
+    def list_asset_grants(self, asset_id: UUID) -> list[dict[str, str]]:
+        return asset_service.list_asset_grants(self._store, asset_id)
+
+    def replace_asset_grants(
+        self,
+        asset_id: UUID,
+        grants: list[dict[str, str]],
+    ) -> list[dict[str, str]]:
+        return asset_service.replace_asset_grants(self._store, asset_id, grants)
+
+    def ensure_asset_capability(
+        self,
+        asset_id: UUID,
+        actor: ControlPlaneActor,
+        capability: str,
+    ) -> None:
+        policy_service.ensure_asset_capability(self._store, asset_id, actor, capability)
+
     def replace_asset_schema_fields(
         self,
         asset_id: UUID,

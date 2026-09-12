@@ -6,12 +6,13 @@ from dataclasses import dataclass
 from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import delete, func, or_, select, tuple_, update
+from sqlalchemy import and_, delete, func, or_, select, tuple_, update
 from sqlalchemy.orm import Session
 
 from dal_obscura.common.config_store.orm import (
     ActivePublicationRecord,
     ActivePublishedAssetRecord,
+    AssetGrantRecord,
     AssetOwnerRecord,
     AssetRecord,
     AssetSchemaFieldRecord,
@@ -766,11 +767,18 @@ class PublicationStore:
         records = list(
             self._session.scalars(
                 select(AssetRecord)
-                .join(AssetOwnerRecord, AssetOwnerRecord.asset_id == AssetRecord.id)
+                .outerjoin(AssetOwnerRecord, AssetOwnerRecord.asset_id == AssetRecord.id)
+                .outerjoin(AssetGrantRecord, AssetGrantRecord.asset_id == AssetRecord.id)
                 .where(
                     AssetRecord.cell_id == context.cell_id,
                     AssetRecord.tenant_id == context.tenant_id,
-                    AssetOwnerRecord.principal.in_(principals),
+                    or_(
+                        AssetOwnerRecord.principal.in_(principals),
+                        and_(
+                            AssetGrantRecord.principal.in_(principals),
+                            AssetGrantRecord.capability == "read",
+                        ),
+                    ),
                 )
                 .distinct()
                 .order_by(AssetRecord.target, AssetRecord.id)
@@ -836,6 +844,55 @@ class PublicationStore:
                 .order_by(AssetOwnerRecord.ordinal)
             )
         ]
+
+    def list_asset_grants(self, asset_id: UUID) -> list[dict[str, str]]:
+        return [
+            {
+                "id": str(record.id),
+                "asset_id": str(record.asset_id),
+                "principal": record.principal,
+                "capability": record.capability,
+            }
+            for record in self._session.scalars(
+                select(AssetGrantRecord)
+                .where(AssetGrantRecord.asset_id == asset_id)
+                .order_by(AssetGrantRecord.principal, AssetGrantRecord.capability)
+            )
+        ]
+
+    def replace_asset_grants(
+        self,
+        *,
+        asset_id: UUID,
+        grants: list[dict[str, str]],
+    ) -> list[dict[str, str]]:
+        if self._session.get(AssetRecord, asset_id) is None:
+            raise LookupError(f"No asset {asset_id}")
+        for record in self._session.scalars(
+            select(AssetGrantRecord).where(AssetGrantRecord.asset_id == asset_id)
+        ):
+            self._session.delete(record)
+        self._session.flush()
+        normalized: list[dict[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        for raw in grants:
+            principal = str(raw["principal"]).strip()
+            capability = str(raw["capability"]).strip()
+            key = (principal, capability)
+            if not principal or not capability or key in seen:
+                continue
+            seen.add(key)
+            self._session.add(
+                AssetGrantRecord(
+                    id=uuid4(),
+                    asset_id=asset_id,
+                    principal=principal,
+                    capability=capability,
+                )
+            )
+            normalized.append({"principal": principal, "capability": capability})
+        self._session.flush()
+        return normalized
 
     def list_asset_schema_fields(self, asset_id: UUID) -> list[dict[str, object]]:
         return [

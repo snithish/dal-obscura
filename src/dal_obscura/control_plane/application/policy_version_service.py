@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.compiler import PublicationCompiler
 from dal_obscura.control_plane.application.errors import ValidationFailure
-from dal_obscura.control_plane.application.policy_service import ensure_policy_editor
+from dal_obscura.control_plane.application.policy_service import ensure_asset_capability
 from dal_obscura.control_plane.domain.models import CompiledCatalog, CompiledPublication
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 
@@ -103,7 +103,7 @@ def create_asset_policy_version(
         ```
     """
 
-    ensure_policy_editor(store, asset_id, actor)
+    ensure_asset_capability(store, asset_id, actor, "publish")
     asset, catalog = store.load_asset_publish_draft(asset_id)
     if not asset.rules:
         raise ValidationFailure("Cannot publish a policy version without policy rules.")

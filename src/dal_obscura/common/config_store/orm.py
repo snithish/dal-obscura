@@ -136,6 +136,22 @@ class AssetOwnerRecord(Base):
     principal: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+class AssetGrantRecord(Base):
+    """Explicit capability grant for one asset principal."""
+
+    __tablename__ = "asset_grants"
+    __table_args__ = (
+        UniqueConstraint("asset_id", "principal", "capability"),
+        Index("ix_asset_grants_asset_principal", "asset_id", "principal"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    asset_id: Mapped[UUID] = mapped_column(ForeignKey("assets.id"), nullable=False)
+    principal: Mapped[str] = mapped_column(Text, nullable=False)
+    capability: Mapped[str] = mapped_column(String(24), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class AssetSchemaFieldRecord(Base):
     """Schema field metadata row for an asset."""
 

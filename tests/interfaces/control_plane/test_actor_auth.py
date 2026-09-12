@@ -410,6 +410,31 @@ def test_non_admin_cannot_read_catalog_or_auth_settings():
     assert providers.status_code == 403
 
 
+def test_asset_owner_can_delegate_read_without_edit_or_publish():
+    client = _client()
+    asset = _provision_owned_asset(client)
+    grants = client.put(
+        f"/v1/assets/{asset}/grants",
+        json={"grants": [{"principal": "outsider", "capability": "read"}]},
+        headers=_bearer("owner-token"),
+    )
+
+    inventory = client.get("/v1/assets", headers=_bearer("outsider-token"))
+    rules = client.get(f"/v1/assets/{asset}/policy-rules", headers=_bearer("outsider-token"))
+    replace = client.put(
+        f"/v1/assets/{asset}/policy-rules",
+        json={"rules": [_allow_rule(row_filter=None)]},
+        headers=_bearer("outsider-token"),
+    )
+
+    assert grants.status_code == 200
+    assert grants.json()["grants"] == [{"principal": "outsider", "capability": "read"}]
+    assert inventory.status_code == 200
+    assert inventory.json()[0]["id"] == str(asset)
+    assert rules.status_code == 200
+    assert replace.status_code == 403
+
+
 def test_policy_save_rejects_invalid_row_filter_before_publish():
     client = _client()
     asset = _provision_owned_asset(client)
