@@ -169,6 +169,8 @@ def list_workspace_auth_providers(store: PublicationStore) -> list[dict[str, obj
 def replace_workspace_auth_providers(
     store: PublicationStore,
     providers: list[dict[str, Any]],
+    *,
+    actor_principal: str = "system",
 ) -> None:
     """Replaces the workspace authentication provider chain.
 
@@ -181,6 +183,18 @@ def replace_workspace_auth_providers(
     validate_auth_provider_payloads(providers)
     context = store.ensure_default_workspace_context()
     store.replace_auth_providers(cell_id=context.cell_id, providers=providers)
+    store.record_workspace_audit_event(
+        cell_id=context.cell_id,
+        tenant_id=context.tenant_id,
+        actor_principal=actor_principal,
+        action="workspace.auth_providers.update",
+        resource_type="workspace",
+        resource_id=str(context.tenant_id),
+        details={
+            "provider_count": len(providers),
+            "enabled_count": sum(1 for provider in providers if provider.get("enabled", True)),
+        },
+    )
 
 
 def upsert_workspace_runtime_settings(
@@ -188,6 +202,8 @@ def upsert_workspace_runtime_settings(
     ttl: int,
     max_tickets: int,
     max_ticket_exchanges: int,
+    *,
+    actor_principal: str = "system",
 ) -> None:
     """Creates or updates workspace runtime ticket settings.
 
@@ -203,6 +219,19 @@ def upsert_workspace_runtime_settings(
         ticket_ttl_seconds=ttl,
         max_tickets=max_tickets,
         max_ticket_exchanges=max_ticket_exchanges,
+    )
+    store.record_workspace_audit_event(
+        cell_id=context.cell_id,
+        tenant_id=context.tenant_id,
+        actor_principal=actor_principal,
+        action="workspace.runtime.update",
+        resource_type="workspace",
+        resource_id=str(context.tenant_id),
+        details={
+            "ticket_ttl_seconds": ttl,
+            "max_tickets": max_tickets,
+            "max_ticket_exchanges": max_ticket_exchanges,
+        },
     )
 
 

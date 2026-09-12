@@ -31,6 +31,14 @@ def test_workspace_runtime_settings_can_be_configured_without_tenant_or_cell_ids
         "max_tickets": 32,
         "max_ticket_exchanges": 3,
     }
+    events = client.get("/v1/audit/events", headers=ADMIN_HEADERS).json()
+    runtime_events = [event for event in events if event["action"] == "workspace.runtime.update"]
+    assert runtime_events[0]["actor"] == "platform:admin"
+    assert runtime_events[0]["details"] == {
+        "ticket_ttl_seconds": 1200,
+        "max_tickets": 32,
+        "max_ticket_exchanges": 3,
+    }
 
 
 def test_workspace_runtime_settings_rejects_path_rules():
@@ -83,6 +91,12 @@ def test_workspace_auth_providers_can_be_configured_without_cell_ids():
         }
     ]
     assert "cell" not in _keys_recursive(after_setup.json())
+    events = client.get("/v1/audit/events", headers=ADMIN_HEADERS).json()
+    provider_events = [
+        event for event in events if event["action"] == "workspace.auth_providers.update"
+    ]
+    assert provider_events[0]["actor"] == "platform:admin"
+    assert provider_events[0]["details"] == {"provider_count": 1, "enabled_count": 1}
 
 
 def test_workspace_auth_providers_reject_unsupported_modules_and_inline_key_material():

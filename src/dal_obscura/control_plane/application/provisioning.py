@@ -352,12 +352,14 @@ class ProvisioningService:
         ttl: int,
         max_tickets: int,
         max_ticket_exchanges: int,
+        actor: ControlPlaneActor | None = None,
     ) -> None:
         workspace_service.upsert_workspace_runtime_settings(
             self._store,
             ttl=ttl,
             max_tickets=max_tickets,
             max_ticket_exchanges=max_ticket_exchanges,
+            actor_principal="system" if actor is None else actor.identity_key(),
         )
 
     def upsert_catalog(
@@ -595,8 +597,16 @@ class ProvisioningService:
     def replace_auth_providers(self, cell_id: UUID, providers: list[dict[str, Any]]) -> None:
         self._store.replace_auth_providers(cell_id=cell_id, providers=providers)
 
-    def replace_workspace_auth_providers(self, providers: list[dict[str, Any]]) -> None:
-        workspace_service.replace_workspace_auth_providers(self._store, providers)
+    def replace_workspace_auth_providers(
+        self,
+        providers: list[dict[str, Any]],
+        actor: ControlPlaneActor | None = None,
+    ) -> None:
+        workspace_service.replace_workspace_auth_providers(
+            self._store,
+            providers,
+            actor_principal="system" if actor is None else actor.identity_key(),
+        )
 
     def create_publication(self, cell_id: UUID) -> dict[str, object]:
         return policy_version_service.create_publication(self._store, cell_id)

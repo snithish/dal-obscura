@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
+from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 from dal_obscura.control_plane.interfaces.routes.schemas import (
     AuthProvidersRequest,
@@ -37,12 +38,16 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         return deps.with_service(lambda service: service.list_workspace_auth_providers())
 
     @api.put("/v1/settings/runtime", dependencies=[Depends(deps.require_admin)])
-    def upsert_workspace_runtime_settings(request: RuntimeSettingsRequest) -> object:
+    def upsert_workspace_runtime_settings(
+        request: RuntimeSettingsRequest,
+        actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
+    ) -> object:
         return deps.with_service(
             lambda service: service.upsert_workspace_runtime_settings(
                 ttl=request.ticket_ttl_seconds,
                 max_tickets=request.max_tickets,
                 max_ticket_exchanges=request.max_ticket_exchanges,
+                actor=actor,
             )
         ) or {
             "ticket_ttl_seconds": request.ticket_ttl_seconds,
@@ -51,10 +56,14 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         }
 
     @api.put("/v1/settings/auth-providers", dependencies=[Depends(deps.require_admin)])
-    def replace_workspace_auth_providers(request: AuthProvidersRequest) -> object:
+    def replace_workspace_auth_providers(
+        request: AuthProvidersRequest,
+        actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
+    ) -> object:
         return deps.with_service(
             lambda service: service.replace_workspace_auth_providers(
                 providers=request.providers,
+                actor=actor,
             )
         ) or {"providers": request.providers}
 
