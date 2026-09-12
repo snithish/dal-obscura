@@ -3,13 +3,16 @@
 Status: product specification exists; implementation and validation are incomplete.
 Paid-production release is **on hold**. See the code-backed
 [production readiness review and required backend/deployment work](PRODUCTION_READINESS.md).
-The source application, demo cookie login/logout, and UI container packaging exist.
-Production OIDC, complete scoped authorization, canonical nested authoring, durable
-revision workflows, required management screens, and real-stack/browser evidence
-remain incomplete. The control-plane executable now exists; clean installed-wheel
-server and container startup remain unverified. The rewritten handoff describes
-remaining work only, with one canonical sequence. Prior planning does not satisfy
-prototype or usability acceptance.
+The source application now includes OIDC/PKCE browser sessions, scoped owner and
+delegated capabilities, canonical nested Iceberg schema authoring, durable
+revisioned drafts, reviewed/idempotent publication, history/restore, activity,
+catalog discovery, asset onboarding, and production-profile startup guards. The
+control-plane executable, data-plane TLS checks, Flight readiness action, restore
+invalidation command, and local UI build are implemented. Clean installed-wheel,
+container, PostgreSQL, real-IdP/browser, and consumer evidence remain unverified;
+paid-production release stays on hold. The rewritten handoff describes remaining
+work only, with one canonical sequence. Prior planning does not satisfy prototype
+or usability acceptance.
 
 Owner direction: policy authoring and management UI is non-negotiable. Design the experience from scratch. Existing screens, navigation, framework, and component library impose no constraints. Existing security invariants, durable authoring records, Iceberg scope, nested-schema requirements, and DuckDB/Spark/Arrow consumers remain constraints. Preserve pickle logic under the owner's separate instruction.
 
