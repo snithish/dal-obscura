@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import type { Asset, AssetGrant, AuditEvent, AuthProvider, Catalog, CatalogDiagnostic, Mask, PolicyRule, PolicyVersion, Preview, RuntimeSettings, SchemaNode, Session, UiAuthConfig, WorkspaceObservations, WorkspaceSummary } from "./api";
+import type { Asset, AssetGrant, AuditEvent, AuthProvider, Catalog, CatalogDiagnostic, Mask, PolicyRule, PolicyVersion, Preview, RuntimeSettings, SchemaNode, Session, SessionOptions, UiAuthConfig, WorkspaceObservations, WorkspaceSummary } from "./api";
 import { controlPlane } from "./api";
 import { demoAsset, demoRules } from "./fixtures";
 import "./styles.css";
@@ -40,6 +40,9 @@ function App() {
   const [notice, setNotice] = useState("Loading workspace…");
   const [session, setSession] = useState<Session | null>(null);
   const [authConfig, setAuthConfig] = useState<UiAuthConfig | null>(null);
+  const [sessionOptions, setSessionOptions] = useState<SessionOptions | null>(null);
+  const [bootstrapToken, setBootstrapToken] = useState("");
+  const [authError, setAuthError] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
   const [managementData, setManagementData] = useState<ManagementData>({});
   const [managementLoading, setManagementLoading] = useState(false);
@@ -142,7 +145,9 @@ function App() {
       if (epoch !== loadEpoch.current) return;
       setWorkspace("unavailable");
       setSession(null);
-      setAuthConfig(await controlPlane.getUiAuthConfig().catch(() => null));
+      const options = await controlPlane.getSessionOptions().catch(() => null);
+      setSessionOptions(options);
+      setAuthConfig(options?.oidc ?? await controlPlane.getUiAuthConfig().catch(() => null));
       setNotice("Workspace unavailable. Sign in or reconnect to the control plane; no demo data is shown automatically.");
     }
   }
@@ -189,6 +194,31 @@ function App() {
     }
   }
 
+  async function bootstrapLogin() {
+    const token = bootstrapToken.trim();
+    if (!token) {
+      setAuthError("Enter the local control-plane token to continue.");
+      return;
+    }
+    setLoggingIn(true);
+    setAuthError("");
+    try {
+      await controlPlane.bootstrapLogin(token);
+      setBootstrapToken("");
+      setAuthError("");
+      loadEpoch.current += 1;
+      await loadInitialWorkspace();
+    } catch (error) {
+      setAuthError((error as { status?: number })?.status === 429
+        ? "Too many sign-in attempts. Wait a moment and try again."
+        : "That local token was not accepted. Check the control-plane configuration and try again.");
+      setWorkspace("unavailable");
+      setNotice("Sign-in failed. No policy data was loaded.");
+    } finally {
+      setLoggingIn(false);
+    }
+  }
+
   async function logout() {
     loadEpoch.current += 1;
     inventoryEpoch.current += 1;
@@ -217,7 +247,12 @@ function App() {
     setManagementData({}); setAssetCursor(null); setAssetHasMore(false); setAssetSearch("");
     setDraftRevision(0); setReviewToken(null); setSaveState("saved");
     setWorkspace("unavailable");
-    void controlPlane.getUiAuthConfig().then(setAuthConfig).catch(() => setAuthConfig(null));
+    void controlPlane.getSessionOptions().then((options) => {
+      setSessionOptions(options);
+      setAuthConfig(options.oidc);
+    }).catch(() => {
+      void controlPlane.getUiAuthConfig().then(setAuthConfig).catch(() => setAuthConfig(null));
+    });
   }
 
   function navigateTo(next: Page) {
@@ -405,7 +440,7 @@ function App() {
     </aside>
     <main>
       <header className="topbar"><div><span className="eyebrow">{page === "assets" ? "ASSET WORKSPACE" : page.toUpperCase()}</span><h1>{page === "assets" ? asset?.name ?? "Assets" : titleFor(page)}</h1></div><div className="actor"><span className="avatar">{session?.principal.slice(0, 1).toUpperCase() ?? "?"}</span><div><strong>{session?.principal ?? "Not signed in"}</strong><small>{session?.platform_admin ? "Platform admin" : "Authenticated user"}{session?.issuer ? ` · ${session.issuer}` : ""}</small></div>{session && <button className="text-button" onClick={() => void logout()}>Sign out</button>}{logoutPending && <button className="text-button" onClick={() => void logout()}>Retry sign out</button>}</div></header>
-      {page !== "assets" ? <ManagementView page={page} data={managementData} loading={managementLoading} onReload={() => void loadManagement(page)} onLoadMore={page === "changes" ? () => void loadMoreHistory() : undefined} historyLoading={historyLoading} /> : workspace === "loading" ? <WorkspaceMessage title="Loading governed assets" message="Checking your workspace access and available assets." /> : workspace === "unavailable" ? <WorkspaceMessage title="Cannot load workspace" message={notice} retry={loadInitialWorkspace} authConfig={authConfig} onLogin={demoLogin} loggingIn={loggingIn} /> : !asset ? <WorkspaceMessage title="No governed assets" message={notice} /> : <AssetWorkspace assets={assets} asset={asset} history={managementData.history ?? []} grants={managementData.grants ?? []} onAsset={(id) => { if (confirmDiscardUnsaved()) void loadAsset(id); }} assetSearch={assetSearch} assetHasMore={assetHasMore} assetInventoryLoading={assetInventoryLoading} onSearch={searchAssets} onLoadMore={() => void refreshAssetInventory(assetSearch, true)} rules={rules} activeRule={activeRule} activeRevision={draftRevision} selectedRule={selectedRule} onRule={setSelectedRule} selectedField={selectedField} onField={setSelectedField} selectedMask={selectedMask} effectiveFields={effectiveFields} saveState={saveState} notice={notice} onToggleField={toggleField} onMask={setMask} onUpdateRule={updateRule} onAddRule={addRule} onRemoveRule={removeRule} onSave={() => void saveDraft()} onPreview={() => void runPreview()} onReview={() => void requestReview()} previewPrincipal={previewPrincipal} previewGroups={previewGroups} previewClaims={previewClaims} onPreviewPrincipal={setPreviewPrincipal} onPreviewGroups={setPreviewGroups} onPreviewClaims={setPreviewClaims} onPublish={() => void publishAsset()} publishing={publishPending} onRestore={(version) => void restorePolicyVersion(version)} reviewToken={reviewToken ?? undefined} preview={preview} session={session} onReloadAccess={() => void loadAsset(asset.id)} />}
+      {page !== "assets" ? <ManagementView page={page} data={managementData} loading={managementLoading} onReload={() => void loadManagement(page)} onLoadMore={page === "changes" ? () => void loadMoreHistory() : undefined} historyLoading={historyLoading} /> : workspace === "loading" ? <WorkspaceMessage title="Loading governed assets" message="Checking your workspace access and available assets." /> : workspace === "unavailable" ? <WorkspaceMessage showAuth title="Sign in to your workspace" message={notice} retry={loadInitialWorkspace} authConfig={authConfig} sessionOptions={sessionOptions} bootstrapToken={bootstrapToken} onBootstrapToken={setBootstrapToken} onBootstrapLogin={() => void bootstrapLogin()} onLogin={demoLogin} loggingIn={loggingIn} authError={authError} /> : !asset ? <WorkspaceMessage title="No governed assets" message={notice} /> : <AssetWorkspace assets={assets} asset={asset} history={managementData.history ?? []} grants={managementData.grants ?? []} onAsset={(id) => { if (confirmDiscardUnsaved()) void loadAsset(id); }} assetSearch={assetSearch} assetHasMore={assetHasMore} assetInventoryLoading={assetInventoryLoading} onSearch={searchAssets} onLoadMore={() => void refreshAssetInventory(assetSearch, true)} rules={rules} activeRule={activeRule} activeRevision={draftRevision} selectedRule={selectedRule} onRule={setSelectedRule} selectedField={selectedField} onField={setSelectedField} selectedMask={selectedMask} effectiveFields={effectiveFields} saveState={saveState} notice={notice} onToggleField={toggleField} onMask={setMask} onUpdateRule={updateRule} onAddRule={addRule} onRemoveRule={removeRule} onSave={() => void saveDraft()} onPreview={() => void runPreview()} onReview={() => void requestReview()} previewPrincipal={previewPrincipal} previewGroups={previewGroups} previewClaims={previewClaims} onPreviewPrincipal={setPreviewPrincipal} onPreviewGroups={setPreviewGroups} onPreviewClaims={setPreviewClaims} onPublish={() => void publishAsset()} publishing={publishPending} onRestore={(version) => void restorePolicyVersion(version)} reviewToken={reviewToken ?? undefined} preview={preview} session={session} onReloadAccess={() => void loadAsset(asset.id)} />}
     </main>
   </div>;
 }
@@ -552,7 +587,9 @@ function SettingsView({ runtime, providers, onReload }: { runtime?: RuntimeSetti
   async function save() { try { await controlPlane.saveRuntimeSettings(form); setMessage("Runtime settings saved as draft configuration. Publish to make worker behavior change."); onReload(); } catch { setMessage("Settings update was rejected; the previous values remain active."); } }
   return <section className="management-view"><div className="management-head"><div><span className="eyebrow">SETTINGS</span><h2>Runtime and identity</h2><p className="muted">These controls affect ticket fan-out and authentication. Changes are server-validated and do not expose secrets.</p></div><button className="secondary" onClick={onReload}>Refresh</button></div><div className="form-card"><h3>Runtime limits</h3><div className="form-grid three"><label>Ticket TTL (seconds)<input type="number" min="1" value={form.ticket_ttl_seconds} onChange={(event) => setForm({ ...form, ticket_ttl_seconds: Number(event.target.value) })} /></label><label>Max tickets<input type="number" min="1" value={form.max_tickets} onChange={(event) => setForm({ ...form, max_tickets: Number(event.target.value) })} /></label><label>Ticket exchanges<input type="number" min="1" value={form.max_ticket_exchanges} onChange={(event) => setForm({ ...form, max_ticket_exchanges: Number(event.target.value) })} /></label></div><button className="primary" onClick={() => void save()}>Save runtime settings</button>{message && <p className="notice">{message}</p>}</div><div className="form-card"><h3>Authentication providers</h3>{providers.length ? <ul className="provider-list">{providers.map((provider) => <li key={provider.id}><span className={provider.enabled ? "status-dot ready" : "status-dot unavailable"} /><div><strong>{provider.module.split(".").at(-1)}</strong><small>Order {provider.ordinal} · {provider.enabled ? "Enabled" : "Disabled"}</small></div></li>)}</ul> : <div className="empty-result"><strong>No provider configured</strong><p>Production startup must fail closed until an approved identity provider is enabled.</p></div>}</div></section>;
 }
-function WorkspaceMessage({ title, message, retry, authConfig, onLogin, loggingIn }: { title: string; message: string; retry?: () => void; authConfig?: UiAuthConfig | null; onLogin?: (loginHint: string) => void; loggingIn?: boolean }) { return <section className="coming-soon"><span className="eyebrow">WORKSPACE</span><h2>{title}</h2><p>{message}</p>{authConfig?.authority && <button className="primary login-shortcut" onClick={controlPlane.startLogin}>Sign in with SSO</button>}{authConfig?.login_shortcuts?.map((shortcut) => shortcut.demo_login_path && onLogin ? <button className="secondary login-shortcut" disabled={loggingIn} key={shortcut.login_hint} onClick={() => onLogin(shortcut.login_hint)}>{loggingIn ? "Signing in…" : `Use demo persona · ${shortcut.label}`}</button> : null)}{retry && <button className="secondary" onClick={() => void retry()}>Retry</button>}</section>; }
+function WorkspaceMessage({ showAuth = false, title, message, retry, authConfig, sessionOptions, bootstrapToken, onBootstrapToken, onBootstrapLogin, onLogin, loggingIn, authError }: { showAuth?: boolean; title: string; message: string; retry?: () => void; authConfig?: UiAuthConfig | null; sessionOptions?: SessionOptions | null; bootstrapToken?: string; onBootstrapToken?: (value: string) => void; onBootstrapLogin?: () => void; onLogin?: (loginHint: string) => void; loggingIn?: boolean; authError?: string }) {
+  const hasLoginMethod = Boolean(authConfig?.authority || sessionOptions?.bootstrap_enabled || authConfig?.login_shortcuts?.some((shortcut) => shortcut.demo_login_path));
+  return <section className={showAuth ? "coming-soon auth-panel" : "coming-soon"}><span className="eyebrow">{showAuth ? "WORKSPACE ACCESS" : "WORKSPACE"}</span><h2>{title}</h2><p>{message}</p>{showAuth && authConfig?.authority && <button className="primary login-shortcut" onClick={controlPlane.startLogin}>Sign in with SSO</button>}{showAuth && sessionOptions?.bootstrap_enabled && onBootstrapToken && onBootstrapLogin && <form className="bootstrap-login" onSubmit={(event) => { event.preventDefault(); onBootstrapLogin(); }}><label>Local control-plane token<input type="password" autoComplete="current-password" value={bootstrapToken ?? ""} onChange={(event) => onBootstrapToken(event.target.value)} placeholder="Paste the configured local token" /></label><button className="secondary" type="submit" disabled={loggingIn}>{loggingIn ? "Signing in…" : "Sign in locally"}</button></form>}{showAuth && authConfig?.login_shortcuts?.map((shortcut) => shortcut.demo_login_path && onLogin ? <button className="secondary login-shortcut" disabled={loggingIn} key={shortcut.login_hint} onClick={() => onLogin(shortcut.login_hint)}>{loggingIn ? "Signing in…" : `Use demo persona · ${shortcut.label}`}</button> : null)}{showAuth && authError && <p className="auth-error" role="alert">{authError}</p>}{showAuth && !hasLoginMethod && <p className="help">No browser identity provider is configured. Ask an operator to configure OIDC before signing in.</p>}{retry && <button className="secondary" onClick={() => void retry()}>Retry connection</button>}</section>; }
 function titleFor(page: Page) { return ({ changes: "Changes", activity: "Activity", connections: "Connections", settings: "Settings", assets: "Assets" })[page]; }
 function saveLabel(state: SaveState) { return ({ saved: "Saved draft", saving: "Saving draft", unsaved: "Unsaved changes", failed: "Save failed" })[state]; }
 function workspaceLabel(state: WorkspaceState) { return ({ loading: "Checking access", ready: "Connected", demo: "Explicit demo", unavailable: "Unavailable" })[state]; }

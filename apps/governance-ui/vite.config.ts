@@ -6,6 +6,7 @@ export default defineConfig({
   server: {
     proxy: {
       "/v1": "http://127.0.0.1:8821",
+      "/auth": "http://127.0.0.1:8821",
     },
   },
 });

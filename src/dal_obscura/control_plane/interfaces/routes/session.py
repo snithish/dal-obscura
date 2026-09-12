@@ -15,7 +15,7 @@ from collections.abc import Mapping
 from typing import NoReturn, cast
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
@@ -153,6 +153,73 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
     @api.get("/v1/session")
     def get_session(actor: ControlPlaneActor = Depends(deps.require_actor)) -> object:  # noqa: B008
         return actor_response(actor)
+
+    @api.get("/v1/session/options")
+    def get_session_options() -> object:
+        """Returns browser-safe login methods for the current deployment.
+
+        The local bootstrap flag is deliberately exposed as capability metadata
+        only. The credential itself is never returned to the browser and the
+        production profile disables this method at startup.
+        """
+
+        return {
+            "bootstrap_enabled": deps.bootstrap_enabled,
+            "oidc": (
+                public_ui_auth_config(deps.ui_auth_config)
+                if deps.ui_auth_config is not None
+                else None
+            ),
+        }
+
+    @api.post("/v1/session/bootstrap")
+    def bootstrap_session(
+        request: Request,
+        response: Response,
+        authorization: str = Header(default=""),
+    ) -> object:
+        """Exchanges the local admin bearer secret for a browser session.
+
+        This route is a local-development bridge only. It requires the exact
+        configured bootstrap secret, is rate limited, and mints the same
+        server-side HttpOnly session plus CSRF cookie used by OIDC callbacks.
+        """
+
+        if not deps.bootstrap_enabled:
+            raise HTTPException(status_code=404, detail="Local bootstrap login is disabled")
+        _enforce_login_rate_limit(deps, request)
+        if authorization != f"Bearer {deps.admin_token}":
+            decision = deps.record_login_failure(_client_rate_key(request))
+            if not decision.allowed:
+                raise HTTPException(
+                    status_code=429,
+                    detail="Login temporarily unavailable",
+                    headers={"Retry-After": str(decision.retry_after_seconds)},
+                )
+            raise HTTPException(status_code=401, detail="Invalid bootstrap credential")
+        actor = ControlPlaneActor.for_platform_admin("platform:admin")
+        session_token, csrf_token = deps.issue_browser_session_credentials(actor)
+        deps.clear_login_rate_limit(_client_rate_key(request))
+        config = dict(deps.ui_auth_config or {})
+        session_cookie, csrf_cookie = _browser_cookie_names(config)
+        secure = _secure_cookie(config)
+        response.set_cookie(
+            key=session_cookie,
+            value=session_token,
+            httponly=True,
+            secure=secure,
+            samesite="lax",
+            path="/",
+        )
+        response.set_cookie(
+            key=csrf_cookie,
+            value=csrf_token,
+            httponly=False,
+            secure=secure,
+            samesite="lax",
+            path="/",
+        )
+        return {"authenticated": True}
 
     @api.get("/v1/ui-auth-config")
     def get_ui_auth_config() -> object:

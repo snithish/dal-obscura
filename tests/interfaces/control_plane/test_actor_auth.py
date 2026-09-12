@@ -345,6 +345,55 @@ def test_session_reports_admin_token_actor():
     }
 
 
+def test_local_bootstrap_login_exchanges_bearer_for_browser_session():
+    client = _client()
+
+    response = client.post("/v1/session/bootstrap", headers=ADMIN_HEADERS)
+
+    assert response.status_code == 200
+    assert response.json() == {"authenticated": True}
+    assert response.cookies["dal_obscura_session"]
+    assert response.cookies["dal_obscura_csrf"]
+    session = client.get("/v1/session")
+    assert session.status_code == 200
+    assert session.json()["principal"] == "platform:admin"
+
+
+def test_local_bootstrap_login_rejects_invalid_bearer():
+    client = _client()
+
+    response = client.post("/v1/session/bootstrap", headers={"authorization": "Bearer wrong"})
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid bootstrap credential"}
+
+
+def test_local_bootstrap_login_is_unavailable_when_disabled():
+    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+    migrate_config_store(engine)
+    client = TestClient(
+        create_app(
+            session_factory(engine),
+            admin_token="test-admin",
+            bootstrap_enabled=False,
+        )
+    )
+
+    response = client.post("/v1/session/bootstrap", headers=ADMIN_HEADERS)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Local bootstrap login is disabled"}
+
+
+def test_session_options_disclose_only_enabled_login_methods():
+    client = _client()
+
+    response = client.get("/v1/session/options")
+
+    assert response.status_code == 200
+    assert response.json() == {"bootstrap_enabled": True, "oidc": None}
+
+
 def test_session_reports_oidc_actor_and_platform_admin_group():
     client = _client()
 

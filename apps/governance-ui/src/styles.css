@@ -27,6 +27,14 @@
 .persona-form input, .persona-form textarea { width: 100%; border: 1px solid #bbc8c0; border-radius: 4px; padding: 8px 9px; background: #fff; color: inherit; }
 .persona-form textarea { min-height: 42px; font: 12px/1.45 "SFMono-Regular", Consolas, monospace; }
 .load-more { display: block; margin: 14px auto 0; }
+.auth-panel { max-width: 560px; }
+.auth-panel > p { line-height: 1.55; }
+.bootstrap-login { display: grid; gap: 12px; margin: 24px 0 10px; padding: 18px; background: #fffefa; border: 1px solid #d7dcd5; border-radius: 7px; }
+.bootstrap-login label { display: grid; gap: 7px; color: #52635e; font-size: 13px; font-weight: 700; }
+.bootstrap-login input { width: 100%; border: 1px solid #bbc8c0; border-radius: 4px; padding: 10px; background: #fff; color: inherit; }
+.bootstrap-login button { justify-self: start; }
+.login-shortcut { margin: 6px 8px 6px 0; }
+.auth-error { color: #9f302c; font-size: 13px !important; }
 @media (max-width: 760px) { .consumer-grid { grid-template-columns: 1fr; } }
 @media (max-width: 1120px) { .studio { grid-template-columns: 1fr 1fr; } .result-panel { grid-column: 1 / -1; border-left: 0 !important; border-top: 1px solid #d7dcd5; } } @media (max-width: 760px) { .app-shell { display: block; } .sidebar { padding: 16px; } .brand { padding: 0 0 16px; } nav { display: flex; overflow-x: auto; } .nav-item { white-space: nowrap; } .sidebar-foot { display: none; } main { padding: 24px 18px 50px; } .topbar { align-items: start; } .actor { display: none; } .studio { display: block; } .studio > section + section { border-left: 0; border-top: 1px solid #d7dcd5; } .asset-summary { align-items: start; gap: 10px; flex-direction: column; } .asset-tabs { gap: 16px; overflow-x: auto; } }
 

@@ -102,6 +102,11 @@ export type UiAuthConfig = {
   login_shortcuts?: Array<{ label: string; login_hint: string; demo_login_path?: string }>;
 };
 
+export type SessionOptions = {
+  bootstrap_enabled: boolean;
+  oidc: UiAuthConfig | null;
+};
+
 export type PolicyVersion = {
   asset_id: string;
   asset_name: string;
@@ -222,6 +227,11 @@ export const controlPlane = {
   startLogin: () => { window.location.assign("/auth/login"); },
   getSession: () => request<Session>("/v1/session"),
   getUiAuthConfig: () => request<UiAuthConfig>("/v1/ui-auth-config"),
+  getSessionOptions: () => request<SessionOptions>("/v1/session/options"),
+  bootstrapLogin: (token: string) => request<{ authenticated: true }>("/v1/session/bootstrap", {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+  }),
   demoLogin: (loginHint: string) => request<{ authenticated: true }>("/v1/demo-login", {
     method: "POST",
     body: JSON.stringify({ login_hint: loginHint }),

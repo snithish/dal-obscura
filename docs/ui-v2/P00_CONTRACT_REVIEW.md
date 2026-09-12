@@ -31,6 +31,8 @@ dependency.
 | POST | `/v1/demo-login` | public when configured | password-grant demo shortcut | remove from default supported path in P02 |
 | POST | `/v1/logout` | Actor + CSRF for cookie client | expires current browser cookies | replace with revocable-session logout in P02 |
 | GET | `/v1/session` | Actor | actor metadata | replace with safe session/capability response |
+| GET | `/v1/session/options` | public | browser-safe OIDC/bootstrap capability metadata | bootstrap is local-profile only and never returns a credential |
+| POST | `/v1/session/bootstrap` | configured local bootstrap bearer | exchanges the local operator secret for the same revocable browser session and CSRF cookie | disabled in production |
 | GET | `/v1/workspace/summary` | Actor | workspace inventory summary | scope by workspace capability |
 | GET | `/v1/workspace/observations` | Actor | bounded control-plane generation and data-plane observation status | retain; never claim Flight health without a probe |
 | GET | `/v1/catalogs` | Actor | catalog list | scope by workspace and connection visibility |

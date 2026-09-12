@@ -28,10 +28,15 @@ pnpm install
 pnpm run dev
 ```
 
-Vite proxies `/v1` to a local control plane at `http://127.0.0.1:8821`. Use a
-browser session authorized for that API. The labelled synthetic demo workspace
-appears only when the `?demo` query parameter is explicitly present; failed
-authentication never loads demo policy data.
+Vite proxies `/v1` and `/auth` to a local control plane at
+`http://127.0.0.1:8821`. The normal route starts signed out. In the local
+profile, enter the configured `DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN` in the
+labelled local sign-in form; the server exchanges it for the same HttpOnly
+session and CSRF cookie used by OIDC. Production disables this bootstrap route
+and uses the SSO button, which starts the OIDC authorization-code/PKCE flow.
+The labelled synthetic demo workspace appears only when the `?demo` query
+parameter is explicitly present; failed authentication never loads demo policy
+data.
 
 ```bash
 pnpm run check
