@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `4c7c76d`.
+Implementation follow-up through `9fac614`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -259,6 +259,22 @@ remain open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: continue X06 evolution policy and X03 PostgreSQL
   transaction barriers.
+
+### X10 authoring controls — `9fac614`
+
+- State: implemented-unverified.
+- Behavior: the governance UI now exposes explicit rule precedence controls and
+  a JSON principal-condition editor. Invalid condition text remains local,
+  announces an error, and blocks saving; valid conditions use the existing
+  draft/review/publish workflow.
+- Green evidence: direct TypeScript check, Vite production build, and Node
+  lifecycle tests passed; the expanded Python boundary suite remains green.
+- Remaining gaps: browser journey and accessibility evidence, typed mask UX
+  coverage, active-generation/config activation proof, and real IdP/session
+  acceptance remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: continue X10 management/accessibility coverage while
+  X03 PostgreSQL and X06 provider-evolution gates remain open.
 
 The combined control-plane, catalog, schema, publication, migration, plugin, and
 published-config boundary suite passed at 100% after the budget change.
