@@ -512,6 +512,7 @@ class PublicationStore:
         publication = self._session.get(ConfigPublicationRecord, publication_id)
         if publication is None or publication.cell_id != cell_id:
             raise LookupError(f"No publication {publication_id} for cell {cell_id}")
+        self.lock_cell_for_publication(cell_id)
         existing = self._session.get(ActivePublicationRecord, cell_id)
         if existing is None:
             self._session.add(
@@ -534,6 +535,7 @@ class PublicationStore:
         publication = self._session.get(ConfigPublicationRecord, publication_id)
         if publication is None or publication.cell_id != cell_id:
             raise LookupError(f"No publication {publication_id} for cell {cell_id}")
+        self.lock_cell_for_publication(cell_id)
         result = self._session.execute(
             update(ActivePublicationRecord)
             .where(
@@ -555,6 +557,7 @@ class PublicationStore:
         publication = self._session.get(ConfigPublicationRecord, publication_id)
         if publication is None or publication.cell_id != cell_id:
             raise LookupError(f"No publication {publication_id} for cell {cell_id}")
+        self.lock_cell_for_publication(cell_id)
         if self._session.get(ActivePublicationRecord, cell_id) is not None:
             raise PublicationConflictError(
                 "active generation already exists; reread status before publishing"
@@ -562,6 +565,15 @@ class PublicationStore:
         self._session.add(ActivePublicationRecord(cell_id=cell_id, publication_id=publication_id))
         self._replace_active_assets(cell_id=cell_id, publication_id=publication_id)
         self._session.flush()
+
+    def lock_cell_for_publication(self, cell_id: UUID) -> None:
+        """Locks the cell row after the asset lock and before pointer mutation."""
+
+        record = self._session.scalar(
+            select(CellRecord).where(CellRecord.id == cell_id).with_for_update()
+        )
+        if record is None:
+            raise LookupError(f"No cell {cell_id}")
 
     def _replace_active_assets(self, *, cell_id: UUID, publication_id: UUID) -> None:
         self._session.execute(
