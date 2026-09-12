@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Callable, Iterable, Iterator
+from time import monotonic
 from typing import Any
 
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import CatalogType
@@ -14,6 +16,7 @@ LoadCatalogFn = Any
 Namespace = tuple[str, ...]
 DEFAULT_MAX_NAMESPACES = 1_000
 DEFAULT_MAX_TABLES = 10_000
+DEFAULT_DEADLINE_SECONDS = 30.0
 
 
 def discover_catalog_tables(
@@ -38,6 +41,7 @@ def discover_catalog_tables(
             dict(options),
             max_tables=DEFAULT_MAX_TABLES,
             max_namespaces=DEFAULT_MAX_NAMESPACES,
+            deadline_at=monotonic() + DEFAULT_DEADLINE_SECONDS,
         )
     _catalog_type(module)
     raise ValueError(f"Unsupported catalog module: {module}")
@@ -56,6 +60,8 @@ def discover_iceberg_tables(
     load_catalog_fn: LoadCatalogFn | None = None,
     max_namespaces: int = DEFAULT_MAX_NAMESPACES,
     max_tables: int = DEFAULT_MAX_TABLES,
+    deadline_at: float | None = None,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> list[CatalogTable]:
     """Lists every table reachable through a PyIceberg catalog.
 
@@ -70,11 +76,21 @@ def discover_iceberg_tables(
     loader = load_catalog_fn or _load_catalog
     catalog = loader(catalog_name, **options)
     table_names: set[str] = set()
-    for namespace in _walk_namespaces(catalog, max_namespaces=max_namespaces):
-        for identifier in _list_tables(catalog, namespace):
+    for namespace in _walk_namespaces(
+        catalog,
+        max_namespaces=max_namespaces,
+        deadline_at=deadline_at,
+        cancel_check=cancel_check,
+    ):
+        remaining_tables = max_tables - len(table_names)
+        for identifier in _bounded_provider_items(
+            _list_tables(catalog, namespace),
+            limit=remaining_tables,
+            kind="table",
+            deadline_at=deadline_at,
+            cancel_check=cancel_check,
+        ):
             table_names.add(_identifier_to_name(identifier))
-            if len(table_names) > max_tables:
-                raise ValueError(f"Catalog discovery exceeded the {max_tables}-table limit")
     return [
         {
             "backend": "iceberg",
@@ -89,6 +105,8 @@ def _walk_namespaces(
     catalog: Any,
     *,
     max_namespaces: int = DEFAULT_MAX_NAMESPACES,
+    deadline_at: float | None = None,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> list[Namespace]:
     namespaces: list[Namespace] = []
     pending = deque([()])
@@ -97,27 +115,34 @@ def _walk_namespaces(
         namespace = pending.popleft()
         if namespace in seen:
             continue
+        _check_budget(deadline_at, cancel_check)
         if len(seen) >= max_namespaces:
             raise ValueError(f"Catalog discovery exceeded the {max_namespaces}-namespace limit")
         seen.add(namespace)
         namespaces.append(namespace)
-        for child in _list_namespaces(catalog, namespace):
+        for child in _bounded_provider_items(
+            _list_namespaces(catalog, namespace),
+            limit=max_namespaces - len(seen),
+            kind="namespace",
+            deadline_at=deadline_at,
+            cancel_check=cancel_check,
+        ):
             pending.append(_namespace_tuple(child))
     return namespaces
 
 
-def _list_namespaces(catalog: Any, namespace: Namespace) -> list[object]:
+def _list_namespaces(catalog: Any, namespace: Namespace) -> Iterable[object]:
     try:
         if namespace:
-            return list(catalog.list_namespaces(namespace))
-        return list(catalog.list_namespaces())
+            return catalog.list_namespaces(namespace)
+        return catalog.list_namespaces()
     except TypeError:
-        return list(catalog.list_namespaces(namespace))
+        return catalog.list_namespaces(namespace)
 
 
-def _list_tables(catalog: Any, namespace: Namespace) -> list[object]:
+def _list_tables(catalog: Any, namespace: Namespace) -> Iterable[object]:
     try:
-        return list(catalog.list_tables(namespace))
+        return catalog.list_tables(namespace)
     except Exception:
         if namespace:
             raise
@@ -142,6 +167,30 @@ def _identifier_to_name(identifier: object) -> str:
     if isinstance(identifier, list):
         return ".".join(str(part) for part in identifier)
     return str(identifier)
+
+
+def _bounded_provider_items(
+    values: Iterable[object],
+    *,
+    limit: int,
+    kind: str,
+    deadline_at: float | None,
+    cancel_check: Callable[[], bool] | None,
+) -> Iterator[object]:
+    if limit < 0:
+        raise ValueError(f"Catalog discovery exceeded the {kind} limit")
+    for index, value in enumerate(values):
+        _check_budget(deadline_at, cancel_check)
+        if index >= limit:
+            raise ValueError(f"Catalog discovery exceeded the {kind} limit")
+        yield value
+
+
+def _check_budget(deadline_at: float | None, cancel_check: Callable[[], bool] | None) -> None:
+    if cancel_check is not None and cancel_check():
+        raise RuntimeError("Catalog discovery cancelled")
+    if deadline_at is not None and monotonic() >= deadline_at:
+        raise TimeoutError("Catalog discovery deadline exceeded")
 
 
 def _load_catalog(catalog_name: str, **options: Any) -> Any:

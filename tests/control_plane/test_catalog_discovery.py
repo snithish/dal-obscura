@@ -52,3 +52,47 @@ def test_iceberg_discovery_rejects_table_explosion():
             load_catalog_fn=lambda name, **options: FakeIcebergCatalog(),
             max_tables=1,
         )
+
+
+def test_iceberg_discovery_stops_an_unbounded_provider_page():
+    class EndlessCatalog:
+        def list_namespaces(self, namespace=()):
+            if namespace == ():
+                return (("ns", index) for index in range(100_000))
+            return ()
+
+        def list_tables(self, namespace):
+            return ()
+
+    with pytest.raises(ValueError, match="namespace limit"):
+        discover_iceberg_tables(
+            "analytics",
+            {},
+            load_catalog_fn=lambda name, **options: EndlessCatalog(),
+            max_namespaces=4,
+        )
+
+
+def test_iceberg_discovery_honors_cancellation_and_deadline():
+    class SlowCatalog:
+        def list_namespaces(self, namespace=()):
+            return (("ns", index) for index in range(100_000))
+
+        def list_tables(self, namespace):
+            return ()
+
+    with pytest.raises(RuntimeError, match="cancelled"):
+        discover_iceberg_tables(
+            "analytics",
+            {},
+            load_catalog_fn=lambda name, **options: SlowCatalog(),
+            cancel_check=lambda: True,
+        )
+
+    with pytest.raises(TimeoutError, match="deadline"):
+        discover_iceberg_tables(
+            "analytics",
+            {},
+            load_catalog_fn=lambda name, **options: SlowCatalog(),
+            deadline_at=0.0,
+        )

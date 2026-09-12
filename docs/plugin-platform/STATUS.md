@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `014d205` (next X06 slice uncommitted).
+Implementation follow-up through `69375e4` (next X08 slice uncommitted).
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -47,9 +47,10 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
 - X07 configuration/secrets/IO: **implementing**; nested dynamic class-loader options
   are rejected. Typed provider configs, shared secret resolution, and IO enforcement
   remain open.
-- X08 budgets and atomic reload: **implementing**; real discovery now routes through
-  pre-materialization namespace/table caps and uses deque traversal. Provider page
-  bounds, deadlines, cancellation, and atomic reload remain open.
+- X08 budgets and atomic reload: **implementing**; discovery now bounds provider
+  iterators before materialization and checks cancellation/deadline per item while
+  retaining deque traversal. Provider-specific transport timeouts and atomic
+  registry reload remain open.
 - X09 UI lifecycle: **implemented-unverified**; initial-load epoch and synchronous
   logout fencing plus stale history/preview/review/publish response checks are fixed.
   Deferred browser tests and full operation-state coverage remain open.
@@ -76,6 +77,12 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
 Next implementation action: continue X03 with PostgreSQL barrier/CAS evidence and
 then complete X06 persisted field identities/evolution rules. Do not add new
 providers before Phase A's security/correctness prerequisites are accepted.
+
+Latest implementation slice after the schema migration: X08 provider-page budget
+and cancellation checks are validated by
+`tests/control_plane/test_catalog_discovery.py` (5 passed) with Ruff clean. The
+slice is intentionally not marked accepted because live provider timeout,
+multi-worker capacity, and atomic reload evidence are still required.
 
 ## Latest evidence entry
 
