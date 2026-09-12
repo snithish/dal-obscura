@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `e7144a9`.
+Implementation follow-up through `79c3642`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -459,6 +459,12 @@ Full pytest exposed and fixed a route-inventory drift for the workspace
 publication endpoints. The remaining full-suite failures are environment-gated
 Flight socket binds, heavyweight benchmark subprocesses, and connector fixture
 assumptions; they remain release evidence gaps rather than being suppressed.
+
+The Flight health helper no longer logs readiness exception text. A sentinel
+provider-error regression confirms the secret is absent from logs while the
+stable unavailable error remains intact; focused Ruff/Ty checks pass. The
+existing bind-failure test remains unexecutable in this sandbox because socket
+bind is denied by the environment.
 
 The direct-Arrow bounds regression and Ty/Ruff checks passed in
 `3263645`; the full schema byte-budget and every-entry-route acceptance matrix
