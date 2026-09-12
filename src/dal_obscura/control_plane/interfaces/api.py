@@ -118,6 +118,9 @@ def create_app(  # noqa: C901
     catalog_egress_allowlist: tuple[str, ...] = (),
     bootstrap_enabled: bool | None = None,
     max_request_bytes: int = 1_048_576,
+    login_rate_limit_attempts: int = 20,
+    login_rate_limit_window_seconds: int = 60,
+    login_rate_limit_block_seconds: int = 300,
 ) -> FastAPI:
     """Creates the control-plane FastAPI app with all workspace routes installed.
 
@@ -129,6 +132,12 @@ def create_app(  # noqa: C901
 
     if max_request_bytes <= 0:
         raise ValueError("max_request_bytes must be positive")
+    if (
+        login_rate_limit_attempts <= 0
+        or login_rate_limit_window_seconds <= 0
+        or login_rate_limit_block_seconds <= 0
+    ):
+        raise ValueError("login rate-limit values must be positive")
 
     app = FastAPI(
         title="dal-obscura control-plane API",
@@ -215,6 +224,9 @@ def create_app(  # noqa: C901
         bootstrap_enabled=(not require_review if bootstrap_enabled is None else bootstrap_enabled),
         allowed_origins=cors_origins,
         oidc_nonce_actor_resolver=oidc_nonce_actor_resolver,
+        login_rate_limit_attempts=login_rate_limit_attempts,
+        login_rate_limit_window_seconds=login_rate_limit_window_seconds,
+        login_rate_limit_block_seconds=login_rate_limit_block_seconds,
         authorization_code_exchange=lambda config, code, verifier: _exchange_authorization_code(
             config,
             code,

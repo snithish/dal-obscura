@@ -95,3 +95,52 @@ def test_oidc_callback_rejects_state_replay_and_nonce_failure(monkeypatch) -> No
 
     assert nonce_failure.status_code == 401
     assert replay.status_code == 400
+
+
+def test_oidc_login_is_bounded_per_client_and_returns_retry_after() -> None:
+    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+    migrate_config_store(engine)
+    client = TestClient(
+        create_app(
+            session_factory(engine),
+            admin_token="test-admin",
+            ui_auth_config={
+                "authority": "https://issuer.example/realms/demo",
+                "client_id": "dal-obscura-ui",
+                "redirect_uri": "http://testserver/auth/callback",
+            },
+            login_rate_limit_attempts=2,
+            login_rate_limit_window_seconds=60,
+            login_rate_limit_block_seconds=30,
+        )
+    )
+
+    assert client.get("/auth/login", follow_redirects=False).status_code == 303
+    assert client.get("/auth/login", follow_redirects=False).status_code == 303
+    blocked = client.get("/auth/login", follow_redirects=False)
+
+    assert blocked.status_code == 429
+    assert blocked.headers["retry-after"] == "30"
+    assert blocked.json() == {"detail": "Login temporarily unavailable"}
+
+
+def test_successful_oidc_callback_clears_client_login_limit(monkeypatch) -> None:
+    monkeypatch.setattr(
+        api_module,
+        "_exchange_authorization_code",
+        lambda config, code, verifier: {"access_token": "access", "id_token": "id"},
+    )
+    client = _client(lambda token, nonce_hash: {"principal": "alice", "groups": []})
+
+    start = client.get("/auth/login", follow_redirects=False)
+    state = parse_qs(urlsplit(start.headers["location"]).query)["state"][0]
+    callback = client.get(
+        "/auth/callback",
+        params={"code": "code", "state": state},
+        follow_redirects=False,
+    )
+
+    assert callback.status_code == 303
+    # A successful callback resets the client window, so the default limiter
+    # can immediately admit another login start.
+    assert client.get("/auth/login", follow_redirects=False).status_code == 303

@@ -31,6 +31,8 @@ from dal_obscura.control_plane.application.errors import (
 from dal_obscura.control_plane.application.provisioning import ProvisioningService
 from dal_obscura.control_plane.infrastructure.session_store import (
     BrowserSessionStore,
+    LoginRateLimitDecision,
+    LoginRateLimiter,
     LoginTransaction,
     LoginTransactionStore,
 )
@@ -69,6 +71,9 @@ class ControlPlaneDeps:
     review_secret: str = ""
     catalog_egress_allowlist: tuple[str, ...] = ()
     bootstrap_enabled: bool = True
+    login_rate_limit_attempts: int = 20
+    login_rate_limit_window_seconds: int = 60
+    login_rate_limit_block_seconds: int = 300
 
     def require_actor(
         self,
@@ -191,6 +196,39 @@ class ControlPlaneDeps:
                 code_verifier=code_verifier,
                 redirect_uri=redirect_uri,
             )
+            session.commit()
+
+    def check_login_rate_limit(self, client_key: str) -> LoginRateLimitDecision:
+        """Records a login start and returns the generic admission decision."""
+
+        with self.session_maker() as session:
+            decision = LoginRateLimiter(session).allow(
+                client_key,
+                max_attempts=self.login_rate_limit_attempts,
+                window_seconds=self.login_rate_limit_window_seconds,
+                block_seconds=self.login_rate_limit_block_seconds,
+            )
+            session.commit()
+            return decision
+
+    def record_login_failure(self, client_key: str) -> LoginRateLimitDecision:
+        """Records a failed callback using the same durable client window."""
+
+        with self.session_maker() as session:
+            decision = LoginRateLimiter(session).record_failure(
+                client_key,
+                max_attempts=self.login_rate_limit_attempts,
+                window_seconds=self.login_rate_limit_window_seconds,
+                block_seconds=self.login_rate_limit_block_seconds,
+            )
+            session.commit()
+            return decision
+
+    def clear_login_rate_limit(self, client_key: str) -> None:
+        """Clears login abuse state after a successful callback."""
+
+        with self.session_maker() as session:
+            LoginRateLimiter(session).clear(client_key)
             session.commit()
 
     def consume_login_transaction(self, state: str) -> LoginTransaction | None:

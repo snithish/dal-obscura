@@ -12,7 +12,7 @@ import base64
 import hashlib
 import secrets
 from collections.abc import Mapping
-from typing import cast
+from typing import NoReturn, cast
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
@@ -40,8 +40,9 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
     api = APIRouter()
 
     @api.get("/auth/login")
-    def auth_login() -> Response:
+    def auth_login(request: Request) -> Response:
         config = _required_ui_config(deps)
+        _enforce_login_rate_limit(deps, request)
         redirect_uri = _required_config_value(config, "redirect_uri")
         state = secrets.token_urlsafe(32)
         nonce = secrets.token_urlsafe(32)
@@ -84,6 +85,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
 
     @api.get("/auth/callback")
     def auth_callback(
+        request: Request,
         code: str | None = None,
         state: str | None = None,
         error: str | None = None,
@@ -92,24 +94,40 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         auth_state = _cookie_text(auth_state)
         config = _required_ui_config(deps)
         if error:
-            raise HTTPException(status_code=401, detail="OIDC login was not completed")
+            _callback_failure(deps, request, status_code=401, detail="OIDC login was not completed")
         if not code or not state or not auth_state or not secrets.compare_digest(state, auth_state):
-            raise HTTPException(status_code=400, detail="Invalid OIDC login state")
+            _callback_failure(deps, request, status_code=400, detail="Invalid OIDC login state")
         transaction = deps.consume_login_transaction(state)
         if transaction is None:
-            raise HTTPException(status_code=400, detail="Expired or already used OIDC login state")
+            _callback_failure(
+                deps,
+                request,
+                status_code=400,
+                detail="Expired or already used OIDC login state",
+            )
         redirect_uri = _required_config_value(config, "redirect_uri")
         if transaction.redirect_uri != redirect_uri:
-            raise HTTPException(status_code=400, detail="OIDC redirect URI changed during login")
+            _callback_failure(
+                deps,
+                request,
+                status_code=400,
+                detail="OIDC redirect URI changed during login",
+            )
         exchange = deps.authorization_code_exchange
         if exchange is None:
             raise HTTPException(status_code=503, detail="OIDC code exchange is not configured")
-        tokens = exchange(config, code, transaction.code_verifier)
+        try:
+            tokens = exchange(config, code, transaction.code_verifier)
+        except HTTPException:
+            _callback_failure(deps, request, status_code=502, detail="OIDC code exchange failed")
+        except Exception:
+            _callback_failure(deps, request, status_code=502, detail="OIDC code exchange failed")
         id_token = str(tokens.get("id_token", "")).strip()
         actor = deps.resolve_nonce_token(id_token, transaction.nonce_hash)
         if actor is None:
-            raise HTTPException(status_code=401, detail="OIDC ID token was rejected")
+            _callback_failure(deps, request, status_code=401, detail="OIDC ID token was rejected")
         session_token, csrf_token = deps.issue_browser_session_credentials(actor)
+        deps.clear_login_rate_limit(_client_rate_key(request))
         result = RedirectResponse(_post_login_redirect(config, redirect_uri), status_code=303)
         result.headers["cache-control"] = "no-store"
         session_cookie, csrf_cookie = _browser_cookie_names(config)
@@ -143,9 +161,10 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         return public_ui_auth_config(deps.ui_auth_config)
 
     @api.post("/v1/demo-login")
-    def demo_login(request: DemoLoginRequest, response: Response) -> object:
+    def demo_login(request: DemoLoginRequest, response: Response, http_request: Request) -> object:
         if deps.ui_auth_config is None:
             raise HTTPException(status_code=404, detail="Demo login is not configured")
+        _enforce_login_rate_limit(deps, http_request)
         login_config = demo_login_config(deps.ui_auth_config)
         if not login_config:
             raise HTTPException(status_code=404, detail="Demo login is not configured")
@@ -153,11 +172,22 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         passwords = cast(dict[str, str], login_config["passwords"])
         if username not in passwords:
             raise HTTPException(status_code=404, detail="Demo persona is not configured")
-        provider_token = deps.demo_token_exchange(login_config, username)
+        try:
+            provider_token = deps.demo_token_exchange(login_config, username)
+        except HTTPException:
+            _callback_failure(deps, http_request, status_code=502, detail="Demo login failed")
+        except Exception:
+            _callback_failure(deps, http_request, status_code=502, detail="Demo login failed")
         actor = deps.resolve_bearer_token(provider_token)
         if actor is None:
-            raise HTTPException(status_code=401, detail="Demo identity provider token rejected")
+            _callback_failure(
+                deps,
+                http_request,
+                status_code=401,
+                detail="Demo identity provider token rejected",
+            )
         session_token, csrf_token = deps.issue_browser_session_credentials(actor)
+        deps.clear_login_rate_limit(_client_rate_key(http_request))
         secure = str(deps.ui_auth_config.get("redirect_uri", "")).startswith("https://")
         session_cookie, csrf_cookie = _browser_cookie_names(deps.ui_auth_config)
         response.set_cookie(
@@ -255,3 +285,38 @@ def _post_login_redirect(config: dict[str, object], redirect_uri: str) -> str:
         return fallback
     parsed = urlsplit(redirect_uri)
     return urlunsplit((parsed.scheme, parsed.netloc, "/", "", ""))
+
+
+def _client_rate_key(request: Request) -> str:
+    """Returns a direct connection key; forwarded headers are never trusted."""
+
+    client = request.client
+    return client.host if client is not None and client.host else "unknown"
+
+
+def _enforce_login_rate_limit(deps: ControlPlaneDeps, request: Request) -> None:
+    decision = deps.check_login_rate_limit(_client_rate_key(request))
+    if decision.allowed:
+        return
+    raise HTTPException(
+        status_code=429,
+        detail="Login temporarily unavailable",
+        headers={"Retry-After": str(decision.retry_after_seconds)},
+    )
+
+
+def _callback_failure(
+    deps: ControlPlaneDeps,
+    request: Request,
+    *,
+    status_code: int,
+    detail: str,
+) -> NoReturn:
+    decision = deps.record_login_failure(_client_rate_key(request))
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Login temporarily unavailable",
+            headers={"Retry-After": str(decision.retry_after_seconds)},
+        )
+    raise HTTPException(status_code=status_code, detail=detail)

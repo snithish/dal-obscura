@@ -242,6 +242,29 @@ class LoginTransactionRecord(Base):
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class LoginRateLimitRecord(Base):
+    """Durable per-client login-abuse window.
+
+    The key is a SHA-256 digest of a trusted client identifier, so the
+    control-plane database never stores a raw network address.  This table is
+    deliberately separate from OIDC transactions: failed callbacks must be
+    rate-limited even after their one-time transaction has been consumed.
+    """
+
+    __tablename__ = "login_rate_limits"
+    __table_args__ = (
+        UniqueConstraint("client_key_hash"),
+        Index("ix_login_rate_limits_blocked_until", "blocked_until"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    client_key_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    window_started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    blocked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class AssetPolicyDraftRecord(Base):
     """Revisioned personal policy draft for one asset."""
 
