@@ -177,6 +177,12 @@ class PolicyRestoreRequest(StrictModel):
     expected_revision: int = Field(ge=0)
 
 
+class PublicationActivationRequest(StrictModel):
+    """Optional active-generation precondition for workspace activation."""
+
+    expected_publication_id: UUID | None = None
+
+
 class PolicyPreviewRequest(StrictModel):
     """Policy-preview request for a candidate principal.
 

@@ -123,6 +123,36 @@ def test_workspace_publication_management_is_admin_scoped_and_staged():
     assert client.get("/v1/workspace/publications").status_code == 401
 
 
+def test_workspace_publication_activation_rejects_stale_generation_precondition():
+    client = _client()
+    asset = _provision_draft(client)
+    assert client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        headers=ADMIN_HEADERS,
+        json={"owners": ["platform:admin"]},
+    ).status_code == 200
+    first = client.post("/v1/workspace/publications", headers=ADMIN_HEADERS).json()
+    second = client.post("/v1/workspace/publications", headers=ADMIN_HEADERS).json()
+
+    assert client.post(
+        f"/v1/workspace/publications/{first['publication_id']}/activate",
+        headers=ADMIN_HEADERS,
+    ).status_code == 200
+    activated = client.post(
+        f"/v1/workspace/publications/{second['publication_id']}/activate",
+        headers=ADMIN_HEADERS,
+        json={"expected_publication_id": first["publication_id"]},
+    )
+    stale = client.post(
+        f"/v1/workspace/publications/{first['publication_id']}/activate",
+        headers=ADMIN_HEADERS,
+        json={"expected_publication_id": first["publication_id"]},
+    )
+
+    assert activated.status_code == 200
+    assert stale.status_code == 409
+
+
 def test_tenant_and_cell_routes_are_not_public_workspace_api():
     client = _client()
 

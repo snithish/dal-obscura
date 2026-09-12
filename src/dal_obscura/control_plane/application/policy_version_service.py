@@ -418,6 +418,8 @@ def activate_publication(
     store: PublicationStore,
     cell_id: UUID,
     publication_id: UUID,
+    *,
+    expected_publication_id: UUID | None = None,
 ) -> dict[str, str]:
     """Marks a publication active for one cell.
 
@@ -427,7 +429,14 @@ def activate_publication(
         ```
     """
 
-    store.activate_publication(cell_id=cell_id, publication_id=publication_id)
+    if expected_publication_id is None:
+        store.activate_publication(cell_id=cell_id, publication_id=publication_id)
+    else:
+        store.activate_publication_if_current(
+            cell_id=cell_id,
+            publication_id=publication_id,
+            expected_publication_id=expected_publication_id,
+        )
     return {"cell_id": str(cell_id), "publication_id": str(publication_id)}
 
 

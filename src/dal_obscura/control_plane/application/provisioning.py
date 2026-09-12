@@ -307,11 +307,17 @@ class ProvisioningService:
             actor=actor,
         )
 
-    def activate_workspace_publication(self, publication_id: UUID) -> dict[str, str]:
+    def activate_workspace_publication(
+        self,
+        publication_id: UUID,
+        *,
+        expected_publication_id: UUID | None = None,
+    ) -> dict[str, str]:
         return workspace_service.activate_workspace_publication(
             self._store,
             self.activate_publication,
             publication_id,
+            expected_publication_id=expected_publication_id,
         )
 
     def assign_tenant(self, cell_id: UUID, tenant_id: UUID, shard_key: str) -> None:
@@ -589,11 +595,18 @@ class ProvisioningService:
     def create_publication(self, cell_id: UUID) -> dict[str, object]:
         return policy_version_service.create_publication(self._store, cell_id)
 
-    def activate_publication(self, cell_id: UUID, publication_id: UUID) -> dict[str, str]:
+    def activate_publication(
+        self,
+        cell_id: UUID,
+        publication_id: UUID,
+        *,
+        expected_publication_id: UUID | None = None,
+    ) -> dict[str, str]:
         return policy_version_service.activate_publication(
             self._store,
             cell_id,
             publication_id,
+            expected_publication_id=expected_publication_id,
         )
 
     def _required_workspace_context(self):

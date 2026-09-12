@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
+from dal_obscura.control_plane.interfaces.routes.schemas import PublicationActivationRequest
 
 
 def router(deps: ControlPlaneDeps) -> APIRouter:
@@ -56,11 +57,17 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
     @api.post("/v1/workspace/publications/{publication_id}/activate")
     def activate_workspace_publication(
         publication_id: UUID,
+        request: PublicationActivationRequest | None = None,
         actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
     ) -> object:
         del actor
         return deps.with_service(
-            lambda service: service.activate_workspace_publication(publication_id)
+            lambda service: service.activate_workspace_publication(
+                publication_id,
+                expected_publication_id=(
+                    None if request is None else request.expected_publication_id
+                ),
+            )
         )
 
     return api
