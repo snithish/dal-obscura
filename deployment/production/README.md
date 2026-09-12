@@ -9,8 +9,10 @@ ingress. Replace every image tag with a verified immutable digest.
 ## Install and start
 
 1. Copy `.env.example` to `.env` and load every secret from the deployment's
-   secret manager. Do not put provider passwords, ticket keys, database
-   credentials, or TLS private keys in Git.
+   secret manager. Place the referenced certificate, private key, and client-CA
+   files at the three `*_SOURCE` paths with mode `0400`; Compose mounts them as
+   read-only secrets only into the data-plane workers. Do not put provider
+   passwords, ticket keys, database credentials, or TLS private keys in Git.
 2. Set the external governance hostname and Flight HTTP/2 hostname in the IdP,
    ingress, and redirect configuration. The control-plane production profile
    rejects non-TLS OIDC and browser redirect settings, weak bootstrap tokens,
@@ -61,6 +63,11 @@ readiness, or synthetic read check fails.
   control plane normal application rights, and Flight workers only the narrow
   ticket-store rights they require. Do not allow customer clients to write
   trusted ticket or publication rows.
+- Compose injects only the variables each role needs: PostgreSQL receives its
+  database bootstrap values, migrations receive only the database URL, the
+  control plane receives browser/admin OIDC settings, and Flight workers
+  receive ticket/TLS/runtime settings. The admin token is never present in the
+  PostgreSQL or data-plane process environment.
 - The UI container is unprivileged, read-only, and has no source-data access.
   The UI never receives database, catalog, IdP client-secret, or ticket-secret
   values. Catalog credentials belong to the secret manager; configure

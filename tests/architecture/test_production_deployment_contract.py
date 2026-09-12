@@ -17,6 +17,14 @@ def test_production_reference_contains_immutable_and_private_topology() -> None:
     assert "condition: service_completed_successfully" in compose
     assert "read_only: true" in compose
     assert 'cap_drop: ["ALL"]' in compose
+    assert "internal: true" in compose
+    assert "flight_cert:" in compose
+    assert "condition: service_healthy" in compose
+    postgres_block = compose.split("  migrate:", 1)[0]
+    assert "env_file: .env" not in postgres_block
+    assert "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN" not in postgres_block
+    assert 'user: "10001:10001"' in compose
+    assert 'memory: "2G"' in compose
     assert "DAL_OBSCURA_CONTROL_PLANE_PROFILE=production" in env_example
     assert "DAL_OBSCURA_TLS_VERIFY_CLIENT=true" in env_example
     assert "Routine restart" in readme
