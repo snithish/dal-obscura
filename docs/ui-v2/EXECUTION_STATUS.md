@@ -32,9 +32,9 @@ Required backend/production coverage: [production review](PRODUCTION_READINESS.m
 - P07 bound synthetic evaluations: implemented-unverified with bounded rows and
   evidence tied to draft revision/content hash.
 - P08 exact review and atomic publication UI/API: implemented-unverified;
-  server review, explicit publish capability, CAS activation, and idempotency
-  replay are shipped, while concurrent PostgreSQL evidence and deny-all policy
-  semantics remain.
+  server review, explicit publish capability, CAS activation, asset-row
+  serialization, and idempotency replay are shipped, while concurrent
+  PostgreSQL evidence and deny-all policy semantics remain.
 - P09 history, restore, audit, runtime observations: implemented-unverified;
   immutable history, audited restore/mutations, and explicit unobserved
   data-plane status are shipped.
@@ -55,8 +55,9 @@ Required backend/production coverage: [production review](PRODUCTION_READINESS.m
   tickets after restore. Encrypted backup/PITR, isolated restore evidence,
   upgrades, and key-rotation drills remain.
 - P15 capacity, observability, and customer operations: partial; bounded
-  evaluation and explicit runtime observation contracts exist, while load,
-  alerts, and customer runbooks remain.
+  evaluation, explicit runtime observations, durable ticket cleanup, and
+  restore invalidation exist, while aggregate limits, metrics/alerts, load,
+  and customer runbooks remain.
 - P16 whole-product release evidence and promotion: not-started.
 
 These statuses refer to acceptance under the new packets, not absence of all
@@ -95,6 +96,25 @@ do not call the release complete without those observations.
   read remain unverified.
 - Limitation: this command is an operator recovery control, not proof of a
   backup, restore, key rotation, or RPO/RTO drill.
+
+### P15.1 bounded access-state retention — `2aa97eb`
+
+- State: partial.
+- Behavior: issuing browser sessions or OIDC login transactions removes
+  revoked/consumed/expired rows. Data-plane workers run a bounded durable-ticket
+  cleanup loop; the interval is configurable and defaults to 60 seconds.
+- Green evidence: runtime-config, browser-session, ticket-store, and recovery
+  tests pass with Ruff and Ty. Multi-process capacity, metrics, and alerting
+  remain open.
+
+### P08.2 publication race serialization — `b1165cf`
+
+- State: implemented-unverified.
+- Behavior: PostgreSQL publication transactions lock the governed asset row
+  before checking idempotency and expected generations, preventing concurrent
+  API processes from publishing the same request twice.
+- Green evidence: publication API/idempotency and repository CAS tests pass;
+  a real two-process PostgreSQL race still needs execution.
 
 ### Production review — 2026-09-12
 
