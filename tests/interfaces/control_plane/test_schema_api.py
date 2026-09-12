@@ -469,7 +469,11 @@ def test_production_publication_rejects_asset_metadata_change_after_review(monke
         )
     )
     asset = _provision_reviewable_asset(client)
-    monkeypatch.setattr(schema_service, "load_catalog", lambda *args, **kwargs: _EvaluationCatalog())
+    monkeypatch.setattr(
+        schema_service,
+        "load_catalog",
+        lambda *args, **kwargs: _EvaluationCatalog(),
+    )
     reviewed = client.post(
         f"/v1/assets/{asset['id']}/policy-review",
         json={"principal": "user1", "groups": [], "claims": {}},
