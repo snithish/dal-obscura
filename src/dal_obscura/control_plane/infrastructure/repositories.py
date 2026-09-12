@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
@@ -103,6 +104,14 @@ class AssetPage:
         page = store.list_assets(cell_id=context.cell_id, tenant_id=context.tenant_id)
         ```
     """
+
+    items: list[dict[str, object]]
+    next_cursor: str | None
+
+
+@dataclass(frozen=True)
+class PolicyHistoryPage:
+    """Cursor-paginated immutable policy history."""
 
     items: list[dict[str, object]]
     next_cursor: str | None
@@ -1150,6 +1159,113 @@ class PublicationStore:
             for published, publication, asset in rows
         ]
 
+    def list_policy_version_history_page(
+        self,
+        context: WorkspaceContext,
+        *,
+        limit: int,
+        cursor: str | None = None,
+        principals: set[str] | None = None,
+    ) -> PolicyHistoryPage:
+        """Returns bounded immutable history ordered by publication time."""
+
+        if limit <= 0:
+            raise ValueError("Policy history page limit must be positive")
+        query = (
+            select(PublishedAssetRecord, ConfigPublicationRecord, AssetRecord)
+            .join(
+                ConfigPublicationRecord,
+                ConfigPublicationRecord.id == PublishedAssetRecord.publication_id,
+            )
+            .join(
+                CatalogRecord,
+                CatalogRecord.cell_id == ConfigPublicationRecord.cell_id,
+            )
+            .join(AssetRecord, AssetRecord.catalog_id == CatalogRecord.id)
+            .where(
+                ConfigPublicationRecord.cell_id == context.cell_id,
+                PublishedAssetRecord.tenant_id == context.tenant_id,
+                CatalogRecord.tenant_id == context.tenant_id,
+                CatalogRecord.name == PublishedAssetRecord.catalog,
+                AssetRecord.tenant_id == context.tenant_id,
+                AssetRecord.target == PublishedAssetRecord.target,
+            )
+        )
+        if principals is not None:
+            if not principals:
+                return PolicyHistoryPage(items=[], next_cursor=None)
+            query = (
+                query.outerjoin(AssetOwnerRecord, AssetOwnerRecord.asset_id == AssetRecord.id)
+                .outerjoin(AssetGrantRecord, AssetGrantRecord.asset_id == AssetRecord.id)
+                .where(
+                    or_(
+                        AssetOwnerRecord.principal.in_(principals),
+                        and_(
+                            AssetGrantRecord.principal.in_(principals),
+                            AssetGrantRecord.capability == "read",
+                        ),
+                    )
+                )
+                .distinct()
+            )
+        if cursor:
+            created_at, target, asset_id, policy_version = _decode_policy_history_cursor(cursor)
+            query = query.where(
+                or_(
+                    ConfigPublicationRecord.created_at > created_at,
+                    and_(
+                        ConfigPublicationRecord.created_at == created_at,
+                        AssetRecord.target > target,
+                    ),
+                    and_(
+                        ConfigPublicationRecord.created_at == created_at,
+                        AssetRecord.target == target,
+                        AssetRecord.id > asset_id,
+                    ),
+                    and_(
+                        ConfigPublicationRecord.created_at == created_at,
+                        AssetRecord.target == target,
+                        AssetRecord.id == asset_id,
+                        PublishedAssetRecord.policy_version > policy_version,
+                    ),
+                )
+            )
+        rows = list(
+            self._session.execute(
+                query.order_by(
+                    ConfigPublicationRecord.created_at,
+                    AssetRecord.target,
+                    AssetRecord.id,
+                    PublishedAssetRecord.policy_version,
+                ).limit(limit + 1)
+            )
+        )
+        next_cursor = None
+        if len(rows) > limit:
+            rows = rows[:limit]
+            published, publication, asset = rows[-1]
+            next_cursor = _encode_policy_history_cursor(
+                created_at=publication.created_at,
+                target=asset.target,
+                asset_id=asset.id,
+                policy_version=published.policy_version,
+            )
+        active = self._session.get(ActivePublicationRecord, context.cell_id)
+        active_publication_id = active.publication_id if active is not None else None
+        items = [
+            {
+                "asset_id": str(asset.id),
+                "asset_name": asset.target,
+                "catalog": published.catalog,
+                "target": published.target,
+                "policy_version": published.policy_version,
+                "active": published.publication_id == active_publication_id,
+                "created_at": _isoformat(publication.created_at),
+            }
+            for published, publication, asset in rows
+        ]
+        return PolicyHistoryPage(items=items, next_cursor=next_cursor)
+
     def get_published_asset_policy(
         self,
         *,
@@ -1706,6 +1822,41 @@ def _decode_asset_cursor(value: str, *, expected_search: str = "") -> tuple[str,
         return str(data["target"]), UUID(str(data["id"]))
     except Exception as exc:
         raise ValueError("Invalid asset cursor") from exc
+
+
+def _encode_policy_history_cursor(
+    *,
+    created_at: datetime,
+    target: str,
+    asset_id: UUID,
+    policy_version: int,
+) -> str:
+    raw = json.dumps(
+        {
+            "created_at": _isoformat(created_at),
+            "target": target,
+            "asset_id": str(asset_id),
+            "policy_version": policy_version,
+        },
+        separators=(",", ":"),
+    )
+    return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
+
+
+def _decode_policy_history_cursor(value: str) -> tuple[datetime, str, UUID, int]:
+    try:
+        padded = value + "=" * (-len(value) % 4)
+        raw = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
+        data = json.loads(raw)
+        created_at = datetime.fromisoformat(str(data["created_at"]).replace("Z", "+00:00"))
+        return (
+            created_at,
+            str(data["target"]),
+            UUID(str(data["asset_id"])),
+            int(data["policy_version"]),
+        )
+    except Exception as exc:
+        raise ValueError("Invalid policy history cursor") from exc
 
 
 def _escape_like(value: str) -> str:

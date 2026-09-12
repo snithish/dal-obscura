@@ -53,6 +53,7 @@ dependency.
 | POST | `/v1/assets/{asset_id}/policy-review` | Actor, service checks publisher | server-signed exact-draft review token | review token must expire and bind asset, revision, evidence, and active generation |
 | POST | `/v1/assets/{asset_id}/policy-versions` | Actor, service checks owner/editor | create and activate policy version | replace with exact-review then explicit publish capability |
 | GET | `/v1/policy-versions` | Actor | version history | auditor/editor scoped history visibility |
+| GET | `/v1/policy-versions/page` | Actor | bounded version history | opaque cursor with deterministic publication ordering and actor scope |
 | GET | `/v1/assets/{asset_id}/policy-versions` | Actor | asset-scoped version history | scope to asset capability |
 | GET | `/v1/assets/{asset_id}/policy-versions/{policy_version}` | Actor | immutable policy version detail | scope to asset capability; omit compiled runtime secrets |
 | POST | `/v1/assets/{asset_id}/policy-versions/{policy_version}/restore` | Actor, service checks editor | copy immutable version into a revisioned draft | compare-and-swap draft revision and audit restore |

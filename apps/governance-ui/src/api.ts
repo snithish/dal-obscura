@@ -109,6 +109,11 @@ export type PolicyVersion = {
   created_at: string;
 };
 
+export type PolicyVersionPage = {
+  items: PolicyVersion[];
+  next_cursor: string | null;
+};
+
 export type PolicyVersionDetail = {
   asset_id: string;
   policy_version: number;
@@ -242,6 +247,13 @@ export const controlPlane = {
   getSchema: (assetId: string) => request<AssetSchema>(`/v1/assets/${assetId}/schema`),
   listRules: (assetId: string) => request<PolicyRule[]>(`/v1/assets/${assetId}/policy-rules`),
   listHistory: () => request<PolicyVersion[]>("/v1/policy-versions"),
+  listHistoryPage: async (params: { limit?: number; cursor?: string } = {}) => {
+    const query = new URLSearchParams();
+    if (params.limit !== undefined) query.set("limit", String(params.limit));
+    if (params.cursor) query.set("cursor", params.cursor);
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    return request<PolicyVersionPage>(`/v1/policy-versions/page${suffix}`);
+  },
   listAuditEvents: (assetId?: string) => request<AuditEvent[]>("/v1/audit/events" + (assetId ? "?asset_id=" + encodeURIComponent(assetId) : "")),
   listAssetHistory: (assetId: string) => request<PolicyVersion[]>(`/v1/assets/${assetId}/policy-versions`),
   getPublicationOperation: (assetId: string, idempotencyKey: string) => request<{ id: string; status: string; result: { asset_id: string; policy_version: number } }>(`/v1/assets/${assetId}/policy-operations/${encodeURIComponent(idempotencyKey)}`),

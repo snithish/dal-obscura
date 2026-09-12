@@ -50,6 +50,7 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
         "/v1/demo-login",
         "/v1/logout",
         "/v1/policy-versions",
+        "/v1/policy-versions/page",
         "/v1/session",
         "/v1/settings/auth-providers",
         "/v1/settings/runtime",

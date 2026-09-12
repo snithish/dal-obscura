@@ -129,6 +129,20 @@ class ProvisioningService:
     ) -> list[dict[str, object]]:
         return policy_version_service.list_policy_version_history(self._store, actor=actor)
 
+    def list_policy_version_history_page(
+        self,
+        *,
+        actor: ControlPlaneActor,
+        limit: int,
+        cursor: str | None = None,
+    ) -> dict[str, object]:
+        return policy_version_service.list_policy_version_history_page(
+            self._store,
+            actor=actor,
+            limit=limit,
+            cursor=cursor,
+        )
+
     def list_audit_events(
         self,
         *,

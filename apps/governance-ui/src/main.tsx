@@ -9,7 +9,7 @@ import "./styles.css";
 type Page = "assets" | "changes" | "activity" | "connections" | "settings";
 type SaveState = "saved" | "saving" | "unsaved" | "failed";
 type WorkspaceState = "loading" | "ready" | "demo" | "unavailable";
-type ManagementData = { history?: PolicyVersion[]; events?: AuditEvent[]; catalogs?: Catalog[]; tables?: Array<Record<string, unknown>>; runtime?: RuntimeSettings | null; providers?: AuthProvider[]; summary?: WorkspaceSummary; observations?: WorkspaceObservations; grants?: AssetGrant[] };
+type ManagementData = { history?: PolicyVersion[]; historyNextCursor?: string | null; events?: AuditEvent[]; catalogs?: Catalog[]; tables?: Array<Record<string, unknown>>; runtime?: RuntimeSettings | null; providers?: AuthProvider[]; summary?: WorkspaceSummary; observations?: WorkspaceObservations; grants?: AssetGrant[] };
 
 const maskOptions: Array<{ type: Mask["type"]; label: string; needsValue?: boolean }> = [
   { type: "null", label: "Null" }, { type: "redact", label: "Redact", needsValue: true },
@@ -43,6 +43,7 @@ function App() {
   const [loggingIn, setLoggingIn] = useState(false);
   const [managementData, setManagementData] = useState<ManagementData>({});
   const [managementLoading, setManagementLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [publishPending, setPublishPending] = useState(false);
   const loadEpoch = useRef(0);
   const inventoryEpoch = useRef(0);
@@ -74,7 +75,7 @@ function App() {
     setManagementLoading(true);
     try {
       let next: ManagementData = {};
-      if (destination === "changes") next = { history: await controlPlane.listHistory() };
+      if (destination === "changes") { const pageResult = await controlPlane.listHistoryPage({ limit: 50 }); next = { history: pageResult.items, historyNextCursor: pageResult.next_cursor }; }
       if (destination === "activity") next = { history: await controlPlane.listHistory(), events: await controlPlane.listAuditEvents(), summary: await controlPlane.getSummary(), observations: await controlPlane.getObservations() };
       if (destination === "connections") next = { catalogs: await controlPlane.listCatalogs() };
       if (destination === "settings") next = { runtime: await controlPlane.getRuntimeSettings(), providers: await controlPlane.getAuthProviders() };
@@ -86,6 +87,20 @@ function App() {
       setNotice("This management view is unavailable for your current session or workspace.");
     } finally {
       if (epoch === managementEpoch.current) setManagementLoading(false);
+    }
+  }
+
+  async function loadMoreHistory() {
+    const cursor = managementData.historyNextCursor;
+    if (!cursor || historyLoading) return;
+    setHistoryLoading(true);
+    try {
+      const pageResult = await controlPlane.listHistoryPage({ limit: 50, cursor });
+      setManagementData((current) => ({ ...current, history: [...(current.history ?? []), ...pageResult.items], historyNextCursor: pageResult.next_cursor }));
+    } catch {
+      setNotice("More history could not be loaded. The entries already visible remain available.");
+    } finally {
+      setHistoryLoading(false);
     }
   }
 
@@ -310,7 +325,7 @@ function App() {
     </aside>
     <main>
       <header className="topbar"><div><span className="eyebrow">{page === "assets" ? "ASSET WORKSPACE" : page.toUpperCase()}</span><h1>{page === "assets" ? asset?.name ?? "Assets" : titleFor(page)}</h1></div><div className="actor"><span className="avatar">{session?.principal.slice(0, 1).toUpperCase() ?? "?"}</span><div><strong>{session?.principal ?? "Not signed in"}</strong><small>{session?.platform_admin ? "Platform admin" : "Authenticated user"}</small></div>{session && <button className="text-button" onClick={() => void logout()}>Sign out</button>}{logoutPending && <button className="text-button" onClick={() => void logout()}>Retry sign out</button>}</div></header>
-      {page !== "assets" ? <ManagementView page={page} data={managementData} loading={managementLoading} onReload={() => void loadManagement(page)} /> : workspace === "loading" ? <WorkspaceMessage title="Loading governed assets" message="Checking your workspace access and available assets." /> : workspace === "unavailable" ? <WorkspaceMessage title="Cannot load workspace" message={notice} retry={loadInitialWorkspace} authConfig={authConfig} onLogin={demoLogin} loggingIn={loggingIn} /> : !asset ? <WorkspaceMessage title="No governed assets" message={notice} /> : <AssetWorkspace assets={assets} asset={asset} history={managementData.history ?? []} grants={managementData.grants ?? []} onAsset={(id) => void loadAsset(id)} assetSearch={assetSearch} assetHasMore={assetHasMore} assetInventoryLoading={assetInventoryLoading} onSearch={searchAssets} onLoadMore={() => void refreshAssetInventory(assetSearch, true)} rules={rules} activeRule={activeRule} activeRevision={draftRevision} selectedRule={selectedRule} onRule={setSelectedRule} selectedField={selectedField} onField={setSelectedField} selectedMask={selectedMask} effectiveFields={effectiveFields} saveState={saveState} notice={notice} onToggleField={toggleField} onMask={setMask} onUpdateRule={updateRule} onAddRule={addRule} onRemoveRule={removeRule} onSave={() => void saveDraft()} onPreview={() => void runPreview()} previewPrincipal={previewPrincipal} previewGroups={previewGroups} previewClaims={previewClaims} onPreviewPrincipal={setPreviewPrincipal} onPreviewGroups={setPreviewGroups} onPreviewClaims={setPreviewClaims} onPublish={() => void publishAsset()} publishing={publishPending} onRestore={(version) => void restorePolicyVersion(version)} reviewToken={reviewToken ?? undefined} preview={preview} session={session} onReloadAccess={() => void loadAsset(asset.id)} />}
+      {page !== "assets" ? <ManagementView page={page} data={managementData} loading={managementLoading} onReload={() => void loadManagement(page)} onLoadMore={page === "changes" ? () => void loadMoreHistory() : undefined} historyLoading={historyLoading} /> : workspace === "loading" ? <WorkspaceMessage title="Loading governed assets" message="Checking your workspace access and available assets." /> : workspace === "unavailable" ? <WorkspaceMessage title="Cannot load workspace" message={notice} retry={loadInitialWorkspace} authConfig={authConfig} onLogin={demoLogin} loggingIn={loggingIn} /> : !asset ? <WorkspaceMessage title="No governed assets" message={notice} /> : <AssetWorkspace assets={assets} asset={asset} history={managementData.history ?? []} grants={managementData.grants ?? []} onAsset={(id) => void loadAsset(id)} assetSearch={assetSearch} assetHasMore={assetHasMore} assetInventoryLoading={assetInventoryLoading} onSearch={searchAssets} onLoadMore={() => void refreshAssetInventory(assetSearch, true)} rules={rules} activeRule={activeRule} activeRevision={draftRevision} selectedRule={selectedRule} onRule={setSelectedRule} selectedField={selectedField} onField={setSelectedField} selectedMask={selectedMask} effectiveFields={effectiveFields} saveState={saveState} notice={notice} onToggleField={toggleField} onMask={setMask} onUpdateRule={updateRule} onAddRule={addRule} onRemoveRule={removeRule} onSave={() => void saveDraft()} onPreview={() => void runPreview()} previewPrincipal={previewPrincipal} previewGroups={previewGroups} previewClaims={previewClaims} onPreviewPrincipal={setPreviewPrincipal} onPreviewGroups={setPreviewGroups} onPreviewClaims={setPreviewClaims} onPublish={() => void publishAsset()} publishing={publishPending} onRestore={(version) => void restorePolicyVersion(version)} reviewToken={reviewToken ?? undefined} preview={preview} session={session} onReloadAccess={() => void loadAsset(asset.id)} />}
     </main>
   </div>;
 }
@@ -375,16 +390,16 @@ function AccessView({ asset, grants, session, onReload }: { asset: Asset; grants
   }
   return <section className="management-view access-view"><div className="management-head"><div><span className="eyebrow">ACCESS</span><h2>Owners and delegated capabilities</h2><p className="muted">Owners and grants are enforced by the control plane. Policy editing and publication remain separate capabilities.</p></div><button className="secondary" onClick={onReload}>Refresh</button></div><div className="form-card"><h3>Owners</h3><label className="form-label">Owner principals<input value={owners} onChange={(event) => setOwners(event.target.value)} placeholder="user:owner@example.com, group:data-stewards" disabled={!canManageOwners} /></label><p className="help">Comma-separated user or group principals. Removing the last owner is blocked while the asset is not safely reassigned.</p><button className="primary" onClick={() => void saveOwners()} disabled={!canManageOwners}>Save owners</button></div><div className="form-card"><h3>Delegated capabilities</h3>{rows.length ? <div className="grant-editor">{rows.map((grant, index) => <div className="grant-row" key={`${grant.principal}-${grant.capability}-${index}`}><input aria-label={`Grant principal ${index + 1}`} value={grant.principal} onChange={(event) => setRows((current) => current.map((item, row) => row === index ? { ...item, principal: event.target.value } : item))} placeholder="user:analyst@example.com" /><select aria-label={`Grant capability ${index + 1}`} value={grant.capability} onChange={(event) => setRows((current) => current.map((item, row) => row === index ? { ...item, capability: event.target.value as AssetGrant["capability"] } : item))}><option value="read">Read</option><option value="edit">Edit</option><option value="publish">Publish</option><option value="grant">Grant management</option></select><button className="danger" onClick={() => setRows((current) => current.filter((_, row) => row !== index))}>Remove</button></div>)}</div> : <p className="muted">No explicit delegated capabilities. Owners retain compatibility access.</p>}<div className="editor-actions"><button className="secondary" onClick={() => setRows((current) => [...current, { principal: "", capability: "read" }])}>Add capability</button><button className="primary" onClick={() => void saveGrants()}>Save capabilities</button></div>{message && <p className="notice" role="status">{message}</p>}</div></section>;
 }
-function ManagementView({ page, data, loading, onReload }: { page: Exclude<Page, "assets">; data: ManagementData; loading: boolean; onReload: () => void }) {
+function ManagementView({ page, data, loading, onReload, onLoadMore, historyLoading }: { page: Exclude<Page, "assets">; data: ManagementData; loading: boolean; onReload: () => void; onLoadMore?: () => void; historyLoading?: boolean }) {
   if (loading) return <section className="coming-soon"><span className="eyebrow">{page.toUpperCase()}</span><h2>Loading {page}</h2><p>Checking the current workspace state and your capabilities.</p></section>;
-  if (page === "changes") return <ChangesView history={data.history ?? []} onReload={onReload} />;
+  if (page === "changes") return <ChangesView history={data.history ?? []} nextCursor={data.historyNextCursor} onReload={onReload} onLoadMore={onLoadMore} loading={historyLoading ?? false} />;
   if (page === "activity") return <ActivityView history={data.history ?? []} events={data.events ?? []} summary={data.summary} observations={data.observations} />;
   if (page === "connections") return <ConnectionsView catalogs={data.catalogs ?? []} onReload={onReload} />;
   return <SettingsView runtime={data.runtime} providers={data.providers ?? []} onReload={onReload} />;
 }
 
-function ChangesView({ history, onReload }: { history: PolicyVersion[]; onReload: () => void }) {
-  return <section className="management-view"><div className="management-head"><div><span className="eyebrow">CHANGES</span><h2>Published policy history</h2><p className="muted">Immutable versions returned by the control plane. A publication is active only when the server says so.</p></div><button className="secondary" onClick={onReload}>Refresh</button></div>{history.length ? <div className="table-wrap"><table><thead><tr><th>Asset</th><th>Version</th><th>State</th><th>Created</th></tr></thead><tbody>{history.map((item) => <tr key={`${item.asset_id}-${item.policy_version}`}><td><strong>{item.asset_name}</strong><small>{item.catalog} / {item.target}</small></td><td><code>{item.policy_version}</code></td><td><span className={item.active ? "result-state allowed" : "pill"}>{item.active ? "Active" : "Published"}</span></td><td>{new Date(item.created_at).toLocaleString()}</td></tr>)}</tbody></table></div> : <div className="empty-result"><strong>No published changes</strong><p>Save and publish an asset draft to create an immutable version.</p></div>}</section>;
+function ChangesView({ history, nextCursor, onReload, onLoadMore, loading }: { history: PolicyVersion[]; nextCursor?: string | null; onReload: () => void; onLoadMore?: () => void; loading: boolean }) {
+  return <section className="management-view"><div className="management-head"><div><span className="eyebrow">CHANGES</span><h2>Published policy history</h2><p className="muted">Immutable versions returned by the control plane. A publication is active only when the server says so.</p></div><button className="secondary" onClick={onReload}>Refresh</button></div>{history.length ? <div className="table-wrap"><table><thead><tr><th>Asset</th><th>Version</th><th>State</th><th>Created</th></tr></thead><tbody>{history.map((item, index) => <tr key={`${item.asset_id}-${item.policy_version}-${item.created_at}-${index}`}><td><strong>{item.asset_name}</strong><small>{item.catalog} / {item.target}</small></td><td><code>{item.policy_version}</code></td><td><span className={item.active ? "result-state allowed" : "pill"}>{item.active ? "Active" : "Published"}</span></td><td>{new Date(item.created_at).toLocaleString()}</td></tr>)}</tbody></table>{nextCursor && onLoadMore && <button className="secondary load-more" disabled={loading} onClick={onLoadMore}>{loading ? "Loading…" : "Load more history"}</button>}</div> : <div className="empty-result"><strong>No published changes</strong><p>Save and publish an asset draft to create an immutable version.</p></div>}</section>;
 }
 
 function ActivityView({ history, events, summary, observations }: { history: PolicyVersion[]; events: AuditEvent[]; summary?: WorkspaceSummary; observations?: WorkspaceObservations }) {

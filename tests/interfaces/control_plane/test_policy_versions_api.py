@@ -182,6 +182,34 @@ def test_policy_version_history_is_asset_focused():
     assert "cell_id" not in response.json()[0]
 
 
+def test_policy_version_history_page_is_cursor_paginated():
+    client = _client()
+    asset = _provision_draft(client)
+    client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["user:owner@example.com"]},
+        headers=ADMIN_HEADERS,
+    )
+    created = [
+        client.post(f"/v1/assets/{asset['id']}/policy-versions", headers=ADMIN_HEADERS).json()
+        for _ in range(3)
+    ]
+
+    first = client.get("/v1/policy-versions/page?limit=1", headers=ADMIN_HEADERS)
+    second = client.get(
+        f"/v1/policy-versions/page?limit=1&cursor={first.json()['next_cursor']}",
+        headers=ADMIN_HEADERS,
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert len(first.json()["items"]) == 1
+    assert len(second.json()["items"]) == 1
+    assert first.json()["items"][0]["policy_version"] == created[0]["policy_version"]
+    assert second.json()["items"][0]["policy_version"] == created[1]["policy_version"]
+    assert second.json()["items"][0]["created_at"] != first.json()["items"][0]["created_at"]
+
+
 def test_asset_policy_history_detail_and_restore_are_revisioned():
     client = _client()
     asset = _provision_draft(client)

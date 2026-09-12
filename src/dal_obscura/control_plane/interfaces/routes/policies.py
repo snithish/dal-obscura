@@ -218,6 +218,20 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
     ) -> object:
         return deps.with_service(lambda service: service.list_policy_version_history(actor=actor))
 
+    @api.get("/v1/policy-versions/page")
+    def list_policy_version_history_page(
+        limit: int = Query(default=50, ge=1, le=200),
+        cursor: str | None = Query(default=None, max_length=512),
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> object:
+        return deps.with_service(
+            lambda service: service.list_policy_version_history_page(
+                actor=actor,
+                limit=limit,
+                cursor=cursor,
+            )
+        )
+
     @api.get("/v1/audit/events")
     def list_audit_events(
         asset_id: UUID | None = None,

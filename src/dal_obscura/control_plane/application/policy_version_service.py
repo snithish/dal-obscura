@@ -63,6 +63,31 @@ def list_policy_version_history(
     return [item for item in history if str(item.get("asset_id")) in visible_asset_ids]
 
 
+def list_policy_version_history_page(
+    store: PublicationStore,
+    *,
+    actor: ControlPlaneActor,
+    limit: int,
+    cursor: str | None = None,
+) -> dict[str, object]:
+    """Returns a bounded, actor-scoped policy history page."""
+
+    context = store.get_default_workspace_context()
+    if context is None:
+        return {"items": [], "next_cursor": None}
+    principals = None if actor.platform_admin else actor.owner_principals()
+    try:
+        page = store.list_policy_version_history_page(
+            context,
+            limit=limit,
+            cursor=cursor,
+            principals=principals,
+        )
+    except ValueError as exc:
+        raise ValidationFailure(str(exc)) from exc
+    return {"items": page.items, "next_cursor": page.next_cursor}
+
+
 def list_asset_policy_version_history(
     store: PublicationStore,
     asset_id: UUID,
