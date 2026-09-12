@@ -125,6 +125,7 @@ def validate_catalog_options(
     """
 
     normalized_allowlist = {item.strip().lower().rstrip(".") for item in egress_allowlist}
+    _reject_inline_secrets(options)
     for key, value in _walk_strings(options):
         if "://" not in value:
             continue
@@ -160,3 +161,39 @@ def _walk_strings(value: object, prefix: str = "options"):
             yield from _walk_strings(item, f"{prefix}[{index}]")
     elif isinstance(value, str):
         yield prefix, value
+
+
+_SECRET_OPTION_KEYS = {
+    "access_token",
+    "api_key",
+    "client_secret",
+    "credential",
+    "credentials",
+    "password",
+    "passwd",
+    "private_key",
+    "secret",
+    "token",
+}
+
+
+def _reject_inline_secrets(value: object, prefix: str = "options") -> None:
+    """Requires sensitive catalog options to use an explicit secret reference."""
+
+    if isinstance(value, dict):
+        mapping = cast(dict[str, object], value)
+        if set(mapping) == {"secret"} and isinstance(mapping.get("secret"), str):
+            return
+        for key, nested in mapping.items():
+            name = str(key).strip().lower()
+            path = f"{prefix}.{key}"
+            if name in _SECRET_OPTION_KEYS and (
+                not isinstance(nested, dict)
+                or set(nested) != {"secret"}
+                or not isinstance(cast(dict[str, object], nested).get("secret"), str)
+            ):
+                raise ValidationFailure(f"Catalog option {path!r} must use a secret reference")
+            _reject_inline_secrets(nested, path)
+    elif isinstance(value, list):
+        for index, nested in enumerate(value):
+            _reject_inline_secrets(nested, f"{prefix}[{index}]")

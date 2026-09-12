@@ -77,6 +77,31 @@ def test_workspace_catalog_rejects_credentials_embedded_in_uri():
     assert "secret reference" in response.json()["detail"]
 
 
+def test_workspace_catalog_rejects_inline_sensitive_options_but_accepts_secret_refs():
+    client = _client()
+
+    rejected = client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"password": "inline-password"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+    accepted = client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"password": {"secret": "CATALOG_PASSWORD"}},
+        },
+        headers=ADMIN_HEADERS,
+    )
+
+    assert rejected.status_code == 400
+    assert "secret reference" in rejected.json()["detail"]
+    assert accepted.status_code == 200, accepted.json()
+
+
 def test_workspace_catalog_enforces_configured_egress_allowlist():
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
     migrate_config_store(engine)
