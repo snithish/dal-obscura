@@ -1,0 +1,20 @@
+{
+  "catalog": "analytics",
+  "columns": ["id", "profile.email"],
+  "decision_digest": "",
+  "expires_at": 1900000000,
+  "identity_context": "",
+  "issuer": "https://issuer.example.test",
+  "nonce": "fixture-nonce-v1",
+  "policy_version": 7,
+  "principal_id": "user:fixture-reader",
+  "scan": {
+    "authorization_columns": ["id", "profile.email"],
+    "full_row_filter": null,
+    "masks": {},
+    "read_payload": "trusted-internal-payload"
+  },
+  "target": "default.users",
+  "tenant_id": "tenant-a",
+  "ticket_id": "fixture-ticket-v1"
+}
