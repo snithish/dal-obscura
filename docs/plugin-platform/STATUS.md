@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `229cd6d`.
+Implementation follow-up through `4528943`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -44,6 +44,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   authorization snapshot between revocation and replacement. Publication
   capability checks now also run after acquiring that asset lock, so revocations
   ordered before activation cannot be bypassed by a pre-lock authorization read.
+  Review issuance follows the same lock ordering, while publish performs live schema
+  I/O before the lock and rechecks persisted evidence after it, avoiding provider
+  calls under a long database row lock.
 - X04 canonical evaluation: **implemented-unverified**; resolved mask values now
   flow from canonical preview and an unmatched-principal regression passes.
 - X05 canonical bounded schemas: **implemented-unverified**; canonical Arrow schema
@@ -1314,6 +1317,17 @@ running-process probe.
   Ty, and `git diff --check` passed.
 - Remaining gaps: real PostgreSQL barrier/process interleavings, rollback after
   process failure, and full recovery evidence remain open.
+
+### X03 review/provider lock boundary — `4528943`
+
+- State: implementing.
+- Behavior: review issuance authorizes on the locked asset generation. Publish
+  validates live provider schema before locking, then performs a no-I/O evidence and
+  authorization recheck after locking before activation.
+- Green evidence: policy-version API tests (12), Ruff, Ty, and `git diff --check`
+  passed.
+- Remaining gaps: PostgreSQL barriers/processes, provider change races, rollback,
+  idempotency recovery, and live deployment evidence remain open.
 
 ## Latest evidence entry
 
