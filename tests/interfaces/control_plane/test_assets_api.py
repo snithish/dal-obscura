@@ -511,6 +511,33 @@ def test_asset_binding_precondition_rejects_stale_update() -> None:
     assert detail["revision"] == 1
 
 
+def test_asset_binding_precondition_rejects_nonzero_revision_on_create() -> None:
+    client = _client()
+    client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+
+    response = client.put(
+        "/v1/assets/analytics/default.new",
+        json={
+            "backend": "iceberg",
+            "table_identifier": "prod.new",
+            "options": {},
+            "expected_revision": 7,
+        },
+        headers=ADMIN_HEADERS,
+    )
+
+    assert response.status_code == 409
+    assert "expected 7, current 0" in response.json()["detail"]
+    assert client.get("/v1/assets", headers=ADMIN_HEADERS).json() == []
+
+
 def test_asset_grant_precondition_rejects_stale_writer() -> None:
     client = _client()
     asset = _provision_draft(client)

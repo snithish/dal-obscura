@@ -363,6 +363,7 @@ class PublicationStore:
             .with_for_update()
         )
         if existing is None:
+            _assert_new_asset_revision(expected_revision)
             asset_id = uuid4()
             self._session.add(
                 AssetRecord(
@@ -1855,6 +1856,16 @@ def _assert_asset_revision(asset: AssetRecord, expected_revision: int | None) ->
         raise PublicationConflictError(
             "Asset revision changed "
             f"(expected {expected_revision}, current {asset.revision}); reread before writing."
+        )
+
+
+def _assert_new_asset_revision(expected_revision: int | None) -> None:
+    """Treat creation as a compare-and-set against the implicit revision zero."""
+
+    if expected_revision is not None and expected_revision != 0:
+        raise PublicationConflictError(
+            "Asset revision changed "
+            f"(expected {expected_revision}, current 0); reread before writing."
         )
 
 
