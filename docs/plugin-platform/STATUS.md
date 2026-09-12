@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `7db7a28`.
+Implementation follow-up through `4c7c76d`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -243,6 +243,22 @@ remain open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: continue X03/X06 correctness work; X22 remains open
   until the CI artifact lanes run in a clean environment.
+
+### X06 admission digest verification — `4c7c76d`
+
+- State: implementing.
+- Behavior: the data-plane registry recomputes and verifies the immutable
+  admitted-schema field digest before matching any live identities. Tampered or
+  malformed digest metadata now fails closed with a review-again error.
+- Red/green evidence: the admission-digest tamper regression was red before the
+  guard and passes with numeric-ID, collection, duplicate-ID, and drift tests;
+  Ruff and Ty passed on the changed adapter.
+- Remaining gaps: end-to-end review-time admission population, provider identity
+  guarantees, schema rename/addition policy, and PostgreSQL/browser/consumer
+  evidence remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: continue X06 evolution policy and X03 PostgreSQL
+  transaction barriers.
 
 The combined control-plane, catalog, schema, publication, migration, plugin, and
 published-config boundary suite passed at 100% after the budget change.
