@@ -156,6 +156,7 @@ def create_app(
         app.add_middleware(
             CORSMiddleware,  # ty: ignore[invalid-argument-type]
             allow_origins=list(cors_origins),
+            allow_credentials=True,
             allow_methods=["GET", "POST", "PUT", "OPTIONS"],
             allow_headers=["authorization", "content-type", "accept", "x-csrf-token"],
         )

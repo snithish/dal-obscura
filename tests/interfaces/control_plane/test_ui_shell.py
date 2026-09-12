@@ -82,6 +82,7 @@ def test_cors_allows_configured_ui_origin() -> None:
 
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:8821"
+    assert response.headers["access-control-allow-credentials"] == "true"
 
 
 def test_cors_allows_browser_csrf_header_for_configured_ui_origin() -> None:
