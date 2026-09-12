@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `9fac86d`.
+Implementation follow-up through `499571f`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -141,6 +141,25 @@ provider calls and are not returned in API responses.
 The evaluation byte-budget slice passed its focused helper/service checks with
 Ruff and Ty clean; process-wide admission and live timeout/cancellation evidence
 remain open.
+
+### X09 UI lifecycle test lane — `499571f`
+
+- State: implemented-unverified.
+- Behavior: management and paginated history requests now share a small,
+  dependency-free epoch guard so stale responses cannot overwrite a newer view.
+  The governance UI exposes a Node built-in test script covering stale-response
+  rejection and monotonic epoch advancement.
+- Green evidence: `node --experimental-strip-types --test
+  apps/governance-ui/tests/lifecycle.test.mjs` passed (2); direct TypeScript
+  project check and Vite production build passed.
+- Package-manager note: the pinned pnpm/Corepack wrapper could not run offline
+  because Corepack attempted to fetch pnpm metadata; this is an environment gate,
+  not a source failure.
+- Remaining gaps: browser-level lifecycle, real IdP/session, accessibility, and
+  full operation-state coverage remain open for X19/X22.
+- Pickle compatibility: unchanged.
+- Next permitted packet: complete X03 PostgreSQL barriers and X06 evolution rules;
+  keep browser acceptance open until the real authenticated lane runs.
 
 The combined control-plane, catalog, schema, publication, migration, plugin, and
 published-config boundary suite passed at 100% after the budget change.
