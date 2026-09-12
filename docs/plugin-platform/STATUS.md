@@ -76,8 +76,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   `packages/plugin-api` wheel now contains the versioned contracts and has an
   offline compile/metadata regression. Core and SDK contracts now reject malformed
   plugin IDs, unbounded capabilities, invalid catalog revisions, and non-canonical
-  schema fingerprints. Service-side compatibility contracts and online wheel
-  artifact evidence remain open.
+  schema fingerprints, and unsafe/unbounded declarative config schemas.
+  Service-side compatibility contracts and online wheel artifact evidence remain
+  open.
 - X12 admitted loading and Iceberg adapter: **implementing**; entry-point loading now
   fails closed when a request names an unallowlisted installation, with registry
   regression coverage. Built-in Iceberg routing and artifact-lock verification
@@ -87,7 +88,10 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   the data plane rejects explicit bindings it cannot honor before provider setup.
   Runtime registry routing, migration of legacy manifests, and mixed-version
   rollout evidence remain open.
-- X14 plugin UI: **not-started**.
+- X14 plugin UI: **implementing**; standalone plugin descriptors now enforce
+  bounded JSON-like form metadata and reject remote/executable content before a
+  future authenticated descriptor API can render it. Descriptor API, capability
+  routing, and browser evidence remain open.
 - X15 conformance kit: **not-started**.
 - X16 REST Iceberg qualification: **not-started**.
 - X17 independent manifest/Parquet plugin: **not-started**.
@@ -188,6 +192,23 @@ open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: continue X13 runtime registry routing and X12 artifact
   lock verification.
+
+### X11/X14 descriptor form boundary — `7e0e6f3`
+
+- State: implementing.
+- Behavior: both the service-side plugin contract and standalone SDK recursively
+  bound descriptor form schemas by depth, nodes, object/array size, key/string
+  length, and JSON-like value types. Remote references, script/HTML fields,
+  executable URL content, and opaque values are rejected before UI rendering or
+  plugin import.
+- Green evidence: plugin contract and package tests pass (3), Ruff, Ty, and
+  `git diff --check` all pass.
+- Remaining gaps: authenticated descriptor/capability API, static descriptor
+  loading, artifact locks, plugin routing, and browser accessibility evidence
+  remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: continue X14 descriptor API design after X13 runtime
+  registry routing is wired.
 
 X11 package check: `tests/plugin_platform/test_plugin_api_package.py` passes and
 the package source compiles without importing the service distribution. Building
