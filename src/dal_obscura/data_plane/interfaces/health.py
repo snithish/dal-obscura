@@ -52,7 +52,7 @@ def create_health_app(*, readiness: Callable[[], HealthPayload]) -> FastAPI:
         try:
             payload = dict(readiness())
         except Exception:
-            LOGGER.exception("data_plane_readiness_failed")
+            LOGGER.warning("data_plane_readiness_failed")
             payload = {"status": "not_ready", "reason": "readiness check failed"}
         if payload.get("status") != "ready":
             return JSONResponse(status_code=503, content=payload)
@@ -75,7 +75,7 @@ def published_runtime_readiness(store: RuntimeStore) -> dict[str, object]:
     try:
         runtime = store.get_runtime()
     except Exception:
-        LOGGER.exception("published_runtime_readiness_failed")
+        LOGGER.warning("published_runtime_readiness_failed")
         return {
             "status": "not_ready",
             "checks": {
