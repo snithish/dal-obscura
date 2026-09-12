@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `3c8869f`.
+Implementation follow-up through `e1de2af`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -469,6 +469,12 @@ bind is denied by the environment.
 Ticket cleanup now emits an opaque warning instead of an exception traceback,
 keeping asynchronous database/provider errors out of logs. Ruff and Ty pass on
 the changed path; pickle and ticket payload formats are unchanged.
+
+The production Compose reference now injects distinct migration,
+control-plane, and data-plane PostgreSQL URLs, with least-privilege role
+provisioning documented and enforced by the deployment contract test. This is
+configuration hardening only; live role grants and PostgreSQL race evidence
+remain unexecuted release gates.
 
 The direct-Arrow bounds regression and Ty/Ruff checks passed in
 `3263645`; the full schema byte-budget and every-entry-route acceptance matrix
