@@ -188,6 +188,34 @@ def test_workspace_catalog_tables_can_be_discovered_without_runtime_ids(monkeypa
         ],
     }
     assert "tenant" not in _keys_recursive(response.json())
+
+
+def test_workspace_catalog_discovery_does_not_echo_provider_errors(monkeypatch):
+    client = _client()
+    client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"uri": "https://catalog.example/api"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+
+    def failing_discovery(name, module, options):
+        raise ValueError(
+            "failed to connect https://catalog-user:catalog-password@catalog.example/api"
+        )
+
+    monkeypatch.setattr(
+        "dal_obscura.control_plane.application.provisioning.discover_catalog_tables",
+        failing_discovery,
+    )
+
+    response = client.get("/v1/catalogs/analytics/tables", headers=ADMIN_HEADERS)
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Catalog discovery failed"}
+    assert "catalog-password" not in response.text
     assert "cell" not in _keys_recursive(response.json())
 
 
