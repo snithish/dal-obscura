@@ -73,3 +73,33 @@ def test_control_plane_cli_exposes_help_without_runtime_configuration(capsys) ->
 
     assert exit_info.value.code == 0
     assert "Start the dal-obscura control-plane HTTP server" in capsys.readouterr().out
+
+
+def test_control_plane_cli_rejects_insecure_production_profile(capsys):
+    result = control_plane_cli.run(
+        {
+            "DAL_OBSCURA_CONTROL_PLANE_PROFILE": "production",
+            "DAL_OBSCURA_DATABASE_URL": "sqlite+pysqlite:///:memory:",
+            "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "short-token",
+        }
+    )
+
+    assert result == 1
+    assert "at least 32 characters" in capsys.readouterr().err
+
+
+def test_control_plane_cli_requires_real_tls_oidc_in_production(tmp_path, capsys):
+    database_url = f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
+    migrate_config_store(create_engine_from_url(database_url))
+    environment = {
+        "DAL_OBSCURA_CONTROL_PLANE_PROFILE": "production",
+        "DAL_OBSCURA_DATABASE_URL": database_url,
+        "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "x" * 40,
+        "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER": "http://issuer.example",
+        "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE": "dal-obscura-admin",
+    }
+
+    result = control_plane_cli.run(environment)
+
+    assert result == 1
+    assert "HTTPS bearer OIDC issuer" in capsys.readouterr().err

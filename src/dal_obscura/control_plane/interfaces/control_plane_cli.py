@@ -50,6 +50,7 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
     if database_url is None or admin_token is None:
         return 2
     try:
+        _validate_profile(values, admin_token)
         port = _port(values.get("DAL_OBSCURA_CONTROL_PLANE_PORT", "8820"))
         engine = create_engine_from_url(database_url)
         check_config_store_schema(engine)
@@ -113,6 +114,44 @@ def _positive_int(value: str, name: str) -> int:
 
 def _csv(value: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in value.split(",") if item.strip())
+
+
+def _validate_profile(values: Mapping[str, str], admin_token: str) -> None:
+    profile = values.get("DAL_OBSCURA_CONTROL_PLANE_PROFILE", "local").strip().lower()
+    if profile not in {"local", "production"}:
+        raise ValueError("DAL_OBSCURA_CONTROL_PLANE_PROFILE must be local or production")
+    if profile != "production":
+        return
+    if len(admin_token) < 32:
+        raise ValueError(
+            "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN must contain at least 32 "
+            "characters in production"
+        )
+    oidc_issuer = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER")
+    oidc_audience = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE")
+    ui_issuer = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER")
+    ui_client = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID")
+    redirect_uri = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI")
+    if not oidc_issuer or not oidc_issuer.startswith("https://") or not oidc_audience:
+        raise ValueError("Production requires an HTTPS bearer OIDC issuer and audience")
+    if not ui_issuer or not ui_issuer.startswith("https://") or not ui_client:
+        raise ValueError("Production requires an HTTPS browser OIDC issuer and client ID")
+    if not redirect_uri or not redirect_uri.startswith("https://"):
+        raise ValueError("Production requires an HTTPS browser redirect URI")
+    origins = _csv(values.get("DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS", ""))
+    if not origins or any(not origin.startswith("https://") for origin in origins):
+        raise ValueError("Production requires at least one HTTPS CORS origin")
+    if any(
+        _optional(values, name)
+        for name in (
+            "DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_TOKEN_URL",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_CLIENT_ID",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_CLIENT_SECRET",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_PASSWORDS",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_LOGIN_SHORTCUTS",
+        )
+    ):
+        raise ValueError("Demo login shortcuts are forbidden in production")
 
 
 def _oidc_resolver(values: Mapping[str, str]):
