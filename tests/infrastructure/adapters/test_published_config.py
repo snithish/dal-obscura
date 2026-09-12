@@ -22,8 +22,10 @@ from dal_obscura.common.config_store.orm import (
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 from dal_obscura.data_plane.infrastructure.adapters.published_config import (
     PublishedAsset,
+    PublishedCatalog,
     PublishedConfigAuthorizer,
     PublishedConfigStore,
+    _catalog_config_for_asset,
     _validate_schema_admission,
 )
 
@@ -91,6 +93,30 @@ def test_published_store_loads_asset_and_catalog_from_one_generation(db_session:
 
     assert asset.publication_id == catalog.publication_id
     assert asset.catalog == catalog.catalog == "analytics"
+
+
+def test_published_config_rejects_tampered_plugin_binding():
+    asset = PublishedAsset(
+        publication_id=uuid4(),
+        tenant_id=uuid4(),
+        catalog="analytics",
+        target="default.users",
+        backend="iceberg",
+        compiled_config={
+            "plugins": {"catalog": "untrusted.catalog", "table_format": "iceberg"},
+            "target": {"backend": "iceberg", "table": "default.users"},
+        },
+        policy_version=1,
+    )
+    catalog = PublishedCatalog(
+        publication_id=asset.publication_id,
+        tenant_id=asset.tenant_id,
+        catalog="analytics",
+        config={"module": ICEBERG_CATALOG_MODULE, "options": {}},
+    )
+
+    with pytest.raises(ValueError, match="plugin binding is unsupported"):
+        _catalog_config_for_asset(catalog, asset)
 
 
 def test_published_store_fails_closed_by_default_after_transient_failure(

@@ -444,6 +444,7 @@ def _catalog_config_from_published_catalog(catalog: PublishedCatalog) -> Catalog
 
 def _catalog_config_for_asset(catalog: PublishedCatalog, asset: PublishedAsset) -> CatalogConfig:
     """Build the runtime catalog config with the published asset as its source of truth."""
+    _validate_plugin_binding(asset)
     config = _catalog_config_from_published_catalog(catalog)
     target = _mapping(asset.compiled_config.get("target"))
     backend = str(target.get("backend") or asset.backend).lower()
@@ -452,6 +453,31 @@ def _catalog_config_for_asset(catalog: PublishedCatalog, asset: PublishedAsset) 
             raise ValueError("Published Iceberg catalogs require Iceberg assets")
         return config
     raise ValueError(f"Unsupported published catalog type: {config.type}")
+
+
+_ICEBERG_CATALOG_MODULE = (
+    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
+)
+
+
+def _validate_plugin_binding(asset: PublishedAsset) -> None:
+    """Rejects an explicit manifest plugin binding the runtime cannot honor.
+
+    Publications created before plugin identities were added remain readable via
+    the compatibility path. New manifests carry the binding and must match the
+    qualified built-in adapter exactly; the data plane never infers a different
+    implementation from mutable catalog options.
+    """
+
+    raw_plugins = asset.compiled_config.get("plugins")
+    if raw_plugins is None:
+        return
+    if not isinstance(raw_plugins, dict):
+        raise ValueError("Published plugin binding is invalid")
+    catalog_plugin = raw_plugins.get("catalog")
+    format_plugin = raw_plugins.get("table_format")
+    if catalog_plugin != _ICEBERG_CATALOG_MODULE or format_plugin != "iceberg":
+        raise ValueError("Published plugin binding is unsupported")
 
 
 def _asset_table_identifier(asset: PublishedAsset) -> str:
