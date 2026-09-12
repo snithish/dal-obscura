@@ -34,6 +34,27 @@ reset, republish, or migrate state. Back up PostgreSQL and the referenced IdP,
 secret, key, and certificate configuration before upgrades. A failed migration
 or readiness check keeps ingress closed until the operator resolves it.
 
+## Restore and emergency access invalidation
+
+Restore PostgreSQL into an isolated environment, run the packaged migrations and
+verify the schema before exposing any listener. Reconcile the active publication,
+cell UUID, IdP configuration, secret references, and key versions. Before opening
+ingress, invalidate credentials and durable replay artifacts in the restored
+database:
+
+```bash
+dal-obscura-maintenance invalidate-access \
+  --database-url "$DAL_OBSCURA_DATABASE_URL" \
+  --cell-id "$DAL_OBSCURA_CELL_ID"
+```
+
+The command revokes every browser session and consumes pending OIDC login
+transactions. With `--cell-id` it also deletes every stored Flight ticket for
+that cell; omit the flag only when intentionally invalidating tickets for every
+cell. Verify denied and allowed synthetic reads after invalidation, then open
+the TLS ingress. Keep the restored environment closed if any reconciliation,
+readiness, or synthetic read check fails.
+
 ## Boundary and operating requirements
 
 - PostgreSQL is internal-only. Give migration jobs schema-change rights, the

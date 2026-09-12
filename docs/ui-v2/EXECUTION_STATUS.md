@@ -49,7 +49,11 @@ Required backend/production coverage: [production review](PRODUCTION_READINESS.m
 - P13 supported production deployment and startup: partial; production Compose
   reference and fail-closed profile validation exist, while clean image/wheel,
   PostgreSQL, TLS ingress, and live startup evidence remain.
-- P14 recovery, upgrades, and credential lifecycle: not-started.
+- P14 recovery, upgrades, and credential lifecycle: implementing; the
+  `dal-obscura-maintenance invalidate-access` command now revokes browser
+  sessions, consumes OIDC login transactions, and removes durable Flight
+  tickets after restore. Encrypted backup/PITR, isolated restore evidence,
+  upgrades, and key-rotation drills remain.
 - P15 capacity, observability, and customer operations: partial; bounded
   evaluation and explicit runtime observation contracts exist, while load,
   alerts, and customer runbooks remain.
@@ -77,6 +81,20 @@ UX/security review. A stopped VM blocks container evidence, not implementation;
 do not call the release complete without those observations.
 
 ## Evidence
+
+### P13/P14 implementation follow-up — `62433ff`, `34f06c5`
+
+- State: implementing.
+- Behavior: production data-plane startup now requires PostgreSQL, a strong
+  ticket secret, `grpc+tls`, and certificate/key material. TLS values may be
+  mounted file paths or bounded inline PEM. The maintenance CLI invalidates
+  browser sessions and pending login transactions and deletes replayable
+  tickets by cell before restored ingress opens.
+- Green evidence: runtime-config tests and the SQLite maintenance integration
+  test pass; Ruff and Ty pass. PostgreSQL PITR and a real restored consumer
+  read remain unverified.
+- Limitation: this command is an operator recovery control, not proof of a
+  backup, restore, key rotation, or RPO/RTO drill.
 
 ### Production review — 2026-09-12
 
