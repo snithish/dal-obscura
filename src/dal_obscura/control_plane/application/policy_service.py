@@ -62,12 +62,12 @@ def replace_policy_rules(
         ```
     """
 
-    ensure_asset_capability(store, asset_id, actor, "edit")
     validate_policy_rule_payloads(rules)
     # Serialize legacy shared-rule edits with publication verification.  This
     # prevents a request already waiting on the asset lock from racing a review
     # candidate at the activation boundary.
     store.lock_asset_for_publication(asset_id)
+    ensure_asset_capability(store, asset_id, actor, "edit")
     store.replace_policy_rules(asset_id=asset_id, rules=rules)
 
 
