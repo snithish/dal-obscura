@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `5e640bc`.
+Implementation follow-up through `9ed158e`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -72,7 +72,8 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   Storage paths now canonicalize local roots and URI authorities/decoded segments
   before every root check; credential-bearing and query/fragment roots are rejected.
   Catalog option payloads are also bounded by depth, node count, collection width,
-  key length, string length, and JSON-compatible value types before provider calls.
+  key length, string length, finite numeric values, and JSON-compatible value types
+  before provider calls.
 - X08 budgets and atomic reload: **implementing**; discovery now bounds provider
   iterators before materialization and checks cancellation/deadline per item while
   retaining deque traversal. Synthetic evaluation now bounds encoded fixture bytes
@@ -101,7 +102,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   distribution digest locks are enforced before factory import. Build tooling now
   exposes `build_plugin_lock` to generate the exact immutable lock tuple from a
   validated entry point and descriptor. Full SDK adapter routing and clean-wheel
-  artifact evidence remain open.
+  artifact evidence remain open. Extended five-part locks now load the bounded
+  static descriptor by default and normalize descriptor read/parse failures before
+  factory import; legacy three-part locks keep their compatibility fallback.
 - X13 plugin routing and migration: **implementing**; immutable compiled asset
   manifests now record explicit catalog and table-format adapter identities, and
   the data plane rejects explicit bindings it cannot honor before provider setup.
@@ -113,8 +116,10 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   Additive migration `20260913_0014` persists qualified catalog/format identities
   and optional plugin revisions beside immutable published rows; reads merge those
   identities back into legacy-compatible manifests.
-  Runtime registry routing, migration of legacy manifests, and mixed-version
-  rollout evidence remain open.
+  A deterministic `dal-obscura-migrate plugin-bindings` dry-run reports bound,
+  exactly migratable, and unsupported legacy rows; `--apply` fills only exact
+  built-in Iceberg identities in one transaction. Runtime registry routing,
+  migration of legacy manifests, and mixed-version rollout evidence remain open.
 - X14 plugin UI: **implementing**; standalone plugin descriptors now enforce
   bounded JSON-like form metadata and reject remote/executable content. An
   authenticated `/v1/plugins` endpoint and Connections view render admitted
@@ -1186,6 +1191,51 @@ running-process probe.
   `git diff --check` passed.
 - Remaining gaps: deliberately incorrect provider fixtures, conforming Iceberg and
   consumer lanes, and external wheel evidence remain open.
+
+### X12 static descriptor error normalization — `8ecefcb`
+
+- State: implementing.
+- Behavior: descriptor reads now normalize missing, unreadable, undecodable, and
+  malformed metadata into the registry's fail-closed plugin admission error before
+  any factory import. This keeps filesystem/provider-specific exceptions out of the
+  transport boundary.
+- Green evidence: registry tests passed (16), Ruff, Ty, and `git diff --check` passed.
+- Remaining gaps: clean-wheel provenance and external distribution evidence remain
+  open. Pickle compatibility is unchanged.
+
+### X12 extended lock admission — `0d727e9`
+
+- State: implementing.
+- Behavior: five-part immutable plugin locks admit static descriptors by default,
+  while legacy three-part locks retain their explicit compatibility fallback. The
+  lock therefore covers descriptor identity without requiring a code import during
+  static validation.
+- Green evidence: registry tests passed (16), Ruff, Ty, and `git diff --check` passed.
+- Remaining gaps: generated lock artifacts and clean-wheel installation evidence
+  remain open.
+
+### X07 finite catalog options — `9a940a8`
+
+- State: implementing.
+- Behavior: bounded catalog option validation rejects non-finite numeric values in
+  addition to depth, node, collection, key, string, and JSON-type limits, before
+  secret resolution or provider calls.
+- Green evidence: catalog option tests passed, Ruff, Ty, and `git diff --check` passed.
+- Remaining gaps: provider-specific schemas, network egress enforcement, and
+  production secret-provider lifecycle evidence remain open.
+
+### X13 legacy plugin binding migration — `9ed158e`
+
+- State: implementing.
+- Behavior: `dal-obscura-migrate plugin-bindings` deterministically classifies
+  published legacy catalog/asset rows as bound, exactly migratable, or unsupported.
+  `--apply` fills only exact built-in Iceberg identities inside one transaction and
+  leaves unsupported rows untouched for operator review.
+- Green evidence: migration CLI and config-store tests passed (5), Ruff, Ty, and
+  `git diff --check` passed.
+- Remaining gaps: external plugin mappings, runtime registry routing, mixed-version
+  rollout, PostgreSQL migration evidence, and end-to-end manifest migration remain
+  open. Pickle compatibility is unchanged.
 
 ## Latest evidence entry
 
