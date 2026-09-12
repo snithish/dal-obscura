@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `39b447c`.
+Implementation follow-up through `fe68e6a`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -61,9 +61,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   enforcement, and production secret-provider lifecycle evidence remain open.
 - X08 budgets and atomic reload: **implementing**; discovery now bounds provider
   iterators before materialization and checks cancellation/deadline per item while
-  retaining deque traversal. Plugin admission now exposes build-then-swap reload
-  snapshots; provider-specific transport timeouts and multi-worker capacity remain
-  open.
+  retaining deque traversal. Synthetic evaluation now bounds encoded fixture bytes
+  before provider work. Plugin admission exposes build-then-swap reload snapshots;
+  provider-specific transport timeouts and multi-worker capacity remain open.
 - X09 UI lifecycle: **implemented-unverified**; initial-load epoch and synchronous
   logout fencing plus stale history/preview/review/publish response checks are fixed.
   Deferred browser tests and full operation-state coverage remain open.
@@ -137,6 +137,10 @@ The subsequent boundary run included catalog API coverage and passed at 100%.
 The secret-resolution slice added schema and catalog discovery regressions and
 passed their focused suites with Ruff clean. Secret values are supplied only to
 provider calls and are not returned in API responses.
+
+The evaluation byte-budget slice passed its focused helper/service checks with
+Ruff and Ty clean; process-wide admission and live timeout/cancellation evidence
+remain open.
 
 The direct-Arrow bounds regression and Ty/Ruff checks passed in
 `3263645`; the full schema byte-budget and every-entry-route acceptance matrix
