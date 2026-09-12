@@ -119,6 +119,55 @@ def test_published_config_rejects_tampered_plugin_binding():
         _catalog_config_for_asset(catalog, asset)
 
 
+class _AdmittedPluginSnapshot:
+    def __init__(self, *keys: tuple[str, str]) -> None:
+        self._keys = set(keys)
+
+    def admitted(self) -> dict[tuple[str, str], object]:
+        return {key: object() for key in self._keys}
+
+
+def test_published_config_requires_both_plugin_identities_in_admitted_snapshot():
+    asset = PublishedAsset(
+        publication_id=uuid4(),
+        tenant_id=uuid4(),
+        catalog="analytics",
+        target="default.users",
+        backend="iceberg",
+        compiled_config={
+            "plugins": {
+                "catalog": ICEBERG_CATALOG_MODULE,
+                "table_format": "iceberg",
+            },
+            "target": {"backend": "iceberg", "table": "default.users"},
+        },
+        policy_version=1,
+    )
+    catalog = PublishedCatalog(
+        publication_id=asset.publication_id,
+        tenant_id=asset.tenant_id,
+        catalog="analytics",
+        config={"module": ICEBERG_CATALOG_MODULE, "options": {}},
+    )
+
+    with pytest.raises(ValueError, match="plugin binding is not admitted"):
+        _catalog_config_for_asset(
+            catalog,
+            asset,
+            plugin_registry=_AdmittedPluginSnapshot(("catalog", "iceberg.sql")),
+        )
+
+    resolved = _catalog_config_for_asset(
+        catalog,
+        asset,
+        plugin_registry=_AdmittedPluginSnapshot(
+            ("catalog", "iceberg.sql"),
+            ("table_format", "iceberg"),
+        ),
+    )
+    assert resolved.type == "iceberg"
+
+
 def test_published_store_fails_closed_by_default_after_transient_failure(
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,

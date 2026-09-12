@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from hashlib import sha256
 from threading import RLock
-from typing import Any, cast
+from typing import Any, Protocol, cast
 from uuid import UUID
 
 import pyarrow as pa
@@ -89,6 +89,12 @@ class PublishedCatalog:
     tenant_id: UUID
     catalog: str
     config: dict[str, Any]
+
+
+class AdmittedPluginSnapshot(Protocol):
+    """Minimal registry surface required by published-config resolution."""
+
+    def admitted(self) -> Mapping[tuple[str, str], object]: ...
 
 
 class PublishedConfigStore:
@@ -375,9 +381,11 @@ class PublishedConfigCatalogRegistry:
         store: PublishedConfigStore,
         *,
         secret_provider: SecretProvider | None = None,
+        plugin_registry: AdmittedPluginSnapshot | None = None,
     ) -> None:
         self._store = store
         self._secret_provider = secret_provider
+        self._plugin_registry = plugin_registry
         self._registry_cache: dict[tuple[UUID, UUID, str, str], CatalogRegistry] = {}
 
     def describe(self, catalog: str | None, target: str, *, tenant_id: str) -> TableFormat:
@@ -398,7 +406,11 @@ class PublishedConfigCatalogRegistry:
             )
             _validate_schema_admission(asset, table_format.get_schema())
             return table_format
-        catalog_config = _catalog_config_for_asset(published_catalog, asset)
+        catalog_config = _catalog_config_for_asset(
+            published_catalog,
+            asset,
+            plugin_registry=self._plugin_registry,
+        )
         if self._secret_provider is not None:
             catalog_config = CatalogConfig(
                 name=catalog_config.name,
@@ -442,9 +454,14 @@ def _catalog_config_from_published_catalog(catalog: PublishedCatalog) -> Catalog
     return CatalogConfig(name=catalog.catalog, type=_catalog_type(config), options=options)
 
 
-def _catalog_config_for_asset(catalog: PublishedCatalog, asset: PublishedAsset) -> CatalogConfig:
+def _catalog_config_for_asset(
+    catalog: PublishedCatalog,
+    asset: PublishedAsset,
+    *,
+    plugin_registry: AdmittedPluginSnapshot | None = None,
+) -> CatalogConfig:
     """Build the runtime catalog config with the published asset as its source of truth."""
-    _validate_plugin_binding(asset)
+    _validate_plugin_binding(asset, plugin_registry=plugin_registry)
     config = _catalog_config_from_published_catalog(catalog)
     target = _mapping(asset.compiled_config.get("target"))
     backend = str(target.get("backend") or asset.backend).lower()
@@ -460,7 +477,11 @@ _ICEBERG_CATALOG_MODULE = (
 )
 
 
-def _validate_plugin_binding(asset: PublishedAsset) -> None:
+def _validate_plugin_binding(
+    asset: PublishedAsset,
+    *,
+    plugin_registry: AdmittedPluginSnapshot | None = None,
+) -> None:
     """Rejects an explicit manifest plugin binding the runtime cannot honor.
 
     Publications created before plugin identities were added remain readable via
@@ -478,6 +499,13 @@ def _validate_plugin_binding(asset: PublishedAsset) -> None:
     format_plugin = raw_plugins.get("table_format")
     if catalog_plugin != _ICEBERG_CATALOG_MODULE or format_plugin != "iceberg":
         raise ValueError("Published plugin binding is unsupported")
+    if plugin_registry is not None:
+        admitted = plugin_registry.admitted()
+        if (
+            ("catalog", "iceberg.sql") not in admitted
+            or ("table_format", "iceberg") not in admitted
+        ):
+            raise ValueError("Published plugin binding is not admitted")
 
 
 def _asset_table_identifier(asset: PublishedAsset) -> str:
