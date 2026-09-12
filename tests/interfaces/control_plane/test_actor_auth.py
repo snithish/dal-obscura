@@ -483,6 +483,7 @@ def test_asset_owner_can_delegate_read_without_edit_or_publish():
     )
 
     inventory = client.get("/v1/assets", headers=_bearer("outsider-token"))
+    detail = client.get(f"/v1/assets/{asset}", headers=_bearer("outsider-token"))
     rules = client.get(f"/v1/assets/{asset}/policy-rules", headers=_bearer("outsider-token"))
     replace = client.put(
         f"/v1/assets/{asset}/policy-rules",
@@ -494,6 +495,8 @@ def test_asset_owner_can_delegate_read_without_edit_or_publish():
     assert grants.json()["grants"] == [{"principal": "outsider", "capability": "read"}]
     assert inventory.status_code == 200
     assert inventory.json()[0]["id"] == str(asset)
+    assert detail.status_code == 200
+    assert detail.json()["id"] == str(asset)
     assert rules.status_code == 200
     assert replace.status_code == 403
 

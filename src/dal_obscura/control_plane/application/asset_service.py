@@ -12,7 +12,8 @@ from typing import Any
 from uuid import UUID
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
-from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
+from dal_obscura.control_plane.application.errors import ValidationFailure
+from dal_obscura.control_plane.application.policy_service import ensure_asset_capability
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 
 
@@ -50,10 +51,8 @@ def get_workspace_asset(
     """
 
     asset = store.get_workspace_asset(asset_id)
-    if actor is not None and not actor.platform_admin:
-        owners = set(store.list_asset_owners(asset_id))
-        if not owners.intersection(actor.owner_principals()):
-            raise AuthorizationFailure("The authenticated actor cannot access this asset.")
+    if actor is not None:
+        ensure_asset_capability(store, asset_id, actor, "read")
     return asset
 
 
