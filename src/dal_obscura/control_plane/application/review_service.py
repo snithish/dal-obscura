@@ -35,6 +35,10 @@ def issue_review_token(
 ) -> dict[str, object]:
     """Signs completed evaluation evidence for one exact draft generation."""
 
+    # Review authority is part of the same generation as the captured draft and
+    # schema identities. Lock before reading it so a revocation ordered before
+    # token issuance cannot be bypassed by a stale snapshot.
+    store.lock_asset_for_publication(asset_id)
     ensure_asset_capability(store, asset_id, actor, "publish")
     if evaluation.get("status") != "completed":
         raise ValidationFailure("Only a completed evaluation can be reviewed.")
@@ -84,7 +88,7 @@ def issue_review_token(
     }
 
 
-def verify_review_token(
+def verify_review_token(  # noqa: C901
     store: PublicationStore,
     asset_id: UUID,
     actor: ControlPlaneActor,
@@ -93,6 +97,7 @@ def verify_review_token(
     secret: str,
     now: int | None = None,
     egress_allowlist: tuple[str, ...] = (),
+    check_live_schema: bool = True,
 ) -> None:
     """Rejects stale, replayed-for-another-scope, or forged review evidence."""
 
@@ -113,17 +118,18 @@ def verify_review_token(
     recorded_schema_fingerprint = evidence.get("schema_fingerprint")
     if not isinstance(recorded_schema_fingerprint, str) or not recorded_schema_fingerprint:
         raise ValidationFailure("Policy review evidence is invalid.")
-    current_schema = load_asset_iceberg_schema(
-        store,
-        asset_id,
-        actor,
-        egress_allowlist=egress_allowlist,
-    )
-    if not hmac.compare_digest(
-        recorded_schema_fingerprint,
-        schema_fingerprint(current_schema.as_arrow()),
-    ):
-        raise ValidationFailure("Iceberg schema changed after review; review again.")
+    if check_live_schema:
+        current_schema = load_asset_iceberg_schema(
+            store,
+            asset_id,
+            actor,
+            egress_allowlist=egress_allowlist,
+        )
+        if not hmac.compare_digest(
+            recorded_schema_fingerprint,
+            schema_fingerprint(current_schema.as_arrow()),
+        ):
+            raise ValidationFailure("Iceberg schema changed after review; review again.")
     if payload.get("admitted_schema_hash") != _admitted_schema_hash(store, asset_id):
         raise ValidationFailure("Admitted schema fields changed after review; review again.")
     if payload.get("asset_revision") != _asset_revision(store, asset_id):

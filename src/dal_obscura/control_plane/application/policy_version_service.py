@@ -192,6 +192,21 @@ def create_asset_policy_version(  # noqa: C901
         ```
     """
 
+    if require_review:
+        if not review_token:
+            raise ValidationFailure("A current server review is required before publishing.")
+        # Live schema reads may perform provider I/O. Do this before taking the
+        # database lock; the locked recheck below validates all persisted review
+        # identities again before activation.
+        verify_review_token(
+            store,
+            asset_id,
+            actor,
+            review_token,
+            secret=review_secret,
+            egress_allowlist=catalog_egress_allowlist,
+        )
+
     # Serialize publication attempts for this asset in PostgreSQL. This closes
     # the read-then-create idempotency race across independent API processes.
     store.lock_asset_for_publication(asset_id)
@@ -229,8 +244,7 @@ def create_asset_policy_version(  # noqa: C901
                 "Policy draft revision changed; reread the draft before publishing."
             )
     if require_review:
-        if not review_token:
-            raise ValidationFailure("A current server review is required before publishing.")
+        assert review_token is not None
         verify_review_token(
             store,
             asset_id,
@@ -238,6 +252,7 @@ def create_asset_policy_version(  # noqa: C901
             review_token,
             secret=review_secret,
             egress_allowlist=catalog_egress_allowlist,
+            check_live_schema=False,
         )
     asset, catalog = store.load_asset_publish_draft(
         asset_id,
