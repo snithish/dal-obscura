@@ -506,7 +506,7 @@ class ProvisioningService:
         principal: str,
         groups: list[str],
         claims: dict[str, object],
-        rows: list[dict[str, object]],
+        rows: list[dict[str, object]] | None,
     ) -> dict[str, object]:
         return evaluation_service.evaluate_asset_policy(
             self._store,
@@ -526,7 +526,7 @@ class ProvisioningService:
         principal: str,
         groups: list[str],
         claims: dict[str, object],
-        rows: list[dict[str, object]],
+        rows: list[dict[str, object]] | None,
     ) -> dict[str, object]:
         evaluation = evaluation_service.evaluate_asset_policy(
             self._store,

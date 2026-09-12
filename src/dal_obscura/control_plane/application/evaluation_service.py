@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import date, datetime, time, timezone
+from decimal import Decimal
 from typing import cast
 from uuid import UUID
 
@@ -39,12 +41,13 @@ def evaluate_asset_policy(
     principal: str,
     groups: list[str],
     claims: dict[str, object],
-    rows: list[dict[str, object]],
+    rows: list[dict[str, object]] | None,
 ) -> dict[str, object]:
     """Evaluates a policy over bounded synthetic rows and returns evidence."""
 
-    if len(rows) > MAX_SYNTHETIC_ROWS:
+    if rows is not None and len(rows) > MAX_SYNTHETIC_ROWS:
         raise ValidationFailure(f"Synthetic evaluation accepts at most {MAX_SYNTHETIC_ROWS} rows")
+    supplied_row_count = 0 if rows is None else len(rows)
     arrow_schema = schema_service.load_asset_iceberg_schema(store, asset_id, actor).as_arrow()
     requested_columns = _leaf_paths(arrow_schema)
     preview = policy_service.preview_asset_policy(
@@ -80,15 +83,28 @@ def evaluate_asset_policy(
             "allowed_columns": [],
             "masks": [],
             "row_filter": None,
-            "input_rows": len(rows),
+                "input_rows": supplied_row_count,
             "output_rows": 0,
             "schema": str(arrow_schema),
             "rows": [],
             "evidence": evidence,
         }
 
-    synthetic_rows = rows or [_sample_row(arrow_schema)]
-    batches = pa.Table.from_pylist(synthetic_rows, schema=arrow_schema).to_batches()
+    synthetic_rows = [_sample_row(arrow_schema)] if rows is None else rows
+    evidence["fixture_fingerprint"] = _fingerprint(
+        json.dumps(
+            {"schema": schema_digest, "rows": synthetic_rows},
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        )
+    )
+    try:
+        batches = pa.Table.from_pylist(synthetic_rows, schema=arrow_schema).to_batches()
+    except Exception as exc:
+        # User-supplied synthetic values can contain arbitrary JSON types. Keep
+        # Arrow's detailed type/schema errors out of the browser response.
+        raise ValidationFailure("Synthetic evaluation rows are invalid") from exc
     masks = {
         str(item["column"]): MaskRule(
             type=str(item["type"]),
@@ -177,24 +193,41 @@ def _sample_row(schema: pa.Schema) -> dict[str, object]:
     return {field.name: _sample_value(field.name, field.type) for field in schema}
 
 
-def _sample_value(name: str, data_type: pa.DataType) -> object:
+def _sample_value(name: str, data_type: pa.DataType) -> object:  # noqa: C901
     if pa.types.is_struct(data_type):
         return {field.name: _sample_value(field.name, field.type) for field in data_type}
     if pa.types.is_list(data_type) or pa.types.is_large_list(data_type):
         return [_sample_value(name, data_type.value_type)]
     if pa.types.is_map(data_type):
-        return {"synthetic": _sample_value(name, data_type.item_type)}
+        return {
+            _sample_value(name, data_type.key_type): _sample_value(name, data_type.item_type)
+        }
     if pa.types.is_boolean(data_type):
         return True
-    if pa.types.is_integer(data_type) or pa.types.is_floating(data_type):
+    if pa.types.is_integer(data_type):
         return 1
-    if pa.types.is_date(data_type) or pa.types.is_timestamp(data_type):
-        return None
+    if pa.types.is_floating(data_type):
+        return 1.0
+    if pa.types.is_decimal(data_type):
+        return Decimal("1").scaleb(-data_type.scale)
+    if pa.types.is_date32(data_type) or pa.types.is_date64(data_type):
+        return date(2024, 1, 2)
+    if pa.types.is_timestamp(data_type):
+        value = datetime(2024, 1, 2, 3, 4, 5)
+        return value.replace(tzinfo=timezone.utc) if data_type.tz else value
+    if pa.types.is_time32(data_type) or pa.types.is_time64(data_type):
+        return time(3, 4, 5)
+    if pa.types.is_binary(data_type) or pa.types.is_large_binary(data_type):
+        return b"synthetic"
+    if pa.types.is_fixed_size_binary(data_type):
+        return b"x" * data_type.byte_width
     if "email" in name.lower():
         return "synthetic@example.com"
     if name.lower() == "region":
         return "us"
-    return "synthetic"
+    if pa.types.is_string(data_type) or pa.types.is_large_string(data_type):
+        return "synthetic"
+    raise ValidationFailure(f"Synthetic evaluation does not support Arrow type {data_type}")
 
 
 def _fingerprint(value: str) -> str:

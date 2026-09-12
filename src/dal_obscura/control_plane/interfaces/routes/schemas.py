@@ -194,7 +194,9 @@ class PolicyPreviewRequest(StrictModel):
 class PolicyEvaluationRequest(PolicyPreviewRequest):
     """Bounded synthetic rows for server-side DuckDB policy evaluation."""
 
-    rows: list[dict[str, object]] = Field(default_factory=list, max_length=100)
+    # ``None`` means use the documented synthetic fixture.  An explicit empty
+    # list is a real zero-row evaluation and must preserve the output schema.
+    rows: list[dict[str, object]] | None = Field(default=None, max_length=100)
 
 
 class AssetOwnersRequest(StrictModel):

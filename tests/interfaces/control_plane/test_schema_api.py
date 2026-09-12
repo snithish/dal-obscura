@@ -170,6 +170,20 @@ def test_policy_evaluation_returns_duckdb_transformed_synthetic_rows(monkeypatch
     assert payload["output_rows"] == 1
     assert payload["rows"][0]["email"] == "[right]"
     assert payload["evidence"]["evaluator_version"] == "duckdb-synthetic-v1"
+    assert len(payload["evidence"]["fixture_fingerprint"]) == 64
+
+    empty = client.post(
+        f"/v1/assets/{asset['id']}/policy-evaluate",
+        json={"principal": "analyst", "rows": []},
+        headers=ADMIN_HEADERS,
+    )
+    assert empty.status_code == 200
+    assert empty.json()["input_rows"] == 0
+    assert empty.json()["output_rows"] == 0
+    assert (
+        empty.json()["evidence"]["fixture_fingerprint"]
+        != payload["evidence"]["fixture_fingerprint"]
+    )
 
 
 def test_production_publication_requires_current_server_review(monkeypatch) -> None:
