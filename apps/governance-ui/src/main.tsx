@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import type { Asset, AuthProvider, Catalog, Mask, PolicyRule, PolicyVersion, Preview, RuntimeSettings, SchemaNode, Session, UiAuthConfig, WorkspaceSummary } from "./api";
@@ -35,6 +35,8 @@ function App() {
   const [loggingIn, setLoggingIn] = useState(false);
   const [managementData, setManagementData] = useState<ManagementData>({});
   const [managementLoading, setManagementLoading] = useState(false);
+  const loadEpoch = useRef(0);
+  const [logoutPending, setLogoutPending] = useState(false);
   const isDemo = workspace === "demo";
 
   useEffect(() => {
@@ -68,8 +70,10 @@ function App() {
 
   async function loadInitialWorkspace() {
     try {
+      const epoch = ++loadEpoch.current;
       setWorkspace("loading");
       setSession(await controlPlane.getSession());
+      if (epoch !== loadEpoch.current) return;
       const loaded = await controlPlane.listAssets();
       setAssets(loaded);
       if (!loaded.length) {
@@ -90,6 +94,7 @@ function App() {
     setLoggingIn(true);
     try {
       await controlPlane.demoLogin(loginHint);
+      loadEpoch.current += 1;
       await loadInitialWorkspace();
     } catch {
       setWorkspace("unavailable");
@@ -100,19 +105,35 @@ function App() {
   }
 
   async function logout() {
+    loadEpoch.current += 1;
     try {
       await controlPlane.logout();
-    } finally {
-      setSession(null); setAsset(null); setAssets([]); setRules([]); setPreview(null);
-      setWorkspace("unavailable");
-      setAuthConfig(await controlPlane.getUiAuthConfig().catch(() => null));
+      clearPrivateState();
+      setLogoutPending(false);
       setNotice("Signed out. No policy data remains loaded in this browser.");
+    } catch {
+      clearPrivateState();
+      setLogoutPending(true);
+      setNotice("Sign out could not be confirmed. Private data is hidden; retry sign out before closing this browser.");
     }
+  }
+
+  function clearPrivateState() {
+    setSession(null); setAsset(null); setAssets([]); setRules([]); setPreview(null);
+    setWorkspace("unavailable");
+    void controlPlane.getUiAuthConfig().then(setAuthConfig).catch(() => setAuthConfig(null));
+  }
+
+  function navigateTo(next: Page) {
+    if (saveState === "unsaved" && !window.confirm("You have unsaved policy changes. Leave this editor?")) return;
+    setPage(next);
   }
 
   async function loadAsset(assetId: string, knownAssets = assets) {
     try {
+      const epoch = ++loadEpoch.current;
       const [fullAsset, loadedRules, schema, history] = await Promise.all([controlPlane.getAsset(assetId), controlPlane.listRules(assetId), controlPlane.getSchema(assetId), controlPlane.listHistory().catch(() => [])]);
+      if (epoch !== loadEpoch.current) return;
       fullAsset.schema = schema;
       const draft = isDemo ? null : await controlPlane.getDraft(assetId);
       const effectiveRules = draft?.rules ?? loadedRules;
@@ -180,12 +201,12 @@ function App() {
 
   return <div className="app-shell">
     <aside className="sidebar" aria-label="Primary navigation">
-      <a className="brand" href="#assets" onClick={() => setPage("assets")}>DAL OBSCURA<span>GOVERNANCE</span></a>
-      <nav>{(["assets", "changes", "activity", "connections", "settings"] as Page[]).map((item) => <button key={item} className={page === item ? "nav-item active" : "nav-item"} onClick={() => setPage(item)}>{item}</button>)}</nav>
+      <a className="brand" href="#assets" onClick={() => navigateTo("assets")}>DAL OBSCURA<span>GOVERNANCE</span></a>
+      <nav>{(["assets", "changes", "activity", "connections", "settings"] as Page[]).map((item) => <button key={item} className={page === item ? "nav-item active" : "nav-item"} onClick={() => navigateTo(item)}>{item}</button>)}</nav>
       <div className="sidebar-foot"><span className={"status-dot " + workspace} /> Workspace: analytics<br /><small>{workspaceLabel(workspace)}</small></div>
     </aside>
     <main>
-      <header className="topbar"><div><span className="eyebrow">{page === "assets" ? "ASSET WORKSPACE" : page.toUpperCase()}</span><h1>{page === "assets" ? asset?.name ?? "Assets" : titleFor(page)}</h1></div><div className="actor"><span className="avatar">{session?.principal.slice(0, 1).toUpperCase() ?? "?"}</span><div><strong>{session?.principal ?? "Not signed in"}</strong><small>{session?.platform_admin ? "Platform admin" : "Policy author"}</small></div>{session && <button className="text-button" onClick={() => void logout()}>Sign out</button>}</div></header>
+      <header className="topbar"><div><span className="eyebrow">{page === "assets" ? "ASSET WORKSPACE" : page.toUpperCase()}</span><h1>{page === "assets" ? asset?.name ?? "Assets" : titleFor(page)}</h1></div><div className="actor"><span className="avatar">{session?.principal.slice(0, 1).toUpperCase() ?? "?"}</span><div><strong>{session?.principal ?? "Not signed in"}</strong><small>{session?.platform_admin ? "Platform admin" : "Policy author"}</small></div>{session && <button className="text-button" onClick={() => void logout()}>Sign out</button>}{logoutPending && <button className="text-button" onClick={() => void logout()}>Retry sign out</button>}</div></header>
       {page !== "assets" ? <ManagementView page={page} data={managementData} loading={managementLoading} onReload={() => void loadManagement(page)} /> : workspace === "loading" ? <WorkspaceMessage title="Loading governed assets" message="Checking your workspace access and available assets." /> : workspace === "unavailable" ? <WorkspaceMessage title="Cannot load workspace" message={notice} retry={loadInitialWorkspace} authConfig={authConfig} onLogin={demoLogin} loggingIn={loggingIn} /> : !asset ? <WorkspaceMessage title="No governed assets" message={notice} /> : <AssetWorkspace assets={assets} asset={asset} history={managementData.history ?? []} onAsset={(id) => void loadAsset(id)} rules={rules} activeRule={activeRule} activeRevision={draftRevision} selectedRule={selectedRule} onRule={setSelectedRule} selectedField={selectedField} onField={setSelectedField} selectedMask={selectedMask} effectiveFields={effectiveFields} saveState={saveState} notice={notice} onToggleField={toggleField} onMask={setMask} onUpdateRule={updateRule} onAddRule={addRule} onRemoveRule={removeRule} onSave={() => void saveDraft()} onPreview={() => void runPreview()} onPublish={() => void controlPlane.publishAsset(asset.id, draftRevision).then(() => setNotice("Published the saved draft.")).catch(() => setNotice("Publish failed. Review the saved draft and active generation."))} preview={preview} />}
     </main>
   </div>;
@@ -197,7 +218,7 @@ function AssetWorkspace(props: { assets: Asset[]; asset: Asset; history: PolicyV
   const currentPreview = props.preview;
   return <><div className="asset-summary"><label>Asset <select value={props.asset.id} onChange={(event) => props.onAsset(event.target.value)}>{props.assets.map((item) => <option key={item.id} value={item.id}>{item.catalog} / {item.name}</option>)}</select></label><div className="save-status" aria-live="polite"><span className={"save-dot " + props.saveState} /> {saveLabel(props.saveState)}</div></div><div className="notice" role="status">{props.notice}</div><div className="asset-tabs" role="tablist" aria-label="Asset views">{(["policy", "tests", "history"] as const).map((item) => <button key={item} role="tab" aria-selected={tab === item} className={tab === item ? "selected" : ""} onClick={() => setTab(item)}>{item === "policy" ? "Policy" : item === "tests" ? "Tests" : "History"}</button>)}</div>{tab === "policy" ? <div className="studio">
     <section className="schema-panel" aria-label="Schema and field selection"><div className="panel-head"><div><span className="eyebrow">SCHEMA</span><h2>Fields & access</h2></div></div><p className="help">Fields retain server-defined paths. A checked field is visible through the selected rule.</p><ul className="field-tree">{fields.map((field) => <SchemaTree key={field.human_path} node={field} depth={0} selectedField={props.selectedField} effectiveFields={props.effectiveFields} onField={props.onField} />)}</ul><div className="schema-note"><strong>Nested fields</strong><p>Struct, list, and map paths come from the control plane. Collection nodes expose explicit <code>$element</code>, <code>$key</code>, and <code>$value</code> segments.</p></div></section>
-    <section className="editor-panel" aria-label="Policy rule editor"><div className="panel-head"><div><span className="eyebrow">POLICY RULES</span><h2>{props.activeRule ? "Rule " + (props.selectedRule + 1) : "No rule selected"}</h2></div><button className="text-button" onClick={props.onAddRule}>Add rule</button></div>{props.rules.length ? <><div className="rule-list" aria-label="Policy rule list">{props.rules.map((rule, index) => <button key={index} className={index === props.selectedRule ? "selected" : ""} onClick={() => props.onRule(index)}>Rule {index + 1}<small>{rule.principals.join(", ") || "No principal"}</small></button>)}</div><EditorSection label="Who"><input value={props.activeRule?.principals.join(", ") ?? ""} onChange={(event) => props.onUpdateRule((rule) => ({ ...rule, principals: event.target.value.split(",").map((value) => value.trim()).filter(Boolean) }))} aria-label="Principals or groups" placeholder="group:us-analysts" /></EditorSection><EditorSection label="Which fields"><label className="check-line"><input type="checkbox" checked={props.activeRule?.columns.includes(props.selectedField) ?? false} disabled={!props.selectedField} onChange={() => props.onToggleField(props.selectedField)} /> Include <strong>{props.selectedField || "a schema field"}</strong></label><p className="help">Parent/child conflicts and invalid nested paths are rejected by the control plane.</p></EditorSection><EditorSection label="Which rows"><textarea value={props.activeRule?.row_filter ?? ""} onChange={(event) => props.onUpdateRule((rule) => ({ ...rule, row_filter: event.target.value || null }))} aria-label="DuckDB row restriction" placeholder="region = 'US'" /><p className="help">Matching rules combine row restrictions with AND.</p></EditorSection><EditorSection label="How values appear"><MaskEditor mask={props.selectedMask} onChange={props.onMask} field={props.selectedField} /></EditorSection><div className="editor-actions"><button className="danger" onClick={props.onRemoveRule}>Remove rule</button><button className="secondary" onClick={props.onPreview}>Run policy test</button><button className="primary" onClick={props.onSave}>Save draft</button><button className="secondary" onClick={props.onPublish} disabled={props.saveState !== "saved"}>Publish reviewed draft</button></div></> : <div className="empty-result"><strong>No draft rules</strong><p>Start with one allow rule. It remains a draft until you save it and complete review.</p><button className="primary" onClick={props.onAddRule}>Add first rule</button></div>}</section>
+    <section className="editor-panel" aria-label="Policy rule editor"><div className="panel-head"><div><span className="eyebrow">POLICY RULES</span><h2>{props.activeRule ? "Rule " + (props.selectedRule + 1) : "No rule selected"}</h2></div><button className="text-button" onClick={props.onAddRule}>Add rule</button></div>{props.rules.length ? <><div className="rule-list" aria-label="Policy rule list">{props.rules.map((rule, index) => <button key={index} className={index === props.selectedRule ? "selected" : ""} onClick={() => props.onRule(index)}>Rule {index + 1}<small>{rule.principals.join(", ") || "No principal"}</small></button>)}</div><EditorSection label="Who"><input value={props.activeRule?.principals.join(", ") ?? ""} onChange={(event) => props.onUpdateRule((rule) => ({ ...rule, principals: event.target.value.split(",").map((value) => value.trim()).filter(Boolean) }))} aria-label="Principals or groups" placeholder="group:us-analysts" /></EditorSection><EditorSection label="Which fields"><label className="check-line"><input type="checkbox" checked={props.activeRule?.columns.includes(props.selectedField) ?? false} disabled={!props.selectedField} onChange={() => props.onToggleField(props.selectedField)} /> Include <strong>{props.selectedField || "a schema field"}</strong></label><p className="help">Parent/child conflicts and invalid nested paths are rejected by the control plane.</p></EditorSection><EditorSection label="Which rows"><textarea value={props.activeRule?.row_filter ?? ""} onChange={(event) => props.onUpdateRule((rule) => ({ ...rule, row_filter: event.target.value || null }))} aria-label="DuckDB row restriction" placeholder="region = 'US'" /><p className="help">Matching rules combine row restrictions with AND.</p></EditorSection><EditorSection label="How values appear"><MaskEditor mask={props.selectedMask} onChange={props.onMask} field={props.selectedField} /></EditorSection><div className="editor-actions"><button className="danger" onClick={props.onRemoveRule}>Remove rule</button><button className="secondary" onClick={props.onPreview}>Run policy test</button><button className="primary" onClick={props.onSave} disabled={props.saveState === "saving"}>{props.saveState === "saving" ? "Saving…" : "Save draft"}</button><button className="secondary" onClick={props.onPublish} disabled={props.saveState !== "saved"}>Publish reviewed draft</button></div></> : <div className="empty-result"><strong>No draft rules</strong><p>Start with one allow rule. It remains a draft until you save it and complete review.</p><button className="primary" onClick={props.onAddRule}>Add first rule</button></div>}</section>
     <section className="result-panel" aria-label="Effective access inspector"><span className="eyebrow">EFFECTIVE ACCESS</span><h2>US analyst</h2><p className="muted">Synthetic persona · not reader authentication</p>{currentPreview ? <><div className="result-state allowed">Test current</div><h3>Visible output</h3><ul>{currentPreview.allowed_columns.map((field) => <li key={field}>{field}{currentPreview.masks[field] && <small> · {currentPreview.masks[field].type} mask</small>}</li>)}</ul><h3>Row restriction</h3><code>{currentPreview.row_filter ?? "No matching row restriction"}</code></> : <div className="empty-result"><strong>Run a policy test</strong><p>See authorized output schema, masks, and row restriction for this draft.</p></div>}<div className="result-warning"><strong>Before publishing</strong><p>Review uses the exact saved draft. Changing fields, masks, or row restrictions makes this result stale.</p></div></section>
   </div> : tab === "tests" ? <TestsView onPreview={props.onPreview} preview={props.preview} /> : <HistoryView history={props.history.filter((item) => item.asset_id === props.asset.id)} />}</>;
 }
