@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `5c17d04`.
+Implementation follow-up through `5f2e196`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -210,6 +210,23 @@ remain open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: continue X06 evolution policy and X03 PostgreSQL
   transaction barriers.
+
+### X06 reviewed selection expansion — `5f2e196`
+
+- State: implementing.
+- Behavior: when admitted schema identities exist, publication compilation
+  expands wildcard and parent column selections to the reviewed canonical leaf
+  paths. Mask entries receive the same expansion, so later schema additions
+  cannot enter through an unresolved wildcard or parent grant.
+- Red/green evidence: compiler regressions for wildcard plus mask expansion and
+  nested-parent expansion pass; the complete `tests/control_plane/test_publication_compiler.py`
+  module passed (34 tests), with Ruff and Ty clean.
+- Remaining gaps: review-time population of the admitted set from every backend,
+  explicit rename/addition policy, and PostgreSQL/browser/consumer acceptance
+  remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: continue X06 schema evolution policy and X03
+  PostgreSQL transaction barriers.
 
 The combined control-plane, catalog, schema, publication, migration, plugin, and
 published-config boundary suite passed at 100% after the budget change.
