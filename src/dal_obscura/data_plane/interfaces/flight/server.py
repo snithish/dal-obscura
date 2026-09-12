@@ -81,7 +81,7 @@ class DataAccessFlightService(flight.FlightServerBase):
         del context
         if action.type != HEALTH_ACTION:
             raise flight.FlightInternalError(f"Unsupported action: {action.type}")
-        payload = _health_payload(self._health_check, self._logger)
+        payload = _health_payload(self._health_check, self._logger, metrics=self._metrics)
         body = json.dumps(payload, separators=(",", ":"))
         return [flight.Result(body.encode("utf-8"))]
 
@@ -189,6 +189,8 @@ class DataAccessFlightService(flight.FlightServerBase):
 def _health_payload(
     health_check: Callable[[], Mapping[str, object]] | None,
     logger: logging.Logger,
+    *,
+    metrics: ServiceMetrics | None = None,
 ) -> dict[str, object]:
     """Builds the Flight health response and fails closed on readiness errors."""
 
@@ -206,6 +208,10 @@ def _health_payload(
     payload["checks"] = observed.get("checks", {})
     if observed.get("publication_id"):
         payload["publication_id"] = observed["publication_id"]
+    if metrics is not None:
+        snapshot = metrics.snapshot()
+        if snapshot:
+            payload["metrics"] = snapshot
     return payload
 
 
