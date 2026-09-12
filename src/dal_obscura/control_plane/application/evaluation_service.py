@@ -11,6 +11,13 @@ import pyarrow as pa
 
 from dal_obscura.common.access_control.filters import deserialize_row_filter
 from dal_obscura.common.access_control.models import MaskRule
+from dal_obscura.common.query_planning.field_paths import (
+    FieldPath,
+    FieldSegment,
+    ListElementSegment,
+    MapKeySegment,
+    MapValueSegment,
+)
 from dal_obscura.control_plane.application import policy_service, schema_service
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.errors import ValidationFailure
@@ -122,28 +129,39 @@ def evaluate_asset_policy(
 def _leaf_paths(schema: pa.Schema) -> list[str]:
     paths: list[str] = []
     for field in schema:
-        if pa.types.is_struct(field.type):
-            paths.extend(_nested_leaf_paths(field.name, field.type))
-        else:
-            paths.append(field.name)
+        paths.extend(_nested_leaf_paths((FieldSegment(field.name, _field_id(field)),), field.type))
     return paths
 
 
-def _nested_leaf_paths(prefix: str, data_type: pa.DataType) -> list[str]:
+def _nested_leaf_paths(
+    prefix: tuple[FieldSegment | ListElementSegment | MapKeySegment | MapValueSegment, ...],
+    data_type: pa.DataType,
+) -> list[str]:
     if pa.types.is_struct(data_type):
         paths: list[str] = []
         for field in data_type:
-            child = f"{prefix}.{field.name}"
+            child = (*prefix, FieldSegment(field.name, _field_id(field)))
             paths.extend(_nested_leaf_paths(child, field.type))
         return paths
     if pa.types.is_list(data_type) or pa.types.is_large_list(data_type):
-        return _nested_leaf_paths(f"{prefix}.$element", data_type.value_type)
+        return _nested_leaf_paths((*prefix, ListElementSegment()), data_type.value_type)
     if pa.types.is_map(data_type):
         return [
-            *_nested_leaf_paths(f"{prefix}.$key", data_type.key_type),
-            *_nested_leaf_paths(f"{prefix}.$value", data_type.item_type),
+            *_nested_leaf_paths((*prefix, MapKeySegment()), data_type.key_type),
+            *_nested_leaf_paths((*prefix, MapValueSegment()), data_type.item_type),
         ]
-    return [prefix]
+    return [FieldPath(prefix).to_human()]
+
+
+def _field_id(field: pa.Field) -> int | None:
+    metadata = field.metadata or {}
+    raw_id = metadata.get(b"PARQUET:field_id") or metadata.get(b"iceberg.field.id")
+    if raw_id is None:
+        return None
+    try:
+        return int(raw_id)
+    except (TypeError, ValueError):
+        return None
 
 
 def _sample_row(schema: pa.Schema) -> dict[str, object]:
