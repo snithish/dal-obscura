@@ -59,7 +59,11 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
         "/v1/ui-auth-config",
         "/v1/workspace/summary",
         "/v1/workspace/observations",
+        "/v1/workspace/publications",
+        "/v1/workspace/publications/{publication_id}/activate",
     }
     assert set(paths["/v1/assets/{asset_id}/policy-rules"]) == {"get", "put"}
     assert set(paths["/v1/assets/{asset_id}/grants"]) == {"get", "put"}
     assert set(paths["/v1/assets/{catalog}/{target}"]) == {"put"}
+    assert set(paths["/v1/workspace/publications"]) == {"get", "post"}
+    assert set(paths["/v1/workspace/publications/{publication_id}/activate"]) == {"post"}
