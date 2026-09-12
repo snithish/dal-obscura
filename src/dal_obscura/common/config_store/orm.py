@@ -289,6 +289,27 @@ class AuditEventRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class PublicationOperationRecord(Base):
+    """Idempotent result for one asset publication request."""
+
+    __tablename__ = "publication_operations"
+    __table_args__ = (
+        UniqueConstraint("asset_id", "actor_principal", "idempotency_key"),
+        Index("ix_publication_operations_created", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    cell_id: Mapped[UUID] = mapped_column(ForeignKey("cells.id"), nullable=False)
+    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    asset_id: Mapped[UUID] = mapped_column(ForeignKey("assets.id"), nullable=False)
+    actor_principal: Mapped[str] = mapped_column(Text, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False)
+    result_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class ConfigPublicationRecord(Base):
     """Immutable publication manifest row."""
 

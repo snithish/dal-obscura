@@ -8,6 +8,8 @@ Example:
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import cast
 from uuid import UUID, uuid4
 
@@ -132,6 +134,7 @@ def create_asset_policy_version(  # noqa: C901
     review_token: str | None = None,
     require_review: bool = False,
     review_secret: str = "",
+    idempotency_key: str | None = None,
 ) -> dict[str, object]:
     """Publishes and activates a new policy version for one asset.
 
@@ -148,6 +151,23 @@ def create_asset_policy_version(  # noqa: C901
     """
 
     ensure_asset_capability(store, asset_id, actor, "publish")
+    request_hash = _publication_request_hash(
+        expected_draft_revision=expected_draft_revision,
+        expected_publication_id=expected_publication_id,
+        review_token=review_token,
+    )
+    if idempotency_key:
+        existing = store.get_publication_operation(
+            asset_id=asset_id,
+            actor_principal=actor.principal,
+            idempotency_key=idempotency_key,
+        )
+        if existing is not None:
+            if existing["request_hash"] != request_hash:
+                raise PublicationConflictError(
+                    "Idempotency key was already used with a different publication request."
+                )
+            return cast(dict[str, object], existing["result"])
     personal_draft = store.get_asset_policy_draft(
         asset_id=asset_id,
         author_principal=actor.principal,
@@ -211,7 +231,19 @@ def create_asset_policy_version(  # noqa: C901
                 "initial": True,
             },
         )
-        return {"asset_id": str(asset.id), "policy_version": compiled_asset.policy_version}
+        result: dict[str, object] = {
+            "asset_id": str(asset.id),
+            "policy_version": compiled_asset.policy_version,
+        }
+        if idempotency_key:
+            store.save_publication_operation(
+                asset_id=asset_id,
+                actor_principal=actor.principal,
+                idempotency_key=idempotency_key,
+                request_hash=request_hash,
+                result=result,
+            )
+        return result
     if (
         expected_publication_id is not None
         and expected_publication_id != active_pointer.publication_id
@@ -259,10 +291,37 @@ def create_asset_policy_version(  # noqa: C901
             "initial": False,
         },
     )
-    return {
+    result: dict[str, object] = {
         "asset_id": str(asset.id),
         "policy_version": compiled_asset.policy_version,
     }
+    if idempotency_key:
+        store.save_publication_operation(
+            asset_id=asset_id,
+            actor_principal=actor.principal,
+            idempotency_key=idempotency_key,
+            request_hash=request_hash,
+            result=result,
+        )
+    return result
+
+
+def _publication_request_hash(
+    *,
+    expected_draft_revision: int | None,
+    expected_publication_id: UUID | None,
+    review_token: str | None,
+) -> str:
+    payload = {
+        "expected_draft_revision": expected_draft_revision,
+        "expected_publication_id": None
+        if expected_publication_id is None
+        else str(expected_publication_id),
+        "review_token": review_token,
+    }
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
 
 
 def create_publication(store: PublicationStore, cell_id: UUID) -> dict[str, object]:

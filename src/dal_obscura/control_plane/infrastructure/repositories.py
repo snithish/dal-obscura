@@ -25,6 +25,7 @@ from dal_obscura.common.config_store.orm import (
     CellTenantRecord,
     ConfigPublicationRecord,
     PolicyRuleRecord,
+    PublicationOperationRecord,
     PublishedAssetRecord,
     PublishedCatalogRecord,
     PublishedCellRuntimeRecord,
@@ -1227,6 +1228,60 @@ class PublicationStore:
             }
             for record in records
         ]
+
+    def get_publication_operation(
+        self,
+        *,
+        asset_id: UUID,
+        actor_principal: str,
+        idempotency_key: str,
+    ) -> dict[str, object] | None:
+        record = self._session.scalar(
+            select(PublicationOperationRecord).where(
+                PublicationOperationRecord.asset_id == asset_id,
+                PublicationOperationRecord.actor_principal == actor_principal,
+                PublicationOperationRecord.idempotency_key == idempotency_key,
+            )
+        )
+        if record is None:
+            return None
+        return {
+            "id": str(record.id),
+            "request_hash": record.request_hash,
+            "status": record.status,
+            "result": dict(record.result_json),
+        }
+
+    def save_publication_operation(
+        self,
+        *,
+        asset_id: UUID,
+        actor_principal: str,
+        idempotency_key: str,
+        request_hash: str,
+        result: dict[str, object],
+        status: str = "committed",
+    ) -> dict[str, object]:
+        context = self.get_asset_workspace_context(asset_id)
+        record = PublicationOperationRecord(
+            id=uuid4(),
+            cell_id=context.cell_id,
+            tenant_id=context.tenant_id,
+            asset_id=asset_id,
+            actor_principal=actor_principal,
+            idempotency_key=idempotency_key,
+            request_hash=request_hash,
+            status=status,
+            result_json=dict(result),
+        )
+        self._session.add(record)
+        self._session.flush()
+        return {
+            "id": str(record.id),
+            "request_hash": record.request_hash,
+            "status": record.status,
+            "result": dict(record.result_json),
+        }
 
     def get_workspace_summary(self, context: WorkspaceContext | None) -> dict[str, object]:
         if context is None:

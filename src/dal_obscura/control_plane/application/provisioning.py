@@ -224,6 +224,7 @@ class ProvisioningService:
         expected_draft_revision: int | None = None,
         expected_publication_id: UUID | None = None,
         review_token: str | None = None,
+        idempotency_key: str | None = None,
     ) -> dict[str, object]:
         return policy_version_service.create_asset_policy_version(
             self._store,
@@ -234,6 +235,7 @@ class ProvisioningService:
             expected_draft_revision=expected_draft_revision,
             expected_publication_id=expected_publication_id,
             review_token=review_token,
+            idempotency_key=idempotency_key,
             require_review=self._require_review,
             review_secret=self._review_secret,
         )

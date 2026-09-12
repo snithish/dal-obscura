@@ -254,3 +254,32 @@ def test_asset_policy_history_is_capability_scoped():
         json={"expected_revision": 0},
         headers=outsider,
     ).status_code == 403
+
+
+def test_publish_idempotency_key_replays_committed_result_and_rejects_mismatch():
+    client = _client()
+    asset = _provision_draft(client)
+    client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["owner"]},
+        headers=ADMIN_HEADERS,
+    )
+    headers = {**ADMIN_HEADERS, "Idempotency-Key": "publish-once"}
+    first = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        headers=headers,
+    )
+    replay = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        headers=headers,
+    )
+    mismatch = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        json={"expected_draft_revision": 0},
+        headers=headers,
+    )
+
+    assert first.status_code == 200
+    assert replay.status_code == 200
+    assert replay.json() == first.json()
+    assert mismatch.status_code == 409

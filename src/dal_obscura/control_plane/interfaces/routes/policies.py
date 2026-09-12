@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
@@ -133,8 +133,11 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
     def create_asset_policy_version(
         asset_id: UUID,
         request: PolicyVersionPublishRequest | None = None,
+        idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
     ) -> object:
+        if idempotency_key is not None and len(idempotency_key.strip()) > 128:
+            raise HTTPException(status_code=422, detail="Idempotency-Key is too long")
         return deps.with_service(
             lambda service: service.create_asset_policy_version(
                 asset_id=asset_id,
@@ -146,6 +149,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
                     None if request is None else request.expected_publication_id
                 ),
                 review_token=None if request is None else request.review_token,
+                idempotency_key=idempotency_key.strip() if idempotency_key else None,
             )
         )
 
