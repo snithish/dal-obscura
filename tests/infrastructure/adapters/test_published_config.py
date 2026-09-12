@@ -26,6 +26,7 @@ from dal_obscura.data_plane.infrastructure.adapters.published_config import (
     PublishedConfigAuthorizer,
     PublishedConfigStore,
     _catalog_config_for_asset,
+    _schema_identities,
     _validate_schema_admission,
 )
 
@@ -166,6 +167,50 @@ def test_published_config_requires_both_plugin_identities_in_admitted_snapshot()
         ),
     )
     assert resolved.type == "iceberg"
+
+
+def test_schema_without_provider_ids_uses_schema_scoped_nested_synthetic_ids():
+    schema = pa.schema(
+        [
+            pa.field("email", pa.string()),
+            pa.field("profile", pa.struct([pa.field("phone", pa.string())])),
+            pa.field("tags", pa.list_(pa.field("item", pa.string()))),
+            pa.field("labels", pa.map_(pa.string(), pa.string())),
+        ]
+    )
+    identities = _schema_identities(schema)
+
+    assert len(identities) == 8
+    assert all(field_id.startswith("synthetic:") for _, field_id in identities)
+    assert any(path == ("profile", "phone") for path, _ in identities)
+
+    admission = {
+        "fields": [
+            {"path": list(path), "field_id": field_id, "type": field_type}
+            for (path, field_id), field_type in identities.items()
+        ]
+    }
+    asset = PublishedAsset(
+        publication_id=uuid4(),
+        tenant_id=uuid4(),
+        catalog="analytics",
+        target="default.users",
+        backend="iceberg",
+        compiled_config={"schema": admission},
+        policy_version=1,
+    )
+
+    _validate_schema_admission(asset, schema)
+    changed = pa.schema(
+        [
+            pa.field("email", pa.string()),
+            pa.field("profile", pa.struct([pa.field("mobile", pa.string())])),
+            pa.field("tags", pa.list_(pa.field("item", pa.string()))),
+            pa.field("labels", pa.map_(pa.string(), pa.string())),
+        ]
+    )
+    with pytest.raises(ValueError, match="review again"):
+        _validate_schema_admission(asset, changed)
 
 
 def test_published_store_fails_closed_by_default_after_transient_failure(

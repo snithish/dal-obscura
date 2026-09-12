@@ -21,6 +21,7 @@ from dal_obscura.common.query_planning.field_paths import (
     MapKeySegment,
     MapValueSegment,
 )
+from dal_obscura.common.schema_identity import schema_has_stable_ids
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.catalog_service import validate_catalog_options
 from dal_obscura.control_plane.application.errors import ValidationFailure
@@ -65,6 +66,7 @@ def get_asset_schema(
         "target": asset["name"],
         "schema_version": 1,
         "schema_fingerprint": schema_fingerprint(schema),
+        "stable_field_ids": schema_has_stable_ids(schema.as_arrow()),
         "fields": [
             _field_node(field, (FieldSegment(field.name, field.field_id),))
             for field in schema.fields

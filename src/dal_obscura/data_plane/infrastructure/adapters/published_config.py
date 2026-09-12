@@ -29,6 +29,7 @@ from dal_obscura.common.config_store.orm import (
     TenantRecord,
 )
 from dal_obscura.common.plugin_api import PluginRegistry
+from dal_obscura.common.schema_identity import schema_field_id, schema_scope_digest
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     CatalogConfig,
     CatalogRegistry,
@@ -579,18 +580,14 @@ def _validate_schema_admission(asset: PublishedAsset, schema: pa.Schema) -> None
 def _schema_identities(schema: pa.Schema) -> dict[tuple[tuple[str, ...], str], str]:
     result: dict[tuple[tuple[str, ...], str], str] = {}
     seen_ids: set[str] = set()
+    scope_digest = schema_scope_digest(schema)
 
     def visit(field: pa.Field, path: tuple[str, ...]) -> None:
-        metadata = field.metadata or {}
-        raw_id = metadata.get(b"PARQUET:field_id") or metadata.get(b"iceberg.field.id")
-        if raw_id is not None:
-            field_id = raw_id.decode("utf-8", "replace")
-            if ":" not in field_id:
-                field_id = f"iceberg:{field_id}"
-            if field_id in seen_ids:
-                raise ValueError("Live schema contains a duplicate field identity")
-            seen_ids.add(field_id)
-            result[(path, field_id)] = str(field.type)
+        field_id, _stable = schema_field_id(field, path, scope_digest=scope_digest)
+        if field_id in seen_ids:
+            raise ValueError("Live schema contains a duplicate field identity")
+        seen_ids.add(field_id)
+        result[(path, field_id)] = str(field.type)
         if pa.types.is_struct(field.type):
             for child in field.type:
                 visit(child, (*path, child.name))
