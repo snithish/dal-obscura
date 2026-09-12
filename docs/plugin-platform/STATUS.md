@@ -1,6 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
+Implementation follow-up through `6fbb028`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task produced review/planning documents only. No runtime, UI, plugin, dependency,
@@ -22,19 +23,34 @@ evidence remains in [the UI ledger](../ui-v2/EXECUTION_STATUS.md).
 
 ## Ordered queue
 
-- X00 baseline and constraints: **not-started**.
-- X01 selected-only publication: **not-started**.
-- X02 immutable draft/review: **not-started**.
+- X00 baseline and constraints: **implementing**; acceptance registry and baseline
+  probes are documented, but immutable ticket fixture inventory remains open.
+- X01 selected-only publication: **implemented-unverified**; initial activation now
+  scopes to selected asset/catalog. Focused SQLite/API evidence passed; Flight and
+  PostgreSQL evidence remain open.
+- X02 immutable draft/review: **implemented-unverified**; strict review requires an
+  explicit saved draft and legacy rule hashes are bound. PostgreSQL race evidence and
+  full snapshot binding remain open.
 - X03 publication/grant/binding transactions: **not-started**.
-- X04 canonical evaluation: **not-started**.
-- X05 canonical bounded schemas: **not-started**.
+- X04 canonical evaluation: **implemented-unverified**; resolved mask values now
+  flow from canonical preview and an unmatched-principal regression passes.
+- X05 canonical bounded schemas: **implemented-unverified**; canonical Arrow schema
+  encoding includes nested metadata/IDs and direct loader bounds. Migration and all
+  entry-route/byte-budget evidence remain open.
 - X06 safe schema evolution: **not-started**.
-- X07 configuration/secrets/IO: **not-started**.
+- X07 configuration/secrets/IO: **implementing**; nested dynamic class-loader options
+  are rejected. Typed provider configs, shared secret resolution, and IO enforcement
+  remain open.
 - X08 budgets and atomic reload: **not-started**.
-- X09 UI lifecycle: **not-started**.
+- X09 UI lifecycle: **implemented-unverified**; initial-load epoch and synchronous
+  logout fencing are fixed. Deferred browser tests and save/preview operation epochs
+  remain open.
 - X10 complete authoring/management: **not-started**.
-- X11 public SDK: **not-started**.
-- X12 admitted loading and Iceberg adapter: **not-started**.
+- X11 public SDK: **implementing**; versioned contracts are present under
+  `src/dal_obscura/common/plugin_api`, but independent wheel extraction remains open.
+- X12 admitted loading and Iceberg adapter: **implementing**; allowlisted entry-point
+  registry tests pass, while built-in Iceberg routing and artifact-lock verification
+  remain open.
 - X13 plugin routing and migration: **not-started**.
 - X14 plugin UI: **not-started**.
 - X15 conformance kit: **not-started**.
@@ -47,8 +63,9 @@ evidence remains in [the UI ledger](../ui-v2/EXECUTION_STATUS.md).
 - X22 exact-artifact CI: **not-started**.
 - X23 independent review/release decision: **not-started**.
 
-Next implementation action: **X00**, then reproduce/fix **X01**. Do not start adding
-new providers before Phase A's security/correctness prerequisites are accepted.
+Next implementation action: finish X00 fixture inventory, then X03 publication CAS
+and X06 schema-admitted fields. Do not add new providers before Phase A's
+security/correctness prerequisites are accepted.
 
 ## Evidence entry template
 
