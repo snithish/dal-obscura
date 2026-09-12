@@ -55,6 +55,9 @@ def issue_review_token(
         )
     revision = 0 if draft is None else int(cast(int | str, draft["revision"]))
     content_hash = None if draft is None else str(draft["content_hash"])
+    shared_rules_hash = (
+        _rules_hash(store.list_policy_rules(asset_id)) if draft is None else None
+    )
     active_publication_id = _active_publication_id(store, asset_id)
     issued_at = int(time.time() if now is None else now)
     payload: dict[str, object] = {
@@ -62,6 +65,7 @@ def issue_review_token(
         "actor": actor.identity_key(),
         "draft_revision": revision,
         "draft_content_hash": content_hash,
+        "shared_rules_hash": shared_rules_hash,
         "active_publication_id": active_publication_id,
         "evidence": cast(dict[str, object], evaluation.get("evidence", {})),
         "issued_at": issued_at,
@@ -120,6 +124,10 @@ def verify_review_token(
         or payload.get("draft_content_hash") != content_hash
     ):
         raise ValidationFailure("Policy draft changed after review; evaluate the current draft.")
+    if payload.get("shared_rules_hash") != (
+        _rules_hash(store.list_policy_rules(asset_id)) if draft is None else None
+    ):
+        raise ValidationFailure("Policy rules changed after review; evaluate the current draft.")
     if payload.get("active_publication_id") != _active_publication_id(store, asset_id):
         raise ValidationFailure("Active publication changed after review; review again.")
 
@@ -145,6 +153,11 @@ def _explicit_deny_all_draft(
         author_principal=actor.identity_key(),
     )
     return draft is not None and not cast(list[object], draft.get("rules", []))
+
+
+def _rules_hash(rules: list[dict[str, object]]) -> str:
+    encoded = json.dumps(rules, sort_keys=True, separators=(",", ":"), default=str).encode()
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _encode_signed(payload: dict[str, object], secret: str) -> str:
