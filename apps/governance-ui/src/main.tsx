@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import type { Asset, AssetGrant, AuditEvent, AuthProvider, Catalog, CatalogDiagnostic, Mask, PolicyRule, PolicyVersion, Preview, RuntimeSettings, SchemaNode, Session, SessionOptions, UiAuthConfig, WorkspaceObservations, WorkspaceSummary } from "./api";
 import { controlPlane } from "./api";
 import { demoAsset, demoRules } from "./fixtures";
+import { isCurrentEpoch } from "./lifecycle";
 import "./styles.css";
 
 type Page = "assets" | "changes" | "activity" | "connections" | "settings";
@@ -93,10 +94,10 @@ function App() {
       if (destination === "activity") next = { history: await controlPlane.listHistory(), events: await controlPlane.listAuditEvents(), summary: await controlPlane.getSummary(), observations: await controlPlane.getObservations() };
       if (destination === "connections") next = { catalogs: await controlPlane.listCatalogs() };
       if (destination === "settings") next = { runtime: await controlPlane.getRuntimeSettings(), providers: await controlPlane.getAuthProviders() };
-      if (epoch !== managementEpoch.current) return;
+      if (!isCurrentEpoch(epoch, managementEpoch.current)) return;
       setManagementData(next);
     } catch {
-      if (epoch !== managementEpoch.current) return;
+      if (!isCurrentEpoch(epoch, managementEpoch.current)) return;
       setManagementData({});
       setNotice("This management view is unavailable for your current session or workspace.");
     } finally {
@@ -111,10 +112,10 @@ function App() {
     setHistoryLoading(true);
     try {
       const pageResult = await controlPlane.listHistoryPage({ limit: 50, cursor });
-      if (scope !== managementEpoch.current) return;
+      if (!isCurrentEpoch(scope, managementEpoch.current)) return;
       setManagementData((current) => ({ ...current, history: [...(current.history ?? []), ...pageResult.items], historyNextCursor: pageResult.next_cursor }));
     } catch {
-      if (scope !== managementEpoch.current) return;
+      if (!isCurrentEpoch(scope, managementEpoch.current)) return;
       setNotice("More history could not be loaded. The entries already visible remain available.");
     } finally {
       if (scope === managementEpoch.current) setHistoryLoading(false);
