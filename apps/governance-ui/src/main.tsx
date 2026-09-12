@@ -131,7 +131,7 @@ function App() {
         setWorkspace("ready"); setNotice("No governed assets are available in this workspace.");
         return;
       }
-      await loadAsset(loaded[0].id, loaded);
+      await loadAsset(loaded[0].id, loaded, epoch);
       if (epoch !== loadEpoch.current) return;
       setWorkspace("ready");
     } catch {
@@ -193,13 +193,15 @@ function App() {
       window.clearTimeout(searchTimer.current);
       searchTimer.current = undefined;
     }
+    // Fence and clear private state before awaiting network revocation. A slow
+    // server response must never leave policy data visible or let a late request
+    // repopulate the previous session.
+    clearPrivateState();
     try {
       await controlPlane.logout();
-      clearPrivateState();
       setLogoutPending(false);
       setNotice("Signed out. No policy data remains loaded in this browser.");
     } catch {
-      clearPrivateState();
       setLogoutPending(true);
       setNotice("Sign out could not be confirmed. Private data is hidden; retry sign out before closing this browser.");
     }
@@ -222,9 +224,13 @@ function App() {
     return saveState !== "unsaved" || window.confirm("You have unsaved policy changes. Leave this editor?");
   }
 
-  async function loadAsset(assetId: string, knownAssets = assets) {
+  async function loadAsset(
+    assetId: string,
+    knownAssets = assets,
+    inheritedEpoch?: number,
+  ) {
+    const epoch = inheritedEpoch ?? ++loadEpoch.current;
     try {
-      const epoch = ++loadEpoch.current;
       const [fullAsset, loadedRules, schema, history, grants] = await Promise.all([controlPlane.getAsset(assetId), controlPlane.listRules(assetId), controlPlane.getSchema(assetId), controlPlane.listAssetHistory(assetId).catch(() => []), controlPlane.listGrants(assetId).catch(() => [])]);
       if (epoch !== loadEpoch.current) return;
       fullAsset.schema = schema;
@@ -236,6 +242,7 @@ function App() {
       setSelectedField(schema.fields[0]?.human_path ?? fullAsset.schema_fields[0]?.name ?? ""); setPreview(null); setSaveState("saved");
       setNotice(effectiveRules.length ? "Loaded your policy draft." : "No policy draft exists yet. Add a rule to begin authoring.");
     } catch {
+      if (inheritedEpoch !== undefined && epoch !== loadEpoch.current) return;
       setNotice("Could not load this asset. Your previous editor state remains unchanged.");
     }
   }
