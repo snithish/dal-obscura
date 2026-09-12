@@ -26,6 +26,8 @@ def test_production_reference_contains_immutable_and_private_topology() -> None:
     assert 'user: "10001:10001"' in compose
     assert 'memory: "2G"' in compose
     assert "DAL_OBSCURA_CONTROL_PLANE_PROFILE=production" in env_example
+    assert "DAL_OBSCURA_CONTROL_PLANE_REVIEW_SECRET=" in env_example
+    assert "DAL_OBSCURA_CONTROL_PLANE_REVIEW_SECRET" in compose
     assert "DAL_OBSCURA_TLS_VERIFY_CLIENT=true" in env_example
     assert "Routine restart" in readme
     assert "does not seed" in readme

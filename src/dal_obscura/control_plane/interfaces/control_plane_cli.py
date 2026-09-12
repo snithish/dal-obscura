@@ -75,6 +75,7 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
             oidc_nonce_actor_resolver=_ui_nonce_resolver(values),
             require_review=values.get("DAL_OBSCURA_CONTROL_PLANE_PROFILE", "local").strip().lower()
             == "production",
+            review_secret=_optional(values, "DAL_OBSCURA_CONTROL_PLANE_REVIEW_SECRET"),
             catalog_egress_allowlist=_csv(
                 values.get("DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST", "")
             ),
@@ -168,7 +169,7 @@ def _validate_optional_https(values: Mapping[str, str], name: str, label: str) -
         raise ValueError(f"Production requires an HTTPS {label}")
 
 
-def _validate_profile(
+def _validate_profile(  # noqa: C901
     values: Mapping[str, str],
     admin_token: str,
     database_url: str | None = None,
@@ -244,6 +245,12 @@ def _validate_profile(
         )
     ):
         raise ValueError("Demo login shortcuts are forbidden in production")
+    review_secret = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_REVIEW_SECRET")
+    if review_secret is None or len(review_secret) < 32:
+        raise ValueError(
+            "DAL_OBSCURA_CONTROL_PLANE_REVIEW_SECRET must contain at least 32 "
+            "characters in production"
+        )
 
 
 def _oidc_resolver(values: Mapping[str, str]):
