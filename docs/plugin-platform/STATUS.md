@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `9a209db`.
+Implementation follow-up through `518fe66`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -263,11 +263,13 @@ option name (`839c16f`); no raw credential field is exposed.
   Plan iterators are bounded before materialization, declared output schemas are
   enforced for every batch, expired contexts fail early, and optional plugin
   cleanup runs on success or failure.
+  Results include package/core/Arrow versions, capability matrix, and optional
+  artifact identity for exact CI traceability.
 - Green evidence: package tests (5), compileall, Ruff, and Ty pass using the
   package-only `PYTHONPATH` lane.
 - Remaining gaps: conforming Iceberg integration, intentionally incorrect
-  provider implementations, governed Flight/consumer lanes, artifact identity
-  output, and external distribution evidence remain open.
+  provider implementations, governed Flight/consumer lanes, and external
+  distribution evidence remain open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: expand the kit with cancellation/cleanup, coverage
   counters, and provider lifecycle fixtures before qualifying REST Iceberg.
