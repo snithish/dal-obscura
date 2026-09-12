@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `f45125e`.
+Implementation follow-up through `2d35c0d`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -113,9 +113,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
 - X15 conformance kit: **implementing**; a standalone public-API-only package
   now provides nested Arrow goldens, capability-negative checks, bounded plan
   and output-schema validation, explicit cancellation checks, cleanup proof,
-  skip semantics, and machine-readable results. Deliberately bad fixture
-  plugins, provider/Flight/consumer lanes, and external distribution evidence
-  remain open.
+  optional expected-task coverage validation, skip semantics, and machine-readable
+  results. Deliberately bad fixture plugins, provider/Flight/consumer lanes, and
+  external distribution evidence remain open.
 - X16 REST Iceberg qualification: **not-started**.
 - X17 independent manifest/Parquet plugin: **not-started**.
 - X18 consumer qualification: **not-started**.
@@ -253,21 +253,21 @@ open.
 The descriptor's password field now matches the server's validated secret-reference
 option name (`839c16f`); no raw credential field is exposed.
 
-### X15 public conformance kit — `f45125e`
+### X15 public conformance kit — `2d35c0d`
 
 - State: implementing.
 - Behavior: `packages/plugin-conformance` is independently importable with only
   the public plugin API and PyArrow. It supplies deterministic nested
   struct/list/map goldens, capability-negative checks, bounded task planning and
-  output-schema checks, explicit cancellation checks, cleanup proof, skip
-  semantics, and machine-readable pass/fail results. Deliberate negative tests
-  prove missing capabilities and schema mutation are rejected. Plan iterators
-  are bounded before materialization, declared output schemas are enforced for
-  every batch, expired contexts fail early, and optional plugin cleanup runs on
-  success or failure. Results include package/core/Arrow versions, capability
-  matrix, failures, skips, and optional artifact identity for exact CI
-  traceability.
-- Green evidence: package tests (7), compileall, Ruff, and Ty pass using the
+  output-schema checks, explicit cancellation checks, cleanup proof, optional
+  expected-task coverage validation, skip semantics, and machine-readable
+  pass/fail results. Deliberate negative tests prove missing capabilities,
+  schema mutation, and duplicate task coverage are rejected. Plan iterators are
+  bounded before materialization, declared output schemas are enforced for every
+  batch, expired contexts fail early, and optional plugin cleanup runs on success
+  or failure. Results include package/core/Arrow versions, capability matrix,
+  failures, skips, and optional artifact identity for exact CI traceability.
+- Green evidence: package tests (8), compileall, Ruff, and Ty pass using the
   package-only `PYTHONPATH` lane.
 - Remaining gaps: conforming Iceberg integration, intentionally incorrect
   provider implementations, governed Flight/consumer lanes, and external
