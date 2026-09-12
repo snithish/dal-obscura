@@ -1,0 +1,95 @@
+"""Live nested Iceberg schema discovery for governed assets."""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any, cast
+from uuid import UUID
+
+from pyiceberg.catalog import load_catalog
+from pyiceberg.schema import Schema
+from pyiceberg.types import ListType, MapType, NestedField, StructType
+
+from dal_obscura.common.query_planning.field_paths import (
+    FieldPath,
+    FieldPathSegment,
+    FieldSegment,
+    ListElementSegment,
+    MapKeySegment,
+    MapValueSegment,
+)
+from dal_obscura.control_plane.application.access import ControlPlaneActor
+from dal_obscura.control_plane.application.policy_service import ensure_asset_capability
+from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
+
+CatalogLoader = Callable[..., Any]
+
+
+def get_asset_schema(
+    store: PublicationStore,
+    asset_id: UUID,
+    actor: ControlPlaneActor,
+    *,
+    load_catalog_fn: CatalogLoader | None = None,
+) -> dict[str, object]:
+    ensure_asset_capability(store, asset_id, actor, "read")
+    asset = store.get_workspace_asset(asset_id)
+    context = store.get_default_workspace_context()
+    if context is None:
+        raise LookupError("No workspace has been configured")
+    catalog = store.get_workspace_catalog(
+        context,
+        str(asset["catalog"]),
+    )
+    options = cast(dict[str, Any], catalog["options"])
+    table_identifier = str(asset["table_identifier"])
+    loader = load_catalog if load_catalog_fn is None else load_catalog_fn
+    table = loader(str(catalog["name"]), **options).load_table(table_identifier)
+    schema = table.schema()
+    if not isinstance(schema, Schema):
+        raise TypeError("Iceberg catalog returned an invalid schema")
+    return {
+        "asset_id": str(asset_id),
+        "catalog": asset["catalog"],
+        "target": asset["name"],
+        "schema_version": 1,
+        "fields": [
+            _field_node(field, (FieldSegment(field.name, field.field_id),))
+            for field in schema.fields
+        ],
+    }
+
+
+def _field_node(field: NestedField, path: tuple[FieldPathSegment, ...]) -> dict[str, object]:
+    field_type = field.field_type
+    if isinstance(field_type, StructType):
+        kind = "struct"
+    elif isinstance(field_type, ListType):
+        kind = "list"
+    elif isinstance(field_type, MapType):
+        kind = "map"
+    else:
+        kind = "scalar"
+    node: dict[str, object] = {
+        "field_id": field.field_id,
+        "name": field.name,
+        "path": FieldPath(path).to_wire(),
+        "human_path": FieldPath(path).to_human(),
+        "type": str(field_type),
+        "nullable": not field.required,
+        "kind": kind,
+    }
+    if isinstance(field_type, StructType):
+        node["children"] = [
+            _field_node(child, (*path, FieldSegment(child.name, child.field_id)))
+            for child in field_type.fields
+        ]
+    elif isinstance(field_type, ListType):
+        element = field_type.element_field
+        node["children"] = [_field_node(element, (*path, ListElementSegment()))]
+    elif isinstance(field_type, MapType):
+        node["children"] = [
+            _field_node(field_type.key_field, (*path, MapKeySegment())),
+            _field_node(field_type.value_field, (*path, MapValueSegment())),
+        ]
+    return node

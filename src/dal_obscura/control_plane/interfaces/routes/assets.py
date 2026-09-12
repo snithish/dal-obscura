@@ -46,6 +46,13 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
     ) -> object:
         return deps.with_service(lambda service: service.get_workspace_asset(asset_id, actor))
 
+    @api.get("/v1/assets/{asset_id}/schema")
+    def get_asset_schema(
+        asset_id: UUID,
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> object:
+        return deps.with_service(lambda service: service.get_asset_schema(asset_id, actor))
+
     @api.put("/v1/assets/{asset_id}/owners", dependencies=[Depends(deps.require_admin)])
     def replace_asset_owners(asset_id: UUID, request: AssetOwnersRequest) -> object:
         owners = deps.with_service(

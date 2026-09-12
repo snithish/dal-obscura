@@ -11,6 +11,7 @@ from dal_obscura.control_plane.application import (
     draft_service,
     policy_service,
     policy_version_service,
+    schema_service,
     workspace_service,
 )
 from dal_obscura.control_plane.application.access import ControlPlaneActor
@@ -127,6 +128,13 @@ class ProvisioningService:
         actor: ControlPlaneActor | None = None,
     ) -> dict[str, object]:
         return asset_service.get_workspace_asset(self._store, asset_id, actor)
+
+    def get_asset_schema(
+        self,
+        asset_id: UUID,
+        actor: ControlPlaneActor,
+    ) -> dict[str, object]:
+        return schema_service.get_asset_schema(self._store, asset_id, actor)
 
     def get_workspace_draft(self) -> dict[str, object]:
         return workspace_service.get_workspace_draft(self._store)
