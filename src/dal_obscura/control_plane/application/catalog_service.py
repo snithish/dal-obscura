@@ -9,6 +9,7 @@ Example:
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from math import isfinite
 from typing import Any, cast
 from urllib.parse import parse_qsl, urlsplit
 
@@ -280,7 +281,11 @@ def _validate_option_shape(  # noqa: C901
         if len(value) > _MAX_OPTION_STRING:
             raise ValidationFailure("Catalog option string is too long")
         return
-    if value is None or isinstance(value, (bool, int, float)):
+    if value is None or isinstance(value, (bool, int)):
+        return
+    if isinstance(value, float):
+        if not isfinite(value):
+            raise ValidationFailure("Catalog option numbers must be finite")
         return
     raise ValidationFailure("Catalog options must contain JSON-compatible values")
 
