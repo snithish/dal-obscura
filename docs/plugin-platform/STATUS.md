@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `9fac614`.
+Implementation follow-up through `0e049c0`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -275,6 +275,21 @@ remain open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: continue X10 management/accessibility coverage while
   X03 PostgreSQL and X06 provider-evolution gates remain open.
+
+### X10 typed mask values — `0e049c0`
+
+- State: implemented-unverified.
+- Behavior: the UI keeps `keep_last` values as bounded integers and preserves
+  default-mask JSON scalar types instead of coercing booleans and numbers into
+  strings. Invalid values remain subject to the control-plane validator before
+  review/publication.
+- Green evidence: direct TypeScript check, Vite production build, Node lifecycle
+  tests, and `git diff --check` passed.
+- Remaining gaps: browser/a11y authoring journeys and server-side golden mask
+  value/type coverage remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: continue X10 browser/accessibility coverage and X04
+  evaluation goldens; PostgreSQL and external consumer gates remain open.
 
 The combined control-plane, catalog, schema, publication, migration, plugin, and
 published-config boundary suite passed at 100% after the budget change.
