@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `b1ee51e`.
+Implementation follow-up through `515cf37`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -307,6 +307,21 @@ remain open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: continue X10 activation conflict/rollback coverage and
   X03 PostgreSQL transaction barriers.
+
+### X10 generation activation CAS — `515cf37`
+
+- State: implementing.
+- Behavior: workspace generation activation accepts an optional expected active
+  publication ID and uses the existing atomic compare-and-set database path. The
+  UI sends the serving generation ID when promoting a staged snapshot, so stale
+  operator views receive a conflict instead of overwriting newer state.
+- Red/green evidence: workspace activation lifecycle and stale-generation tests
+  pass; Ruff, TypeScript, and `git diff --check` pass.
+- Remaining gaps: activation rollback/impact display, PostgreSQL barrier/process
+  evidence, browser/a11y journeys, and production artifact validation remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: continue X10 rollback/impact semantics and X03
+  PostgreSQL transaction barriers.
 
 The combined control-plane, catalog, schema, publication, migration, plugin, and
 published-config boundary suite passed at 100% after the budget change.
