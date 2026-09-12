@@ -1,7 +1,9 @@
 # P00 control-plane contract review packet
 
-This packet freezes the observable administrative API before session, grant, or
-durable-workflow changes. It is preparation for the review required by
+This packet freezes the observable administrative API and records the review
+baseline for session, grant, and durable-workflow changes. It is maintained as
+implementation evolves; shipped routes are marked below and unresolved release
+decisions remain explicit. It was originally preparation for the review required by
 [the execution handoff](EXECUTION_HANDOFF.md), not approval to introduce new
 persistent state or select a new authorization model.
 
@@ -30,6 +32,7 @@ dependency.
 | POST | `/v1/logout` | Actor + CSRF for cookie client | expires current browser cookies | replace with revocable-session logout in P02 |
 | GET | `/v1/session` | Actor | actor metadata | replace with safe session/capability response |
 | GET | `/v1/workspace/summary` | Actor | workspace inventory summary | scope by workspace capability |
+| GET | `/v1/workspace/observations` | Actor | bounded control-plane generation and data-plane observation status | retain; never claim Flight health without a probe |
 | GET | `/v1/catalogs` | Actor | catalog list | scope by workspace and connection visibility |
 | PUT | `/v1/catalogs/{name}` | Admin | catalog registration | connection-operator capability, scoped |
 | GET | `/v1/catalogs/{name}/tables` | Actor | catalog discovery | connection diagnostic/read capability, scoped |
@@ -37,12 +40,21 @@ dependency.
 | GET | `/v1/assets/{asset_id}` | Actor | asset detail | metadata-viewer capability and direct-ID scope check |
 | PUT | `/v1/assets/{catalog}/{target}` | Admin | asset registration | connection-operator capability, scoped |
 | PUT | `/v1/assets/{asset_id}/owners` | Admin | owner replacement | grant-administrator capability, scoped |
+| GET | `/v1/assets/{asset_id}/grants` | Actor, service checks grant capability | asset capability grants | scope to asset; omit grant secrets and cross-tenant rows |
+| PUT | `/v1/assets/{asset_id}/grants` | Admin, service checks grant capability | replace delegated asset capabilities | prevent self-escalation outside grant scope and audit changes |
+| GET | `/v1/assets/{asset_id}/schema` | Actor with asset read | authoritative nested Iceberg schema | return typed paths only; do not trust client metadata |
 | PUT | `/v1/assets/{asset_id}/schema-fields` | Admin | schema-field replacement | replace with revisioned asset/schema workflow after P05/P06 review |
 | GET | `/v1/assets/{asset_id}/policy-rules` | Actor | policy rules | asset policy-read capability; no policy body disclosure to metadata viewer |
 | PUT | `/v1/assets/{asset_id}/policy-rules` | Actor, service checks owner/editor | draft rule replacement | replace with revision-preconditioned draft mutation |
 | POST | `/v1/assets/{asset_id}/policy-preview` | Actor | policy preview | synthetic-evaluate capability; bind to exact draft/revision |
+| POST | `/v1/assets/{asset_id}/policy-evaluate` | Actor | bounded synthetic evaluation | bind to exact draft/revision; never return unbounded source data |
+| POST | `/v1/assets/{asset_id}/policy-review` | Actor, service checks publisher | server-signed exact-draft review token | review token must expire and bind asset, revision, evidence, and active generation |
 | POST | `/v1/assets/{asset_id}/policy-versions` | Actor, service checks owner/editor | create and activate policy version | replace with exact-review then explicit publish capability |
 | GET | `/v1/policy-versions` | Actor | version history | auditor/editor scoped history visibility |
+| GET | `/v1/assets/{asset_id}/policy-versions` | Actor | asset-scoped version history | scope to asset capability |
+| GET | `/v1/assets/{asset_id}/policy-versions/{policy_version}` | Actor | immutable policy version detail | scope to asset capability; omit compiled runtime secrets |
+| POST | `/v1/assets/{asset_id}/policy-versions/{policy_version}/restore` | Actor, service checks editor | copy immutable version into a revisioned draft | compare-and-swap draft revision and audit restore |
+| GET | `/v1/audit/events` | Actor | bounded redacted mutation activity | scope by visible assets; omit source rows and secrets |
 | GET | `/v1/settings/runtime` | Actor | runtime settings | dedicated workspace settings-read capability |
 | PUT | `/v1/settings/runtime` | Admin | runtime settings mutation | dedicated workspace settings-write capability |
 | GET | `/v1/settings/auth-providers` | Actor | authentication-provider configuration | sensitive settings-read capability |
@@ -50,8 +62,10 @@ dependency.
 
 ## Required contract decisions
 
-The capable owner/reviewer must explicitly accept or revise these proposals
-before P02 or P03 changes application-session, grant, or migration behavior.
+These proposals guided the implementation slices below. The capable owner or
+security reviewer still needs to accept the remaining release decisions before
+paid-production approval; this document does not turn local SQLite or mocked
+identity evidence into production acceptance.
 
 1. **Browser session.** Use an opaque, random HttpOnly cookie whose server-side
    record stores only a hash of its identifier, the subject, expiry timestamps,
@@ -74,6 +88,16 @@ before P02 or P03 changes application-session, grant, or migration behavior.
    server-session, CSRF, authorization, validation, publication, and read
    enforcement code as deployment. Demo impersonation cannot satisfy acceptance
    tests.
+
+## Current implementation state
+
+| Boundary | Shipped behavior | Evidence still required |
+| --- | --- | --- |
+| Browser identity | OIDC authorization-code/PKCE callback, nonce/JWKS validation, opaque server session, bound CSRF, idle/absolute expiry, revocation, and stale-session-safe logout | real IdP/browser flow, login abuse limits, trusted proxy policy, cookie `__Host-` production validation |
+| Asset authorization | owner and delegated `read`/`edit`/`publish`/`grant` capabilities scope inventory, reads, drafts, review, publication, history, restore, and audit | PostgreSQL multi-process matrix, grant lifecycle and emergency bootstrap review |
+| Draft and publication | revision CAS drafts, bounded evaluation, server-signed exact-draft review, explicit publish capability, restore audit, and idempotency replay/mismatch handling | concurrent PostgreSQL race test, deny-all publication decision, operation lookup/retention |
+| Nested schema | authoritative recursive Iceberg schema with typed field/list/map paths rendered by the UI | real Iceberg catalog/object-store and Spark/DuckDB consumer probes |
+| Runtime status | control-plane generation metadata plus explicit `data_plane: unobserved` state | authenticated Flight health/observability probe and customer alerting |
 
 ## Proposed session and boundary values
 

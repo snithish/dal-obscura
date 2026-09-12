@@ -7,8 +7,9 @@ Required backend/production coverage: [production review](PRODUCTION_READINESS.m
 
 ## Gate status
 
-- P00 contracts, capability matrix, and migration/session design: review packet
-  prepared; approval remains required before P02/P03.
+- P00 contracts, capability matrix, and migration/session design: baseline
+  implemented and kept in sync with the route inventory; paid-production review
+  remains open for bootstrap, proxy trust, rate limits, and recovery policy.
 - P01 installed startup and container assembly: implementing. Commits `734c018`,
   `02e143b`, and `5fc06a1` add a configured control-plane command, pin the UI
   package manager for container builds, and isolate console arguments from
@@ -16,25 +17,42 @@ Required backend/production coverage: [production review](PRODUCTION_READINESS.m
   readiness endpoints through the configured composition path. Wheel/container
   startup, Compose execution, and the remaining packaging slices remain
   unverified.
-- P02 real OIDC login and revocable sessions: partial; browser sessions are now
-  opaque, durable, expiring, and revocable, while authorization-code/PKCE
-  callback handling remains open.
-- P03 complete scoped authorization: partial; asset reads, policy reads,
-  previews, and history are owner-scoped, while grants, drafts, operations,
-  and full management capabilities remain open.
-- P04 reliable UI lifecycle and behavioral tests: not-started; source shell exists.
-- P05 canonical nested schema API/tree: not-started; gateway primitives exist.
-- P06 durable drafts and conflict protection: not-started.
-- P07 bound synthetic evaluations: not-started.
-- P08 exact review and atomic publication UI/API: not-started; reusable gateway
-  publication primitives require integration review.
-- P09 history, restore, audit, runtime observations: not-started.
-- P10 complete management and consumer handoff: not-started.
-- P11 verified local feature/security parity: not-started.
-- P12 quality, usability, independent review and release: not-started.
-- P13 supported production deployment and startup: not-started.
+- P02 real OIDC login and revocable sessions: implemented-unverified; rate
+  limits, proxy trust, provider logout/reauthentication, and real IdP evidence
+  remain.
+- P03 complete scoped authorization: implemented-unverified for asset owner and
+  delegated capabilities; tenant isolation, bootstrap lifecycle, and a full
+  PostgreSQL matrix remain.
+- P04 reliable UI lifecycle and behavioral tests: implemented-unverified;
+  stale-response fencing and duplicate-submit protection are shipped, while
+  browser automation evidence remains.
+- P05 canonical nested schema API/tree: implemented-unverified; authoritative
+  recursive Iceberg paths are shipped, while real catalog/consumer probes remain.
+- P06 durable drafts and conflict protection: implemented-unverified.
+- P07 bound synthetic evaluations: implemented-unverified with bounded rows and
+  evidence tied to draft revision/content hash.
+- P08 exact review and atomic publication UI/API: implemented-unverified;
+  server review, explicit publish capability, CAS activation, and idempotency
+  replay are shipped, while concurrent PostgreSQL evidence and deny-all policy
+  semantics remain.
+- P09 history, restore, audit, runtime observations: implemented-unverified;
+  immutable history, audited restore/mutations, and explicit unobserved
+  data-plane status are shipped.
+- P10 complete management and consumer handoff: partial; UI management views and
+  API contracts exist, while grant administration, operation lookup, and real
+  DuckDB/Spark/Flight handoff evidence remain.
+- P11 verified local feature/security parity: partial; local uses shared auth,
+  CSRF, authorization, evaluation, and publication code, while a real local
+  OIDC/browser stack is unverified.
+- P12 quality, usability, independent review and release: implementing; focused
+  tests and static checks pass, independent security/UX review is open.
+- P13 supported production deployment and startup: partial; production Compose
+  reference and fail-closed profile validation exist, while clean image/wheel,
+  PostgreSQL, TLS ingress, and live startup evidence remain.
 - P14 recovery, upgrades, and credential lifecycle: not-started.
-- P15 capacity, observability, and customer operations: not-started.
+- P15 capacity, observability, and customer operations: partial; bounded
+  evaluation and explicit runtime observation contracts exist, while load,
+  alerts, and customer runbooks remain.
 - P16 whole-product release evidence and promotion: not-started.
 
 These statuses refer to acceptance under the new packets, not absence of all
@@ -42,7 +60,8 @@ reusable code. Previous build/hook results are historical evidence only.
 
 ## Known external gates
 
-- Session/persistence and capability decisions require concrete review in P00.
+- Paid-production release still requires security review of bootstrap closure,
+  trusted proxy/origin handling, login limits, and recovery semantics in P00.
 - Previous container execution failed because Podman was stopped; recheck runtime
   availability when starting P01. No live-stack success has been recorded.
 - Owner visual acceptance, participant sessions, and independent security review
@@ -51,11 +70,11 @@ reusable code. Previous build/hook results are historical evidence only.
 
 ## Next action
 
-Finish P00's typed capability/session/migration contracts using the review
-corrections, then implement P02/P03 and the P04–P08 real backend/UI journey.
-Independently fix P01's restart reseeding, verify installed server packaging, and
-build P13–P16's operational artifacts. A stopped VM blocks container evidence,
-not all implementation. Do not add placeholder screens or call P01 complete.
+Close the remaining production gates: clean wheel/Compose/PostgreSQL/TLS
+evidence, concurrent publication races and operation lookup, deny-all policy
+semantics, Flight health observations, grant/bootstrap lifecycle, and browser
+UX/security review. A stopped VM blocks container evidence, not implementation;
+do not call the release complete without those observations.
 
 ## Evidence
 
@@ -391,6 +410,38 @@ not all implementation. Do not add placeholder screens or call P01 complete.
 - Next action: implement and test the OIDC authorization-code/PKCE login
   transaction and wire the UI to it before removing the demo-only path.
 
+- Packet/slice: P02.2 authorization-code/PKCE browser login.
+- State: implemented-unverified.
+- Commit: `3df8c4d`.
+- Behavior and touched modules: adds one-time server-side login transactions
+  for state, nonce, PKCE verifier, redirect binding, expiry, and atomic
+  consumption. The callback exchanges a public-client code, verifies the
+  signed ID-token nonce through the OIDC JWKS provider, mints the opaque
+  session, clears the transaction cookie, and redirects to an allowlisted
+  configured location. NGINX proxies `/auth/`; the UI presents SSO as its
+  primary sign-in action and fixes CSRF-header request construction.
+- Prerequisites/review authorization: additive OIDC boundary implementation;
+  no pickle path changed. The UI demo password shortcut remains available only
+  when explicitly configured for local fixtures.
+- Red test and actual failure: the UI had no authorization-code route and would
+  only use the temporary password-grant shortcut; a callback could not bind
+  state, PKCE, nonce, or a server-side session.
+- Green commands and results: OIDC login tests cover S256 challenge, state
+  cookie, one-time replay rejection, nonce failure, token exchange, and opaque
+  session issuance. Route inventory, control-plane tests, migration tests,
+  Ruff, Ty, TypeScript, and Vite build checks passed.
+- Browser/API/PostgreSQL/consumer evidence: mocked OIDC resolver and SQLite
+  FastAPI tests plus local TypeScript/Vite build; no real IdP, Postgres,
+  browser, container, or Flight consumer evidence.
+- Manual/independent review: none.
+- Remaining limitations/blocker: login abuse limits, trusted proxy/origin
+  configuration, provider logout/reauthentication, `__Host-` production cookie
+  policy, and rate-limited audit events remain. The callback currently requires
+  an ID token and does not retain provider tokens.
+- Next action: add capability-scoped draft/publication APIs and wire all UI
+  management views to them; remove demo login from the supported production
+  profile.
+
 - Packet/slice: P03.1 scoped inventory and policy reads.
 - State: implemented-unverified.
 - Commit: `21d43b8`.
@@ -439,11 +490,77 @@ not all implementation. Do not add placeholder screens or call P01 complete.
   Postgres migration and browser grant-management probes remain open.
 - Manual/independent review: none.
 - Remaining limitations/blocker: tenant/cell grants, management capability
-  separation, drafts, evaluations, operations, audit, and OIDC code flow are
-  still incomplete. Existing owner rows remain an intentional compatibility
-  broad grant until migration tooling can make them explicit.
+  separation, drafts, evaluations, operations, and audit are still incomplete.
+  Existing owner rows remain an intentional compatibility broad grant until
+  migration tooling can make them explicit.
 - Next action: implement the OIDC authorization-code/PKCE transaction and
   connect the UI to the scoped asset API.
+
+### Follow-through implementation slices — 2026-09-12
+
+- Packet/slice: P04.1 UI request lifecycle and publication submission safety.
+- State: implemented-unverified.
+- Commits: `c1853b4`, `8c4a162`, `9b3ca6b`.
+- Behavior: stale workspace and management responses are ignored after a newer
+  request or logout; publish is disabled while in flight and sends a fresh
+  `Idempotency-Key`; review tokens are cleared whenever the draft changes.
+- Green evidence: TypeScript no-emit and Vite production builds pass. Browser
+  automation and keyboard/screen-reader review remain open.
+
+- Packet/slice: P05.1 authoritative nested schema.
+- State: implemented-unverified.
+- Commits: `37e3234`, `0f93478`.
+- Behavior: the control plane loads the configured Iceberg schema, emits typed
+  recursive struct/list/map nodes with stable field paths, and the UI renders
+  those paths without flattening collection boundaries.
+- Green evidence: schema service/API and UI build tests pass. Real Iceberg
+  catalog, object-store, DuckDB, Spark, and Arrow Flight probes remain open.
+
+- Packet/slice: P06.1 revisioned personal drafts.
+- State: implemented-unverified.
+- Commit: `8d9b44d`.
+- Behavior: personal drafts persist canonical rules with revision CAS, content
+  hashes, and stale-writer conflicts; publication consumes the saved draft.
+- Green evidence: draft service/API and migration tests pass. PostgreSQL
+  backup/restore and multi-process conflict evidence remain open.
+
+- Packet/slice: P07.1 bounded synthetic evaluation.
+- State: implemented-unverified.
+- Commit: `3dbdf26`.
+- Behavior: server evaluation uses the authoritative schema and policy resolver,
+  bounds test rows, applies DuckDB transforms, and returns redacted evidence
+  bound to the current draft revision/content hash.
+- Green evidence: evaluation and policy tests pass. A production-sized fixture,
+  latency budget, and independent data-leak review remain open.
+
+- Packet/slice: P08.1 exact review, atomic publication, and retry safety.
+- State: implemented-unverified.
+- Commits: `37d2cf4`, `e69e83b`.
+- Behavior: production publication requires a server-signed review token for
+  the exact draft and active generation; activation is CAS-protected; repeated
+  idempotent requests replay the committed result and mismatched bodies conflict.
+- Green evidence: review/publication API tests pass. Concurrent PostgreSQL
+  races, operation lookup/retention, and an explicit deny-all publication
+  decision remain open.
+
+- Packet/slice: P09.1 history, restore, audit, and runtime observations.
+- State: implemented-unverified.
+- Commits: `69e5a13`, `2c8f4d2`, `c1f6e9e`.
+- Behavior: immutable asset history can be restored into a new CAS draft;
+  draft/restore/publication mutations append bounded audit events; Activity can
+  show active control-plane generation while explicitly labeling Flight health
+  as unobserved.
+- Green evidence: history, audit, workspace, migration, route-inventory, and UI
+  build tests pass. Flight health probes, retention jobs, and operator alerting
+  remain open.
+
+- Packet/slice: P13.1 production database fail-closed guard.
+- State: implemented-unverified.
+- Commit: `fff1b54`.
+- Behavior: production startup rejects SQLite or other local databases before
+  engine creation, while local profile behavior remains unchanged.
+- Green evidence: control-plane CLI tests pass. Clean PostgreSQL image startup,
+  TLS ingress, and migration/rollback evidence remain open.
 
 ## Slice evidence template
 
