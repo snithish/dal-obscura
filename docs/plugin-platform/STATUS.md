@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `5f2e196`.
+Implementation follow-up through `7db7a28`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -227,6 +227,22 @@ remain open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: continue X06 schema evolution policy and X03
   PostgreSQL transaction barriers.
+
+### X22 governance UI test gate — `7db7a28`
+
+- State: implementing.
+- Behavior: the exact CI governance-UI job runs the dependency-free lifecycle
+  test script before the TypeScript/Vite production build, so stale-response
+  fencing cannot regress silently behind a green bundle build.
+- Red/green evidence: the CI contract regression was red before the workflow
+  step was added and passes with `tests/architecture/test_ci_workflow.py` (3
+  passed); direct Node lifecycle tests, TypeScript, and Vite build remain green.
+- Remaining gaps: clean pnpm install, artifact digest/provenance, browser/IdP,
+  accessibility, plugin wheel, provider, consumer, recovery, and production
+  acceptance gates remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: continue X03/X06 correctness work; X22 remains open
+  until the CI artifact lanes run in a clean environment.
 
 The combined control-plane, catalog, schema, publication, migration, plugin, and
 published-config boundary suite passed at 100% after the budget change.
