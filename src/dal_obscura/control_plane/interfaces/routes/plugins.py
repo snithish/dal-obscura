@@ -22,7 +22,7 @@ _BUILTIN_CATALOG = PluginDescriptor(
             {"name": "warehouse", "type": "string", "required": False, "secret": False},
             {"name": "username", "type": "string", "required": False, "secret": False},
             {
-                "name": "password_secret",
+                "name": "password",
                 "type": "secret_reference",
                 "required": False,
                 "secret": True,
