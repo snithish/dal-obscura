@@ -47,6 +47,7 @@ export type AssetSchema = {
   target: string;
   schema_version: number;
   schema_fingerprint: string;
+  stable_field_ids?: boolean;
   fields: SchemaNode[];
 };
 
