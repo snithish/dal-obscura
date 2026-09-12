@@ -237,6 +237,10 @@ export const controlPlane = {
     method: "PUT",
     body: JSON.stringify({ module: "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog", options }),
   }),
+  saveAsset: (catalog: string, target: string, tableIdentifier: string) => request<{ id: string; catalog: string; target: string }>(`/v1/assets/${encodeURIComponent(catalog)}/${encodeURIComponent(target)}`, {
+    method: "PUT",
+    body: JSON.stringify({ backend: "iceberg", table_identifier: tableIdentifier, options: {} }),
+  }),
   saveRuntimeSettings: (settings: RuntimeSettings) => request<RuntimeSettings>("/v1/settings/runtime", {
     method: "PUT",
     body: JSON.stringify(settings),
