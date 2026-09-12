@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 
 import pytest
 
@@ -132,3 +132,20 @@ def test_failed_reload_keeps_last_valid_admission_snapshot() -> None:
         registry.reload()
 
     assert registry.admitted() == initial
+
+
+def test_load_uses_entry_point_captured_by_admitted_generation() -> None:
+    first = _entry("iceberg.sql", "dal_obscura.catalogs.v1")
+    entries = [first]
+    registry = PluginRegistry(
+        allowlist={("catalog", "iceberg.sql"): ("plugin-wheel", "1.2.3", "1")},
+        entry_points_fn=lambda: _EntryPoints(entries),
+        factory_loader=lambda entry: entry.load(),
+    )
+
+    registry.reload()
+    replacement = _entry("iceberg.sql", "dal_obscura.catalogs.v1")
+    cast(Any, replacement).load = lambda: {"name": "replacement"}
+    entries[:] = [replacement]
+
+    assert registry.load("catalog", "iceberg.sql") == {"name": "iceberg.sql"}

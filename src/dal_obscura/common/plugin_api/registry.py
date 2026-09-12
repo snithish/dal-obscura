@@ -38,12 +38,65 @@ class PluginRegistry:
         self._entry_points_fn = entry_points_fn or metadata.entry_points
         self._factory_loader = factory_loader or (lambda entry: entry.load())
         self._snapshot: dict[tuple[PluginKind, str], PluginDescriptor] = {}
+        self._snapshot_entries: dict[tuple[PluginKind, str], metadata.EntryPoint] = {}
         self._snapshot_lock = RLock()
 
     def discover(self) -> dict[tuple[PluginKind, str], PluginDescriptor]:
         """Reads entry-point metadata without importing factories."""
+        descriptors, _ = self._discover_with_entries()
+        return descriptors
 
+    def load(self, kind: PluginKind, plugin_id: str) -> object:
+        """Loads one admitted factory; never accepts a request import string."""
+
+        self._validate_id(plugin_id)
+        key = (kind, plugin_id)
+        with self._snapshot_lock:
+            entry = self._snapshot_entries.get(key)
+            admitted = key in self._snapshot
+        if entry is None and not admitted:
+            # Preserve the convenient first-use behavior while still making
+            # the resulting entry point part of one immutable generation.
+            self.reload()
+            with self._snapshot_lock:
+                entry = self._snapshot_entries.get(key)
+                admitted = key in self._snapshot
+        if entry is None or not admitted:
+            raise PluginAdmissionError(f"Plugin is not admitted: {kind}:{plugin_id}")
+        return self._factory_loader(entry)
+
+    def reload(self) -> dict[tuple[PluginKind, str], PluginDescriptor]:
+        """Builds a complete admission snapshot before atomically swapping it."""
+
+        candidate, entries = self._discover_with_entries()
+        with self._snapshot_lock:
+            self._snapshot = dict(candidate)
+            self._snapshot_entries = dict(entries)
+            return dict(self._snapshot)
+
+    def admitted(self) -> dict[tuple[PluginKind, str], PluginDescriptor]:
+        """Returns the last valid snapshot without rebuilding or importing factories."""
+
+        with self._snapshot_lock:
+            return dict(self._snapshot)
+
+    def _select(self, group: str) -> list[metadata.EntryPoint]:
+        points: Any = self._entry_points_fn()
+        selected = (
+            points.select(group=group)
+            if hasattr(points, "select")
+            else points.get(group, ())
+        )
+        return list(cast(Any, selected))
+
+    def _discover_with_entries(
+        self,
+    ) -> tuple[
+        dict[tuple[PluginKind, str], PluginDescriptor],
+        dict[tuple[PluginKind, str], metadata.EntryPoint],
+    ]:
         descriptors: dict[tuple[PluginKind, str], PluginDescriptor] = {}
+        entries: dict[tuple[PluginKind, str], metadata.EntryPoint] = {}
         for kind, group in ENTRY_POINT_GROUPS.items():
             for entry in self._select(group):
                 plugin_id = str(entry.name)
@@ -71,42 +124,8 @@ class PluginRegistry:
                     distribution=distribution,
                     version=version,
                 )
-        return descriptors
-
-    def load(self, kind: PluginKind, plugin_id: str) -> object:
-        """Loads one admitted factory; never accepts a request import string."""
-
-        self._validate_id(plugin_id)
-        group = ENTRY_POINT_GROUPS[kind]
-        matches = [entry for entry in self._select(group) if entry.name == plugin_id]
-        if len(matches) != 1:
-            raise PluginAdmissionError(f"Plugin is not uniquely installed: {kind}:{plugin_id}")
-        if (kind, plugin_id) not in self.discover():
-            raise PluginAdmissionError(f"Plugin is not admitted: {kind}:{plugin_id}")
-        return self._factory_loader(matches[0])
-
-    def reload(self) -> dict[tuple[PluginKind, str], PluginDescriptor]:
-        """Builds a complete admission snapshot before atomically swapping it."""
-
-        candidate = self.discover()
-        with self._snapshot_lock:
-            self._snapshot = dict(candidate)
-            return dict(self._snapshot)
-
-    def admitted(self) -> dict[tuple[PluginKind, str], PluginDescriptor]:
-        """Returns the last valid snapshot without rebuilding or importing factories."""
-
-        with self._snapshot_lock:
-            return dict(self._snapshot)
-
-    def _select(self, group: str) -> list[metadata.EntryPoint]:
-        points: Any = self._entry_points_fn()
-        selected = (
-            points.select(group=group)
-            if hasattr(points, "select")
-            else points.get(group, ())
-        )
-        return list(cast(Any, selected))
+                entries[key] = entry
+        return descriptors, entries
 
     @staticmethod
     def _validate_id(plugin_id: str) -> None:
