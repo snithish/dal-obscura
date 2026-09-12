@@ -80,8 +80,12 @@ class ControlPlaneDeps:
         host_csrf_cookie: str | None = Cookie(default=None, alias="__Host-dal_obscura_csrf"),
     ) -> ControlPlaneActor:
         """Authenticates bearer clients or an HttpOnly browser session."""
-        session_token = host_session_token or session_token
-        csrf_cookie = host_csrf_cookie or csrf_cookie
+        # FastAPI normally injects cookie parameters as strings.  Keep the
+        # dependency boundary defensive because direct dependency invocation
+        # and older Starlette/Pydantic combinations can leave the marker
+        # object in place when the cookie is absent.
+        session_token = _cookie_text(host_session_token) or _cookie_text(session_token)
+        csrf_cookie = _cookie_text(host_csrf_cookie) or _cookie_text(csrf_cookie)
         expected = f"Bearer {self.admin_token}"
         if self.bootstrap_enabled and authorization == expected:
             return ControlPlaneActor.for_platform_admin("platform:admin")
@@ -276,3 +280,11 @@ def _bearer_value(authorization: str) -> str | None:
     if len(parts) != 2 or parts[0].lower() != "bearer":
         return None
     return parts[1].strip() or None
+
+
+def _cookie_text(value: object) -> str | None:
+    """Return a cookie value only when FastAPI supplied a real string."""
+
+    if isinstance(value, str):
+        return value or None
+    return None

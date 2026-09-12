@@ -89,6 +89,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         error: str | None = None,
         auth_state: str | None = Cookie(default=None, alias="dal_obscura_auth_state"),
     ) -> Response:
+        auth_state = _cookie_text(auth_state)
         config = _required_ui_config(deps)
         if error:
             raise HTTPException(status_code=401, detail="OIDC login was not completed")
@@ -187,8 +188,8 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         host_csrf_cookie: str | None = Cookie(default=None, alias="__Host-dal_obscura_csrf"),
     ) -> object:
         """Expires browser credentials even when the server session is stale."""
-        session_token = host_session_token or session_token
-        csrf_cookie = host_csrf_cookie or csrf_cookie
+        session_token = _cookie_text(host_session_token) or _cookie_text(session_token)
+        csrf_cookie = _cookie_text(host_csrf_cookie) or _cookie_text(csrf_cookie)
         if session_token:
             deps.validate_browser_mutation(request, csrf_cookie)
             deps.revoke_browser_session(session_token)
@@ -205,6 +206,14 @@ def _required_ui_config(deps: ControlPlaneDeps) -> dict[str, object]:
     if deps.ui_auth_config is None:
         raise HTTPException(status_code=404, detail="UI auth is not configured")
     return dict(deps.ui_auth_config)
+
+
+def _cookie_text(value: object) -> str | None:
+    """Return a cookie value only when FastAPI supplied a real string."""
+
+    if isinstance(value, str):
+        return value or None
+    return None
 
 
 def _required_config_value(config: dict[str, object], key: str) -> str:
