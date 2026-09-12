@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `524bb6a`.
+Implementation follow-up through `4c0ada8`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -53,7 +53,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   collection-path identity and the full evolution policy remain open. Migration
   `20260912_0013` backfills deterministic legacy IDs and paths for existing rows
   and fails closed on duplicate logical paths. Review tokens bind the persisted admitted-schema
-  digest in addition to the live Iceberg digest.
+  digest in addition to the live Iceberg digest. Renaming a field, even with the
+  same provider ID, is an explicit reapproval event because its canonical path
+  changes.
 - X07 configuration/secrets/IO: **implementing**; nested dynamic class-loader options
   are rejected, and schema/evaluation/review provider calls now use the configured
   catalog egress validator. Explicit environment secret references now resolve in
@@ -148,6 +150,22 @@ open.
   conflicts, runtime routing, and external plugin conformance remain open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: continue X12 artifact-lock and built-in adapter wiring.
+
+### X06 rename policy regression — `4c0ada8`
+
+- State: implementing.
+- Behavior: schema admission requires the reviewed canonical path and provider
+  identity to match together. A field rename with an unchanged Iceberg ID is
+  rejected with a review-again outcome, preventing a renamed sensitive field from
+  inheriting a policy whose path was never reviewed.
+- Green evidence: `tests/infrastructure/adapters/test_published_config.py` (14
+  passed), Ruff, Ty, and `git diff --check` all pass.
+- Remaining gaps: provider-derived IDs for every backend, explicit additive/drop
+  evolution rules, PostgreSQL/browser/consumer evidence, and external plugin
+  qualification remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: continue X06 evolution rules alongside X03 PostgreSQL
+  transaction evidence.
 
 X11 package check: `tests/plugin_platform/test_plugin_api_package.py` passes and
 the package source compiles without importing the service distribution. Building
