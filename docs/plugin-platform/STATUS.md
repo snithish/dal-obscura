@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `f552660`.
+Implementation follow-up through `b19e1c8`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -65,6 +65,8 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   catalog egress validator. Explicit environment secret references now resolve in
   discovery and schema paths. Typed provider configs, provider-returned IO
   enforcement, and production secret-provider lifecycle evidence remain open.
+  Storage paths now canonicalize local roots and URI authorities/decoded segments
+  before every root check; credential-bearing and query/fragment roots are rejected.
 - X08 budgets and atomic reload: **implementing**; discovery now bounds provider
   iterators before materialization and checks cancellation/deadline per item while
   retaining deque traversal. Synthetic evaluation now bounds encoded fixture bytes
@@ -369,6 +371,23 @@ option name (`839c16f`); no raw credential field is exposed.
 - Pickle compatibility: unchanged.
 - Next permitted packet: continue X03 transaction evidence and X07 provider IO
   enforcement before onboarding external adapters.
+
+### X07 canonical storage-path enforcement — `b19e1c8`
+
+- State: implementing.
+- Behavior: the shared path enforcer resolves local roots, normalizes URI scheme
+  and authority, decodes and collapses traversal segments, and compares complete
+  roots rather than string prefixes. Credential-bearing roots and query/fragment
+  locations fail during configuration; metadata paths using encoded traversal are
+  denied before scan execution.
+- Green evidence: path-rule, Iceberg regression, and published-config suites pass
+  (32), Ruff, Ty, and `git diff --check` pass.
+- Remaining gaps: provider-returned IO/redirect/DNS enforcement, supervised
+  cancellation, secret lifecycle, PostgreSQL and live deployment evidence remain
+  open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: add provider-returned location checks at catalog
+  resolution and Iceberg task planning boundaries.
 
 X11 package check: `tests/plugin_platform/test_plugin_api_package.py` passes and
 the package source compiles without importing the service distribution. Building
