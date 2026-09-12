@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `af40e51`.
+Implementation follow-up through `395122d`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -355,6 +355,21 @@ remain open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: continue X10 activation rollback/error UX and X03
   PostgreSQL transaction barriers.
+
+### X10 activation conflict UX — `395122d`
+
+- State: implementing.
+- Behavior: the Connections UI distinguishes a stale generation compare-and-set
+  conflict (HTTP 409) from other activation failures and tells the operator to
+  refresh before retrying, while preserving the serving generation.
+- Green evidence: direct TypeScript check, Vite production build, and
+  `git diff --check` pass.
+- Remaining gaps: browser/a11y proof of the interaction, rollback impact
+  confirmation, real IdP/session validation, PostgreSQL barriers, and release
+  artifact validation remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: continue X03 PostgreSQL transaction barriers and X10
+  staged runtime/auth activation semantics.
 
 The combined control-plane, catalog, schema, publication, migration, plugin, and
 published-config boundary suite passed at 100% after the budget change.
