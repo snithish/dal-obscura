@@ -5,8 +5,9 @@ Implementation follow-up through `6aac008`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
-UI, and plugin-contract slices. Database migrations, external plugin wheels, and
-pickle serialization remain unchanged. Local probes are recorded in [the review](IMPLEMENTATION_REVIEW.md).
+UI, and plugin-contract slices. Database changes remain additive, external
+plugin wheels are still unverified, and pickle serialization remains unchanged.
+Local probes are recorded in [the review](IMPLEMENTATION_REVIEW.md).
 Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_STATUS.md).
 
 ## State meanings
