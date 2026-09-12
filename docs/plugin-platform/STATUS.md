@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `2d35c0d`.
+Implementation follow-up through `daf84cf`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -108,8 +108,10 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
 - X14 plugin UI: **implementing**; standalone plugin descriptors now enforce
   bounded JSON-like form metadata and reject remote/executable content. An
   authenticated `/v1/plugins` endpoint and Connections view render admitted
-  adapter capabilities without installation controls. Dynamic external-plugin
-  routing and browser evidence remain open.
+  adapter capabilities and descriptor-driven configuration fields, including
+  secret-reference inputs, without installation controls. The built-in
+  Iceberg route remains the only writable adapter until external routing is
+  qualified; browser evidence remains open.
 - X15 conformance kit: **implementing**; a standalone public-API-only package
   now provides nested Arrow goldens, capability-negative checks, bounded plan
   and output-schema validation, explicit cancellation checks, cleanup proof,
@@ -233,19 +235,24 @@ open.
 - Next permitted packet: continue X14 descriptor API design after X13 runtime
   registry routing is wired.
 
-### X14 authenticated plugin capability surface — `f4aa339`
+### X14 descriptor-driven connection authoring — `daf84cf`
 
 - State: implementing.
 - Behavior: platform admins can read a bounded `/v1/plugins` descriptor payload
   containing admitted catalog/table-format metadata and intersected pair
   capabilities. The governance Connections view renders these capabilities and
-  versions; it has no package installation or authorization controls. When a
-  `PluginRegistry` snapshot is injected, only that admitted snapshot is exposed.
-- Green evidence: plugin API and route inventory tests pass, plugin endpoint tests
-  pass (2), Ruff, Ty, TypeScript, Vite build, and `git diff --check` pass.
-- Remaining gaps: runtime registry wiring, static descriptor/artifact locks,
-  external REST/Parquet descriptors, backend field revalidation for plugin forms,
-  and browser accessibility/IdP evidence remain open.
+  versions and now generates bounded configuration fields from the selected
+  catalog descriptor, masking secret-reference inputs and validating required
+  values before submission. The writable route remains explicitly limited to
+  the admitted built-in Iceberg adapter; descriptors do not grant installation
+  or authorization power. The built-in descriptor now names the actual `user`
+  option consumed by the catalog adapter.
+- Green evidence: plugin API/route tests (3), built-in plugin tests, Ruff, Ty,
+  TypeScript, Vite build, UI lifecycle tests (2), and `git diff --check` pass.
+- Remaining gaps: runtime registry wiring for external adapters, static
+  descriptor/artifact locks, external REST/Parquet descriptors, backend field
+  revalidation for plugin forms, and browser accessibility/IdP evidence remain
+  open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: wire admitted registry generations into data-plane
   startup before advertising external plugin pairs.
