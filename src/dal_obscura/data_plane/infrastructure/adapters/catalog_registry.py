@@ -148,6 +148,7 @@ class IcebergCatalog(CatalogPlugin):
             self.name,
             target,
             target,
+            path_enforcer=self._path_enforcer,
         )
 
     def list_tables(self) -> list[CatalogTableListing]:
@@ -202,6 +203,8 @@ def _resolve_iceberg_descriptor(
     catalog_name: str,
     requested_target: str,
     table_identifier: str,
+    *,
+    path_enforcer: PathRuleEnforcer | None = None,
 ) -> CatalogTableDescriptor:
     """Contacts the Iceberg catalog to resolve the actual metadata location for a table."""
     try:
@@ -211,14 +214,46 @@ def _resolve_iceberg_descriptor(
             f"Failed to load table {table_identifier!r} from catalog {catalog_name!r}: {e}"
         ) from e
 
+    metadata_location = pyiceberg_table.metadata_location
+    if not isinstance(metadata_location, str) or not metadata_location.strip():
+        raise ValueError("Iceberg catalog returned no metadata location")
+    _check_returned_locations(
+        metadata_location,
+        dict(getattr(pyiceberg_table.io, "properties", {})),
+        path_enforcer,
+    )
     return CatalogTableDescriptor(
         catalog_name=catalog_name,
         requested_target=requested_target,
         provider_id="iceberg",
         table_identifier=table_identifier,
-        metadata_location=pyiceberg_table.metadata_location,
+        metadata_location=metadata_location,
         storage_options=dict(pyiceberg_table.io.properties),
     )
+
+
+def _check_returned_locations(
+    metadata_location: str,
+    storage_options: dict[str, Any],
+    path_enforcer: PathRuleEnforcer | None,
+) -> None:
+    if path_enforcer is None or not path_enforcer.enabled:
+        return
+    path_enforcer.check(metadata_location)
+    for value in _nested_strings(storage_options):
+        if "://" in value:
+            path_enforcer.check(value)
+
+
+def _nested_strings(value: object):
+    if isinstance(value, dict):
+        for item in value.values():
+            yield from _nested_strings(item)
+    elif isinstance(value, list | tuple):
+        for item in value:
+            yield from _nested_strings(item)
+    elif isinstance(value, str):
+        yield value
 
 
 def _load_iceberg_catalog(catalog_name: str, catalog_options: dict[str, Any]) -> Any:

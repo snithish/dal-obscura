@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from typing import Any, ClassVar, cast
 
 import pyarrow as pa
+import pytest
 
 from dal_obscura.common.catalog.ports import (
     CatalogTableDescriptor,
@@ -21,6 +22,7 @@ from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     CatalogRegistry,
     IcebergCatalog,
     ServiceConfig,
+    _resolve_iceberg_descriptor,
 )
 
 
@@ -204,3 +206,29 @@ def test_catalog_registry_constructs_iceberg_through_admitted_plugin_factory():
     registry = CatalogRegistry(config, plugin_registry=create_builtin_plugin_registry())
 
     assert isinstance(registry._catalogs["analytics"], IcebergCatalog)
+
+
+def test_catalog_registry_rejects_provider_returned_metadata_outside_storage_roots():
+    class UnsafeTable:
+        metadata_location = "s3://other-bucket/metadata.json"
+
+        class io:
+            properties: ClassVar[dict[str, str]] = {
+                "warehouse": "s3://analytics-demo/warehouse"
+            }
+
+    class Catalog:
+        def load_table(self, identifier: str) -> UnsafeTable:
+            del identifier
+            return UnsafeTable()
+
+    with pytest.raises(PermissionError, match="Path is not allowed"):
+        _resolve_iceberg_descriptor(
+            Catalog(),
+            "analytics",
+            "default.users",
+            "default.users",
+            path_enforcer=registry_module.PathRuleEnforcer(
+                [{"root": "s3://analytics-demo/warehouse"}]
+            ),
+        )
