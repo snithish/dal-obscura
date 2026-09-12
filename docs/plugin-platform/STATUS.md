@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `9721706`.
+Implementation follow-up through `cbbb42c`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -49,9 +49,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   literal dotted names, schema-field records carry optional stable IDs and typed
   paths through migration `20260912_0011`, and admitted identities are carried into
   immutable manifests and checked before data-plane planning. Provider-derived IDs,
-  collection-path identity, path uniqueness constraints, and the full evolution
-  policy remain open. Migration `20260912_0013` backfills deterministic legacy IDs
-  and paths for existing rows. Review tokens bind the persisted admitted-schema
+  collection-path identity and the full evolution policy remain open. Migration
+  `20260912_0013` backfills deterministic legacy IDs and paths for existing rows
+  and fails closed on duplicate logical paths. Review tokens bind the persisted admitted-schema
   digest in addition to the live Iceberg digest.
 - X07 configuration/secrets/IO: **implementing**; nested dynamic class-loader options
   are rejected. Typed provider configs, shared secret resolution, and IO enforcement
