@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from importlib import metadata
 from types import SimpleNamespace
 from typing import Any, Protocol, cast
 
 import pytest
 
 from dal_obscura.common.plugin_api import PluginAdmissionError, PluginDescriptor, PluginRegistry
+from dal_obscura.common.plugin_api.registry import _artifact_digest, _descriptor_digest
 
 
 class _Entry(Protocol):
@@ -200,3 +202,45 @@ def test_malformed_plugin_lock_is_rejected() -> None:
 
     with pytest.raises(PluginAdmissionError, match="Invalid plugin lock"):
         registry.reload()
+
+
+def test_extended_lock_accepts_matching_descriptor_and_distribution_digest(tmp_path) -> None:
+    artifact = tmp_path / "plugin.py"
+    artifact.write_text("trusted = True\n")
+    descriptor = PluginDescriptor(
+        kind="catalog",
+        plugin_id="iceberg.sql",
+        api_version="1",
+        config_version=1,
+        distribution="plugin-wheel",
+        version="1.2.3",
+    )
+    entry = cast(
+        _Entry,
+        SimpleNamespace(
+            name="iceberg.sql",
+            group="dal_obscura.catalogs.v1",
+            dist=SimpleNamespace(
+                name="plugin-wheel",
+                version="1.2.3",
+                files=["plugin.py"],
+                locate_file=lambda _: artifact,
+            ),
+            load=lambda: {"name": "iceberg.sql"},
+        ),
+    )
+    registry = PluginRegistry(
+        allowlist={
+            ("catalog", "iceberg.sql"): (
+                "plugin-wheel",
+                "1.2.3",
+                "1",
+                _descriptor_digest(descriptor),
+                _artifact_digest(cast(metadata.EntryPoint, entry)),
+            )
+        },
+        entry_points_fn=lambda: _EntryPoints([entry]),
+        descriptor_loader=lambda _: descriptor,
+    )
+
+    assert registry.reload()[("catalog", "iceberg.sql")] == descriptor
