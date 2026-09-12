@@ -416,8 +416,34 @@ not all implementation. Do not add placeholder screens or call P01 complete.
   evaluations, direct-ID pagination, operations, audit, and tenant/cell grant
   records remain to be implemented. Historical baseline text above records the
   pre-fix outsider probe and should not be read as current behavior.
-- Next action: add durable capability/grant records and thread actor context
-  through every management and publication route.
+- Next action: thread actor context through remaining management and publication
+  routes, then add durable draft/evaluation/operation records.
+
+- Packet/slice: P03.2 durable asset capabilities.
+- State: implemented-unverified.
+- Commit: `e654165`.
+- Behavior and touched modules: adds an `asset_grants` migration and repository
+  support for explicit `read`, `edit`, `publish`, and `grant` capabilities.
+  Asset owners retain broad compatibility capabilities; owners can delegate a
+  narrower read grant through the new authenticated grants API. Inventory uses
+  a filtered owner/grant join, policy editing requires `edit`, publication
+  requires `publish`, and grant management requires `grant`.
+- Prerequisites/review authorization: additive authorization hardening on the
+  reviewed single-workspace model; no pickle path changed.
+- Red test and actual failure: an authenticated outsider could not be safely
+  delegated read-only access because the service had no durable capability
+  record and every non-admin owner check was binary.
+- Green commands and results: focused control-plane, migration, service, and
+  actor negative-matrix tests passed; Ruff and Ty checks passed.
+- Browser/API/PostgreSQL/consumer evidence: in-process FastAPI and SQLite only;
+  Postgres migration and browser grant-management probes remain open.
+- Manual/independent review: none.
+- Remaining limitations/blocker: tenant/cell grants, management capability
+  separation, drafts, evaluations, operations, audit, and OIDC code flow are
+  still incomplete. Existing owner rows remain an intentional compatibility
+  broad grant until migration tooling can make them explicit.
+- Next action: implement the OIDC authorization-code/PKCE transaction and
+  connect the UI to the scoped asset API.
 
 ## Slice evidence template
 
