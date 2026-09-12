@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `f320ed9`.
+Implementation follow-up through `ac30712`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -89,7 +89,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   before provider work. Plugin admission exposes build-then-swap reload snapshots;
   catalog registries build complete candidates before a locked metadata/adapter swap,
   so failed reloads cannot expose mixed generations. Provider-specific transport
-  timeouts and multi-worker capacity remain open.
+  timeouts and multi-worker capacity remain open. A process-wide bounded discovery
+  semaphore now rejects excess concurrent operations promptly and releases slots on
+  every provider failure/cancellation path.
 - X09 UI lifecycle: **implemented-unverified**; initial-load epoch and synchronous
   logout fencing plus stale history/preview/review/publish response checks are fixed.
   Deferred browser tests and full operation-state coverage remain open.
@@ -1354,6 +1356,18 @@ running-process probe.
   `git diff --check` passed.
 - Remaining gaps: PostgreSQL interleavings, transaction recovery, and production
   identity evidence remain open.
+
+### X08 bounded discovery admission — `ac30712`
+
+- State: implementing.
+- Behavior: catalog discovery admits at most eight concurrent process-local
+  operations, fails promptly when saturated, and releases its slot on success,
+  cancellation, deadline, or provider failure. Existing page, namespace, table,
+  and deadline bounds remain enforced inside the admitted operation.
+- Green evidence: catalog discovery tests (7), Ruff, Ty, and `git diff --check`
+  passed.
+- Remaining gaps: per-session limits, cross-worker aggregate capacity, provider
+  transport termination, and live workload evidence remain open.
 
 ## Latest evidence entry
 
