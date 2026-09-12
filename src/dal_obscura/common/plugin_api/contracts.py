@@ -6,12 +6,19 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
+from math import isfinite
 from typing import Literal, Protocol
 
 import pyarrow as pa
 
 PluginKind = Literal["catalog", "table_format"]
 _PLUGIN_ID = re.compile(r"[a-z][a-z0-9_.-]{0,63}\Z")
+_MAX_CONFIG_SCHEMA_DEPTH = 8
+_MAX_CONFIG_SCHEMA_NODES = 256
+_MAX_CONFIG_SCHEMA_STRING = 512
+_FORBIDDEN_CONFIG_KEYS = frozenset(
+    {"$ref", "$schema", "remote", "remote_url", "schema_url", "script", "html"}
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,8 +49,9 @@ class PluginDescriptor:
             for capability in self.capabilities
         ):
             raise ValueError("Plugin capabilities must be bounded non-empty strings")
-        if len(self.config_schema) > 64:
-            raise ValueError("Plugin config schema is too large")
+        _validate_config_schema(self.config_schema)
+        if len(self.display_name) > _MAX_CONFIG_SCHEMA_STRING:
+            raise ValueError("Plugin display name is too long")
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,3 +186,50 @@ class TableFormatPlugin(Protocol):
         task: object,
         context: ExecutionContext,
     ) -> tuple[pa.Schema, Sequence[pa.RecordBatch]]: ...
+
+
+def _validate_config_schema(value: object) -> None:  # noqa: C901
+    """Bounds descriptor form data and rejects executable/remote references."""
+
+    nodes = 0
+
+    def visit(item: object, depth: int) -> None:  # noqa: C901
+        nonlocal nodes
+        nodes += 1
+        if nodes > _MAX_CONFIG_SCHEMA_NODES:
+            raise ValueError("Plugin config schema has too many nodes")
+        if depth > _MAX_CONFIG_SCHEMA_DEPTH:
+            raise ValueError("Plugin config schema is too deeply nested")
+        if isinstance(item, Mapping):
+            if len(item) > 64:
+                raise ValueError("Plugin config schema object is too large")
+            for raw_key, child in item.items():
+                if not isinstance(raw_key, str) or not raw_key.strip():
+                    raise ValueError("Plugin config schema keys must be non-empty strings")
+                if len(raw_key) > _MAX_CONFIG_SCHEMA_STRING:
+                    raise ValueError("Plugin config schema key is too long")
+                key = raw_key.strip().lower()
+                if key in _FORBIDDEN_CONFIG_KEYS or key.endswith("_html"):
+                    raise ValueError("Plugin config schema contains a remote or executable field")
+                visit(child, depth + 1)
+            return
+        if isinstance(item, (list, tuple)):
+            if len(item) > 64:
+                raise ValueError("Plugin config schema array is too large")
+            for child in item:
+                visit(child, depth + 1)
+            return
+        if isinstance(item, str):
+            if len(item) > _MAX_CONFIG_SCHEMA_STRING:
+                raise ValueError("Plugin config schema string is too long")
+            lowered = item.strip().lower()
+            if "<script" in lowered or "javascript:" in lowered or "data:text/html" in lowered:
+                raise ValueError("Plugin config schema contains executable content")
+            return
+        if item is None or isinstance(item, (bool, int)):
+            return
+        if isinstance(item, float) and isfinite(item):
+            return
+        raise ValueError("Plugin config schema must contain JSON-like values")
+
+    visit(value, 0)
