@@ -104,14 +104,17 @@ function App() {
   async function loadMoreHistory() {
     const cursor = managementData.historyNextCursor;
     if (!cursor || historyLoading) return;
+    const scope = managementEpoch.current;
     setHistoryLoading(true);
     try {
       const pageResult = await controlPlane.listHistoryPage({ limit: 50, cursor });
+      if (scope !== managementEpoch.current) return;
       setManagementData((current) => ({ ...current, history: [...(current.history ?? []), ...pageResult.items], historyNextCursor: pageResult.next_cursor }));
     } catch {
+      if (scope !== managementEpoch.current) return;
       setNotice("More history could not be loaded. The entries already visible remain available.");
     } finally {
-      setHistoryLoading(false);
+      if (scope === managementEpoch.current) setHistoryLoading(false);
     }
   }
 
@@ -315,6 +318,8 @@ function App() {
       setNotice("Save the draft before running a server-side policy test.");
       return;
     }
+    const loadScope = loadEpoch.current;
+    const editScope = draftEditEpoch.current;
     try {
       let claims: Record<string, unknown> = {};
       if (previewClaims.trim()) {
@@ -323,33 +328,43 @@ function App() {
         claims = parsed as Record<string, unknown>;
       }
       const result: Preview = isDemo ? { decision: "allow", allowed_columns: activeRule?.columns ?? [], masks: activeRule?.masks ?? {}, row_filter: activeRule?.row_filter ?? null, policy_version: 1 } : await controlPlane.evaluate(asset.id, { principal: previewPrincipal.trim(), groups: previewGroups.split(",").map((value) => value.trim()).filter(Boolean), claims });
+      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
       setPreview(result); setReviewToken(null); setNotice(isDemo ? "Demo evaluation is local and cannot be published." : `Server-side evaluation completed: ${result.decision === "allow" ? "allowed" : "denied"}.`);
     } catch {
+      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
       setPreview(null); setReviewToken(null); setNotice("Policy test could not run. This draft is not validated.");
     }
   }
 
   async function requestReview() {
     if (!asset || isDemo || saveState !== "saved" || publishPending) return;
+    const loadScope = loadEpoch.current;
+    const editScope = draftEditEpoch.current;
     try {
       const claims = JSON.parse(previewClaims || "{}") as Record<string, object>;
       if (!claims || Array.isArray(claims) || typeof claims !== "object") throw new Error("Claims must be a JSON object");
       const result = await controlPlane.review(asset.id, { principal: previewPrincipal.trim(), groups: previewGroups.split(",").map((value) => value.trim()).filter(Boolean), claims });
+      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
       setPreview(result); setReviewToken(result.review_token ?? null); setNotice("Server review is current for this saved draft revision. You can publish it now.");
     } catch {
+      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
       setReviewToken(null); setNotice("Review was rejected. Run a successful test against the saved draft and resolve any policy or schema errors.");
     }
   }
 
   async function publishAsset() {
     if (!asset || isDemo || !reviewToken || publishPending) return;
+    const loadScope = loadEpoch.current;
+    const editScope = draftEditEpoch.current;
     const idempotencyKey = crypto.randomUUID();
     setPublishPending(true);
     try {
       await controlPlane.publishAsset(asset.id, draftRevision, reviewToken, idempotencyKey);
+      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
       setReviewToken(null);
       setNotice("Published the saved draft.");
     } catch {
+      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
       try {
         const operation = await controlPlane.getPublicationOperation(asset.id, idempotencyKey);
         if (operation.status === "committed") {
@@ -359,6 +374,7 @@ function App() {
           setNotice("Publish outcome is still pending. Refresh Activity before retrying.");
         }
       } catch {
+        if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
         setNotice("Publish failed. Review the saved draft and active generation.");
       }
     } finally {
