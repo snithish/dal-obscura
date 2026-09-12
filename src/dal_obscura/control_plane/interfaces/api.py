@@ -48,6 +48,10 @@ from dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks import (
 )
 
 
+class _RequestBodyTooLarge(Exception):
+    """Raised by the receive wrapper when a streamed request exceeds its bound."""
+
+
 def create_oidc_actor_resolver(
     *,
     issuer: str,
@@ -94,7 +98,7 @@ _exchange_authorization_code = exchange_authorization_code
 _exchange_demo_password_token = exchange_demo_password_token
 
 
-def create_app(
+def create_app(  # noqa: C901
     session_maker: sessionmaker[Session],
     *,
     admin_token: str,
@@ -150,7 +154,26 @@ def create_app(
                 return JSONResponse(status_code=400, content={"detail": "Invalid content length"})
             if content_length > max_request_bytes:
                 return JSONResponse(status_code=413, content={"detail": "Request body too large"})
-        return await call_next(request)
+        received = 0
+        original_receive = request.receive
+
+        async def limited_receive():
+            nonlocal received
+            message = await original_receive()
+            if message.get("type") == "http.request":
+                received += len(message.get("body", b""))
+                if received > max_request_bytes:
+                    raise _RequestBodyTooLarge
+            return message
+
+        # Starlette's ``call_next`` rebuilds the downstream Request from the
+        # scope, so replace the receive callable on the original request rather
+        # than passing a second Request instance.
+        request._receive = limited_receive
+        try:
+            return await call_next(request)
+        except _RequestBodyTooLarge:
+            return JSONResponse(status_code=413, content={"detail": "Request body too large"})
 
     if cors_origins:
         app.add_middleware(

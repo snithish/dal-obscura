@@ -138,11 +138,11 @@ do not call the release complete without those observations.
 ### P15.2 request-boundary limits — `c2975a3`
 
 - State: partial.
-- Behavior: control-plane requests with a declared body over 1 MiB are
-  rejected before authentication, and policy, identity, grant, provider, and
-  legacy schema collections have explicit cardinality caps.
-- Green evidence: oversized-request, asset, policy, and inventory tests pass;
-  streamed-body enforcement, aggregate per-customer quotas, and load evidence
+- Behavior: control-plane requests with a declared or streamed body over 1 MiB
+  are rejected before application handling, and policy, identity, grant,
+  provider, and legacy schema collections have explicit cardinality caps.
+- Green evidence: oversized-request (including chunked-body), asset, policy,
+  and inventory tests pass; aggregate per-customer quotas and load evidence
   remain open.
 
 ### Production review — 2026-09-12
