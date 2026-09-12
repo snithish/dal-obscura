@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `96cc34e`.
+Implementation follow-up through `9cbb9e7`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -414,6 +414,21 @@ remain open.
   redacted details; Ruff and Ty pass on changed paths.
 - Remaining gaps: revisioned settings activation/rollback and bootstrap
   recovery, browser/a11y proof, PostgreSQL barriers, real IdP/session evidence,
+  and production artifact validation remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: continue X03 PostgreSQL transaction barriers and X10
+  staged runtime/auth activation semantics.
+
+### X10 catalog draft audit — `9cbb9e7`
+
+- State: implementing.
+- Behavior: catalog connection updates now record actor-scoped workspace audit
+  events with catalog identity, adapter module, and sorted option keys. URI,
+  password, and secret-reference values never enter audit details.
+- Green evidence: catalog API suite passes with audit redaction assertions;
+  Ruff and Ty pass on changed paths.
+- Remaining gaps: revisioned catalog activation/rollback and provider health
+  evidence, browser/a11y proof, PostgreSQL barriers, real IdP/session evidence,
   and production artifact validation remain open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: continue X03 PostgreSQL transaction barriers and X10
