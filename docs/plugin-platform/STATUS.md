@@ -260,6 +260,14 @@ Follow-up compatibility regression in `ccb00bc` proves a namespaced admitted
 `iceberg:1` identity matches PyIceberg's numeric `PARQUET:field_id=1` metadata,
 while a rebound numeric ID remains rejected.
 
+Post-normalization boundary verification: the expanded control-plane, migration,
+plugin, publication, schema, and published-config suite passed at 100% with
+`UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane
+tests/interfaces/control_plane/test_assets_api.py tests/interfaces/control_plane/
+test_schema_api.py tests/interfaces/control_plane/test_policy_versions_api.py
+tests/plugin_platform tests/common/config_store/test_schema_migrations.py
+tests/infrastructure/adapters/test_published_config.py -q`.
+
 ### X03 replacement rollback regression — `5420249`
 
 - State: implementing.
