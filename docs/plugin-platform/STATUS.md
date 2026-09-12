@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `b4b068c`.
+Implementation follow-up through `7f98ea2`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -31,7 +31,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
 - X02 immutable draft/review: **implemented-unverified**; strict review requires an
   explicit saved draft and legacy rule hashes are bound. PostgreSQL race evidence and
   full snapshot binding remain open.
-- X03 publication/grant/binding transactions: **not-started**.
+- X03 publication/grant/binding transactions: **implementing**; asset-row locks now
+  serialize shared-rule, draft, and restore mutations with publication. Grant,
+  binding, and PostgreSQL barrier evidence remain open.
 - X04 canonical evaluation: **implemented-unverified**; resolved mask values now
   flow from canonical preview and an unmatched-principal regression passes.
 - X05 canonical bounded schemas: **implemented-unverified**; canonical Arrow schema
@@ -49,7 +51,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
 - X09 UI lifecycle: **implemented-unverified**; initial-load epoch and synchronous
   logout fencing are fixed. Deferred browser tests and save/preview operation epochs
   remain open.
-- X10 complete authoring/management: **not-started**.
+- X10 complete authoring/management: **implemented-unverified** for the deny-all UI
+  path; controls now expose save/test/review/publish actions when rules are empty.
+  Full editor, activation, accessibility, and browser evidence remain open.
 - X11 public SDK: **implementing**; versioned contracts are present under
   `src/dal_obscura/common/plugin_api`, but independent wheel extraction remains open.
 - X12 admitted loading and Iceberg adapter: **implementing**; allowlisted entry-point
