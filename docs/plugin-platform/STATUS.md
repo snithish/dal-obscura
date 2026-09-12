@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `51eb258`.
+Implementation follow-up through `f4aa339`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -89,9 +89,10 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   Runtime registry routing, migration of legacy manifests, and mixed-version
   rollout evidence remain open.
 - X14 plugin UI: **implementing**; standalone plugin descriptors now enforce
-  bounded JSON-like form metadata and reject remote/executable content before a
-  future authenticated descriptor API can render it. Descriptor API, capability
-  routing, and browser evidence remain open.
+  bounded JSON-like form metadata and reject remote/executable content. An
+  authenticated `/v1/plugins` endpoint and Connections view render admitted
+  adapter capabilities without installation controls. Dynamic external-plugin
+  routing and browser evidence remain open.
 - X15 conformance kit: **not-started**.
 - X16 REST Iceberg qualification: **not-started**.
 - X17 independent manifest/Parquet plugin: **not-started**.
@@ -209,6 +210,23 @@ open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: continue X14 descriptor API design after X13 runtime
   registry routing is wired.
+
+### X14 authenticated plugin capability surface — `f4aa339`
+
+- State: implementing.
+- Behavior: platform admins can read a bounded `/v1/plugins` descriptor payload
+  containing admitted catalog/table-format metadata and intersected pair
+  capabilities. The governance Connections view renders these capabilities and
+  versions; it has no package installation or authorization controls. When a
+  `PluginRegistry` snapshot is injected, only that admitted snapshot is exposed.
+- Green evidence: plugin API and route inventory tests pass, plugin endpoint tests
+  pass (2), Ruff, Ty, TypeScript, Vite build, and `git diff --check` pass.
+- Remaining gaps: runtime registry wiring, static descriptor/artifact locks,
+  external REST/Parquet descriptors, backend field revalidation for plugin forms,
+  and browser accessibility/IdP evidence remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: wire admitted registry generations into data-plane
+  startup before advertising external plugin pairs.
 
 X11 package check: `tests/plugin_platform/test_plugin_api_package.py` passes and
 the package source compiles without importing the service distribution. Building
