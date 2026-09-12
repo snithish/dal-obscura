@@ -16,9 +16,15 @@ def test_keycloak_demo_builds_the_governance_ui_and_proxies_api_same_origin() ->
     assert '"packageManager": "pnpm@' in package
     assert "corepack install" in dockerfile
     assert "COPY --from=build /app/dist" in dockerfile
+    assert "nginxinc/nginx-unprivileged:1.27-alpine" in dockerfile
     assert "location /v1/" in nginx
     assert "proxy_pass http://control-plane:8820" in nginx
     assert "Content-Security-Policy" in nginx
+    assert "location /assets/" in nginx
+    assert "try_files $uri =404" in nginx
+    assert "expires max" in nginx
+    assert "location = /index.html" in nginx
+    assert "expires -1" in nginx
     assert "node_modules" in dockerignore
     assert "apps/governance-ui/dist" in dockerignore
     assert ".pnpm-store" in dockerignore

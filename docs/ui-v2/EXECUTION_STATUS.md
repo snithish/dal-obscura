@@ -190,6 +190,31 @@ screens.
 - Next action: run Compose from a clean checkout when the container runtime is
   available, then exercise UI and Flight smoke checks against the healthy stack.
 
+- Packet/slice: P01.5 UI delivery cache and missing-asset behavior.
+- State: partially verified.
+- Commit: pending.
+- Behavior and touched modules: uses the unprivileged NGINX image for the UI
+  runtime; caches content-hashed `/assets/` with a long expiry; serves the SPA
+  shell with an expired cache response; and returns 404 for absent assets rather
+  than falling through to `index.html`.
+- Prerequisites/review authorization: packaging-only change; no authentication,
+  authorization, session, or persistence behavior change.
+- Red test and actual failure: the UI deployment contract had no requirement for
+  non-root NGINX, asset cache behavior, or a true missing-asset response. The
+  previous catch-all location would serve the SPA document for an absent
+  JavaScript asset.
+- Green commands and results: `uv run --no-sync pytest
+  tests/architecture/test_local_demo_ui.py tests/examples/test_ui_smoke.py -q`
+  → 3 passed; focused Ruff and Ty checks passed.
+- Browser/API/PostgreSQL/consumer evidence: NGINX configuration contract only;
+  the unavailable Podman runtime prevents an HTTP deep-link, cache-header, and
+  missing-asset probe against a built image.
+- Manual/independent review: none.
+- Remaining limitations/blocker: build compatibility of the unprivileged NGINX
+  image and all runtime cache/CSP behavior require clean container execution.
+- Next action: build the UI image and check root/deep link, a missing `/assets/`
+  path, CSP, cache headers, and graceful termination when a runtime is available.
+
 - Packet/slice: P11.1 local UI smoke verifier hardening.
 - State: implemented-unverified.
 - Commit: `136b508`.
