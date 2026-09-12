@@ -45,6 +45,7 @@ export type AssetSchema = {
   catalog: string;
   target: string;
   schema_version: number;
+  schema_fingerprint: string;
   fields: SchemaNode[];
 };
 

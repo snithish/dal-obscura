@@ -47,6 +47,7 @@ def get_asset_schema(
         "catalog": asset["catalog"],
         "target": asset["name"],
         "schema_version": 1,
+        "schema_fingerprint": schema_fingerprint(schema),
         "fields": [
             _field_node(field, (FieldSegment(field.name, field.field_id),))
             for field in schema.fields
