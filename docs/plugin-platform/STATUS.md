@@ -2,7 +2,7 @@
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
 Implementation follow-up through `524bb6a`.
-Review date: 2026-09-12. **Paid-production release: HOLD.**
+Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
 UI, and plugin-contract slices. Database changes remain additive, external
