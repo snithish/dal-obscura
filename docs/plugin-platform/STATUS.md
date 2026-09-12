@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `4c0ada8`.
+Implementation follow-up through `51eb258`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -83,7 +83,8 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   regression coverage. Built-in Iceberg routing and artifact-lock verification
   remain open.
 - X13 plugin routing and migration: **implementing**; immutable compiled asset
-  manifests now record explicit catalog and table-format adapter identities.
+  manifests now record explicit catalog and table-format adapter identities, and
+  the data plane rejects explicit bindings it cannot honor before provider setup.
   Runtime registry routing, migration of legacy manifests, and mixed-version
   rollout evidence remain open.
 - X14 plugin UI: **not-started**.
@@ -171,6 +172,22 @@ open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: continue X06 evolution rules alongside X03 PostgreSQL
   transaction evidence.
+
+### X13 manifest binding enforcement — `51eb258`
+
+- State: implementing.
+- Behavior: when an immutable publication carries plugin identities, the data
+  plane validates the catalog and table-format pair before constructing a runtime
+  adapter. Unsupported or tampered bindings fail closed; legacy manifests without
+  the new metadata retain their documented compatibility path.
+- Green evidence: `tests/infrastructure/adapters/test_published_config.py` (15
+  passed), Ruff, Ty, and `git diff --check` all pass.
+- Remaining gaps: admitted registry routing, artifact/descriptor locks, legacy
+  migration tooling, external catalogs/formats, and mixed-version rollout remain
+  open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: continue X13 runtime registry routing and X12 artifact
+  lock verification.
 
 X11 package check: `tests/plugin_platform/test_plugin_api_package.py` passes and
 the package source compiles without importing the service distribution. Building
