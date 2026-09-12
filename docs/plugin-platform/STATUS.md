@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `6aac008`.
+Implementation follow-up through `9fbeb51`.
 Review date: 2026-09-12. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -157,6 +157,22 @@ return the stable redacted validation response at the HTTP boundary.
   and independent multi-process evidence remain required before acceptance.
 - Next permitted packet: X03 PostgreSQL CAS/barrier slice, then X06 admitted
   schema identity and evolution rules.
+
+### X03 review-token generation binding — `9fbeb51`
+
+- State: implementing.
+- Behavior: signed review evidence now captures the governed asset revision;
+  publication rejects a token after binding, owner, grant, or admitted-schema
+  metadata changes, even when the policy draft and live schema are unchanged.
+- Green evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync
+  pytest tests/interfaces/control_plane/test_schema_api.py -q` passed (6), with
+  the stale metadata token regression included; Ruff and Ty passed on changed
+  paths.
+- Pickle compatibility: unchanged.
+- Remaining gaps: PostgreSQL barrier-controlled races and transaction recovery
+  evidence remain open.
+- Next permitted packet: X03 PostgreSQL CAS/barrier slice, then X06 evolution
+  rules.
 
 ## Latest evidence entry
 
