@@ -137,3 +137,26 @@ def test_provision_rejects_partial_workspace_before_mutation(monkeypatch) -> Non
         module._provision_workspace(_fixture())
 
     assert calls == [("GET", "/v1/workspace/summary")]
+
+
+def test_demo_owner_keys_are_scoped_to_oidc_issuer(monkeypatch) -> None:
+    monkeypatch.setenv("DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN", "test-admin")
+    monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
+    module = _load_script("provision_demo")
+
+    assert module._scoped_demo_owners(["group:asset-owners", "asset-owner"]) == [
+        "http://127.0.0.1:8080/realms/dal-obscura-demo|group:asset-owners",
+        "http://127.0.0.1:8080/realms/dal-obscura-demo|asset-owner",
+    ]
+    assert module._scoped_demo_owners(["https://issuer.example/realm|group:asset-owners"]) == [
+        "https://issuer.example/realm|group:asset-owners"
+    ]
+
+
+def test_demo_owner_keys_require_an_owner(monkeypatch) -> None:
+    monkeypatch.setenv("DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN", "test-admin")
+    monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
+    module = _load_script("provision_demo")
+
+    with pytest.raises(ValueError, match="at least one owner"):
+        module._scoped_demo_owners([])

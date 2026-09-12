@@ -24,6 +24,10 @@ ICEBERG_CATALOG_MODULE = (
 OIDC_AUTH_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider"
 )
+DEMO_OIDC_ISSUER = os.environ.get(
+    "DEMO_OIDC_ISSUER",
+    "http://127.0.0.1:8080/realms/dal-obscura-demo",
+)
 
 
 def main() -> None:
@@ -100,7 +104,7 @@ def _provision_workspace(fixture: dict[str, Any]) -> str:
                     "ordinal": 10,
                     "module": OIDC_AUTH_MODULE,
                     "args": {
-                        "issuer": "http://127.0.0.1:8080/realms/dal-obscura-demo",
+                        "issuer": DEMO_OIDC_ISSUER,
                         "audience": "dal-obscura",
                         "jwks_url": (
                             "http://keycloak:8080/realms/dal-obscura-demo/"
@@ -268,9 +272,36 @@ def _promote_table(fixture: dict[str, Any], table_fixture: dict[str, Any]) -> st
             ]
         },
     )
-    _request("PUT", f"/v1/assets/{asset_id}/owners", {"owners": fixture["owners"]})
+    _request(
+        "PUT",
+        f"/v1/assets/{asset_id}/owners",
+        {"owners": _scoped_demo_owners(fixture["owners"])},
+    )
     _request("PUT", f"/v1/assets/{asset_id}/policy-rules", {"rules": fixture["policies"]})
     return asset_id
+
+
+def _scoped_demo_owners(raw_owners: object) -> list[str]:
+    """Return owner keys that match the demo OIDC identity namespace.
+
+    Fixture policy principals intentionally stay unscoped because they are
+    evaluated by the data-plane identity provider.  Control-plane ownership
+    is persisted with the issuer prefix so a same-named identity from another
+    provider cannot gain edit or publish access.
+    """
+
+    if not isinstance(raw_owners, list):
+        raise ValueError("demo fixture owners must be a list")
+    prefix = f"{DEMO_OIDC_ISSUER.rstrip('/')}|"
+    owners: list[str] = []
+    for raw_owner in raw_owners:
+        owner = str(raw_owner).strip()
+        if not owner:
+            continue
+        owners.append(owner if "|" in owner else f"{prefix}{owner}")
+    if not owners:
+        raise ValueError("demo fixture must define at least one owner")
+    return owners
 
 
 def _request(method: str, path: str, body: object | None = None) -> object:
