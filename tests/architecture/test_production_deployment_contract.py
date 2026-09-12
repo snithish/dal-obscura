@@ -47,6 +47,7 @@ def test_production_reference_contains_immutable_and_private_topology() -> None:
     assert "CREATE ROLE dal_obscura_migrator" in role_init
     assert "CREATE ROLE dal_obscura_control" in role_init
     assert "CREATE ROLE dal_obscura_reader" in role_init
+    assert "GRANT USAGE, CREATE ON SCHEMA public TO dal_obscura_migrator" in role_init
     assert "GRANT SELECT ON TABLES TO dal_obscura_reader" in role_init
     assert "Routine restart" in readme
     assert "does not seed" in readme

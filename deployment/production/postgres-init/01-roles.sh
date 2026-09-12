@@ -35,6 +35,9 @@ ALTER ROLE dal_obscura_reader PASSWORD :'data_password';
 GRANT CONNECT ON DATABASE :"db_name" TO dal_obscura_migrator;
 GRANT CONNECT ON DATABASE :"db_name" TO dal_obscura_control;
 GRANT CONNECT ON DATABASE :"db_name" TO dal_obscura_reader;
+GRANT USAGE, CREATE ON SCHEMA public TO dal_obscura_migrator;
+GRANT USAGE ON SCHEMA public TO dal_obscura_control;
+GRANT USAGE ON SCHEMA public TO dal_obscura_reader;
 
 -- Migration-created objects are owned by the migrator. Control-plane writes
 -- are granted through default privileges; data-plane starts read-only.
