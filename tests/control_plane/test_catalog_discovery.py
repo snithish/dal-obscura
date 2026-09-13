@@ -118,7 +118,7 @@ def test_iceberg_discovery_stops_an_unbounded_provider_page():
     class EndlessCatalog:
         def list_namespaces(self, namespace=()):
             if namespace == ():
-                return (("ns", index) for index in range(100_000))
+                return (("ns", str(index)) for index in range(100_000))
             return ()
 
         def list_tables(self, namespace):
@@ -155,6 +155,25 @@ def test_iceberg_discovery_honors_cancellation_and_deadline():
             {},
             load_catalog_fn=lambda name, **options: SlowCatalog(),
             deadline_at=0.0,
+        )
+
+
+def test_iceberg_discovery_rejects_malformed_provider_identifier_segments():
+    class MalformedCatalog:
+        def list_namespaces(self, namespace=()):
+            if namespace == ():
+                return [("default", 7)]
+            return []
+
+        def list_tables(self, namespace):
+            del namespace
+            return [("default", "users\n")]
+
+    with pytest.raises(ValueError, match="invalid namespace"):
+        discover_iceberg_tables(
+            "analytics",
+            {},
+            load_catalog_fn=lambda name, **options: MalformedCatalog(),
         )
 
 

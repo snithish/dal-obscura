@@ -5,7 +5,7 @@ from collections.abc import Callable, Iterable, Iterator
 from datetime import datetime, timedelta, timezone
 from threading import BoundedSemaphore
 from time import monotonic
-from typing import Any
+from typing import Any, cast
 
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import CatalogType
 
@@ -244,22 +244,45 @@ def _list_tables(catalog: Any, namespace: Namespace) -> Iterable[object]:
 
 def _namespace_tuple(namespace: object) -> Namespace:
     if isinstance(namespace, str):
-        return tuple(part for part in namespace.split(".") if part)
+        parts = tuple(namespace.split("."))
+        if any(not _valid_identifier_segment(part) for part in parts):
+            raise ValueError("Catalog provider returned an invalid namespace")
+        return parts
     if isinstance(namespace, tuple):
-        return tuple(str(part) for part in namespace)
+        if any(not _valid_identifier_segment(part) for part in namespace):
+            raise ValueError("Catalog provider returned an invalid namespace")
+        return cast(tuple[str, ...], namespace)
     if isinstance(namespace, list):
-        return tuple(str(part) for part in namespace)
-    return (str(namespace),)
+        if any(not _valid_identifier_segment(part) for part in namespace):
+            raise ValueError("Catalog provider returned an invalid namespace")
+        return cast(tuple[str, ...], tuple(namespace))
+    raise ValueError("Catalog provider returned an invalid namespace")
 
 
 def _identifier_to_name(identifier: object) -> str:
     if isinstance(identifier, str):
+        parts = tuple(identifier.split("."))
+        if any(not _valid_identifier_segment(part) for part in parts):
+            raise ValueError("Catalog provider returned an invalid table identifier")
         return identifier
     if isinstance(identifier, tuple):
-        return ".".join(str(part) for part in identifier)
+        if any(not _valid_identifier_segment(part) for part in identifier):
+            raise ValueError("Catalog provider returned an invalid table identifier")
+        return ".".join(cast(tuple[str, ...], identifier))
     if isinstance(identifier, list):
-        return ".".join(str(part) for part in identifier)
-    return str(identifier)
+        if any(not _valid_identifier_segment(part) for part in identifier):
+            raise ValueError("Catalog provider returned an invalid table identifier")
+        return ".".join(cast(list[str], identifier))
+    raise ValueError("Catalog provider returned an invalid table identifier")
+
+
+def _valid_identifier_segment(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and bool(value)
+        and len(value) <= 256
+        and all(ord(char) >= 0x20 and ord(char) != 0x7F for char in value)
+    )
 
 
 def _bounded_provider_items(
