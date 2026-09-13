@@ -675,7 +675,7 @@ providers before Phase A's security/correctness prerequisites are accepted.
   certificate boundary from reaching a running service.
 - Green evidence: shell syntax, secure-local architecture test, YAML parse,
   temporary-profile `./run init`, distinct-key comparison, CA certificate
-  verification, and `git diff --check` passed.
+  verification, placeholder-preflight rejection, and `git diff --check` passed.
 - Remaining gaps: real Docker startup, IdP/TLS browser flow, PostgreSQL role
   denial/allowance, and production artifact/recovery evidence remain open.
 
