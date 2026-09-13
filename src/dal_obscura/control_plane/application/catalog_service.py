@@ -8,6 +8,7 @@ Example:
 
 from __future__ import annotations
 
+import math
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from math import isfinite
@@ -397,7 +398,7 @@ def validate_descriptor_options(
         )
 
 
-def _validate_descriptor_value(
+def _validate_descriptor_value(  # noqa: C901
     name: str,
     field_type: object,
     value: object,
@@ -411,6 +412,10 @@ def _validate_descriptor_value(
         raise ValidationFailure(f"{kind} option {name!r} must be a boolean")
     if field_type == "integer" and (isinstance(value, bool) or not isinstance(value, int)):
         raise ValidationFailure(f"{kind} option {name!r} must be an integer")
+    if field_type == "number" and (
+        isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
+    ):
+        raise ValidationFailure(f"{kind} option {name!r} must be a finite number")
     if field_type == "enum":
         if not isinstance(choices, list) or not choices:
             raise ValidationFailure(f"{kind} option {name!r} has no valid enum choices")

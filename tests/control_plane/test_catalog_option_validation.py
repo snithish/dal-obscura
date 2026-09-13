@@ -70,17 +70,30 @@ def test_admitted_descriptor_preserves_typed_boolean_integer_and_enum_values() -
             "fields": [
                 {"name": "enabled", "type": "boolean"},
                 {"name": "timeout", "type": "integer"},
+                {"name": "ratio", "type": "number"},
                 {"name": "mode", "type": "enum", "options": ["safe", "fast"]},
             ]
         },
     )
-    validate_descriptor_options(descriptor, {"enabled": True, "timeout": 30, "mode": "safe"})
+    validate_descriptor_options(
+        descriptor, {"enabled": True, "timeout": 30, "ratio": 0.5, "mode": "safe"}
+    )
     with pytest.raises(ValidationFailure, match="must be a boolean"):
-        validate_descriptor_options(descriptor, {"enabled": "true", "timeout": 30, "mode": "safe"})
+        validate_descriptor_options(
+            descriptor, {"enabled": "true", "timeout": 30, "ratio": 0.5, "mode": "safe"}
+        )
     with pytest.raises(ValidationFailure, match="must be an integer"):
-        validate_descriptor_options(descriptor, {"enabled": True, "timeout": True, "mode": "safe"})
+        validate_descriptor_options(
+            descriptor, {"enabled": True, "timeout": True, "ratio": 0.5, "mode": "safe"}
+        )
     with pytest.raises(ValidationFailure, match="declared choices"):
-        validate_descriptor_options(descriptor, {"enabled": True, "timeout": 30, "mode": "unsafe"})
+        validate_descriptor_options(
+            descriptor, {"enabled": True, "timeout": 30, "ratio": 0.5, "mode": "unsafe"}
+        )
+    with pytest.raises(ValidationFailure, match="finite number"):
+        validate_descriptor_options(
+            descriptor, {"enabled": True, "timeout": 30, "ratio": float("inf"), "mode": "safe"}
+        )
 
 
 def test_admitted_catalog_options_are_checked_before_factory_use() -> None:
