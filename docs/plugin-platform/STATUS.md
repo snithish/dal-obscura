@@ -205,6 +205,14 @@ all collected tests. Plugin conformance passed (2 tests); direct UI TypeScript/
 Vite production build passed (264.88 kB JavaScript, 14.22 kB CSS); UI lifecycle
 and schema tests passed (5). No pickle fixture or serializer paths changed.
 
+## Implementation update — 2e23b25 (2026-09-13)
+
+- Packet / status / candidate commit / owner: N02/N05 UI authentication cleanup / VERIFY / `2e23b25` / governance UI.
+- Observable behavior delivered: the shipped UI no longer contains the development `?demo` workspace, local fixture asset, demo persona buttons, or demo-login client method. Workspace reads, policy evaluation, draft saves, reviews, publishes, and restores now always use the authenticated control plane. SSO and explicitly enabled local bootstrap-token login remain available for production and local parity respectively.
+- Changed and deleted paths: `apps/governance-ui/src/main.tsx`, `apps/governance-ui/src/api.ts`, deleted `apps/governance-ui/src/fixtures.ts`. No backend demo route was changed, preserving existing server-side compatibility tests and local operator fixtures. No pickle serializer, payload class, or import path changed.
+- Evidence: `node --experimental-strip-types --test tests/*.test.mjs` — 5 passed; `node_modules/.bin/tsc -p tsconfig.json && node_modules/.bin/vite build` — passed (263.59 kB JavaScript, 14.22 kB CSS); generated bundle contains no `demo-login`, `Use demo persona`, `Explicit demo`, or `?demo` strings. `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/architecture/test_local_demo_ui.py tests/examples/test_ui_smoke.py -q` — 3 passed.
+- Remaining N02/N05 work: backend demo endpoint retirement and fixture migration require a separate compatibility decision; live OIDC/browser expiry, two-process freshness, and independent security/UX review remain VERIFY. Release remains HOLD.
+
 ## Implementation update — 96bfdf6 (2026-09-13)
 
 - Packet / status / candidate commit / owner: N02/B03 partial / VERIFY / `96bfdf6` / control-plane + governance UI + test fixtures.
