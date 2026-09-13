@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime
 from threading import Lock
+from typing import Any, cast
 from urllib.parse import urlsplit
 
 from dal_obscura_plugin_api import (
@@ -17,8 +21,25 @@ from dal_obscura_plugin_api import (
 MAX_TABLES = 10_000
 MAX_NAMESPACES = 10_000
 MAX_PAGE = 500
+DEFAULT_CONNECT_TIMEOUT_SECONDS = 5.0
+DEFAULT_READ_TIMEOUT_SECONDS = 30.0
+MIN_TIMEOUT_SECONDS = 0.1
+MAX_CONNECT_TIMEOUT_SECONDS = 30.0
+MAX_READ_TIMEOUT_SECONDS = 120.0
 _ALLOWED_OPTIONS = frozenset(
-    {"uri", "warehouse", "token", "credential", "scope", "oauth2-server-uri"}
+    {
+        "uri",
+        "warehouse",
+        "token",
+        "credential",
+        "scope",
+        "oauth2-server-uri",
+        "connect-timeout-ms",
+        "read-timeout-ms",
+    }
+)
+_ACTIVE_REQUEST_BUDGET: ContextVar[tuple[datetime, Any, float, float] | None] = ContextVar(
+    "dal_obscura_rest_request_budget", default=None
 )
 
 DESCRIPTOR = PluginDescriptor(
@@ -40,6 +61,8 @@ DESCRIPTOR = PluginDescriptor(
             {"name": "credential", "type": "secret_reference", "required": False, "secret": True},
             {"name": "scope", "type": "string", "required": False, "secret": False},
             {"name": "oauth2-server-uri", "type": "uri", "required": False, "secret": False},
+            {"name": "connect-timeout-ms", "type": "integer", "required": False, "secret": False},
+            {"name": "read-timeout-ms", "type": "integer", "required": False, "secret": False},
         ]
     },
 )
@@ -73,6 +96,18 @@ class RestCatalog(CatalogPlugin):
         oauth_uri = options.get("oauth2-server-uri")
         if oauth_uri is not None:
             _validate_optional_uri(oauth_uri, "oauth2-server-uri", http_only=True)
+        self._connect_timeout = _timeout_seconds(
+            cast(str | None, options.get("connect-timeout-ms")),
+            default=DEFAULT_CONNECT_TIMEOUT_SECONDS,
+            maximum=MAX_CONNECT_TIMEOUT_SECONDS,
+            label="connect-timeout-ms",
+        )
+        self._read_timeout = _timeout_seconds(
+            cast(str | None, options.get("read-timeout-ms")),
+            default=DEFAULT_READ_TIMEOUT_SECONDS,
+            maximum=MAX_READ_TIMEOUT_SECONDS,
+            label="read-timeout-ms",
+        )
         self._options = options
         self._catalog = None
         self._catalog_lock = Lock()
@@ -91,30 +126,30 @@ class RestCatalog(CatalogPlugin):
         *,
         namespace: tuple[str, ...] = (),
     ) -> tuple[tuple[str, ...], ...]:
-        self._validate_context(context)
-        catalog = self._load_catalog(context)
-        result: set[tuple[str, ...]] = set()
-        try:
-            raw_namespaces = (
-                catalog.list_namespaces(namespace) if namespace else catalog.list_namespaces()
-            )
-        except TypeError:
-            raw_namespaces = catalog.list_namespaces()
-        for raw in raw_namespaces:
-            self._validate_context(context)
-            if (
-                not isinstance(raw, (tuple, list))
-                or not raw
-                or any(not isinstance(part, str) or not part for part in raw)
-            ):
-                raise ValueError("REST catalog returned an invalid namespace")
-            value = tuple(raw)
-            if namespace and value[: len(namespace)] != namespace:
-                continue
-            result.add(value)
-            if len(result) > MAX_NAMESPACES:
-                raise ValueError("REST catalog contains too many namespaces")
-        return tuple(sorted(result))
+        with self._request_budget(context):
+            catalog = self._load_catalog(context)
+            result: set[tuple[str, ...]] = set()
+            try:
+                raw_namespaces = (
+                    catalog.list_namespaces(namespace) if namespace else catalog.list_namespaces()
+                )
+            except TypeError:
+                raw_namespaces = catalog.list_namespaces()
+            for raw in raw_namespaces:
+                self._validate_context(context)
+                if (
+                    not isinstance(raw, (tuple, list))
+                    or not raw
+                    or any(not isinstance(part, str) or not part for part in raw)
+                ):
+                    raise ValueError("REST catalog returned an invalid namespace")
+                value = tuple(raw)
+                if namespace and value[: len(namespace)] != namespace:
+                    continue
+                result.add(value)
+                if len(result) > MAX_NAMESPACES:
+                    raise ValueError("REST catalog contains too many namespaces")
+            return tuple(sorted(result))
 
     def list_tables(
         self,
@@ -123,48 +158,48 @@ class RestCatalog(CatalogPlugin):
         continuation: str | None = None,
         limit: int,
     ) -> DiscoveryPage:
-        self._validate_context(context)
-        if not 1 <= limit <= MAX_PAGE:
-            raise ValueError("REST catalog page size is out of bounds")
-        offset = _continuation_offset(continuation)
-        catalog = self._load_catalog(context)
-        identifiers = []
-        for index, namespace in enumerate(catalog.list_namespaces()):
-            if index >= MAX_NAMESPACES:
-                raise ValueError("REST catalog contains too many namespaces")
-            self._validate_context(context)
-            for identifier in catalog.list_tables(namespace):
+        with self._request_budget(context):
+            if not 1 <= limit <= MAX_PAGE:
+                raise ValueError("REST catalog page size is out of bounds")
+            offset = _continuation_offset(continuation)
+            catalog = self._load_catalog(context)
+            identifiers = []
+            for index, namespace in enumerate(catalog.list_namespaces()):
+                if index >= MAX_NAMESPACES:
+                    raise ValueError("REST catalog contains too many namespaces")
                 self._validate_context(context)
-                identifiers.append(_identifier(identifier))
-                if len(identifiers) > MAX_TABLES:
-                    raise ValueError("REST catalog contains too many tables")
-        identifiers.sort(key=lambda item: (*item.namespace, item.name))
-        if offset > len(identifiers):
-            raise ValueError("REST catalog continuation token is out of range")
-        end = min(offset + limit, len(identifiers))
-        return DiscoveryPage(
-            entries=tuple(identifiers[offset:end]),
-            continuation=str(end) if end < len(identifiers) else None,
-        )
+                for identifier in catalog.list_tables(namespace):
+                    self._validate_context(context)
+                    identifiers.append(_identifier(identifier))
+                    if len(identifiers) > MAX_TABLES:
+                        raise ValueError("REST catalog contains too many tables")
+            identifiers.sort(key=lambda item: (*item.namespace, item.name))
+            if offset > len(identifiers):
+                raise ValueError("REST catalog continuation token is out of range")
+            end = min(offset + limit, len(identifiers))
+            return DiscoveryPage(
+                entries=tuple(identifiers[offset:end]),
+                continuation=str(end) if end < len(identifiers) else None,
+            )
 
     def resolve_table(self, identifier: TableIdentifier, context: ExecutionContext) -> TableHandle:
-        self._validate_context(context)
-        table = self._load_catalog(context).load_table((*identifier.namespace, identifier.name))
-        metadata_location = getattr(table, "metadata_location", None)
-        if not isinstance(metadata_location, str) or not metadata_location:
-            raise ValueError("REST catalog table has no metadata location")
-        return TableHandle(
-            catalog_plugin_id=DESCRIPTOR.plugin_id,
-            catalog_instance_id=self._config.instance_id,
-            catalog_revision=self._config.revision,
-            identifier=identifier,
-            format_plugin_id="iceberg",
-            handle_version=1,
-            snapshot_id=_snapshot_id(table),
-            metadata={
-                "metadata_location": metadata_location,
-            },
-        )
+        with self._request_budget(context):
+            table = self._load_catalog(context).load_table((*identifier.namespace, identifier.name))
+            metadata_location = getattr(table, "metadata_location", None)
+            if not isinstance(metadata_location, str) or not metadata_location:
+                raise ValueError("REST catalog table has no metadata location")
+            return TableHandle(
+                catalog_plugin_id=DESCRIPTOR.plugin_id,
+                catalog_instance_id=self._config.instance_id,
+                catalog_revision=self._config.revision,
+                identifier=identifier,
+                format_plugin_id="iceberg",
+                handle_version=1,
+                snapshot_id=_snapshot_id(table),
+                metadata={
+                    "metadata_location": metadata_location,
+                },
+            )
 
     def close(self) -> None:
         """Release the provider session and make this catalog unusable."""
@@ -195,18 +230,30 @@ class RestCatalog(CatalogPlugin):
                 if self._closed:
                     raise ValueError("REST catalog is closed")
                 if self._catalog is None:
-                    from pyiceberg.catalog import load_catalog
-
                     properties = {
-                        key: str(value) for key, value in self._options.items() if key != "uri"
+                        key: str(value)
+                        for key, value in self._options.items()
+                        if key not in {"uri", "connect-timeout-ms", "read-timeout-ms"}
                     }
-                    self._catalog = load_catalog(
+                    self._catalog = _create_catalog(
                         self._config.instance_id,
-                        type="rest",
                         uri=str(self._options["uri"]),
+                        connect_timeout=self._connect_timeout,
+                        read_timeout=self._read_timeout,
                         **properties,
                     )
         return self._catalog
+
+    @contextmanager
+    def _request_budget(self, context: ExecutionContext) -> Iterator[None]:
+        self._validate_context(context)
+        token = _ACTIVE_REQUEST_BUDGET.set(
+            (context.deadline, context.cancel_check, self._connect_timeout, self._read_timeout)
+        )
+        try:
+            yield
+        finally:
+            _ACTIVE_REQUEST_BUDGET.reset(token)
 
     @staticmethod
     def _validate_context(context: ExecutionContext) -> None:
@@ -255,6 +302,75 @@ def _validate_optional_uri(value: object, label: str, *, http_only: bool = False
         raise ValueError(f"REST catalog {label} must use HTTPS")
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise ValueError(f"REST catalog {label} cannot contain credentials or query data")
+
+
+def _timeout_seconds(
+    value: str | None,
+    *,
+    default: float,
+    maximum: float,
+    label: str,
+) -> float:
+    if value is None:
+        return default
+    if not value.isdigit():
+        raise ValueError(f"REST catalog {label} must be a positive integer in milliseconds")
+    milliseconds = int(value)
+    seconds = milliseconds / 1000
+    if not MIN_TIMEOUT_SECONDS <= seconds <= maximum:
+        raise ValueError(f"REST catalog {label} is out of bounds")
+    return seconds
+
+
+def _create_catalog(
+    name: str,
+    *,
+    uri: str,
+    connect_timeout: float,
+    read_timeout: float,
+    **properties: str,
+) -> Any:
+    """Construct PyIceberg REST with a bounded requests session.
+
+    PyIceberg's REST adapter does not pass a timeout to ``requests``.  The
+    subclass keeps provider behavior intact while applying a connect/read
+    timeout to every request, including the initial config fetch in its
+    constructor.  The active execution context narrows the timeout further.
+    """
+
+    from pyiceberg.catalog.rest import RestCatalog as PyIcebergRestCatalog
+
+    class BoundedRestCatalog(PyIcebergRestCatalog):
+        def _create_session(self):
+            session = super()._create_session()
+            _install_request_timeout(session, connect_timeout, read_timeout)
+            return session
+
+    return BoundedRestCatalog(name, uri=uri, **properties)
+
+
+def _install_request_timeout(session: Any, connect_timeout: float, read_timeout: float) -> None:
+    original_request = session.request
+
+    def request(method: str, url: str, **kwargs: Any) -> Any:
+        budget = _ACTIVE_REQUEST_BUDGET.get()
+        if budget is None:
+            timeout = (connect_timeout, read_timeout)
+        else:
+            deadline, cancel_check, configured_connect, configured_read = budget
+            if cancel_check is not None and cancel_check():
+                raise ValueError("REST catalog operation was cancelled")
+            remaining = (deadline - datetime.now(deadline.tzinfo)).total_seconds()
+            if remaining <= 0:
+                raise TimeoutError("REST catalog execution deadline has expired")
+            timeout = (
+                min(configured_connect, remaining),
+                min(configured_read, remaining),
+            )
+        kwargs.setdefault("timeout", timeout)
+        return original_request(method, url, **kwargs)
+
+    session.request = request
 
 
 def rest_catalog_factory(config: CatalogConfig, context: ExecutionContext) -> RestCatalog:

@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from time import sleep
+from types import SimpleNamespace
 
 import pytest
 from dal_obscura_iceberg_rest.catalog import RestCatalog
@@ -35,6 +36,8 @@ def test_static_descriptor_advertises_all_supported_rest_auth_options() -> None:
         "required": False,
         "secret": False,
     }
+    assert fields["connect-timeout-ms"]["type"] == "integer"
+    assert fields["read-timeout-ms"]["type"] == "integer"
 
 
 def _context() -> ExecutionContext:
@@ -83,6 +86,17 @@ def test_rest_catalog_rejects_unresolved_secret_objects():
         RestCatalog(_config(token={"secret": "REST_TOKEN"}), _context())
 
 
+@pytest.mark.parametrize(
+    "option",
+    ["connect-timeout-ms", "read-timeout-ms"],
+)
+def test_rest_catalog_rejects_invalid_timeouts(option: str) -> None:
+    with pytest.raises(ValueError, match="timeout"):
+        RestCatalog(_config(**{option: "0"}), _context())
+    with pytest.raises(ValueError, match="timeout"):
+        RestCatalog(_config(**{option: "not-a-number"}), _context())
+
+
 def test_rest_catalog_context_cancellation_is_fail_closed():
     context = ExecutionContext(
         deadline=datetime.now(timezone.utc) + timedelta(minutes=1),
@@ -91,6 +105,33 @@ def test_rest_catalog_context_cancellation_is_fail_closed():
     )
     with pytest.raises(ValueError, match="cancelled"):
         RestCatalog(_config(), context)
+
+
+def test_rest_catalog_requests_receive_deadline_bounded_timeout() -> None:
+    from dal_obscura_iceberg_rest import catalog as module
+
+    calls: list[tuple[object, object]] = []
+    session = SimpleNamespace()
+
+    def original_request(method, url, **kwargs):
+        calls.append((kwargs["timeout"], kwargs.get("headers")))
+        return "ok"
+
+    session.request = original_request
+    module._install_request_timeout(session, 5.0, 30.0)
+    context = ExecutionContext(
+        deadline=datetime.now(timezone.utc) + timedelta(seconds=2),
+        correlation_id="rest-timeout",
+    )
+    token = module._ACTIVE_REQUEST_BUDGET.set((context.deadline, None, 5.0, 30.0))
+    try:
+        assert session.request("GET", "https://catalog.example") == "ok"
+    finally:
+        module._ACTIVE_REQUEST_BUDGET.reset(token)
+
+    connect, read = calls[0][0]
+    assert 0 < connect <= 2
+    assert 0 < read <= 2
 
 
 def test_rest_catalog_paginates_bounded_sorted_identifiers():
@@ -192,9 +233,10 @@ def test_rest_catalog_initializes_provider_once_under_concurrency(monkeypatch) -
         sleep(0.01)
         return FakeCatalog()
 
-    import pyiceberg.catalog
-
-    monkeypatch.setattr(pyiceberg.catalog, "load_catalog", load_catalog)
+    monkeypatch.setattr(
+        "dal_obscura_iceberg_rest.catalog._create_catalog",
+        lambda *args, **kwargs: load_catalog(*args, **kwargs),
+    )
     with ThreadPoolExecutor(max_workers=8) as executor:
         values = list(executor.map(lambda _: plugin._load_catalog(_context()), range(8)))
 
