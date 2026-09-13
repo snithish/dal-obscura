@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import os
 
+import pyarrow as pa
 import pytest
 
 from dal_obscura.connectors.python_sdk import DalObscuraClient, DuckDBDalObscuraReader
-from tests.support.arrow import metadata_batch, metadata_schema
+from tests.support.arrow import metadata_schema
 from tests.support.flight import (
     StubTableFormat,
     build_flight_service,
@@ -27,7 +28,26 @@ def require_consumer_lane() -> None:
 
 def test_python_and_duckdb_consumers_receive_identical_nested_governed_data() -> None:
     schema = metadata_schema()
-    batch = metadata_batch()
+    batch = pa.RecordBatch.from_pylist(
+        [
+            {
+                "id": 1,
+                "metadata": {
+                    "preferences": [
+                        {"name": "web", "theme": "dark"},
+                        {"name": "mobile", "theme": "light"},
+                    ]
+                },
+            },
+            {
+                "id": 2,
+                "metadata": {
+                    "preferences": [{"name": "desktop", "theme": "dark"}]
+                },
+            },
+        ],
+        schema=schema,
+    )
     table_format = StubTableFormat(
         catalog_name="analytics",
         table_name="consumer.nested",
