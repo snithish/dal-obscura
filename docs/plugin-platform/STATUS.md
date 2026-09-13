@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `c52fc89` (bounded provider field identities;
+Implementation follow-up through `56e9f91` (provider identity vocabulary;
+bounded provider field identities;
 external-catalog Iceberg schema bridge;
 catalog mutation lock ordering;
 workspace generation lock ordering;
@@ -351,6 +352,9 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   Arrow provider field IDs are now bounded, UTF-8, and printable before they
   become stable identities; malformed metadata falls back to a schema-scoped
   synthetic identity and cannot widen a reviewed field grant.
+  Explicit schema-field saves and manifest identities now normalize provider
+  IDs to the shared `iceberg:<id>` vocabulary before persistence, keeping
+  control-plane review evidence and data-plane drift checks comparable.
   Both service composition roots now accept an optional operator-mounted
   `DAL_OBSCURA_PLUGIN_LOCK_FILE`; its bounded parser rejects symlinks,
   group/world-writable files, malformed identities, duplicates, and incomplete
@@ -507,6 +511,18 @@ providers before Phase A's security/correctness prerequisites are accepted.
   (26 passed), Ruff, Ty, and `git diff --check`.
 - Remaining gaps: live provider-derived IDs and the complete schema-evolution
   acceptance matrix remain open.
+
+### X06 provider identity vocabulary — `56e9f91`
+
+- State: implementing.
+- Behavior: explicit schema-field writes and manifest-derived identities now
+  canonicalize unqualified provider IDs to `iceberg:<id>`, matching the shared
+  data-plane identity contract while retaining synthetic identities for nested
+  descendants and legacy IDs.
+- Green evidence: publication-store, published-config, and manifest plugin
+  suites (40 passed), Ruff, Ty, and `git diff --check`.
+- Remaining gaps: full provider-derived identity propagation through live
+  external schemas and schema-evolution/reapproval evidence remain open.
 
 ### X03 direct mutation row locks — `165015f`
 
