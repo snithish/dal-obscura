@@ -2,6 +2,7 @@ import pyarrow as pa
 import pytest
 
 from dal_obscura.common.query_planning.field_paths import (
+    MAX_FIELD_PATH_SEGMENTS,
     FieldPath,
     FieldSegment,
     ListElementSegment,
@@ -101,6 +102,15 @@ def test_field_path_validates_wire_model_invariants():
         ],
     }
     assert MapValueSegment() != MapKeySegment()
+
+
+def test_field_path_rejects_unbounded_or_control_bearing_names():
+    with pytest.raises(ValueError, match="bounded printable"):
+        FieldPath((FieldSegment("x" * 257),))
+    with pytest.raises(ValueError, match="bounded printable"):
+        FieldPath((FieldSegment("bad\nname"),))
+    with pytest.raises(ValueError, match="too many segments"):
+        FieldPath(tuple([FieldSegment("root")] + [FieldSegment("child")] * MAX_FIELD_PATH_SEGMENTS))
 
 
 def test_field_path_wire_round_trip_preserves_ids_and_collection_nodes():

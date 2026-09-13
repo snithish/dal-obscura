@@ -17,6 +17,8 @@ import pyarrow as pa
 
 _SIMPLE_FIELD_NAME: Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*$")
 _COLLECTION_SEGMENTS: Final = {"$element", "$key", "$value"}
+MAX_FIELD_PATH_SEGMENTS: Final = 64
+MAX_FIELD_NAME_LENGTH: Final = 256
 
 
 @dataclass(frozen=True)
@@ -57,11 +59,17 @@ class FieldPath:
             raise ValueError("Unsupported field path version")
         if not self.segments:
             raise ValueError("Field path must contain at least one segment")
+        if len(self.segments) > MAX_FIELD_PATH_SEGMENTS:
+            raise ValueError("Field path contains too many segments")
         if not isinstance(self.segments[0], FieldSegment):
             raise ValueError("Field paths must begin with a field segment")
         for segment in self.segments:
-            if isinstance(segment, FieldSegment) and not segment.name:
-                raise ValueError("Field segment names must be non-empty")
+            if isinstance(segment, FieldSegment) and (
+                not segment.name
+                or len(segment.name) > MAX_FIELD_NAME_LENGTH
+                or any(ord(char) < 0x20 or ord(char) == 0x7F for char in segment.name)
+            ):
+                raise ValueError("Field segment names must be bounded printable text")
 
     def to_wire(self) -> dict[str, object]:
         """Returns the stable typed representation used by protocol payloads."""
