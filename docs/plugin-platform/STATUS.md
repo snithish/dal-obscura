@@ -339,6 +339,11 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Evidence: `DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:////private/tmp/dal-obscura-ui-dev-8821.db uv run dal-obscura-migrate upgrade`; live curl checks against `127.0.0.1:8821` and `127.0.0.1:5173`.
 - Remaining release gates: production OIDC/browser lifecycle, generated DTO/browser proof, real PostgreSQL race matrix, live catalog/consumer qualification, capacity/recovery, and independent security/UX review. Release remains HOLD.
 
+## Verification update — broad regression (2026-09-13)
+
+- `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane tests/interfaces/control_plane tests/plugin_platform tests/infrastructure/adapters -q` passed with all collected tests green after the persistent auth revision changes. The UI TypeScript/Vite build and changed-path Ruff checks also pass. No pickle serializer or task payload files were modified.
+- Release remains HOLD for the required PostgreSQL two-process barriers, live OIDC/browser lifecycle, generated DTO/browser proof, real catalog/consumer matrix, capacity/recovery, and independent security/UX acceptance.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
