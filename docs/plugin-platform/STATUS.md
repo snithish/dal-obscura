@@ -66,6 +66,14 @@ Post-fix full qualification (`/tmp/dal-obscura-final.xml`) collected 821 tests,
 passed 807, skipped the same 14 explicit opt-in nodes, and reported zero
 failures/errors in 125.394 seconds.
 
+## Implementation update — a0c0940 (2026-09-14)
+
+- Packet / status / candidate commit / owner: N02/F06 partial / VERIFY / `a0c0940` / governance UI.
+- Observable behavior delivered: new catalog connections created from the UI now persist the admitted plugin ID (`iceberg.sql` or an external ID) directly. The UI no longer emits the retired built-in Python class path for new records; legacy rows remain subject to the explicit offline binding migration and serving parser checks.
+- Changed paths: `apps/governance-ui/src/main.tsx` only; no pickle serializer, payload or persisted record was rewritten.
+- Evidence: governance UI TypeScript build, Vite production build (272.01 kB JS / 82.09 kB gzip) and 5 lifecycle tests — passed.
+- Remaining N02 work: remove remaining legacy module aliases from write/compile paths after the offline migration proves populated fixtures; retain strict unknown-record failure and the canonical SDK contract. Release remains HOLD.
+
 ## Implementation update — 96573bb (2026-09-14)
 
 - Packet / status / candidate commit / owner: N02/F13 partial / VERIFY / `96573bb` / control-plane API.
