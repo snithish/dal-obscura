@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `ed8aebf` (nested Iceberg Flight E2E qualification;
+Implementation follow-up through `51feac9` (typed nested Iceberg Flight E2E fixture;
+nested Iceberg Flight E2E qualification;
 IO boundary qualification tests;
 locked Python/UI dependency audit;
 Python/DuckDB consumer CI lane;
@@ -778,7 +779,7 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Remaining gaps: socket-enabled CI must execute the Python/DuckDB, Flight, and
   E2E consumer lanes.
 
-### X18 nested Iceberg Flight E2E qualification — `ed8aebf`
+### X18 nested Iceberg Flight E2E qualification — `ed8aebf`, `51feac9`
 
 - State: implemented-unverified.
 - Behavior: the end-to-end fixture now uses a local RSA JWKS endpoint, explicit
@@ -786,7 +787,7 @@ providers before Phase A's security/correctness prerequisites are accepted.
   parent and collection nodes). The data plane therefore starts through the same
   OIDC verification and schema-drift gates as production and serves the nested
   Arrow result over Flight.
-- Green evidence: elevated `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/test_e2e_smoke.py::test_e2e_flight_server_with_iceberg -q` (1 passed) and full `pytest -q` (all collected tests passed; external-service lanes skipped) with Ruff and `git diff --check`.
+- Green evidence: elevated `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/test_e2e_smoke.py::test_e2e_flight_server_with_iceberg -q` (1 passed) and full `pytest -q` (all collected tests passed; external-service lanes skipped) with Ruff, Ty, and `git diff --check`.
 - Remaining gaps: hosted TLS/OIDC, real provider, Spark/DuckDB consumer matrix,
   restart/revocation, and clean artifact evidence remain open.
 
