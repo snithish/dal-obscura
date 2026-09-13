@@ -5,9 +5,10 @@ import type { Asset, AssetGrant, AuditEvent, AuthProvider, Catalog, CatalogDiagn
 import { controlPlane } from "./api";
 import { demoAsset, demoRules } from "./fixtures";
 import { isCurrentEpoch } from "./lifecycle";
+import { pageFromHash, type UiPage } from "./navigation";
 import "./styles.css";
 
-type Page = "assets" | "changes" | "activity" | "connections" | "settings";
+type Page = UiPage;
 type SaveState = "saved" | "saving" | "unsaved" | "failed";
 type WorkspaceState = "loading" | "ready" | "demo" | "unavailable";
 type ManagementData = { history?: PolicyVersion[]; historyNextCursor?: string | null; events?: AuditEvent[]; catalogs?: Catalog[]; tables?: Array<Record<string, unknown>>; runtime?: RuntimeSettings | null; providers?: AuthProvider[]; publications?: WorkspacePublication[]; summary?: WorkspaceSummary; observations?: WorkspaceObservations; grants?: AssetGrant[]; plugins?: PluginDescriptor[]; pluginStates?: PluginState[]; pluginPairs?: PluginPair[] };
@@ -49,7 +50,7 @@ function configFieldLabel(name: string): string {
 const newRule = (field: string, ordinal: number): PolicyRule => ({ ordinal, effect: "allow", principals: [], columns: field ? [field] : [], masks: {}, row_filter: null });
 
 function App() {
-  const [page, setPage] = useState<Page>("assets");
+  const [page, setPage] = useState<Page>(() => pageFromHash(window.location.hash));
   const [workspace, setWorkspace] = useState<WorkspaceState>("loading");
   const [assets, setAssets] = useState<Asset[]>([]);
   const [asset, setAsset] = useState<Asset | null>(null);
@@ -98,6 +99,19 @@ function App() {
   useEffect(() => () => {
     if (searchTimer.current !== undefined) window.clearTimeout(searchTimer.current);
   }, []);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const next = pageFromHash(window.location.hash);
+      if (next !== page && !confirmDiscardUnsaved()) {
+        window.history.replaceState(null, "", `#${page}`);
+        return;
+      }
+      setPage(next);
+    };
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, [page, saveState]);
 
   useEffect(() => {
     const handleAuthExpired = () => {
@@ -178,11 +192,13 @@ function App() {
       setAssetHasMore(Boolean(loadedPage.next_cursor));
       if (!loaded.length) {
         setWorkspace("ready"); setNotice("No governed assets are available in this workspace.");
+        restorePostLoginHash();
         return;
       }
       await loadAsset(loaded[0].id, loaded, epoch);
       if (epoch !== loadEpoch.current) return;
       setWorkspace("ready");
+      restorePostLoginHash();
     } catch {
       if (epoch !== loadEpoch.current) return;
       setWorkspace("unavailable");
@@ -299,7 +315,20 @@ function App() {
 
   function navigateTo(next: Page) {
     if (!confirmDiscardUnsaved()) return;
-    setPage(next);
+    if (pageFromHash(window.location.hash) !== next) window.location.hash = next;
+    else setPage(next);
+  }
+
+  function restorePostLoginHash() {
+    try {
+      const pending = window.sessionStorage.getItem("dal_obscura_post_login_hash");
+      window.sessionStorage.removeItem("dal_obscura_post_login_hash");
+      if (pending && pageFromHash(pending) !== "assets") {
+        window.location.hash = pageFromHash(pending);
+      }
+    } catch {
+      // Storage access is optional; the authenticated workspace remains usable.
+    }
   }
 
   function confirmDiscardUnsaved() {

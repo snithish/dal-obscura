@@ -268,7 +268,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const controlPlane = {
-  startLogin: () => { window.location.assign("/auth/login"); },
+  startLogin: () => {
+    try {
+      window.sessionStorage.setItem("dal_obscura_post_login_hash", window.location.hash);
+    } catch {
+      // Private browsing policies may deny sessionStorage; login still works.
+    }
+    window.location.assign("/auth/login");
+  },
   getSession: () => request<Session>("/v1/session"),
   getUiAuthConfig: () => request<UiAuthConfig>("/v1/ui-auth-config"),
   getSessionOptions: () => request<SessionOptions>("/v1/session/options"),
