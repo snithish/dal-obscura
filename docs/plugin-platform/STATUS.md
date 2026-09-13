@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `a390084` (PostgreSQL grant CAS race probe;
+Implementation follow-up through `b6da896` (PostgreSQL binding CAS race probe;
+PostgreSQL grant CAS race probe;
 plugin lifecycle formatting and
 tests; plugin lifecycle architecture
 contract; PostgreSQL CI recovery probe;
@@ -216,7 +217,8 @@ production build, Ruff, and Ty with the public SDK source path configured.
   PostgreSQL barrier evidence, full transaction rollback/idempotency, and
   multi-process grant/binding evidence remain open. A barrier-controlled grant
   replacement regression now exercises the same asset revision CAS in the
-  PostgreSQL CI lane. Delegated grant mutations now
+  PostgreSQL CI lane. Asset binding replacement now has the same barrier
+  coverage. Delegated grant mutations now
   lock the asset before checking grant-manager authority, eliminating a stale
   authorization snapshot between revocation and replacement. Publication
   capability checks now also run after acquiring that asset lock, so revocations
