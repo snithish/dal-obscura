@@ -24,6 +24,7 @@ from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
 from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 from dal_obscura.data_plane.infrastructure.adapters.public_plugin_adapter import (
     PublicPluginCatalogAdapter,
+    PublicPluginPartition,
     PublicPluginTableFormat,
 )
 
@@ -81,7 +82,8 @@ def test_catalog_registry_routes_public_manifest_plugin_through_legacy_port(tmp_
     assert table_format.get_schema() == table.schema
     plan = table_format.plan(PlanRequest(target="default.users", columns=["*"]), max_tickets=4)
     assert len(plan.tasks) == 2
-    assert plan.tasks[0].partition.handle.catalog_revision == 17
+    partition = cast(PublicPluginPartition, plan.tasks[0].partition)
+    assert partition.handle.catalog_revision == 17
     serialized = pickle.dumps(plan.tasks[0])
     restored = pickle.loads(serialized)
     output_schema, batches = restored.table_format.execute(restored.partition)
