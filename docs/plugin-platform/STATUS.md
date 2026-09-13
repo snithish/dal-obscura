@@ -1,7 +1,9 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `cb4a8f1` (config-activation generation boundary;
+Implementation follow-up through `082783a` (independent plugin-pair conformance;
+schema-evolution admission guard;
+config-activation generation boundary;
 typed nested Iceberg Flight E2E fixture;
 nested Iceberg Flight E2E qualification;
 IO boundary qualification tests;
@@ -550,6 +552,9 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   consumer qualification remain open. Fetch-stream guard wrappers now close
   upstream scanner/transform iterators when a consumer cancels or stops early,
   including policy/expiry guard failures.
+  The independent pair owner suite now verifies the manifest catalog and Parquet
+  format descriptors share the required nested/splittable capabilities and that
+  the REST catalog retains its public SDK identity and version contract.
 - X18 consumer qualification: **implementing**; Python/DuckDB connector tests and
   the Java/Spark Maven reactor pass in the local lanes (the JVM lane required
   socket permission). Real TLS/OIDC Flight runs, exact nested goldens across both
@@ -803,6 +808,25 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Green evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane/test_config_activation.py -q` (1 passed), Ruff, and `git diff --check` passed.
 - Remaining gaps: PostgreSQL/multi-worker activation races, live data-plane restart,
   and production artifact evidence remain open.
+
+### X16/X17 independent plugin-pair conformance — `082783a`
+
+- State: implemented-unverified.
+- Behavior: the owner suite validates the independently packaged manifest catalog
+  and Parquet format pair, including shared nested/splittable capabilities, and
+  checks the REST catalog descriptor's public SDK identity/version contract.
+- Green evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/plugin_conformance/test_pairs.py -q` (2 passed), Ruff, Ty, and `git diff --check` passed.
+- Remaining gaps: clean wheel installation, real provider endpoints, consumer
+  matrices, and artifact provenance remain open.
+
+### X06 schema-evolution admission owner — `c5031e9`
+
+- State: implemented-unverified.
+- Behavior: the schema admission boundary accepts the reviewed nested identities
+  and rejects field renames or type changes before a published read can proceed.
+- Green evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane/test_schema_evolution.py -q` (2 passed), Ruff, and `git diff --check` passed.
+- Remaining gaps: live stale-ticket behavior, provider evolution matrices, and
+  PostgreSQL/multi-worker publication evidence remain open.
 
 ### X03 PostgreSQL draft CAS race gate — `ee6b405`
 
