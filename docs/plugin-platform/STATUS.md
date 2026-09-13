@@ -229,6 +229,14 @@ uv run --no-sync pytest tests/control_plane tests/interfaces/control_plane -q`
 passed; changed test paths pass Ruff. Socket-backed Flight and benchmark lanes
 remain environment-blocked in this sandbox and are still VERIFY.
 
+The clean wheel gate for N02 also passed on 2026-09-13: the server and SDK
+wheels were installed into `/tmp/dal-obscura-wheel-smoke`, with the process
+started from `/tmp` and no checkout path, and imports resolved from that target
+for both `dal_obscura` and `dal_obscura_plugin_api`. The SDK wheel was built
+from `packages/plugin-api`; the server wheel metadata declares the SDK
+dependency. This is artifact evidence only; live plugin admission and
+maintenance-mode conversion remain open.
+
 ## Implementation update — 2e23b25 (2026-09-13)
 
 - Packet / status / candidate commit / owner: N02/N05 UI authentication cleanup / VERIFY / `2e23b25` / governance UI.
