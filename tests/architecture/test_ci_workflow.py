@@ -32,6 +32,17 @@ def test_ci_python_jobs_have_single_clear_responsibilities() -> None:
     assert "name: Build, scan, and publish image" in workflow
 
 
+def test_ci_requires_locked_dependency_audit_before_image_promotion() -> None:
+    workflow = Path(".github/workflows/ci.yml").read_text()
+
+    assert "name: Dependency vulnerability audit" in workflow
+    assert "uv export --frozen --no-dev --extra server --extra postgres" in workflow
+    assert "uvx --from pip-audit pip-audit" in workflow
+    assert "pnpm --dir apps/governance-ui audit --prod --audit-level high" in workflow
+    container_block = workflow.split("  container:\n", 1)[1]
+    assert "      - dependency-audit" in container_block
+
+
 def test_ci_governance_ui_runs_lifecycle_tests_before_build() -> None:
     workflow = Path(".github/workflows/ci.yml").read_text()
 

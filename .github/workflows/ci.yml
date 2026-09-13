@@ -338,6 +338,53 @@ jobs:
       - name: Run pinned-snapshot and schema conformance tests
         run: uv run pytest tests/infrastructure/adapters/test_iceberg_phase0_regressions.py -q
 
+  dependency-audit:
+    name: Dependency vulnerability audit
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: apps/governance-ui/pnpm-lock.yaml
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Export locked production Python requirements
+        run: >-
+          uv export --frozen --no-dev --extra server --extra postgres
+          --format requirements.txt
+          --output-file "$RUNNER_TEMP/requirements.txt"
+
+      - name: Audit locked Python dependencies
+        run: >-
+          uvx --from pip-audit pip-audit
+          --strict
+          --requirement "$RUNNER_TEMP/requirements.txt"
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Audit locked UI dependencies
+        run: pnpm --dir apps/governance-ui audit --prod --audit-level high
+
   jvm:
     name: JVM connector tests
     runs-on: ubuntu-24.04
@@ -406,6 +453,7 @@ jobs:
       - python-plugin-contract
       - python-plugin-integration
       - python-native-iceberg
+      - dependency-audit
       - jvm
       - governance-ui
     permissions:
