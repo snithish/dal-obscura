@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `3bd526c` (workspace generation lock ordering;
+Implementation follow-up through `36633af` (catalog mutation lock ordering;
+workspace generation lock ordering;
 direct policy mutation locking;
 bounded discovery page typing;
 table-handle identity binding;
@@ -580,6 +581,17 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Remaining gaps: clean wheel provenance, duplicate installed distributions,
   external package admission, and production artifact evidence remain open.
   Pickle compatibility is unchanged.
+
+### X03 catalog mutation lock ordering — `36633af`
+
+- State: implementing.
+- Behavior: catalog upserts now acquire the workspace cell lock before reading
+  or advancing catalog configuration revisions, joining asset publication,
+  runtime, and identity mutations under one deterministic generation boundary.
+- Green evidence: publication-store, catalog-option, catalog API, and publish
+  flow suites (21 passed), Ruff, and `git diff --check`.
+- Remaining gaps: PostgreSQL barrier/process evidence and complete rollback
+  injection matrix remain open. Pickle compatibility is unchanged.
 
 ### X08 public discovery concurrency bound — `b5dd0d4`
 
