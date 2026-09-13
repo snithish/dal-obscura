@@ -104,6 +104,10 @@ out users and non-admin actors see management destinations disabled with an
 explicit browser tooltip, while scoped asset/history/activity navigation stays
 available. Server authorization remains authoritative for direct callers.
 
+Follow-up `pending` clears read-only draft-handoff mode when the user selects a
+different asset, preventing an author’s review state from leaking into another
+asset’s editor. The existing load and edit epochs continue to fence the switch.
+
 ## Implementation update — identity migration (working slice, 2026-09-13)
 
 - Packet / status / candidate commit / owner: N05/F01 partial / VERIFY / pending atomic commit / control-plane.
