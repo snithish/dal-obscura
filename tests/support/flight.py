@@ -310,7 +310,7 @@ def build_flight_service(
         ticket_store=ticket_store,
     )
     return DataAccessFlightService(
-        location="grpc+tcp://0.0.0.0:0",
+        location="grpc+tcp://127.0.0.1:0",
         get_schema_use_case=get_schema,
         plan_access_use_case=plan_access,
         fetch_stream_use_case=fetch_stream,

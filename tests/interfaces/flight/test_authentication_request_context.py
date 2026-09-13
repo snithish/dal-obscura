@@ -85,7 +85,7 @@ def test_authentication_request_rejects_duplicate_auth_headers():
 def test_flight_service_passes_authentication_request_to_use_case():
     get_schema = RecordingGetSchemaUseCase()
     service = DataAccessFlightService(
-        location="grpc+tcp://0.0.0.0:0",
+        location="grpc+tcp://127.0.0.1:0",
         get_schema_use_case=cast(Any, get_schema),
         plan_access_use_case=cast(Any, object()),
         fetch_stream_use_case=cast(Any, object()),
