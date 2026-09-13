@@ -233,6 +233,14 @@ is recorded explicitly; it is never PASS or a waived skip.
 - Evidence: direct UI TypeScript build, Vite production build (276.45 kB JavaScript / 83.43 kB gzip), all 6 UI lifecycle/schema tests, and `git diff --check` passed.
 - Remaining N06/N09 work: live browser back/refresh evidence, accessible primitive/icon system, responsive visual review, CSP/axe and keyboard/screen-reader evidence, and live review/publication gates. Release remains HOLD.
 
+## Implementation update — 610c597 (2026-09-14)
+
+- Packet / status / candidate commit / owner: N07/B10 recovery partial / VERIFY / `610c597` / governance UI.
+- Observable behavior delivered: a shared recovery mapper now preserves distinct operator guidance for 403, 404, 409, 422, 429, and 503 responses, including request IDs. Management loads, paginated history/activity, inventory, asset loading, draft save, policy test, review, publish reconciliation, and history restore all use the mapper while retaining private state on recoverable failures.
+- Changed paths: `apps/governance-ui/src/recovery.ts`, `apps/governance-ui/src/main.tsx`, and `apps/governance-ui/tests/lifecycle.test.mjs`. No backend, session, pickle serializer, serialized class, payload, or import path changed.
+- Evidence: direct UI TypeScript build, Vite production build (276.99 kB JavaScript / 83.64 kB gzip), all 7 UI lifecycle/schema/recovery tests, and `git diff --check` passed.
+- Remaining N07 work: session-scoped query/mutation cache, rendered deferred-response race coverage for every workflow, and live recovery qualification for all listed statuses. Release remains HOLD.
+
 ## Evidence inherited, with limits
 
 The historical ledger reports Python/socket-enabled suite and PostgreSQL checks
