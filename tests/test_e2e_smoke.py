@@ -4,9 +4,11 @@ import socket
 import subprocess
 import sys
 import time
+from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
+from typing import Any
 from uuid import UUID
 
 import jwt
@@ -15,6 +17,7 @@ import pyarrow.flight as flight
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
+from jwt.algorithms import RSAAlgorithm
 from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
 from pyiceberg.types import (
@@ -160,9 +163,9 @@ def iceberg_setup(tmp_path: Path) -> tuple[str, Path]:
 
 
 @pytest.fixture
-def oidc_jwks_server() -> dict[str, str]:
+def oidc_jwks_server() -> Iterator[dict[str, str]]:
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    public_jwk = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(private_key.public_key()))
+    public_jwk = json.loads(RSAAlgorithm.to_jwk(private_key.public_key()))
     public_jwk["alg"] = "RS256"
     public_jwk["use"] = "sig"
     public_jwk["kid"] = "e2e"
@@ -185,7 +188,7 @@ def oidc_jwks_server() -> dict[str, str]:
             self.end_headers()
             self.wfile.write(payload)
 
-        def log_message(self, _format: str, *_args: object) -> None:
+        def log_message(self, format: str, *args: Any) -> None:
             return
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
