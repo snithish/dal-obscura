@@ -151,6 +151,11 @@ evaluation revisions return 409, missing selected drafts remain concealed as
 404, and the cross-identity regression proves an editor change invalidates a
 publisher's expected revision.
 
+Follow-up `65adae6` returns and renders separate draft-author and reviewer
+identities in completed review evidence, closing the authorship distinction in
+the handoff response. Full before/after diff rendering and independent browser
+acceptance remain VERIFY.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
