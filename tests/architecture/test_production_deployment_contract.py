@@ -64,3 +64,16 @@ def test_production_reference_contains_immutable_and_private_topology() -> None:
     assert "Routine restart" in readme
     assert "does not seed" in readme
     assert "republish" in readme
+
+
+def test_recovery_scripts_require_encryption_and_isolated_restore_confirmation() -> None:
+    backup = Path("scripts/backup_postgres.sh").read_text()
+    restore = Path("scripts/restore_postgres.sh").read_text()
+
+    assert "pg_dump --format=custom" in backup
+    assert "age --encrypt" in backup
+    assert "refusing to overwrite existing backup" in backup
+    assert "age --decrypt" in restore
+    assert "pg_restore --single-transaction" in restore
+    assert "I_UNDERSTAND_ISOLATED_RESTORE" in restore
+    assert "dal-obscura-maintenance invalidate-access" in restore
