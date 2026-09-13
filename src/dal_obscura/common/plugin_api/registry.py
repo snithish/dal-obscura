@@ -19,6 +19,8 @@ ENTRY_POINT_GROUPS: dict[PluginKind, str] = {
 }
 STATIC_DESCRIPTOR_FILENAME = "dal_obscura-plugin.json"
 MAX_STATIC_DESCRIPTOR_BYTES = 65_536
+SUPPORTED_PLUGIN_API_VERSIONS = frozenset({"1"})
+SUPPORTED_PLUGIN_CONFIG_VERSIONS = frozenset({1})
 _PLUGIN_ID = re.compile(r"[a-z][a-z0-9_.-]{0,63}\Z")
 _MODULE_PATH = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*\Z")
 
@@ -217,6 +219,14 @@ class PluginRegistry:
                     or descriptor.version != version
                 ):
                     raise PluginAdmissionError(f"Plugin descriptor mismatch for {kind}:{plugin_id}")
+                if descriptor.api_version not in SUPPORTED_PLUGIN_API_VERSIONS:
+                    raise PluginAdmissionError(
+                        f"Plugin descriptor uses unsupported API version for {kind}:{plugin_id}"
+                    )
+                if descriptor.config_version not in SUPPORTED_PLUGIN_CONFIG_VERSIONS:
+                    raise PluginAdmissionError(
+                        f"Plugin descriptor uses unsupported config version for {kind}:{plugin_id}"
+                    )
                 if digests:
                     descriptor_digest, artifact_digest = digests
                     if _descriptor_digest(descriptor) != descriptor_digest:
@@ -356,6 +366,8 @@ def _status_incompatibility(
     distribution, version, _api_version, *_digests = lock
     if (entry.dist.name, entry.dist.version) != (distribution, version):
         return "installed distribution does not match the plugin lock"
+    if _api_version not in SUPPORTED_PLUGIN_API_VERSIONS:
+        return "plugin API version is unsupported"
     return "plugin admission metadata is incompatible"
 
 

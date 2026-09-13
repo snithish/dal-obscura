@@ -236,6 +236,46 @@ def test_descriptor_loader_mismatch_fails_before_factory_import() -> None:
         registry.reload()
 
 
+def test_registry_rejects_self_consistent_unsupported_api_version() -> None:
+    entry = _entry("iceberg.sql", "dal_obscura.catalogs.v1")
+    registry = PluginRegistry(
+        allowlist={("catalog", "iceberg.sql"): ("plugin-wheel", "1.2.3", "2")},
+        entry_points_fn=lambda: _EntryPoints([entry]),
+        descriptor_loader=lambda _: PluginDescriptor(
+            kind="catalog",
+            plugin_id="iceberg.sql",
+            api_version="2",
+            config_version=1,
+            distribution="plugin-wheel",
+            version="1.2.3",
+        ),
+        factory_loader=lambda _: pytest.fail("unsupported API must not import"),
+    )
+
+    with pytest.raises(PluginAdmissionError, match="unsupported API version"):
+        registry.reload()
+
+
+def test_registry_rejects_self_consistent_unsupported_config_version() -> None:
+    entry = _entry("iceberg.sql", "dal_obscura.catalogs.v1")
+    registry = PluginRegistry(
+        allowlist={("catalog", "iceberg.sql"): ("plugin-wheel", "1.2.3", "1")},
+        entry_points_fn=lambda: _EntryPoints([entry]),
+        descriptor_loader=lambda _: PluginDescriptor(
+            kind="catalog",
+            plugin_id="iceberg.sql",
+            api_version="1",
+            config_version=2,
+            distribution="plugin-wheel",
+            version="1.2.3",
+        ),
+        factory_loader=lambda _: pytest.fail("unsupported config must not import"),
+    )
+
+    with pytest.raises(PluginAdmissionError, match="unsupported config version"):
+        registry.reload()
+
+
 def test_malformed_plugin_lock_is_rejected() -> None:
     entry = _entry("iceberg.sql", "dal_obscura.catalogs.v1")
     registry = PluginRegistry(
