@@ -72,16 +72,20 @@ class PublicPluginTableFormat(TableFormat):
     format: str
 
     def get_schema(self) -> pa.Schema:
-        plugin = self._open()
-        descriptor = plugin.schema(self.handle, _context())
+        context = _context()
+        plugin = self._open(context)
+        descriptor = plugin.schema(self.handle, context)
+        _ensure_context_active(context)
         _validate_schema_descriptor(descriptor)
         return descriptor.arrow_schema
 
     def plan(self, request: PlanRequest, max_tickets: int) -> Plan:
         if max_tickets <= 0:
             raise ValueError("max_tickets must be positive")
-        plugin = self._open()
-        descriptor = plugin.schema(self.handle, _context())
+        context = _context()
+        plugin = self._open(context)
+        descriptor = plugin.schema(self.handle, context)
+        _ensure_context_active(context)
         _validate_schema_descriptor(descriptor)
         row_filter = None
         if request.row_filter is not None:
@@ -89,11 +93,12 @@ class PublicPluginTableFormat(TableFormat):
         planned = plugin.plan(
             self.handle,
             descriptor,
-            _context(),
+            context,
             projection=request.columns,
             row_filter=row_filter,
             max_tasks=max_tickets,
         )
+        _ensure_context_active(context)
         output_schema = _projected_schema(descriptor.arrow_schema, request.columns)
         tasks: list[object] = []
         for task in planned:
@@ -130,14 +135,19 @@ class PublicPluginTableFormat(TableFormat):
             raise TypeError("Public plugin format requires a PublicPluginPartition")
         if partition.handle != self.handle or partition.format_factory != self.format_factory:
             raise ValueError("Public plugin partition does not match its format")
-        plugin = self._open()
-        output_schema, batches = plugin.execute(partition.task, _context())
+        context = _context()
+        plugin = self._open(context)
+        output_schema, batches = plugin.execute(partition.task, context)
+        _ensure_context_active(context)
         if output_schema != partition.schema:
             raise ValueError("Public plugin changed the declared output schema")
-        return output_schema, _checked_plugin_batches(batches, output_schema)
+        return output_schema, _checked_plugin_batches(batches, output_schema, context)
 
-    def _open(self) -> TableFormatPlugin:
-        plugin = self.format_factory(self.handle, _context())
+    def _open(self, context: ExecutionContext | None = None) -> TableFormatPlugin:
+        context = context or _context()
+        _ensure_context_active(context)
+        plugin = self.format_factory(self.handle, context)
+        _ensure_context_active(context)
         if not all(callable(getattr(plugin, name, None)) for name in ("schema", "plan", "execute")):
             raise ValueError("Public format factory returned an invalid plugin")
         descriptor = getattr(plugin, "descriptor", None)
@@ -191,7 +201,9 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
 
     def resolve_table(self, target: str) -> TableFormat:
         identifier = _legacy_identifier(target)
-        handle = self._catalog.resolve_table(identifier, _context())
+        context = _context()
+        handle = self._catalog.resolve_table(identifier, context)
+        _ensure_context_active(context)
         if not isinstance(handle, TableHandle):
             raise ValueError("Public catalog returned an invalid table handle")
         if handle.format_plugin_id == "iceberg":
@@ -231,7 +243,9 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
         seen_tokens: set[str] = set()
         listings: list[CatalogTableListing] = []
         for _ in range(MAX_PLUGIN_DISCOVERY_PAGES):
-            page = self._catalog.list_tables(_context(), continuation=continuation, limit=500)
+            context = _context()
+            page = self._catalog.list_tables(context, continuation=continuation, limit=500)
+            _ensure_context_active(context)
             if not hasattr(page, "entries") or not hasattr(page, "continuation"):
                 raise ValueError("Public catalog returned an invalid discovery page")
             for identifier in page.entries:
@@ -276,6 +290,13 @@ def _legacy_identifier(target: str) -> TableIdentifier:
 
 def _identifier_name(identifier: TableIdentifier) -> str:
     return ".".join((*identifier.namespace, identifier.name))
+
+
+def _ensure_context_active(context: ExecutionContext) -> None:
+    if context.deadline <= datetime.now(timezone.utc):
+        raise ValueError("Public plugin operation deadline expired")
+    if context.cancel_check is not None and context.cancel_check():
+        raise ValueError("Public plugin operation was cancelled")
 
 
 def _validate_schema_descriptor(descriptor: SchemaDescriptor) -> None:
@@ -360,12 +381,13 @@ def _validate_task_payload(value: object) -> None:  # noqa: C901
 
 
 def _checked_plugin_batches(
-    batches: Iterable[pa.RecordBatch], schema: pa.Schema
+    batches: Iterable[pa.RecordBatch], schema: pa.Schema, context: ExecutionContext
 ) -> Iterable[pa.RecordBatch]:
     """Validate each lazy batch before it reaches DuckDB or Flight output."""
 
     def checked() -> Iterable[pa.RecordBatch]:
         for batch in batches:
+            _ensure_context_active(context)
             if not isinstance(batch, pa.RecordBatch):
                 raise ValueError("Public plugin returned a non-Arrow batch")
             if batch.schema != schema:

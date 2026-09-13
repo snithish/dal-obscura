@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import pickle
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, cast
 
@@ -203,6 +204,62 @@ def test_public_format_validates_lazy_batch_schema_before_streaming() -> None:
     plan = table_format.plan(PlanRequest(target="default.users", columns=["*"]), max_tickets=2)
     _schema, batches = plan.tasks[0].table_format.execute(plan.tasks[0].partition)
     with pytest.raises(ValueError, match="batch schema"):
+        list(batches)
+
+
+def test_public_format_stops_lazy_batches_when_context_is_cancelled(monkeypatch) -> None:
+    identifier = TableIdentifier(namespace=("default",), name="users")
+    handle = TableHandle(
+        catalog_plugin_id="manifest",
+        catalog_instance_id="fixture",
+        catalog_revision=1,
+        identifier=identifier,
+        format_plugin_id="parquet.dataset",
+        handle_version=1,
+    )
+    schema = pa.schema([pa.field("id", pa.int64())])
+    cancelled = [False]
+
+    class SlowFormat:
+        def schema(self, value, context):
+            del value, context
+            from dal_obscura_plugin_api import SchemaDescriptor
+
+            return SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=schema)
+
+        def plan(self, value, descriptor, context, *, projection, row_filter, max_tasks):
+            del value, descriptor, context, projection, row_filter, max_tasks
+            return ["task"]
+
+        def execute(self, task, context):
+            del task, context
+            def batches():
+                cancelled[0] = True
+                yield pa.RecordBatch.from_pylist([{"id": 1}], schema=schema)
+
+            return schema, batches()
+
+    from dal_obscura.data_plane.infrastructure.adapters import public_plugin_adapter
+
+    monkeypatch.setattr(
+        public_plugin_adapter,
+        "_context",
+        lambda: ExecutionContext(
+            deadline=datetime.now(timezone.utc) + timedelta(minutes=1),
+            correlation_id="cancelled-plugin",
+            cancel_check=lambda: cancelled[0],
+        ),
+    )
+    table_format = PublicPluginTableFormat(
+        catalog_name="fixture",
+        table_name="default.users",
+        format="parquet.dataset",
+        format_factory=lambda value, context: SlowFormat(),
+        handle=handle,
+    )
+    plan = table_format.plan(PlanRequest(target="default.users", columns=["*"]), max_tickets=2)
+    _schema, batches = plan.tasks[0].table_format.execute(plan.tasks[0].partition)
+    with pytest.raises(ValueError, match="cancelled"):
         list(batches)
 
 
