@@ -149,6 +149,7 @@ def test_catalog_updates_advance_a_revision_only_when_configuration_changes(db_s
         name="analytics",
         module="iceberg.sql",
         options={"uri": "sqlite:///catalog.db"},
+        expected_revision=0,
     )
     assert store.list_catalogs(cell_id)[0]["revision"] == 0
 
@@ -158,6 +159,7 @@ def test_catalog_updates_advance_a_revision_only_when_configuration_changes(db_s
         name="analytics",
         module="iceberg.sql",
         options={"uri": "sqlite:///catalog.db"},
+        expected_revision=0,
     )
     assert store.list_catalogs(cell_id)[0]["revision"] == 0
 
@@ -167,6 +169,7 @@ def test_catalog_updates_advance_a_revision_only_when_configuration_changes(db_s
         name="analytics",
         module="iceberg.sql",
         options={"uri": "sqlite:///catalog-revised.db"},
+        expected_revision=0,
     ) == catalog_id
     assert store.list_catalogs(cell_id)[0]["revision"] == 1
 
@@ -209,16 +212,19 @@ def test_schema_identity_rejects_non_text_and_control_values(db_session, monkeyp
         store.replace_asset_schema_fields(
             asset_id=asset_id,
             fields=[{"name": "id", "field_id": 1}],
+            expected_revision=0,
         )
     with pytest.raises(ValueError, match="printable"):
         store.replace_asset_schema_fields(
             asset_id=asset_id,
             fields=[{"name": "id", "field_id": "safe\nvalue"}],
+            expected_revision=0,
         )
     with pytest.raises(ValueError, match="bounded printable"):
         store.replace_asset_schema_fields(
             asset_id=asset_id,
             fields=[{"name": "id", "path": ["id", "x" * 257]}],
+            expected_revision=0,
         )
 
     locked: list[object] = []

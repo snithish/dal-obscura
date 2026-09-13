@@ -28,6 +28,7 @@ from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.errors import (
     AuthorizationFailure,
     PublicationConflictError,
+    RevisionPreconditionRequired,
     ValidationFailure,
 )
 from dal_obscura.control_plane.application.provisioning import ProvisioningService
@@ -334,7 +335,10 @@ class ControlPlaneDeps:
                 raise HTTPException(status_code=403, detail=str(exc)) from exc
             except PublicationConflictError as exc:
                 session.rollback()
-                raise HTTPException(status_code=409, detail=str(exc)) from exc
+                raise HTTPException(
+                    status_code=428 if isinstance(exc, RevisionPreconditionRequired) else 409,
+                    detail=str(exc),
+                ) from exc
             except LookupError as exc:
                 session.rollback()
                 raise HTTPException(status_code=404, detail=str(exc)) from exc

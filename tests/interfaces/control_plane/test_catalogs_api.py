@@ -92,6 +92,31 @@ def test_workspace_catalog_upsert_rejects_a_stale_revision():
     assert "Catalog revision changed" in stale.json()["detail"]
 
 
+def test_workspace_catalog_update_requires_revision_precondition():
+    client = _client()
+    created = client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+    assert created.status_code == 200
+
+    missing = client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog-new.db"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+
+    assert missing.status_code == 428
+    assert client.get("/v1/catalogs", headers=ADMIN_HEADERS).json()[0]["revision"] == 0
+
+
 def test_workspace_catalog_rejects_non_iceberg_module():
     client = _client()
 

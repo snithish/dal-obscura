@@ -74,13 +74,13 @@ def test_asset_cannot_remove_its_last_owner_without_reassignment():
     asset = _provision_draft(client)
     assigned = client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["user:owner@example.com"]},
+        json={"owners": ["user:owner@example.com"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
 
     removed = client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": []},
+        json={"owners": [], "expected_revision": 1},
         headers=ADMIN_HEADERS,
     )
 
@@ -111,7 +111,8 @@ def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail():
             "fields": [
                 {"name": "id", "type": "long", "nullable": False},
                 {"name": "email", "type": "string", "nullable": True},
-            ]
+            ],
+            "expected_revision": 0,
         },
         headers=ADMIN_HEADERS,
     )
@@ -121,7 +122,8 @@ def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail():
             "fields": [
                 {"name": "id", "type": "long", "nullable": False},
                 {"name": "email", "type": "string", "nullable": False},
-            ]
+            ],
+            "expected_revision": 1,
         },
         headers=ADMIN_HEADERS,
     )
@@ -188,7 +190,8 @@ def test_schema_fields_preserve_literal_dotted_and_nested_paths():
             "fields": [
                 {"name": "a.b", "path": ["a.b"], "field_id": "literal-1"},
                 {"name": "b", "path": ["a", "b"], "field_id": "nested-2"},
-            ]
+            ],
+            "expected_revision": 0,
         },
         headers=ADMIN_HEADERS,
     )
@@ -307,12 +310,15 @@ def test_workspace_asset_owners_can_be_replaced_from_asset_detail():
 
     response = client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["user:alice@example.com", "group:data-owners"]},
+        json={
+            "owners": ["user:alice@example.com", "group:data-owners"],
+            "expected_revision": 0,
+        },
         headers=ADMIN_HEADERS,
     )
     second_response = client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["user:alice@example.com"]},
+        json={"owners": ["user:alice@example.com"], "expected_revision": 1},
         headers=ADMIN_HEADERS,
     )
     assets = client.get("/v1/assets", headers=ADMIN_HEADERS).json()
@@ -332,6 +338,32 @@ def test_workspace_asset_owners_can_be_replaced_from_asset_detail():
     assert summary["unowned_asset_count"] == 0
     assert summary["runtime_configured"] is False
     assert summary["enabled_auth_provider_count"] == 0
+
+
+def test_existing_asset_metadata_update_requires_revision_precondition():
+    client = _client()
+    client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+    asset = client.put(
+        "/v1/assets/analytics/default.users",
+        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
+        headers=ADMIN_HEADERS,
+    ).json()
+
+    missing = client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["user:alice@example.com"]},
+        headers=ADMIN_HEADERS,
+    )
+
+    assert missing.status_code == 428
+    assert client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()["revision"] == 0
 
 
 def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():

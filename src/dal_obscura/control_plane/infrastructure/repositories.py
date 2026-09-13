@@ -37,7 +37,10 @@ from dal_obscura.common.config_store.orm import (
     utcnow,
 )
 from dal_obscura.common.schema_identity import canonical_provider_field_id
-from dal_obscura.control_plane.application.errors import PublicationConflictError
+from dal_obscura.control_plane.application.errors import (
+    PublicationConflictError,
+    RevisionPreconditionRequired,
+)
 from dal_obscura.control_plane.domain.models import (
     AssetDraft,
     AuthProviderDraft,
@@ -354,7 +357,12 @@ class PublicationStore:
                 )
             )
         else:
-            if expected_revision is not None and existing.revision != expected_revision:
+            if expected_revision is None:
+                raise RevisionPreconditionRequired(
+                    "Catalog revision is required for updates "
+                    f"(current {existing.revision}); reread before writing."
+                )
+            if existing.revision != expected_revision:
                 raise PublicationConflictError(
                     "Catalog revision changed (expected "
                     f"{expected_revision}, current {existing.revision}); reread before writing."
@@ -2168,7 +2176,12 @@ class PublicationStore:
 def _assert_asset_revision(asset: AssetRecord, expected_revision: int | None) -> None:
     """Rejects stale metadata/binding writes after the asset row is locked."""
 
-    if expected_revision is not None and asset.revision != expected_revision:
+    if expected_revision is None:
+        raise RevisionPreconditionRequired(
+            "Asset revision is required for updates "
+            f"(current {asset.revision}); reread before writing."
+        )
+    if asset.revision != expected_revision:
         raise PublicationConflictError(
             "Asset revision changed "
             f"(expected {expected_revision}, current {asset.revision}); reread before writing."

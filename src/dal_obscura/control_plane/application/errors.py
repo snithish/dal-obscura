@@ -11,3 +11,7 @@ class AuthorizationFailure(PermissionError):
 
 class PublicationConflictError(RuntimeError):
     """Raised when a publication activation loses its generation compare-and-swap."""
+
+
+class RevisionPreconditionRequired(PublicationConflictError):
+    """Raised when an existing mutable resource is written without its revision."""
