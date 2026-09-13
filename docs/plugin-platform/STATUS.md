@@ -237,6 +237,14 @@ from `packages/plugin-api`; the server wheel metadata declares the SDK
 dependency. This is artifact evidence only; live plugin admission and
 maintenance-mode conversion remain open.
 
+Follow-ups `d9ddea4` and `051bfe0` complete the existing owner/grant/schema
+fixture migration for the CAS contract, including multi-step schema drift and
+cross-identity draft handoff cases. The combined regression lane
+`UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest
+tests/plugin_platform tests/control_plane tests/interfaces/control_plane
+tests/infrastructure/adapters -q` passed with no failures. Socket-bound Flight,
+benchmark, and live process-boundary lanes remain VERIFY in this environment.
+
 ## Implementation update — 14edd5b (2026-09-13)
 
 - Packet / status / candidate commit / owner: N02/B03 partial / VERIFY / `14edd5b` / compiler + data-plane manifest reader + offline migration.
