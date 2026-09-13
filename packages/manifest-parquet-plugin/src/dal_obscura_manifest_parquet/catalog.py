@@ -26,6 +26,7 @@ _MAX_TABLES = 10_000
 _MAX_FILES_PER_TABLE = 100_000
 _MAX_PATH_LENGTH = 1_024
 _MAX_PROVIDER_FIELD_ID_LENGTH = 128
+_FIELD_ID_KEYS = (b"PARQUET:field_id", b"iceberg.field.id")
 
 CATALOG_DESCRIPTOR = PluginDescriptor(
     kind="catalog",
@@ -262,15 +263,21 @@ def _schema_identities(
     if len(field_ids) != len(schema):
         raise ValueError("manifest field IDs must cover every top-level field")
     identities: list[tuple[str, str]] = []
+    seen_ids: set[str] = set()
 
     def visit(field: pa.Field, path: tuple[str, ...], anchor: str) -> None:
         path_text = ".".join(path)
         if len(path) == 1:
             field_id = _canonical_provider_field_id(anchor)
         else:
-            field_id = "synthetic:" + hashlib.sha256(
-                f"{anchor}:{path_text}".encode()
-            ).hexdigest()[:32]
+            field_id = _provider_field_id(field)
+            if field_id is None:
+                field_id = "synthetic:" + hashlib.sha256(
+                    f"{anchor}:{path_text}".encode()
+                ).hexdigest()[:32]
+        if field_id in seen_ids:
+            raise ValueError("manifest schema contains duplicate field identities")
+        seen_ids.add(field_id)
         identities.append((path_text, field_id))
         type_ = field.type
         if pa.types.is_struct(type_):
@@ -298,6 +305,28 @@ def _canonical_provider_field_id(value: str) -> str:
     """Normalize manifest IDs without importing core service modules."""
 
     return value if ":" in value else f"iceberg:{value}"
+
+
+def _provider_field_id(field: pa.Field) -> str | None:
+    """Read a bounded provider ID without importing core service modules."""
+
+    metadata = field.metadata or {}
+    for key in _FIELD_ID_KEYS:
+        raw_id = metadata.get(key)
+        if raw_id is None:
+            continue
+        try:
+            value = raw_id.decode("utf-8").strip()
+        except UnicodeDecodeError:
+            continue
+        if (
+            value
+            and len(value) <= _MAX_PROVIDER_FIELD_ID_LENGTH
+            and not any(ord(char) < 0x20 or ord(char) == 0x7F for char in value)
+            and not value.startswith(("synthetic:", "legacy:"))
+        ):
+            return _canonical_provider_field_id(value)
+    return None
 
 
 def _required_root(value: object) -> Path:

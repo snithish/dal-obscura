@@ -94,6 +94,24 @@ def test_manifest_catalog_and_parquet_format_split_nested_rows(tmp_path):
     assert identities["profile.email"].startswith("synthetic:")
 
 
+def test_manifest_schema_identities_preserve_nested_provider_ids() -> None:
+    schema = pa.schema(
+        [
+            pa.field(
+                "profile",
+                pa.struct(
+                    [pa.field("email", pa.string(), metadata={b"PARQUET:field_id": b"17"})]
+                ),
+            )
+        ]
+    )
+
+    identities = dict(_schema_identities(schema, ("profile",)))
+
+    assert identities["profile"] == "iceberg:profile"
+    assert identities["profile.email"] == "iceberg:17"
+
+
 def test_manifest_catalog_exposes_namespace_and_config_lifecycle(tmp_path):
     root, manifest, _table = _write_fixture(tmp_path)
     catalog = ManifestCatalog(
