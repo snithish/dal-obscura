@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `5b34f9b` (publication rollback coverage;
+Implementation follow-up through `ca88316` (plugin lock identity validation;
+publication rollback coverage;
 idempotency-key validation;
 publication idempotency coverage;
 unsafe schema-identity rejection;
@@ -535,6 +536,17 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Remaining gaps: PostgreSQL barrier interleavings, independent-process races,
   failure injection at every transaction boundary, and production recovery
   evidence remain open. Pickle compatibility is unchanged.
+
+### X12 plugin lock identity validation — `ca88316`
+
+- State: implementing.
+- Behavior: operator-mounted five-part plugin locks now reject malformed plugin
+  IDs, control-character or oversized identity values, and non-canonical
+  descriptor/artifact digests before registry admission or factory import.
+- Green evidence: plugin lock suite (8 passed), Ruff, and `git diff --check`.
+- Remaining gaps: clean wheel provenance, duplicate installed distributions,
+  external package admission, and production artifact evidence remain open.
+  Pickle compatibility is unchanged.
 
 ### X07/X14 asset binding validation — `3c3709b`
 
