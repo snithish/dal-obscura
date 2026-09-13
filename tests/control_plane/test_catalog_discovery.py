@@ -38,6 +38,43 @@ def test_iceberg_discovery_lists_tables_across_namespaces():
     ]
 
 
+def test_iceberg_discovery_closes_provider_after_success() -> None:
+    closed: list[bool] = []
+
+    class ClosableCatalog(FakeIcebergCatalog):
+        def close(self) -> None:
+            closed.append(True)
+
+    discover_iceberg_tables(
+        "analytics",
+        {},
+        load_catalog_fn=lambda name, **options: ClosableCatalog(),
+    )
+
+    assert closed == [True]
+
+
+def test_iceberg_discovery_closes_provider_after_failure() -> None:
+    closed: list[bool] = []
+
+    class ClosableCatalog(FakeIcebergCatalog):
+        def list_namespaces(self, namespace=()):
+            del namespace
+            raise RuntimeError("provider failed")
+
+        def close(self) -> None:
+            closed.append(True)
+
+    with pytest.raises(RuntimeError, match="provider failed"):
+        discover_iceberg_tables(
+            "analytics",
+            {},
+            load_catalog_fn=lambda name, **options: ClosableCatalog(),
+        )
+
+    assert closed == [True]
+
+
 def test_public_catalog_discovery_uses_admitted_plugin_and_closes_it():
     closed = []
     received_revision = []

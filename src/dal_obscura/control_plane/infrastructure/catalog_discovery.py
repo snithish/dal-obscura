@@ -215,30 +215,35 @@ def _discover_iceberg_tables(
         raise ValueError("Catalog discovery limits must be positive")
     loader = load_catalog_fn or _load_catalog
     catalog = loader(catalog_name, **options)
-    table_names: set[str] = set()
-    for namespace in _walk_namespaces(
-        catalog,
-        max_namespaces=max_namespaces,
-        deadline_at=deadline_at,
-        cancel_check=cancel_check,
-    ):
-        remaining_tables = max_tables - len(table_names)
-        for identifier in _bounded_provider_items(
-            _list_tables(catalog, namespace),
-            limit=remaining_tables,
-            kind="table",
+    try:
+        table_names: set[str] = set()
+        for namespace in _walk_namespaces(
+            catalog,
+            max_namespaces=max_namespaces,
             deadline_at=deadline_at,
             cancel_check=cancel_check,
         ):
-            table_names.add(_identifier_to_name(identifier))
-    return [
-        {
-            "backend": "iceberg",
-            "name": table_name,
-            "table_identifier": table_name,
-        }
-        for table_name in sorted(table_names)
-    ]
+            remaining_tables = max_tables - len(table_names)
+            for identifier in _bounded_provider_items(
+                _list_tables(catalog, namespace),
+                limit=remaining_tables,
+                kind="table",
+                deadline_at=deadline_at,
+                cancel_check=cancel_check,
+            ):
+                table_names.add(_identifier_to_name(identifier))
+        return [
+            {
+                "backend": "iceberg",
+                "name": table_name,
+                "table_identifier": table_name,
+            }
+            for table_name in sorted(table_names)
+        ]
+    finally:
+        close = getattr(catalog, "close", None)
+        if callable(close):
+            close()
 
 
 def _walk_namespaces(
