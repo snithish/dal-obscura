@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `8c73c41` (REST namespace traversal;
+Implementation follow-up through `1e2308a` (catalog configuration CAS;
+REST namespace traversal;
 conformance cleanup gate;
 catalog binding replacement;
 public-response compatibility fix;
@@ -221,6 +222,8 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   treating missing cleanup as a pass.
   REST catalog namespace lifecycle now honors provider-scoped traversal and
   safely filters bounded root listings for legacy providers.
+  Catalog revisions are now returned in workspace metadata and accepted as an
+  expected write precondition through the API and Connections UI.
   Service-side compatibility contracts and online wheel artifact evidence remain
   open.
 - X12 admitted loading and Iceberg adapter: **implementing**; entry-point loading now
@@ -413,6 +416,17 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Green evidence: REST package suite (15 passed), Ruff, and `git diff --check`.
 - Remaining gaps: live REST provider, TLS/auth, clean-wheel, and consumer evidence
   remain open. Pickle compatibility is unchanged.
+
+### X03 catalog configuration CAS — `1e2308a`
+
+- State: implementing.
+- Behavior: catalog upserts lock the row and reject stale expected revisions;
+  workspace metadata exposes the current revision and Connections submits it when
+  editing an existing catalog, surfacing a refresh conflict to the operator.
+- Green evidence: catalog API and repository suites (17 passed), local TypeScript
+  compile and Vite production build, Ruff, and `git diff --check`.
+- Remaining gaps: PostgreSQL multi-process barriers, transaction rollback and live
+  production/browser evidence remain open. Pickle compatibility is unchanged.
 
 ### X05 shared Arrow schema bounds — `fd20e72`
 
