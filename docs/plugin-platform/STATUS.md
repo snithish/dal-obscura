@@ -2962,6 +2962,14 @@ otherwise continue locally executable X06/X07/X08 acceptance work
   cannot substitute for missing external environments; it now fails clearly
   when those environments cause mandatory skips.
 
+### Regression verification after X21/X22 follow-up — `7fc0eeb`
+
+- `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q` passed
+  at 100% with the socket-enabled execution permission; the non-elevated run
+  remains expected to fail at Flight/E2E socket binds in this sandbox.
+- Architecture, wrapper, capacity-runner, inventory, Ruff, Python compile,
+  shell syntax, and `git diff --check` validations also passed locally.
+
 ## Evidence entry template
 
 Copy this section for each atomic slice. Replace every placeholder; do not delete
