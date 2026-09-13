@@ -76,6 +76,17 @@ one maintained primitive only when measured behavior requires it.
 
 ## Required upgrade record
 
+Include the UI base image and its web server in the same support/advisory matrix.
+The current Dockerfile uses Node 22 and nginx-unprivileged 1.27; verify maintained
+target tags and digests at N01, rather than preserving a tag because a test quotes
+it. Build tools (Vite and its React plugin) belong in devDependencies; only actual
+browser runtime packages belong in dependencies. Preserve the production CSP,
+same-origin proxy and hashed-asset cache behavior through one live image test.
+
+Rechecked the official Vite and Node release pages on the second review: the
+8.3 stable patch line and Node 24 LTS direction above remain applicable. Exact
+passing patch/digest selection remains implementation work, not a guessed pin.
+
 For each changed dependency/toolchain, record current resolved version, target
 exact version, official release/support/advisory source and check date, affected
 runtime/consumer matrix, removed dependency/code, and executed install/build/type/

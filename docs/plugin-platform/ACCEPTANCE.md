@@ -69,6 +69,9 @@ planned test location; every old X packet has a disposition in the review.
 Pass if the same locked inputs reproduce collection/build, no new empty tests are
 added, and the map distinguishes fast/component/live/release evidence.
 Primary evidence: baseline report and existing package smoke job.
+The operational guide references existing source paths/commands and the current
+queue. It must not instruct a new agent to recreate removed layers or preserve
+superseded public APIs. Verify guide examples against the CLI/OpenAPI inventory.
 
 ## B02 — Current stable, minimal toolchain (N01)
 
@@ -79,6 +82,8 @@ Pass if dependencies are supported stable releases, no unresolved high/critical
 runtime advisory exists, every added dependency has a named replacement/benefit,
 and runtime metadata matches executed version support. Nightlies and warning
 suppression do not satisfy this case. Primary owner: package/build CI.
+Container base images are included, not only language dependencies. Updating an
+image must not require retaining an obsolete literal tag to satisfy a prose test.
 
 ## B03 — Deliberate break with no compatibility residue (N02)
 
@@ -92,6 +97,10 @@ Protected pickle fixture hashes and referenced symbols remain unchanged.
 Pass requires net production logical SLOC reduction in deletion slices and one
 contract implementation. One-time offline migration is not a runtime shim.
 Primary owner: existing plugin registry/package-boundary tests plus conversion test.
+Retired /policy-rules and /policy-preview routes are absent from OpenAPI and return
+404 with no write/provider side effect. Their former UI/CLI callers use revisioned
+/draft or canonical /policy-evaluate. Existing evaluator internals and published
+policy fixtures still pass; a route deletion cannot remove their shared helper.
 
 ## B04 — Real pair compatibility and typed forms (N03/N10)
 
@@ -114,6 +123,11 @@ activation. Error contains safe code/message/request_id and field errors where
 useful; unauthorized asset lookup is concealed 404, allowed resource/forbidden
 action is 403. No write/audit-success/generation change after rejection.
 Primary owner: parameterized API/repository tests; process race in B16.
+Referenced-draft requests require draft ID and expected revision; the draft must
+belong to the requested asset and an existing saved revision. A foreign/forbidden
+ID is concealed 404; a stale revision is 409; missing preconditions are 428.
+Evaluation/review/publication all address that exact content. Review evidence
+binds draft author/ID/revision/hash separately from the authenticated reviewer.
 
 ## B06 — Secret scope and complete IO/cancel enforcement (N04)
 
@@ -214,6 +228,13 @@ active version. Compare history versions; restore produces a saved new draft
 revision, never activates it. UI shows “Saved draft” and the returned revision,
 invalidates previous review and requires fresh review before publication.
 Deep-link/refresh reopens same asset/tab/version.
+Editor A with read/edit saves a draft and copies its review link. Publisher B
+with read/publish and no edit opens it, sees A as author, reviews and publishes
+exactly A's saved content without creating a personal copy. B cannot edit it;
+an unrelated principal cannot inspect it. Editing A's draft invalidates B's
+review. Audit records both author and publishing actor. Reusing an operation key
+with a different referenced draft is rejected; a retry of the same request
+reconciles the existing operation.
 Primary owner: one publication browser journey plus B10/B16.
 
 ## B14 — Complete catalog/configuration lifecycle (N10)
@@ -231,8 +252,23 @@ Primary owner: shared lifecycle journey parameterized by pair, backend activatio
 
 ## B15 — Administrative completeness and consumer guidance (N11)
 
-Run each control as all seven actor types; verify actual API result matches displayed
-capability. Configure ownership/grants/runtime/auth using canonical identities,
+Use these seven fixtures: anonymous; authenticated unrelated; read-only (read);
+editor (read + edit); publisher (read + publish); grant manager (read + grant);
+platform administrator. Capabilities are existing asset management capabilities.
+Also test owner-derived read/edit without implicit publish/grant. Parameterize the
+API operation/capability matrix once; browser tests cover one allowed/denied action
+per capability and confirm displayed controls match it. Do not repeat every widget
+under every actor in a separate browser test.
+
+Publish-only actors cannot edit drafts; edit-only actors cannot publish. Grant
+managers cannot delegate grant-management or escalate their own authority.
+Only platform administrators manage owners, connections/runtime/auth settings.
+Management read/admin access never grants Flight access: an administrator without
+a matching data policy is denied a read. Conversely, a principal authorized by
+data policy but without management grants may read governed data and cannot inspect
+private policy-management APIs. Use the same live asset to test both directions.
+
+Configure ownership/grants/runtime/auth using canonical identities,
 revisions and validated fields. Refuse removal of the final usable administrator
 until replacement login/recovery is verified. Test provider failure during change.
 Audit filters/page/detail match permitted actions and redacted data; failures show
@@ -240,6 +276,17 @@ request ID and recovery action. Health uses measured observations or explicit un
 Execute copied consumer snippets with only endpoint/credential inputs replaced.
 No secret/provider password, unsupported badge or fake health metric is displayed.
 Primary owner: permission matrix plus management browser journey.
+
+Audit query subcases: seed >=1,000 events with tied timestamps and permitted/
+forbidden assets; combine actor/action/asset/time/outcome/request-ID filters.
+Pages of 1/50/200 return all and only matching permitted events exactly once in
+(created_at, id) descending order. Pin an initial upper bound so concurrent new
+events do not duplicate/skip this traversal; Refresh starts a new traversal.
+Revoke access between pages: subsequent pages reveal no newly forbidden records.
+Malformed or filter-mismatched cursors fail 422; out-of-range limits fail 422.
+Cursor length >512 or text filter length >200 also fails 422 before querying.
+Filtering precedes LIMIT. Cursor contents never bypass current authorization.
+Extend the existing audit API/repository suite; reuse this data for the UI journey.
 
 ## B16 — Multi-process publication and revocation correctness (N12)
 
@@ -249,6 +296,9 @@ change. Include same/different-author drafts. Terminate worker before commit, af
 commit and before response. Inspect publication, active pointer, operation/audit
 and consumer output. Each outcome is atomic: either old valid state or new valid
 state, never mixed authority/evidence or duplicate logical operation.
+Explicitly race author A saving/restoring the selected draft against publisher B's
+review/commit; B's personal draft must never be substituted. Revoke B's capability
+before commit and verify that ordering determines a denied or prior valid commit.
 No test accepts a 500 merely because a race happened. Selected-only initial
 activation excludes unrelated incomplete B. Primary owner: extend existing
 tests/integration/control_plane/test_publication_races.py with API processes.
@@ -295,6 +345,10 @@ versus qualified baseline; report absolute results. 60 minutes at 16 consumers p
 metadata/UI traffic: no OOM/unexplained admitted-read errors/secret leaks; <=2GiB RSS
 per Flight worker; warm first/last 10-minute median RSS growth <=10%.
 All canceled resources release by deadline+2s. Faults trigger tested metrics/alerts.
+Audit load: 1M events and 10k assets, permitted-page size 50, fixed filter mix;
+warmed page retrieval p95 <=500ms across 100 queries on this runner. Materialize
+at most page_size+1 audit rows and no full asset-ID inventory per request.
+Record PostgreSQL query plan and relevant indexes; no N+1 query loop.
 Browser cold build: initial JS <=200KiB gzip, route increment <=150KiB gzip,
 CSS <=50KiB gzip; p95 post-load interactions <=200ms, LCP <=2.5s/CLS <=0.1 across
 five cold loads at 10Mbps/50ms RTT on declared browser/CPU. Measure, do not infer

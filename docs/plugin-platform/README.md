@@ -2,6 +2,9 @@
 
 Reviewed 2026-09-13 at c464152. **Planning documents only; paid-production HOLD.**
 The active queue is N01–N16. Start with N01, not the archived X00 queue.
+Second pass at c6230b1 confirmed the same implementation baseline; the current
+documents additionally specify separate editor/publisher handoff, bounded audit
+backend queries and removal of obsolete policy routes and test constraints.
 
 ## Read in order
 

@@ -49,7 +49,7 @@ responsibility, not a lower line count achieved by minification or hidden comple
    initialization/recovery and legitimate machine OIDC credentials. Remove
    bootstrap-token browser sessions and unsupported demo shortcuts once normal
    OIDC parity works. This is not authorization to remove machine-client auth.
-6. **Replace tests that lock prose or internals (N14).** Review
+6. **Replace tests that lock prose or internals (owning slice, then N14).** Review
    tests/architecture/test_dead_code_inventory.py, test_operator_plugin_lock_docs.py,
    test_capacity_runbook.py, UI lifecycle arithmetic/route-parser tests and
    duplicate stub adapter matrices. Map each asserted invariant first. Remove
@@ -57,10 +57,20 @@ responsibility, not a lower line count achieved by minification or hidden comple
    owned elsewhere. Replace arithmetic checks with one parameterized rendered
    interleaving test. Keep a simple docs link check where valuable, not assertions
    requiring sentences or “KEEP” dispositions. Never drop a unique security case.
+   Also replace test_local_demo_ui.py's literal obsolete image-tag assertion in
+   N01 and update test_control_plane_route_inventory.py when N02/N05 remove routes.
+   Preserve live build/proxy/CSP/auth coverage and the canonical route inventory.
+   Do not keep obsolete code or failing assertions until a later cleanup packet.
 7. **Archive completed planning (this review).** X00–X23 and earlier UI queues
    remain historical evidence; active work is N01–N16 only. Keep one compact
    ledger and an invariant registry, not repeated completion narratives. Do not
    create an executable test merely to assert these packet counts.
+8. **Consolidate public policy APIs (N02).** Remove GET/PUT policy-rules and POST
+   policy-preview, migrating api.ts saveRules/preview and other actual callers
+   to /draft and /policy-evaluate. Keep policy_service.preview_asset_policy as
+   an internal helper while the canonical evaluator uses it. Retain published
+   policy records/history and their internal readers. The absence of a public
+   route does not prove that its underlying data or helpers are dead.
 
 ## Explicitly retain
 

@@ -5,6 +5,11 @@ Review baseline: c46415282a2a796cf737a9c3b7f7ba941f19bf7b (2026-09-13).
 Execution authority: [implementation plan](IMPLEMENTATION_PLAN.md).
 Previous completion notes: [archived ledger](STATUS_ARCHIVE_20260913.md).
 
+Second review at c6230b1 found no intervening implementation changes. Queue status
+is unchanged. F11–F14 refine N01/N02/N03/N09/N11/N12: current operational guidance,
+removal of obsolete test/API contracts, bounded audit queries and editor-to-publisher
+draft handoff. B05/B13/B15/B16/B19 specify their exact expected outcomes.
+
 ## Queue
 
 Only N packets are active. Completed parts of X00–X23 were removed through the

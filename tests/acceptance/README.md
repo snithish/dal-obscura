@@ -15,6 +15,7 @@ and are grouped under G guarantees. Do not create a second runner per packet.
   protected serialized fixtures. Replace retention-only prose checks in N14.
 - **B04/B05, N03:** tests/interfaces/control_plane and tests/control_plane.
   Pair declarations/returned handles, authoritative DTOs and revisions.
+  Include cross-author saved draft references and reviewer-bound evidence.
 - **B06, N04:** tests/integration/test_io_boundary.py extended with real local
   transports/counters and provider cancellation. Validators alone are insufficient.
 - **B07/B08, N05:** existing actor/session API tests plus real OIDC browser fixture.
@@ -28,13 +29,17 @@ and are grouped under G guarantees. Do not create a second runner per packet.
   apps/governance-ui/e2e/policy.spec.ts; existing backend nested goldens; 10k-node
   measured browser fixture. Typed mask/condition roundtrip and keyboard navigation.
 - **B13, N09:** extend the same policy browser journey and existing operation API
-  tests. Saved semantic diff/lost-response/history/restore.
+  tests. Saved semantic diff/lost-response/history/restore and separate
+  editor-to-publisher handoff without copying draft ownership.
 - **B14, N10:** planned apps/governance-ui/e2e/connections.spec.ts parameterized by
   the three pairs, backed by catalog/activation API tests.
 - **B15, N11:** planned apps/governance-ui/e2e/management.spec.ts and existing actor,
   grant, settings and audit API tests. One explicit capability matrix.
+  Add database-filtered cursor traversal with timestamp ties/revocation; reuse
+  its fixture for UI coverage. Management capabilities do not imply Flight access.
 - **B16, N12:** tests/integration/control_plane/test_publication_races.py extended
   to real PostgreSQL and two API processes, plus actual Flight output.
+  Include author A changing the selected draft while publisher B commits it.
 - **B17, N13:** tests/plugin_conformance/test_pairs.py,
   tests/consumers/test_governed_reads.py and connectors/jvm integration tests.
   Reuse the wheel admission/conformance runner and fixture data for nine live

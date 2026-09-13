@@ -4,6 +4,11 @@ Reviewed source baseline: `c46415282a2a796cf737a9c3b7f7ba941f19bf7b`.
 Documentation-only review. No runtime, UI, dependency, database or executable test
 changes. Paid-production release: **HOLD**.
 
+Second pass at documentation commit `c6230b1`: the implementation tree is unchanged
+from this baseline. No additional N packet can be removed as implemented. The
+findings below add precise remaining tasks inside the existing packets, rather
+than restarting the review queue. No application suites or visual session were run.
+
 ## Conclusion and evidence limits
 
 The project has substantial governed gateway and plugin functionality. Recreating
@@ -158,7 +163,71 @@ Vite 7.1 and TypeScript 5.9; the lock determines resolved versions. CI uses Node
 Pre-commit invokes broad tests and type checks on every commit. N01/N14 align the
 support matrix and shorten feedback. Do not infer installed age from lower bounds.
 
-## Handoff
+### F11 — Repository instructions and tests can restore obsolete design (medium)
+
+AGENTS.md still points to removed root application/domain/infrastructure/interfaces
+paths and describes keeping public APIs stable. docs/policy-authoring.md presents
+the CLI as the primary authoring workflow. These conflict with the current runtime
+map and the owner's breaking-change/UI direction. N01 must update the operational
+guide and canonical entry points without discarding the security ground rules.
+
+tests/architecture/test_local_demo_ui.py requires the literal
+nginxinc/nginx-unprivileged:1.27-alpine image string. The route inventory test requires
+demo/bootstrap and old policy endpoints. These are source/contract snapshots,
+not proof that old versions or routes must remain. N01/N02/N05 must update them
+with their owning changes; do not defer a now-failing obsolete assertion until N14.
+Keep the unique build/proxy/security/route-authorization assertions.
+
+### F12 — Audit UI needs a real bounded backend query (medium)
+
+routes/policies.py::list_audit_events accepts only asset_id and limit; it has no
+cursor or action/actor/time/outcome filter. repositories.py::list_audit_events
+orders by created_at alone and returns at most 200 records. audit_service.py first
+materializes all visible assets for a non-admin and builds an ID set.
+
+N11 must implement database-scoped keyset pagination and filtering before building
+the Activity UI. Keep permission filtering in the query, avoid a full visible-asset
+load, and recheck authority on every page. N14 measures the query under scale.
+The previous plan called for pagination, but did not make this missing backend and
+its boundedness oracle explicit.
+
+### F13 — Competing public policy paths leave unnecessary surface (medium)
+
+routes/policies.py exposes both revisioned /draft and unrevisioned /policy-rules
+writes; api.ts still exports saveRules and a /policy-preview client alongside
+evaluate. The canonical evaluator calls policy_service.preview_asset_policy
+internally, so deleting that helper blindly would break evaluation.
+
+N02 removes obsolete public editing/preview endpoints and unused browser clients
+after migrating actual callers. Keep one revisioned draft path, one synthetic
+evaluation endpoint and the necessary internal authorization helper. Preserve
+current published policy semantics and history. This is a consolidation finding,
+not a demonstrated publication bypass.
+
+### F14 — Separate editors and publishers lack a draft handoff (high)
+
+draft_service.py stores drafts by author_principal; review_service.py and
+policy_version_service.py look up that draft with actor.identity_key(). An actor
+with read/publish but no edit cannot save their own draft or select an editor's
+saved draft for review. Existing authority checks are useful, but do not complete
+this two-person workflow.
+
+N03 adds an explicit saved draft ID/revision reference to evaluation/review/
+publication, authorized against that asset. N09 exposes a copyable review link.
+Reuse existing draft records; no submission queue, notification service or new
+approval database. N12 proves author-edit/reviewer-publish races and preserves
+reviewer identity in the token/operation audit separately from draft authorship.
+
+## Second-pass handoff clarifications
+
+Management capability "read" concerns policy/metadata; it does not authorize
+Flight data. The existing core policy decision must remain independent even for
+platform administrators. B15 now names exact actor fixtures and tests both
+directions of this separation. This preserves a boundary, not a new role system.
+
+All earlier F01–F10 findings and the X00–X23 reconciliation remain applicable.
+
+## Current handoff
 
 Use [remaining packets](IMPLEMENTATION_PLAN.md), [acceptance](ACCEPTANCE.md),
 [UX requirements](UX_REQUIREMENTS.md), [technology](TECHNOLOGY.md),

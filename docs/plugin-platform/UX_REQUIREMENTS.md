@@ -120,6 +120,11 @@ version independently. Keyboard save does not publish.
    impact. Publish has explicit confirmation and authoritative outcome. No stale
    review can publish. A lost response reconciles the original operation key.
    History detail/diff/restore creates a draft, never implicit activation.
+   A saved draft offers Copy review link. The reference identifies asset/draft/
+   revision, contains no credential and is authorized again when opened.
+   A distinct publisher sees the author and exact revision in a read-only view,
+   then evaluates/reviews/publishes it. Changing the author's draft invalidates
+   that review. No implicit copy to the reviewer's personal draft.
 6. **Connections (N10).** Descriptor-driven forms preserve booleans/numbers/enums/
    strings/structured fields and secret references. Existing safe values prefill.
    Separate validation from activation; show affected assets and generation.
@@ -155,3 +160,27 @@ A page is finished only when its real authorized/forbidden/error/conflict workfl
 pass, its controls have backend behavior, and its layout satisfies B09. B22 adds
 owner visual acceptance and representative-user evidence. A screenshot or color
 change alone does not close the UI work.
+
+## Backend ownership for page completion
+
+Use existing route/service families rather than adding one backend per page:
+
+- Assets and schema: assets.py + schema routes/services; consolidate inventory on
+  the paginated contract and use authorized IDs from that response.
+- Policy/Test/Changes/History: policies.py with draft, policy-evaluate,
+  policy-review, policy-versions and policy-operations. N02 removes obsolete
+  public policy-rules/policy-preview routes; retain internal evaluator helpers.
+  N03 supplies referenced saved drafts for the separate publisher journey.
+- Connections: catalog/plugin routes and configuration activation service, with
+  descriptor types and authoritative format candidates from N03/N10.
+- Access/Settings: existing owner/grant/runtime/auth-provider routes. Metadata
+  read and platform administration never bypass governed Flight policy. B15 fixes
+  the capability fixtures; the UI must not invent its own role implications.
+- Activity: current audit route/service/repository need N11 cursor/filter/query
+  extensions. Do not implement filters over the first 200 events in the browser.
+- Login: existing session/OIDC routes, extended by N05. Reuse no-store responses,
+  CSRF and origin enforcement; do not rebuild an identity provider.
+
+At each page's completion, its primary journey must pass against the actual API.
+Mock responses are reserved for deterministic interleaving/error tests. A polished
+control with no authorized server effect remains OPEN in the ledger.

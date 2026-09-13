@@ -41,6 +41,9 @@ details remain in [the archived plan](IMPLEMENTATION_PLAN_ARCHIVE_20260913.md).
 - Deliver one behavior per atomic Conventional Commit. Remove superseded callers,
   code, configuration and tests in the same slice. A temporary adapter may exist
   inside an uncommitted edit, never as the delivered architecture.
+- Update obsolete route/version/prose assertions in that same owning slice.
+  N14 consolidates remaining duplication; it is not permission to leave earlier
+  commits failing tests or retaining obsolete runtime paths to satisfy snapshots.
 - Run relevant tests, changed-language lint/type/build checks and update evidence.
   Never equate a source-string check, mock provider, skip, screenshot or successful
   build with the complete behavioral requirement.
@@ -68,7 +71,7 @@ Documentation-only validation checks links/IDs/whitespace, not the runtime suite
 
 ## N01 — Establish the lean baseline and supported toolchain
 
-**Dependencies:** none. **Findings:** F07/F10. **Acceptance:** B01/B02.
+**Dependencies:** none. **Findings:** F07/F10/F11. **Acceptance:** B01/B02.
 **Start:** pyproject.toml, uv.lock, apps/governance-ui/package.json and lock,
 .pre-commit-config.yaml, .github/workflows/ci.yml, tests/architecture.
 
@@ -77,6 +80,10 @@ durations. Apply TECHNOLOGY.md selections in one toolchain slice. Record a basel
 of formatted production/test logical SLOC, duplicate contract owners, dependency
 count, UI gzip size, cold/warm check duration, slowest 20 tests and mandatory skips.
 Use the existing test system; create no custom test runner.
+Update AGENTS.md, README entry points and docs/policy-authoring.md to the actual
+control_plane/data_plane/common layout, current commands and UI-first workflow.
+State the owner's breaking-change exception and protected pickle boundary.
+Fix literal obsolete image/toolchain assertions alongside their upgrades.
 
 **NFR:** one Python/Node/pnpm support policy across CI/images/local docs. No prerelease
 dependency, unbounded latest tag or guessed compatibility. No broad test hook on
@@ -90,7 +97,7 @@ Commit: `build: align supported runtime and toolchain versions`.
 
 ## N02 — Consolidate contracts and delete obsolete production paths
 
-**Dependencies:** N01. **Findings:** F06/F07. **Acceptance:** B03; G01–G04.
+**Dependencies:** N01. **Findings:** F06/F07/F13. **Acceptance:** B03; G01–G04.
 **Start:** CLEANUP_PLAN.md paths, common/plugin_api, packages/plugin-api,
 public_plugin_adapter, published_config, catalog_service and their callers.
 
@@ -101,6 +108,10 @@ unscoped secret references, permissive manifest normalization and replaced CLI/A
 paths. Implement explicit offline conversion of valid persisted records where
 needed, fail unknown records without imports, and require maintenance-mode cutover.
 Keep only necessary serialization-boundary adapters and active protocol generation.
+Consolidate public policy editing on /draft and testing on /policy-evaluate;
+remove /policy-rules and /policy-preview routes and old UI methods after migrating
+callers. Preserve internal evaluator/authorization helpers actually in use.
+Do not delete underlying published-policy records merely because an endpoint retires.
 
 **NFR:** no re-export shim, dual-version runtime, catch-and-default parsing, or new
 copy of a validator. Cleanup slice has a net reduction in handwritten production
@@ -116,7 +127,7 @@ separate coherent deletion commits.
 
 ## N03 — Fix pair admission and authoritative mutation contracts
 
-**Dependencies:** N02. **Findings:** F02/F04. **Acceptance:** B04/B05.
+**Dependencies:** N02. **Findings:** F02/F04/F14. **Acceptance:** B04/B05.
 **Start:** SDK descriptor, routes/plugins.py, asset_service.py, schemas.py,
 catalog/policy/settings routes and repositories, UI api.ts.
 
@@ -128,6 +139,13 @@ on existing catalog/binding/owner/grant/runtime/auth configuration writes and ex
 active generation on activation; missing precondition is 428, stale is 409.
 Use one safe error envelope: code, message, request_id, optional field_errors and
 current_revision. Preserve concealed-resource 404 and authenticated forbidden 403.
+Allow an authorized publisher to select an existing author's saved draft by
+immutable draft ID plus expected revision. Reuse the draft endpoint with an
+explicit reference, and carry that reference through evaluate/review/publish.
+Verify asset membership and read/publish authority server-side; a reference is
+not a bearer credential. Sign reviewer identity and draft author/ID/revision/hash
+separately, including them in the idempotency request hash and audit. Do not
+copy a draft into the publisher's ownership or add a second approval store.
 
 **NFR:** server owns validation and scope for direct API/CLI callers. No reload on
 ordinary requests to hide missing startup admission. Strict response models drive
@@ -222,9 +240,11 @@ rerun B09 in N08–N11; N06 does not claim their workflow acceptance.
 **FR:** one API transport and TanStack Query client scoped by session identity,
 resource/revision and query parameters. Pass AbortSignal to fetch. Keep local drafts
 separate from server cache. Mutation results use captured session/resource/edit
-identity after every await, including reconciliation/finally; cache cancellation
-alone does not guarantee mutation safety. Keep the same publication operation key
-during uncertain-outcome reconciliation; never automatically resubmit publication.
+identity after every await, including reconciliation/finally. Captured identity
+also includes the selected draft ID/author/revision when changing review links.
+Cache cancellation alone does not guarantee mutation safety. Keep the same
+publication operation key during uncertain-outcome reconciliation; never
+automatically resubmit publication.
 Remove old helper/epoch machinery once replacement owns all callers.
 
 **NFR:** no private cache/localStorage persistence; logout/401 cancels and clears
@@ -261,7 +281,7 @@ reuse G02 backend goldens. One browser authoring journey including deny-all.
 
 ## N09 — Deliver understandable review, publication and history
 
-**Dependencies:** N07/N08. **Acceptance:** B13.
+**Dependencies:** N07/N08. **Finding:** F14. **Acceptance:** B13.
 **Start:** TestsView, HistoryView, ChangesView, review/publish/operation APIs.
 
 **FR:** persona testing identifies synthetic input; before/after review shows exact
@@ -270,6 +290,10 @@ ticket impact. Invalidated review disables Publish with a reason. Publication ha
 explicit review/confirm/committed/failed/unknown states and safe reconciliation.
 History supports version detail, semantic diff and restore-to-draft; restoring
 never auto-publishes. Deep links retain asset/tab/version.
+An editor can copy a same-origin review link for their exact saved draft reference;
+a publisher opens it read-only, evaluates/reviews and publishes that revision.
+Show author and reviewer separately. A changed/missing reference requires fresh
+selection/review, never a fallback to the publisher's personal draft.
 
 **NFR:** UI never claims active based on a local optimistic state. No unauthorized
 history or raw source rows. Current backend review/idempotency services are reused.
@@ -304,7 +328,7 @@ test ambiguous-format selection and stale catalog revision.
 
 ## N11 — Complete access, settings, audit and consumer handoff
 
-**Dependencies:** N05/N07/N09/N10. **Acceptance:** B15.
+**Dependencies:** N05/N07/N09/N10. **Finding:** F12. **Acceptance:** B15.
 **Start:** AccessView, SettingsView, ActivityView, ConsumerView and existing services.
 
 **FR:** explicit effective-capability/reason displays; edit owners/grants with exact
@@ -314,6 +338,13 @@ Audit supports bounded filter/pagination and redacted event detail by actor/acti
 asset/time/outcome/request ID. Show control-plane health and measured Flight health
 separately. Provide accurate copyable Python/DuckDB/Spark/Arrow instructions and
 qualified version badges. Refresh reflects authority changes without page reload.
+Implement those audit filters and stable (created_at, id) keyset pagination in
+the API/repository first; current limit-only queries are insufficient. Apply scope
+through database joins/EXISTS, not materializing all visible asset IDs. Bound page
+size to 200, cursors to 512 characters and text filters to 200 characters; never
+filter only the returned page.
+Use the precise B15 actor fixtures and keep management authority distinct from
+governed data access. Do not introduce a second configurable role hierarchy.
 
 **NFR:** all visible controls backed by authorized APIs; disabled controls explain
 why. No invented metrics, default settings after failed GET, unbounded audit fetch,
@@ -335,6 +366,9 @@ change; initial activation with unrelated draft; duplicate idempotency request;
 lost response; process termination before and after commit. Independent DB sessions
 and barriers establish ordering. Inspect active generation, history, operation,
 audit and actual Flight result together.
+Include editor A's referenced draft being changed while publisher B reviews or
+publishes it, and revocation of B's authority. This crosses actor identities,
+not only two requests by the same publisher.
 
 **NFR:** no sleep-only race oracle, SQLite replacement, mocks for transactions, or
 retry that masks incorrect commits. One committed logical operation and no mixed
