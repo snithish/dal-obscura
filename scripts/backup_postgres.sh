@@ -29,8 +29,11 @@ trap cleanup EXIT HUP INT TERM
 pg_dump --format=custom --no-owner --no-acl --dbname="$DAL_OBSCURA_DATABASE_URL" \
   | age --encrypt --recipient "$DAL_OBSCURA_BACKUP_RECIPIENT" --output "$temporary"
 test -s "$temporary" || { echo "encrypted backup is empty" >&2; exit 1; }
+digest=$(sha256sum "$temporary" | awk '{print $1}')
+test -n "$digest" || { echo "could not compute backup checksum" >&2; exit 1; }
+printf '%s  %s\n' "$digest" "$output" > "$checksum_temporary"
+test -s "$checksum_temporary" || { echo "backup checksum is empty" >&2; exit 1; }
 mv -- "$temporary" "$output"
-sha256sum "$output" > "$checksum_temporary"
 mv -- "$checksum_temporary" "$checksum"
 trap - EXIT HUP INT TERM
 printf 'encrypted backup written: %s\nchecksum written: %s\n' "$output" "$checksum"
