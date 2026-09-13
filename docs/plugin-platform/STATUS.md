@@ -205,6 +205,15 @@ all collected tests. Plugin conformance passed (2 tests); direct UI TypeScript/
 Vite production build passed (264.88 kB JavaScript, 14.22 kB CSS); UI lifecycle
 and schema tests passed (5). No pickle fixture or serializer paths changed.
 
+## Implementation update — 4e5f314 (2026-09-13)
+
+- Packet / status / candidate commit / owner: N02/B03 partial / VERIFY / `4e5f314` / plugin SDK + packaging.
+- Observable behavior delivered: `dal-obscura-plugin-api` is an explicit runtime dependency resolved from the repository SDK package and included in the Docker builder context. The runtime, control plane, lock builder, and tests import shared descriptor/configuration contracts directly from the public SDK. The duplicate `src/dal_obscura/common/plugin_api/contracts.py` module and its re-export surface were deleted; `PluginKind` is exported by the SDK. Pickle serializers, serialized classes/import paths, and task payload semantics were not changed.
+- Changed and deleted paths: `pyproject.toml`, `uv.lock`, `Dockerfile`, public SDK `__init__.py`, plugin registry/lock adapters, built-in plugin wiring, lock-builder script, and contract/registry tests; deleted internal duplicate contracts module.
+- Primary tests: `tests/plugin_platform`, `tests/control_plane`, `tests/interfaces/control_plane`, `tests/infrastructure/adapters`, and `tests/architecture` all passed; changed-path Ruff passed. `uv build` passed and wheel metadata contains `Requires-Dist: dal-obscura-plugin-api`.
+- Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/plugin_platform tests/control_plane tests/interfaces/control_plane tests/infrastructure/adapters -q`; `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/plugin_platform tests/architecture -q`; targeted `ruff check`; `uv build`.
+- Remaining N02/B03 work: strict old-input rejection and maintenance-mode conversion for known persisted records, removal of any remaining migration-only legacy readers where safe, and clean installed-wheel migration proof. Release remains HOLD.
+
 ## Implementation update — 2e23b25 (2026-09-13)
 
 - Packet / status / candidate commit / owner: N02/N05 UI authentication cleanup / VERIFY / `2e23b25` / governance UI.
