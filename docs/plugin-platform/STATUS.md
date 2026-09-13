@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `fc90ddc` (ticket-handle metadata bounds at `fc90ddc`; secure REST auxiliary URI checks at `6ee3d81`; REST identifier validation at `4980609`; ledger update for manifest deadline enforcement at `827c6a9`; manifest deadline enforcement at `97663b7`; session-expiry fence at `4e2ac7d`; public option bounds at `17ab77f`; symlink rejection at `6136224`; malformed-entry isolation at `6c129d3`; REST descriptor contract at `7adb4d6`; concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
+Implementation follow-up through `0f09d42` (public task payload boundary at `0f09d42`; ticket-handle metadata bounds at `fc90ddc`; secure REST auxiliary URI checks at `6ee3d81`; REST identifier validation at `4980609`; ledger update for manifest deadline enforcement at `827c6a9`; manifest deadline enforcement at `97663b7`; session-expiry fence at `4e2ac7d`; public option bounds at `17ab77f`; symlink rejection at `6136224`; malformed-entry isolation at `6c129d3`; REST descriptor contract at `7adb4d6`; concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -35,6 +35,9 @@ PyIceberg catalog is constructed.
 Public `TableHandle` values now validate plugin identities, revisions, versions,
 snapshot IDs, and bounded JSON-like metadata before any handle can enter trusted
 ticket serialization.
+Public scan tasks now accept only bounded inert primitives or frozen dataclass
+fields before entering the same serializer; opaque task objects are rejected at
+planning time.
 Local probes are recorded in [the review](IMPLEMENTATION_REVIEW.md).
 Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_STATUS.md).
 
@@ -166,7 +169,9 @@ artifacts.
   kind/ID before any factory import. The data-plane catalog registry now bridges
   public SDK catalog/format factories into the existing governed `TableFormat` and
   trusted `ScanTask` serializer, recreating request contexts at execution time and
-  rejecting plugin output schema changes. Authenticated plugin diagnostics also expose enabled, not-installed, and
+  rejecting plugin output schema changes. Public task payloads are constrained to
+  bounded inert data before entering the trusted ScanTask serializer. Authenticated
+  plugin diagnostics also expose enabled, not-installed, and
   incompatible states for operator-expected IDs without importing factories or
   enumerating unapproved installations.
 - X13 plugin routing and migration: **implementing**; immutable compiled asset
