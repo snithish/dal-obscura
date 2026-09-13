@@ -518,6 +518,8 @@ def test_published_schema_admission_accepts_iceberg_numeric_metadata_and_aliases
         {b"PARQUET:field_id": b"bad\x00id"},
         {b"iceberg.field.id": b"x" * 129},
         {b"PARQUET:field_id": b"\xff"},
+        {b"PARQUET:field_id": b"synthetic:forged"},
+        {b"iceberg.field.id": b"legacy:forged"},
     ],
 )
 def test_schema_identity_rejects_unbounded_or_malformed_provider_ids(metadata: dict[bytes, bytes]):
