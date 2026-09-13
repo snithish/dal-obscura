@@ -259,6 +259,113 @@ def test_runner_rejects_duplicate_or_missing_task_coverage():
     assert any("duplicate task identities" in failure for failure in duplicate.failures)
 
 
+def test_runner_checks_cancellation_before_requesting_more_plan_work():
+    table = pa.table({"id": [1]})
+    schema = SchemaDescriptor(
+        schema_version=1,
+        fingerprint="0" * 64,
+        arrow_schema=table.schema,
+    )
+    handle = TableHandle(
+        catalog_plugin_id="fixture",
+        catalog_instance_id="fixture",
+        catalog_revision=1,
+        identifier=TableIdentifier(namespace=("default",), name="users"),
+        format_plugin_id="fixture",
+        handle_version=1,
+    )
+    calls = 0
+
+    def cancelled() -> bool:
+        nonlocal calls
+        calls += 1
+        return calls >= 3
+
+    requested = 0
+
+    class _CancelledPlan(_ConformingFormat):
+        def plan(self, handle, schema, context, *, projection, row_filter, max_tasks):
+            del handle, context, projection, row_filter, max_tasks
+            nonlocal requested
+            requested += 1
+            yield schema
+            requested += 1
+            yield schema
+
+    result = run_format_checks(
+        cast(TableFormatPlugin, _CancelledPlan()),
+        handle,
+        schema,
+        replace(_context(), cancel_check=cancelled),
+        max_tasks=2,
+    )
+
+    assert result.to_dict()["status"] == "failed"
+    assert any("cancelled while planning" in failure for failure in result.failures)
+    assert requested == 1
+
+
+def test_runner_checks_cancellation_before_requesting_more_output():
+    table = pa.table({"id": [1]})
+    schema = SchemaDescriptor(
+        schema_version=1,
+        fingerprint="0" * 64,
+        arrow_schema=table.schema,
+    )
+    handle = TableHandle(
+        catalog_plugin_id="fixture",
+        catalog_instance_id="fixture",
+        catalog_revision=1,
+        identifier=TableIdentifier(namespace=("default",), name="users"),
+        format_plugin_id="fixture",
+        handle_version=1,
+    )
+    calls = 0
+
+    def cancelled() -> bool:
+        nonlocal calls
+        calls += 1
+        return calls >= 6
+
+    requested = 0
+
+    class _CancelledOutput(_ConformingFormat):
+        def execute(self, task, context):
+            del context
+
+            def batches():
+                nonlocal requested
+                requested += 1
+                yield pa.RecordBatch.from_pylist([{"id": 1}], schema=task.arrow_schema)
+                requested += 1
+                yield pa.RecordBatch.from_pylist([{"id": 2}], schema=task.arrow_schema)
+
+            return task.arrow_schema, batches()
+
+    result = run_format_checks(
+        cast(TableFormatPlugin, _CancelledOutput()),
+        handle,
+        schema,
+        replace(_context(), cancel_check=cancelled),
+    )
+
+    assert result.to_dict()["status"] == "failed"
+    assert any("cancelled while reading output" in failure for failure in result.failures)
+    assert requested == 1
+
+
+def test_record_batch_validation_rejects_expired_deadline():
+    schema = pa.schema([pa.field("id", pa.int64())])
+    batch = pa.RecordBatch.from_pylist([{"id": 1}], schema=schema)
+
+    with pytest.raises(TimeoutError, match="deadline expired"):
+        check_record_batches(
+            schema,
+            [batch],
+            deadline=datetime.now(timezone.utc) - timedelta(seconds=1),
+        )
+
+
 def test_runner_honors_cancellation_before_plugin_execution():
     table = pa.table({"id": [1]})
     schema = SchemaDescriptor(

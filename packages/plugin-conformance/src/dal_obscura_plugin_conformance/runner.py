@@ -6,7 +6,6 @@ import json
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from itertools import islice
 
 import pyarrow as pa
 from dal_obscura_plugin_api import (
@@ -104,14 +103,31 @@ def check_record_batches(
     result: ConformanceResult | None = None,
     max_batches: int = DEFAULT_MAX_OUTPUT_BATCHES,
     max_rows: int = DEFAULT_MAX_OUTPUT_ROWS,
+    cancel_check: Callable[[], bool] | None = None,
+    deadline: datetime | None = None,
 ) -> None:
-    """Incrementally validate output without allowing unbounded materialization."""
+    """Incrementally validate output without allowing unbounded materialization.
+
+    ``cancel_check`` and ``deadline`` are sampled before every batch so a
+    provider cannot continue producing output after the core has withdrawn the
+    request.  The iterator is deliberately never collected into a table.
+    """
 
     if max_batches <= 0 or max_rows <= 0:
         raise ValueError("output budgets must be positive")
     row_count = 0
 
-    for index, batch in enumerate(batches):
+    iterator = iter(batches)
+    index = 0
+    while True:
+        if deadline is not None and datetime.now(timezone.utc) >= deadline:
+            raise TimeoutError("execution context deadline expired while reading output")
+        if cancel_check is not None and cancel_check():
+            raise RuntimeError("execution context was cancelled while reading output")
+        try:
+            batch = next(iterator)
+        except StopIteration:
+            break
         if index >= max_batches:
             raise ValueError(f"format returned more than {max_batches} output batches")
         if batch.schema != schema:
@@ -121,6 +137,7 @@ def check_record_batches(
         row_count += batch.num_rows
         if row_count > max_rows:
             raise ValueError(f"format returned more than {max_rows} output rows")
+        index += 1
     if result is not None:
         result.record_pass("record_batches")
 
@@ -149,7 +166,7 @@ def _check_task_coverage(
     result.record_pass("task_coverage")
 
 
-def run_format_checks(
+def run_format_checks(  # noqa: C901
     plugin: TableFormatPlugin,
     handle: TableHandle,
     schema: SchemaDescriptor,
@@ -193,7 +210,17 @@ def run_format_checks(
             row_filter=row_filter,
             max_tasks=max_tasks,
         )
-        tasks = list(islice(planned, max_tasks + 1))
+        tasks: list[object] = []
+        iterator = iter(planned)
+        while len(tasks) <= max_tasks:
+            if datetime.now(timezone.utc) >= context.deadline:
+                raise TimeoutError("execution context deadline expired while planning")
+            if context.cancel_check is not None and context.cancel_check():
+                raise RuntimeError("execution context was cancelled while planning")
+            try:
+                tasks.append(next(iterator))
+            except StopIteration:
+                break
         if len(tasks) > max_tasks:
             raise ValueError("format returned more tasks than requested")
         result.record_pass("bounded_plan")
@@ -204,7 +231,13 @@ def run_format_checks(
             output_schema, batches = plugin.execute(task, context)
             if output_schema != schema.arrow_schema:
                 raise ValueError("format output schema differs from the declared schema")
-            check_record_batches(output_schema, batches, result=result)
+            check_record_batches(
+                output_schema,
+                batches,
+                result=result,
+                cancel_check=context.cancel_check,
+                deadline=context.deadline,
+            )
         result.record_pass("execution")
     except Exception as exc:
         result.record_failure("format", str(exc))
