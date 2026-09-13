@@ -174,7 +174,11 @@ def _nested_leaf_paths(
             child = (*prefix, FieldSegment(field.name, _field_id(field)))
             paths.extend(_nested_leaf_paths(child, field.type))
         return paths
-    if pa.types.is_list(data_type) or pa.types.is_large_list(data_type):
+    if (
+        pa.types.is_list(data_type)
+        or pa.types.is_large_list(data_type)
+        or pa.types.is_fixed_size_list(data_type)
+    ):
         return _nested_leaf_paths((*prefix, ListElementSegment()), data_type.value_type)
     if pa.types.is_map(data_type):
         return [
@@ -202,6 +206,8 @@ def _sample_row(schema: pa.Schema) -> dict[str, object]:
 def _sample_value(name: str, data_type: pa.DataType) -> object:  # noqa: C901
     if pa.types.is_struct(data_type):
         return {field.name: _sample_value(field.name, field.type) for field in data_type}
+    if pa.types.is_fixed_size_list(data_type):
+        return [_sample_value(name, data_type.value_type) for _ in range(data_type.list_size)]
     if pa.types.is_list(data_type) or pa.types.is_large_list(data_type):
         return [_sample_value(name, data_type.value_type)]
     if pa.types.is_map(data_type):

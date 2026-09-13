@@ -49,6 +49,23 @@ def test_sample_row_matches_nested_typed_arrow_schema() -> None:
     assert row["ids"] == {1: "synthetic"}
 
 
+def test_sample_row_supports_fixed_size_lists_and_top_level_collections() -> None:
+    schema = pa.schema(
+        [
+            pa.field("fixed", pa.list_(pa.field("item", pa.int16()), 2), nullable=False),
+            pa.field("large", pa.large_list(pa.field("item", pa.string())), nullable=False),
+        ]
+    )
+
+    row = _sample_row(schema)
+    table = pa.Table.from_pylist([row], schema=schema)
+
+    assert table.num_rows == 1
+    assert row["fixed"] == [1, 1]
+    assert row["large"] == ["synthetic"]
+    assert _leaf_paths(schema) == ["fixed.$element", "large.$element"]
+
+
 def test_sample_row_rejects_unsupported_types_instead_of_inventing_values() -> None:
     schema = pa.schema([pa.field("duration", pa.duration("us"), nullable=False)])
 
