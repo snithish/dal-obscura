@@ -673,8 +673,9 @@ providers before Phase A's security/correctness prerequisites are accepted.
   `REPLACE_WITH_*` values and missing readable generated TLS files before Docker
   Compose is invoked. This keeps placeholder credentials and an uninitialized
   certificate boundary from reaching a running service.
-- Green evidence: shell syntax, secure-local architecture test, YAML parse, and
-  `git diff --check` passed.
+- Green evidence: shell syntax, secure-local architecture test, YAML parse,
+  temporary-profile `./run init`, distinct-key comparison, CA certificate
+  verification, and `git diff --check` passed.
 - Remaining gaps: real Docker startup, IdP/TLS browser flow, PostgreSQL role
   denial/allowance, and production artifact/recovery evidence remain open.
 
@@ -696,8 +697,9 @@ providers before Phase A's security/correctness prerequisites are accepted.
   certificates/keys from the same local CA. A migration guard replaces the
   earlier profile's copied UI key on the next `./run init`, preserving client-CA
   verification without sharing a private key across services.
-- Green evidence: shell syntax, secure-local architecture test, YAML parse, and
-  `git diff --check` passed.
+- Green evidence: shell syntax, secure-local architecture test, YAML parse,
+  temporary-profile `./run init`, distinct-key comparison, CA certificate
+  verification, and `git diff --check` passed.
 - Remaining gaps: real TLS client/server handshake, browser OIDC flow, and
   production certificate rotation evidence remain open.
 
