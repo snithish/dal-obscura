@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `1ca91f1` (plugin lifecycle formatting and
+Implementation follow-up through `a390084` (PostgreSQL grant CAS race probe;
+plugin lifecycle formatting and
 tests; plugin lifecycle architecture
 contract; PostgreSQL CI recovery probe;
 UI plugin lifecycle status display;
@@ -213,7 +214,9 @@ production build, Ruff, and Ty with the public SDK source path configured.
   mutations with publication, and binding/access writes expose an optional
   monotonic asset revision precondition that returns 409 on stale writers.
   PostgreSQL barrier evidence, full transaction rollback/idempotency, and
-  multi-process grant/binding evidence remain open. Delegated grant mutations now
+  multi-process grant/binding evidence remain open. A barrier-controlled grant
+  replacement regression now exercises the same asset revision CAS in the
+  PostgreSQL CI lane. Delegated grant mutations now
   lock the asset before checking grant-manager authority, eliminating a stale
   authorization snapshot between revocation and replacement. Publication
   capability checks now also run after acquiring that asset lock, so revocations
