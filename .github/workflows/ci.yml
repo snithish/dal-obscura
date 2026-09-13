@@ -90,7 +90,7 @@ jobs:
       - name: Run deterministic contracts
         run: >-
           uv run pytest tests/common tests/domain tests/application tests/connectors
-          tests/architecture -q
+          tests/architecture tests/plugin_platform/test_registry.py -q
 
   python-integration-tests:
     name: Python integration tests
