@@ -116,6 +116,10 @@ Follow-up `0ee3ee7` stops asset history, grants, and effective-access failures
 from becoming empty success states. Any protected read failure now leaves the
 previous editor intact and reports that access metadata could not be loaded.
 
+Follow-up `pending` removes hard-coded runtime values from the unconfigured
+settings state. Blank fields with examples now require positive operator input,
+so a successful `null` runtime read cannot be mistaken for serving configuration.
+
 ## Implementation update — identity migration (working slice, 2026-09-13)
 
 - Packet / status / candidate commit / owner: N05/F01 partial / VERIFY / pending atomic commit / control-plane.
