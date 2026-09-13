@@ -29,6 +29,7 @@ from dal_obscura.common.config_store.orm import (
     TenantRecord,
 )
 from dal_obscura.common.plugin_api import PluginRegistry
+from dal_obscura.common.query_planning.field_paths import parse_field_path, resolve_schema_path
 from dal_obscura.common.schema_identity import (
     schema_field_id,
     schema_has_stable_ids,
@@ -583,6 +584,7 @@ def _validate_schema_admission(asset: PublishedAsset, schema: pa.Schema) -> None
     admission = _mapping(asset.compiled_config.get("schema"))
     fields = admission.get("fields")
     if not isinstance(fields, list) or not fields:
+        _reject_unbound_broad_policy(asset, schema)
         return
     stable_ids = admission.get("stable_ids")
     if stable_ids is True and not schema_has_stable_ids(schema):
@@ -629,6 +631,36 @@ def _validate_schema_admission(asset: PublishedAsset, schema: pa.Schema) -> None
             raise ValueError(
                 "Published schema field type changed after review; review again."
             )
+
+
+def _reject_unbound_broad_policy(asset: PublishedAsset, schema: pa.Schema) -> None:
+    """Prevent legacy wildcard/parent grants from expanding on schema drift."""
+
+    policy = asset.compiled_config.get("policy")
+    if not isinstance(policy, dict):
+        return
+    rules = policy.get("rules")
+    if not isinstance(rules, list):
+        return
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        selectors: list[object] = []
+        columns = rule.get("columns")
+        if isinstance(columns, list):
+            selectors.extend(columns)
+        masks = rule.get("masks")
+        if isinstance(masks, dict):
+            selectors.extend(masks)
+        for selector in selectors:
+            if not isinstance(selector, str) or selector == "*":
+                raise ValueError("Published broad policy requires schema admission; review again.")
+            try:
+                field = resolve_schema_path(schema, parse_field_path(selector))
+            except ValueError:
+                continue
+            if pa.types.is_nested(field.type):
+                raise ValueError("Published parent policy requires schema admission; review again.")
 
 
 def _schema_identities(schema: pa.Schema) -> dict[tuple[tuple[str, ...], str], str]:

@@ -298,6 +298,39 @@ def test_schema_admission_rejects_unstable_live_schema_for_stable_publication():
         _validate_schema_admission(asset, schema)
 
 
+def test_legacy_wildcard_policy_requires_schema_admission():
+    asset = PublishedAsset(
+        publication_id=uuid4(),
+        tenant_id=uuid4(),
+        catalog="analytics",
+        target="default.users",
+        backend="iceberg",
+        compiled_config={"policy": {"rules": [{"columns": ["*"], "masks": {}}]}},
+        policy_version=1,
+    )
+
+    with pytest.raises(ValueError, match="requires schema admission"):
+        _validate_schema_admission(asset, pa.schema([pa.field("id", pa.int64())]))
+
+
+def test_legacy_parent_policy_requires_schema_admission():
+    asset = PublishedAsset(
+        publication_id=uuid4(),
+        tenant_id=uuid4(),
+        catalog="analytics",
+        target="default.users",
+        backend="iceberg",
+        compiled_config={"policy": {"rules": [{"columns": ["profile"], "masks": {}}]}},
+        policy_version=1,
+    )
+    schema = pa.schema(
+        [pa.field("profile", pa.struct([pa.field("email", pa.string())]))]
+    )
+
+    with pytest.raises(ValueError, match="requires schema admission"):
+        _validate_schema_admission(asset, schema)
+
+
 def test_published_store_fails_closed_by_default_after_transient_failure(
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
