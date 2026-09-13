@@ -46,6 +46,8 @@ from dal_obscura.control_plane.interfaces.session_api import (
 
 DemoTokenExchange = Callable[[Mapping[str, object], str], str]
 AuthorizationCodeExchange = Callable[[Mapping[str, object], str, str], Mapping[str, object]]
+MAX_BROWSER_SESSION_TTL_SECONDS = 86_400
+MAX_BROWSER_IDLE_TTL_SECONDS = 7_200
 
 
 @dataclass(frozen=True)
@@ -77,6 +79,14 @@ class ControlPlaneDeps:
     login_rate_limit_window_seconds: int = 60
     login_rate_limit_block_seconds: int = 300
     plugin_registry: PluginRegistry | None = None
+
+    def __post_init__(self) -> None:
+        if not 1 <= self.session_ttl_seconds <= MAX_BROWSER_SESSION_TTL_SECONDS:
+            raise ValueError("session TTL must be between 1 second and 24 hours")
+        if not 1 <= self.session_idle_ttl_seconds <= MAX_BROWSER_IDLE_TTL_SECONDS:
+            raise ValueError("idle session TTL must be between 1 second and 2 hours")
+        if self.session_idle_ttl_seconds > self.session_ttl_seconds:
+            raise ValueError("idle session TTL cannot exceed session TTL")
 
     def require_actor(
         self,

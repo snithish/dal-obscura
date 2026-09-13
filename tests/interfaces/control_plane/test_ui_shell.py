@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from dal_obscura.common.config_store.db import (
@@ -99,3 +100,14 @@ def test_cors_allows_browser_csrf_header_for_configured_ui_origin() -> None:
 
     assert response.status_code == 200
     assert "x-csrf-token" in response.headers["access-control-allow-headers"].lower()
+
+
+def test_browser_session_lifetimes_are_bounded() -> None:
+    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+    migrate_config_store(engine)
+    with pytest.raises(ValueError, match="24 hours"):
+        create_app(
+            session_factory(engine),
+            admin_token="test-admin",
+            session_ttl_seconds=86_401,
+        )
