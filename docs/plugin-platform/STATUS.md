@@ -394,6 +394,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Verification: asset API tests pass; UI TypeScript compilation and Vite production build pass; targeted Ruff checks pass after formatting.
 - Remaining gate: browser and multi-actor acceptance still require the N11/B15 live journey and independent UX/security review.
 
+## 2026-09-13 — N11 management failure states
+
+- Scope: authenticated management navigation and forbidden/error handling.
+- Observable behavior delivered: management loads now retain a distinct error state and render an explicit unavailable/permission message with a retry action instead of falling through to empty tables or default settings. HTTP 403 is explained as missing management permission; other failures identify server/session availability.
+- Verification: UI TypeScript compilation and Vite production build pass.
+- Remaining gate: browser permission matrix and independent UX/security evidence remain VERIFY under B15/B22.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
