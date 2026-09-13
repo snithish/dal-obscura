@@ -74,6 +74,14 @@ failures/errors in 125.394 seconds.
 - Evidence: governance UI TypeScript build, Vite production build (272.01 kB JS / 82.09 kB gzip) and 5 lifecycle tests — passed.
 - Remaining N02 work: remove remaining legacy module aliases from write/compile paths after the offline migration proves populated fixtures; retain strict unknown-record failure and the canonical SDK contract. Release remains HOLD.
 
+## Implementation update — 2388668 (2026-09-14)
+
+- Packet / status / candidate commit / owner: N03/B05 partial / VERIFY / `2388668` / API acceptance tests.
+- Observable behavior covered: existing asset binding and grant mutations that omit `expected_revision` return the structured 428 precondition error and leave the resource unchanged. This closes two previously untested B05 cases without weakening creation semantics.
+- Changed paths: `tests/interfaces/control_plane/test_assets_api.py` only; no production or pickle changes.
+- Evidence: owning asset API suite — 20 passed; changed-path Ruff check/format — passed.
+- Remaining N03 work: complete parameterized cross-resource race/process evidence, generated DTO coverage, and the referenced-draft review contract. Release remains HOLD.
+
 ## Implementation update — 96573bb (2026-09-14)
 
 - Packet / status / candidate commit / owner: N02/F13 partial / VERIFY / `96573bb` / control-plane API.
