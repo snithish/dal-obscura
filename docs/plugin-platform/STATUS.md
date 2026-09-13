@@ -65,6 +65,13 @@ timed restore. See F08/F09 and N12/N13/N15. Reuse the existing harnesses.
 - Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane/test_audit_api.py tests/architecture/test_control_plane_route_inventory.py -q` — 5 passed; changed Python `ruff check` — passed.
 - Remaining N11/B15 work: activity filter controls still need UI wiring and the complete permission/settings/consumer qualification remains open.
 
+## Implementation update — e4764f5 (2026-09-13)
+
+- Packet / status / candidate commit / owner: N11 partial / VERIFY / `e4764f5` / governance UI.
+- Observable behavior delivered: Activity now exposes actor, action, request ID, resource type, outcome, and time-window filters. Applying or clearing filters reloads the server-scoped keyset query; loading more retains the same filter set.
+- Evidence: `apps/governance-ui/node_modules/.bin/tsc -p apps/governance-ui/tsconfig.json` — passed. The pnpm wrapper remains environment-blocked while resolving the pinned package manager from the npm registry.
+- Remaining N11/B15 work: full permission matrix, settings and consumer handoff qualification, production browser evidence, and independent UX/security review.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
