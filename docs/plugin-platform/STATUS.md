@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `414581e` (bounded discovery page typing;
+Implementation follow-up through `80fedc2` (direct policy mutation locking;
+bounded discovery page typing;
 table-handle identity binding;
 public page-entry bounds;
 public continuation validation;
@@ -541,6 +542,19 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Remaining gaps: PostgreSQL barrier interleavings, independent-process races,
   failure injection at every transaction boundary, and production recovery
   evidence remain open. Pickle compatibility is unchanged.
+
+### X03 direct policy mutation locking — `80fedc2`
+
+- State: implementing.
+- Behavior: repository-level policy-rule replacement now locks the asset row
+  internally before deleting or inserting rules. Direct repository callers
+  therefore cannot bypass the publication serialization boundary enforced by
+  application services.
+- Green evidence: publication-store and policy-authorization suites (12
+  passed), Ruff, and `git diff --check`.
+- Remaining gaps: PostgreSQL barrier interleavings, full revision/CAS coverage,
+  and multi-process grant/binding evidence remain open. Pickle compatibility is
+  unchanged.
 
 ### X12 plugin lock identity validation — `ca88316`
 
