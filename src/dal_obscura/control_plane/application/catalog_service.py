@@ -17,7 +17,11 @@ from urllib.parse import parse_qsl, urlsplit
 
 from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.control_plane.application.errors import ValidationFailure
-from dal_obscura.control_plane.infrastructure.catalog_discovery import discover_catalog_tables
+from dal_obscura.control_plane.infrastructure.catalog_discovery import (
+    ICEBERG_CATALOG_MODULE,
+    discover_catalog_tables,
+    discover_public_catalog_tables,
+)
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
     EnvSecretProvider,
@@ -88,6 +92,7 @@ def discover_workspace_catalog_tables(
     discover: CatalogDiscoverer = discover_catalog_tables,
     egress_allowlist: tuple[str, ...] = (),
     session_key: str | None = None,
+    plugin_registry: PluginRegistry | None = None,
 ) -> dict[str, object]:
     """Discovers tables for a configured workspace catalog.
 
@@ -104,11 +109,23 @@ def discover_workspace_catalog_tables(
     catalog_options = _resolve_catalog_secrets(catalog_options)
     try:
         with _admit_session_discovery(session_key):
-            tables = discover(
-                str(catalog["name"]),
-                str(catalog["module"]),
-                catalog_options,
-            )
+            if (
+                plugin_registry is not None
+                and str(catalog["module"]) != ICEBERG_CATALOG_MODULE
+            ):
+                tables = discover_public_catalog_tables(
+                    str(catalog["name"]),
+                    str(catalog["module"]),
+                    catalog_options,
+                    revision=_catalog_revision(catalog),
+                    plugin_registry=plugin_registry,
+                )
+            else:
+                tables = discover(
+                    str(catalog["name"]),
+                    str(catalog["module"]),
+                    catalog_options,
+                )
     except ValidationFailure:
         raise
     except Exception as exc:
@@ -143,6 +160,7 @@ def diagnose_workspace_catalog(
     discover: CatalogDiscoverer = discover_catalog_tables,
     egress_allowlist: tuple[str, ...] = (),
     session_key: str | None = None,
+    plugin_registry: PluginRegistry | None = None,
 ) -> dict[str, object]:
     """Runs bounded catalog discovery and returns a redacted readiness result."""
 
@@ -155,7 +173,16 @@ def diagnose_workspace_catalog(
     try:
         with _admit_session_discovery(session_key):
             tables = list(
-                discover(
+                discover_public_catalog_tables(
+                    str(catalog["name"]),
+                    str(catalog["module"]),
+                    catalog_options,
+                    revision=_catalog_revision(catalog),
+                    plugin_registry=plugin_registry,
+                )
+                if plugin_registry is not None
+                and str(catalog["module"]) != ICEBERG_CATALOG_MODULE
+                else discover(
                     str(catalog["name"]),
                     str(catalog["module"]),
                     catalog_options,
@@ -237,6 +264,18 @@ def _required_workspace_context(store: PublicationStore):
     if context is None:
         raise LookupError("No workspace has been configured")
     return context
+
+
+def _catalog_revision(catalog: dict[str, object]) -> int:
+    raw_revision = catalog.get("revision", 0)
+    if isinstance(raw_revision, bool):
+        return 0
+    if isinstance(raw_revision, (int, str)):
+        try:
+            return max(0, int(raw_revision))
+        except ValueError:
+            return 0
+    return 0
 
 
 def _resolve_catalog_secrets(options: dict[str, Any]) -> dict[str, Any]:

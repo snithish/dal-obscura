@@ -217,6 +217,7 @@ class ProvisioningService:
             discover=discover_catalog_tables,
             egress_allowlist=self._catalog_egress_allowlist,
             session_key=actor.identity_key() if actor is not None else None,
+            plugin_registry=self._plugin_registry,
         )
 
     def diagnose_workspace_catalog(
@@ -231,6 +232,7 @@ class ProvisioningService:
             discover=discover_catalog_tables,
             egress_allowlist=self._catalog_egress_allowlist,
             session_key=actor.identity_key() if actor is not None else None,
+            plugin_registry=self._plugin_registry,
         )
 
     def list_workspace_assets(

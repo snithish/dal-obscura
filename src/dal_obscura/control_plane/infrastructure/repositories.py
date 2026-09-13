@@ -778,6 +778,7 @@ class PublicationStore:
             "name": record.name,
             "module": record.module,
             "options": dict(record.options_json),
+            "revision": record.revision,
         }
 
     def list_assets(self, cell_id: UUID) -> list[dict[str, object]]:

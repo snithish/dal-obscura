@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import pytest
+from dal_obscura_plugin_api import DiscoveryPage, PluginDescriptor, TableIdentifier
 
 import dal_obscura.control_plane.application.catalog_service as catalog_service
 import dal_obscura.control_plane.infrastructure.catalog_discovery as discovery
 from dal_obscura.control_plane.infrastructure.catalog_discovery import (
     discover_iceberg_tables,
+    discover_public_catalog_tables,
 )
 
 
@@ -34,6 +36,62 @@ def test_iceberg_discovery_lists_tables_across_namespaces():
         {"backend": "iceberg", "name": "default.users", "table_identifier": "default.users"},
         {"backend": "iceberg", "name": "prod.orders", "table_identifier": "prod.orders"},
     ]
+
+
+def test_public_catalog_discovery_uses_admitted_plugin_and_closes_it():
+    closed = []
+    received_revision = []
+
+    class PublicCatalog:
+        descriptor = PluginDescriptor(
+            kind="catalog",
+            plugin_id="fixture.catalog",
+            api_version="1",
+            config_version=1,
+            distribution="fixture",
+            version="1.0.0",
+        )
+
+        def list_tables(self, context, *, continuation=None, limit):
+            del context, limit
+            entries = (
+                (TableIdentifier(namespace=("default",), name="orders"),)
+                if continuation is not None
+                else (TableIdentifier(namespace=("default",), name="users"),)
+            )
+            return DiscoveryPage(entries=entries, continuation=None)
+
+        def close(self):
+            closed.append(True)
+
+    class Registry:
+        def load(self, kind, plugin_id):
+            assert (kind, plugin_id) == ("catalog", "fixture.catalog")
+
+            def factory(config, context):
+                del context
+                received_revision.append(config.revision)
+                return PublicCatalog()
+
+            return factory
+
+    tables = discover_public_catalog_tables(
+        "analytics",
+        "fixture.catalog",
+        {"uri": "https://catalog.example"},
+        revision=4,
+        plugin_registry=Registry(),
+    )
+
+    assert tables == [
+        {
+            "backend": "fixture.catalog",
+            "name": "default.users",
+            "table_identifier": "default.users",
+        }
+    ]
+    assert received_revision == [4]
+    assert closed == [True]
 
 
 def test_iceberg_discovery_rejects_namespace_explosion():

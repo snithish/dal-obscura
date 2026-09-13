@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from collections.abc import Callable, Iterable, Iterator
+from datetime import datetime, timedelta, timezone
 from threading import BoundedSemaphore
 from time import monotonic
 from typing import Any
@@ -48,6 +49,67 @@ def discover_catalog_tables(
         )
     _catalog_type(module)
     raise ValueError(f"Unsupported catalog module: {module}")
+
+
+def discover_public_catalog_tables(
+    catalog_name: str,
+    plugin_id: str,
+    options: dict[str, Any],
+    *,
+    revision: int = 0,
+    plugin_registry: Any,
+) -> list[CatalogTable]:
+    """Discover tables through one admitted public catalog plugin."""
+
+    if plugin_registry is None:
+        raise ValueError("An admitted plugin registry is required for external discovery")
+    factory = plugin_registry.load("catalog", plugin_id)
+    if not callable(factory):
+        raise ValueError("Admitted catalog factory is invalid")
+    from dal_obscura_plugin_api import CatalogConfig, ExecutionContext
+
+    context = ExecutionContext(
+        deadline=datetime.now(timezone.utc) + timedelta(seconds=DEFAULT_DEADLINE_SECONDS),
+        correlation_id=f"catalog-discovery-{catalog_name}",
+    )
+    plugin = factory(
+        CatalogConfig(
+            plugin_id=plugin_id,
+            instance_id=catalog_name,
+            revision=revision,
+            options=dict(options),
+        ),
+        context,
+    )
+    try:
+        deadline_at = monotonic() + DEFAULT_DEADLINE_SECONDS
+        continuation: str | None = None
+        seen: set[str] = set()
+        tables: list[CatalogTable] = []
+        for _ in range(DEFAULT_MAX_NAMESPACES):
+            _check_budget(deadline_at, context.cancel_check)
+            page = plugin.list_tables(context, continuation=continuation, limit=500)
+            if not hasattr(page, "entries") or not hasattr(page, "continuation"):
+                raise ValueError("Catalog plugin returned an invalid discovery page")
+            for identifier in page.entries:
+                if not hasattr(identifier, "namespace") or not hasattr(identifier, "name"):
+                    raise ValueError("Catalog plugin returned an invalid table identifier")
+                name = ".".join((*identifier.namespace, identifier.name))
+                tables.append({"backend": plugin_id, "name": name, "table_identifier": name})
+                if len(tables) > DEFAULT_MAX_TABLES:
+                    raise ValueError("Catalog discovery exceeded the table limit")
+            token = page.continuation
+            if token is None:
+                return tables
+            if not isinstance(token, str) or not token or token in seen:
+                raise ValueError("Catalog plugin returned an invalid continuation token")
+            seen.add(token)
+            continuation = token
+        raise ValueError("Catalog discovery exceeded the page limit")
+    finally:
+        close = getattr(plugin, "close", None)
+        if callable(close):
+            close()
 
 
 def _catalog_type(module: str) -> CatalogType:
