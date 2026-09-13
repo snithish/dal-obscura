@@ -88,6 +88,12 @@ Plugin-platform and architecture regression evidence: `UV_CACHE_DIR=/tmp/dal-obs
 - Evidence: actor-auth and OIDC login tests passed; changed-path Ruff passed; UI TypeScript, Vite production build, and lifecycle tests passed.
 - Remaining N05/N11/B15 work: structured principal-kind persistence, two-process OIDC freshness, browser login/logout/expiry, complete actor capability matrix, and independent security/UX review.
 
+Follow-up `pending` extends abort propagation through plugin, catalog,
+publication, runtime, and authentication-provider reads. Connections discovery
+and diagnostics abort superseded requests on component teardown or replacement;
+stale errors do not overwrite the current view. Direct UI TypeScript/Vite build
+and lifecycle tests pass.
+
 ## Implementation update — identity migration (working slice, 2026-09-13)
 
 - Packet / status / candidate commit / owner: N05/F01 partial / VERIFY / pending atomic commit / control-plane.

@@ -102,7 +102,6 @@ function App() {
   const inventoryEpoch = useRef(0);
   const searchTimer = useRef<number | undefined>(undefined);
   const managementEpoch = useRef(0);
-  const connectionsEpoch = useRef(0);
   const assetAbortController = useRef<AbortController | null>(null);
   const managementAbortController = useRef<AbortController | null>(null);
   const workspaceAbortController = useRef<AbortController | null>(null);
@@ -197,8 +196,8 @@ function App() {
       let next: ManagementData = {};
       if (destination === "changes") { const pageResult = await controlPlane.listHistoryPage({ limit: 50, signal: controller.signal }); next = { history: pageResult.items, historyNextCursor: pageResult.next_cursor }; }
       if (destination === "activity") { const audit = await controlPlane.listAuditEventsPage({ limit: 50, ...auditFilters, signal: controller.signal }); next = { history: await controlPlane.listHistory(controller.signal), events: audit.items, eventsNextCursor: audit.next_cursor, summary: await controlPlane.getSummary(controller.signal), observations: await controlPlane.getObservations(controller.signal) }; }
-      if (destination === "connections") { const pluginData = await controlPlane.listPlugins(); next = { catalogs: await controlPlane.listCatalogs(), publications: session?.platform_admin ? await controlPlane.listWorkspacePublications() : [], plugins: pluginData.plugins, pluginStates: pluginData.states, pluginPairs: pluginData.pairs }; }
-      if (destination === "settings") { const [runtime, providers, revision] = await Promise.all([controlPlane.getRuntimeSettings(), controlPlane.getAuthProviders(), controlPlane.getAuthProviderRevision()]); next = { runtime, providers, providerRevision: revision.revision, publications: session?.platform_admin ? await controlPlane.listWorkspacePublications() : [] }; }
+      if (destination === "connections") { const pluginData = await controlPlane.listPlugins(controller.signal); next = { catalogs: await controlPlane.listCatalogs(controller.signal), publications: session?.platform_admin ? await controlPlane.listWorkspacePublications(controller.signal) : [], plugins: pluginData.plugins, pluginStates: pluginData.states, pluginPairs: pluginData.pairs }; }
+      if (destination === "settings") { const [runtime, providers, revision] = await Promise.all([controlPlane.getRuntimeSettings(controller.signal), controlPlane.getAuthProviders(controller.signal), controlPlane.getAuthProviderRevision(controller.signal)]); next = { runtime, providers, providerRevision: revision.revision, publications: session?.platform_admin ? await controlPlane.listWorkspacePublications(controller.signal) : [] }; }
       if (!isCurrentEpoch(epoch, managementEpoch.current)) return;
       setManagementData(next);
     } catch (error) {
@@ -803,6 +802,12 @@ function ConnectionsView({ catalogs, publications, plugins, pluginStates, plugin
   const [diagnosing, setDiagnosing] = useState("");
   const [publishing, setPublishing] = useState(false);
   const discoveryEpoch = useRef(0);
+  const discoveryAbortController = useRef<AbortController | null>(null);
+  const diagnosticAbortController = useRef<AbortController | null>(null);
+  useEffect(() => () => {
+    discoveryAbortController.current?.abort();
+    diagnosticAbortController.current?.abort();
+  }, []);
   useEffect(() => {
     setPluginId((current) => catalogPlugins.some((plugin) => plugin.plugin_id === current) ? current : (catalogPlugins[0]?.plugin_id ?? "iceberg.sql"));
   }, [plugins]);
@@ -827,30 +832,38 @@ function ConnectionsView({ catalogs, publications, plugins, pluginStates, plugin
   }
   async function discover(catalog: string) {
     const epoch = ++discoveryEpoch.current;
+    discoveryAbortController.current?.abort();
+    const controller = new AbortController();
+    discoveryAbortController.current = controller;
     try {
       const catalogRow = catalogs.find((item) => item.name === catalog);
       const catalogPluginId = catalogRow?.module === "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog" ? "iceberg.sql" : catalogRow?.module;
       const choices = pluginPairs.filter((pair) => pair.catalog_plugin_id === catalogPluginId && pair.status === "admitted");
-      const discovered = await controlPlane.discoverCatalogTables(catalog);
+      const discovered = await controlPlane.discoverCatalogTables(catalog, controller.signal);
       if (epoch !== discoveryEpoch.current) return;
       setDiscoveredCatalog(catalog);
       setSelectedFormatId(choices.length === 1 ? choices[0].format_plugin_id : "");
       setTables(discovered.tables);
       setMessage(`Loaded table inventory for ${catalog}.`);
-    } catch {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
       if (epoch !== discoveryEpoch.current) return;
       setTables([]); setMessage("Discovery failed; source credentials and endpoint policy were not changed.");
     }
   }
   async function diagnose(catalog: string) {
+    diagnosticAbortController.current?.abort();
+    const controller = new AbortController();
+    diagnosticAbortController.current = controller;
     setDiagnosing(catalog);
     try {
-      const result = await controlPlane.diagnoseCatalog(catalog);
+      const result = await controlPlane.diagnoseCatalog(catalog, controller.signal);
       setDiagnostics((current) => ({ ...current, [catalog]: result }));
-    } catch {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
       setDiagnostics((current) => ({ ...current, [catalog]: { catalog, status: "unavailable", message: "Diagnostic request failed", checked_at: new Date().toISOString() } }));
     } finally {
-      setDiagnosing("");
+      if (controller === diagnosticAbortController.current) setDiagnosing("");
     }
   }
   async function govern(catalog: string, table: Record<string, unknown>) {
