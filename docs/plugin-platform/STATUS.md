@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `ee6b405` (PostgreSQL draft CAS race gate;
+Implementation follow-up through `917a095` (CI PostgreSQL concurrency lane;
+PostgreSQL draft CAS race gate;
 loopback-bound Flight test harness;
 separate local TLS trust domains;
 immutable infrastructure image
@@ -731,6 +732,17 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Remaining gaps: execute against real PostgreSQL in a socket-enabled CI lane,
   extend barriers to publication/grant/rebind orderings, and run rollback
   injection coverage before accepting A03/A04.
+
+### X03 CI PostgreSQL concurrency lane — `917a095`
+
+- State: implemented-unverified.
+- Behavior: CI now provisions a disposable PostgreSQL service, installs the
+  PostgreSQL driver extra, runs the barrier-based draft CAS gate, and makes that
+  job a prerequisite for container publication.
+- Green evidence: workflow YAML parse and CI architecture contract tests passed
+  locally; hosted execution remains required for database-lock evidence.
+- Remaining gaps: publication/grant/rebind race matrix, rollback injection, and
+  multi-process revocation scenarios remain open.
 
 ### X14 scoped secret inputs in Connections — `2b81337`
 
