@@ -89,7 +89,7 @@ class BrowserSessionStore:
                 BrowserSessionRecord.token_hash == digest,
                 BrowserSessionRecord.revoked_at.is_(None),
                 BrowserSessionRecord.expires_at > now,
-            )
+            ).with_for_update()
         )
         if record is None:
             return None
@@ -122,7 +122,7 @@ class BrowserSessionStore:
             select(BrowserSessionRecord).where(
                 BrowserSessionRecord.token_hash == _token_hash(token),
                 BrowserSessionRecord.revoked_at.is_(None),
-            )
+            ).with_for_update()
         )
         if record is None:
             return False
@@ -337,7 +337,7 @@ class LoginTransactionStore:
                 LoginTransactionRecord.state_hash == _token_hash(state),
                 LoginTransactionRecord.consumed_at.is_(None),
                 LoginTransactionRecord.expires_at > utcnow(),
-            )
+            ).with_for_update()
         )
         if record is None:
             return None
