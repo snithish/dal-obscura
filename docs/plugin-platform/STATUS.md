@@ -146,6 +146,11 @@ retaining server-side evaluation, review, and publish actions. Route inventory,
 API, and UI regression/build checks pass; browser rendering and multi-process
 handoff races remain VERIFY.
 
+Follow-up `af81794` aligns the selected-draft error contract with B05: stale
+evaluation revisions return 409, missing selected drafts remain concealed as
+404, and the cross-identity regression proves an editor change invalidates a
+publisher's expected revision.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
