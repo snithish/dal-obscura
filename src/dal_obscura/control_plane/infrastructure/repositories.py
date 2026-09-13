@@ -35,6 +35,7 @@ from dal_obscura.common.config_store.orm import (
     TenantRecord,
     utcnow,
 )
+from dal_obscura.common.schema_identity import canonical_provider_field_id
 from dal_obscura.control_plane.application.errors import PublicationConflictError
 from dal_obscura.control_plane.domain.models import (
     AssetDraft,
@@ -2144,6 +2145,8 @@ def _normalize_schema_fields(fields: list[dict[str, Any]]) -> list[dict[str, obj
                 raise ValueError("Schema field id must be text")
             field_id = raw_field_id.strip()
             _validate_schema_text(field_id, "Schema field id", max_length=128)
+            if not field_id.startswith(("synthetic:", "legacy:")):
+                field_id = canonical_provider_field_id(field_id)
         if not field_id:
             raise ValueError("Schema field id must be non-empty")
         if field_id in seen_ids:

@@ -90,7 +90,7 @@ def test_manifest_catalog_and_parquet_format_split_nested_rows(tmp_path):
     identities = dict(
         cast(tuple[tuple[str, str], ...], handle.metadata["schema_identities"])
     )
-    assert identities["id"] == "id"
+    assert identities["id"] == "iceberg:id"
     assert identities["profile.email"].startswith("synthetic:")
 
 

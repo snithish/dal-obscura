@@ -39,15 +39,21 @@ def schema_field_id(
 
     raw_id = _provider_field_id(field)
     if raw_id is not None:
-        if ":" not in raw_id:
-            raw_id = f"iceberg:{raw_id}"
-        return raw_id, True
+        return canonical_provider_field_id(raw_id), True
     scope = scope_digest or ""
     path_value = tuple(path)
     path_digest = hashlib.sha256(
         json.dumps(path_value, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     ).hexdigest()[:24]
     return f"{SYNTHETIC_ID_PREFIX}{scope[:32]}:{path_digest}", False
+
+
+def canonical_provider_field_id(value: str) -> str:
+    """Normalize a bounded provider identity into the shared vocabulary."""
+
+    if not isinstance(value, str) or not value:
+        raise ValueError("Provider field ID must be non-empty text")
+    return value if ":" in value else f"iceberg:{value}"
 
 
 def schema_has_stable_ids(schema: pa.Schema) -> bool:
@@ -83,7 +89,7 @@ def _provider_field_id(field: pa.Field) -> str | None:
                 and len(value) <= MAX_PROVIDER_FIELD_ID_LENGTH
                 and not any(ord(char) < 0x20 or ord(char) == 0x7F for char in value)
             ):
-                return value
+                return canonical_provider_field_id(value)
     return None
 
 

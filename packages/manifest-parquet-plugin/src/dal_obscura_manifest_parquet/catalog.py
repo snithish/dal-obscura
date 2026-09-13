@@ -21,6 +21,8 @@ from dal_obscura_plugin_api import (
     TableIdentifier,
 )
 
+from dal_obscura.common.schema_identity import canonical_provider_field_id
+
 _MAX_MANIFEST_BYTES = 1_048_576
 _MAX_TABLES = 10_000
 _MAX_FILES_PER_TABLE = 100_000
@@ -260,9 +262,12 @@ def _schema_identities(
 
     def visit(field: pa.Field, path: tuple[str, ...], anchor: str) -> None:
         path_text = ".".join(path)
-        field_id = anchor if len(path) == 1 else "synthetic:" + hashlib.sha256(
-            f"{anchor}:{path_text}".encode()
-        ).hexdigest()[:32]
+        if len(path) == 1:
+            field_id = canonical_provider_field_id(anchor)
+        else:
+            field_id = "synthetic:" + hashlib.sha256(
+                f"{anchor}:{path_text}".encode()
+            ).hexdigest()[:32]
         identities.append((path_text, field_id))
         type_ = field.type
         if pa.types.is_struct(type_):
