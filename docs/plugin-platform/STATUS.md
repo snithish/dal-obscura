@@ -222,6 +222,13 @@ and schema tests passed (5). No pickle fixture or serializer paths changed.
 - Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane/test_catalogs_api.py tests/interfaces/control_plane/test_assets_api.py tests/control_plane/test_publication_store.py tests/control_plane/test_asset_grant_authorization.py -q` — 34 passed; changed-path Ruff and `git diff --check` passed.
 - Remaining N03/B05 work: runtime/auth-provider write preconditions, explicit activation generation precondition, safe structured error envelopes, process race evidence, and generated DTO/browser proof. Release remains HOLD.
 
+Follow-up `d9ddea4` migrates the existing control-plane, integration, connector,
+and E2E fixture callers to send the revision required by the new CAS contract,
+including sequential owner/grant updates. `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache
+uv run --no-sync pytest tests/control_plane tests/interfaces/control_plane -q`
+passed; changed test paths pass Ruff. Socket-backed Flight and benchmark lanes
+remain environment-blocked in this sandbox and are still VERIFY.
+
 ## Implementation update — 2e23b25 (2026-09-13)
 
 - Packet / status / candidate commit / owner: N02/N05 UI authentication cleanup / VERIFY / `2e23b25` / governance UI.
