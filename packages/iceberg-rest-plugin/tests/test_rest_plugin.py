@@ -125,7 +125,7 @@ def test_rest_catalog_requests_receive_deadline_bounded_timeout() -> None:
     )
     token = module._ACTIVE_REQUEST_BUDGET.set((context.deadline, None, 5.0, 30.0))
     try:
-        assert session.request("GET", "https://catalog.example") == "ok"
+        assert session.request("GET", "https://catalog.example", timeout=999) == "ok"
     finally:
         module._ACTIVE_REQUEST_BUDGET.reset(token)
 

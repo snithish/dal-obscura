@@ -367,7 +367,9 @@ def _install_request_timeout(session: Any, connect_timeout: float, read_timeout:
                 min(configured_connect, remaining),
                 min(configured_read, remaining),
             )
-        kwargs.setdefault("timeout", timeout)
+        # Provider methods must not be able to opt out of the gateway budget
+        # by supplying an unbounded or larger requests timeout.
+        kwargs["timeout"] = timeout
         return original_request(method, url, **kwargs)
 
     session.request = request
