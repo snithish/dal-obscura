@@ -66,6 +66,10 @@ Authoritative post-identity qualification (`/tmp/dal-obscura-identity.xml`) coll
 830 tests, passed 816, skipped the same 14 explicit opt-in lanes, and reported zero
 failures/errors in 125.768 seconds with loopback/subprocess permissions enabled.
 
+Follow-up `54bea07` makes typed-key migration rerunnable after an issuer is removed
+from configuration; current `issuer|u|subject` and `issuer|g|group` shapes are
+recognized without treating them as unresolved legacy data. Five migration tests pass.
+
 ## Implementation update — 8a615c3 (2026-09-14)
 
 - Packet / status / candidate commit / owner: N01/B01-B02 / VERIFY / `8a615c3` / toolchain and documentation.
