@@ -1,7 +1,10 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `78363e9` (dead-code inventory guard;
+Implementation follow-up through `4a790ed` (capacity evidence runbook;
+reproducible capacity runner;
+capacity runbook contract guard;
+dead-code inventory guard;
 bounded Flight readiness polling;
 independent plugin-pair conformance;
 schema-evolution admission guard;
@@ -2928,6 +2931,21 @@ otherwise continue locally executable X06/X07/X08 acceptance work
   thresholds, benchmark timing, live consumer/provider lanes, and independent
   review remain open. Any future deletion requires a new inventory entry and a
   separate behavioral commit.
+
+### X21 capacity measurement harness — `b19d8f8`, `51d30cc`, `4a790ed`
+
+- State: implementing.
+- Behavior: the architecture contract test guards an executable capacity runner
+  and the A21 runbook. The runner records commit/lock/platform metadata, refuses
+  to overwrite evidence, executes the masking, multifile Iceberg, and streaming
+  benchmark suites for a configurable number of comparable runs, and emits
+  separate JSON artifacts. The runbook defines the 4-vCPU/8-GiB workload,
+  throughput/latency/RSS thresholds, cancellation cleanup, and the required
+  60-minute 16-consumer workload without claiming unexecuted capacity.
+- Green evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/architecture/test_capacity_runbook.py -q` (1 passed), targeted Ruff, shell syntax, and `git diff --check` passed.
+- Remaining gaps: the required five-run benchmark set and 60-minute mixed
+  workload still need a socket-enabled, 4-vCPU/8-GiB runner; no capacity or
+  alert threshold is marked accepted until those artifacts are recorded.
 
 ## Evidence entry template
 
