@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `4e2ac7d` (session-expiry fence at `4e2ac7d`; public option bounds at `17ab77f`; symlink rejection at `6136224`; malformed-entry isolation at `6c129d3`; REST descriptor contract at `7adb4d6`; concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
+Implementation follow-up through `97663b7` (manifest deadline enforcement at `97663b7`; session-expiry fence at `4e2ac7d`; public option bounds at `17ab77f`; symlink rejection at `6136224`; malformed-entry isolation at `6c129d3`; REST descriptor contract at `7adb4d6`; concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -24,6 +24,9 @@ The UI API client now broadcasts authenticated `401` responses; the app fences
 loaded policy, schema, plugin, and management state before showing the sign-in
 surface again, covering server-side session expiry and revocation while a page is
 open.
+Manifest and Parquet plugin operations now enforce deadline/cancellation checks
+during initialization and per-file/per-row-group planning, so expired work stops
+before additional member metadata is opened.
 Local probes are recorded in [the review](IMPLEMENTATION_REVIEW.md).
 Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_STATUS.md).
 
@@ -216,7 +219,8 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   Parquet row group with nested projection support. Nested descendants now receive
   deterministic schema-scoped synthetic IDs anchored to manifest top-level IDs.
   Escape, symlink, unreadable-member, schema-drift, and corrupt-member execution
-  tests pass.
+  tests pass; deadline/cancellation checks run during manifest and row-group
+  planning.
   Core admission wiring, retry evidence, and live wheel/UI/
   consumer qualification remain open.
 - X18 consumer qualification: **implementing**; Python/DuckDB connector tests and
