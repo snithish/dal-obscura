@@ -189,7 +189,11 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   row-group execution tests pass. Core admission wiring, schema-scoped IDs beyond
   top-level fields, retry evidence, and live wheel/UI/
   consumer qualification remain open.
-- X18 consumer qualification: **not-started**.
+- X18 consumer qualification: **implementing**; Python/DuckDB connector tests and
+  the Java/Spark Maven reactor pass in the local lanes (the JVM lane required
+  socket permission). Real TLS/OIDC Flight runs, exact nested goldens across both
+  admitted pairs, retry/expiry/revocation behavior, and clean version-matrix
+  artifacts remain open.
 - X19 secure deployment and identity lifecycle: **implementing**; production
   Compose now separates migration/control/data credentials, provisions isolated
   PostgreSQL roles, orders readiness through migration and post-migration ticket
