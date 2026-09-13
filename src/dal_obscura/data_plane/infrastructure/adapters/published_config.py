@@ -668,7 +668,7 @@ def _catalog_type(config: dict[str, Any]) -> CatalogType:
         return "iceberg"
     # External catalogs are executed through the public-plugin adapter. The
     # legacy type remains an internal compatibility value for CatalogConfig.
-    return cast(CatalogType, "iceberg")
+    return "iceberg"
 
 
 def _known_catalog_type(value: str) -> CatalogType:

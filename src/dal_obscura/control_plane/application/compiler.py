@@ -227,7 +227,7 @@ class PublicationCompiler:
         admitted = self._plugin_registry.admitted()
         if not admitted:
             admitted = self._plugin_registry.reload()
-        return admitted
+        return cast(dict[tuple[str, str], object], admitted)
 
 
     def _compile_rule(self, rule: PolicyRuleDraft) -> CompiledPolicyRule:
