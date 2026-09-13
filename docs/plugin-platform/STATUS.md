@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `4f7d782` (secure-local deployment edge path;
+Implementation follow-up through `ac04fba` (strict test typing; secure-local
+deployment edge path;
 stream iterator cleanup;
 idempotency operation write locking;
 draft write serialization;
@@ -651,6 +652,16 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Remaining gaps: Docker startup, real TLS/OIDC browser flow, PostgreSQL role
   denial/allowance, restart/recovery, provider/consumer qualification, and clean
   image/wheel/security artifacts remain open.
+
+### X21 strict test typing — `ac04fba`
+
+- State: implemented-unverified.
+- Behavior: cleanup and secure-local architecture regression tests now satisfy
+  the repository's strict type checker without changing runtime behavior.
+- Green evidence: full `ty check` with all four standalone plugin source roots,
+  targeted Ruff, and `git diff --check` passed.
+- Remaining gaps: network-bound Flight/subprocess benchmark lanes remain
+  sandbox-blocked and must run in a socket-enabled CI environment.
 
 ### X14 scoped secret inputs in Connections — `2b81337`
 
