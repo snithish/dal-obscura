@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `32d0623` (loopback-bound Flight test harness;
+Implementation follow-up through `ee6b405` (PostgreSQL draft CAS race gate;
+loopback-bound Flight test harness;
 separate local TLS trust domains;
 immutable infrastructure image
 digests; secure-local fail-closed preflight;
@@ -716,6 +717,20 @@ providers before Phase A's security/correctness prerequisites are accepted.
   denied, including loopback.
 - Remaining gaps: socket-enabled CI must execute the Python/DuckDB, Flight, and
   E2E consumer lanes.
+
+### X03 PostgreSQL draft CAS race gate — `ee6b405`
+
+- State: implemented-unverified.
+- Behavior: `tests/integration/control_plane/test_publication_races.py` provisions
+  unique assets and uses independent SQLAlchemy sessions plus thread barriers to
+  race revision-zero draft writes. Independent principals both retain separate
+  drafts; two writers for one principal produce exactly one committed revision
+  and one `PublicationConflictError` after the asset lock.
+- Green evidence: strict Ruff/Ty and explicit skip behavior without
+  `DAL_OBSCURA_POSTGRES_TEST_URL` passed locally.
+- Remaining gaps: execute against real PostgreSQL in a socket-enabled CI lane,
+  extend barriers to publication/grant/rebind orderings, and run rollback
+  injection coverage before accepting A03/A04.
 
 ### X14 scoped secret inputs in Connections — `2b81337`
 
