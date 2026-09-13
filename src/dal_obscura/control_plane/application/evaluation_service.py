@@ -6,10 +6,11 @@ import hashlib
 import json
 from datetime import date, datetime, time, timezone
 from decimal import Decimal
-from typing import cast
+from typing import Any, cast
 from uuid import UUID
 
 import pyarrow as pa
+from pyiceberg.schema import Schema
 
 from dal_obscura.common.access_control.filters import deserialize_row_filter
 from dal_obscura.common.access_control.models import MaskRule
@@ -44,17 +45,20 @@ def evaluate_asset_policy(
     claims: dict[str, object],
     rows: list[dict[str, object]] | None,
     egress_allowlist: tuple[str, ...] = (),
+    plugin_registry: Any | None = None,
 ) -> dict[str, object]:
     """Evaluates a policy over bounded synthetic rows and returns evidence."""
 
     _validate_synthetic_rows(rows)
     supplied_row_count = 0 if rows is None else len(rows)
-    arrow_schema = schema_service.load_asset_iceberg_schema(
+    loaded_schema = schema_service.load_asset_iceberg_schema(
         store,
         asset_id,
         actor,
         egress_allowlist=egress_allowlist,
-    ).as_arrow()
+        plugin_registry=plugin_registry,
+    )
+    arrow_schema = loaded_schema.as_arrow() if isinstance(loaded_schema, Schema) else loaded_schema
     requested_columns = _leaf_paths(arrow_schema)
     preview = policy_service.preview_asset_policy(
         store,

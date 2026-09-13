@@ -39,6 +39,9 @@ from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
 )
 
 CatalogLoader = Callable[..., Any]
+ICEBERG_CATALOG_MODULE = (
+    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
+)
 
 def get_asset_schema(
     store: PublicationStore,
@@ -47,6 +50,7 @@ def get_asset_schema(
     *,
     load_catalog_fn: CatalogLoader | None = None,
     egress_allowlist: tuple[str, ...] = (),
+    plugin_registry: Any | None = None,
 ) -> dict[str, object]:
     ensure_asset_capability(store, asset_id, actor, "read")
     schema = load_asset_iceberg_schema(
@@ -55,20 +59,26 @@ def get_asset_schema(
         actor,
         load_catalog_fn=load_catalog_fn,
         egress_allowlist=egress_allowlist,
+        plugin_registry=plugin_registry,
     )
-    _validate_schema_bounds(schema)
+    arrow_schema = schema.as_arrow() if isinstance(schema, Schema) else schema
+    _validate_arrow_schema_bounds(arrow_schema)
     asset = store.get_workspace_asset(asset_id)
     return {
         "asset_id": str(asset_id),
         "catalog": asset["catalog"],
         "target": asset["name"],
         "schema_version": 1,
-        "schema_fingerprint": schema_fingerprint(schema),
-        "stable_field_ids": schema_has_stable_ids(schema.as_arrow()),
-        "fields": [
-            _field_node(field, (FieldSegment(field.name, field.field_id),))
-            for field in schema.fields
-        ],
+        "schema_fingerprint": schema_fingerprint(arrow_schema),
+        "stable_field_ids": schema_has_stable_ids(arrow_schema),
+        "fields": (
+            [
+                _field_node(field, (FieldSegment(field.name, field.field_id),))
+                for field in schema.fields
+            ]
+            if isinstance(schema, Schema)
+            else [_arrow_field_node(field, (field.name,)) for field in arrow_schema]
+        ),
     }
 
 
@@ -79,7 +89,8 @@ def load_asset_iceberg_schema(
     *,
     load_catalog_fn: CatalogLoader | None = None,
     egress_allowlist: tuple[str, ...] = (),
-) -> Schema:
+    plugin_registry: Any | None = None,
+) -> Schema | pa.Schema:
     """Loads the authoritative Iceberg schema without reading table rows."""
 
     ensure_asset_capability(store, asset_id, actor, "read")
@@ -97,6 +108,13 @@ def load_asset_iceberg_schema(
         dict[str, Any],
         resolve_secret_refs(options, provider=EnvSecretProvider()),
     )
+    if plugin_registry is not None and str(catalog["module"]) != ICEBERG_CATALOG_MODULE:
+        return _load_public_plugin_schema(
+            asset=asset,
+            catalog=catalog,
+            options=options,
+            plugin_registry=plugin_registry,
+        )
     table_identifier = str(asset["table_identifier"])
     loader = load_catalog if load_catalog_fn is None else load_catalog_fn
     try:
@@ -110,6 +128,92 @@ def load_asset_iceberg_schema(
         raise TypeError("Iceberg catalog returned an invalid schema")
     _validate_schema_bounds(schema)
     return schema
+
+
+def _load_public_plugin_schema(
+    *,
+    asset: dict[str, object],
+    catalog: dict[str, object],
+    options: dict[str, Any],
+    plugin_registry: Any,
+) -> pa.Schema:
+    """Resolve one admitted catalog/format pair without importing request paths."""
+
+    from datetime import datetime, timedelta, timezone
+
+    from dal_obscura_plugin_api import CatalogConfig, ExecutionContext, TableIdentifier
+
+    catalog_plugin_id = str(catalog["module"])
+    format_plugin_id = str(asset["backend"])
+    context = ExecutionContext(
+        deadline=datetime.now(timezone.utc) + timedelta(seconds=30),
+        correlation_id=f"schema-{asset['id']}",
+    )
+    catalog_plugin: Any | None = None
+    format_plugin: Any | None = None
+    try:
+        catalog_factory = plugin_registry.load("catalog", catalog_plugin_id)
+        format_factory = plugin_registry.load("table_format", format_plugin_id)
+        if not callable(catalog_factory) or not callable(format_factory):
+            raise ValidationFailure("Admitted schema plugin is unavailable")
+        catalog_plugin = catalog_factory(
+            CatalogConfig(
+                plugin_id=catalog_plugin_id,
+                instance_id=str(catalog["name"]),
+                revision=int(cast(int | str, catalog.get("revision", 0))),
+                options=options,
+            ),
+            context,
+        )
+        _require_plugin_methods(
+            catalog_plugin,
+            ("validate_config", "list_namespaces", "resolve_table", "close"),
+            "catalog",
+        )
+        catalog_plugin.validate_config(context)
+        target = str(asset.get("table_identifier") or asset["name"])
+        identifier = _public_table_identifier(target, TableIdentifier)
+        handle = catalog_plugin.resolve_table(identifier, context)
+        from dal_obscura_plugin_api import SchemaDescriptor, TableHandle
+
+        if not isinstance(handle, TableHandle):
+            raise ValidationFailure("Catalog plugin returned an invalid table handle")
+        if handle.format_plugin_id != format_plugin_id:
+            raise ValidationFailure("Catalog and table-format plugins do not match")
+        format_plugin = format_factory(handle, context)
+        _require_plugin_methods(format_plugin, ("schema", "close"), "table-format")
+        descriptor = format_plugin.schema(handle, context)
+        if not isinstance(descriptor, SchemaDescriptor):
+            raise ValidationFailure("Table-format plugin returned an invalid schema")
+        _validate_arrow_schema_bounds(descriptor.arrow_schema)
+        return descriptor.arrow_schema
+    except ValidationFailure:
+        raise
+    except Exception as exc:
+        raise ValidationFailure("Schema discovery failed") from exc
+    finally:
+        if format_plugin is not None:
+            _close_plugin(format_plugin)
+        if catalog_plugin is not None:
+            _close_plugin(catalog_plugin)
+
+
+def _require_plugin_methods(plugin: object, names: tuple[str, ...], kind: str) -> None:
+    if not all(callable(getattr(plugin, name, None)) for name in names):
+        raise ValidationFailure(f"Admitted {kind} plugin has an incomplete lifecycle")
+
+
+def _close_plugin(plugin: object) -> None:
+    close = getattr(plugin, "close", None)
+    if callable(close):
+        close()
+
+
+def _public_table_identifier(target: str, identifier_type: Any) -> Any:
+    parts = tuple(target.split("."))
+    if not parts or any(not part for part in parts):
+        raise ValidationFailure("Asset table identifier is invalid")
+    return identifier_type(namespace=parts[:-1], name=parts[-1])
 
 
 def schema_fingerprint(schema: object) -> str:
@@ -259,3 +363,72 @@ def _field_node(field: NestedField, path: tuple[FieldPathSegment, ...]) -> dict[
             _field_node(field_type.value_field, (*path, MapValueSegment())),
         ]
     return node
+
+
+def _arrow_field_node(field: pa.Field, path: tuple[str, ...]) -> dict[str, object]:
+    field_id = _arrow_field_id(field, path)
+    field_type = field.type
+    if pa.types.is_struct(field_type):
+        kind = "struct"
+    elif pa.types.is_list(field_type) or pa.types.is_large_list(field_type):
+        kind = "list"
+    elif pa.types.is_map(field_type):
+        kind = "map"
+    elif pa.types.is_fixed_size_list(field_type):
+        kind = "list"
+    else:
+        kind = "scalar"
+    node: dict[str, object] = {
+        "field_id": field_id,
+        "name": field.name,
+        "path": _arrow_field_path(path, field_id),
+        "human_path": ".".join(path),
+        "type": str(field_type),
+        "nullable": field.nullable,
+        "kind": kind,
+    }
+    if pa.types.is_struct(field_type):
+        node["children"] = [
+            _arrow_field_node(child, (*path, child.name)) for child in field_type
+        ]
+    elif (
+        pa.types.is_list(field_type)
+        or pa.types.is_large_list(field_type)
+        or pa.types.is_fixed_size_list(field_type)
+    ):
+        node["children"] = [
+            _arrow_field_node(field_type.value_field, (*path, "$element"))
+        ]
+    elif pa.types.is_map(field_type):
+        node["children"] = [
+            _arrow_field_node(field_type.key_field, (*path, "$key")),
+            _arrow_field_node(field_type.item_field, (*path, "$value")),
+        ]
+    return node
+
+
+def _arrow_field_path(path: tuple[str, ...], field_id: int) -> dict[str, object]:
+    segments: list[FieldPathSegment] = []
+    for index, part in enumerate(path):
+        if part == "$element":
+            segments.append(ListElementSegment())
+        elif part == "$key":
+            segments.append(MapKeySegment())
+        elif part == "$value":
+            segments.append(MapValueSegment())
+        else:
+            segments.append(FieldSegment(part, field_id if index == len(path) - 1 else None))
+    return FieldPath(tuple(segments)).to_wire()
+
+
+def _arrow_field_id(field: pa.Field, path: tuple[str, ...]) -> int:
+    metadata = field.metadata or {}
+    for key in (b"PARQUET:field_id", b"iceberg.field.id"):
+        raw = metadata.get(key)
+        if raw is not None:
+            try:
+                return int(raw.decode("utf-8"))
+            except (TypeError, ValueError):
+                break
+    digest = hashlib.sha256("\\x1f".join(path).encode("utf-8")).digest()
+    return int.from_bytes(digest[:8], "big", signed=False)

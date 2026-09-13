@@ -208,6 +208,7 @@ def create_asset_policy_version(  # noqa: C901
             review_token,
             secret=review_secret,
             egress_allowlist=catalog_egress_allowlist,
+            plugin_registry=plugin_registry,
         )
 
     # Serialize publication attempts for this asset in PostgreSQL. This closes
@@ -256,6 +257,7 @@ def create_asset_policy_version(  # noqa: C901
             secret=review_secret,
             egress_allowlist=catalog_egress_allowlist,
             check_live_schema=False,
+            plugin_registry=plugin_registry,
         )
     asset, catalog = store.load_asset_publish_draft(
         asset_id,

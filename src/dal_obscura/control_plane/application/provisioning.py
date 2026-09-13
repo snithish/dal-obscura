@@ -274,6 +274,7 @@ class ProvisioningService:
             asset_id,
             actor,
             egress_allowlist=self._catalog_egress_allowlist,
+            plugin_registry=self._plugin_registry,
         )
 
     def get_workspace_draft(self) -> dict[str, object]:
@@ -594,6 +595,7 @@ class ProvisioningService:
             claims=claims,
             rows=rows,
             egress_allowlist=self._catalog_egress_allowlist,
+            plugin_registry=self._plugin_registry,
         )
 
     def review_asset_policy(
@@ -615,6 +617,7 @@ class ProvisioningService:
             claims=claims,
             rows=rows,
             egress_allowlist=self._catalog_egress_allowlist,
+            plugin_registry=self._plugin_registry,
         )
         try:
             return review_service.issue_review_token(

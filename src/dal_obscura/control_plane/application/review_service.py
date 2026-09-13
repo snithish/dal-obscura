@@ -100,6 +100,7 @@ def verify_review_token(  # noqa: C901
     now: int | None = None,
     egress_allowlist: tuple[str, ...] = (),
     check_live_schema: bool = True,
+    plugin_registry: object | None = None,
 ) -> None:
     """Rejects stale, replayed-for-another-scope, or forged review evidence."""
 
@@ -126,10 +127,15 @@ def verify_review_token(  # noqa: C901
             asset_id,
             actor,
             egress_allowlist=egress_allowlist,
+            plugin_registry=plugin_registry,
         )
         if not hmac.compare_digest(
             recorded_schema_fingerprint,
-            schema_fingerprint(current_schema.as_arrow()),
+            schema_fingerprint(
+                current_schema.as_arrow()
+                if hasattr(current_schema, "as_arrow")
+                else current_schema
+            ),
         ):
             raise ValidationFailure("Iceberg schema changed after review; review again.")
     if payload.get("admitted_schema_hash") != _admitted_schema_hash(store, asset_id):

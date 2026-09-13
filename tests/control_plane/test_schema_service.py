@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 import pyarrow as pa
 import pytest
+from dal_obscura_plugin_api import SchemaDescriptor, TableHandle, TableIdentifier
 from pyiceberg.schema import Schema
 from pyiceberg.types import (
     IntegerType,
@@ -145,6 +146,96 @@ def test_get_asset_schema_returns_typed_nested_paths() -> None:
         "attributes.$key",
         "attributes.$value",
     ]
+
+
+def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None:
+    asset_id = uuid4()
+    schema = pa.schema(
+        [
+            pa.field(
+                "profile",
+                pa.struct([pa.field("email", pa.string())]),
+                metadata={b"iceberg.field.id": b"2"},
+            )
+        ]
+    )
+    closed: list[str] = []
+
+    class PublicStore(_FakeStore):
+        def get_workspace_asset(self, asset_id: UUID) -> dict[str, object]:
+            assert asset_id == self.asset_id
+            return {
+                "id": str(self.asset_id),
+                "catalog": "analytics",
+                "name": "default.events",
+                "table_identifier": "default.events",
+                "backend": "fixture.format",
+            }
+
+        def get_workspace_catalog(self, context: object, name: str) -> dict[str, object]:
+            assert name == "analytics"
+            return {
+                "name": name,
+                "module": "fixture.catalog",
+                "revision": 3,
+                "options": {"uri": "https://catalog.example"},
+            }
+
+    identifier = TableIdentifier(namespace=("default",), name="events")
+    handle = TableHandle(
+        catalog_plugin_id="fixture.catalog",
+        catalog_instance_id="analytics",
+        catalog_revision=3,
+        identifier=identifier,
+        format_plugin_id="fixture.format",
+        handle_version=1,
+    )
+
+    class PublicCatalog:
+        def validate_config(self, context):
+            del context
+
+        def list_namespaces(self, context, *, namespace=()):
+            del context, namespace
+            return (("default",),)
+
+        def resolve_table(self, value, context):
+            del context
+            assert value == identifier
+            return handle
+
+        def close(self):
+            closed.append("catalog")
+
+    class PublicFormat:
+        def schema(self, value, context):
+            del context
+            assert value == handle
+            return SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=schema)
+
+        def close(self):
+            closed.append("format")
+
+    class Registry:
+        def load(self, kind, plugin_id):
+            if (kind, plugin_id) == ("catalog", "fixture.catalog"):
+                return lambda config, context: PublicCatalog()
+            if (kind, plugin_id) == ("table_format", "fixture.format"):
+                return lambda value, context: PublicFormat()
+            raise AssertionError((kind, plugin_id))
+
+    result = get_asset_schema(
+        PublicStore(asset_id),  # type: ignore[arg-type]
+        asset_id,
+        ControlPlaneActor.for_platform_admin("admin"),
+        plugin_registry=Registry(),
+    )
+
+    assert result["catalog"] == "analytics"
+    assert result["target"] == "default.events"
+    assert result["stable_field_ids"] is False
+    assert cast(list[dict[str, object]], result["fields"])[0]["name"] == "profile"
+    assert closed == ["format", "catalog"]
 
 
 def test_schema_loading_enforces_catalog_egress_before_provider_call(
