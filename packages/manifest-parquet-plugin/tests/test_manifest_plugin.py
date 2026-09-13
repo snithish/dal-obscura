@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pytest
 from dal_obscura_manifest_parquet.catalog import ManifestCatalog
 from dal_obscura_manifest_parquet.format import ParquetDatasetFormat
 from dal_obscura_plugin_api import CatalogConfig, ExecutionContext, TableIdentifier
@@ -130,3 +131,68 @@ def test_parquet_format_accepts_wildcard_projection(tmp_path):
     output_schema, batches = plugin.execute(tasks[0], context)
     assert output_schema == table.schema
     assert pa.Table.from_batches(batches).num_rows == 1
+
+
+def test_parquet_format_rejects_member_schema_drift(tmp_path):
+    root, manifest, table = _write_fixture(tmp_path)
+    drifted = root / "drifted.parquet"
+    pq.write_table(
+        pa.table(
+            {"id": pa.array([4], type=pa.int32()), "profile": table["profile"].slice(0, 1)}
+        ),
+        drifted,
+    )
+    payload = json.loads(manifest.read_text())
+    payload["tables"]["default.users"]["files"].append("drifted.parquet")
+    manifest.write_text(json.dumps(payload))
+    context = _context()
+    catalog = ManifestCatalog(
+        CatalogConfig(
+            plugin_id="manifest",
+            instance_id="fixture",
+            revision=1,
+            options={"root": str(root), "manifest_path": str(manifest)},
+        ),
+        context,
+    )
+    handle = catalog.resolve_table(TableIdentifier(namespace=("default",), name="users"), context)
+    plugin = ParquetDatasetFormat(handle, context)
+    with pytest.raises(ValueError, match="schema"):
+        plugin.plan(
+            handle,
+            plugin.schema(handle, context),
+            context,
+            projection=("*",),
+            row_filter=None,
+            max_tasks=8,
+        )
+
+
+def test_parquet_format_rejects_corrupt_member_during_plan(tmp_path):
+    root, manifest, _table = _write_fixture(tmp_path)
+    corrupt = root / "corrupt.parquet"
+    corrupt.write_bytes(b"not parquet")
+    payload = json.loads(manifest.read_text())
+    payload["tables"]["default.users"]["files"] = ["corrupt.parquet"]
+    manifest.write_text(json.dumps(payload))
+    context = _context()
+    catalog = ManifestCatalog(
+        CatalogConfig(
+            plugin_id="manifest",
+            instance_id="fixture",
+            revision=1,
+            options={"root": str(root), "manifest_path": str(manifest)},
+        ),
+        context,
+    )
+    handle = catalog.resolve_table(TableIdentifier(namespace=("default",), name="users"), context)
+    plugin = ParquetDatasetFormat(handle, context)
+    with pytest.raises((ValueError, OSError)):
+        plugin.plan(
+            handle,
+            plugin.schema(handle, context),
+            context,
+            projection=("*",),
+            row_filter=None,
+            max_tasks=8,
+        )
