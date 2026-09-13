@@ -12,10 +12,13 @@ allowed by the active policy generation.
 dal-obscura supports governed Iceberg assets, DuckDB row filters, column masks,
 and JVM/Python connector surfaces.
 
-**Production status:** the governance UI and its administrative backend are
-incomplete. Do not treat the demo or a passing build as approval to serve paying
-customers. See the [code-backed readiness review](docs/ui-v2/PRODUCTION_READINESS.md)
-and [implementation ledger](docs/ui-v2/EXECUTION_STATUS.md) for required work.
+**Production status:** the governance UI and administrative backend include the
+normal authenticated workspace, OIDC/PKCE login, local bootstrap login for
+development, policy authoring, review/publication, catalog management, and
+consumer instructions. Paid-production release remains on hold until the live
+PostgreSQL, TLS/OIDC, artifact, browser, consumer, recovery, and independent
+security gates pass. See the [code-backed readiness review](docs/ui-v2/PRODUCTION_READINESS.md)
+and [implementation ledger](docs/plugin-platform/STATUS.md) for the evidence.
 
 ## Contents
 
@@ -40,9 +43,9 @@ and [implementation ledger](docs/ui-v2/EXECUTION_STATUS.md) for required work.
 
 ## Fast start
 
-The local Keycloak demo assembles IAM, Postgres, control plane, Iceberg, and
-Flight reads. Its temporary login path and startup scripts do not yet satisfy
-supported local-security parity or production acceptance:
+The local Keycloak demo assembles IAM, Postgres, control plane, Iceberg, Flight,
+and the authenticated governance UI. It is a disposable development profile;
+its HTTP Keycloak and demo credentials do not satisfy production acceptance:
 
 ```bash
 cd examples/demo/keycloak
@@ -51,6 +54,12 @@ cd examples/demo/keycloak
 ```
 
 Open the Flight data plane at `grpc://127.0.0.1:8815`.
+
+Open the governance UI at `http://127.0.0.1:8821`. The normal page starts signed
+out. Choose **Sign in with SSO** when the demo OIDC settings are enabled, or use
+the local control-plane token form when the service is running with
+`DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED=true`. The production profile
+disables bootstrap and requires OIDC.
 
 Stop the demo without deleting state:
 
