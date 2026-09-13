@@ -122,14 +122,14 @@ def parse_field_path(value: str) -> FieldPath:
 
     tokens = _split_path(value)
     segments: list[FieldPathSegment] = []
-    for token in tokens:
-        if token == "$element":
+    for token, quoted in tokens:
+        if not quoted and token == "$element":
             segments.append(ListElementSegment())
-        elif token == "$key":
+        elif not quoted and token == "$key":
             segments.append(MapKeySegment())
-        elif token == "$value":
+        elif not quoted and token == "$value":
             segments.append(MapValueSegment())
-        elif token in _COLLECTION_SEGMENTS:
+        elif not quoted and token in _COLLECTION_SEGMENTS:
             raise ValueError(f"Invalid collection path segment: {token}")
         else:
             segments.append(FieldSegment(token))
@@ -226,8 +226,8 @@ def _resolve_collection_segment(
     return current.type.key_field if isinstance(segment, MapKeySegment) else current.type.item_field
 
 
-def _split_path(value: str) -> list[str]:
-    tokens: list[str] = []
+def _split_path(value: str) -> list[tuple[str, bool]]:
+    tokens: list[tuple[str, bool]] = []
     offset = 0
     while offset < len(value):
         if value[offset] == "[":
@@ -241,6 +241,7 @@ def _split_path(value: str) -> list[str]:
             if not isinstance(token, str) or not token:
                 raise ValueError("Quoted field names must be non-empty text")
             offset = closing + 1
+            quoted = True
         else:
             next_dot = value.find(".", offset)
             end = len(value) if next_dot == -1 else next_dot
@@ -248,7 +249,8 @@ def _split_path(value: str) -> list[str]:
             if not _SIMPLE_FIELD_NAME.fullmatch(token) and token not in _COLLECTION_SEGMENTS:
                 raise ValueError(f"Invalid field path segment: {token}")
             offset = end
-        tokens.append(token)
+            quoted = False
+        tokens.append((token, quoted))
         if offset == len(value):
             break
         if value[offset] != ".":

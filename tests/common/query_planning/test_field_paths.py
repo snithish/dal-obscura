@@ -24,6 +24,15 @@ def test_field_path_distinguishes_literal_dots_from_nested_fields():
     assert nested.to_human() == "a.b"
 
 
+def test_field_path_preserves_quoted_reserved_collection_names():
+    literal = FieldPath((FieldSegment("$element"), FieldSegment("$value")))
+
+    rendered = literal.to_human()
+
+    assert rendered == '["$element"].["$value"]'
+    assert parse_field_path(rendered) == literal
+
+
 def test_field_path_resolves_nested_struct_list_and_map_nodes():
     schema = pa.schema(
         [
