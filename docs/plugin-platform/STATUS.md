@@ -54,6 +54,14 @@ source inspection: the standalone SDK is the sole current contract validator;
 - Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync ty check --extra-search-path packages/plugin-api/src --extra-search-path packages/plugin-conformance/src --extra-search-path packages/manifest-parquet-plugin/src --extra-search-path packages/iceberg-rest-plugin/src` — all checks passed; repository Ruff check/format — passed; owning tests — 63 passed.
 - Remaining N01/B02 work: run the Node 24 frozen install, image smoke and advisory/license checks in CI. Release remains HOLD.
 
+## Implementation update — b451c79 (2026-09-14)
+
+- Packet / status / candidate commit / owner: N05/F04 partial / VERIFY / `b451c79` / OIDC session routes.
+- Observable behavior delivered: an OIDC callback without an explicit post-login destination now returns to the gateway origin derived from its callback URI. A configured post-logout URI can no longer redirect a successful login into the logout flow.
+- Changed paths: `control_plane/interfaces/routes/session.py` and its OIDC regression test. No session cookie, identity encoding, bootstrap, pickle serializer or payload behavior changed.
+- Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane/test_oidc_login.py -q` — 5 passed; changed-path Ruff check/format — passed.
+- Remaining N05 work: live local/production OIDC browser journey, exact typed principal persistence, bootstrap retirement, freshness/revocation and two-process evidence. Release remains HOLD.
+
 ## Implementation update — 96573bb (2026-09-14)
 
 - Packet / status / candidate commit / owner: N02/F13 partial / VERIFY / `96573bb` / control-plane API.
