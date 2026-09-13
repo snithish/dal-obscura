@@ -88,6 +88,10 @@ Plugin-platform and architecture regression evidence: `UV_CACHE_DIR=/tmp/dal-obs
 - Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/common/config_store/test_identity_migration.py -q` — 2 passed; changed-path `ruff check` — passed; operator procedure is documented in `docs/operators.md`.
 - Remaining N05/F01 work: structured principal-kind persistence or an independently approved encoding contract, two-process OIDC freshness, browser login/logout/expiry, and ambiguous-history operator evidence.
 
+Follow-up `bf62ca0` closes a migration edge case: local `local|...` and
+`group:local|...` keys are intentionally left untouched, with a focused mixed
+workspace regression test (3 migration tests passed).
+
 ## Implementation update — 7c20db5 (2026-09-13)
 
 - Packet / status / candidate commit / owner: N03/B04 partial / VERIFY / `7c20db5` / plugin SDK + control-plane + governance UI.
