@@ -324,6 +324,14 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/common/config_store/test_schema_migrations.py -q` — 7 passed.
 - Remaining N03/B05 work: complete generated browser DTO wiring and live process-boundary evidence. Release remains HOLD.
 
+## Implementation update — 21dacc0 (2026-09-13)
+
+- Packet / status / candidate commit / owner: N03/B05 partial / VERIFY / `21dacc0` / auth-provider revision persistence.
+- Observable behavior delivered: the auth-chain revision is persisted on the cell as well as provider rows, so removing every provider does not reset compare-and-swap state. An authenticated revision endpoint lets the UI continue guarded writes after an empty chain; delete and recreate regressions advance revisions 1→2→3.
+- Changed paths: cell ORM/migration, repository/service/route revision endpoint, UI settings loading, and API tests. Pickle serializers and task payloads are unchanged.
+- Evidence: settings, OpenAPI, and migration tests passed; UI TypeScript passed; changed-path Ruff/format checks passed.
+- Remaining N03/B05 work: generated DTO/browser proof and live process-boundary execution. Release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
