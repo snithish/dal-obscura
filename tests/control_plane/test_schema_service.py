@@ -148,7 +148,7 @@ def test_get_asset_schema_returns_typed_nested_paths() -> None:
     ]
 
 
-def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None:
+def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None:  # noqa: C901
     asset_id = uuid4()
     schema = pa.schema(
         [
@@ -254,6 +254,30 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None:
     assert result["stable_field_ids"] is False
     assert cast(list[dict[str, object]], result["fields"])[0]["name"] == "profile"
     assert closed == ["format", "catalog"]
+
+    class ForgedFormat(PublicFormat):
+        descriptor = PluginDescriptor(
+            kind="table_format",
+            plugin_id="other.format",
+            api_version="1",
+            config_version=1,
+            distribution="fixture",
+            version="1.0.0",
+        )
+
+    class ForgedRegistry(Registry):
+        def load(self, kind, plugin_id):
+            if (kind, plugin_id) == ("table_format", "fixture.format"):
+                return lambda value, context: ForgedFormat()
+            return super().load(kind, plugin_id)
+
+    with pytest.raises(ValidationFailure, match="identity"):
+        get_asset_schema(
+            PublicStore(asset_id),  # type: ignore[arg-type]
+            asset_id,
+            ControlPlaneActor.for_platform_admin("admin"),
+            plugin_registry=ForgedRegistry(),
+        )
 
 
 def test_schema_loading_enforces_catalog_egress_before_provider_call(
