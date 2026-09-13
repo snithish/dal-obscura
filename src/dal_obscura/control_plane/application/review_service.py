@@ -181,7 +181,9 @@ def _catalog_revision(store: PublicationStore, asset_id: UUID) -> int:
     """Returns the catalog generation captured by review evidence."""
 
     asset = store.get_workspace_asset(asset_id)
-    raw_revision = asset.get("catalog_revision", 0)
+    context = store.get_asset_workspace_context(asset_id)
+    catalog = store.get_workspace_catalog(context, str(asset["catalog"]))
+    raw_revision = catalog.get("revision", 0)
     try:
         return int(cast(int | str, raw_revision))
     except (TypeError, ValueError):

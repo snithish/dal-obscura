@@ -914,7 +914,6 @@ class PublicationStore:
         return {
             **self._workspace_asset_row(record, catalog),
             "revision": record.revision,
-            "catalog_revision": catalog.revision,
             "options": dict(record.options_json),
             "schema_fields": self.list_asset_schema_fields(asset_id),
             "policy_rules": self.list_policy_rules(asset_id),
