@@ -7,43 +7,6 @@ from fastapi import APIRouter, Depends
 from dal_obscura.common.plugin_api.contracts import PluginDescriptor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 
-_BUILTIN_CATALOG = PluginDescriptor(
-    kind="catalog",
-    plugin_id="iceberg.sql",
-    api_version="1",
-    config_version=1,
-    distribution="dal-obscura",
-    version="0.1.0",
-    display_name="Iceberg SQL catalog",
-    capabilities=frozenset({"nested_schema", "snapshot_reads", "splittable_scan"}),
-    output_formats=frozenset({"iceberg"}),
-    handle_versions=frozenset({1}),
-    config_schema={
-        "fields": [
-            {"name": "uri", "type": "string", "required": True, "secret": False},
-            {"name": "warehouse", "type": "string", "required": False, "secret": False},
-            {"name": "user", "type": "string", "required": False, "secret": False},
-            {
-                "name": "password",
-                "type": "secret_reference",
-                "required": False,
-                "secret": True,
-            },
-        ]
-    },
-)
-_BUILTIN_FORMAT = PluginDescriptor(
-    kind="table_format",
-    plugin_id="iceberg",
-    api_version="1",
-    config_version=1,
-    distribution="dal-obscura",
-    version="0.1.0",
-    display_name="Apache Iceberg",
-    capabilities=frozenset({"nested_schema", "snapshot_reads", "splittable_scan"}),
-    handle_versions=frozenset({1}),
-)
-
 
 def router(deps: ControlPlaneDeps) -> APIRouter:
     """Builds the authenticated descriptor route."""
@@ -52,19 +15,10 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
 
     @api.get("/v1/plugins", dependencies=[Depends(deps.require_admin)])
     def list_plugins() -> object:
-        descriptors = (
-            list(deps.plugin_registry.admitted().values())
-            if deps.plugin_registry is not None
-            else [_BUILTIN_CATALOG, _BUILTIN_FORMAT]
-        )
-        states = (
-            list(deps.plugin_registry.status_report())
-            if deps.plugin_registry is not None
-            else [
-                {"kind": item.kind, "plugin_id": item.plugin_id, "status": "enabled"}
-                for item in (_BUILTIN_CATALOG, _BUILTIN_FORMAT)
-            ]
-        )
+        if deps.plugin_registry is None:
+            raise RuntimeError("Plugin registry was not admitted during application startup")
+        descriptors = list(deps.plugin_registry.admitted().values())
+        states = list(deps.plugin_registry.status_report())
         return {
             "plugins": [_descriptor_payload(descriptor) for descriptor in descriptors],
             "pairs": _pair_payload(descriptors),

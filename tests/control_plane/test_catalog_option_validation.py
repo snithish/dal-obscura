@@ -4,9 +4,9 @@ import pytest
 
 from dal_obscura.common.plugin_api.contracts import PluginDescriptor
 from dal_obscura.control_plane.application.catalog_service import (
-    _validate_descriptor_options,
     validate_admitted_catalog_options,
     validate_catalog_options,
+    validate_descriptor_options,
 )
 from dal_obscura.control_plane.application.errors import ValidationFailure
 
@@ -32,9 +32,9 @@ def test_admitted_descriptor_rejects_unknown_and_missing_form_fields() -> None:
         },
     )
     with pytest.raises(ValidationFailure, match="unsupported fields"):
-        _validate_descriptor_options(descriptor, {"uri": "https://example", "debug": True})
+        validate_descriptor_options(descriptor, {"uri": "https://example", "debug": True})
     with pytest.raises(ValidationFailure, match="missing required fields"):
-        _validate_descriptor_options(descriptor, {})
+        validate_descriptor_options(descriptor, {})
 
 
 def test_admitted_secret_reference_accepts_bounded_scope() -> None:
@@ -47,12 +47,12 @@ def test_admitted_secret_reference_accepts_bounded_scope() -> None:
         version="1.0.0",
         config_schema={"fields": [{"name": "token", "type": "secret_reference"}]},
     )
-    _validate_descriptor_options(
+    validate_descriptor_options(
         descriptor,
         {"token": {"secret": "catalog-token", "scope": "catalog:analytics"}},
     )
     with pytest.raises(ValidationFailure, match="invalid secret scope"):
-        _validate_descriptor_options(
+        validate_descriptor_options(
             descriptor,
             {"token": {"secret": "catalog-token", "scope": ""}},
         )

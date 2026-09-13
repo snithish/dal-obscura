@@ -412,10 +412,6 @@ def validate_descriptor_options(
         )
 
 
-# Compatibility alias for internal callers and existing extension tests.
-_validate_descriptor_options = validate_descriptor_options
-
-
 def _validate_descriptor_value(name: str, field_type: object, value: object, *, kind: str) -> None:
     if field_type in (None, "string", "uri") and not isinstance(value, str):
         raise ValidationFailure(f"{kind} option {name!r} must be a string")

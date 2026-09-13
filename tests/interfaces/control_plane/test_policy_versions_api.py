@@ -257,13 +257,17 @@ def test_asset_policy_history_detail_and_restore_are_revisioned():
 
     restore_response = client.post(
         f"/v1/assets/{asset['id']}/policy-versions/{created['policy_version']}/restore",
-        json={"expected_revision": 0},
+        json={
+            "expected_revision": client.get(
+                f"/v1/assets/{asset['id']}/draft", headers=ADMIN_HEADERS
+            ).json()["revision"]
+        },
         headers=ADMIN_HEADERS,
     )
 
     assert restore_response.status_code == 200
     restored = restore_response.json()
-    assert restored["revision"] == 1
+    assert restored["revision"] == 2
     assert restored["base_policy_version"] == created["policy_version"]
     assert restored["rules"][0]["columns"] == ["id", "email"]
 

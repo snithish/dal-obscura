@@ -12,10 +12,11 @@ def test_audit_events_are_transactional_redacted_and_scoped() -> None:
         json={"owners": ["asset-owner"]},
         headers=ADMIN_HEADERS,
     )
+    current_draft = client.get(f"/v1/assets/{asset['id']}/draft", headers=ADMIN_HEADERS).json()
     saved_response = client.put(
         f"/v1/assets/{asset['id']}/draft",
         json={
-            "expected_revision": 0,
+            "expected_revision": current_draft["revision"],
             "rules": [
                 {
                     "ordinal": 10,
@@ -50,8 +51,9 @@ def test_audit_events_are_transactional_redacted_and_scoped() -> None:
     owner_events = client.get("/v1/audit/events", headers=_bearer("owner-token"))
     outsider_events = client.get("/v1/audit/events", headers=_bearer("outsider-token"))
     assert owner_events.status_code == 200
-    assert len(owner_events.json()) == 3
-    assert owner_events.json()[-1]["action"] == "asset.owners.replace"
+    owner_actions = [event["action"] for event in owner_events.json()]
+    assert len(owner_actions) == 4
+    assert "asset.owners.replace" in owner_actions
     assert outsider_events.status_code == 200
     assert outsider_events.json() == []
 

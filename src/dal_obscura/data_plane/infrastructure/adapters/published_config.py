@@ -228,13 +228,21 @@ class PublishedConfigStore:
         )
         if record is None:
             raise LookupError(f"No published asset for {catalog}/{target}")
+        compiled_config = dict(record.compiled_config_json)
+        plugin_binding = dict(_mapping(compiled_config.get("plugins")))
+        if record.catalog_plugin_id is not None:
+            plugin_binding.setdefault("catalog", record.catalog_plugin_id)
+        if record.format_plugin_id is not None:
+            plugin_binding.setdefault("table_format", record.format_plugin_id)
+        if plugin_binding:
+            compiled_config["plugins"] = plugin_binding
         return PublishedAsset(
             publication_id=record.publication_id,
             tenant_id=record.tenant_id,
             catalog=record.catalog,
             target=record.target,
             backend=record.backend,
-            compiled_config=dict(record.compiled_config_json),
+            compiled_config=compiled_config,
             policy_version=record.policy_version,
         )
 
@@ -513,13 +521,9 @@ def _catalog_config_for_asset(
     """Build the runtime catalog config with the published asset as its source of truth."""
     _validate_plugin_binding(asset, plugin_registry=plugin_registry)
     raw_plugins = asset.compiled_config.get("plugins")
-    catalog_plugin_id = "iceberg.sql"
+    catalog_plugin_id = catalog.plugin_id or ""
     if isinstance(raw_plugins, dict) and isinstance(raw_plugins.get("catalog"), str):
-        catalog_plugin_id = (
-            "iceberg.sql"
-            if raw_plugins["catalog"] == _ICEBERG_CATALOG_MODULE
-            else raw_plugins["catalog"]
-        )
+        catalog_plugin_id = str(raw_plugins["catalog"])
     config = _catalog_config_from_published_catalog(catalog, plugin_id=catalog_plugin_id)
     target = _mapping(asset.compiled_config.get("target"))
     backend = str(target.get("backend") or asset.backend).lower()
@@ -544,21 +548,19 @@ def _validate_plugin_binding(
 ) -> None:
     """Rejects an explicit manifest plugin binding the runtime cannot honor.
 
-    Publications created before plugin identities were added remain readable via
-    the compatibility path. New manifests carry the binding and must match the
-    qualified built-in adapter exactly; the data plane never infers a different
-    implementation from mutable catalog options.
+    Every serving manifest must carry the binding and match the qualified
+    adapter exactly. Older rows must be converted by the offline binding
+    migration before admission; the data plane never infers an implementation
+    from mutable catalog options.
     """
 
     raw_plugins = asset.compiled_config.get("plugins")
-    if raw_plugins is None:
-        return
     if not isinstance(raw_plugins, dict):
-        raise ValueError("Published plugin binding is invalid")
+        raise ValueError("Published plugin binding is missing")
     catalog_plugin = raw_plugins.get("catalog")
     format_plugin = raw_plugins.get("table_format")
     if catalog_plugin == _ICEBERG_CATALOG_MODULE:
-        catalog_plugin = "iceberg.sql"
+        raise ValueError("Published plugin binding uses a retired module identity")
     if not isinstance(catalog_plugin, str) or not isinstance(format_plugin, str):
         raise ValueError("Published plugin binding is unsupported")
     if catalog_plugin == "iceberg.sql" and format_plugin != "iceberg":

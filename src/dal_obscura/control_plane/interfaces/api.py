@@ -53,6 +53,9 @@ from dal_obscura.control_plane.interfaces.session_api import (
     exchange_demo_password_token,
 )
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
+from dal_obscura.data_plane.infrastructure.adapters.builtin_plugins import (
+    create_builtin_plugin_registry,
+)
 from dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks import (
     OidcJwksIdentityProvider,
 )
@@ -151,6 +154,13 @@ def create_app(  # noqa: C901
         or login_rate_limit_block_seconds <= 0
     ):
         raise ValueError("login rate-limit values must be positive")
+
+    # Every serving process has one admitted registry generation. The
+    # composition root may replace it with an operator-allowlisted registry,
+    # but routes must never synthesize a duplicate descriptor set or silently
+    # fall back when admission is absent.
+    if plugin_registry is None:
+        plugin_registry = create_builtin_plugin_registry()
 
     app = FastAPI(
         title="dal-obscura control-plane API",

@@ -1178,6 +1178,10 @@ class PublicationStore:
             self._session.add(record)
         else:
             record.revision += 1
+            # The revision remains the same draft identity, but restoring
+            # history must advance its base policy generation so subsequent
+            # review/publication checks describe the content now displayed.
+            record.base_policy_version = base_policy_version
             record.rules_json = [dict(rule) for rule in rules]
             record.content_hash = content_hash
             record.updated_at = now
@@ -1842,7 +1846,10 @@ class PublicationStore:
                     AssetPolicyDraftRecord.asset_id == asset.id,
                     AssetPolicyDraftRecord.discarded_at.is_(None),
                 )
-                .order_by(AssetPolicyDraftRecord.updated_at.desc(), AssetPolicyDraftRecord.id.desc())
+                .order_by(
+                    AssetPolicyDraftRecord.updated_at.desc(),
+                    AssetPolicyDraftRecord.id.desc(),
+                )
             )
             rules = (
                 [

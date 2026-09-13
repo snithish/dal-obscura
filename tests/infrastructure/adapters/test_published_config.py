@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import replace
 from uuid import uuid4
 
 import pyarrow as pa
@@ -136,8 +137,8 @@ def test_published_config_requires_both_plugin_identities_in_admitted_snapshot()
         target="default.users",
         backend="iceberg",
         compiled_config={
-            "plugins": {
-                "catalog": ICEBERG_CATALOG_MODULE,
+                "plugins": {
+                    "catalog": "iceberg.sql",
                 "table_format": "iceberg",
             },
             "target": {"backend": "iceberg", "table": "default.users"},
@@ -167,6 +168,23 @@ def test_published_config_requires_both_plugin_identities_in_admitted_snapshot()
         ),
     )
     assert resolved.type == "iceberg"
+
+    retired = replace(
+        asset,
+        compiled_config={
+            **asset.compiled_config,
+            "plugins": {"catalog": ICEBERG_CATALOG_MODULE, "table_format": "iceberg"},
+        },
+    )
+    with pytest.raises(ValueError, match="retired module identity"):
+        _catalog_config_for_asset(
+            catalog,
+            retired,
+            plugin_registry=_AdmittedPluginSnapshot(
+                ("catalog", "iceberg.sql"),
+                ("table_format", "iceberg"),
+            ),
+        )
 
 
 def test_published_config_preserves_external_plugin_identity():
