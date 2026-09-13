@@ -30,6 +30,9 @@ from dal_obscura.control_plane.interfaces.api import (
     create_app,
     create_oidc_actor_resolver,
 )
+from dal_obscura.data_plane.infrastructure.adapters.builtin_plugins import (
+    create_builtin_plugin_registry,
+)
 
 
 def main() -> None:
@@ -58,6 +61,7 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
         engine = create_engine_from_url(database_url)
         check_config_store_schema(engine)
         oidc_resolver = _oidc_resolver(values)
+        plugin_registry = create_builtin_plugin_registry()
         app = create_app(
             session_factory(engine),
             admin_token=admin_token,
@@ -97,6 +101,7 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
                 values.get("DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_BLOCK_SECONDS", "300"),
                 "DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_BLOCK_SECONDS",
             ),
+            plugin_registry=plugin_registry,
         )
     except (ConfigStoreSchemaError, ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)

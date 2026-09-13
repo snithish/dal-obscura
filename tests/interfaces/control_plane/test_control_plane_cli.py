@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from sqlalchemy.exc import SQLAlchemyError
 
 from dal_obscura.common.config_store.db import create_engine_from_url, migrate_config_store
+from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.control_plane.interfaces import control_plane_cli
 
 
@@ -57,6 +58,9 @@ def test_control_plane_cli_passes_login_rate_limits(monkeypatch, tmp_path) -> No
     assert captured["login_rate_limit_attempts"] == 5
     assert captured["login_rate_limit_window_seconds"] == 120
     assert captured["login_rate_limit_block_seconds"] == 42
+    registry = cast(PluginRegistry, captured["plugin_registry"])
+    assert ("catalog", "iceberg.sql") in registry.admitted()
+    assert ("table_format", "iceberg") in registry.admitted()
 
 
 def test_control_plane_cli_passes_dedicated_review_secret(monkeypatch, tmp_path) -> None:
