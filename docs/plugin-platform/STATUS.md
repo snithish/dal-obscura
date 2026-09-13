@@ -104,11 +104,11 @@ out users and non-admin actors see management destinations disabled with an
 explicit browser tooltip, while scoped asset/history/activity navigation stays
 available. Server authorization remains authoritative for direct callers.
 
-Follow-up `pending` clears read-only draft-handoff mode when the user selects a
+Follow-up `d0c490d` clears read-only draft-handoff mode when the user selects a
 different asset, preventing an author’s review state from leaking into another
 asset’s editor. The existing load and edit epochs continue to fence the switch.
 
-Follow-up `pending` stops asset history, grants, and effective-access failures
+Follow-up `0ee3ee7` stops asset history, grants, and effective-access failures
 from becoming empty success states. Any protected read failure now leaves the
 previous editor intact and reports that access metadata could not be loaded.
 
