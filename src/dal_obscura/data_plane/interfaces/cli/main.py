@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import socket
+import sys
 import threading
 import time
 from pathlib import Path
@@ -62,6 +63,9 @@ _OIDC_IDENTITY_PROVIDER = (
 
 def main() -> None:
     """CLI entry point that wires the data plane from published control-plane state."""
+    if any(argument in {"-h", "--help"} for argument in sys.argv[1:]):
+        print(_HELP_TEXT)
+        return
     runtime_config = load_data_plane_runtime_config()
     setup_logging(LoggingConfig(level=runtime_config.log_level, json=runtime_config.json_logs))
     LOGGER.info("Starting dal-obscura data plane")
@@ -140,6 +144,25 @@ def main() -> None:
         health_check=lambda: _published_runtime_readiness(session_maker, runtime_config),
     )
     server.serve()
+
+
+_HELP_TEXT = """dal-obscura — governed Arrow Flight data plane
+
+Starts the data plane from an already migrated and published control-plane
+database. Configuration is read from DAL_OBSCURA_* environment variables.
+
+Required variables:
+  DAL_OBSCURA_DATABASE_URL   PostgreSQL (production) or SQLite (local) URL
+  DAL_OBSCURA_CELL_ID        Published cell UUID
+  DAL_OBSCURA_TICKET_SECRET  HMAC ticket secret
+
+Common variables:
+  DAL_OBSCURA_LOCATION           Flight location (default: grpc://0.0.0.0:8815)
+  DAL_OBSCURA_DATA_PLANE_PROFILE  local or production
+  DAL_OBSCURA_TLS_CERT / DAL_OBSCURA_TLS_KEY  TLS files in production
+
+Use dal-obscura-migrate to initialize the schema before starting the service.
+"""
 
 
 def _identity_from_runtime(

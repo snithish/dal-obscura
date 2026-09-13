@@ -25,3 +25,13 @@ def test_data_plane_startup_checks_schema_without_migrating(tmp_path, monkeypatc
 
     engine = create_engine_from_url(database_url)
     assert inspect(engine).get_table_names() == []
+
+
+def test_data_plane_help_does_not_require_runtime_environment(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(cli.sys, "argv", ["dal-obscura", "--help"])
+
+    cli.main()
+
+    output = capsys.readouterr().out
+    assert "governed Arrow Flight data plane" in output
+    assert "DAL_OBSCURA_DATABASE_URL" in output
