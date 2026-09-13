@@ -130,7 +130,7 @@ def test_concurrent_draft_cas_allows_one_revision_zero_writer(postgres_engine: E
                 return exc
 
     with ThreadPoolExecutor(max_workers=2) as executor:
-        results = list(executor.map(save_same_draft, ("race-a", "race-a")))
+        results = list(executor.map(save_same_draft, ("race-c", "race-c")))
 
     assert sum(isinstance(result, dict) for result in results) == 1
     assert sum(isinstance(result, PublicationConflictError) for result in results) == 1
