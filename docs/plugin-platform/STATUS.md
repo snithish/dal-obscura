@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `827c6a9` (ledger update for manifest deadline enforcement at `827c6a9`; manifest deadline enforcement at `97663b7`; session-expiry fence at `4e2ac7d`; public option bounds at `17ab77f`; symlink rejection at `6136224`; malformed-entry isolation at `6c129d3`; REST descriptor contract at `7adb4d6`; concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
+Implementation follow-up through `4980609` (REST identifier validation at `4980609`; ledger update for manifest deadline enforcement at `827c6a9`; manifest deadline enforcement at `97663b7`; session-expiry fence at `4e2ac7d`; public option bounds at `17ab77f`; symlink rejection at `6136224`; malformed-entry isolation at `6c129d3`; REST descriptor contract at `7adb4d6`; concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -27,6 +27,8 @@ open.
 Manifest and Parquet plugin operations now enforce deadline/cancellation checks
 during initialization and per-file/per-row-group planning, so expired work stops
 before additional member metadata is opened.
+REST table discovery now rejects non-string provider identifier segments instead of
+coercing malformed values into new logical identities.
 Local probes are recorded in [the review](IMPLEMENTATION_REVIEW.md).
 Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_STATUS.md).
 
@@ -216,7 +218,9 @@ artifacts.
   copying provider IO credentials into ticket-bound handles. The static descriptor
   now uses the registry's exact `dal_obscura-plugin.json` package-data name. Live
   REST server, auth, TLS, and clean-wheel evidence remain open; local wheel
-  construction is blocked by unavailable build dependencies.
+  construction is blocked by unavailable build dependencies. Provider table
+  discovery preserves identifier types and rejects malformed segments at the
+  public boundary.
 - X17 independent manifest/Parquet plugin: **implementing**; the independent
   `dal-obscura-manifest-parquet` package registers `manifest` and `parquet.dataset`
   entry points against the public SDK. Its catalog pins an operator-owned manifest,
