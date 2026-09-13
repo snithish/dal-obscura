@@ -9,6 +9,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
+from dal_obscura.common.identity import encode_federated_group, encode_federated_identity
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 
 DEMO_DIR = Path(os.environ.get("DEMO_DIR", "/workspace/demo"))
@@ -258,10 +259,12 @@ def _promote_table(fixture: dict[str, Any], table_fixture: dict[str, Any]) -> st
         raise RuntimeError("asset upsert returned an unexpected response")
     asset_payload = cast(dict[str, Any], asset)
     asset_id = str(asset_payload["id"])
+    revision = _asset_revision(asset_id)
     _request(
         "PUT",
         f"/v1/assets/{asset_id}/schema-fields",
         {
+            "expected_revision": revision,
             "fields": [
                 {
                     "name": field["name"],
@@ -272,18 +275,41 @@ def _promote_table(fixture: dict[str, Any], table_fixture: dict[str, Any]) -> st
             ]
         },
     )
+    revision = _asset_revision(asset_id)
     _request(
         "PUT",
         f"/v1/assets/{asset_id}/owners",
-        {"owners": _scoped_demo_owners(fixture["owners"])},
+        {"owners": _scoped_demo_owners(fixture["owners"]), "expected_revision": revision},
     )
+    revision = _asset_revision(asset_id)
     _request(
         "PUT",
         f"/v1/assets/{asset_id}/grants",
-        {"grants": _scoped_demo_grants(fixture.get("grants", []))},
+        {
+            "grants": _scoped_demo_grants(fixture.get("grants", [])),
+            "expected_revision": revision,
+        },
     )
-    _request("PUT", f"/v1/assets/{asset_id}/policy-rules", {"rules": fixture["policies"]})
+    draft = _request(
+        "PUT",
+        f"/v1/assets/{asset_id}/draft",
+        {"expected_revision": 0, "rules": fixture["policies"]},
+    )
+    if not isinstance(draft, dict) or not isinstance(draft.get("revision"), int):
+        raise RuntimeError("policy draft save returned an unexpected response")
+    _request(
+        "POST",
+        f"/v1/assets/{asset_id}/policy-versions",
+        {"draft_id": draft.get("id"), "expected_draft_revision": draft["revision"]},
+    )
     return asset_id
+
+
+def _asset_revision(asset_id: str) -> int:
+    asset = _request("GET", f"/v1/assets/{asset_id}")
+    if not isinstance(asset, dict) or not isinstance(asset.get("revision"), int):
+        raise RuntimeError("asset lookup returned no revision")
+    return asset["revision"]
 
 
 def _scoped_demo_owners(raw_owners: object) -> list[str]:
@@ -297,13 +323,17 @@ def _scoped_demo_owners(raw_owners: object) -> list[str]:
 
     if not isinstance(raw_owners, list):
         raise ValueError("demo fixture owners must be a list")
-    prefix = f"{DEMO_OIDC_ISSUER.rstrip('/')}|"
     owners: list[str] = []
     for raw_owner in raw_owners:
         owner = str(raw_owner).strip()
         if not owner:
             continue
-        owners.append(owner if "|" in owner else f"{prefix}{owner}")
+        if "|" in owner:
+            owners.append(owner)
+        elif owner.startswith("group:"):
+            owners.append(encode_federated_group(DEMO_OIDC_ISSUER.rstrip("/"), owner[6:]))
+        else:
+            owners.append(encode_federated_identity(DEMO_OIDC_ISSUER.rstrip("/"), owner))
     if not owners:
         raise ValueError("demo fixture must define at least one owner")
     return owners
@@ -314,7 +344,6 @@ def _scoped_demo_grants(raw_grants: object) -> list[dict[str, str]]:
 
     if not isinstance(raw_grants, list):
         raise ValueError("demo fixture grants must be a list")
-    prefix = f"{DEMO_OIDC_ISSUER.rstrip('/')}|"
     grants: list[dict[str, str]] = []
     for raw_grant in raw_grants:
         if not isinstance(raw_grant, dict):
@@ -326,7 +355,15 @@ def _scoped_demo_grants(raw_grants: object) -> list[dict[str, str]]:
             raise ValueError("demo fixture grants require principal and capability")
         grants.append(
             {
-                "principal": principal if "|" in principal else f"{prefix}{principal}",
+                "principal": (
+                    principal
+                    if "|" in principal
+                    else (
+                        encode_federated_group(DEMO_OIDC_ISSUER.rstrip("/"), principal[6:])
+                        if principal.startswith("group:")
+                        else encode_federated_identity(DEMO_OIDC_ISSUER.rstrip("/"), principal)
+                    )
+                ),
                 "capability": capability,
             }
         )

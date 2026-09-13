@@ -8,11 +8,22 @@ def test_federated_identity_preserves_exact_issuer_and_escapes_delimiters() -> N
         issuer="https://issuer.example/realm/",
     )
 
-    assert actor.identity_key() == "https://issuer.example/realm/|subject%7Cone%25two"
+    assert actor.identity_key() == "https://issuer.example/realm/|u|subject%7Cone%25two"
     assert actor.owner_principals() == {
-        "https://issuer.example/realm/|subject%7Cone%25two",
-        "https://issuer.example/realm/|group:group%7Cone%25two",
+        "https://issuer.example/realm/|u|subject%7Cone%25two",
+        "https://issuer.example/realm/|g|group%7Cone%25two",
     }
+
+
+def test_federated_subject_and_group_names_cannot_collide() -> None:
+    subject = ControlPlaneActor(
+        principal="group:analyst", groups=(), issuer="https://issuer.example"
+    )
+    group = ControlPlaneActor(
+        groups=("analyst",), issuer="https://issuer.example", principal="other"
+    )
+
+    assert subject.identity_key() != next(iter(group.owner_principals() - {group.identity_key()}))
 
 
 def test_local_identity_keeps_existing_unscoped_representation() -> None:

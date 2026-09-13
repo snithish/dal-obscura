@@ -91,9 +91,9 @@ def test_identity_migration_previews_and_applies_known_issuer_keys() -> None:
         policy_rule = session.query(PolicyRuleRecord).first()
         assert owner is not None
         assert policy_rule is not None
-        assert owner.principal == ("https://issuer.example/realm/|alice%7Cone")
+        assert owner.principal == ("https://issuer.example/realm/|u|alice%7Cone")
         assert policy_rule.principals_json == [
-            "https://issuer.example/realm/|group:analysts%7Ceast"
+            "https://issuer.example/realm/|g|analysts%7Ceast"
         ]
 
 
@@ -177,7 +177,7 @@ def test_identity_migration_leaves_local_identity_keys_unchanged() -> None:
         assert report.converted == 0
 
 
-def test_identity_migration_leaves_canonical_escaped_keys_and_rejects_legacy_escapes() -> None:
+def test_identity_migration_converts_exact_issuer_escapes_and_rejects_legacy_escapes() -> None:
     with _session() as session:
         store = PublicationStore(session)
         context = store.ensure_default_workspace_context()
@@ -226,5 +226,5 @@ def test_identity_migration_leaves_canonical_escaped_keys_and_rejects_legacy_esc
         session.commit()
 
         report = inspect_identity_keys(session)
-        assert report.converted == 0
+        assert report.converted == 1
         assert report.ambiguous == ("https://issuer.example/realm|alice%7Cone",)

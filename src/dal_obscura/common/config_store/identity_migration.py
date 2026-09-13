@@ -188,6 +188,10 @@ def _set_policy_principal(
 def _convert(value: str, issuers: tuple[str, ...]) -> str | IdentityMigrationError | None:
     if not isinstance(value, str) or "|" not in value:
         return None
+    # Typed keys are the current representation and are intentionally
+    # idempotent when an operator reruns the maintenance command.
+    if _has_typed_identity_shape(value, issuers):
+        return value
     # Local actors intentionally retain their legacy unscoped representation;
     # only values that look like federated issuer-prefixed keys are candidates.
     if value.startswith(("local|", "group:local|")):
@@ -206,14 +210,30 @@ def _convert(value: str, issuers: tuple[str, ...]) -> str | IdentityMigrationErr
         reason = "ambiguous" if len(matches) > 1 else "unresolved"
         return IdentityMigrationError(f"{reason} legacy identity key {value!r}")
     issuer, subject, exact_issuer = matches[0]
-    if exact_issuer and ("%7C" in subject or "%25" in subject):
-        # Already-canonical escaped values are safe to leave in place. A
-        # legacy value using the slash-stripped issuer and escapes is
-        # indistinguishable from a literal encoded subject and must be
-        # reapproved rather than guessed.
-        return value
     if not exact_issuer and ("%7C" in subject or "%25" in subject):
         return IdentityMigrationError(f"ambiguous legacy identity key {value!r}")
+    subject = _decode_legacy_component(subject)
     if subject.startswith("group:"):
         return encode_federated_group(issuer, subject[6:])
     return encode_federated_identity(issuer, subject)
+
+
+def _has_typed_identity_shape(value: str, issuers: tuple[str, ...]) -> bool:
+    """Recognize only current keys for configured issuers."""
+
+    return any(
+        value.startswith(
+            (f"{_escape_component(issuer)}|u|", f"{_escape_component(issuer)}|g|")
+        )
+        for issuer in issuers
+    )
+
+
+def _escape_component(value: str) -> str:
+    return value.replace("%", "%25").replace("|", "%7C")
+
+
+def _decode_legacy_component(value: str) -> str:
+    """Decode only the two escapes emitted by the legacy encoder."""
+
+    return value.replace("%7C", "|").replace("%25", "%")

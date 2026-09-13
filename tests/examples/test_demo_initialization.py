@@ -145,8 +145,8 @@ def test_demo_owner_keys_are_scoped_to_oidc_issuer(monkeypatch) -> None:
     module = _load_script("provision_demo")
 
     assert module._scoped_demo_owners(["group:asset-owners", "asset-owner"]) == [
-        "http://127.0.0.1:8080/realms/dal-obscura-demo|group:asset-owners",
-        "http://127.0.0.1:8080/realms/dal-obscura-demo|asset-owner",
+        "http://127.0.0.1:8080/realms/dal-obscura-demo|g|asset-owners",
+        "http://127.0.0.1:8080/realms/dal-obscura-demo|u|asset-owner",
     ]
     assert module._scoped_demo_owners(["https://issuer.example/realm|group:asset-owners"]) == [
         "https://issuer.example/realm|group:asset-owners"
@@ -171,7 +171,7 @@ def test_demo_grant_keys_are_scoped_to_oidc_issuer(monkeypatch) -> None:
         [{"principal": "group:asset-owners", "capability": "publish"}]
     ) == [
         {
-            "principal": "http://127.0.0.1:8080/realms/dal-obscura-demo|group:asset-owners",
+            "principal": "http://127.0.0.1:8080/realms/dal-obscura-demo|g|asset-owners",
             "capability": "publish",
         }
     ]
