@@ -116,7 +116,7 @@ Follow-up `0ee3ee7` stops asset history, grants, and effective-access failures
 from becoming empty success states. Any protected read failure now leaves the
 previous editor intact and reports that access metadata could not be loaded.
 
-Follow-up `pending` removes hard-coded runtime values from the unconfigured
+Follow-up `5408068` removes hard-coded runtime values from the unconfigured
 settings state. Blank fields with examples now require positive operator input,
 so a successful `null` runtime read cannot be mistaken for serving configuration.
 
