@@ -8,7 +8,8 @@ import stat
 from pathlib import Path
 from typing import cast
 
-from dal_obscura.common.plugin_api.contracts import PluginKind
+from dal_obscura_plugin_api import PluginKind
+
 from dal_obscura.common.plugin_api.registry import PluginAdmissionError, PluginLock
 
 MAX_PLUGIN_LOCK_BYTES = 1_048_576

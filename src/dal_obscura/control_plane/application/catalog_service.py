@@ -15,7 +15,9 @@ from threading import BoundedSemaphore, Lock
 from typing import Any, cast
 from urllib.parse import parse_qsl, urlsplit
 
-from dal_obscura.common.plugin_api import PluginDescriptor, PluginRegistry
+from dal_obscura_plugin_api import PluginDescriptor
+
+from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.infrastructure.catalog_discovery import (
     ICEBERG_CATALOG_MODULE,

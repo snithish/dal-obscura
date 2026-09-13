@@ -14,6 +14,7 @@ ENV UV_LINK_MODE=copy \
 # are package metadata inputs for the setuptools build backend.
 COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY src ./src
+COPY packages/plugin-api ./packages/plugin-api
 
 # Install only production dependencies plus the Flight server and Postgres
 # driver extras. No dev, test, or build caches are copied into the runtime stage.

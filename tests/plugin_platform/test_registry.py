@@ -6,10 +6,10 @@ from types import SimpleNamespace
 from typing import Any, Protocol, cast
 
 import pytest
+from dal_obscura_plugin_api import PluginDescriptor
 
 from dal_obscura.common.plugin_api import (
     PluginAdmissionError,
-    PluginDescriptor,
     PluginRegistry,
     build_plugin_lock,
     load_static_plugin_descriptor,

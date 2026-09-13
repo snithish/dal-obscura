@@ -451,6 +451,7 @@ name = "dal-obscura"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "dal-obscura-plugin-api" },
     { name = "protobuf" },
     { name = "pyarrow" },
 ]
@@ -509,6 +510,7 @@ requires-dist = [
     { name = "alembic", marker = "extra == 'server'", specifier = ">=1.13.0" },
     { name = "cryptography", marker = "extra == 'server'", specifier = ">=46.0.7" },
     { name = "dal-obscura", extras = ["duckdb", "polars"], marker = "extra == 'examples'" },
+    { name = "dal-obscura-plugin-api", directory = "packages/plugin-api" },
     { name = "duckdb", marker = "extra == 'duckdb'", specifier = ">=1.0.0" },
     { name = "duckdb", marker = "extra == 'server'", specifier = ">=1.0.0" },
     { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.115.0" },
@@ -544,6 +546,17 @@ dev = [
     { name = "sqlalchemy", specifier = ">=2.0.0" },
     { name = "ty", specifier = ">=0.0.22" },
 ]
+
+[[package]]
+name = "dal-obscura-plugin-api"
+version = "0.1.0"
+source = { directory = "packages/plugin-api" }
+dependencies = [
+    { name = "pyarrow" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pyarrow", specifier = ">=15.0.0" }]
 
 [[package]]
 name = "distlib"

@@ -4,12 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from dal_obscura.common.plugin_api import (
-    PluginDescriptor,
-    PluginLock,
-    PluginRegistry,
-)
-from dal_obscura.common.plugin_api.contracts import PluginKind
+from dal_obscura_plugin_api import PluginDescriptor, PluginKind
+
+from dal_obscura.common.plugin_api import PluginLock, PluginRegistry
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import IcebergCatalog
 from dal_obscura.data_plane.infrastructure.table_formats.iceberg import IcebergTableFormat
 

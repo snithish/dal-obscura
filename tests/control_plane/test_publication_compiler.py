@@ -5,13 +5,13 @@ from typing import Any, cast
 from uuid import uuid4
 
 import pytest
+from dal_obscura_plugin_api import PluginDescriptor
 
 from dal_obscura.common.access_control.compiled_policy import (
     CompiledMaskRule,
     CompiledPolicy,
     CompiledPolicyRule,
 )
-from dal_obscura.common.plugin_api import PluginDescriptor
 from dal_obscura.control_plane.application.compiler import PublicationCompiler
 from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.domain.models import (

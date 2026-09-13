@@ -11,12 +11,13 @@ from pathlib import Path
 from threading import RLock
 from typing import Any, Literal, cast
 
-from dal_obscura.common.plugin_api.contracts import (
+from dal_obscura_plugin_api import (
     SUPPORTED_PLUGIN_API_VERSIONS,
     SUPPORTED_PLUGIN_CONFIG_VERSIONS,
     PluginDescriptor,
     PluginKind,
 )
+
 from dal_obscura.common.plugin_api.lifecycle import (
     PluginLifecycleState,
     transition_plugin_lifecycle,

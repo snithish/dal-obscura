@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from dal_obscura_plugin_api import PluginDescriptor
 from fastapi import APIRouter, Depends
 
-from dal_obscura.common.plugin_api.contracts import PluginDescriptor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 
 

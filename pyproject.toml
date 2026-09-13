@@ -8,6 +8,7 @@ license = "Apache-2.0"
 authors = [{ name = "dal-obscura" }]
 
 dependencies = [
+  "dal-obscura-plugin-api",
   "pyarrow>=15.0.0",
   "protobuf>=7.35.1",
 ]
@@ -51,6 +52,9 @@ dal-obscura-maintenance = "dal_obscura.control_plane.interfaces.maintenance_cli:
 [build-system]
 requires = ["setuptools>=68.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.uv.sources]
+dal-obscura-plugin-api = { path = "packages/plugin-api" }
 
 [tool.pytest.ini_options]
 addopts = "-q --benchmark-skip"

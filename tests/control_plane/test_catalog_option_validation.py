@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import pytest
+from dal_obscura_plugin_api import PluginDescriptor
 
-from dal_obscura.common.plugin_api.contracts import PluginDescriptor
 from dal_obscura.control_plane.application.catalog_service import (
     validate_admitted_catalog_options,
     validate_catalog_options,

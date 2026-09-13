@@ -13,7 +13,8 @@ from importlib import metadata
 from pathlib import Path
 from typing import cast
 
-from dal_obscura.common.plugin_api.contracts import PluginKind
+from dal_obscura_plugin_api import PluginKind
+
 from dal_obscura.common.plugin_api.registry import (
     ENTRY_POINT_GROUPS,
     PluginAdmissionError,

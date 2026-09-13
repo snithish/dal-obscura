@@ -6,8 +6,8 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
+from dal_obscura_plugin_api import PluginKind
 
-from dal_obscura.common.plugin_api.contracts import PluginKind
 from dal_obscura.common.plugin_api.registry import PluginAdmissionError
 from scripts.build_plugin_lock import build_document, parse_selection, write_lock
 

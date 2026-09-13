@@ -5,6 +5,15 @@ from datetime import datetime, timezone
 import pyarrow as pa
 import pytest
 from dal_obscura_plugin_api import (
+    CatalogConfig,
+    DiscoveryPage,
+    ExecutionContext,
+    PluginDescriptor,
+    SchemaDescriptor,
+    TableHandle,
+    TableIdentifier,
+)
+from dal_obscura_plugin_api import (
     CatalogConfig as PublicCatalogConfig,
 )
 from dal_obscura_plugin_api import (
@@ -15,16 +24,6 @@ from dal_obscura_plugin_api import (
 )
 from dal_obscura_plugin_api import (
     TableIdentifier as PublicTableIdentifier,
-)
-
-from dal_obscura.common.plugin_api.contracts import (
-    CatalogConfig,
-    DiscoveryPage,
-    ExecutionContext,
-    PluginDescriptor,
-    SchemaDescriptor,
-    TableHandle,
-    TableIdentifier,
 )
 
 

@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from dal_obscura.common.plugin_api import (
+from dal_obscura_plugin_api import (
     PLUGIN_API_VERSION,
     SUPPORTED_PLUGIN_API_VERSIONS,
     SUPPORTED_PLUGIN_CONFIG_VERSIONS,
