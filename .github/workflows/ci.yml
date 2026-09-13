@@ -123,6 +123,11 @@ jobs:
           uv run pytest tests/interfaces tests/infrastructure tests/control_plane
           tests/examples tests/test_e2e_smoke.py -q
 
+      - name: Run Python and DuckDB consumer qualification
+        env:
+          DAL_OBSCURA_RUN_CONSUMER_TESTS: "1"
+        run: uv run pytest tests/consumers/test_governed_reads.py -q
+
   postgres-race-tests:
     name: PostgreSQL concurrency gates
     runs-on: ubuntu-24.04
