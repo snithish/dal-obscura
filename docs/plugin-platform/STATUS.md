@@ -373,6 +373,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Evidence: UI TypeScript and Vite production build passed; no private session or policy state is persisted by the theme control. Manual responsive/accessibility review remains required.
 - Remaining N06/B09 work: command palette, icon system, menu drawer, rendered 390/768/1440 layouts, keyboard/screen-reader and axe review. Release remains HOLD.
 
+## Implementation update — 1bea336 (2026-09-13)
+
+- Packet / status / candidate commit / owner: N06/B09 partial / VERIFY / `1bea336` / governance UI navigation.
+- Observable behavior delivered: Cmd/Ctrl+K opens a keyboard-accessible command palette for authorized destination navigation and workflow help. It closes on Escape/backdrop, supports filtering, and contains no publish/delete/revoke action. Palette state is ephemeral and does not persist policy or identity data.
+- Evidence: UI TypeScript and Vite production build passed. Manual keyboard focus restoration, responsive rendering, and screen-reader review remain required.
+- Remaining N06/B09 work: menu drawer, Lucide icon system, focus restoration, rendered layout/a11y checks, and full page state coverage. Release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
