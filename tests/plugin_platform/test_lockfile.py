@@ -61,3 +61,27 @@ def test_load_plugin_lock_file_rejects_symlink(tmp_path) -> None:
 
     with pytest.raises(PluginAdmissionError, match="symbolic"):
         load_plugin_lock_file(link)
+
+
+@pytest.mark.parametrize(
+    ("plugin_id", "lock", "message"),
+    [
+        ("Fixture.catalog", ["fixture", "1.0.0", "1", "a" * 64, "b" * 64], "identity"),
+        ("fixture.catalog", ["fixture", "1.0.0", "1", "A" * 64, "b" * 64], "digests"),
+        ("fixture.catalog", ["fixture", "1.0.0", "1", "a" * 63, "b" * 64], "digests"),
+    ],
+)
+def test_load_plugin_lock_file_rejects_malformed_identity_or_digest(
+    tmp_path,
+    plugin_id,
+    lock,
+    message,
+) -> None:
+    path = tmp_path / "plugins.json"
+    _write_lock(
+        path,
+        [{"kind": "catalog", "plugin_id": plugin_id, "lock": lock}],
+    )
+
+    with pytest.raises(PluginAdmissionError, match=message):
+        load_plugin_lock_file(path)

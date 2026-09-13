@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import stat
 from pathlib import Path
 from typing import cast
@@ -12,6 +13,8 @@ from dal_obscura.common.plugin_api.registry import PluginAdmissionError, PluginL
 
 MAX_PLUGIN_LOCK_BYTES = 1_048_576
 MAX_PLUGIN_LOCK_ENTRIES = 256
+_PLUGIN_ID = re.compile(r"[a-z][a-z0-9_.-]{0,63}\Z")
+_HEX_DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 
 
 def load_plugin_lock_file(path: str | Path) -> dict[tuple[PluginKind, str], PluginLock]:  # noqa: C901
@@ -49,12 +52,27 @@ def load_plugin_lock_file(path: str | Path) -> dict[tuple[PluginKind, str], Plug
         kind = entry.get("kind")
         plugin_id = entry.get("plugin_id")
         lock = entry.get("lock")
-        if kind not in {"catalog", "table_format"} or not isinstance(plugin_id, str):
+        if (
+            kind not in {"catalog", "table_format"}
+            or not isinstance(plugin_id, str)
+            or not _PLUGIN_ID.fullmatch(plugin_id)
+        ):
             raise PluginAdmissionError("Plugin lock entry identity is invalid")
         if not isinstance(lock, list) or len(lock) != 5 or any(
             not isinstance(value, str) or not value for value in lock
         ):
             raise PluginAdmissionError("Plugin lock entry must contain a five-part lock")
+        distribution, version, api_version, descriptor_digest, artifact_digest = lock
+        if any(
+            any(ord(char) < 0x20 or ord(char) == 0x7F for char in value)
+            or len(value) > 256
+            for value in (distribution, version, api_version)
+        ):
+            raise PluginAdmissionError("Plugin lock identity values must be printable and bounded")
+        if not _HEX_DIGEST.fullmatch(descriptor_digest) or not _HEX_DIGEST.fullmatch(
+            artifact_digest
+        ):
+            raise PluginAdmissionError("Plugin lock digests must be lowercase SHA-256 values")
         key = (cast(PluginKind, kind), plugin_id)
         if key in result:
             raise PluginAdmissionError("Plugin lock contains duplicate identities")
