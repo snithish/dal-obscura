@@ -529,17 +529,19 @@ def _publication_list_response(publication: dict[str, object]) -> dict[str, obje
 
 
 def _catalogs_with_selected(active_catalogs, catalog):
-    for active in active_catalogs:
+    replacement = CompiledCatalog(
+        tenant_id=catalog.tenant_id,
+        catalog=catalog.name,
+        config={
+            "module": catalog.module,
+            "options": dict(catalog.options),
+            "revision": catalog.revision,
+        },
+    )
+    for index, active in enumerate(active_catalogs):
         if active.tenant_id == catalog.tenant_id and active.catalog == catalog.name:
-            return list(active_catalogs)
-    return [
-        *active_catalogs,
-        CompiledCatalog(
-            tenant_id=catalog.tenant_id,
-            catalog=catalog.name,
-            config={"module": catalog.module, "options": dict(catalog.options)},
-        ),
-    ]
+            return [*active_catalogs[:index], replacement, *active_catalogs[index + 1 :]]
+    return [*active_catalogs, replacement]
 
 
 def _validate_publish_readiness(
