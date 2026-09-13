@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `0d224ee` (explicit plugin admission lifecycle
+Implementation follow-up through `8e6d058` (UI plugin lifecycle status display;
+explicit plugin admission lifecycle
 transitions; A22 recovery/upgrade acceptance
 probes; isolated restore runbook and
 recovery helper hardening; encrypted PostgreSQL backup helpers; fresh-identity race correction;
@@ -1491,6 +1492,11 @@ and manifest packages.
   leases for a measured drain, wire disable/revoke to publication admission and
   ticket invalidation, and exercise upgrade/remove transitions across workers.
   Pickle compatibility is unchanged.
+
+The Connections view now renders the lifecycle state returned by the
+authenticated plugin endpoint, so draining/disabled/revoked adapters are
+visible to operators instead of appearing enabled by omission. TypeScript
+compile and Vite production build pass; browser/IdP evidence remains open.
 
 ### X19 production database privilege ordering — `18f8e64`
 
