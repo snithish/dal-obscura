@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `7dd89d3` (environment-independent CLI help at `7dd89d3`; lazy optional plugin bridge at `0de9d98`; shared public schema bounds at `c8d2450`; public stable-ID claim validation at `102c768`; generic admitted catalog labels at `079324e`; manifest nested schema identity validation at `a318b97`; bounded browser session lifetimes at `e6e1fdd`; ledger update for runtime descriptor checks at `f3adebb`; runtime descriptor verification at `e074d5c`; per-batch plugin output validation at `97da8cb`; public task payload boundary at `0f09d42`; ticket-handle metadata bounds at `fc90ddc`; secure REST auxiliary URI checks at `6ee3d81`; REST identifier validation at `4980609`; ledger update for manifest deadline enforcement at `827c6a9`; manifest deadline enforcement at `97663b7`; session-expiry fence at `4e2ac7d`; public option bounds at `17ab77f`; symlink rejection at `6136224`; malformed-entry isolation at `6c129d3`; REST descriptor contract at `7adb4d6`; concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
+Implementation follow-up through `54b6dc1` (exact installed plugin routing CI at `54b6dc1`; environment-independent CLI help at `7dd89d3`; lazy optional plugin bridge at `0de9d98`; shared public schema bounds at `c8d2450`; public stable-ID claim validation at `102c768`; generic admitted catalog labels at `079324e`; manifest nested schema identity validation at `a318b97`; bounded browser session lifetimes at `e6e1fdd`; ledger update for runtime descriptor checks at `f3adebb`; runtime descriptor verification at `e074d5c`; per-batch plugin output validation at `97da8cb`; public task payload boundary at `0f09d42`; ticket-handle metadata bounds at `fc90ddc`; secure REST auxiliary URI checks at `6ee3d81`; REST identifier validation at `4980609`; ledger update for manifest deadline enforcement at `827c6a9`; manifest deadline enforcement at `97663b7`; session-expiry fence at `4e2ac7d`; public option bounds at `17ab77f`; symlink rejection at `6136224`; malformed-entry isolation at `6c129d3`; REST descriptor contract at `7adb4d6`; concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -61,6 +61,9 @@ an external catalog plugin is explicitly selected; missing external wheels fail
 at that boundary instead of preventing the core service from starting.
 The data-plane CLI now prints startup requirements before loading environment or
 database state when invoked with `--help`/`-h`.
+CI now builds the server and all independently packaged plugin wheels once,
+installs those exact artifacts into a fresh environment, and runs core routing
+tests before image publication.
 Local probes are recorded in [the review](IMPLEMENTATION_REVIEW.md).
 Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_STATUS.md).
 
@@ -854,6 +857,22 @@ remain open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: continue X21 test-efficiency/capacity evidence and X22
   exact artifact gates.
+
+### X22 installed plugin routing lane — `54b6dc1`
+
+- State: implementing.
+- Behavior: the release workflow builds exact server, SDK, conformance,
+  manifest/Parquet, and REST wheels and exercises the installed plugin bridge in
+  an isolated environment before the container job can run.
+- Green evidence: workflow YAML parses and `git diff --check` passes locally;
+  hosted execution remains required for wheel/build proof.
+- Remaining gaps: hosted artifact digests, browser/provider/consumer/recovery
+  gates, vulnerability/SBOM evidence, and architecture matrix execution remain
+  open.
+- Pickle compatibility: unchanged; the lane exercises the existing ticket path
+  without changing serialization.
+- Next permitted packet: run the hosted clean-artifact and security lanes, then
+  continue X19/X20 recovery and lifecycle evidence.
 
 ### X06 duplicate identity rejection — `5c17d04`
 
