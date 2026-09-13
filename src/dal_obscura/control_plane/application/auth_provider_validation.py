@@ -9,8 +9,7 @@ from urllib.parse import urlsplit
 from dal_obscura.control_plane.application.errors import ValidationFailure
 
 OIDC_IDENTITY_MODULE = (
-    "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks."
-    "OidcJwksIdentityProvider"
+    "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider"
 )
 
 _SUPPORTED_ARGUMENTS = frozenset(
@@ -92,7 +91,12 @@ def _validate_oidc_args(args: Mapping[str, object], *, index: int) -> None:
         raise ValidationFailure(
             f"Authentication provider {index} cannot persist static JWKS material"
         )
-    unknown = sorted(str(key) for key in args if str(key) not in _SUPPORTED_ARGUMENTS)
+    unknown = sorted(
+        str(key)
+        for key, value in args.items()
+        if str(key) not in _SUPPORTED_ARGUMENTS
+        and not (value == "[redacted]" and str(key).lower() in _REDACTED_ARGUMENTS)
+    )
     if unknown:
         raise ValidationFailure(
             f"Authentication provider {index} has unsupported arguments: {', '.join(unknown)}"

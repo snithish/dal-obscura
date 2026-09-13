@@ -509,6 +509,12 @@ class PublicationStore:
 
     def replace_auth_providers(self, *, cell_id: UUID, providers: list[dict[str, Any]]) -> None:
         self.lock_cell_for_publication(cell_id)
+        existing_args = {
+            record.ordinal: dict(record.args_json)
+            for record in self._session.scalars(
+                select(AuthProviderRecord).where(AuthProviderRecord.cell_id == cell_id)
+            )
+        }
         for record in self._session.scalars(
             select(AuthProviderRecord).where(AuthProviderRecord.cell_id == cell_id)
         ):
@@ -521,7 +527,9 @@ class PublicationStore:
                     cell_id=cell_id,
                     ordinal=int(raw["ordinal"]),
                     module=str(raw["module"]),
-                    args_json=dict(raw.get("args", {})),
+                    args_json=_preserve_redacted_args(
+                        dict(raw.get("args", {})), existing_args.get(int(raw["ordinal"]))
+                    ),
                     enabled=bool(raw.get("enabled", True)),
                 )
             )
@@ -2206,6 +2214,34 @@ def _normalize_principals(principals: list[str]) -> list[str]:
             normalized.append(value)
             seen.add(value)
     return normalized
+
+
+def _preserve_redacted_args(
+    incoming: Mapping[str, object], existing: Mapping[str, object] | None
+) -> dict[str, object]:
+    """Keep server-held secret values when a redacted GET is round-tripped."""
+
+    if not existing:
+        return dict(incoming)
+    result: dict[str, object] = {}
+    for key, value in incoming.items():
+        old = existing.get(key)
+        if value == "[redacted]" and old is not None:
+            result[key] = old
+        elif isinstance(value, Mapping) and isinstance(old, Mapping):
+            result[key] = _preserve_redacted_args(value, old)
+        elif isinstance(value, list) and isinstance(old, list):
+            result[key] = [
+                _preserve_redacted_args(item, old[index])
+                if isinstance(item, Mapping)
+                and index < len(old)
+                and isinstance(old[index], Mapping)
+                else item
+                for index, item in enumerate(value)
+            ]
+        else:
+            result[key] = value
+    return result
 
 
 _ICEBERG_CATALOG_MODULE = (
