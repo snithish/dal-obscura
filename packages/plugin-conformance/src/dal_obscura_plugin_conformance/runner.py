@@ -22,6 +22,8 @@ DEFAULT_MAX_OUTPUT_BATCHES = 1_024
 DEFAULT_MAX_OUTPUT_ROWS = 1_000_000
 DEFAULT_MAX_DISCOVERY_PAGES = 64
 DEFAULT_MAX_DISCOVERY_TABLES = 10_000
+DEFAULT_MAX_SCHEMA_BYTES = 1_048_576
+DEFAULT_MAX_SCHEMA_FIELDS = 4_096
 
 
 @dataclass
@@ -92,11 +94,19 @@ def check_schema_descriptor(
     descriptor: SchemaDescriptor,
     *,
     result: ConformanceResult | None = None,
+    max_bytes: int = DEFAULT_MAX_SCHEMA_BYTES,
+    max_fields: int = DEFAULT_MAX_SCHEMA_FIELDS,
 ) -> None:
     """Validate the public schema descriptor's bounded identity contract."""
 
     if descriptor.arrow_schema is None or not isinstance(descriptor.arrow_schema, pa.Schema):
         raise ValueError("schema descriptor must contain an Arrow schema")
+    if max_bytes <= 0 or max_fields <= 0:
+        raise ValueError("schema descriptor budgets must be positive")
+    if len(descriptor.arrow_schema) > max_fields:
+        raise ValueError(f"schema descriptor has more than {max_fields} fields")
+    if descriptor.arrow_schema.serialize().size > max_bytes:
+        raise ValueError(f"schema descriptor exceeds {max_bytes} serialized bytes")
     if result is not None:
         result.record_pass("schema_descriptor")
 

@@ -17,7 +17,7 @@ package/plugin identity, Arrow version, pass/fail checks, failures, skips, and a
 JSON representation suitable for CI artifacts. The fixture includes nested
 struct, list, and map values. The kit validates declared capabilities, bounded
 catalog discovery/page identities, task counts, schema descriptors, output batch
-schemas, cancellation, and cleanup;
+schemas, schema byte/field budgets, cancellation, and cleanup;
 it checks cancellation and deadlines before requesting more plan or output work,
 and it does not pretend to sandbox in-process Python plugins. Provider fixtures can
 also pass `expected_task_ids` with a `task_identity` function to reject duplicate

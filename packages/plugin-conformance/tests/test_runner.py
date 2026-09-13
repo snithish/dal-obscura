@@ -20,6 +20,7 @@ from dal_obscura_plugin_conformance import (
     check_capabilities,
     check_discovery_page,
     check_record_batches,
+    check_schema_descriptor,
     nested_golden_table,
     run_catalog_checks,
     run_format_checks,
@@ -368,6 +369,17 @@ def test_record_batch_validation_rejects_expired_deadline():
             [batch],
             deadline=datetime.now(timezone.utc) - timedelta(seconds=1),
         )
+
+
+def test_schema_descriptor_rejects_oversized_field_count():
+    schema = SchemaDescriptor(
+        schema_version=1,
+        fingerprint="0" * 64,
+        arrow_schema=pa.schema([pa.field(f"field_{index}", pa.string()) for index in range(3)]),
+    )
+
+    with pytest.raises(ValueError, match="more than 2 fields"):
+        check_schema_descriptor(schema, max_fields=2)
 
 
 def _catalog_descriptor() -> PluginDescriptor:
