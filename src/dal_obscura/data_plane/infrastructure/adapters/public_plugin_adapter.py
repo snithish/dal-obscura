@@ -39,6 +39,7 @@ from dal_obscura.common.catalog.ports import (
     TableFormat,
 )
 from dal_obscura.common.query_planning.models import PlanRequest
+from dal_obscura.common.schema_bounds import validate_arrow_schema_bounds
 from dal_obscura.common.schema_identity import schema_has_stable_ids
 from dal_obscura.common.table_format.ports import InputPartition, Plan, ScanTask
 from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
@@ -280,6 +281,7 @@ def _identifier_name(identifier: TableIdentifier) -> str:
 def _validate_schema_descriptor(descriptor: SchemaDescriptor) -> None:
     if not isinstance(descriptor, SchemaDescriptor):
         raise ValueError("Public plugin returned an invalid schema descriptor")
+    validate_arrow_schema_bounds(descriptor.arrow_schema)
     serialized = descriptor.arrow_schema.serialize().size
     if serialized > MAX_PLUGIN_TASK_BYTES:
         raise ValueError("Public plugin schema exceeds the byte limit")

@@ -290,3 +290,44 @@ def test_public_format_rejects_false_stable_id_claim() -> None:
     )
     with pytest.raises(ValueError, match="stable IDs"):
         table_format.get_schema()
+
+
+def test_public_format_rejects_schema_depth_before_plugin_execution() -> None:
+    identifier = TableIdentifier(namespace=("default",), name="users")
+    handle = TableHandle(
+        catalog_plugin_id="manifest",
+        catalog_instance_id="fixture",
+        catalog_revision=1,
+        identifier=identifier,
+        format_plugin_id="parquet.dataset",
+        handle_version=1,
+    )
+    nested: pa.DataType = pa.string()
+    for index in range(66):
+        nested = pa.struct([pa.field(f"level_{index}", nested)])
+    schema = pa.schema([pa.field("root", nested)])
+
+    class DeepFormat:
+        def schema(self, value, context):
+            del value, context
+            from dal_obscura_plugin_api import SchemaDescriptor
+
+            return SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=schema)
+
+        def plan(self, value, descriptor, context, *, projection, row_filter, max_tasks):
+            del value, descriptor, context, projection, row_filter, max_tasks
+            return []
+
+        def execute(self, task, context):
+            del task, context
+            return schema, []
+
+    table_format = PublicPluginTableFormat(
+        catalog_name="fixture",
+        table_name="default.users",
+        format="parquet.dataset",
+        format_factory=lambda value, context: DeepFormat(),
+        handle=handle,
+    )
+    with pytest.raises(ValueError, match="nesting-depth"):
+        table_format.get_schema()
