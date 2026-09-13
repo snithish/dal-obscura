@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `b6da896` (PostgreSQL binding CAS race probe;
+Implementation follow-up through `399f311` (CI plugin lifecycle security lane;
+PostgreSQL binding CAS race probe;
 PostgreSQL grant CAS race probe;
 plugin lifecycle formatting and
 tests; plugin lifecycle architecture
@@ -1490,6 +1491,9 @@ The PostgreSQL CI lane now executes the A22 recovery probe together with the
 publication barrier tests, so a healthy disposable PostgreSQL service exercises
 session/ticket invalidation on every candidate. Encrypted `age` restore and
 measured RPO/RTO remain mandatory external gates.
+
+The Python contract lane now also runs the core plugin registry lifecycle tests,
+so invalid transition and non-enabled admission regressions are promotion gates.
 
 ### X20 plugin admission lifecycle — `0d224ee`
 
