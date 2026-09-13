@@ -184,6 +184,7 @@ artifacts.
   now describe the core-injected construction boundary. Catalog table identifiers in both contracts now enforce a
   bounded segment count/length and printable string segments, preventing malformed
   provider identities from crossing the plugin boundary.
+Core and public SDK descriptors now enforce one version-1 capability vocabulary and export it for adapters; unknown semantic claims fail before admission.
   Service-side compatibility contracts and online wheel artifact evidence remain
   open.
 - X12 admitted loading and Iceberg adapter: **implementing**; entry-point loading now
