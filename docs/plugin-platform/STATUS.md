@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `b178cc3` (conformance cleanup gate;
+Implementation follow-up through `8c73c41` (REST namespace traversal;
+conformance cleanup gate;
 catalog binding replacement;
 public-response compatibility fix;
 strict provider identity validation;
@@ -218,6 +219,8 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   lifecycle evidence remain open.
   The conformance runner now fails a plugin that omits `close()` instead of
   treating missing cleanup as a pass.
+  REST catalog namespace lifecycle now honors provider-scoped traversal and
+  safely filters bounded root listings for legacy providers.
   Service-side compatibility contracts and online wheel artifact evidence remain
   open.
 - X12 admitted loading and Iceberg adapter: **implementing**; entry-point loading now
@@ -400,6 +403,16 @@ providers before Phase A's security/correctness prerequisites are accepted.
   (23 passed), Ruff, Ty, and `git diff --check`.
 - Remaining gaps: provider interruption, real consumer cleanup, and external wheel
   evidence remain open. Pickle compatibility is unchanged.
+
+### X16 REST namespace lifecycle — `8c73c41`
+
+- State: implementing.
+- Behavior: REST catalog namespace listing accepts structured scoped requests,
+  invokes provider-scoped APIs when available, and filters bounded root listings
+  for legacy providers without that overload.
+- Green evidence: REST package suite (15 passed), Ruff, and `git diff --check`.
+- Remaining gaps: live REST provider, TLS/auth, clean-wheel, and consumer evidence
+  remain open. Pickle compatibility is unchanged.
 
 ### X05 shared Arrow schema bounds — `fd20e72`
 
