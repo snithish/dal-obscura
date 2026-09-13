@@ -1,6 +1,7 @@
 """Public, dependency-light contracts for Dal Obscura plugins."""
 
 from dal_obscura_plugin_api.contracts import (
+    SUPPORTED_CAPABILITIES,
     CatalogConfig,
     CatalogFactory,
     CatalogPlugin,
@@ -16,6 +17,7 @@ from dal_obscura_plugin_api.contracts import (
 )
 
 __all__ = [
+    "SUPPORTED_CAPABILITIES",
     "CatalogConfig",
     "CatalogFactory",
     "CatalogPlugin",

@@ -331,7 +331,7 @@ def test_build_plugin_lock_derives_the_exact_verified_five_part_lock(tmp_path) -
 def test_static_descriptor_loader_reads_metadata_without_factory_import() -> None:
     descriptor_json = (
         '{"kind":"catalog","plugin_id":"rest.catalog","api_version":"1",'
-        '"config_version":1,"capabilities":["nested"],'
+        '"config_version":1,"capabilities":["nested_schema"],'
         '"config_schema":{"fields":[]},"display_name":"REST Catalog"}'
     )
     distribution = SimpleNamespace(
@@ -356,7 +356,7 @@ def test_static_descriptor_loader_reads_metadata_without_factory_import() -> Non
     assert descriptor.plugin_id == "rest.catalog"
     assert descriptor.distribution == "rest-wheel"
     assert descriptor.version == "2.0.0"
-    assert descriptor.capabilities == frozenset({"nested"})
+    assert descriptor.capabilities == frozenset({"nested_schema"})
 
 
 def test_static_descriptor_loader_reads_setuptools_package_data_without_importing_factory() -> None:

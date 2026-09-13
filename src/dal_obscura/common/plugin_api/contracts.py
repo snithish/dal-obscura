@@ -13,6 +13,18 @@ import pyarrow as pa
 
 PluginKind = Literal["catalog", "table_format"]
 _PLUGIN_ID = re.compile(r"[a-z][a-z0-9_.-]{0,63}\Z")
+SUPPORTED_CAPABILITIES = frozenset(
+    {
+        "nested_schema",
+        "field_id_stability",
+        "snapshot_reads",
+        "splittable_scan",
+        "projection_pushdown",
+        "filter_pushdown",
+        "delete_files",
+        "cancellation",
+    }
+)
 _MAX_CONFIG_SCHEMA_DEPTH = 8
 _MAX_CONFIG_SCHEMA_NODES = 256
 _MAX_CONFIG_SCHEMA_STRING = 512
@@ -51,6 +63,12 @@ class PluginDescriptor:
             for capability in self.capabilities
         ):
             raise ValueError("Plugin capabilities must be bounded non-empty strings")
+        unsupported = set(self.capabilities) - SUPPORTED_CAPABILITIES
+        if unsupported:
+            raise ValueError(
+                "Plugin descriptor contains unsupported capability: "
+                + ", ".join(sorted(unsupported))
+            )
         _validate_config_schema(self.config_schema)
         if len(self.display_name) > _MAX_CONFIG_SCHEMA_STRING:
             raise ValueError("Plugin display name is too long")

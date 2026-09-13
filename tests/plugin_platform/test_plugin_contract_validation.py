@@ -46,6 +46,16 @@ def test_plugin_descriptor_rejects_unbounded_or_invalid_metadata() -> None:
             version="1.0.0",
             capabilities=frozenset({""}),
         )
+    with pytest.raises(ValueError, match="unsupported capability"):
+        PluginDescriptor(
+            kind="catalog",
+            plugin_id="example",
+            api_version="1",
+            config_version=1,
+            distribution="example",
+            version="1.0.0",
+            capabilities=frozenset({"executes_arbitrary_sql"}),
+        )
 
     with pytest.raises(ValueError, match="remote or executable"):
         PluginDescriptor(
