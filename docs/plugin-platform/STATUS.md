@@ -34,6 +34,14 @@ their underlying functionality is wholly absent.
 - N15 — Deployment/recovery/artifact integrity: OPEN; requires N05/N12/N13/N14; B20/B21.
 - N16 — Independent security/UX acceptance: OPEN; requires N01–N15; B22/all G/B.
 
+## Implementation update — f99f441 (2026-09-14)
+
+- Packet / status / candidate commit / owner: N06/B09 foundation partial / VERIFY / \`f99f441\` / governance UI.
+- Observable behavior delivered: catalog and plugin lifecycle management now lives in a dedicated typed \`ConnectionsView\` component. Catalog discovery cancellation, plugin-pair admission checks, secret-reference-only configuration, catalog CAS saves, table-format selection, diagnostics, and publication create/activate flows are preserved while the root shell only coordinates route data and callbacks.
+- Changed paths: \`apps/governance-ui/src/components/ConnectionsView.tsx\`, \`apps/governance-ui/src/main.tsx\`. No backend, session, pickle serializer, serialized class, payload, or import path changed.
+- Evidence: direct UI TypeScript build, Vite production build (271.97 kB JavaScript / 82.27 kB gzip), and all 5 UI lifecycle/schema tests passed; \`git diff --check\` passed.
+- Remaining N06/B09 work: componentize the remaining asset/editor and management pages, adopt the selected accessible primitives/icon system, typed deep links, responsive visual review at required sizes, CSP/browser/axe evidence, and keyboard/screen-reader journeys. Release remains HOLD.
+
 ## Implementation update — b7bc1e8 (2026-09-14)
 
 - Packet / status / candidate commit / owner: N04/B06 partial / VERIFY / `b7bc1e8` / Iceberg REST plugin.
