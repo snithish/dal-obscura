@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `7aa68da` (concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
+Implementation follow-up through `17ab77f` (public option bounds at `17ab77f`; symlink rejection at `6136224`; malformed-entry isolation at `6c129d3`; REST descriptor contract at `7adb4d6`; concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -16,6 +16,10 @@ The browser authorization suite records the concealed-resource contract after
 valid CSRF validation (`404` for an asset outside the actor's visibility), and the
 registry accepts both root and setuptools package-local static descriptor layouts
 without importing plugin factories.
+Public catalog configuration objects now reject non-JSON-like values and bounded
+shape violations before factory invocation. The manifest/Parquet plugin rejects
+symlink components in governed paths, and malformed unallowlisted entry points are
+ignored so arbitrary installed metadata cannot block admission reloads.
 Local probes are recorded in [the review](IMPLEMENTATION_REVIEW.md).
 Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_STATUS.md).
 
@@ -205,7 +209,8 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   membership; its format validates every member schema and emits one task per
   Parquet row group with nested projection support. Nested descendants now receive
   deterministic schema-scoped synthetic IDs anchored to manifest top-level IDs.
-  Escape, unreadable-member, schema-drift, and corrupt-member execution tests pass.
+  Escape, symlink, unreadable-member, schema-drift, and corrupt-member execution
+  tests pass.
   Core admission wiring, retry evidence, and live wheel/UI/
   consumer qualification remain open.
 - X18 consumer qualification: **implementing**; Python/DuckDB connector tests and
@@ -622,7 +627,9 @@ The returned-location check also handles authority-wide URI roots (for example,
 covers that case.
 
 X11 package check: `tests/plugin_platform/test_plugin_api_package.py` passes and
-the package source compiles without importing the service distribution. Building
+the package source compiles without importing the service distribution. Public
+catalog options are bounded to printable JSON-like values before factory
+invocation. Building
 the wheel with `uv build --wheel --no-build-isolation` is currently blocked because
 the isolated environment has no `setuptools`; the normal online wheel/artifact
 gate remains unverified and is not claimed by the test.
