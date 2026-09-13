@@ -105,6 +105,8 @@ function App() {
   const assetAbortController = useRef<AbortController | null>(null);
   const managementAbortController = useRef<AbortController | null>(null);
   const workspaceAbortController = useRef<AbortController | null>(null);
+  const historyAbortController = useRef<AbortController | null>(null);
+  const auditAbortController = useRef<AbortController | null>(null);
   const [logoutPending, setLogoutPending] = useState(false);
   useEffect(() => {
     void loadInitialWorkspace();
@@ -140,6 +142,8 @@ function App() {
     assetAbortController.current?.abort();
     managementAbortController.current?.abort();
     workspaceAbortController.current?.abort();
+    historyAbortController.current?.abort();
+    auditAbortController.current?.abort();
   }, []);
 
   useEffect(() => {
@@ -163,6 +167,8 @@ function App() {
       assetAbortController.current?.abort();
       managementAbortController.current?.abort();
       workspaceAbortController.current?.abort();
+      historyAbortController.current?.abort();
+      auditAbortController.current?.abort();
       clearPrivateState();
       setNotice("Your session expired or was revoked. Sign in again to continue.");
     };
@@ -215,16 +221,21 @@ function App() {
     const cursor = managementData.historyNextCursor;
     if (!cursor || historyLoading) return;
     const scope = managementEpoch.current;
+    historyAbortController.current?.abort();
+    const controller = new AbortController();
+    historyAbortController.current = controller;
     setHistoryLoading(true);
     try {
-      const pageResult = await controlPlane.listHistoryPage({ limit: 50, cursor });
+      const pageResult = await controlPlane.listHistoryPage({ limit: 50, cursor, signal: controller.signal });
       if (!isCurrentEpoch(scope, managementEpoch.current)) return;
       setManagementData((current) => ({ ...current, history: [...(current.history ?? []), ...pageResult.items], historyNextCursor: pageResult.next_cursor }));
-    } catch {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
       if (!isCurrentEpoch(scope, managementEpoch.current)) return;
       setNotice("More history could not be loaded. The entries already visible remain available.");
     } finally {
       if (scope === managementEpoch.current) setHistoryLoading(false);
+      if (controller === historyAbortController.current) historyAbortController.current = null;
     }
   }
 
@@ -232,21 +243,28 @@ function App() {
     const cursor = managementData.eventsNextCursor;
     if (!cursor || auditLoading) return;
     const scope = managementEpoch.current;
+    auditAbortController.current?.abort();
+    const controller = new AbortController();
+    auditAbortController.current = controller;
     setAuditLoading(true);
     try {
-      const pageResult = await controlPlane.listAuditEventsPage({ limit: 50, cursor, ...auditFilters });
+      const pageResult = await controlPlane.listAuditEventsPage({ limit: 50, cursor, ...auditFilters, signal: controller.signal });
       if (!isCurrentEpoch(scope, managementEpoch.current)) return;
       setManagementData((current) => ({ ...current, events: [...(current.events ?? []), ...pageResult.items], eventsNextCursor: pageResult.next_cursor }));
-    } catch {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
       if (!isCurrentEpoch(scope, managementEpoch.current)) return;
       setNotice("More activity could not be loaded. The entries already visible remain available.");
     } finally {
       if (scope === managementEpoch.current) setAuditLoading(false);
+      if (controller === auditAbortController.current) auditAbortController.current = null;
     }
   }
 
   function updateAuditFilters(next: AuditFilters) {
     managementEpoch.current += 1;
+    historyAbortController.current?.abort();
+    auditAbortController.current?.abort();
     setManagementData({});
     setAuditFilters(next);
   }
@@ -351,6 +369,11 @@ function App() {
     loadEpoch.current += 1;
     inventoryEpoch.current += 1;
     managementEpoch.current += 1;
+    assetAbortController.current?.abort();
+    managementAbortController.current?.abort();
+    workspaceAbortController.current?.abort();
+    historyAbortController.current?.abort();
+    auditAbortController.current?.abort();
     if (searchTimer.current !== undefined) {
       window.clearTimeout(searchTimer.current);
       searchTimer.current = undefined;
