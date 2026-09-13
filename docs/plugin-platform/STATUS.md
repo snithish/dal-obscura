@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `9cae43f` (descriptor option type validation;
+Implementation follow-up through `15a2f9b` (production plugin-lock configuration;
+descriptor option type validation;
 asset binding plugin validation;
 schema-scoped synthetic field IDs;
 direct asset mutation row locks;
@@ -340,6 +341,8 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   overlap, and table-format declarative options before persisting configuration.
   Descriptor-backed catalog and table-format options now enforce declared string,
   URI, and explicit secret-reference types before provider construction.
+  The production Compose reference now passes the optional plugin-lock path to
+  both application services and documents its in-container mount contract.
   Legacy Iceberg discovery now rejects malformed, non-printable, or oversized
   namespace/table segments instead of coercing them into new logical identities.
   Additive migration `20260913_0014` persists qualified catalog/format identities
@@ -652,6 +655,17 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Remaining gaps: clean wheel/artifact provenance, production policy requiring a
   lock, live PostgreSQL/provider/browser acceptance, and full data-plane external
   plugin execution remain open. Pickle compatibility is unchanged.
+
+### X19 production plugin-lock configuration — `15a2f9b`
+
+- State: implementing.
+- Behavior: the production Compose reference forwards `DAL_OBSCURA_PLUGIN_LOCK_FILE`
+  to both application services, and the operator runbook documents mounting one
+  immutable lock at the same in-container path before enabling external wheels.
+- Green evidence: `tests/architecture/test_production_deployment_contract.py`
+  (1 passed), `git diff --check`.
+- Remaining gaps: actual clean image/wheel assembly, mounted-lock deployment, and
+  live production security evidence remain open.
 
 ### X16 REST namespace lifecycle — `8c73c41`
 
