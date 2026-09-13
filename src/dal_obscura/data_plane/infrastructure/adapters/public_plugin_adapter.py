@@ -358,7 +358,7 @@ def _validated_page_entries(page: object) -> tuple[object, ...] | list[object]:
         raise ValueError("Public catalog returned an invalid discovery page")
     if len(entries) > MAX_PLUGIN_DISCOVERY_PAGE_ENTRIES:
         raise ValueError("Public catalog returned too many page entries")
-    return entries
+    return cast(tuple[object, ...] | list[object], entries)
 
 
 def _ensure_context_active(context: ExecutionContext) -> None:

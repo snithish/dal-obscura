@@ -156,7 +156,7 @@ def _public_page_entries(page: object) -> tuple[object, ...] | list[object]:
         raise ValueError("Catalog plugin returned an invalid discovery page")
     if len(entries) > DEFAULT_MAX_PAGE_ENTRIES:
         raise ValueError("Catalog plugin returned too many page entries")
-    return entries
+    return cast(tuple[object, ...] | list[object], entries)
 
 
 def _catalog_type(module: str) -> CatalogType:
