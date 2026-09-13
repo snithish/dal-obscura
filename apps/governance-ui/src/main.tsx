@@ -62,6 +62,7 @@ function App() {
   const [assetInventoryLoading, setAssetInventoryLoading] = useState(false);
   const [rules, setRules] = useState<PolicyRule[]>([]);
   const [draftRevision, setDraftRevision] = useState(0);
+  const [draftId, setDraftId] = useState<string | null>(null);
   const [selectedRule, setSelectedRule] = useState(0);
   const [selectedField, setSelectedField] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("saved");
@@ -331,7 +332,7 @@ function App() {
     draftEditEpoch.current += 1;
     setSession(null); setAsset(null); setAssets([]); setRules([]); setPreview(null);
     setManagementData({}); setAssetCursor(null); setAssetHasMore(false); setAssetSearch("");
-    setDraftRevision(0); setReviewToken(null); setSaveState("saved");
+      setDraftRevision(0); setDraftId(null); setReviewToken(null); setSaveState("saved");
     setPublishPending(false);
     setWorkspace("unavailable");
     void controlPlane.getSessionOptions().then((options) => {
@@ -378,7 +379,7 @@ function App() {
       if (epoch !== loadEpoch.current) return;
       const effectiveRules = draft?.rules ?? loadedRules;
       setManagementData((current) => ({ ...current, history, grants }));
-      setAssets(knownAssets); setAsset(fullAsset); setRules(effectiveRules); setDraftRevision(draft?.revision ?? 0); setSelectedRule(0); setReviewToken(null);
+      setAssets(knownAssets); setAsset(fullAsset); setRules(effectiveRules); setDraftRevision(draft?.revision ?? 0); setDraftId(draft?.id ?? null); setSelectedRule(0); setReviewToken(null);
       draftEditEpoch.current += 1;
       setSelectedField(schema.fields[0]?.human_path ?? fullAsset.schema_fields[0]?.name ?? ""); setPreview(null); setSaveState("saved");
       setNotice(effectiveRules.length ? "Loaded your policy draft." : "No policy draft exists yet. Add a rule to begin authoring.");
@@ -448,6 +449,7 @@ function App() {
           return;
         }
         setDraftRevision(saved.revision);
+        setDraftId(saved.id);
       }
       if (loadScope !== loadEpoch.current || editEpoch !== draftEditEpoch.current) {
         if (loadScope === loadEpoch.current) setSaveState("unsaved");
@@ -474,7 +476,7 @@ function App() {
         if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") throw new Error("Claims must be a JSON object");
         claims = parsed as Record<string, unknown>;
       }
-      const result: Preview = isDemo ? { decision: "allow", allowed_columns: activeRule?.columns ?? [], masks: activeRule?.masks ?? {}, row_filter: activeRule?.row_filter ?? null, policy_version: 1 } : await controlPlane.evaluate(asset.id, { principal: previewPrincipal.trim(), groups: previewGroups.split(",").map((value) => value.trim()).filter(Boolean), claims });
+      const result: Preview = isDemo ? { decision: "allow", allowed_columns: activeRule?.columns ?? [], masks: activeRule?.masks ?? {}, row_filter: activeRule?.row_filter ?? null, policy_version: 1 } : await controlPlane.evaluate(asset.id, { principal: previewPrincipal.trim(), groups: previewGroups.split(",").map((value) => value.trim()).filter(Boolean), claims, draft_id: draftId ?? undefined, draft_revision: draftRevision });
       if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
       setPreview(result); setReviewToken(null); setNotice(isDemo ? "Demo evaluation is local and cannot be published." : `Server-side evaluation completed: ${result.decision === "allow" ? "allowed" : "denied"}.`);
     } catch {
@@ -490,7 +492,7 @@ function App() {
     try {
       const claims = JSON.parse(previewClaims || "{}") as Record<string, object>;
       if (!claims || Array.isArray(claims) || typeof claims !== "object") throw new Error("Claims must be a JSON object");
-      const result = await controlPlane.review(asset.id, { principal: previewPrincipal.trim(), groups: previewGroups.split(",").map((value) => value.trim()).filter(Boolean), claims });
+      const result = await controlPlane.review(asset.id, { principal: previewPrincipal.trim(), groups: previewGroups.split(",").map((value) => value.trim()).filter(Boolean), claims, draft_id: draftId ?? undefined, draft_revision: draftRevision });
       if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
       setPreview(result); setReviewToken(result.review_token ?? null); setNotice("Server review is current for this saved draft revision. You can publish it now.");
     } catch {
@@ -506,7 +508,7 @@ function App() {
     const idempotencyKey = crypto.randomUUID();
     setPublishPending(true);
     try {
-      await controlPlane.publishAsset(asset.id, draftRevision, reviewToken, idempotencyKey);
+      await controlPlane.publishAsset(asset.id, draftRevision, reviewToken, idempotencyKey, draftId ?? undefined);
       if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
       setReviewToken(null);
       setNotice("Published the saved draft.");

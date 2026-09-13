@@ -381,10 +381,10 @@ export const controlPlane = {
     method: "PUT",
     body: JSON.stringify(settings),
   }),
-  publishAsset: (assetId: string, expectedDraftRevision?: number, reviewToken?: string, idempotencyKey?: string) => request<{ asset_id: string; policy_version: number }>(`/v1/assets/${assetId}/policy-versions`, {
+  publishAsset: (assetId: string, expectedDraftRevision?: number, reviewToken?: string, idempotencyKey?: string, draftId?: string) => request<{ asset_id: string; policy_version: number }>(`/v1/assets/${assetId}/policy-versions`, {
     method: "POST",
     headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
-    body: JSON.stringify({ ...(expectedDraftRevision === undefined ? {} : { expected_draft_revision: expectedDraftRevision }), ...(reviewToken ? { review_token: reviewToken } : {}) }),
+    body: JSON.stringify({ ...(draftId ? { draft_id: draftId } : {}), ...(expectedDraftRevision === undefined ? {} : { expected_draft_revision: expectedDraftRevision }), ...(reviewToken ? { review_token: reviewToken } : {}) }),
   }),
   getDraft: (assetId: string) => request<PolicyDraft>(`/v1/assets/${assetId}/draft`),
   saveDraft: (assetId: string, expectedRevision: number, rules: PolicyRule[]) =>
@@ -397,7 +397,7 @@ export const controlPlane = {
       method: "PUT",
       body: JSON.stringify({ rules }),
     }),
-  preview: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, unknown> }) => {
+  preview: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, unknown>; draft_id?: string; draft_revision?: number }) => {
     const raw = await request<RawPreview>(`/v1/assets/${assetId}/policy-preview`, {
       method: "POST",
       body: JSON.stringify(persona),
@@ -410,7 +410,7 @@ export const controlPlane = {
       policy_version: 0,
     } satisfies Preview;
   },
-  evaluate: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, unknown> }) => {
+  evaluate: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, unknown>; draft_id?: string; draft_revision?: number }) => {
     const raw = await request<{ decision: "allow" | "deny"; allowed_columns: string[]; masks: Array<{ column: string; type: Mask["type"] }>; row_filter: string | null; output_rows: number; rows: Array<Record<string, unknown>>; evidence: Record<string, unknown> }>(`/v1/assets/${assetId}/policy-evaluate`, {
       method: "POST",
       body: JSON.stringify(persona),
@@ -427,7 +427,7 @@ export const controlPlane = {
       evidence: raw.evidence,
     } satisfies Preview;
   },
-  review: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, unknown> }) => {
+  review: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, unknown>; draft_id?: string; draft_revision?: number }) => {
     const raw = await request<{ decision: "allow" | "deny"; allowed_columns: string[]; masks: Array<{ column: string; type: Mask["type"] }>; row_filter: string | null; output_rows: number; rows: Array<Record<string, unknown>>; evidence: Record<string, unknown>; review_token: string; review_expires_at: number }>("/v1/assets/" + assetId + "/policy-review", {
       method: "POST",
       body: JSON.stringify(persona),

@@ -81,6 +81,7 @@ def preview_asset_policy(
     actor: ControlPlaneActor | None = None,
     requested_columns: list[str] | None = None,
     include_mask_values: bool = False,
+    draft_id: UUID | None = None,
 ) -> dict[str, object]:
     """Evaluates draft policy rules for a preview principal.
 
@@ -101,12 +102,18 @@ def preview_asset_policy(
     asset = store.get_workspace_asset(asset_id)
     raw_rules = store.list_policy_rules(asset_id)
     if actor is not None:
-        draft = store.get_asset_policy_draft(
-            asset_id=asset_id,
-            author_principal=actor.identity_key(),
+        draft = (
+            store.get_asset_policy_draft_by_id(asset_id=asset_id, draft_id=draft_id)
+            if draft_id is not None
+            else store.get_asset_policy_draft(
+                asset_id=asset_id,
+                author_principal=actor.identity_key(),
+            )
         )
         if draft is not None:
             raw_rules = cast(list[dict[str, object]], draft["rules"])
+        elif draft_id is not None:
+            raise LookupError("Policy draft not found")
     compiled = _compiled_policy_from_response(asset, raw_rules)
     policy = compiled.to_policy()
     rules = policy.datasets[0].rules

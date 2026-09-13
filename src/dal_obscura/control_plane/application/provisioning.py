@@ -331,6 +331,7 @@ class ProvisioningService:
         expected_publication_id: UUID | None = None,
         review_token: str | None = None,
         idempotency_key: str | None = None,
+        draft_id: UUID | None = None,
     ) -> dict[str, object]:
         return policy_version_service.create_asset_policy_version(
             self._store,
@@ -346,6 +347,7 @@ class ProvisioningService:
             idempotency_key=idempotency_key,
             require_review=self._require_review,
             review_secret=self._review_secret,
+            draft_id=draft_id,
         )
 
     def get_publication_operation(
@@ -596,6 +598,7 @@ class ProvisioningService:
         claims: dict[str, object],
         actor: ControlPlaneActor | None = None,
         requested_columns: list[str] | None = None,
+        draft_id: UUID | None = None,
     ) -> dict[str, object]:
         return policy_service.preview_asset_policy(
             self._store,
@@ -605,6 +608,7 @@ class ProvisioningService:
             claims=claims,
             actor=actor,
             requested_columns=requested_columns,
+            draft_id=draft_id,
         )
 
     def evaluate_asset_policy(
@@ -616,6 +620,8 @@ class ProvisioningService:
         groups: list[str],
         claims: dict[str, object],
         rows: list[dict[str, object]] | None,
+        draft_id: UUID | None = None,
+        draft_revision: int | None = None,
     ) -> dict[str, object]:
         return evaluation_service.evaluate_asset_policy(
             self._store,
@@ -627,6 +633,8 @@ class ProvisioningService:
             rows=rows,
             egress_allowlist=self._catalog_egress_allowlist,
             plugin_registry=self._plugin_registry,
+            draft_id=draft_id,
+            draft_revision=draft_revision,
         )
 
     def review_asset_policy(
@@ -638,6 +646,8 @@ class ProvisioningService:
         groups: list[str],
         claims: dict[str, object],
         rows: list[dict[str, object]] | None,
+        draft_id: UUID | None = None,
+        draft_revision: int | None = None,
     ) -> dict[str, object]:
         evaluation = evaluation_service.evaluate_asset_policy(
             self._store,
@@ -649,6 +659,8 @@ class ProvisioningService:
             rows=rows,
             egress_allowlist=self._catalog_egress_allowlist,
             plugin_registry=self._plugin_registry,
+            draft_id=draft_id,
+            draft_revision=draft_revision,
         )
         try:
             return review_service.issue_review_token(
@@ -659,6 +671,7 @@ class ProvisioningService:
                 secret=self._review_secret,
                 require_saved_draft=self._require_review,
                 egress_allowlist=self._catalog_egress_allowlist,
+                draft_id=draft_id,
             )
         except AuthorizationFailure:
             return evaluation

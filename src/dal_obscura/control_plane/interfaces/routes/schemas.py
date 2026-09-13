@@ -174,6 +174,7 @@ class PolicyDraftRequest(StrictModel):
 class PolicyVersionPublishRequest(StrictModel):
     """Optional generation preconditions for publishing one asset draft."""
 
+    draft_id: UUID | None = None
     expected_draft_revision: int | None = Field(default=None, ge=0)
     expected_publication_id: UUID | None = None
     review_token: str | None = Field(default=None, min_length=16, max_length=4096)
@@ -200,6 +201,8 @@ class PolicyPreviewRequest(StrictModel):
         ```
     """
 
+    draft_id: UUID | None = None
+    draft_revision: int | None = Field(default=None, ge=0)
     principal: str = Field(min_length=1)
     groups: list[str] = Field(default_factory=list, max_length=64)
     claims: dict[str, object] = Field(default_factory=dict)

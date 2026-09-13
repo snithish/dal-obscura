@@ -1106,6 +1106,32 @@ class PublicationStore:
             "updated_at": _isoformat(record.updated_at),
         }
 
+    def get_asset_policy_draft_by_id(
+        self, *, asset_id: UUID, draft_id: UUID
+    ) -> dict[str, object] | None:
+        """Load one saved draft only when it belongs to the requested asset."""
+
+        record = self._session.scalar(
+            select(AssetPolicyDraftRecord).where(
+                AssetPolicyDraftRecord.id == draft_id,
+                AssetPolicyDraftRecord.asset_id == asset_id,
+                AssetPolicyDraftRecord.discarded_at.is_(None),
+            )
+        )
+        if record is None:
+            return None
+        return {
+            "id": str(record.id),
+            "asset_id": str(record.asset_id),
+            "author_principal": record.author_principal,
+            "revision": record.revision,
+            "base_policy_version": record.base_policy_version,
+            "rules": [dict(rule) for rule in record.rules_json],
+            "content_hash": record.content_hash,
+            "created_at": _isoformat(record.created_at),
+            "updated_at": _isoformat(record.updated_at),
+        }
+
     def save_asset_policy_draft(
         self,
         *,
@@ -1844,6 +1870,7 @@ class PublicationStore:
         asset_id: UUID,
         *,
         author_principal: str | None = None,
+        draft_id: UUID | None = None,
     ) -> tuple[AssetDraft, CatalogDraft]:
         asset = self._session.get(AssetRecord, asset_id)
         if asset is None:
@@ -1876,27 +1903,38 @@ class PublicationStore:
                 .order_by(PolicyRuleRecord.ordinal)
             )
         ]
-        if author_principal is not None:
-            personal_draft = self._session.scalar(
+        selected_draft = None
+        if draft_id is not None:
+            selected_draft = self._session.scalar(
+                select(AssetPolicyDraftRecord).where(
+                    AssetPolicyDraftRecord.id == draft_id,
+                    AssetPolicyDraftRecord.asset_id == asset_id,
+                    AssetPolicyDraftRecord.discarded_at.is_(None),
+                )
+            )
+            if selected_draft is None:
+                raise LookupError(f"No draft {draft_id} for asset {asset_id}")
+        elif author_principal is not None:
+            selected_draft = self._session.scalar(
                 select(AssetPolicyDraftRecord).where(
                     AssetPolicyDraftRecord.asset_id == asset_id,
                     AssetPolicyDraftRecord.author_principal == author_principal,
                     AssetPolicyDraftRecord.discarded_at.is_(None),
                 )
             )
-            if personal_draft is not None:
-                rules = [
-                    PolicyRuleDraft(
-                        ordinal=int(raw.get("ordinal", 0)),
-                        effect="allow",
-                        principals=[str(item) for item in raw.get("principals", [])],
-                        when=cast(dict[str, str | list[str]], dict(raw.get("when", {}))),
-                        columns=[str(item) for item in raw.get("columns", [])],
-                        masks=dict(raw.get("masks", {})),
-                        row_filter=cast(str | None, raw.get("row_filter")),
-                    )
-                    for raw in personal_draft.rules_json
-                ]
+        if selected_draft is not None:
+            rules = [
+                PolicyRuleDraft(
+                    ordinal=int(raw.get("ordinal", 0)),
+                    effect="allow",
+                    principals=[str(item) for item in raw.get("principals", [])],
+                    when=cast(dict[str, str | list[str]], dict(raw.get("when", {}))),
+                    columns=[str(item) for item in raw.get("columns", [])],
+                    masks=dict(raw.get("masks", {})),
+                    row_filter=cast(str | None, raw.get("row_filter")),
+                )
+                for raw in selected_draft.rules_json
+            ]
         return (
             AssetDraft(
                 id=asset.id,

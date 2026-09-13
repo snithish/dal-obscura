@@ -39,6 +39,10 @@ def _actor_for_token(token: str) -> DemoToken:
         return DemoToken("outsider", ("analysts",))
     if token == "admin-oidc-token":
         return DemoToken("demo-admin", ("platform-admins",))
+    if token == "editor-token":
+        return DemoToken("editor")
+    if token == "publisher-token":
+        return DemoToken("publisher")
     raise PermissionError("bad token")
 
 
@@ -193,8 +197,7 @@ def test_cookie_session_rejects_a_forged_csrf_cookie(monkeypatch):
     )
     login = client.post("/v1/demo-login", json={"login_hint": "asset-owner"})
     cookie_header = (
-        f"dal_obscura_session={login.cookies['dal_obscura_session']}; "
-        "dal_obscura_csrf=forged"
+        f"dal_obscura_session={login.cookies['dal_obscura_session']}; dal_obscura_csrf=forged"
     )
 
     response = client.get("/v1/session", headers={"cookie": cookie_header})

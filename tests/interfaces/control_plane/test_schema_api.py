@@ -11,6 +11,8 @@ from dal_obscura.common.config_store.db import (
 )
 from dal_obscura.control_plane.application import schema_service
 from dal_obscura.control_plane.interfaces.api import create_app
+from tests.interfaces.control_plane.test_actor_auth import _bearer
+from tests.interfaces.control_plane.test_actor_auth import _client as _actor_client
 from tests.interfaces.control_plane.workspace_helpers import (
     ADMIN_HEADERS,
     ICEBERG_CATALOG_MODULE,
@@ -518,9 +520,7 @@ def test_production_publication_rejects_asset_metadata_change_after_review(monke
     assert reviewed.status_code == 200, reviewed.json()
     assert changed.status_code == 200, changed.json()
     assert published.status_code == 400
-    assert published.json() == {
-        "detail": "Asset configuration changed after review; review again."
-    }
+    assert published.json() == {"detail": "Asset configuration changed after review; review again."}
 
 
 def test_explicit_empty_draft_is_reviewable_and_publishable_as_deny_all(monkeypatch) -> None:
@@ -567,3 +567,89 @@ def test_explicit_empty_draft_is_reviewable_and_publishable_as_deny_all(monkeypa
         headers=ADMIN_HEADERS,
     )
     assert published.status_code == 200, published.json()
+
+
+def test_publisher_can_review_and_publish_editor_draft_by_explicit_id(monkeypatch) -> None:
+    client = _actor_client()
+    client.put(
+        "/v1/settings/runtime",
+        json={"ticket_ttl_seconds": 900, "max_tickets": 64, "max_ticket_exchanges": 2},
+        headers=ADMIN_HEADERS,
+    )
+    client.put(
+        "/v1/settings/auth-providers",
+        json={
+            "providers": [
+                {
+                    "ordinal": 1,
+                    "module": (
+                        "dal_obscura.data_plane.infrastructure.adapters."
+                        "identity_oidc_jwks.OidcJwksIdentityProvider"
+                    ),
+                    "args": {"issuer": "https://issuer.example"},
+                    "enabled": True,
+                }
+            ]
+        },
+        headers=ADMIN_HEADERS,
+    )
+    asset = _provision_reviewable_asset(client)
+    client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["editor"]},
+        headers=ADMIN_HEADERS,
+    )
+    client.put(
+        f"/v1/assets/{asset['id']}/grants",
+        json={
+            "grants": [
+                {"principal": "publisher", "capability": "read"},
+                {"principal": "publisher", "capability": "publish"},
+            ]
+        },
+        headers=ADMIN_HEADERS,
+    )
+    editor_draft = client.get(
+        f"/v1/assets/{asset['id']}/draft", headers=_bearer("editor-token")
+    ).json()
+    saved = client.put(
+        f"/v1/assets/{asset['id']}/draft",
+        json={"expected_revision": editor_draft["revision"], "rules": editor_draft["rules"]},
+        headers=_bearer("editor-token"),
+    )
+    assert saved.status_code == 200, saved.json()
+    selected = saved.json()
+    monkeypatch.setattr(
+        schema_service, "load_catalog", lambda *args, **kwargs: _EvaluationCatalog()
+    )
+
+    reviewed = client.post(
+        f"/v1/assets/{asset['id']}/policy-review",
+        json={
+            "principal": "user1",
+            "groups": [],
+            "claims": {"tenant": "default"},
+            "draft_id": selected["id"],
+            "draft_revision": selected["revision"],
+        },
+        headers=_bearer("publisher-token"),
+    )
+    assert reviewed.status_code == 200, reviewed.json()
+    token = reviewed.json()["review_token"]
+    published = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        json={
+            "draft_id": selected["id"],
+            "expected_draft_revision": selected["revision"],
+            "review_token": token,
+        },
+        headers=_bearer("publisher-token"),
+    )
+    assert published.status_code == 200, published.json()
+
+    foreign = client.post(
+        f"/v1/assets/{asset['id']}/policy-review",
+        json={"principal": "user1", "groups": [], "claims": {}, "draft_id": str(asset["id"])},
+        headers=_bearer("publisher-token"),
+    )
+    assert foreign.status_code == 404

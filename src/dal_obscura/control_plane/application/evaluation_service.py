@@ -46,6 +46,8 @@ def evaluate_asset_policy(
     rows: list[dict[str, object]] | None,
     egress_allowlist: tuple[str, ...] = (),
     plugin_registry: Any | None = None,
+    draft_id: UUID | None = None,
+    draft_revision: int | None = None,
 ) -> dict[str, object]:
     """Evaluates a policy over bounded synthetic rows and returns evidence."""
 
@@ -69,9 +71,20 @@ def evaluate_asset_policy(
         actor=actor,
         requested_columns=requested_columns,
         include_mask_values=True,
+        draft_id=draft_id,
     )
-    draft = store.get_asset_policy_draft(asset_id=asset_id, author_principal=actor.identity_key())
+    draft = (
+        store.get_asset_policy_draft_by_id(asset_id=asset_id, draft_id=draft_id)
+        if draft_id is not None
+        else store.get_asset_policy_draft(asset_id=asset_id, author_principal=actor.identity_key())
+    )
+    if draft_id is not None and draft is None:
+        raise ValidationFailure("Policy draft not found")
     revision = 0 if draft is None else int(cast(int | str, draft["revision"]))
+    if draft_revision is not None and revision != draft_revision:
+        raise ValidationFailure(
+            "Policy draft revision changed; reread the draft before evaluating."
+        )
     schema_digest = schema_service.schema_fingerprint(arrow_schema)
     evidence = {
         "draft_revision": revision,
@@ -93,7 +106,7 @@ def evaluate_asset_policy(
             "allowed_columns": [],
             "masks": [],
             "row_filter": None,
-                "input_rows": supplied_row_count,
+            "input_rows": supplied_row_count,
             "output_rows": 0,
             "schema": str(arrow_schema),
             "rows": [],
@@ -215,9 +228,7 @@ def _sample_value(name: str, data_type: pa.DataType) -> object:  # noqa: C901
     if pa.types.is_list(data_type) or pa.types.is_large_list(data_type):
         return [_sample_value(name, data_type.value_type)]
     if pa.types.is_map(data_type):
-        return {
-            _sample_value(name, data_type.key_type): _sample_value(name, data_type.item_type)
-        }
+        return {_sample_value(name, data_type.key_type): _sample_value(name, data_type.item_type)}
     if pa.types.is_boolean(data_type):
         return True
     if pa.types.is_integer(data_type):

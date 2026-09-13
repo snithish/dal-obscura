@@ -180,6 +180,7 @@ def create_asset_policy_version(  # noqa: C901
     catalog_egress_allowlist: tuple[str, ...] = (),
     idempotency_key: str | None = None,
     plugin_registry: PluginRegistry | None = None,
+    draft_id: UUID | None = None,
 ) -> dict[str, object]:
     """Publishes and activates a new policy version for one asset.
 
@@ -212,6 +213,7 @@ def create_asset_policy_version(  # noqa: C901
             secret=review_secret,
             egress_allowlist=catalog_egress_allowlist,
             plugin_registry=plugin_registry,
+            draft_id=draft_id,
         )
 
     # Serialize publication attempts for this asset in PostgreSQL. This closes
@@ -231,6 +233,7 @@ def create_asset_policy_version(  # noqa: C901
         expected_draft_revision=expected_draft_revision,
         expected_publication_id=expected_publication_id,
         review_token=review_token,
+        draft_id=draft_id,
     )
     if idempotency_key:
         existing = store.get_publication_operation(
@@ -244,10 +247,13 @@ def create_asset_policy_version(  # noqa: C901
                     "Idempotency key was already used with a different publication request."
                 )
             return cast(dict[str, object], existing["result"])
-    personal_draft = store.get_asset_policy_draft(
-        asset_id=asset_id,
-        author_principal=actor.identity_key(),
+    personal_draft = (
+        store.get_asset_policy_draft_by_id(asset_id=asset_id, draft_id=draft_id)
+        if draft_id is not None
+        else store.get_asset_policy_draft(asset_id=asset_id, author_principal=actor.identity_key())
     )
+    if draft_id is not None and personal_draft is None:
+        raise ValidationFailure("Policy draft not found")
     if expected_draft_revision is not None:
         current_revision = (
             0 if personal_draft is None else int(cast(int | str, personal_draft["revision"]))
@@ -267,10 +273,18 @@ def create_asset_policy_version(  # noqa: C901
             egress_allowlist=catalog_egress_allowlist,
             check_live_schema=False,
             plugin_registry=plugin_registry,
+            draft_id=draft_id,
         )
     asset, catalog = store.load_asset_publish_draft(
         asset_id,
-        author_principal=actor.identity_key() if personal_draft is not None else None,
+        draft_id=draft_id,
+        author_principal=(
+            None
+            if draft_id is not None
+            else actor.identity_key()
+            if personal_draft is not None
+            else None
+        ),
     )
     if not asset.rules and personal_draft is None:
         raise ValidationFailure("Cannot publish a policy version without policy rules.")
@@ -440,6 +454,7 @@ def _publication_request_hash(
     expected_draft_revision: int | None,
     expected_publication_id: UUID | None,
     review_token: str | None,
+    draft_id: UUID | None = None,
 ) -> str:
     payload = {
         "expected_draft_revision": expected_draft_revision,
@@ -447,6 +462,7 @@ def _publication_request_hash(
         if expected_publication_id is None
         else str(expected_publication_id),
         "review_token": review_token,
+        "draft_id": None if draft_id is None else str(draft_id),
     }
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()

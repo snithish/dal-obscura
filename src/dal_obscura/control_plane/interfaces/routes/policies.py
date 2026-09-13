@@ -93,6 +93,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
                 claims=request.claims,
                 actor=actor,
                 requested_columns=request.columns or None,
+                draft_id=request.draft_id,
             )
         )
 
@@ -110,6 +111,8 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
                 groups=request.groups,
                 claims=request.claims,
                 rows=request.rows,
+                draft_id=request.draft_id,
+                draft_revision=request.draft_revision,
             )
         )
 
@@ -127,6 +130,8 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
                 groups=request.groups,
                 claims=request.claims,
                 rows=request.rows,
+                draft_id=request.draft_id,
+                draft_revision=request.draft_revision,
             )
         )
 
@@ -146,6 +151,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
                 expected_draft_revision=(
                     None if request is None else request.expected_draft_revision
                 ),
+                draft_id=None if request is None else request.draft_id,
                 expected_publication_id=(
                     None if request is None else request.expected_publication_id
                 ),

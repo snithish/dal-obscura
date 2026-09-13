@@ -32,6 +32,7 @@ def issue_review_token(
     now: int | None = None,
     require_saved_draft: bool = False,
     egress_allowlist: tuple[str, ...] = (),
+    draft_id: UUID | None = None,
 ) -> dict[str, object]:
     """Signs completed evaluation evidence for one exact draft generation."""
 
@@ -46,23 +47,23 @@ def issue_review_token(
         store,
         asset_id,
         actor,
+        draft_id=draft_id,
     ):
         raise ValidationFailure(
             "Only an allowed evaluation or explicit deny-all draft can be reviewed."
         )
-    draft = store.get_asset_policy_draft(
-        asset_id=asset_id,
-        author_principal=actor.identity_key(),
+    draft = (
+        store.get_asset_policy_draft_by_id(asset_id=asset_id, draft_id=draft_id)
+        if draft_id is not None
+        else store.get_asset_policy_draft(asset_id=asset_id, author_principal=actor.identity_key())
     )
+    if draft_id is not None and draft is None:
+        raise ValidationFailure("Policy draft not found")
     if require_saved_draft and draft is None:
-        raise ValidationFailure(
-            "Save an explicit policy draft before requesting server review."
-        )
+        raise ValidationFailure("Save an explicit policy draft before requesting server review.")
     revision = 0 if draft is None else int(cast(int | str, draft["revision"]))
     content_hash = None if draft is None else str(draft["content_hash"])
-    shared_rules_hash = (
-        _rules_hash(store.list_policy_rules(asset_id)) if draft is None else None
-    )
+    shared_rules_hash = _rules_hash(store.list_policy_rules(asset_id)) if draft is None else None
     active_publication_id = _active_publication_id(store, asset_id)
     asset_revision = _asset_revision(store, asset_id)
     catalog_revision = _catalog_revision(store, asset_id)
@@ -71,6 +72,8 @@ def issue_review_token(
     payload: dict[str, object] = {
         "asset_id": str(asset_id),
         "actor": actor.identity_key(),
+        "draft_id": None if draft is None else draft["id"],
+        "draft_author": None if draft is None else draft["author_principal"],
         "draft_revision": revision,
         "draft_content_hash": content_hash,
         "shared_rules_hash": shared_rules_hash,
@@ -101,6 +104,7 @@ def verify_review_token(  # noqa: C901
     egress_allowlist: tuple[str, ...] = (),
     check_live_schema: bool = True,
     plugin_registry: object | None = None,
+    draft_id: UUID | None = None,
 ) -> None:
     """Rejects stale, replayed-for-another-scope, or forged review evidence."""
 
@@ -112,6 +116,9 @@ def verify_review_token(  # noqa: C901
         raise ValidationFailure("Policy review has expired; run the evaluation again.")
     if payload.get("asset_id") != str(asset_id) or payload.get("actor") != actor.identity_key():
         raise ValidationFailure("Policy review is bound to another actor or asset.")
+    token_draft_id = payload.get("draft_id")
+    if draft_id is not None and token_draft_id != str(draft_id):
+        raise ValidationFailure("Policy review is bound to another draft.")
     evidence_raw = payload.get("evidence")
     if not isinstance(evidence_raw, dict):
         raise ValidationFailure("Policy review evidence is invalid.")
@@ -132,9 +139,7 @@ def verify_review_token(  # noqa: C901
         if not hmac.compare_digest(
             recorded_schema_fingerprint,
             schema_fingerprint(
-                current_schema.as_arrow()
-                if hasattr(current_schema, "as_arrow")
-                else current_schema
+                current_schema.as_arrow() if hasattr(current_schema, "as_arrow") else current_schema
             ),
         ):
             raise ValidationFailure("Iceberg schema changed after review; review again.")
@@ -144,10 +149,22 @@ def verify_review_token(  # noqa: C901
         raise ValidationFailure("Asset configuration changed after review; review again.")
     if payload.get("catalog_revision") != _catalog_revision(store, asset_id):
         raise ValidationFailure("Catalog configuration changed after review; review again.")
-    draft = store.get_asset_policy_draft(
-        asset_id=asset_id,
-        author_principal=actor.identity_key(),
+    draft_id_raw = payload.get("draft_id")
+    if draft_id_raw is not None and not isinstance(draft_id_raw, str):
+        raise ValidationFailure("Policy review draft identity is invalid.")
+    try:
+        token_draft_uuid = UUID(draft_id_raw) if isinstance(draft_id_raw, str) else None
+    except ValueError:
+        raise ValidationFailure("Policy review draft identity is invalid.") from None
+    draft = (
+        store.get_asset_policy_draft_by_id(asset_id=asset_id, draft_id=token_draft_uuid)
+        if token_draft_uuid is not None
+        else store.get_asset_policy_draft(asset_id=asset_id, author_principal=actor.identity_key())
     )
+    if draft_id_raw is not None and draft is None:
+        raise ValidationFailure("Policy draft changed after review; evaluate the current draft.")
+    if draft_id_raw is not None and payload.get("draft_author") != draft["author_principal"]:
+        raise ValidationFailure("Policy review draft author changed; review again.")
     revision = 0 if draft is None else int(cast(int | str, draft["revision"]))
     content_hash = None if draft is None else str(draft["content_hash"])
     if (
@@ -200,12 +217,18 @@ def _explicit_deny_all_draft(
     store: PublicationStore,
     asset_id: UUID,
     actor: ControlPlaneActor,
+    *,
+    draft_id: UUID | None = None,
 ) -> bool:
     """Returns true only when this actor saved an intentional empty draft."""
 
-    draft = store.get_asset_policy_draft(
-        asset_id=asset_id,
-        author_principal=actor.identity_key(),
+    draft = (
+        store.get_asset_policy_draft_by_id(asset_id=asset_id, draft_id=draft_id)
+        if draft_id is not None
+        else store.get_asset_policy_draft(
+            asset_id=asset_id,
+            author_principal=actor.identity_key(),
+        )
     )
     return draft is not None and not cast(list[object], draft.get("rules", []))
 
