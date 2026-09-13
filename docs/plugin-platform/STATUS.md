@@ -96,6 +96,8 @@ Follow-up `79314a7` also distinguishes exact-issuer canonical escaped keys from
 slash-stripped history and rejects the latter when escapes make the original
 subject ambiguous (4 migration tests passed).
 
+Post-slice regression: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane tests/interfaces/control_plane tests/common/config_store tests/plugin_platform tests/architecture -q` — all collected tests passed; UI lifecycle tests and direct TypeScript/Vite build also passed. The already-running local endpoints remain healthy (`/healthz` 200, UI root 200). Release remains HOLD pending live OIDC, process-boundary, real catalog/consumer, capacity, recovery, and independent review gates.
+
 ## Implementation update — 7c20db5 (2026-09-13)
 
 - Packet / status / candidate commit / owner: N03/B04 partial / VERIFY / `7c20db5` / plugin SDK + control-plane + governance UI.
