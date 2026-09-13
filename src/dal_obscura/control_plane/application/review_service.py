@@ -164,10 +164,13 @@ def verify_review_token(  # noqa: C901
         if token_draft_uuid is not None
         else store.get_asset_policy_draft(asset_id=asset_id, author_principal=actor.identity_key())
     )
-    if draft_id_raw is not None and draft is None:
-        raise ValidationFailure("Policy draft changed after review; evaluate the current draft.")
-    if draft_id_raw is not None and payload.get("draft_author") != draft["author_principal"]:
-        raise ValidationFailure("Policy review draft author changed; review again.")
+    if draft_id_raw is not None:
+        if draft is None:
+            raise ValidationFailure(
+                "Policy draft changed after review; evaluate the current draft."
+            )
+        if payload.get("draft_author") != draft["author_principal"]:
+            raise ValidationFailure("Policy review draft author changed; review again.")
     revision = 0 if draft is None else int(cast(int | str, draft["revision"]))
     content_hash = None if draft is None else str(draft["content_hash"])
     if (

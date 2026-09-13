@@ -387,6 +387,8 @@ def load_static_plugin_descriptor(entry: metadata.EntryPoint) -> PluginDescripto
     if not isinstance(config_schema, Mapping) or not isinstance(display_name, str):
         raise PluginAdmissionError("Plugin static descriptor fields are invalid")
     capability_values = cast(list[str], capabilities)
+    output_format_values = cast(list[str], output_formats)
+    handle_version_values = cast(list[int], handle_versions)
     return PluginDescriptor(
         kind=cast(PluginKind, kind),
         plugin_id=plugin_id,
@@ -395,8 +397,8 @@ def load_static_plugin_descriptor(entry: metadata.EntryPoint) -> PluginDescripto
         distribution=distribution.name,
         version=distribution.version,
         capabilities=frozenset(capability_values),
-        output_formats=frozenset(output_formats),
-        handle_versions=frozenset(handle_versions),
+        output_formats=frozenset(output_format_values),
+        handle_versions=frozenset(handle_version_values),
         config_schema=config_schema,
         display_name=display_name,
     )

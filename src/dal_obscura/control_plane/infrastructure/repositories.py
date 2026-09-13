@@ -2371,10 +2371,15 @@ def _preserve_redacted_args(
         if value == "[redacted]" and old is not None:
             result[key] = old
         elif isinstance(value, Mapping) and isinstance(old, Mapping):
-            result[key] = _preserve_redacted_args(value, old)
+            result[key] = _preserve_redacted_args(
+                cast(Mapping[str, object], value), cast(Mapping[str, object], old)
+            )
         elif isinstance(value, list) and isinstance(old, list):
             result[key] = [
-                _preserve_redacted_args(item, old[index])
+                _preserve_redacted_args(
+                    cast(Mapping[str, object], item),
+                    cast(Mapping[str, object], old[index]),
+                )
                 if isinstance(item, Mapping)
                 and index < len(old)
                 and isinstance(old[index], Mapping)

@@ -8,6 +8,8 @@ Example:
 
 from __future__ import annotations
 
+from typing import cast
+
 from fastapi import APIRouter, Depends
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
@@ -38,7 +40,10 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         dependencies=[Depends(deps.require_admin)],
     )
     def get_workspace_runtime_settings() -> RuntimeSettingsResponse | None:
-        return deps.with_service(lambda service: service.get_workspace_runtime_settings())
+        return cast(
+            RuntimeSettingsResponse | None,
+            deps.with_service(lambda service: service.get_workspace_runtime_settings()),
+        )
 
     @api.get(
         "/v1/settings/auth-providers",
@@ -46,7 +51,10 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         dependencies=[Depends(deps.require_admin)],
     )
     def list_workspace_auth_providers() -> list[AuthProviderResponse]:
-        return deps.with_service(lambda service: service.list_workspace_auth_providers())
+        return cast(
+            list[AuthProviderResponse],
+            deps.with_service(lambda service: service.list_workspace_auth_providers()),
+        )
 
     @api.get(
         "/v1/settings/auth-providers/revision",
@@ -54,8 +62,11 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         dependencies=[Depends(deps.require_admin)],
     )
     def workspace_auth_provider_revision() -> AuthProviderRevisionResponse:
-        return deps.with_service(
-            lambda service: {"revision": service.workspace_auth_provider_revision()}
+        return cast(
+            AuthProviderRevisionResponse,
+            deps.with_service(
+                lambda service: {"revision": service.workspace_auth_provider_revision()}
+            ),
         )
 
     @api.put("/v1/settings/runtime", dependencies=[Depends(deps.require_admin)])
@@ -63,7 +74,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         request: RuntimeSettingsRequest,
         actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
     ) -> RuntimeSettingsResponse:
-        return deps.with_service(
+        result = deps.with_service(
             lambda service: service.upsert_workspace_runtime_settings(
                 ttl=request.ticket_ttl_seconds,
                 max_tickets=request.max_tickets,
@@ -71,19 +82,25 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
                 expected_revision=request.expected_revision,
                 actor=actor,
             )
-        ) or {
-            "ticket_ttl_seconds": request.ticket_ttl_seconds,
-            "max_tickets": request.max_tickets,
-            "max_ticket_exchanges": request.max_ticket_exchanges,
-            "revision": 0,
-        }
+        )
+        return cast(
+            RuntimeSettingsResponse,
+            result
+            or {
+                "ticket_ttl_seconds": request.ticket_ttl_seconds,
+                "max_tickets": request.max_tickets,
+                "max_ticket_exchanges": request.max_ticket_exchanges,
+                "revision": 0,
+            },
+        )
 
     @api.put("/v1/settings/auth-providers", dependencies=[Depends(deps.require_admin)])
     def replace_workspace_auth_providers(
         request: AuthProvidersRequest,
         actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
     ) -> list[AuthProviderResponse]:
-        return (
+        return cast(
+            list[AuthProviderResponse],
             deps.with_service(
                 lambda service: service.replace_workspace_auth_providers(
                     providers=request.providers,
@@ -91,7 +108,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
                     actor=actor,
                 )
             )
-            or []
+            or [],
         )
 
     return api

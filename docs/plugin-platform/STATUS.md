@@ -414,6 +414,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Verification: UI TypeScript compilation, Vite production build, and control-plane/API suites pass.
 - Remaining gate: rendered multi-actor browser evidence and independent UX/security acceptance remain VERIFY.
 
+## 2026-09-13 — typing cleanup for review and plugin admission
+
+- Scope: static correctness in production code paths.
+- Observable behavior delivered: plugin descriptor parsing now narrows validated output-format and handle-version collections before constructing immutable descriptors; review token validation narrows selected drafts before author checks; settings route adapters preserve typed response contracts; redacted configuration round-tripping uses explicit mapping casts at recursive boundaries. Runtime behavior and pickle serialization are unchanged.
+- Verification: changed-path Ruff passes; policy schema tests pass. Full `ty check` still reports only unresolved optional plugin-package imports and existing test-only typing diagnostics in the uninstalled workspace.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
