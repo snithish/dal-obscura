@@ -28,6 +28,7 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
         "/v1/assets",
         "/v1/assets/page",
         "/v1/assets/{asset_id}",
+        "/v1/assets/{asset_id}/access",
         "/v1/assets/{asset_id}/draft",
         "/v1/assets/{asset_id}/draft/{draft_id}",
         "/v1/assets/{asset_id}/owners",
@@ -55,6 +56,7 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
         "/v1/session",
         "/v1/session/options",
         "/v1/settings/auth-providers",
+        "/v1/settings/auth-providers/revision",
         "/v1/settings/runtime",
         "/v1/plugins",
         "/v1/ui-auth-config",
@@ -64,6 +66,8 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
         "/v1/workspace/publications/{publication_id}/activate",
     }
     assert set(paths["/v1/assets/{asset_id}/grants"]) == {"get", "put"}
+    assert set(paths["/v1/assets/{asset_id}/access"]) == {"get"}
     assert set(paths["/v1/assets/{catalog}/{target}"]) == {"put"}
     assert set(paths["/v1/workspace/publications"]) == {"get", "post"}
     assert set(paths["/v1/workspace/publications/{publication_id}/activate"]) == {"post"}
+    assert set(paths["/v1/settings/auth-providers/revision"]) == {"get"}

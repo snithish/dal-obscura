@@ -401,6 +401,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Verification: UI TypeScript compilation and Vite production build pass.
 - Remaining gate: browser permission matrix and independent UX/security evidence remain VERIFY under B15/B22.
 
+## 2026-09-13 — N03 route inventory update
+
+- Scope: public contract inventory for effective asset access.
+- Observable behavior delivered: the canonical OpenAPI route inventory now includes `GET /v1/assets/{asset_id}/access` and asserts its read-only method set, preventing future route drift from the reviewed contract.
+- Verification: route inventory and asset API tests pass.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
