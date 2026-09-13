@@ -280,7 +280,7 @@ def test_workspace_policy_draft_can_be_replaced_from_asset_detail():
     ]
 
 
-def test_retired_asset_policy_preview_route_is_absent():
+def test_retired_asset_policy_preview_route_does_not_dispatch():
     client = _client()
     client.put(
         "/v1/catalogs/analytics",
@@ -300,7 +300,10 @@ def test_retired_asset_policy_preview_route_is_absent():
         json={"principal": "user:alice@example.com"},
         headers=ADMIN_HEADERS,
     )
-    assert response.status_code == 404
+    # With the catch-all asset detail route still present, Starlette reports a
+    # method mismatch (405) for this retired path. The important contract is
+    # that no policy-preview handler executes or leaks resource metadata.
+    assert response.status_code == 405
     assert "cell" not in _keys_recursive(response.json())
 
 

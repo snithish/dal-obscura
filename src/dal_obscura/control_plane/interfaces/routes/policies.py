@@ -1,4 +1,4 @@
-"""Policy rule, preview, and policy-version routes.
+"""Revisioned policy draft, evaluation, review, and publication routes.
 
 Example:
     ```python
@@ -65,18 +65,6 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         return deps.with_service(
             lambda service: service.get_policy_draft_by_id(asset_id, draft_id, actor)
         )
-
-    @api.api_route(
-        "/v1/assets/{asset_id}/policy-rules",
-        methods=["GET", "PUT"],
-        include_in_schema=False,
-    )
-    def retired_policy_rules() -> object:
-        raise HTTPException(status_code=404, detail="Policy rules route has been retired")
-
-    @api.post("/v1/assets/{asset_id}/policy-preview", include_in_schema=False)
-    def retired_policy_preview() -> object:
-        raise HTTPException(status_code=404, detail="Policy preview route has been retired")
 
     @api.post("/v1/assets/{asset_id}/policy-evaluate")
     def evaluate_asset_policy(
