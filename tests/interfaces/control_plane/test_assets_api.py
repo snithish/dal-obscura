@@ -500,6 +500,35 @@ def test_asset_binding_precondition_rejects_stale_update() -> None:
     assert detail["revision"] == 1
 
 
+def test_asset_binding_update_requires_revision_precondition() -> None:
+    client = _client()
+    client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+    asset = client.put(
+        "/v1/assets/analytics/default.users",
+        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
+        headers=ADMIN_HEADERS,
+    ).json()
+
+    missing = client.put(
+        "/v1/assets/analytics/default.users",
+        json={"backend": "iceberg", "table_identifier": "prod.users-v2", "options": {}},
+        headers=ADMIN_HEADERS,
+    )
+
+    assert missing.status_code == 428
+    assert missing.json()["error"]["code"] == "revision_precondition_required"
+    detail = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
+    assert detail["table_identifier"] == "prod.users"
+    assert detail["revision"] == 0
+
+
 def test_asset_binding_precondition_rejects_nonzero_revision_on_create() -> None:
     client = _client()
     client.put(
@@ -548,6 +577,20 @@ def test_asset_grant_precondition_rejects_stale_writer() -> None:
 
     assert first.status_code == 200
     assert stale.status_code == 409
+
+
+def test_asset_grant_update_requires_revision_precondition() -> None:
+    client = _client()
+    asset = _provision_draft(client)
+    missing = client.put(
+        f"/v1/assets/{asset['id']}/grants",
+        json={"grants": [{"principal": "analyst", "capability": "read"}]},
+        headers=ADMIN_HEADERS,
+    )
+
+    assert missing.status_code == 428
+    assert missing.json()["error"]["code"] == "revision_precondition_required"
+    assert client.get(f"/v1/assets/{asset['id']}/grants", headers=ADMIN_HEADERS).json() == []
 
 
 def test_workspace_asset_page_is_bounded_searchable_and_cursor_paginated():
