@@ -36,3 +36,11 @@ major versions in a future release, but it will never guess a compatibility
 fallback or import an unadmitted factory. Historical publications retain their
 recorded plugin identity and revision; changing the admitted plugin generation
 requires a new review and publication.
+
+Pair metadata is part of the v1 descriptor contract. A catalog descriptor must
+list every table-format plugin ID in `output_formats`; both catalog and format
+descriptors must list the handle versions they support in `handle_versions`.
+The control plane requires the explicit format declaration, a non-empty handle
+version intersection, and compatible capabilities. Capability overlap by itself
+never admits a pair. Resolved handles are checked against the selected format
+ID and declared handle version before schema or data execution.
