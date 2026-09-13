@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `2977315` (REST qualification at `96068ee`; authoring routing at `6890b3f`).
+Implementation follow-up through `f7bb516` (REST qualification at `96068ee`; authoring routing at `6890b3f`).
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -206,8 +206,10 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   duration aggregates with fixed low-cardinality operation names, and the Flight
   health action can expose a bounded copy of those aggregates. Dynamic
   principals, tables, URIs, and correlation IDs cannot become metric labels.
-  Capacity profiling, benchmark thresholds, test-lane timing, and dead-code
-  inventory remain open.
+  Standalone package test modules now have unique import names and root pytest
+  explicitly includes each package source path, removing cross-package collection
+  collisions. Capacity profiling, benchmark thresholds, test-lane timing, and
+  dead-code inventory remain open.
 - X22 exact-artifact CI: **implementing**; the container publication job now
   depends on a pinned governance-UI install/type-check/build lane, and the Python
   type-check lane now resolves both independently buildable plugin package source
