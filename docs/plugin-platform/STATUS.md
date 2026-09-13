@@ -58,6 +58,14 @@ their underlying functionality is wholly absent.
 - Evidence: 17 JWKS adapter tests, 40 actor/OIDC session tests, Ruff, and \`ty\` checks passed.
 - Remaining N05/B07 work: live two-process OIDC freshness, principal-kind persistence across live IdP paths, revocation/disabled-account timing, browser login/logout evidence, and supported-profile bootstrap retirement. Release remains HOLD.
 
+## Implementation update — ac7dda3 (2026-09-14)
+
+- Packet / status / candidate commit / owner: N04/B06 and N05/B08 endpoint validation partial / VERIFY / \`ac7dda3\` / control-plane identity validation.
+- Observable behavior delivered: issuer and JWKS endpoint configuration now rejects query data in addition to credentials and fragments, preventing ambiguous OIDC discovery destinations. Validation remains fail-closed before persistence or provider construction.
+- Changed paths: \`src/dal_obscura/control_plane/application/auth_provider_validation.py\` and its focused tests. No session, pickle serializer, serialized class, payload, or import path changed.
+- Evidence: settings and auth-provider tests passed (7 tests); Ruff and \`ty\` checks passed.
+- Remaining N04/B06 and N05/B08 work: real hostile transport counters, DNS/private-address policy, cancellation cleanup, live IdP/browser journeys, session freshness/revocation, and supported-profile bootstrap retirement. Release remains HOLD.
+
 ## Implementation update — b7bc1e8 (2026-09-14)
 
 - Packet / status / candidate commit / owner: N04/B06 partial / VERIFY / `b7bc1e8` / Iceberg REST plugin.
