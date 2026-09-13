@@ -227,6 +227,8 @@ jobs:
   python-plugin-contract:
     name: Plugin contract wheel smoke
     runs-on: ubuntu-24.04
+    outputs:
+      plugin_lock_sha256: ${{ steps.lock.outputs.sha256 }}
     permissions:
       contents: read
     steps:
@@ -273,6 +275,7 @@ jobs:
           "$RUNNER_TEMP/plugin-env/bin/python" -m pytest packages/manifest-parquet-plugin/tests packages/iceberg-rest-plugin/tests -q
 
       - name: Generate and validate lock from installed plugin wheels
+        id: lock
         run: |
           PYTHONPATH=src "$RUNNER_TEMP/plugin-env/bin/python" scripts/build_plugin_lock.py \
             --output "$RUNNER_TEMP/plugin-lock.json" \
@@ -281,6 +284,7 @@ jobs:
             --plugin table_format:parquet.dataset
           PYTHONPATH=src "$RUNNER_TEMP/plugin-env/bin/python" -c \
             'from dal_obscura.common.plugin_api import load_plugin_lock_file; assert len(load_plugin_lock_file("'$RUNNER_TEMP'/plugin-lock.json")) == 3'
+          echo "sha256=$(sha256sum \"$RUNNER_TEMP/plugin-lock.json\" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
   python-plugin-integration:
     name: Installed plugin routing
@@ -458,6 +462,90 @@ jobs:
           pnpm --dir apps/governance-ui test
           pnpm --dir apps/governance-ui build
 
+  ui-image:
+    name: Build, scan, and publish UI image
+    runs-on: ubuntu-24.04
+    needs:
+      - governance-ui
+    outputs:
+      ui_digest: ${{ steps.image.outputs.digest }}
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Generate UI image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-ui
+          tags: |
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=sha,prefix=sha-,enable=${{ github.ref == 'refs/heads/main' }}
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+
+      - name: Log in to GHCR for immutable UI candidate publication
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build one immutable UI image candidate
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ui/Dockerfile
+          load: ${{ github.event_name == 'pull_request' }}
+          push: ${{ github.event_name != 'pull_request' }}
+          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          tags: |
+            ${{ github.event_name == 'pull_request' && 'dal-obscura-ui:ci' || format('{0}/{1}-ui:candidate-{2}', env.REGISTRY, env.IMAGE_NAME, github.sha) }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: ${{ github.event_name != 'pull_request' }}
+          sbom: ${{ github.event_name != 'pull_request' }}
+
+      - name: Scan exact UI candidate digest
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          image-ref: ${{ github.event_name == 'pull_request' && 'dal-obscura-ui:ci' || format('{0}/{1}-ui@{2}', env.REGISTRY, env.IMAGE_NAME, steps.image.outputs.digest) }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+      - name: Promote the scanned immutable UI digest
+        if: github.event_name != 'pull_request'
+        env:
+          PROMOTION_TAGS: ${{ steps.meta.outputs.tags }}
+          CANDIDATE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -eu
+          candidate="${REGISTRY}/${IMAGE_NAME}-ui@${CANDIDATE_DIGEST}"
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            docker buildx imagetools create --tag "$tag" "$candidate"
+          done <<EOF
+          ${PROMOTION_TAGS}
+          EOF
+
   container:
     name: Build, scan, and publish image
     runs-on: ubuntu-24.04
@@ -473,6 +561,7 @@ jobs:
       - dependency-audit
       - jvm
       - governance-ui
+      - ui-image
     permissions:
       contents: read
       packages: write
@@ -553,3 +642,32 @@ jobs:
           done <<EOF
           ${PROMOTION_TAGS}
           EOF
+
+      - name: Write candidate release manifest
+        env:
+          SERVER_DIGEST: ${{ steps.image.outputs.digest }}
+          UI_DIGEST: ${{ needs.ui-image.outputs.ui_digest }}
+          PLUGIN_LOCK_SHA256: ${{ needs.python-plugin-contract.outputs.plugin_lock_sha256 }}
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/release-manifest"
+          cat > "$RUNNER_TEMP/release-manifest/release.json" <<EOF
+          {
+            "schema_version": 1,
+            "git_commit": "${GITHUB_SHA}",
+            "server_image_digest": "${SERVER_DIGEST}",
+            "ui_image_digest": "${UI_DIGEST}",
+            "plugin_lock_sha256": "${PLUGIN_LOCK_SHA256}",
+            "tested_platforms": "${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}",
+            "dependency_audit": "passed",
+            "image_scan": "passed"
+          }
+          EOF
+          sha256sum "$RUNNER_TEMP/release-manifest/release.json" > "$RUNNER_TEMP/release-manifest/release.json.sha256"
+
+      - name: Upload candidate release manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-manifest-${{ github.sha }}
+          path: ${{ runner.temp }}/release-manifest
+          if-no-files-found: error
