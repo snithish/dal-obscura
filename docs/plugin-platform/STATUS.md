@@ -1,12 +1,17 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `8badc6a` (REST qualification at `96068ee`; authoring routing at `6890b3f`).
+Implementation follow-up through `67ec022` (authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
 UI, and plugin-contract slices. Database changes remain additive, external
 plugin wheels are still unverified, and pickle serialization remains unchanged.
+All private UI pages now share the authenticated workspace gate: signed-out users
+see only the sign-in/reconnect surface, including when a management hash is opened
+directly. The REST plugin descriptor is packaged under the exact static-admission
+filename expected by the registry; online wheel construction is still an external
+CI gate in this offline workspace.
 Local probes are recorded in [the review](IMPLEMENTATION_REVIEW.md).
 Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_STATUS.md).
 
@@ -164,6 +169,8 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   Iceberg module compatibility mapping. Pair responses now mark capability-
   incompatible combinations and the form filters them; the management view also renders the
   authenticated lifecycle status inventory. Browser evidence remains open.
+  Signed-out navigation is fenced at the top-level render boundary, so a direct
+  management URL cannot display private workspace views before login.
 - X15 conformance kit: **implementing**; a standalone public-API-only package
   now provides nested Arrow goldens, catalog discovery/page checks,
   capability-negative checks, bounded plan and output-schema validation, explicit
@@ -183,8 +190,10 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   `dal-obscura-iceberg-rest` wheel now exposes an admitted PyIceberg REST catalog,
   validates endpoint/config boundaries, paginates bounded table discovery, and
   returns immutable metadata locations for the trusted Iceberg executor without
-  copying provider IO credentials into ticket-bound handles. Live
-  REST server, auth, TLS, and clean-wheel evidence remain open.
+  copying provider IO credentials into ticket-bound handles. The static descriptor
+  now uses the registry's exact `dal_obscura-plugin.json` package-data name. Live
+  REST server, auth, TLS, and clean-wheel evidence remain open; local wheel
+  construction is blocked by unavailable build dependencies.
 - X17 independent manifest/Parquet plugin: **implementing**; the independent
   `dal-obscura-manifest-parquet` package registers `manifest` and `parquet.dataset`
   entry points against the public SDK. Its catalog pins an operator-owned manifest,
