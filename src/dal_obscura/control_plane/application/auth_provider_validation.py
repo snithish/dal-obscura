@@ -124,8 +124,8 @@ def _validate_endpoint(value: str, *, label: str) -> None:
     parsed = urlsplit(value.strip())
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise ValidationFailure(f"{label} must use an HTTP(S) URL")
-    if parsed.username or parsed.password or parsed.fragment:
-        raise ValidationFailure(f"{label} must not contain credentials or a fragment")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValidationFailure(f"{label} must not contain credentials, query data, or a fragment")
 
 
 def _redact_mapping(args: Mapping[str, object]) -> dict[str, object]:
