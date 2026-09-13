@@ -402,6 +402,9 @@ class PublicationStore:
         return asset_id
 
     def replace_policy_rules(self, *, asset_id: UUID, rules: list[dict[str, Any]]) -> None:
+        asset = self._locked_asset(asset_id)
+        if asset is None:
+            raise LookupError(f"No asset {asset_id}")
         normalized_rules = [_normalize_policy_rule(raw) for raw in rules]
         for record in self._session.scalars(
             select(PolicyRuleRecord).where(PolicyRuleRecord.asset_id == asset_id)

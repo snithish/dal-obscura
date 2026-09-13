@@ -181,7 +181,7 @@ def test_catalog_updates_advance_a_revision_only_when_configuration_changes(db_s
         )
 
 
-def test_schema_identity_rejects_non_text_and_control_values(db_session):
+def test_schema_identity_rejects_non_text_and_control_values(db_session, monkeypatch):
     store = PublicationStore(db_session)
     cell_id = uuid4()
     tenant_id = uuid4()
@@ -220,3 +220,24 @@ def test_schema_identity_rejects_non_text_and_control_values(db_session):
             asset_id=asset_id,
             fields=[{"name": "id", "path": ["id", "x" * 257]}],
         )
+
+    locked: list[object] = []
+    original_lock = store._locked_asset
+
+    def record_lock(value):
+        locked.append(value)
+        return original_lock(value)
+
+    monkeypatch.setattr(store, "_locked_asset", record_lock)
+    store.replace_policy_rules(
+        asset_id=asset_id,
+        rules=[
+            {
+                "ordinal": 1,
+                "effect": "allow",
+                "principals": ["user1"],
+                "columns": ["id"],
+            }
+        ],
+    )
+    assert locked == [asset_id]
