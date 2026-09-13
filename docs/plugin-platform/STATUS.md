@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `bd710ea` (canonical provider ID API regression;
+Implementation follow-up through `52cdd04` (manifest field-ID bounds;
+canonical provider ID API regression;
 provider identity vocabulary;
 bounded provider field identities;
 external-catalog Iceberg schema bridge;
@@ -356,6 +357,9 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   Explicit schema-field saves and manifest identities now normalize provider
   IDs to the shared `iceberg:<id>` vocabulary before persistence, keeping
   control-plane review evidence and data-plane drift checks comparable.
+  Manifest field-ID entries are also bounded and printable before identity
+  derivation, so an operator-controlled manifest cannot inject oversized or
+  control-bearing grant keys.
   Both service composition roots now accept an optional operator-mounted
   `DAL_OBSCURA_PLUGIN_LOCK_FILE`; its bounded parser rejects symlinks,
   group/world-writable files, malformed identities, duplicates, and incomplete
@@ -534,6 +538,18 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Green evidence: targeted asset API test, Ruff, and `git diff --check`.
 - Remaining gaps: live provider-derived identity propagation and the complete
   schema-evolution/reapproval matrix remain open.
+
+### X06 manifest field-ID bounds — `52cdd04`
+
+- State: implementing.
+- Behavior: the manifest/Parquet catalog rejects control-bearing and oversized
+  top-level provider IDs before deriving nested identities or returning a table
+  handle. This keeps independent plugin metadata within the shared bounded
+  schema identity contract.
+- Green evidence: manifest plugin suite (14 passed), Ruff, Ty, and
+  `git diff --check`.
+- Remaining gaps: live manifest wheel/consumer qualification and complete
+  provider-derived schema-evolution evidence remain open.
 
 ### X03 direct mutation row locks — `165015f`
 
