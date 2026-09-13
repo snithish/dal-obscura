@@ -13,6 +13,9 @@ from dal_obscura.common.catalog.ports import (
 )
 from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
+from dal_obscura.data_plane.infrastructure.adapters.public_plugin_adapter import (
+    PublicPluginCatalogAdapter,
+)
 from dal_obscura.data_plane.infrastructure.table_formats.iceberg import IcebergTableFormat
 
 CatalogType = Literal["iceberg"]
@@ -193,6 +196,14 @@ def _build_catalog(
         factory = plugin_registry.load("catalog", config.plugin_id)
         if not callable(factory):
             raise ValueError(f"Plugin factory is invalid: {config.plugin_id}")
+        if config.plugin_id != "iceberg.sql":
+            return PublicPluginCatalogAdapter(
+                config.name,
+                config.options,
+                config.plugin_id,
+                cast(Any, factory),
+                lambda plugin_id: plugin_registry.load("table_format", plugin_id),
+            )
         constructor = cast(
             Callable[[str, dict[str, Any], PathRuleEnforcer | None], CatalogPlugin],
             factory,
