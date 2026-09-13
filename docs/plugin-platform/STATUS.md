@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `a30f1c1` (executable backup integrity tests;
+Implementation follow-up through `bf0d3e6` (secure-local parity contract tests;
+executable backup integrity tests;
 atomic backup checksum preparation;
 backup checksum verification and
 runbook; CI plugin lifecycle security lane;
@@ -551,6 +552,10 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   topology, with bootstrap disabled and explicit TLS/OIDC settings. Real
   PostgreSQL SQL denial/allowance, TLS, IdP, browser, restart, and clean-artifact
   evidence remain open.
+  Secure-local parity contract tests now verify that the profile layers the
+  production services, preserves loopback-only exposure and container hardening,
+  and rejects placeholders/TLS omissions before Compose operations. Runtime
+  Docker/TLS/OIDC parity remains unverified.
 - X20 recovery and upgrades: **implementing**; data-plane ticket signing now
   supports one active HMAC key plus explicitly configured retired verification
   keys, with bounded rotation/rollback instructions and duplicate-key rejection.
