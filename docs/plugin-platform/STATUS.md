@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `b7ca710` (reserved identity namespaces;
+Implementation follow-up through `4abb24f` (quoted JSON path boundaries;
+reserved identity namespaces;
 quoted collection path parsing;
 manifest field-ID bounds;
 canonical provider ID API regression;
@@ -368,6 +369,8 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   Provider metadata cannot claim the core-reserved `synthetic:` or `legacy:`
   namespaces as stable IDs; those values fall back to bounded schema-scoped
   identities.
+  Quoted path parsing now uses JSON decoder boundaries, so field names containing
+  brackets and escaped characters remain addressable without delimiter bugs.
   Both service composition roots now accept an optional operator-mounted
   `DAL_OBSCURA_PLUGIN_LOCK_FILE`; its bounded parser rejects symlinks,
   group/world-writable files, malformed identities, duplicates, and incomplete
@@ -580,6 +583,17 @@ providers before Phase A's security/correctness prerequisites are accepted.
   `git diff --check`.
 - Remaining gaps: live provider-derived IDs and complete schema-evolution
   acceptance remain open.
+
+### X04 quoted JSON path boundaries — `4abb24f`
+
+- State: implementing.
+- Behavior: canonical human path parsing now decodes quoted JSON names with
+  proper string boundaries, preserving names that contain `]`, `[`, or escape
+  sequences while keeping collection markers typed.
+- Green evidence: field-path suite (21 passed), Ruff, Ty, and
+  `git diff --check`.
+- Remaining gaps: browser/consumer nested-path evidence and complete schema
+  evolution acceptance remain open.
 
 ### X03 direct mutation row locks — `165015f`
 
