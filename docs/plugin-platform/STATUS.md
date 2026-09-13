@@ -293,6 +293,14 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane tests/interfaces/control_plane -q` — all passed; `tests/plugin_platform` and `tests/infrastructure/adapters` passed; UI `tsc` and changed-path Ruff passed.
 - Remaining N03/B05 work: safe structured error envelopes, two-process freshness/race evidence, and generated DTO/browser proof. Release remains HOLD.
 
+## Implementation update — a3bef98 (2026-09-13)
+
+- Packet / status / candidate commit / owner: N03/B05 partial / VERIFY / `a3bef98` / control-plane API.
+- Observable behavior delivered: HTTP 409 revision conflicts and 428 missing-precondition failures now include a safe `error` object with stable code, message, and request ID while retaining the existing `detail` field for current clients. Successful responses and unrelated error contracts are unchanged.
+- Changed paths: FastAPI HTTP exception handler and CAS regression assertions. Pickle serializers and task payloads are unchanged.
+- Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane tests/interfaces/control_plane -q` — all passed; changed-path Ruff, format, and diff checks passed.
+- Remaining N03/B05 work: field-level errors where useful, two-process freshness/race evidence, and generated DTO/browser proof. Release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
