@@ -39,7 +39,7 @@ their underlying functionality is wholly absent.
 - Packet / status / candidate commit / owner: N01/B01-B02 / VERIFY / `8a615c3` / toolchain and documentation.
 - Observable behavior delivered: CI and the UI image now select Node 24; the UI manifest and lock importer use exact tested dependency versions and declare the supported Node/pnpm engines. The repository-wide Ruff formatting drift and line-length failure are corrected. Agent, policy-authoring and baseline documents now describe the actual control-plane/data-plane layout and UI-first workflow while preserving the pickle boundary.
 - Changed paths: CI runtime matrix, `ui/Dockerfile`, governance UI manifest/lock, 40 formatted Python sources/tests, `AGENTS.md`, `docs/policy-authoring.md`, `docs/plugin-platform/TECHNOLOGY.md`, and `BASELINE_20260914.md`. No serializer, serialized class, payload or import path changed. Production/test logical SLOC remains measured in the baseline; formatting accounts for the source churn (363 insertions, 264 deletions).
-- Evidence: authoritative `uv run --no-sync pytest --durations=20 --junitxml=/tmp/dal-obscura-baseline.xml -q -rs` — 820 collected, 806 passed, 14 explicit skips, 0 failures in 125.531s; `uv run --no-sync ruff check .` and `ruff format --check .` — passed; governance UI `tsc -b`, Vite build and 5 lifecycle tests — passed (82.09 kB gzip JS). The Node 24 clean-install/image job remains a CI qualification gate.
+- Evidence: authoritative `uv run --no-sync pytest --durations=20 --junitxml=/tmp/dal-obscura-baseline.xml -q -rs` — 820 collected, 806 passed, 14 explicit skips, 0 failures in 125.531s; `uv run --no-sync ruff check .` and `ruff format --check .` — passed; governance UI `tsc -b`, Vite build and 5 lifecycle tests — passed (82.09 kB gzip JS). The Node 24 clean-install/image job remains a CI qualification gate. A post-fix rerun is recorded below.
 - Remaining N01/B02 work: execute the Node 24 clean install and immutable image/advisory checks in CI, then advance N02 contract consolidation. Release remains HOLD.
 
 Follow-up `docs/plugin-platform/BASELINE_20260914.md` was corrected after
@@ -61,6 +61,10 @@ source inspection: the standalone SDK is the sole current contract validator;
 - Changed paths: `control_plane/interfaces/routes/session.py` and its OIDC regression test. No session cookie, identity encoding, bootstrap, pickle serializer or payload behavior changed.
 - Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane/test_oidc_login.py -q` — 5 passed; changed-path Ruff check/format — passed.
 - Remaining N05 work: live local/production OIDC browser journey, exact typed principal persistence, bootstrap retirement, freshness/revocation and two-process evidence. Release remains HOLD.
+
+Post-fix full qualification (`/tmp/dal-obscura-final.xml`) collected 821 tests,
+passed 807, skipped the same 14 explicit opt-in nodes, and reported zero
+failures/errors in 125.394 seconds.
 
 ## Implementation update — 96573bb (2026-09-14)
 
