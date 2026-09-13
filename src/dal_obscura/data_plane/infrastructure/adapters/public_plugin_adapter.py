@@ -138,6 +138,12 @@ class PublicPluginTableFormat(TableFormat):
         plugin = self.format_factory(self.handle, _context())
         if not all(callable(getattr(plugin, name, None)) for name in ("schema", "plan", "execute")):
             raise ValueError("Public format factory returned an invalid plugin")
+        descriptor = getattr(plugin, "descriptor", None)
+        if descriptor is not None and (
+            getattr(descriptor, "kind", None) != "table_format"
+            or getattr(descriptor, "plugin_id", None) != self.format
+        ):
+            raise ValueError("Public format factory returned a mismatched descriptor")
         return plugin
 
 
@@ -170,6 +176,12 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
             for name in ("list_tables", "resolve_table")
         ):
             raise ValueError("Public catalog factory returned an invalid plugin")
+        descriptor = getattr(self._catalog, "descriptor", None)
+        if descriptor is not None and (
+            getattr(descriptor, "kind", None) != "catalog"
+            or getattr(descriptor, "plugin_id", None) != self._catalog_plugin_id
+        ):
+            raise ValueError("Public catalog factory returned a mismatched descriptor")
 
     @property
     def name(self) -> str:

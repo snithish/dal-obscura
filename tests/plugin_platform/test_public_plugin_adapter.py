@@ -204,3 +204,46 @@ def test_public_format_validates_lazy_batch_schema_before_streaming() -> None:
     _schema, batches = plan.tasks[0].table_format.execute(plan.tasks[0].partition)
     with pytest.raises(ValueError, match="batch schema"):
         list(batches)
+
+
+def test_public_format_rejects_factory_descriptor_mismatch() -> None:
+    identifier = TableIdentifier(namespace=("default",), name="users")
+    handle = TableHandle(
+        catalog_plugin_id="manifest",
+        catalog_instance_id="fixture",
+        catalog_revision=1,
+        identifier=identifier,
+        format_plugin_id="parquet.dataset",
+        handle_version=1,
+    )
+
+    class WrongDescriptorFormat:
+        descriptor = type("Descriptor", (), {"kind": "catalog", "plugin_id": "other"})()
+
+        def schema(self, value, context):
+            del value, context
+            from dal_obscura_plugin_api import SchemaDescriptor
+
+            return SchemaDescriptor(
+                schema_version=1,
+                fingerprint="0" * 64,
+                arrow_schema=pa.schema([]),
+            )
+
+        def plan(self, value, descriptor, context, *, projection, row_filter, max_tasks):
+            del value, descriptor, context, projection, row_filter, max_tasks
+            return []
+
+        def execute(self, task, context):
+            del task, context
+            return pa.schema([]), []
+
+    table_format = PublicPluginTableFormat(
+        catalog_name="fixture",
+        table_name="default.users",
+        format="parquet.dataset",
+        format_factory=lambda value, context: WrongDescriptorFormat(),
+        handle=handle,
+    )
+    with pytest.raises(ValueError, match="mismatched descriptor"):
+        table_format.get_schema()
