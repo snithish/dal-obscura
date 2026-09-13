@@ -245,6 +245,14 @@ tests/plugin_platform tests/control_plane tests/interfaces/control_plane
 tests/infrastructure/adapters -q` passed with no failures. Socket-bound Flight,
 benchmark, and live process-boundary lanes remain VERIFY in this environment.
 
+## Implementation update — 9fc6197 (2026-09-13)
+
+- Packet / status / candidate commit / owner: N03/B05 partial / VERIFY / `9fc6197` / workspace activation route + UI.
+- Observable behavior delivered: publication activation now requires an explicit serving-generation precondition. A caller sends the current publication ID for replacement or JSON `null` for first activation; an omitted body/field returns 428 before mutation. The UI always supplies the precondition and preserves the existing 409 stale-generation CAS behavior.
+- Changed paths: workspace route, UI transport, activation API tests, and missing-precondition regression coverage. No pickle serializer or payload path changed.
+- Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane/test_config_activation.py tests/interfaces/control_plane/test_workspace_api.py -q` — 7 passed; UI `tsc` and changed-path Ruff passed.
+- Remaining N03/B05 work: runtime/auth-provider write preconditions, safe structured error envelopes, process race evidence, and generated DTO/browser proof. Release remains HOLD.
+
 ## Implementation update — 14edd5b (2026-09-13)
 
 - Packet / status / candidate commit / owner: N02/B03 partial / VERIFY / `14edd5b` / compiler + data-plane manifest reader + offline migration.
