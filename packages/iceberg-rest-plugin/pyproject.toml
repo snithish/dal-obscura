@@ -9,7 +9,7 @@ dependencies = [
 ]
 
 [project.entry-points."dal_obscura.catalogs.v1"]
-iceberg.rest = "dal_obscura_iceberg_rest.catalog:rest_catalog_factory"
+"iceberg.rest" = "dal_obscura_iceberg_rest.catalog:rest_catalog_factory"
 
 [tool.setuptools.package-data]
 dal_obscura_iceberg_rest = ["dal_obscura-plugin.json"]
