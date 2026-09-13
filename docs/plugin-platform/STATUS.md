@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `4a790ed` (capacity evidence runbook;
+Implementation follow-up through `585902e` (mandatory CI skip gate;
+capacity evidence runbook;
 reproducible capacity runner;
 capacity runbook contract guard;
 dead-code inventory guard;
@@ -2946,6 +2947,20 @@ otherwise continue locally executable X06/X07/X08 acceptance work
 - Remaining gaps: the required five-run benchmark set and 60-minute mixed
   workload still need a socket-enabled, 4-vCPU/8-GiB runner; no capacity or
   alert threshold is marked accepted until those artifacts are recorded.
+
+### X22 mandatory-lane completeness gate — `dd82a5c`, `6c63c07`, `585902e`
+
+- State: implementing.
+- Behavior: required integration, Python/DuckDB consumer, PostgreSQL race, and
+  recovery jobs now run through `scripts/require_no_skips.py`. The wrapper adds
+  a JUnit report to the wrapped pytest command and fails after a successful run
+  if any test is skipped, while preserving the original non-zero exit code for
+  test failures. Architecture tests cover both outcomes and CI wiring.
+- Green evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/architecture/test_mandatory_test_wrapper.py -q` (3 passed), targeted Ruff, shell syntax, and `git diff --check` passed.
+- Remaining gaps: hosted CI execution, real browser/IdP/provider/consumer,
+  recovery, artifact provenance, and independent review remain open. The gate
+  cannot substitute for missing external environments; it now fails clearly
+  when those environments cause mandatory skips.
 
 ## Evidence entry template
 
