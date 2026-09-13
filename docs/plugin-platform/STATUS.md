@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `fb305e7` (aggregate catalog checks;
+Implementation follow-up through `7d1119c` (core option boundary;
+aggregate catalog checks;
 catalog revision API contract test;
 catalog configuration CAS;
 REST namespace traversal;
@@ -220,12 +221,17 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   namespace listing, and deterministic close operations. REST and manifest
   adapters implement bounded lifecycle methods; clean-wheel and external
   lifecycle evidence remain open.
+  Core and public catalog configuration boundaries now reject arbitrary option
+  objects, oversized maps, deep nesting, control characters, and non-finite
+  values before factory invocation.
   The conformance runner now fails a plugin that omits `close()` instead of
   treating missing cleanup as a pass.
   REST catalog namespace lifecycle now honors provider-scoped traversal and
   safely filters bounded root listings for legacy providers.
   Catalog revisions are now returned in workspace metadata and accepted as an
   expected write precondition through the API and Connections UI.
+  Core `CatalogConfig` now applies the same bounded JSON-like option validation
+  as the public SDK before any adapter receives provider options.
   Service-side compatibility contracts and online wheel artifact evidence remain
   open.
 - X12 admitted loading and Iceberg adapter: **implementing**; entry-point loading now
@@ -429,6 +435,16 @@ providers before Phase A's security/correctness prerequisites are accepted.
   compile and Vite production build, Ruff, and `git diff --check`.
 - Remaining gaps: PostgreSQL multi-process barriers, transaction rollback and live
   production/browser evidence remain open. Pickle compatibility is unchanged.
+
+### X11 core option boundary — `7d1119c`
+
+- State: implementing.
+- Behavior: core `CatalogConfig` now validates bounded JSON-like provider options
+  before adapters receive them, matching public SDK enforcement.
+- Green evidence: plugin contract and public adapter suites (16 passed), Ruff, Ty,
+  and `git diff --check`.
+- Remaining gaps: clean-wheel, external provider, and production admission evidence
+  remain open. Pickle compatibility is unchanged.
 
 The aggregate local control-plane/plugin lane now passes after the revision field
 contract update: 262 tests across control-plane routes, plugin conformance, REST,
