@@ -60,6 +60,7 @@ class CellRecord(Base):
     name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
     region: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="active")
+    auth_provider_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

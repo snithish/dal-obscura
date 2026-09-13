@@ -14,6 +14,7 @@ from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 from dal_obscura.control_plane.interfaces.routes.schemas import (
     AuthProviderResponse,
+    AuthProviderRevisionResponse,
     AuthProvidersRequest,
     RuntimeSettingsRequest,
     RuntimeSettingsResponse,
@@ -46,6 +47,16 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
     )
     def list_workspace_auth_providers() -> list[AuthProviderResponse]:
         return deps.with_service(lambda service: service.list_workspace_auth_providers())
+
+    @api.get(
+        "/v1/settings/auth-providers/revision",
+        response_model=AuthProviderRevisionResponse,
+        dependencies=[Depends(deps.require_admin)],
+    )
+    def workspace_auth_provider_revision() -> AuthProviderRevisionResponse:
+        return deps.with_service(
+            lambda service: {"revision": service.workspace_auth_provider_revision()}
+        )
 
     @api.put("/v1/settings/runtime", dependencies=[Depends(deps.require_admin)])
     def upsert_workspace_runtime_settings(

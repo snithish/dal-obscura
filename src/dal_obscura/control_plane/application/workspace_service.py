@@ -165,6 +165,11 @@ def list_workspace_auth_providers(store: PublicationStore) -> list[dict[str, obj
     return [redact_auth_provider(item) for item in store.list_auth_providers(context.cell_id)]
 
 
+def workspace_auth_provider_revision(store: PublicationStore) -> int:
+    context = store.get_default_workspace_context()
+    return 0 if context is None else store.get_auth_provider_revision(context.cell_id)
+
+
 def replace_workspace_auth_providers(
     store: PublicationStore,
     providers: list[dict[str, Any]],

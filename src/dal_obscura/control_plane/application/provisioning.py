@@ -699,6 +699,9 @@ class ProvisioningService:
             actor_principal="system" if actor is None else actor.identity_key(),
         )
 
+    def workspace_auth_provider_revision(self) -> int:
+        return workspace_service.workspace_auth_provider_revision(self._store)
+
     def create_publication(
         self,
         cell_id: UUID,

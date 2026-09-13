@@ -302,6 +302,9 @@ class PublicationStore:
         expected_revision: int | None = None,
     ) -> None:
         self.lock_cell_for_publication(cell_id)
+        cell = self._session.get(CellRecord, cell_id)
+        if cell is None:
+            raise LookupError(f"No cell {cell_id}")
         existing = self._session.get(CellRuntimeSettingsRecord, cell_id)
         if existing is None:
             self._session.add(
@@ -543,25 +546,28 @@ class PublicationStore:
         expected_revision: int | None = None,
     ) -> None:
         self.lock_cell_for_publication(cell_id)
+        cell = self._session.get(CellRecord, cell_id)
+        if cell is None:
+            raise LookupError(f"No cell {cell_id}")
         existing = list(
             self._session.scalars(
                 select(AuthProviderRecord).where(AuthProviderRecord.cell_id == cell_id)
             )
         )
-        current_revision = max((record.revision for record in existing), default=0)
-        if existing and expected_revision is None:
+        current_revision = cell.auth_provider_revision
+        if (existing or current_revision > 0) and expected_revision is None:
             raise RevisionPreconditionRequired(
                 "Authentication provider revision is required for updates "
                 f"(current {current_revision}); reread before writing."
             )
-        if existing and expected_revision != current_revision:
+        if (existing or current_revision > 0) and expected_revision != current_revision:
             raise PublicationConflictError(
                 "Authentication provider revision changed "
                 f"(expected {expected_revision}, current {current_revision}); "
                 "reread before writing."
             )
         existing_args = {record.ordinal: dict(record.args_json) for record in existing}
-        new_revision = 0 if not existing else current_revision + 1
+        new_revision = 0 if not existing and current_revision == 0 else current_revision + 1
         for record in existing:
             self._session.delete(record)
         self._session.flush()
@@ -580,6 +586,12 @@ class PublicationStore:
                 )
             )
         self._session.flush()
+        cell.auth_provider_revision = new_revision
+        self._session.flush()
+
+    def get_auth_provider_revision(self, cell_id: UUID) -> int:
+        cell = self._session.get(CellRecord, cell_id)
+        return 0 if cell is None else cell.auth_provider_revision
 
     def insert_publication(
         self, *, cell_id: UUID, publication_id: UUID, manifest_hash: str

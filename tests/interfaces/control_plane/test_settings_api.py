@@ -157,6 +157,32 @@ def test_workspace_auth_providers_can_be_configured_without_cell_ids():
     assert stale.status_code == 409
     assert stale.json()["error"]["code"] == "revision_conflict"
     assert missing.json()["error"]["code"] == "revision_precondition_required"
+    removed = client.put(
+        "/v1/settings/auth-providers",
+        json={"providers": [], "expected_revision": 1},
+        headers=ADMIN_HEADERS,
+    )
+    assert removed.status_code == 200
+    assert client.get("/v1/settings/auth-providers/revision", headers=ADMIN_HEADERS).json() == {
+        "revision": 2
+    }
+    recreated = client.put(
+        "/v1/settings/auth-providers",
+        json={
+            "providers": [
+                {
+                    "ordinal": 1,
+                    "module": DEFAULT_AUTH_MODULE,
+                    "args": {"issuer": "https://issuer.example"},
+                    "enabled": True,
+                }
+            ],
+            "expected_revision": 2,
+        },
+        headers=ADMIN_HEADERS,
+    )
+    assert recreated.status_code == 200
+    assert recreated.json()[0]["revision"] == 3
 
 
 def test_workspace_auth_providers_reject_unsupported_modules_and_inline_key_material():

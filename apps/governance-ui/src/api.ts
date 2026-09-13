@@ -354,6 +354,7 @@ export const controlPlane = {
   diagnoseCatalog: (name: string) => request<CatalogDiagnostic>(`/v1/catalogs/${encodeURIComponent(name)}/diagnostics`),
   getRuntimeSettings: () => request<RuntimeSettings | null>("/v1/settings/runtime"),
   getAuthProviders: () => request<AuthProvider[]>("/v1/settings/auth-providers"),
+  getAuthProviderRevision: () => request<{ revision: number }>("/v1/settings/auth-providers/revision"),
   saveAuthProviders: (providers: Array<{ ordinal: number; module: string; args: Record<string, unknown>; enabled: boolean }>, expectedRevision?: number) => request<AuthProvider[]>("/v1/settings/auth-providers", {
     method: "PUT",
     body: JSON.stringify({ providers, ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }) }),

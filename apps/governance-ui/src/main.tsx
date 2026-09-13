@@ -11,7 +11,7 @@ import "./styles.css";
 type Page = UiPage;
 type SaveState = "saved" | "saving" | "unsaved" | "failed";
 type WorkspaceState = "loading" | "ready" | "unavailable";
-type ManagementData = { history?: PolicyVersion[]; historyNextCursor?: string | null; events?: AuditEvent[]; eventsNextCursor?: string | null; catalogs?: Catalog[]; tables?: Array<Record<string, unknown>>; runtime?: RuntimeSettings | null; providers?: AuthProvider[]; publications?: WorkspacePublication[]; summary?: WorkspaceSummary; observations?: WorkspaceObservations; grants?: AssetGrant[]; plugins?: PluginDescriptor[]; pluginStates?: PluginState[]; pluginPairs?: PluginPair[] };
+type ManagementData = { history?: PolicyVersion[]; historyNextCursor?: string | null; events?: AuditEvent[]; eventsNextCursor?: string | null; catalogs?: Catalog[]; tables?: Array<Record<string, unknown>>; runtime?: RuntimeSettings | null; providers?: AuthProvider[]; providerRevision?: number; publications?: WorkspacePublication[]; summary?: WorkspaceSummary; observations?: WorkspaceObservations; grants?: AssetGrant[]; plugins?: PluginDescriptor[]; pluginStates?: PluginState[]; pluginPairs?: PluginPair[] };
 type AuditFilters = { actor?: string; action?: string; resourceType?: string; outcome?: string; correlationId?: string; createdAfter?: string; createdBefore?: string };
 
 const maskOptions: Array<{ type: Mask["type"]; label: string; needsValue?: boolean }> = [
@@ -147,7 +147,7 @@ function App() {
       if (destination === "changes") { const pageResult = await controlPlane.listHistoryPage({ limit: 50 }); next = { history: pageResult.items, historyNextCursor: pageResult.next_cursor }; }
       if (destination === "activity") { const audit = await controlPlane.listAuditEventsPage({ limit: 50, ...auditFilters }); next = { history: await controlPlane.listHistory(), events: audit.items, eventsNextCursor: audit.next_cursor, summary: await controlPlane.getSummary(), observations: await controlPlane.getObservations() }; }
       if (destination === "connections") { const pluginData = await controlPlane.listPlugins(); next = { catalogs: await controlPlane.listCatalogs(), publications: session?.platform_admin ? await controlPlane.listWorkspacePublications() : [], plugins: pluginData.plugins, pluginStates: pluginData.states, pluginPairs: pluginData.pairs }; }
-      if (destination === "settings") next = { runtime: await controlPlane.getRuntimeSettings(), providers: await controlPlane.getAuthProviders(), publications: session?.platform_admin ? await controlPlane.listWorkspacePublications() : [] };
+      if (destination === "settings") { const [runtime, providers, revision] = await Promise.all([controlPlane.getRuntimeSettings(), controlPlane.getAuthProviders(), controlPlane.getAuthProviderRevision()]); next = { runtime, providers, providerRevision: revision.revision, publications: session?.platform_admin ? await controlPlane.listWorkspacePublications() : [] }; }
       if (!isCurrentEpoch(epoch, managementEpoch.current)) return;
       setManagementData(next);
     } catch {
@@ -687,7 +687,7 @@ function ManagementView({ page, data, loading, onReload, onLoadMore, historyLoad
   if (page === "changes") return <ChangesView history={data.history ?? []} nextCursor={data.historyNextCursor} onReload={onReload} onLoadMore={onLoadMore} loading={historyLoading ?? false} />;
   if (page === "activity") return <ActivityView history={data.history ?? []} events={data.events ?? []} nextCursor={data.eventsNextCursor} onLoadMore={onLoadMore} loading={auditLoading ?? false} filters={filters} onFiltersChange={onFiltersChange} summary={data.summary} observations={data.observations} />;
   if (page === "connections") return <ConnectionsView catalogs={data.catalogs ?? []} publications={data.publications ?? []} plugins={data.plugins ?? []} pluginStates={data.pluginStates ?? []} pluginPairs={data.pluginPairs ?? []} canActivate={Boolean(session?.platform_admin)} onReload={onReload} />;
-  return <SettingsView runtime={data.runtime} providers={data.providers ?? []} publications={data.publications ?? []} onReload={onReload} />;
+  return <SettingsView runtime={data.runtime} providers={data.providers ?? []} providerRevision={data.providerRevision} publications={data.publications ?? []} onReload={onReload} />;
 }
 
 function ChangesView({ history, nextCursor, onReload, onLoadMore, loading }: { history: PolicyVersion[]; nextCursor?: string | null; onReload: () => void; onLoadMore?: () => void; loading: boolean }) {
@@ -805,7 +805,7 @@ function catalogDisplayName(catalog: Catalog): string {
     : `Catalog adapter · ${catalog.module}`;
 }
 
-function SettingsView({ runtime, providers, publications, onReload }: { runtime?: RuntimeSettings | null; providers: AuthProvider[]; publications: WorkspacePublication[]; onReload: () => void }) {
+function SettingsView({ runtime, providers, providerRevision, publications, onReload }: { runtime?: RuntimeSettings | null; providers: AuthProvider[]; providerRevision?: number; publications: WorkspacePublication[]; onReload: () => void }) {
   const [form, setForm] = useState<RuntimeSettings>(runtime ?? { ticket_ttl_seconds: 900, max_tickets: 64, max_ticket_exchanges: 2 });
   const [providerRows, setProviderRows] = useState<AuthProvider[]>(providers);
   const [message, setMessage] = useState("");
@@ -814,7 +814,7 @@ function SettingsView({ runtime, providers, publications, onReload }: { runtime?
   async function save() { try { await controlPlane.saveRuntimeSettings(form); setMessage("Runtime settings saved as draft configuration. Publish to make worker behavior change."); onReload(); } catch { setMessage("Settings update was rejected; the previous values remain active."); } }
   async function saveProviders() {
     try {
-      await controlPlane.saveAuthProviders(providerRows.map((provider, index) => ({ ordinal: index + 1, module: provider.module, args: provider.args, enabled: provider.enabled })), providerRows[0]?.revision);
+      await controlPlane.saveAuthProviders(providerRows.map((provider, index) => ({ ordinal: index + 1, module: provider.module, args: provider.args, enabled: provider.enabled })), providerRows[0]?.revision ?? providerRevision);
       setMessage("Identity provider settings saved as draft configuration. Publish a snapshot to activate them.");
       onReload();
     } catch {

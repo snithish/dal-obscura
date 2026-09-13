@@ -135,6 +135,10 @@ class AuthProviderResponse(BaseModel):
     revision: int
 
 
+class AuthProviderRevisionResponse(BaseModel):
+    revision: int
+
+
 class CatalogRequest(StrictModel):
     """Catalog configuration request.
 
