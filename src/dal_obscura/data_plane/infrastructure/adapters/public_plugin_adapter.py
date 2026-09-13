@@ -159,7 +159,10 @@ class PublicPluginTableFormat(TableFormat):
         _ensure_context_active(context)
         plugin = self.format_factory(self.handle, context)
         _ensure_context_active(context)
-        if not all(callable(getattr(plugin, name, None)) for name in ("schema", "plan", "execute")):
+        if not all(
+            callable(getattr(plugin, name, None))
+            for name in ("schema", "plan", "execute", "close")
+        ):
             raise ValueError("Public format factory returned an invalid plugin")
         descriptor = getattr(plugin, "descriptor", None)
         if descriptor is not None and (
@@ -198,7 +201,7 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
         self._closed = False
         if not all(
             callable(getattr(self._catalog, name, None))
-            for name in ("list_tables", "resolve_table")
+            for name in ("list_tables", "resolve_table", "close")
         ):
             raise ValueError("Public catalog factory returned an invalid plugin")
         descriptor = getattr(self._catalog, "descriptor", None)

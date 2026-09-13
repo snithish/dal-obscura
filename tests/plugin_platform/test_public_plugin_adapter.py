@@ -113,6 +113,9 @@ def test_public_iceberg_compatibility_path_enforces_metadata_destination(tmp_pat
     )
 
     class Catalog:
+        def close(self):
+            return None
+
         def list_tables(self, context: ExecutionContext, *, continuation: str | None, limit: int):
             return DiscoveryPage((identifier,))
 
@@ -145,6 +148,9 @@ def test_public_format_rejects_opaque_task_payloads_before_ticket_serialization(
     schema = pa.schema([pa.field("id", pa.int64())])
 
     class OpaqueFormat:
+        def close(self):
+            return None
+
         def schema(self, value, context):
             del value, context
             from dal_obscura_plugin_api import SchemaDescriptor
@@ -170,6 +176,47 @@ def test_public_format_rejects_opaque_task_payloads_before_ticket_serialization(
         table_format.plan(PlanRequest(target="default.users", columns=["*"]), max_tickets=2)
 
 
+def test_public_format_requires_explicit_close_lifecycle() -> None:
+    identifier = TableIdentifier(namespace=("default",), name="users")
+    handle = TableHandle(
+        catalog_plugin_id="manifest",
+        catalog_instance_id="fixture",
+        catalog_revision=1,
+        identifier=identifier,
+        format_plugin_id="parquet.dataset",
+        handle_version=1,
+    )
+
+    class MissingCloseFormat:
+        def schema(self, value, context):
+            del value, context
+            from dal_obscura_plugin_api import SchemaDescriptor
+
+            return SchemaDescriptor(
+                schema_version=1,
+                fingerprint="0" * 64,
+                arrow_schema=pa.schema([pa.field("id", pa.int64())]),
+            )
+
+        def plan(self, value, descriptor, context, *, projection, row_filter, max_tasks):
+            del value, descriptor, context, projection, row_filter, max_tasks
+            return []
+
+        def execute(self, task, context):
+            del task, context
+            return pa.schema([]), []
+
+    table_format = PublicPluginTableFormat(
+        catalog_name="fixture",
+        table_name="default.users",
+        format="parquet.dataset",
+        format_factory=lambda value, context: MissingCloseFormat(),
+        handle=handle,
+    )
+    with pytest.raises(ValueError, match="invalid plugin"):
+        table_format.get_schema()
+
+
 def test_public_format_validates_lazy_batch_schema_before_streaming() -> None:
     identifier = TableIdentifier(namespace=("default",), name="users")
     handle = TableHandle(
@@ -183,6 +230,9 @@ def test_public_format_validates_lazy_batch_schema_before_streaming() -> None:
     schema = pa.schema([pa.field("id", pa.int64())])
 
     class BadBatchFormat:
+        def close(self):
+            return None
+
         def schema(self, value, context):
             del value, context
             from dal_obscura_plugin_api import SchemaDescriptor
@@ -225,6 +275,9 @@ def test_public_format_stops_lazy_batches_when_context_is_cancelled(monkeypatch)
     cancelled = [False]
 
     class SlowFormat:
+        def close(self):
+            return None
+
         def schema(self, value, context):
             del value, context
             from dal_obscura_plugin_api import SchemaDescriptor
@@ -360,6 +413,9 @@ def test_public_format_rejects_factory_descriptor_mismatch() -> None:
     class WrongDescriptorFormat:
         descriptor = type("Descriptor", (), {"kind": "catalog", "plugin_id": "other"})()
 
+        def close(self):
+            return None
+
         def schema(self, value, context):
             del value, context
             from dal_obscura_plugin_api import SchemaDescriptor
@@ -402,6 +458,9 @@ def test_public_format_rejects_false_stable_id_claim() -> None:
     schema = pa.schema([pa.field("id", pa.int64())])
 
     class LyingFormat:
+        def close(self):
+            return None
+
         def schema(self, value, context):
             del value, context
             from dal_obscura_plugin_api import SchemaDescriptor
@@ -448,6 +507,9 @@ def test_public_format_rejects_schema_depth_before_plugin_execution() -> None:
     schema = pa.schema([pa.field("root", nested)])
 
     class DeepFormat:
+        def close(self):
+            return None
+
         def schema(self, value, context):
             del value, context
             from dal_obscura_plugin_api import SchemaDescriptor
