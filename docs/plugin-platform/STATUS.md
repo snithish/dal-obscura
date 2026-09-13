@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `2386a02` (unsafe schema-identity rejection;
+Implementation follow-up through `40d9cf7` (publication idempotency coverage;
+unsafe schema-identity rejection;
 production plugin-lock configuration;
 descriptor option type validation;
 asset binding plugin validation;
@@ -494,6 +495,19 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Remaining gaps: PostgreSQL barrier evidence, provider-derived IDs from live
   format metadata, and complete schema-evolution acceptance remain open.
   Pickle compatibility is unchanged.
+
+### X03 publication idempotency coverage — `40d9cf7`
+
+- State: implementing.
+- Behavior: the control-plane API now proves a committed publication replay
+  returns the original result, operation lookup is available to the authorized
+  actor, and reusing the same key with a different request body returns a 409
+  conflict.
+- Green evidence: `tests/interfaces/control_plane/test_api_publish_flow.py`
+  (1 passed), Ruff, and `git diff --check`.
+- Remaining gaps: PostgreSQL barrier interleavings, injected rollback points,
+  multi-process races, and full audit/operation transaction evidence remain
+  open. Pickle compatibility is unchanged.
 
 ### X07/X14 asset binding validation — `3c3709b`
 
