@@ -348,6 +348,35 @@ def test_static_descriptor_loader_reads_metadata_without_factory_import() -> Non
     assert descriptor.capabilities == frozenset({"nested"})
 
 
+def test_static_descriptor_loader_reads_setuptools_package_data_without_importing_factory() -> None:
+    descriptor_json = (
+        '{"kind":"catalog","plugin_id":"rest.catalog","api_version":"1",'
+        '"config_version":1,"capabilities":[],"config_schema":{"fields":[]},'
+        '"display_name":"REST Catalog"}'
+    )
+    requested: list[str] = []
+
+    def read_text(filename: str) -> str | None:
+        requested.append(filename)
+        return descriptor_json if filename == "rest_pkg/dal_obscura-plugin.json" else None
+
+    distribution = SimpleNamespace(name="rest-wheel", version="2.0.0", read_text=read_text)
+    entry = cast(
+        _Entry,
+        SimpleNamespace(
+            name="rest.catalog",
+            group="dal_obscura.catalogs.v1",
+            value="rest_pkg.catalog:factory",
+            dist=distribution,
+        ),
+    )
+
+    descriptor = load_static_plugin_descriptor(cast(metadata.EntryPoint, entry))
+
+    assert descriptor.plugin_id == "rest.catalog"
+    assert requested == ["dal_obscura-plugin.json", "rest_pkg/dal_obscura-plugin.json"]
+
+
 def test_static_descriptor_loader_selects_matching_descriptor_from_multi_kind_wheel() -> None:
     descriptor_json = (
         '{"descriptors":['

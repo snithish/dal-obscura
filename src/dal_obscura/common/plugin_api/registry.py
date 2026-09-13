@@ -20,6 +20,7 @@ ENTRY_POINT_GROUPS: dict[PluginKind, str] = {
 STATIC_DESCRIPTOR_FILENAME = "dal_obscura-plugin.json"
 MAX_STATIC_DESCRIPTOR_BYTES = 65_536
 _PLUGIN_ID = re.compile(r"[a-z][a-z0-9_.-]{0,63}\Z")
+_MODULE_PATH = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*\Z")
 
 
 class PluginAdmissionError(ValueError):
@@ -246,6 +247,16 @@ def load_static_plugin_descriptor(entry: metadata.EntryPoint) -> PluginDescripto
         raise PluginAdmissionError("Plugin provenance is unavailable")
     try:
         raw = distribution.read_text(STATIC_DESCRIPTOR_FILENAME)
+        if raw is None:
+            # setuptools package-data is conventionally stored beneath the
+            # entry-point's top-level package rather than at distribution root.
+            # Read only that deterministic package-local path; never inspect or
+            # import arbitrary paths supplied by plugin metadata.
+            module_path = str(entry.value).split(":", 1)[0]
+            if not _MODULE_PATH.fullmatch(module_path):
+                raise PluginAdmissionError("Plugin entry-point module is invalid")
+            package = module_path.split(".", 1)[0]
+            raw = distribution.read_text(f"{package}/{STATIC_DESCRIPTOR_FILENAME}")
     except (AttributeError, OSError, UnicodeError) as exc:
         raise PluginAdmissionError("Plugin static descriptor is unreadable") from exc
     if raw is None:
