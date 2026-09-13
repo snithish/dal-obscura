@@ -245,6 +245,14 @@ Follow-up `1e240c3` expands the recovery mapper evidence to all governed HTTP
 statuses (403, 404, 409, 422, 429, and 503); the UI lifecycle/schema/recovery
 test count is now 8.
 
+## Implementation update — 8f4957d (2026-09-14)
+
+- Packet / status / candidate commit / owner: N04/B06 and N05/B08 browser boundary partial / VERIFY / `8f4957d` / control-plane security middleware.
+- Observable behavior delivered: all responses now include `X-Frame-Options: DENY`, same-origin opener isolation, and a restrictive Permissions-Policy. HTTPS requests additionally receive one-year HSTS with subdomains; HTTP local development remains usable without an HSTS side effect.
+- Changed paths: `src/dal_obscura/control_plane/interfaces/api.py` and `tests/interfaces/control_plane/test_actor_auth.py`. No session, identity, pickle serializer, serialized class, payload, or import path changed.
+- Evidence: 34 actor/auth tests, changed-path Ruff, and `ty` checks passed, including an HTTPS TestClient assertion for HSTS.
+- Remaining N04/N05 work: hostile transport/DNS/private-address enforcement, credential redaction, cancellation/resource cleanup, live IdP/browser freshness and revocation journeys, and deployment network controls. Release remains HOLD.
+
 ## Evidence inherited, with limits
 
 The historical ledger reports Python/socket-enabled suite and PostgreSQL checks
