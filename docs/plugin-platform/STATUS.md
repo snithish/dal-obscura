@@ -42,6 +42,14 @@ their underlying functionality is wholly absent.
 - Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest packages/iceberg-rest-plugin/tests/test_rest_plugin.py tests/plugin_platform tests/interfaces/control_plane/test_plugins_api.py -q` — all collected tests passed; plugin Ruff check and format check passed; `ty check packages/iceberg-rest-plugin/src` passed. The timeout propagation test records a two-second execution budget being applied as a smaller `(connect, read)` pair.
 - Remaining N04/B06 work: real hostile local transport counters, redirect/DNS/private-address enforcement across metadata/data/delete destinations, cancellation that closes provider tasks, credential redaction scans, deployment network policy and live storage qualification. Release remains HOLD.
 
+## Implementation update — 0fd82d9 (2026-09-14)
+
+- Packet / status / candidate commit / owner: N05/B08 partial / VERIFY / `0fd82d9` / OIDC session routes.
+- Observable behavior delivered: configured post-login redirects are now constrained to the callback gateway origin and reject credentials, query strings, fragments, and missing hosts. A malformed or external destination fails with a safe 503 instead of redirecting a newly authenticated browser away from the deployment.
+- Changed paths: `control_plane/interfaces/routes/session.py` and its OIDC regression tests. No cookie, session, identity, bootstrap, pickle serializer, payload, or import path changed.
+- Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane/test_oidc_login.py -q` — 8 passed; changed-path Ruff and `ty` checks passed.
+- Remaining N05/B08 work: live OIDC code/PKCE browser journey, exact typed principal persistence, freshness/revocation and two-process evidence, secure cookie/CSP inspection, and supported-profile bootstrap retirement. Release remains HOLD.
+
 ## Implementation update — 8a615c3 (2026-09-14)
 
 - Packet / status / candidate commit / owner: N01/B01-B02 / VERIFY / `8a615c3` / toolchain and documentation.
