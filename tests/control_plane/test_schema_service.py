@@ -284,6 +284,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
     assert cast(list[dict[str, object]], result["fields"])[0]["name"] == "profile"
     assert closed == ["format", "catalog"]
 
+
     class ForgedHandleCatalog(PublicCatalog):
         def resolve_table(self, value, context):
             del value, context
@@ -326,6 +327,45 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
             ControlPlaneActor.for_platform_admin("admin"),
             plugin_registry=ForgedRegistry(),
         )
+
+
+def test_get_asset_schema_rejects_persisted_unknown_catalog_option_before_factory() -> None:
+    asset_id = uuid4()
+    store = _FakeStore(asset_id)
+    store.get_workspace_catalog = lambda context, name: {
+        "name": name,
+        "module": "fixture.catalog",
+        "revision": 1,
+        "options": {"uri": "https://catalog.example", "debug": True},
+    }
+    descriptor = PluginDescriptor(
+        kind="catalog",
+        plugin_id="fixture.catalog",
+        api_version="1",
+        config_version=1,
+        distribution="fixture",
+        version="1.0.0",
+        config_schema={"fields": [{"name": "uri", "required": True}]},
+    )
+    loaded = False
+
+    class Registry:
+        def admitted(self):
+            return {("catalog", "fixture.catalog"): descriptor}
+
+        def load(self, kind, plugin_id):
+            nonlocal loaded
+            loaded = True
+            raise AssertionError("unknown options must fail before factory loading")
+
+    with pytest.raises(ValidationFailure, match="unsupported fields"):
+        get_asset_schema(
+            store,  # type: ignore[arg-type]
+            asset_id,
+            ControlPlaneActor.for_platform_admin("admin"),
+            plugin_registry=Registry(),
+        )
+    assert loaded is False
 
 
 def test_legacy_iceberg_format_bridge_loads_external_catalog_handle(
