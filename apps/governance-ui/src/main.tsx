@@ -103,6 +103,9 @@ function App() {
   const searchTimer = useRef<number | undefined>(undefined);
   const managementEpoch = useRef(0);
   const connectionsEpoch = useRef(0);
+  const assetAbortController = useRef<AbortController | null>(null);
+  const managementAbortController = useRef<AbortController | null>(null);
+  const workspaceAbortController = useRef<AbortController | null>(null);
   const [logoutPending, setLogoutPending] = useState(false);
   useEffect(() => {
     void loadInitialWorkspace();
@@ -135,6 +138,9 @@ function App() {
 
   useEffect(() => () => {
     if (searchTimer.current !== undefined) window.clearTimeout(searchTimer.current);
+    assetAbortController.current?.abort();
+    managementAbortController.current?.abort();
+    workspaceAbortController.current?.abort();
   }, []);
 
   useEffect(() => {
@@ -155,6 +161,9 @@ function App() {
       loadEpoch.current += 1;
       inventoryEpoch.current += 1;
       managementEpoch.current += 1;
+      assetAbortController.current?.abort();
+      managementAbortController.current?.abort();
+      workspaceAbortController.current?.abort();
       clearPrivateState();
       setNotice("Your session expired or was revoked. Sign in again to continue.");
     };
@@ -179,18 +188,22 @@ function App() {
 
   async function loadManagement(destination: Page) {
     const epoch = ++managementEpoch.current;
+    managementAbortController.current?.abort();
+    const controller = new AbortController();
+    managementAbortController.current = controller;
     setManagementLoading(true);
     setManagementError("");
     try {
       let next: ManagementData = {};
-      if (destination === "changes") { const pageResult = await controlPlane.listHistoryPage({ limit: 50 }); next = { history: pageResult.items, historyNextCursor: pageResult.next_cursor }; }
-      if (destination === "activity") { const audit = await controlPlane.listAuditEventsPage({ limit: 50, ...auditFilters }); next = { history: await controlPlane.listHistory(), events: audit.items, eventsNextCursor: audit.next_cursor, summary: await controlPlane.getSummary(), observations: await controlPlane.getObservations() }; }
+      if (destination === "changes") { const pageResult = await controlPlane.listHistoryPage({ limit: 50, signal: controller.signal }); next = { history: pageResult.items, historyNextCursor: pageResult.next_cursor }; }
+      if (destination === "activity") { const audit = await controlPlane.listAuditEventsPage({ limit: 50, ...auditFilters, signal: controller.signal }); next = { history: await controlPlane.listHistory(controller.signal), events: audit.items, eventsNextCursor: audit.next_cursor, summary: await controlPlane.getSummary(controller.signal), observations: await controlPlane.getObservations(controller.signal) }; }
       if (destination === "connections") { const pluginData = await controlPlane.listPlugins(); next = { catalogs: await controlPlane.listCatalogs(), publications: session?.platform_admin ? await controlPlane.listWorkspacePublications() : [], plugins: pluginData.plugins, pluginStates: pluginData.states, pluginPairs: pluginData.pairs }; }
       if (destination === "settings") { const [runtime, providers, revision] = await Promise.all([controlPlane.getRuntimeSettings(), controlPlane.getAuthProviders(), controlPlane.getAuthProviderRevision()]); next = { runtime, providers, providerRevision: revision.revision, publications: session?.platform_admin ? await controlPlane.listWorkspacePublications() : [] }; }
       if (!isCurrentEpoch(epoch, managementEpoch.current)) return;
       setManagementData(next);
     } catch (error) {
       if (!isCurrentEpoch(epoch, managementEpoch.current)) return;
+      if (error instanceof DOMException && error.name === "AbortError") return;
       const status = (error as Error & { status?: number }).status;
       setManagementError(status === 403 ? "Your account can view the workspace, but it does not have permission to open this management view." : "This management view could not be loaded. The server may be unavailable or the session may have expired.");
     } finally {
@@ -240,12 +253,15 @@ function App() {
 
   async function loadInitialWorkspace() {
     const epoch = ++loadEpoch.current;
+    workspaceAbortController.current?.abort();
+    const controller = new AbortController();
+    workspaceAbortController.current = controller;
     setWorkspace("loading");
     try {
-      const loadedSession = await controlPlane.getSession();
+      const loadedSession = await controlPlane.getSession(controller.signal);
       if (epoch !== loadEpoch.current) return;
       setSession(loadedSession);
-      const loadedPage = await controlPlane.listAssetPage({ limit: 50 });
+      const loadedPage = await controlPlane.listAssetPage({ limit: 50, signal: controller.signal });
       const loaded = loadedPage.items;
       if (epoch !== loadEpoch.current) return;
       setAssets(loaded);
@@ -265,11 +281,12 @@ function App() {
       if (epoch !== loadEpoch.current) return;
       setWorkspace("ready");
       restorePostLoginHash();
-    } catch {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
       if (epoch !== loadEpoch.current) return;
       setWorkspace("unavailable");
       setSession(null);
-      const options = await controlPlane.getSessionOptions().catch(() => null);
+      const options = await controlPlane.getSessionOptions(controller.signal).catch(() => null);
       if (epoch !== loadEpoch.current) return;
       setSessionOptions(options);
       setAuthConfig(options?.oidc ?? await controlPlane.getUiAuthConfig().catch(() => null));
@@ -410,11 +427,14 @@ function App() {
     selectedDraftId?: string,
   ) {
     const epoch = inheritedEpoch ?? ++loadEpoch.current;
+    assetAbortController.current?.abort();
+    const controller = new AbortController();
+    assetAbortController.current = controller;
     try {
-      const [fullAsset, schema, history, grants, access] = await Promise.all([controlPlane.getAsset(assetId), controlPlane.getSchema(assetId), controlPlane.listAssetHistory(assetId).catch(() => []), controlPlane.listGrants(assetId).catch(() => []), controlPlane.getAssetAccess(assetId).catch(() => undefined)]);
+      const [fullAsset, schema, history, grants, access] = await Promise.all([controlPlane.getAsset(assetId, controller.signal), controlPlane.getSchema(assetId, controller.signal), controlPlane.listAssetHistory(assetId, controller.signal).catch(() => []), controlPlane.listGrants(assetId, controller.signal).catch(() => []), controlPlane.getAssetAccess(assetId, controller.signal).catch(() => undefined)]);
       if (epoch !== loadEpoch.current) return;
       fullAsset.schema = schema;
-      const draft = await controlPlane.getDraft(assetId, selectedDraftId);
+      const draft = await controlPlane.getDraft(assetId, selectedDraftId, controller.signal);
       if (epoch !== loadEpoch.current) return;
       const effectiveRules = draft?.rules ?? [];
       setManagementData((current) => ({ ...current, history, grants, access }));
@@ -422,7 +442,8 @@ function App() {
       draftEditEpoch.current += 1;
       setSelectedField(schema.fields[0]?.human_path ?? fullAsset.schema_fields[0]?.name ?? ""); setPreview(null); setSaveState("saved");
       setNotice(selectedDraftId ? `Loaded saved draft ${draft?.revision ?? 0} for read-only review.` : effectiveRules.length ? "Loaded your policy draft." : "No policy draft exists yet. Add a rule to begin authoring.");
-    } catch {
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
       if (inheritedEpoch !== undefined && epoch !== loadEpoch.current) return;
       setNotice("Could not load this asset. Your previous editor state remains unchanged.");
     }

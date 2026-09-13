@@ -426,6 +426,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: the API regression suite now verifies an owner receives exactly `read` and `edit`, while `publish` and `grant` remain denied until explicitly delegated.
 - Verification: actor-auth and asset API suites pass.
 
+## 2026-09-13 — N07 abortable read transport
+
+- Scope: cancellation of superseded authenticated UI reads.
+- Observable behavior delivered: the single API transport accepts `AbortSignal`; initial workspace, asset detail/schema/access/draft/history/grant reads, and management history/audit/summary/observation reads now receive request signals. Replacing a load, logging out, or unmounting aborts the prior request before the next state can render; stale epoch checks remain as a second identity fence.
+- Verification: UI TypeScript compilation, Vite production build, and all UI tests pass.
+- Remaining gate: the plan still calls for a TanStack Query cache migration and rendered deferred-response coverage; those are not claimed complete by this slice.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.

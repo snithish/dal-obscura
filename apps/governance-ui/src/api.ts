@@ -295,27 +295,27 @@ export const controlPlane = {
     }
     window.location.assign("/auth/login");
   },
-  getSession: () => request<Session>("/v1/session"),
-  getUiAuthConfig: () => request<UiAuthConfig>("/v1/ui-auth-config"),
-  getSessionOptions: () => request<SessionOptions>("/v1/session/options"),
+  getSession: (signal?: AbortSignal) => request<Session>("/v1/session", { signal }),
+  getUiAuthConfig: (signal?: AbortSignal) => request<UiAuthConfig>("/v1/ui-auth-config", { signal }),
+  getSessionOptions: (signal?: AbortSignal) => request<SessionOptions>("/v1/session/options", { signal }),
   bootstrapLogin: (token: string) => request<{ authenticated: true }>("/v1/session/bootstrap", {
     method: "POST",
     headers: { authorization: `Bearer ${token}` },
   }),
   logout: () => request<{ authenticated: false }>("/v1/logout", { method: "POST" }),
   listAssets: async () => (await request<Asset[]>("/v1/assets")).map(normalizeAsset),
-  listAssetPage: async (params: { limit?: number; cursor?: string; search?: string } = {}) => {
+  listAssetPage: async (params: { limit?: number; cursor?: string; search?: string; signal?: AbortSignal } = {}) => {
     const query = new URLSearchParams();
     if (params.limit !== undefined) query.set("limit", String(params.limit));
     if (params.cursor) query.set("cursor", params.cursor);
     if (params.search) query.set("search", params.search);
     const suffix = query.toString() ? `?${query.toString()}` : "";
-    const page = await request<AssetPage>(`/v1/assets/page${suffix}`);
+    const page = await request<AssetPage>(`/v1/assets/page${suffix}`, { signal: params.signal });
     return { ...page, items: page.items.map(normalizeAsset) };
   },
-  getAsset: async (assetId: string) => normalizeAsset(await request<Asset>(`/v1/assets/${assetId}`)),
-  getAssetAccess: (assetId: string) => request<AssetAccess>(`/v1/assets/${assetId}/access`),
-  listGrants: (assetId: string) => request<AssetGrant[]>(`/v1/assets/${assetId}/grants`),
+  getAsset: async (assetId: string, signal?: AbortSignal) => normalizeAsset(await request<Asset>(`/v1/assets/${assetId}`, { signal })),
+  getAssetAccess: (assetId: string, signal?: AbortSignal) => request<AssetAccess>(`/v1/assets/${assetId}/access`, { signal }),
+  listGrants: (assetId: string, signal?: AbortSignal) => request<AssetGrant[]>(`/v1/assets/${assetId}/grants`, { signal }),
   saveOwners: (assetId: string, owners: string[], expectedRevision?: number) => request<{ asset_id: string; owners: string[] }>(`/v1/assets/${assetId}/owners`, {
     method: "PUT",
     body: JSON.stringify({ owners, ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }) }),
@@ -324,17 +324,17 @@ export const controlPlane = {
     method: "PUT",
     body: JSON.stringify({ grants, ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }) }),
   }),
-  getSchema: (assetId: string) => request<AssetSchema>(`/v1/assets/${assetId}/schema`),
-  listHistory: () => request<PolicyVersion[]>("/v1/policy-versions"),
-  listHistoryPage: async (params: { limit?: number; cursor?: string } = {}) => {
+  getSchema: (assetId: string, signal?: AbortSignal) => request<AssetSchema>(`/v1/assets/${assetId}/schema`, { signal }),
+  listHistory: (signal?: AbortSignal) => request<PolicyVersion[]>("/v1/policy-versions", { signal }),
+  listHistoryPage: async (params: { limit?: number; cursor?: string; signal?: AbortSignal } = {}) => {
     const query = new URLSearchParams();
     if (params.limit !== undefined) query.set("limit", String(params.limit));
     if (params.cursor) query.set("cursor", params.cursor);
     const suffix = query.toString() ? `?${query.toString()}` : "";
-    return request<PolicyVersionPage>(`/v1/policy-versions/page${suffix}`);
+    return request<PolicyVersionPage>(`/v1/policy-versions/page${suffix}`, { signal: params.signal });
   },
   listAuditEvents: (assetId?: string) => request<AuditEvent[]>("/v1/audit/events" + (assetId ? "?asset_id=" + encodeURIComponent(assetId) : "")),
-  listAuditEventsPage: async (params: { limit?: number; cursor?: string; assetId?: string; actor?: string; action?: string; resourceType?: string; outcome?: string; correlationId?: string; createdAfter?: string; createdBefore?: string } = {}) => {
+  listAuditEventsPage: async (params: { limit?: number; cursor?: string; assetId?: string; actor?: string; action?: string; resourceType?: string; outcome?: string; correlationId?: string; createdAfter?: string; createdBefore?: string; signal?: AbortSignal } = {}) => {
     const query = new URLSearchParams();
     if (params.limit !== undefined) query.set("limit", String(params.limit));
     if (params.cursor) query.set("cursor", params.cursor);
@@ -347,9 +347,9 @@ export const controlPlane = {
     if (params.createdAfter) query.set("created_after", params.createdAfter);
     if (params.createdBefore) query.set("created_before", params.createdBefore);
     const suffix = query.toString() ? `?${query.toString()}` : "";
-    return request<AuditEventPage>(`/v1/audit/events/page${suffix}`);
+    return request<AuditEventPage>(`/v1/audit/events/page${suffix}`, { signal: params.signal });
   },
-  listAssetHistory: (assetId: string) => request<PolicyVersion[]>(`/v1/assets/${assetId}/policy-versions`),
+  listAssetHistory: (assetId: string, signal?: AbortSignal) => request<PolicyVersion[]>(`/v1/assets/${assetId}/policy-versions`, { signal }),
   getPublicationOperation: (assetId: string, idempotencyKey: string) => request<{ id: string; status: string; result: { asset_id: string; policy_version: number } }>(`/v1/assets/${assetId}/policy-operations/${encodeURIComponent(idempotencyKey)}`),
   getPolicyVersion: (assetId: string, policyVersion: number) => request<PolicyVersionDetail>(`/v1/assets/${assetId}/policy-versions/${policyVersion}`),
   restorePolicyVersion: (assetId: string, policyVersion: number, expectedRevision: number) =>
@@ -374,8 +374,8 @@ export const controlPlane = {
     body: JSON.stringify({ providers, ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }) }),
   }),
   listPlugins: () => request<{ plugins: PluginDescriptor[]; states: PluginState[]; pairs: PluginPair[] }>("/v1/plugins"),
-  getSummary: () => request<WorkspaceSummary>("/v1/workspace/summary"),
-  getObservations: () => request<WorkspaceObservations>("/v1/workspace/observations"),
+  getSummary: (signal?: AbortSignal) => request<WorkspaceSummary>("/v1/workspace/summary", { signal }),
+  getObservations: (signal?: AbortSignal) => request<WorkspaceObservations>("/v1/workspace/observations", { signal }),
   saveCatalog: (name: string, module: string, options: Record<string, unknown>, expectedRevision?: number) => request<{ id: string; name: string }>(`/v1/catalogs/${encodeURIComponent(name)}`, {
     method: "PUT",
     body: JSON.stringify({ module, options, ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }) }),
@@ -393,7 +393,7 @@ export const controlPlane = {
     headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
     body: JSON.stringify({ ...(draftId ? { draft_id: draftId } : {}), ...(expectedDraftRevision === undefined ? {} : { expected_draft_revision: expectedDraftRevision }), ...(reviewToken ? { review_token: reviewToken } : {}) }),
   }),
-  getDraft: (assetId: string, draftId?: string) => request<PolicyDraft>(draftId ? `/v1/assets/${assetId}/draft/${encodeURIComponent(draftId)}` : `/v1/assets/${assetId}/draft`),
+  getDraft: (assetId: string, draftId?: string, signal?: AbortSignal) => request<PolicyDraft>(draftId ? `/v1/assets/${assetId}/draft/${encodeURIComponent(draftId)}` : `/v1/assets/${assetId}/draft`, { signal }),
   saveDraft: (assetId: string, expectedRevision: number, rules: PolicyRule[]) =>
     request<PolicyDraft>(`/v1/assets/${assetId}/draft`, {
       method: "PUT",
