@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `86e9f01` (typed path budgets;
+Implementation follow-up through `c43b15e` (legacy broad-grant admission guard;
+typed path budgets;
 quoted JSON path boundaries;
 reserved identity namespaces;
 quoted collection path parsing;
@@ -374,6 +375,9 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   brackets and escaped characters remain addressable without delimiter bugs.
   Typed field paths now enforce shared segment-count, field-name length, and
   printable-text limits before schema resolution or transport execution.
+  Legacy published policies without persisted schema admission now fail closed
+  when they contain wildcard, mask, or nested-parent selectors, preventing
+  schema additions from expanding access.
   Both service composition roots now accept an optional operator-mounted
   `DAL_OBSCURA_PLUGIN_LOCK_FILE`; its bounded parser rejects symlinks,
   group/world-writable files, malformed identities, duplicates, and incomplete
@@ -609,6 +613,18 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Remaining gaps: Flight/browser nested-path evidence and full schema-boundary
   acceptance remain open; sandboxed Flight socket tests remain environment
   restricted.
+
+### X06 legacy broad-grant admission guard — `c43b15e`
+
+- State: implementing.
+- Behavior: published generations lacking schema admission reject wildcard and
+  nested-parent policy selectors before serving reads; scalar explicit selectors
+  retain legacy readability. This prevents implicit access expansion while old
+  rows await migration or republish.
+- Green evidence: published-config suite (27 passed), Ruff, Ty, and
+  `git diff --check`.
+- Remaining gaps: PostgreSQL migration evidence, live schema evolution, and
+  consumer/browser qualification remain open.
 
 ### X03 direct mutation row locks — `165015f`
 
