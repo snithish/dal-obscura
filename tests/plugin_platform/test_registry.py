@@ -31,20 +31,21 @@ class _EntryPoints:
 
 def _entry(name: str, group: str, distribution: str = "plugin-wheel", version: str = "1.2.3"):
     loaded = {"name": name}
-    return cast(_Entry, SimpleNamespace(
-        name=name,
-        group=group,
-        dist=SimpleNamespace(name=distribution, version=version),
-        load=lambda: loaded,
-    ))
+    return cast(
+        _Entry,
+        SimpleNamespace(
+            name=name,
+            group=group,
+            dist=SimpleNamespace(name=distribution, version=version),
+            load=lambda: loaded,
+        ),
+    )
 
 
 def test_discovery_does_not_import_unapproved_entry_points() -> None:
     registry = PluginRegistry(
         allowlist={},
-        entry_points_fn=lambda: _EntryPoints(
-            [_entry("unapproved", "dal_obscura.catalogs.v1")]
-        ),
+        entry_points_fn=lambda: _EntryPoints([_entry("unapproved", "dal_obscura.catalogs.v1")]),
         factory_loader=lambda _: pytest.fail("unapproved factory must not load"),
     )
 
@@ -78,9 +79,7 @@ def test_admitted_entry_point_loads_only_after_lock_match() -> None:
 def test_unapproved_entry_point_cannot_be_loaded_on_request() -> None:
     registry = PluginRegistry(
         allowlist={},
-        entry_points_fn=lambda: _EntryPoints(
-            [_entry("unapproved", "dal_obscura.catalogs.v1")]
-        ),
+        entry_points_fn=lambda: _EntryPoints([_entry("unapproved", "dal_obscura.catalogs.v1")]),
         factory_loader=lambda _: pytest.fail("unapproved factory must not load"),
     )
 
@@ -91,9 +90,7 @@ def test_unapproved_entry_point_cannot_be_loaded_on_request() -> None:
 def test_lock_mismatch_and_duplicate_ids_fail_closed() -> None:
     mismatched = PluginRegistry(
         allowlist={("catalog", "iceberg.sql"): ("plugin-wheel", "9.9.9", "1")},
-        entry_points_fn=lambda: _EntryPoints(
-            [_entry("iceberg.sql", "dal_obscura.catalogs.v1")]
-        ),
+        entry_points_fn=lambda: _EntryPoints([_entry("iceberg.sql", "dal_obscura.catalogs.v1")]),
     )
     with pytest.raises(PluginAdmissionError, match="lock mismatch"):
         mismatched.discover()
@@ -206,9 +203,7 @@ def test_status_report_distinguishes_enabled_missing_and_incompatible_without_im
 
     registry.reload()
     entries.append(_entry("wrong", "dal_obscura.catalogs.v1"))
-    statuses = {
-        row["plugin_id"]: row["status"] for row in registry.status_report()
-    }
+    statuses = {row["plugin_id"]: row["status"] for row in registry.status_report()}
 
     assert statuses == {
         "enabled": "enabled",
@@ -226,9 +221,10 @@ def test_plugin_lifecycle_draining_blocks_new_admissions_and_is_reported() -> No
     )
     registry.reload()
 
-    assert registry.set_lifecycle(
-        "catalog", "drainable", PluginLifecycleState.DRAINING
-    ) is PluginLifecycleState.DRAINING
+    assert (
+        registry.set_lifecycle("catalog", "drainable", PluginLifecycleState.DRAINING)
+        is PluginLifecycleState.DRAINING
+    )
     with pytest.raises(PluginAdmissionError, match="draining"):
         registry.load("catalog", "drainable")
     assert registry.status_report() == (
@@ -239,9 +235,10 @@ def test_plugin_lifecycle_draining_blocks_new_admissions_and_is_reported() -> No
             "lifecycle": "draining",
         },
     )
-    assert registry.set_lifecycle(
-        "catalog", "drainable", PluginLifecycleState.REVOKED
-    ) is PluginLifecycleState.REVOKED
+    assert (
+        registry.set_lifecycle("catalog", "drainable", PluginLifecycleState.REVOKED)
+        is PluginLifecycleState.REVOKED
+    )
     with pytest.raises(PluginLifecycleError):
         registry.set_lifecycle("catalog", "drainable", PluginLifecycleState.ENABLED)
 
@@ -252,9 +249,10 @@ def test_revoked_plugin_can_only_be_removed() -> None:
         entry_points_fn=lambda: _EntryPoints([]),
     )
     registry.set_lifecycle("catalog", "revoked", PluginLifecycleState.REVOKED)
-    assert registry.set_lifecycle(
-        "catalog", "revoked", PluginLifecycleState.REMOVED
-    ) is PluginLifecycleState.REMOVED
+    assert (
+        registry.set_lifecycle("catalog", "revoked", PluginLifecycleState.REMOVED)
+        is PluginLifecycleState.REMOVED
+    )
     with pytest.raises(PluginAdmissionError, match="removed"):
         registry.load("catalog", "revoked")
 
@@ -420,9 +418,9 @@ def test_static_descriptor_loader_reads_metadata_without_factory_import() -> Non
     distribution = SimpleNamespace(
         name="rest-wheel",
         version="2.0.0",
-        read_text=lambda filename: descriptor_json
-        if filename == "dal_obscura-plugin.json"
-        else None,
+        read_text=lambda filename: (
+            descriptor_json if filename == "dal_obscura-plugin.json" else None
+        ),
     )
     entry = cast(
         _Entry,
@@ -478,7 +476,7 @@ def test_static_descriptor_loader_selects_matching_descriptor_from_multi_kind_wh
         '"config_version":1,"display_name":"Manifest"},'
         '{"kind":"table_format","plugin_id":"parquet.dataset",'
         '"api_version":"1","config_version":1,"display_name":"Parquet"}'
-        ']}'
+        "]}"
     )
     distribution = SimpleNamespace(
         name="manifest-wheel",
@@ -506,8 +504,7 @@ def test_static_descriptor_loader_rejects_identity_mismatch() -> None:
         name="rest-wheel",
         version="2.0.0",
         read_text=lambda _: (
-            '{"kind":"catalog","plugin_id":"other","api_version":"1",'
-            '"config_version":1}'
+            '{"kind":"catalog","plugin_id":"other","api_version":"1","config_version":1}'
         ),
     )
     entry = cast(

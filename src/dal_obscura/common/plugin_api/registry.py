@@ -83,8 +83,7 @@ class PluginRegistry:
             lifecycle = self._lifecycle.get(key, PluginLifecycleState.ENABLED)
             if lifecycle is not PluginLifecycleState.ENABLED:
                 raise PluginAdmissionError(
-                    f"Plugin is {lifecycle.value}; new admissions are disabled: "
-                    f"{kind}:{plugin_id}"
+                    f"Plugin is {lifecycle.value}; new admissions are disabled: {kind}:{plugin_id}"
                 )
             entry = self._snapshot_entries.get(key)
             builtin = self._snapshot_builtins.get(key)
@@ -189,9 +188,8 @@ class PluginRegistry:
                 "status": status,
             }
             if (
-                (key in admitted or key in self._builtins)
-                and lifecycle is not PluginLifecycleState.ENABLED
-            ):
+                key in admitted or key in self._builtins
+            ) and lifecycle is not PluginLifecycleState.ENABLED:
                 row["lifecycle"] = lifecycle.value
             if reason is not None:
                 row["reason"] = reason
@@ -201,9 +199,7 @@ class PluginRegistry:
     def _select(self, group: str) -> list[metadata.EntryPoint]:
         points: Any = self._entry_points_fn()
         selected = (
-            points.select(group=group)
-            if hasattr(points, "select")
-            else points.get(group, ())
+            points.select(group=group) if hasattr(points, "select") else points.get(group, ())
         )
         return list(cast(Any, selected))
 
