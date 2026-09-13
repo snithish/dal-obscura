@@ -225,6 +225,14 @@ is recorded explicitly; it is never PASS or a waived skip.
 - Evidence: 18 JWKS adapter tests, changed-path Ruff, and `ty` checks passed.
 - Remaining N04/N05 work: hostile local transport counters, DNS/private-address policy, credential redaction, cancellation/resource cleanup, live IdP/browser freshness and revocation journeys, and deployment network controls. Release remains HOLD.
 
+## Implementation update — bb41307 (2026-09-14)
+
+- Packet / status / candidate commit / owner: N06/B09 and N09/B13 navigation partial / VERIFY / `bb41307` / governance UI.
+- Observable behavior delivered: asset tab and policy-version selections now create same-origin browser history entries. Back/forward events restore the typed tab/version state, and asset deep-link changes reload the selected asset and draft through the existing epoch and cancellation fences. Hash navigation remains guarded by the unsaved-change prompt.
+- Changed paths: `apps/governance-ui/src/main.tsx` and `apps/governance-ui/src/components/AssetWorkspace.tsx`. No backend, session, pickle serializer, serialized class, payload, or import path changed.
+- Evidence: direct UI TypeScript build, Vite production build (276.45 kB JavaScript / 83.43 kB gzip), all 6 UI lifecycle/schema tests, and `git diff --check` passed.
+- Remaining N06/N09 work: live browser back/refresh evidence, accessible primitive/icon system, responsive visual review, CSP/axe and keyboard/screen-reader evidence, and live review/publication gates. Release remains HOLD.
+
 ## Evidence inherited, with limits
 
 The historical ledger reports Python/socket-enabled suite and PostgreSQL checks
