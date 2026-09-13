@@ -92,6 +92,35 @@ def test_valid_keycloak_like_access_token_authenticates():
     assert principal.attributes == {}
 
 
+def test_preserves_trailing_slash_in_exact_issuer_comparison():
+    private_key, jwk = _rsa_key_pair("kid-1")
+    issuer = f"{ISSUER}/"
+    provider = OidcJwksIdentityProvider(
+        issuer=issuer,
+        audience=AUDIENCE,
+        jwks_url="https://keycloak.example.test/certs",
+        jwks_fetcher=lambda _url: {"keys": [jwk]},
+    )
+
+    principal = provider.authenticate(
+        _auth_request(_token(private_key, kid="kid-1", issuer=issuer))
+    )
+
+    assert principal.issuer == issuer
+
+
+def test_oidc_discovery_does_not_double_append_issuer_slash():
+    requested: list[str] = []
+
+    def fetcher(url: str):
+        requested.append(url)
+        return {"jwks_uri": "https://keycloak.example.test/certs"}
+
+    OidcJwksIdentityProvider(issuer=f"{ISSUER}/", jwks_fetcher=fetcher)
+
+    assert requested == [f"{ISSUER}/.well-known/openid-configuration"]
+
+
 def test_ignores_non_signing_jwks_entries():
     private_key, jwk = _rsa_key_pair("signing-kid")
     encryption_jwk = {**jwk, "kid": "encryption-kid", "use": "enc", "alg": "RSA-OAEP"}

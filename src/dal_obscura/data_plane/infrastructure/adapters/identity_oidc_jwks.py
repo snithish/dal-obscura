@@ -72,7 +72,11 @@ class OidcJwksIdentityProvider:
             raise ValueError("JWKS refresh interval must be positive")
         if max_jwks_keys <= 0:
             raise ValueError("JWKS key limit must be positive")
-        normalized_issuer = issuer.rstrip("/")
+        if not isinstance(issuer, str) or not issuer.strip():
+            raise ValueError("OIDC issuer must be a non-empty URL")
+        # Preserve the configured issuer exactly for JWT claim comparison.
+        # Trailing slashes are issuer identity, not cosmetic formatting.
+        normalized_issuer = issuer.strip()
         static_jwks = _load_static_jwks(jwks, jwks_file)
         if static_jwks is not None:
             resolved_jwks_url = jwks_url or ""
@@ -244,7 +248,7 @@ def _load_static_jwks(jwks: JsonObject | None, jwks_file: str | None) -> JsonObj
 
 def _discover_jwks_url(issuer: str, fetcher: JsonFetcher | None) -> str:
     loader = fetcher or _fetch_json
-    metadata = loader(f"{issuer}/.well-known/openid-configuration")
+    metadata = loader(f"{issuer.rstrip('/')}/.well-known/openid-configuration")
     jwks_url = metadata.get("jwks_uri")
     if not isinstance(jwks_url, str) or not jwks_url.strip():
         raise ValueError("OIDC discovery response did not include jwks_uri")
