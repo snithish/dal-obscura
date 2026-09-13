@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `0bf6b1b` (forged descriptor regression;
+Implementation follow-up through `ebf71b6` (operator plugin-lock startup loading;
+forged descriptor regression;
 control-plane descriptor identity checks;
 control-plane built-in registry startup;
 control-plane schema/evaluation plugin
@@ -318,6 +319,10 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   authoring use the same registry boundary as the data plane.
   Control-plane schema discovery also verifies each returned catalog and
   table-format descriptor against the admitted kind/ID before provider work.
+  Both service composition roots now accept an optional operator-mounted
+  `DAL_OBSCURA_PLUGIN_LOCK_FILE`; its bounded parser rejects symlinks,
+  group/world-writable files, malformed identities, duplicates, and incomplete
+  five-part locks before any factory import.
   Legacy Iceberg discovery now rejects malformed, non-printable, or oversized
   namespace/table segments instead of coercing them into new logical identities.
   Additive migration `20260913_0014` persists qualified catalog/format identities
@@ -567,6 +572,20 @@ providers before Phase A's security/correctness prerequisites are accepted.
   Ty, and `git diff --check`.
 - Remaining gaps: external wheel/provider evidence and live PostgreSQL/browser
   acceptance remain open. Pickle compatibility is unchanged.
+
+### X12/X13 operator plugin-lock loading — `ebf71b6`
+
+- State: implementing.
+- Behavior: both control-plane and data-plane startup accept an optional
+  `DAL_OBSCURA_PLUGIN_LOCK_FILE` and pass its validated five-part locks into the
+  immutable registry alongside trusted built-ins. The parser is bounded, refuses
+  symlink or group/world-writable files, rejects malformed/duplicate entries, and
+  performs no factory imports while reading the lock.
+- Green evidence: lock-file, built-in registry, and control-plane CLI suites
+  (25 passed), Ruff, Ty, and `git diff --check`.
+- Remaining gaps: clean wheel/artifact provenance, production policy requiring a
+  lock, live PostgreSQL/provider/browser acceptance, and full data-plane external
+  plugin execution remain open. Pickle compatibility is unchanged.
 
 ### X16 REST namespace lifecycle — `8c73c41`
 
