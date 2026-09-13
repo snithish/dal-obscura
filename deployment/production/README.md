@@ -73,7 +73,8 @@ readiness, or synthetic read check fails.
 
 Use the checked-in helper with an `age` recipient held by the operator backup
 system. The database URL and recipient are read from the environment; backups
-are created with mode `0600`, written atomically, and are never overwritten:
+and their SHA-256 sidecars are created with mode `0600`, written atomically,
+and are never overwritten:
 
 ```bash
 DAL_OBSCURA_DATABASE_URL="$DAL_OBSCURA_CONTROL_PLANE_DATABASE_URL" \
@@ -81,8 +82,9 @@ DAL_OBSCURA_BACKUP_RECIPIENT="age1..." \
   ../../scripts/backup_postgres.sh /secure/backup/dal-obscura-$(date +%Y%m%d%H%M%S).dump.age
 ```
 
-Restore only into an isolated PostgreSQL instance with ingress stopped. The
-helper decrypts to a mode-`0600` temporary file, restores in one transaction,
+Restore only into an isolated PostgreSQL instance with ingress stopped. When a
+`OUTPUT.age.sha256` sidecar is present, the helper verifies it before decrypting;
+it then decrypts to a mode-`0600` temporary file and restores in one transaction,
 and revokes restored sessions, login transactions, and tickets before returning:
 
 ```bash
