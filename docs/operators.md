@@ -11,6 +11,7 @@ For incident-style steps, use the [Operator Runbook](operators-runbook.md).
 - [Components](#components)
 - [Required Decisions](#required-decisions)
 - [Common Environment Variables](#common-environment-variables)
+- [Identity-Key Migration](#identity-key-migration)
 - [Startup Order](#startup-order)
 - [Health And Readiness](#health-and-readiness)
 - [Operational Risks](#operational-risks)
@@ -105,6 +106,35 @@ must mount the same file; a missing, changed, or incompatible lock fails startup
 before any factory import.
 
 See [Security](security.md) and the runnable [OIDC example](../examples/auth/keycloak-oidc/README.md).
+
+## Identity-Key Migration
+
+Federated owner, grant, draft, audit, and session records use the exact OIDC
+issuer together with an escaped principal value. Existing databases created
+before that encoding was introduced must be converted explicitly during a
+maintenance window. The service does not perform a runtime fallback.
+
+Preview the conversion against the same database used by the control plane:
+
+```sh
+DAL_OBSCURA_DATABASE_URL='postgresql+psycopg://...' \
+  uv run dal-obscura-migrate identity-keys
+```
+
+Proceed only when the JSON report has `safe_to_apply: true` and both
+`unresolved` and `ambiguous` are empty. Stop and obtain operator reapproval for
+any value in either list. Apply the reviewed conversion in one transaction:
+
+```sh
+DAL_OBSCURA_DATABASE_URL='postgresql+psycopg://...' \
+  uv run dal-obscura-migrate identity-keys --apply
+```
+
+Take a database backup first, stop or drain control-plane writers, and run the
+preview again after the write lock is in place. The command changes only text
+and JSON identity fields; it does not delete customer data and does not read or
+rewrite the protected pickle ticket payload boundary. A failed apply rolls back
+the transaction. Run `dal-obscura-migrate check` before restarting services.
 
 ## Startup Order
 
