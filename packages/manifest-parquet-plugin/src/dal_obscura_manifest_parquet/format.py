@@ -104,6 +104,7 @@ class ParquetDatasetFormat:
         columns = _projected_columns(self._schema, projection)
         tasks: list[ParquetRowGroupTask] = []
         for relative_path in self._files:
+            _check_context(context)
             path = _safe_member(self._root, relative_path)
             try:
                 parquet_file = pq.ParquetFile(path)
@@ -111,6 +112,7 @@ class ParquetDatasetFormat:
                 raise ValueError("manifest Parquet member is unreadable") from exc
             _validate_file_schema(parquet_file.schema_arrow, self._schema)
             for row_group in range(parquet_file.num_row_groups):
+                _check_context(context)
                 tasks.append(ParquetRowGroupTask(relative_path, row_group, columns))
                 if len(tasks) > max_tasks:
                     raise ValueError("Parquet dataset requires more tasks than allowed")

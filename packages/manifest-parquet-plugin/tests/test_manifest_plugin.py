@@ -136,6 +136,24 @@ def test_manifest_rejects_symlinked_member(tmp_path):
         )
 
 
+def test_manifest_and_format_reject_expired_context(tmp_path):
+    root, manifest, _table = _write_fixture(tmp_path)
+    expired = ExecutionContext(
+        deadline=datetime.now(timezone.utc) - timedelta(seconds=1),
+        correlation_id="expired",
+    )
+    with pytest.raises(TimeoutError, match="deadline"):
+        ManifestCatalog(
+            CatalogConfig(
+                plugin_id="manifest",
+                instance_id="fixture",
+                revision=1,
+                options={"root": str(root), "manifest_path": str(manifest)},
+            ),
+            expired,
+        )
+
+
 def test_parquet_format_accepts_wildcard_projection(tmp_path):
     root, manifest, table = _write_fixture(tmp_path)
     context = _context()

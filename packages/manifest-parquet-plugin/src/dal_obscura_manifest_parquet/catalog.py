@@ -6,6 +6,7 @@ import base64
 import hashlib
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 import pyarrow as pa
@@ -288,5 +289,7 @@ def _reject_symlink_components(root: Path, candidate: Path) -> None:
 def _check_context(context: ExecutionContext) -> None:
     if context.deadline.tzinfo is None or context.deadline.utcoffset() is None:
         raise ValueError("execution deadline must be timezone-aware")
+    if context.deadline <= datetime.now(context.deadline.tzinfo):
+        raise TimeoutError("execution context deadline has expired")
     if context.cancel_check is not None and context.cancel_check():
         raise RuntimeError("execution context was cancelled")
