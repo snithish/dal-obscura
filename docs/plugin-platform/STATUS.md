@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `7791809` (typed field-ID range;
+Implementation follow-up through `0dbfc40` (bounded synthetic Arrow IDs;
+serialized browser/OIDC auth state;
 manifest standalone boundary;
 legacy broad-grant admission guard;
 typed path budgets;
@@ -513,6 +514,29 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
 Next implementation action: continue X03 with PostgreSQL barrier/CAS evidence and
 then complete X06 provider-derived and collection field identity rules. Do not add new
 providers before Phase A's security/correctness prerequisites are accepted.
+
+### X05 bounded synthetic Arrow field IDs — `0dbfc40`
+
+- State: implemented-unverified.
+- Behavior: deterministic synthetic IDs emitted for nested Arrow schema paths now
+  fit the shared nonnegative 32-bit `FieldPath` contract. This prevents valid
+  schemas without provider IDs from failing during schema-path serialization.
+- Green evidence: schema service and schema API suites passed (16), Ruff and
+  `git diff --check` passed.
+- Remaining gaps: provider-backed schema evolution, live PostgreSQL barriers,
+  external wheels, browser, consumer, recovery, and release gates remain open.
+
+### X19 serialized browser and OIDC state — `ac38f89`
+
+- State: implementing.
+- Behavior: browser-session resolve/revoke and one-time OIDC transaction consume
+  now lock their rows for the transaction, preventing concurrent callback replay
+  and a request from refreshing a session after logout across control-plane
+  workers.
+- Green evidence: browser-session and OIDC route suites passed (8), Ruff and
+  `git diff --check` passed.
+- Remaining gaps: real PostgreSQL interleavings, live IdP/TLS, browser evidence,
+  recovery, and production deployment gates remain open.
 
 ### X13 external-catalog Iceberg schema bridge — `5b152aa`
 
@@ -2388,23 +2412,20 @@ running-process probe.
 
 ## Latest evidence entry
 
-Packet/slice: X04/X06 quoted collection path parsing and schema identity boundary
+Packet/slice: X05/X06/X19 bounded schema and serialized browser/OIDC state
 State: implementing
-Baseline and resulting commit: `5208eee` -> `f0731dd`
-Files/contracts changed: `src/dal_obscura/common/query_planning/field_paths.py`,
-`src/dal_obscura/common/schema_identity.py`,
-`src/dal_obscura/control_plane/infrastructure/repositories.py`,
-`packages/manifest-parquet-plugin/src/dal_obscura_manifest_parquet/catalog.py`,
-focused path/schema/manifest tests, and this ledger
-Findings addressed (R IDs): R04/R05/R09 nested path collisions and bounded plugin identities
-Acceptance cases/test node IDs (A IDs): A06/A08 local path and schema-drift subcases
-Failing behavior before the change: quoted reserved field names were parsed as
-collection markers, and provider IDs were accepted without a shared bounded vocabulary
-Implementation behavior after the change: quoted names round-trip as field segments;
-provider IDs are bounded and canonicalized before review/data-plane comparison
-Exact commands and exit results: governed aggregate suite passed; field-path suite
-(20), manifest suite (14), Ruff, Ty, UI build/lifecycle checks, and `git diff --check`
-passed
+Baseline and resulting commits: `3ba59bb` -> `0dbfc40`, `ac38f89`
+Files/contracts changed: `src/dal_obscura/control_plane/application/schema_service.py`,
+`src/dal_obscura/control_plane/infrastructure/session_store.py`, focused schema,
+browser-session, and OIDC route tests, and this ledger
+Findings addressed (R IDs): R04/R05 nested identity bounds; R13 concurrent auth replay
+Acceptance cases/test node IDs (A IDs): A06/A08 schema subcases; A12 login/replay subcases
+Failing behavior before the change: synthetic nested Arrow IDs could exceed the 32-bit
+path contract; concurrent callbacks and logout/session refresh were not row-serialized
+Implementation behavior after the change: synthetic IDs are bounded deterministically;
+session and one-time login rows are locked during read-modify-write operations
+Exact commands and exit results: schema/API suite (16), browser/OIDC suite (8), governed
+aggregate suite, Ruff, UI build/lifecycle checks, and `git diff --check` passed
 Environment/dependency and wheel/image/plugin-lock identities: Darwin 25.6.0 arm64;
 no external wheel or production image was available in this workspace
 Evidence files or CI artifact links: focused test nodes and this ledger
