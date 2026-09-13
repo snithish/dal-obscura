@@ -128,6 +128,7 @@ td small { display: block; color: #61736e; margin-top: 4px; }
 :root[data-theme="dark"] .command-palette { background: #111827; border-color: #64748b; }
 :root[data-theme="dark"] .command-palette [role="option"] { color: #f8fafc; }
 .capability-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.nav-item:disabled { cursor: not-allowed; opacity: .48; }
 .capability-card { display: grid; gap: 4px; min-width: 0; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #f8fafc; }
 .capability-card strong { text-transform: capitalize; }
 .capability-card span { font-size: 12px; font-weight: 700; }

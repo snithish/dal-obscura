@@ -635,11 +635,17 @@ function App() {
   }
 
   const signedOut = workspace === "unavailable" || (workspace === "loading" && !session);
+  const canManageWorkspace = Boolean(session?.capabilities.includes("workspace:admin"));
   const accessView = <WorkspaceMessage showAuth={workspace === "unavailable"} title={workspace === "loading" ? "Loading governed workspace" : "Sign in to your workspace"} message={workspace === "loading" ? "Checking your workspace access and available assets." : notice} retry={workspace === "unavailable" ? loadInitialWorkspace : undefined} authConfig={authConfig} sessionOptions={sessionOptions} bootstrapToken={bootstrapToken} onBootstrapToken={setBootstrapToken} onBootstrapLogin={() => void bootstrapLogin()} loggingIn={loggingIn} authError={authError} />;
   return <div className="app-shell">
     <aside className="sidebar" aria-label="Primary navigation">
       <a className="brand" href="#assets" onClick={() => navigateTo("assets")}>DAL OBSCURA<span>GOVERNANCE</span></a>
-      <nav>{(["assets", "changes", "activity", "connections", "settings"] as Page[]).map((item) => <button key={item} className={page === item ? "nav-item active" : "nav-item"} onClick={() => navigateTo(item)}>{item}</button>)}</nav>
+      <nav>{(["assets", "changes", "activity", "connections", "settings"] as Page[]).map((item) => {
+        const requiresWorkspaceAdmin = item === "connections" || item === "settings";
+        const disabled = !session || (requiresWorkspaceAdmin && !canManageWorkspace);
+        const reason = !session ? "Sign in to open this workspace view" : requiresWorkspaceAdmin && !canManageWorkspace ? "Platform administrator capability required" : undefined;
+        return <button key={item} className={page === item ? "nav-item active" : "nav-item"} onClick={() => navigateTo(item)} disabled={disabled} title={reason}>{item}</button>;
+      })}</nav>
       <div className="sidebar-foot"><span className={"status-dot " + workspace} /> Workspace: {workspace === "ready" ? "connected" : "unavailable"}<br /><small>{workspaceLabel(workspace)}{asset?.catalog ? ` · catalog ${asset.catalog}` : ""}</small></div>
     </aside>
     <main>

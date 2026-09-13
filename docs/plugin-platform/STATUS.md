@@ -99,6 +99,11 @@ effective asset capabilities, with route-inventory assertions that prevent
 future untyped contract drift. Local issuer omission remains compatible with
 the established response shape.
 
+Follow-up `pending` uses the session capability contract in the UI shell: signed-
+out users and non-admin actors see management destinations disabled with an
+explicit browser tooltip, while scoped asset/history/activity navigation stays
+available. Server authorization remains authoritative for direct callers.
+
 ## Implementation update — identity migration (working slice, 2026-09-13)
 
 - Packet / status / candidate commit / owner: N05/F01 partial / VERIFY / pending atomic commit / control-plane.
