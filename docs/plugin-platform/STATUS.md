@@ -1,7 +1,9 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `b9b2531` (authenticated UI navigation;
+Implementation follow-up through `4942dfc` (public discovery lifecycle;
+data-plane catalog lifecycle validation; public adapter cleanup;
+authenticated UI navigation;
 catalog lifecycle conformance;
 descriptor field enforcement;
 discovery page boundary;
@@ -321,6 +323,13 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   authenticated lifecycle status inventory. Browser evidence remains open.
   Signed-out navigation is fenced at the top-level render boundary, so a direct
   management URL cannot display private workspace views before login.
+- Public catalog discovery now requires the full lifecycle (`validate_config`,
+  bounded namespace listing, table listing, and `close`) before provider results
+  can enter the control-plane inventory. Namespace iteration is deadline and
+  cancellation checked and bounded before table pages are materialized.
+- The data-plane public catalog bridge applies the same lifecycle contract and
+  validates configuration before resolving tables. Partially constructed or
+  mismatched plugins are closed before the request fails.
 - X15 conformance kit: **implementing**; a standalone public-API-only package
   now provides nested Arrow goldens, catalog discovery/page checks,
   capability-negative checks, bounded plan and output-schema validation, explicit
@@ -453,6 +462,28 @@ providers before Phase A's security/correctness prerequisites are accepted.
   Vite production build, and `git diff --check`.
 - Remaining gaps: real-browser accessibility, IdP callback journeys, and complete
   deferred operation ordering remain open. Pickle compatibility is unchanged.
+
+### X13 public discovery lifecycle — `87900c8`
+
+- State: implementing.
+- Behavior: admitted public catalog discovery executes configuration validation and
+  structured namespace listing before bounded table traversal, rejects malformed
+  or oversized namespace streams, and always closes the provider.
+- Green evidence: `tests/control_plane/test_catalog_discovery.py` (11 passed),
+  Ruff, Ty, and `git diff --check`.
+- Remaining gaps: live provider termination, cross-worker capacity, external wheel,
+  and browser evidence remain open. Pickle compatibility is unchanged.
+
+### X12 data-plane catalog lifecycle — `4942dfc`
+
+- State: implementing.
+- Behavior: the public catalog bridge requires every lifecycle operation and runs
+  `validate_config()` before serving. Validation failures close the newly created
+  provider before returning an error; missing lifecycle methods are rejected.
+- Green evidence: public adapter and discovery suites (23 passed), Ruff, Ty, and
+  `git diff --check`.
+- Remaining gaps: clean isolated wheels, external provider lifecycle, and live
+  serving evidence remain open. Pickle compatibility is unchanged.
 
 ### X16 REST namespace lifecycle — `8c73c41`
 
