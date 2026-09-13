@@ -138,6 +138,11 @@ td small { display: block; color: #61736e; margin-top: 4px; }
 .capability-card.denied { border-color: #cbd5e1; }
 .capability-card.denied span { color: #64748b; }
 @media (max-width: 760px) { .capability-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.link-button { border: 0; padding: 0; color: #1c6d61; background: transparent; text-decoration: underline; }
+.selected-row { background: #eef8f2; }
+.version-detail { margin-top: 20px; max-width: 900px; }
+.version-detail table { min-width: 560px; }
+:root[data-theme="dark"] .selected-row { background: #173b35; }
 :root[data-theme="dark"] .capability-card, :root:not([data-theme="light"]) .capability-card { background: #1e293b; border-color: #64748b; }
 :root[data-theme="dark"] .capability-card.allowed, :root:not([data-theme="light"]) .capability-card.allowed { background: #14352a; border-color: #4ade80; }
 :root[data-theme="dark"] .capability-card.allowed span, :root:not([data-theme="light"]) .capability-card.allowed span { color: #86efac; }

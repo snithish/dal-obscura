@@ -390,7 +390,7 @@ export const controlPlane = {
   },
   listAssetHistory: (assetId: string, signal?: AbortSignal) => request<PolicyVersion[]>(`/v1/assets/${assetId}/policy-versions`, { signal }),
   getPublicationOperation: (assetId: string, idempotencyKey: string) => request<{ id: string; status: string; result: { asset_id: string; policy_version: number } }>(`/v1/assets/${assetId}/policy-operations/${encodeURIComponent(idempotencyKey)}`),
-  getPolicyVersion: (assetId: string, policyVersion: number) => request<PolicyVersionDetail>(`/v1/assets/${assetId}/policy-versions/${policyVersion}`),
+  getPolicyVersion: (assetId: string, policyVersion: number, signal?: AbortSignal) => request<PolicyVersionDetail>(`/v1/assets/${assetId}/policy-versions/${policyVersion}`, { signal }),
   restorePolicyVersion: (assetId: string, policyVersion: number, expectedRevision: number) =>
     request<PolicyDraft>(`/v1/assets/${assetId}/policy-versions/${policyVersion}/restore`, {
       method: "POST",
