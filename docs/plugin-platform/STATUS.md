@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `1e2308a` (catalog configuration CAS;
+Implementation follow-up through `4a59a94` (catalog revision API contract test;
+catalog configuration CAS;
 REST namespace traversal;
 conformance cleanup gate;
 catalog binding replacement;
@@ -427,6 +428,10 @@ providers before Phase A's security/correctness prerequisites are accepted.
   compile and Vite production build, Ruff, and `git diff --check`.
 - Remaining gaps: PostgreSQL multi-process barriers, transaction rollback and live
   production/browser evidence remain open. Pickle compatibility is unchanged.
+
+The aggregate local control-plane/plugin lane now passes after the revision field
+contract update: 262 tests across control-plane routes, plugin conformance, REST,
+and manifest packages.
 
 ### X05 shared Arrow schema bounds — `fd20e72`
 
