@@ -309,6 +309,14 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/integration/control_plane/test_publication_races.py -q` — 5 scenarios skipped because `DAL_OBSCURA_POSTGRES_TEST_URL` is not configured in this sandbox; Ruff passed. CI PostgreSQL execution is still required for acceptance.
 - Remaining N12/B16 work: run the full two-process PostgreSQL/API/Flight interleaving matrix with termination and lost-response evidence. Release remains HOLD.
 
+## Implementation update — 7fae923 (2026-09-13)
+
+- Packet / status / candidate commit / owner: N03/B04 partial / VERIFY / `7fae923` / control-plane API contracts.
+- Observable behavior delivered: runtime and authentication-provider settings routes now publish explicit Pydantic response models. OpenAPI describes nullable runtime settings and redacted provider records, including revisions, so generated clients can consume a stable schema.
+- Changed paths: settings response DTOs, route annotations, and OpenAPI regression assertions. Pickle serializers and task payloads are unchanged.
+- Evidence: settings and UI-shell tests passed; changed-path Ruff/format checks passed. Full generated TypeScript client regeneration remains open because the UI currently uses handwritten transport types.
+- Remaining N03/B04 work: generate/check browser DTOs from the OpenAPI contract, complete real pair compatibility, and run live consumer/browser evidence. Release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
