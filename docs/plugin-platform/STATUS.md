@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `2b81337` (UI catalog-scoped secret inputs;
+Implementation follow-up through `1f5e793` (Iceberg discovery provider cleanup;
+UI catalog-scoped secret inputs;
 catalog-scoped secret references;
 virtualized tree keyboard focus and activation; restored-option route regression;
 exact scanned image digest promotion;
@@ -264,7 +265,9 @@ production build, Ruff, and Ty with the public SDK source path configured.
   Catalog registries now expose an explicit terminal close, reject reuse after
   shutdown, close retired generations after metadata operations drain, and clean
   up partially built adapters when replacement reload fails; cross-worker provider
-  termination remains open.
+  termination remains open. The built-in Iceberg discovery path now closes its
+  provider catalog in a `finally` block after both successful and failed traversal,
+  so released admission slots cannot hide leaked provider sessions.
 - X09 UI lifecycle: **implemented-unverified**; initial-load epoch and synchronous
   logout fencing plus stale history/preview/review/publish response checks are fixed.
   Authenticated `401` responses now also fence loaded private state and return the
@@ -583,6 +586,14 @@ providers before Phase A's security/correctness prerequisites are accepted.
   suites passed (37), Ruff and `git diff --check` passed.
 - Remaining gaps: live secret providers, returned-location/DNS enforcement,
   PostgreSQL, external wheels, browser, consumer, recovery, and release gates.
+
+### X08 Iceberg discovery provider cleanup — `1f5e793`
+
+- State: implementing.
+- Behavior: bounded built-in Iceberg discovery closes the loaded provider catalog
+  on success and failure while retaining semaphore release behavior.
+- Green evidence: catalog discovery suite (19), Ruff, and `git diff --check`.
+- Remaining gaps: cross-worker capacity/termination and live provider evidence remain open.
 
 ### X14 scoped secret inputs in Connections — `2b81337`
 
