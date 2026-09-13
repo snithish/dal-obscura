@@ -8,7 +8,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
-from urllib.request import urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 import jwt
 
@@ -256,8 +256,19 @@ def _discover_jwks_url(issuer: str, fetcher: JsonFetcher | None) -> str:
 
 
 def _fetch_json(url: str) -> JsonObject:
-    with urlopen(url, timeout=5) as response:
+    # JWKS discovery is part of the authentication boundary. A provider that
+    # redirects this request could otherwise move the verifier to an
+    # unvalidated origin. Keep the five-second bound and reject redirects by
+    # omitting urllib's default redirect handler.
+    opener = build_opener(_NoRedirectHandler())
+    request = Request(url, headers={"accept": "application/json"})
+    with opener.open(request, timeout=5) as response:
         payload = json.loads(response.read().decode("utf-8"))
     if not isinstance(payload, Mapping):
         raise ValueError(f"Expected JSON object from {url!r}")
     return payload
+
+
+class _NoRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None

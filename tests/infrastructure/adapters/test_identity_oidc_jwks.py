@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from urllib.request import Request
 
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from jwt.utils import base64url_encode
 
+import dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks as jwks_module
 from dal_obscura.data_plane.application.ports.identity import (
     AuthenticationRequest,
     MissingCredentialsError,
@@ -119,6 +121,40 @@ def test_oidc_discovery_does_not_double_append_issuer_slash():
     OidcJwksIdentityProvider(issuer=f"{ISSUER}/", jwks_fetcher=fetcher)
 
     assert requested == [f"{ISSUER}/.well-known/openid-configuration"]
+
+
+def test_jwks_transport_does_not_follow_redirects(monkeypatch):
+    seen: dict[str, Any] = {}
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return b'{"keys": []}'
+
+    class Opener:
+        def open(self, request, *, timeout):
+            seen["request"] = request
+            seen["timeout"] = timeout
+            return Response()
+
+    def build(handler):
+        seen["handler"] = handler
+        return Opener()
+
+    monkeypatch.setattr(jwks_module, "build_opener", build)
+    assert jwks_module._fetch_json("http://127.0.0.1:9999/jwks") == {"keys": []}
+    assert isinstance(seen["request"], Request)
+    assert seen["request"].full_url == "http://127.0.0.1:9999/jwks"
+    assert seen["timeout"] == 5
+    assert isinstance(seen["handler"], jwks_module._NoRedirectHandler)
+    assert seen["handler"].redirect_request(
+        None, None, 302, "Found", {}, "https://attacker.example"
+    ) is None
 
 
 def test_ignores_non_signing_jwks_entries():
