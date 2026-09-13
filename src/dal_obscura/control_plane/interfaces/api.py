@@ -12,13 +12,15 @@ import re
 from collections.abc import Mapping
 from uuid import uuid4
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session, sessionmaker
 
 from dal_obscura.common.plugin_api.registry import PluginRegistry
 from dal_obscura.control_plane.infrastructure.request_context import (
+    current_request_id,
     reset_request_id,
     set_request_id,
 )
@@ -170,6 +172,27 @@ def create_app(  # noqa: C901
         redoc_url="/redoc",
         openapi_url="/openapi.json",
     )
+
+    @app.exception_handler(HTTPException)
+    async def structured_http_error(request: Request, exc: HTTPException):
+        """Add a safe, correlated envelope to concurrency failures."""
+
+        if exc.status_code not in {409, 428}:
+            return await http_exception_handler(request, exc)
+        detail = exc.detail if isinstance(exc.detail, str) else "Request rejected"
+        code = "revision_precondition_required" if exc.status_code == 428 else "revision_conflict"
+        return JSONResponse(
+            status_code=exc.status_code,
+            headers=exc.headers,
+            content={
+                "detail": exc.detail,
+                "error": {
+                    "code": code,
+                    "message": detail,
+                    "request_id": current_request_id(),
+                },
+            },
+        )
 
     @app.middleware("http")
     async def security_headers(request, call_next):

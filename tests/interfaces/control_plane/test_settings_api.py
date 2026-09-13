@@ -55,6 +55,8 @@ def test_workspace_runtime_settings_can_be_configured_without_tenant_or_cell_ids
     assert updated.status_code == 200
     assert updated.json()["revision"] == 1
     assert stale.status_code == 409
+    assert stale.json()["error"]["code"] == "revision_conflict"
+    assert stale.json()["error"]["request_id"]
     events = client.get("/v1/audit/events", headers=ADMIN_HEADERS).json()
     runtime_events = [event for event in events if event["action"] == "workspace.runtime.update"]
     assert runtime_events[0]["actor"] == "platform:admin"
@@ -153,6 +155,8 @@ def test_workspace_auth_providers_can_be_configured_without_cell_ids():
     )
     assert missing.status_code == 428
     assert stale.status_code == 409
+    assert stale.json()["error"]["code"] == "revision_conflict"
+    assert missing.json()["error"]["code"] == "revision_precondition_required"
 
 
 def test_workspace_auth_providers_reject_unsupported_modules_and_inline_key_material():
