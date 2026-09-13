@@ -143,6 +143,7 @@ class PublicationCompiler:
 
     def _compile_asset(self, asset: AssetDraft, catalog: CatalogDraft) -> CompiledAsset:
         self._validate_format_plugin(asset.backend)
+        self._validate_plugin_pair(catalog.module, asset.backend)
         if asset.backend not in SUPPORTED_BACKENDS and self._plugin_registry is None:
             raise ValidationFailure(f"Unsupported backend {asset.backend!r}")
         if not asset.table_identifier or not asset.table_identifier.strip():
@@ -221,6 +222,25 @@ class PublicationCompiler:
             plugin_id,
         ) not in self._admitted_plugins():
             raise ValidationFailure(f"Unsupported backend {plugin_id!r}")
+
+    def _validate_plugin_pair(self, catalog_module: str, format_id: str) -> None:
+        if catalog_module == _ICEBERG_CATALOG_MODULE and format_id == "iceberg":
+            return
+        if self._plugin_registry is None:
+            raise ValidationFailure("Unsupported plugin pair; an admitted registry is required")
+        admitted = self._admitted_plugins()
+        catalog = admitted.get(("catalog", catalog_module))
+        table_format = admitted.get(("table_format", format_id))
+        catalog_capabilities = getattr(catalog, "capabilities", frozenset())
+        format_capabilities = getattr(table_format, "capabilities", frozenset())
+        if (
+            not catalog
+            or not table_format
+            or not catalog_capabilities.intersection(format_capabilities)
+        ):
+            raise ValidationFailure(
+                f"Unsupported plugin pair {catalog_module!r} + {format_id!r}"
+            )
 
     def _admitted_plugins(self) -> dict[tuple[str, str], object]:
         assert self._plugin_registry is not None

@@ -11,6 +11,7 @@ from dal_obscura.common.access_control.compiled_policy import (
     CompiledPolicy,
     CompiledPolicyRule,
 )
+from dal_obscura.common.plugin_api import PluginDescriptor
 from dal_obscura.control_plane.application.compiler import PublicationCompiler
 from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.domain.models import (
@@ -265,8 +266,24 @@ def test_compiler_accepts_only_admitted_external_catalog_and_format():
     class Registry:
         def admitted(self):
             return {
-                ("catalog", "manifest"): object(),
-                ("table_format", "parquet.dataset"): object(),
+                ("catalog", "manifest"): PluginDescriptor(
+                    kind="catalog",
+                    plugin_id="manifest",
+                    api_version="1",
+                    config_version=1,
+                    distribution="fixture",
+                    version="1",
+                    capabilities=frozenset({"nested_schema"}),
+                ),
+                ("table_format", "parquet.dataset"): PluginDescriptor(
+                    kind="table_format",
+                    plugin_id="parquet.dataset",
+                    api_version="1",
+                    config_version=1,
+                    distribution="fixture",
+                    version="1",
+                    capabilities=frozenset({"nested_schema"}),
+                ),
             }
 
     compiled = PublicationCompiler(cast(Any, Registry())).compile(draft)
@@ -281,6 +298,38 @@ def test_compiler_rejects_external_plugin_without_registry():
     draft.catalogs[0] = replace(draft.catalogs[0], module="manifest")
     with pytest.raises(ValidationFailure, match="admitted plugins"):
         PublicationCompiler().compile(draft)
+
+
+def test_compiler_rejects_admitted_but_incompatible_plugin_pair():
+    draft = _draft()
+    draft.catalogs[0] = replace(draft.catalogs[0], module="manifest")
+    draft.assets[0].backend = "parquet.dataset"
+
+    class Registry:
+        def admitted(self):
+            return {
+                ("catalog", "manifest"): PluginDescriptor(
+                    kind="catalog",
+                    plugin_id="manifest",
+                    api_version="1",
+                    config_version=1,
+                    distribution="fixture",
+                    version="1",
+                    capabilities=frozenset({"nested_schema"}),
+                ),
+                ("table_format", "parquet.dataset"): PluginDescriptor(
+                    kind="table_format",
+                    plugin_id="parquet.dataset",
+                    api_version="1",
+                    config_version=1,
+                    distribution="fixture",
+                    version="1",
+                    capabilities=frozenset({"snapshot_reads"}),
+                ),
+            }
+
+    with pytest.raises(ValidationFailure, match="Unsupported plugin pair"):
+        PublicationCompiler(cast(Any, Registry())).compile(draft)
 
 
 def test_compiler_rejects_static_jwks_material_in_identity_provider():
