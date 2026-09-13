@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from dal_obscura_iceberg_rest.catalog import RestCatalog
-from dal_obscura_plugin_api import CatalogConfig, ExecutionContext
+from dal_obscura_plugin_api import CatalogConfig, ExecutionContext, TableIdentifier
 
 
 def _context() -> ExecutionContext:
@@ -63,3 +63,27 @@ def test_rest_catalog_paginates_bounded_sorted_identifiers():
     assert [item.name for item in first.entries] == ["a"]
     assert [item.name for item in second.entries] == ["b"]
     assert second.continuation is None
+
+
+def test_rest_catalog_does_not_copy_provider_io_credentials_into_handle():
+    plugin = RestCatalog(_config(), _context())
+
+    class FakeSnapshot:
+        snapshot_id = 42
+
+    class FakeTable:
+        metadata_location = "https://storage.example/metadata/v1.json"
+        current_snapshot = FakeSnapshot()
+        io = type("IO", (), {"properties": {"s3.access-key-id": "secret"}})()
+
+    class FakeCatalog:
+        def load_table(self, identifier):
+            assert identifier == ("default", "users")
+            return FakeTable()
+
+    plugin._catalog = FakeCatalog()
+    handle = plugin.resolve_table(
+        TableIdentifier(namespace=("default",), name="users"),
+        _context(),
+    )
+    assert handle.metadata == {"metadata_location": "https://storage.example/metadata/v1.json"}

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
 from datetime import datetime
 from urllib.parse import urlsplit
 
@@ -94,9 +93,6 @@ class RestCatalog(CatalogPlugin):
         metadata_location = getattr(table, "metadata_location", None)
         if not isinstance(metadata_location, str) or not metadata_location:
             raise ValueError("REST catalog table has no metadata location")
-        io_options = getattr(getattr(table, "io", None), "properties", {})
-        if not isinstance(io_options, Mapping):
-            io_options = {}
         return TableHandle(
             catalog_plugin_id=DESCRIPTOR.plugin_id,
             catalog_instance_id=self._config.instance_id,
@@ -107,7 +103,6 @@ class RestCatalog(CatalogPlugin):
             snapshot_id=_snapshot_id(table),
             metadata={
                 "metadata_location": metadata_location,
-                "io_options": dict(io_options),
             },
         )
 
