@@ -99,6 +99,10 @@ effective asset capabilities, with route-inventory assertions that prevent
 future untyped contract drift. Local issuer omission remains compatible with
 the established response shape.
 
+Follow-up `pending` validates helper/service payloads into those response models
+inside the routes, removing the production type-check diagnostics caused by the
+generic service wrapper while retaining the same JSON contract.
+
 Follow-up `fcc6a13` uses the session capability contract in the UI shell: signed-
 out users and non-admin actors see management destinations disabled with an
 explicit browser tooltip, while scoped asset/history/activity navigation stays

@@ -73,7 +73,8 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         asset_id: UUID,
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
     ) -> AssetAccessResponse:
-        return deps.with_service(lambda service: service.get_asset_access(asset_id, actor))
+        payload = deps.with_service(lambda service: service.get_asset_access(asset_id, actor))
+        return AssetAccessResponse.model_validate(payload)
 
     @api.get("/v1/assets/{asset_id}/schema")
     def get_asset_schema(

@@ -152,7 +152,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
 
     @api.get("/v1/session", response_model=SessionResponse, response_model_exclude_none=True)
     def get_session(actor: ControlPlaneActor = Depends(deps.require_actor)) -> SessionResponse:  # noqa: B008
-        return actor_response(actor)
+        return SessionResponse.model_validate(actor_response(actor))
 
     @api.get("/v1/session/options")
     def get_session_options() -> object:
