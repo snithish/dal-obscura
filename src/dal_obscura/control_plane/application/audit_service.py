@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
@@ -38,6 +39,13 @@ def list_audit_events_page(
     *,
     actor: ControlPlaneActor,
     asset_id: UUID | None = None,
+    actor_filter: str | None = None,
+    action: str | None = None,
+    resource_type: str | None = None,
+    outcome: str | None = None,
+    correlation_id: str | None = None,
+    created_after: datetime | None = None,
+    created_before: datetime | None = None,
     limit: int = 100,
     cursor: str | None = None,
 ) -> dict[str, object]:
@@ -54,6 +62,13 @@ def list_audit_events_page(
             context,
             asset_id=asset_id,
             principals=principals,
+            actor=actor_filter,
+            action=action,
+            resource_type=resource_type,
+            outcome=outcome,
+            correlation_id=correlation_id,
+            created_after=created_after,
+            created_before=created_before,
             limit=limit,
             cursor=cursor,
         )

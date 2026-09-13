@@ -99,3 +99,34 @@ def test_audit_page_uses_keyset_cursor_and_preserves_scope() -> None:
         headers=ADMIN_HEADERS,
     )
     assert invalid.status_code == 400
+
+
+def test_audit_page_filters_before_pagination() -> None:
+    client = _client()
+    _provision_draft(client)
+    response = client.get(
+        "/v1/audit/events/page?action=workspace.runtime.update&resource_type=workspace&limit=1",
+        headers=ADMIN_HEADERS,
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["items"]
+    assert all(
+        item["action"] == "workspace.runtime.update" and item["resource_type"] == "workspace"
+        for item in payload["items"]
+    )
+    assert payload["next_cursor"] is None
+
+    by_actor = client.get(
+        "/v1/audit/events/page?actor=platform%3Aadmin&outcome=success",
+        headers=ADMIN_HEADERS,
+    )
+    assert by_actor.status_code == 200
+    assert by_actor.json()["items"]
+    assert all(item["actor"] == "platform:admin" for item in by_actor.json()["items"])
+
+    too_long = client.get(
+        "/v1/audit/events/page?actor=" + ("x" * 201),
+        headers=ADMIN_HEADERS,
+    )
+    assert too_long.status_code == 422

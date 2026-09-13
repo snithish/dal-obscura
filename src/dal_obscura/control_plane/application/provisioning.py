@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -165,6 +166,13 @@ class ProvisioningService:
         *,
         actor: ControlPlaneActor,
         asset_id: UUID | None = None,
+        actor_filter: str | None = None,
+        action: str | None = None,
+        resource_type: str | None = None,
+        outcome: str | None = None,
+        correlation_id: str | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
         limit: int = 100,
         cursor: str | None = None,
     ) -> dict[str, object]:
@@ -172,6 +180,13 @@ class ProvisioningService:
             self._store,
             actor=actor,
             asset_id=asset_id,
+            actor_filter=actor_filter,
+            action=action,
+            resource_type=resource_type,
+            outcome=outcome,
+            correlation_id=correlation_id,
+            created_after=created_after,
+            created_before=created_before,
             limit=limit,
             cursor=cursor,
         )

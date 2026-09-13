@@ -1528,12 +1528,19 @@ class PublicationStore:
             for record in records
         ]
 
-    def list_audit_events_page(
+    def list_audit_events_page(  # noqa: C901
         self,
         context: WorkspaceContext,
         *,
         asset_id: UUID | None = None,
         principals: set[str] | None = None,
+        actor: str | None = None,
+        action: str | None = None,
+        resource_type: str | None = None,
+        outcome: str | None = None,
+        correlation_id: str | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
         limit: int = 100,
         cursor: str | None = None,
     ) -> AuditEventPage:
@@ -1550,6 +1557,20 @@ class PublicationStore:
                 AuditEventRecord.resource_type == "asset",
                 AuditEventRecord.resource_id == str(asset_id),
             )
+        if actor:
+            query = query.where(AuditEventRecord.actor_principal == actor)
+        if action:
+            query = query.where(AuditEventRecord.action == action)
+        if resource_type:
+            query = query.where(AuditEventRecord.resource_type == resource_type)
+        if outcome:
+            query = query.where(AuditEventRecord.outcome == outcome)
+        if correlation_id:
+            query = query.where(AuditEventRecord.correlation_id == correlation_id)
+        if created_after is not None:
+            query = query.where(AuditEventRecord.created_at >= created_after)
+        if created_before is not None:
+            query = query.where(AuditEventRecord.created_at <= created_before)
         if principals is not None:
             if not principals:
                 return AuditEventPage(items=[], next_cursor=None)
