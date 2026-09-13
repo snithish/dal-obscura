@@ -50,6 +50,14 @@ their underlying functionality is wholly absent.
 - Evidence: direct UI TypeScript build, Vite production build (271.97 kB JavaScript / 82.29 kB gzip), all 5 UI lifecycle/schema tests, and \`git diff --check\` passed.
 - Remaining N06/B09 work: adopt the selected accessible primitives/icon system, typed deep links, responsive visual review at required sizes, CSP/browser/axe evidence, and keyboard/screen-reader journeys. Remaining N07–N16 packets and live release gates stay open; release remains HOLD.
 
+## Implementation update — 502d012 (2026-09-14)
+
+- Packet / status / candidate commit / owner: N05/B07 identity boundary partial / VERIFY / \`502d012\` / OIDC JWKS adapter.
+- Observable behavior delivered: configured OIDC issuers are now preserved exactly for JWT \`iss\` validation, including meaningful trailing slashes. Discovery still constructs the standards endpoint with one separator and rejects an empty issuer before any provider setup.
+- Changed paths: \`src/dal_obscura/data_plane/infrastructure/adapters/identity_oidc_jwks.py\` and its focused tests. No session, pickle serializer, serialized class, payload, or import path changed.
+- Evidence: 17 JWKS adapter tests, 40 actor/OIDC session tests, Ruff, and \`ty\` checks passed.
+- Remaining N05/B07 work: live two-process OIDC freshness, principal-kind persistence across live IdP paths, revocation/disabled-account timing, browser login/logout evidence, and supported-profile bootstrap retirement. Release remains HOLD.
+
 ## Implementation update — b7bc1e8 (2026-09-14)
 
 - Packet / status / candidate commit / owner: N04/B06 partial / VERIFY / `b7bc1e8` / Iceberg REST plugin.
