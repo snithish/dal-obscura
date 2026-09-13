@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `57163da` (exact scanned image digest promotion;
+Implementation follow-up through `66adca6` (restored-option route regression;
+exact scanned image digest promotion;
 virtualized nested schema navigation;
 persisted catalog option revalidation;
 nested manifest provider IDs;
@@ -549,8 +550,9 @@ providers before Phase A's security/correctness prerequisites are accepted.
   catalog rows against the admitted descriptor before resolving secrets or invoking
   a provider factory. Unknown and missing fields fail closed; built-in Iceberg keeps
   its explicit compatibility contract.
-- Green evidence: catalog-option, discovery, and schema suites passed (31), Ruff
-  and `git diff --check` passed.
+- Green evidence: catalog-option, discovery, and schema suites passed (32), including
+  a route regression proving factory loading is skipped; Ruff and `git diff --check`
+  passed.
 - Remaining gaps: provider-specific secret lifecycle, returned-location/DNS
   enforcement, PostgreSQL barriers, live wheels, browser, consumer, recovery, and
   release gates remain open.
@@ -2467,7 +2469,7 @@ running-process probe.
 
 Packet/slice: X05/X06/X07/X10/X19/X22 bounded schema, nested provider identity, persisted option validation, virtualized UI navigation, serialized browser/OIDC state, and exact image promotion
 State: implementing
-Baseline and resulting commits: `3ba59bb` -> `0dbfc40`, `56c5e43`, `54855b1`, `3f46816`, `57163da`, `ac38f89`
+Baseline and resulting commits: `3ba59bb` -> `0dbfc40`, `56c5e43`, `54855b1`, `66adca6`, `3f46816`, `57163da`, `ac38f89`
 Files/contracts changed: `src/dal_obscura/control_plane/application/schema_service.py`,
 `src/dal_obscura/control_plane/infrastructure/session_store.py`,
 `packages/manifest-parquet-plugin/src/dal_obscura_manifest_parquet/catalog.py`,
@@ -2485,7 +2487,7 @@ descriptor-validated before provider use; schema navigation mounts a bounded win
 session and one-time login rows are locked during read-modify-write operations;
 release tags are promoted from the exact scanned image digest
 Exact commands and exit results: schema/API suite (16), manifest suite (15), catalog
-option/discovery suite (31), UI tree/lifecycle suite (5), CI workflow suite (4), browser/OIDC suite (8), governed
+option/discovery suite (32), UI tree/lifecycle suite (5), CI workflow suite (4), browser/OIDC suite (8), governed
 aggregate suite, Ruff, UI build/lifecycle checks, and `git diff --check` passed
 Environment/dependency and wheel/image/plugin-lock identities: Darwin 25.6.0 arm64;
 no external wheel or production image was available in this workspace
