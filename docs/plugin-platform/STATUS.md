@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `ac30712`.
+Implementation follow-up through `893b776`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -147,7 +147,8 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   and output-schema validation, explicit cancellation checks, cleanup proof,
   optional expected-task coverage validation, skip semantics, and machine-readable
   results. Output validation now consumes batches incrementally with fixed batch
-  and row budgets, and cancellation is checked between planned tasks. Deliberately
+  and row budgets, and cancellation/deadlines are checked before requesting each
+  planned task or output batch. Deliberately
   bad fixture plugins, provider/Flight/consumer lanes, and external distribution
   evidence remain open. CI now builds both standalone plugin wheels, installs those
   exact artifacts in an isolated environment, and runs the conformance suite before
