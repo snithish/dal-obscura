@@ -78,6 +78,14 @@ recognized without treating them as unresolved legacy data. Five migration tests
 - Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane/test_oidc_login.py tests/interfaces/control_plane/test_actor_auth.py -q` — 40 passed; changed-path Ruff and `ty` checks passed.
 - Remaining N04/B06 work: live hostile transport counters, DNS/private-address policy, credential redaction, cancellation cleanup and deployment network controls. Remaining N05/B08 work is live IdP/browser evidence. Release remains HOLD.
 
+## Implementation update — 21ffed2 (2026-09-14)
+
+- Packet / status / candidate commit / owner: N06/B09 foundation partial / VERIFY / `21ffed2` / governance UI.
+- Observable behavior delivered: the workspace access surface is now a dedicated typed `LoginPanel` component. OIDC sign-in, local development sign-in, retry, and fail-closed auth messaging remain behaviorally unchanged; authentication errors announce assertively to assistive technology. The shell no longer owns the login markup.
+- Changed paths: `apps/governance-ui/src/components/LoginPanel.tsx` and its shell import. No backend, session, pickle serializer, payload, or import path changed.
+- Evidence: direct UI `tsc -b`, Vite production build (272.04 kB JavaScript / 82.06 kB gzip), and all 5 lifecycle/component-adjacent tests passed.
+- Remaining N06/B09 work: componentize the full shell/pages, adopt the selected accessible primitives/icon system, typed deep links, responsive visual review at required sizes, CSP/browser/axe evidence, and keyboard/screen-reader journeys. Release remains HOLD.
+
 ## Implementation update — 8a615c3 (2026-09-14)
 
 - Packet / status / candidate commit / owner: N01/B01-B02 / VERIFY / `8a615c3` / toolchain and documentation.
