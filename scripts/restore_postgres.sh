@@ -16,6 +16,7 @@ fi
 
 command -v age >/dev/null 2>&1 || { echo "age is required" >&2; exit 2; }
 command -v pg_restore >/dev/null 2>&1 || { echo "pg_restore is required" >&2; exit 2; }
+command -v sha256sum >/dev/null 2>&1 || { echo "sha256sum is required" >&2; exit 2; }
 command -v dal-obscura-maintenance >/dev/null 2>&1 || {
   echo "dal-obscura-maintenance is required" >&2
   exit 2
@@ -23,6 +24,14 @@ command -v dal-obscura-maintenance >/dev/null 2>&1 || {
 backup=$1
 cell_id=${2:-}
 test -r "$backup" || { echo "backup is not readable: $backup" >&2; exit 2; }
+checksum="${backup}.sha256"
+if [ -e "$checksum" ]; then
+  test -r "$checksum" || { echo "backup checksum is not readable: $checksum" >&2; exit 2; }
+  sha256sum --check "$checksum" >/dev/null || {
+    echo "backup checksum verification failed: $backup" >&2
+    exit 1
+  }
+fi
 test -r "$DAL_OBSCURA_AGE_IDENTITY" || {
   echo "age identity is not readable: $DAL_OBSCURA_AGE_IDENTITY" >&2
   exit 2

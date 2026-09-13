@@ -72,8 +72,12 @@ def test_recovery_scripts_require_encryption_and_isolated_restore_confirmation()
 
     assert "pg_dump --format=custom" in backup
     assert "age --encrypt" in backup
+    assert "sha256sum \"$output\"" in backup
+    assert "${output}.sha256" in backup
     assert "refusing to overwrite existing backup" in backup
     assert "age --decrypt" in restore
+    assert "sha256sum --check" in restore
+    assert "backup checksum verification failed" in restore
     assert "age identity is not readable" in restore
     assert "pg_restore --single-transaction" in restore
     assert "I_UNDERSTAND_ISOLATED_RESTORE" in restore
