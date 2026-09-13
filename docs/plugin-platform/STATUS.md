@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `3c3709b` (asset binding plugin validation;
+Implementation follow-up through `9cae43f` (descriptor option type validation;
+asset binding plugin validation;
 schema-scoped synthetic field IDs;
 direct asset mutation row locks;
 operator plugin-lock startup loading;
@@ -337,6 +338,8 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   changes require reapproval.
   Asset binding saves now validate admitted catalog/format identity, capability
   overlap, and table-format declarative options before persisting configuration.
+  Descriptor-backed catalog and table-format options now enforce declared string,
+  URI, and explicit secret-reference types before provider construction.
   Legacy Iceberg discovery now rejects malformed, non-printable, or oversized
   namespace/table segments instead of coercing them into new logical identities.
   Additive migration `20260913_0014` persists qualified catalog/format identities
@@ -485,6 +488,19 @@ providers before Phase A's security/correctness prerequisites are accepted.
   Ruff, Ty, and `git diff --check`.
 - Remaining gaps: provider-specific typed options, live secret/IO enforcement,
   and browser/provider acceptance remain open. Pickle compatibility is unchanged.
+
+### X07 descriptor option types — `9cae43f`
+
+- State: implementing.
+- Behavior: admitted descriptor fields now validate declared string/URI types and
+  require secret fields to use an explicit `{secret: name}` reference before
+  values reach providers or are persisted. Existing bounded shape and egress
+  checks remain in force.
+- Green evidence: catalog-option and asset-plugin suites (4 passed), Ruff, Ty,
+  and `git diff --check`.
+- Remaining gaps: provider-specific semantic validation, secret-provider
+  lifecycle, and live IO/browser evidence remain open. Pickle compatibility is
+  unchanged.
 
 ### X03 catalog binding replacement — `1771f26`
 
