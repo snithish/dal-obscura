@@ -63,9 +63,7 @@ class RestCatalog(CatalogPlugin):
             raise ValueError("REST catalog URI must be an absolute HTTP(S) URL")
         if parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise ValueError("REST catalog URI cannot contain credentials or query data")
-        if parsed.scheme == "http" and any(
-            key in options for key in ("token", "credential")
-        ):
+        if parsed.scheme == "http" and any(key in options for key in ("token", "credential")):
             raise ValueError("REST catalog credentials require an HTTPS URI")
         warehouse = options.get("warehouse")
         if warehouse is not None:
@@ -92,17 +90,26 @@ class RestCatalog(CatalogPlugin):
         namespace: tuple[str, ...] = (),
     ) -> tuple[tuple[str, ...], ...]:
         self._validate_context(context)
-        if namespace:
-            raise ValueError("REST namespace traversal accepts only the root namespace")
         catalog = self._load_catalog(context)
         result: set[tuple[str, ...]] = set()
-        for raw in catalog.list_namespaces():
+        try:
+            raw_namespaces = (
+                catalog.list_namespaces(namespace) if namespace else catalog.list_namespaces()
+            )
+        except TypeError:
+            raw_namespaces = catalog.list_namespaces()
+        for raw in raw_namespaces:
             self._validate_context(context)
-            if not isinstance(raw, (tuple, list)) or not raw or any(
-                not isinstance(part, str) or not part for part in raw
+            if (
+                not isinstance(raw, (tuple, list))
+                or not raw
+                or any(not isinstance(part, str) or not part for part in raw)
             ):
                 raise ValueError("REST catalog returned an invalid namespace")
-            result.add(tuple(raw))
+            value = tuple(raw)
+            if namespace and value[: len(namespace)] != namespace:
+                continue
+            result.add(value)
             if len(result) > MAX_NAMESPACES:
                 raise ValueError("REST catalog contains too many namespaces")
         return tuple(sorted(result))
