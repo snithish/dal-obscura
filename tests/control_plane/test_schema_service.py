@@ -168,6 +168,8 @@ def test_arrow_synthetic_field_ids_are_schema_scoped() -> None:
     )
 
     assert integer_id != string_id
+    assert 0 <= integer_id <= 2**31 - 1
+    assert 0 <= string_id <= 2**31 - 1
 
 
 def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None:  # noqa: C901

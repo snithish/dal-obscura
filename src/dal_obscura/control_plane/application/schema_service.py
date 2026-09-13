@@ -522,4 +522,8 @@ def _arrow_field_id(field: pa.Field, path: tuple[str, ...], scope_digest: str) -
             except (TypeError, ValueError):
                 break
     digest = hashlib.sha256("\x1f".join((scope_digest, *path)).encode("utf-8")).digest()
-    return int.from_bytes(digest[:8], "big", signed=False)
+    # FieldPath carries provider and synthetic IDs in a bounded signed
+    # 32-bit slot. Keep the deterministic synthetic identity inside that
+    # contract instead of producing an ID that only fails later during path
+    # serialization.
+    return int.from_bytes(digest[:4], "big", signed=False) & 0x7FFFFFFF
