@@ -223,6 +223,15 @@ the active generation. Explicit disable/revoke rejects new plans and follows the
 documented ticket-invalidation behavior. Ordinary generation replacement may drain
 in-flight references, but must not delay security revocation silently.
 
+Plugin admission also has explicit operator lifecycle metadata: `enabled` admits
+new factories, `draining` stops new admissions while existing generation leases
+finish, `disabled` can be re-enabled after review, `revoked` is terminal for
+admission, and `removed` is terminal. Lifecycle transitions are validated and
+reported independently of the immutable distribution lock and historical
+publication records. The current process-local registry enforces the admission
+boundary; persistence, lease accounting, and ticket invalidation remain required
+before lifecycle controls can be treated as a production drain workflow.
+
 ## 6. Persistence and compatibility migration
 
 Use additive migrations in the existing database for stable plugin IDs, config
