@@ -1,15 +1,20 @@
+import json
 import os
 import socket
 import subprocess
 import sys
 import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from threading import Thread
 from uuid import UUID
 
 import jwt
 import pyarrow as pa
 import pyarrow.flight as flight
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
 from pyiceberg.types import (
@@ -155,7 +160,54 @@ def iceberg_setup(tmp_path: Path) -> tuple[str, Path]:
 
 
 @pytest.fixture
-def control_plane_setup(tmp_path: Path, iceberg_setup: tuple[str, Path]) -> dict[str, str]:
+def oidc_jwks_server() -> dict[str, str]:
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    public_jwk = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(private_key.public_key()))
+    public_jwk["alg"] = "RS256"
+    public_jwk["use"] = "sig"
+    public_jwk["kid"] = "e2e"
+    private_pem = private_key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    ).decode()
+    jwks = {"keys": [public_jwk]}
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            if self.path != "/jwks.json":
+                self.send_error(404)
+                return
+            payload = json.dumps(jwks).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, _format: str, *_args: object) -> None:
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield {
+            "url": f"http://127.0.0.1:{server.server_port}/jwks.json",
+            "private_key": private_pem,
+        }
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
+
+
+@pytest.fixture
+def control_plane_setup(
+    tmp_path: Path,
+    iceberg_setup: tuple[str, Path],
+    oidc_jwks_server: dict[str, str],
+) -> dict[str, str]:
     catalog_uri, warehouse = iceberg_setup
     database_url = f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
     engine = create_engine_from_url(database_url)
@@ -198,6 +250,63 @@ def control_plane_setup(tmp_path: Path, iceberg_setup: tuple[str, Path]) -> dict
             table_identifier="default.users",
             options={},
         )
+        service.replace_asset_schema_fields(
+            asset_id=UUID(asset["id"]),
+            fields=[
+                {"name": "id", "field_id": "iceberg:1", "path": ["id"], "type": "int64"},
+                {
+                    "name": "email",
+                    "field_id": "iceberg:2",
+                    "path": ["email"],
+                    "type": "large_string",
+                },
+                {
+                    "name": "metadata",
+                    "field_id": "iceberg:3",
+                    "path": ["metadata"],
+                    "type": (
+                        "struct<preferences: large_list<element: struct<name: large_string, "
+                        "theme: large_string, notifications: large_string>>>"
+                    ),
+                },
+                {
+                    "name": "metadata.preferences",
+                    "field_id": "iceberg:4",
+                    "path": ["metadata", "preferences"],
+                    "type": (
+                        "large_list<element: struct<name: large_string, theme: large_string, "
+                        "notifications: large_string>>"
+                    ),
+                },
+                {
+                    "name": "metadata.preferences.$element",
+                    "field_id": "iceberg:5",
+                    "path": ["metadata", "preferences", "$element"],
+                    "type": (
+                        "struct<name: large_string, theme: large_string, "
+                        "notifications: large_string>"
+                    ),
+                },
+                {
+                    "name": "metadata.preferences.$element.name",
+                    "field_id": "iceberg:6",
+                    "path": ["metadata", "preferences", "$element", "name"],
+                    "type": "large_string",
+                },
+                {
+                    "name": "metadata.preferences.$element.theme",
+                    "field_id": "iceberg:7",
+                    "path": ["metadata", "preferences", "$element", "theme"],
+                    "type": "large_string",
+                },
+                {
+                    "name": "metadata.preferences.$element.notifications",
+                    "field_id": "iceberg:8",
+                    "path": ["metadata", "preferences", "$element", "notifications"],
+                    "type": "large_string",
+                },
+            ],
+        )
         service.replace_policy_rules(
             asset_id=UUID(asset["id"]),
             rules=[
@@ -226,7 +335,12 @@ def control_plane_setup(tmp_path: Path, iceberg_setup: tuple[str, Path]) -> dict
                         "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks."
                         "OidcJwksIdentityProvider"
                     ),
-                    "args": {"issuer": "https://issuer.example"},
+                    "args": {
+                        "issuer": "https://issuer.example",
+                        "algorithms": ["RS256"],
+                        "jwks_url": oidc_jwks_server["url"],
+                        "attribute_claims": {"tenant_id": "attributes.tenant_id"},
+                    },
                     "enabled": True,
                 }
             ],
@@ -238,21 +352,23 @@ def control_plane_setup(tmp_path: Path, iceberg_setup: tuple[str, Path]) -> dict
         )
         session.commit()
 
-    return {"database_url": database_url, "cell_id": cell["id"], "tenant_id": tenant["id"]}
+    return {
+        "database_url": database_url,
+        "cell_id": cell["id"],
+        "tenant_id": tenant["id"],
+        "private_key": oidc_jwks_server["private_key"],
+    }
 
 
 def test_e2e_flight_server_with_iceberg(control_plane_setup: dict[str, str]):
     port = get_free_port()
-    jwt_secret = "e2e-very-secret-key-that-is-long-enough"
     ticket_secret = "e2e-ticket-secret"
-    jwt_secret_env = "DAL_OBSCURA_E2E_JWT_SECRET"
 
     env = dict(os.environ)
     env["DAL_OBSCURA_DATABASE_URL"] = control_plane_setup["database_url"]
     env["DAL_OBSCURA_CELL_ID"] = control_plane_setup["cell_id"]
     env["DAL_OBSCURA_LOCATION"] = f"grpc://0.0.0.0:{port}"
     env["DAL_OBSCURA_TICKET_SECRET"] = ticket_secret
-    env[jwt_secret_env] = jwt_secret
 
     cmd = [
         sys.executable,
@@ -296,9 +412,12 @@ def test_e2e_flight_server_with_iceberg(control_plane_setup: dict[str, str]):
             {
                 "sub": "e2e_user",
                 "attributes": {"tenant_id": control_plane_setup["tenant_id"]},
+                "iss": "https://issuer.example",
+                "exp": int(time.time()) + 900,
             },
-            jwt_secret,
-            algorithm="HS256",
+            control_plane_setup["private_key"],
+            algorithm="RS256",
+            headers={"kid": "e2e"},
         )
         options = flight.FlightCallOptions(headers=[(b"authorization", f"Bearer {token}".encode())])
 
@@ -311,7 +430,14 @@ def test_e2e_flight_server_with_iceberg(control_plane_setup: dict[str, str]):
             )
         )
 
-        info = client.get_flight_info(descriptor, options=options)
+        try:
+            info = client.get_flight_info(descriptor, options=options)
+        except Exception as exc:
+            process.terminate()
+            stdout, stderr = process.communicate()
+            raise RuntimeError(
+                f"Flight request failed:\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+            ) from exc
 
         batches = []
         for endpoint in info.endpoints:

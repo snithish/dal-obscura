@@ -491,7 +491,9 @@ def _catalog_config_from_published_catalog(
         if isinstance(raw_revision, int)
         and not isinstance(raw_revision, bool)
         and raw_revision >= 0
-        else catalog.plugin_revision if catalog.plugin_revision is not None else 0
+        else catalog.plugin_revision
+        if catalog.plugin_revision is not None
+        else 0
     )
     return CatalogConfig(
         name=catalog.catalog,
@@ -562,15 +564,13 @@ def _validate_plugin_binding(
     if catalog_plugin == "iceberg.sql" and format_plugin != "iceberg":
         raise ValueError("Published plugin binding is unsupported")
     if catalog_plugin != "iceberg.sql" and plugin_registry is None:
-        raise ValueError(
-            "Published plugin binding is unsupported without an admitted registry"
-        )
+        raise ValueError("Published plugin binding is unsupported without an admitted registry")
     if plugin_registry is not None:
         admitted = plugin_registry.admitted()
-        if (
-            ("catalog", catalog_plugin) not in admitted
-            or ("table_format", format_plugin) not in admitted
-        ):
+        if ("catalog", catalog_plugin) not in admitted or (
+            "table_format",
+            format_plugin,
+        ) not in admitted:
             raise ValueError("Published plugin binding is not admitted")
 
 
@@ -592,9 +592,7 @@ def _validate_schema_admission(asset: PublishedAsset, schema: pa.Schema) -> None
         return
     stable_ids = admission.get("stable_ids")
     if stable_ids is True and not schema_has_stable_ids(schema):
-        raise ValueError(
-            "Published schema requires stable provider field IDs; review again."
-        )
+        raise ValueError("Published schema requires stable provider field IDs; review again.")
     digest = admission.get("digest")
     if digest is not None:
         if not isinstance(digest, str):
@@ -633,7 +631,8 @@ def _validate_schema_admission(asset: PublishedAsset, schema: pa.Schema) -> None
             and _canonical_type_name(expected_type) != _canonical_type_name(actual)
         ):
             raise ValueError(
-                "Published schema field type changed after review; review again."
+                "Published schema field type changed after review; review again. "
+                f"Expected {expected_type!r}, live value is {actual!r}."
             )
 
 
