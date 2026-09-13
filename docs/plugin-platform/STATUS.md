@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `165015f` (direct asset mutation row locks;
+Implementation follow-up through `cede42f` (schema-scoped synthetic field IDs;
+direct asset mutation row locks;
 operator plugin-lock startup loading;
 forged descriptor regression;
 control-plane descriptor identity checks;
@@ -187,6 +188,9 @@ artifacts.
   requires reapproval instead of inheriting a display-name grant.
   Compiled schema metadata now records `stable_ids`; planning rejects a stable
   publication when the live schema no longer exposes provider IDs.
+  Control-plane external Arrow schema responses now scope synthetic IDs to the
+  complete schema shape and path, preventing type or nested-shape changes from
+  reusing an approved field identity.
 - X07 configuration/secrets/IO: **implementing**; nested dynamic class-loader options
   are rejected, and schema/evaluation/review provider calls now use the configured
   catalog egress validator. Explicit environment secret references now resolve in
@@ -327,6 +331,9 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   Repository owner, schema-field, and grant replacement methods now acquire the
   asset row lock themselves, so direct callers cannot bypass the X03 revision
   serialization boundary.
+  Control-plane Arrow synthetic field IDs now include the complete schema-shape
+  digest and logical path, matching the data-plane identity rule so semantic
+  changes require reapproval.
   Legacy Iceberg discovery now rejects malformed, non-printable, or oversized
   namespace/table segments instead of coercing them into new logical identities.
   Additive migration `20260913_0014` persists qualified catalog/format identities
@@ -451,6 +458,18 @@ providers before Phase A's security/correctness prerequisites are accepted.
   (19 passed), Ruff, Ty, and `git diff --check`.
 - Remaining gaps: live PostgreSQL barrier, rollback/idempotency, and multi-process
   evidence remain open. Pickle compatibility is unchanged.
+
+### X06 schema-scoped Arrow identities — `cede42f`
+
+- State: implementing.
+- Behavior: external Arrow schema fields without provider IDs now receive
+  deterministic synthetic IDs derived from the full schema-shape digest and
+  logical path. Equivalent schemas retain identities; type or nested-shape
+  changes require reapproval instead of inheriting grants.
+- Green evidence: schema service and published-config suites (31 passed), Ruff,
+  Ty, and `git diff --check`.
+- Remaining gaps: provider-derived IDs from live format metadata and complete
+  schema-evolution acceptance remain open. Pickle compatibility is unchanged.
 
 ### X03 catalog binding replacement — `1771f26`
 
