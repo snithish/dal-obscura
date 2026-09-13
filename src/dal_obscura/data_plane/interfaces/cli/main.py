@@ -299,7 +299,11 @@ def _load_identity_provider(
         raise ValueError("Unsupported identity provider; only built-in OIDC is supported")
     args = cast(
         dict[str, object],
-        resolve_secret_refs(raw.get("args", {}), provider=secret_provider),
+        resolve_secret_refs(
+            raw.get("args", {}),
+            provider=secret_provider,
+            expected_scope="identity",
+        ),
     )
     return OidcJwksIdentityProvider(**cast(Any, args))
 

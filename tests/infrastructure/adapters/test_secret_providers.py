@@ -53,11 +53,14 @@ def test_resolve_secret_refs_uses_explicit_secret_shape_only(monkeypatch: pytest
 
     resolved = resolve_secret_refs(
         {
-            "jwt_secret": {"secret": "jwt-signing"},
+            "jwt_secret": {"secret": "jwt-signing", "scope": "identity"},
             "plain_env_ref": {"key": "DAL_OBSCURA_JWT_SECRET"},
-            "keys": [{"id": "svc", "secret": {"secret": "api-key"}}],
+            "keys": [
+                {"id": "svc", "secret": {"secret": "api-key", "scope": "identity"}}
+            ],
         },
         provider=provider,
+        expected_scope="identity",
     )
 
     assert resolved == {
@@ -71,7 +74,11 @@ def test_resolve_secret_refs_rejects_missing_secret():
     provider = EnvSecretProvider()
 
     with pytest.raises(ValueError, match="Secret 'missing' could not be resolved"):
-        resolve_secret_refs({"jwt_secret": {"secret": "missing"}}, provider=provider)
+        resolve_secret_refs(
+            {"jwt_secret": {"secret": "missing", "scope": "identity"}},
+            provider=provider,
+            expected_scope="identity",
+        )
 
 
 def test_resolve_secret_refs_requires_matching_scope(monkeypatch: pytest.MonkeyPatch):
@@ -86,6 +93,12 @@ def test_resolve_secret_refs_requires_matching_scope(monkeypatch: pytest.MonkeyP
     with pytest.raises(ValueError, match="scope"):
         resolve_secret_refs(
             {"password": {"secret": "catalog-password", "scope": "catalog:other"}},
+            provider=provider,
+            expected_scope="catalog:analytics",
+        )
+    with pytest.raises(ValueError, match="scope"):
+        resolve_secret_refs(
+            {"password": {"secret": "catalog-password"}},
             provider=provider,
             expected_scope="catalog:analytics",
         )

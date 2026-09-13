@@ -472,7 +472,7 @@ def test_schema_loading_resolves_secret_references_before_provider_call(
             "name": name,
             "options": {
                 "uri": "https://catalog.example/api",
-                "token": {"secret": "CATALOG_TOKEN"},
+                "token": {"secret": "CATALOG_TOKEN", "scope": "catalog:analytics"},
             },
         },
     )

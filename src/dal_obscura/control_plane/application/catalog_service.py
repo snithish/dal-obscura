@@ -416,7 +416,7 @@ def _validate_descriptor_value(name: str, field_type: object, value: object, *, 
     if field_type in (None, "string", "uri") and not isinstance(value, str):
         raise ValidationFailure(f"{kind} option {name!r} must be a string")
     if field_type == "secret_reference":
-        if not isinstance(value, dict) or set(value) not in ({"secret"}, {"secret", "scope"}):
+        if not isinstance(value, dict) or set(value) != {"secret", "scope"}:
             raise ValidationFailure(
                 f"{kind} option {name!r} must be an explicit secret reference"
             )
@@ -506,9 +506,10 @@ def _reject_inline_secrets(value: object, prefix: str = "options") -> None:
     if isinstance(value, dict):
         mapping = cast(dict[str, object], value)
         if (
-            set(mapping) in ({"secret"}, {"secret", "scope"})
+            set(mapping) == {"secret", "scope"}
             and isinstance(mapping.get("secret"), str)
-            and ("scope" not in mapping or isinstance(mapping.get("scope"), str))
+            and isinstance(mapping.get("scope"), str)
+            and bool(str(mapping.get("scope")).strip())
         ):
             return
         for key, nested in mapping.items():
@@ -516,7 +517,7 @@ def _reject_inline_secrets(value: object, prefix: str = "options") -> None:
             path = f"{prefix}.{key}"
             if name in _SECRET_OPTION_KEYS and (
                 not isinstance(nested, dict)
-                or set(nested) not in ({"secret"}, {"secret", "scope"})
+                or set(nested) != {"secret", "scope"}
                 or not isinstance(cast(dict[str, object], nested).get("secret"), str)
             ):
                 raise ValidationFailure(f"Catalog option {path!r} must use a secret reference")

@@ -79,16 +79,18 @@ def resolve_secret_refs(
 ) -> object:
     """Recursively resolves explicit secret references in provider configuration.
 
-    A reference may include an optional ``scope``. Scoped references are only
-    usable by the matching caller scope; callers that do not declare a scope
-    fail closed instead of silently widening the reference.
+    Every reference must carry an explicit ``scope``. It is usable only by the
+    matching caller scope; callers that do not declare a scope fail closed
+    instead of silently widening the reference.
     """
     if isinstance(value, Mapping):
         mapping = cast(Mapping[object, object], value)
         secret_key = mapping.get("secret")
         reference_scope = mapping.get("scope")
-        if set(mapping) in ({"secret"}, {"secret", "scope"}) and isinstance(secret_key, str):
-            if "scope" in mapping and (
+        if isinstance(secret_key, str) and set(mapping) != {"secret", "scope"}:
+            raise ValueError("Secret reference scope is required")
+        if set(mapping) == {"secret", "scope"} and isinstance(secret_key, str):
+            if (
                 not isinstance(reference_scope, str)
                 or not reference_scope.strip()
                 or expected_scope is None
