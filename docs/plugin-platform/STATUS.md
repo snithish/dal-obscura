@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `97da8cb` (per-batch plugin output validation at `97da8cb`; public task payload boundary at `0f09d42`; ticket-handle metadata bounds at `fc90ddc`; secure REST auxiliary URI checks at `6ee3d81`; REST identifier validation at `4980609`; ledger update for manifest deadline enforcement at `827c6a9`; manifest deadline enforcement at `97663b7`; session-expiry fence at `4e2ac7d`; public option bounds at `17ab77f`; symlink rejection at `6136224`; malformed-entry isolation at `6c129d3`; REST descriptor contract at `7adb4d6`; concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
+Implementation follow-up through `e074d5c` (runtime descriptor verification at `e074d5c`; per-batch plugin output validation at `97da8cb`; public task payload boundary at `0f09d42`; ticket-handle metadata bounds at `fc90ddc`; secure REST auxiliary URI checks at `6ee3d81`; REST identifier validation at `4980609`; ledger update for manifest deadline enforcement at `827c6a9`; manifest deadline enforcement at `97663b7`; session-expiry fence at `4e2ac7d`; public option bounds at `17ab77f`; symlink rejection at `6136224`; malformed-entry isolation at `6c129d3`; REST descriptor contract at `7adb4d6`; concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -40,6 +40,8 @@ fields before entering the same serializer; opaque task objects are rejected at
 planning time.
 Lazy public plugin output is now checked batch by batch for Arrow type, exact
 declared schema, and byte limits before it reaches DuckDB or Flight.
+Admitted catalog/format factories that expose runtime descriptors are checked for
+kind and plugin identity before use.
 Local probes are recorded in [the review](IMPLEMENTATION_REVIEW.md).
 Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_STATUS.md).
 
