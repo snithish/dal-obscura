@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `b0f5ac2`.
+Implementation follow-up through `489624d`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -91,7 +91,10 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   so failed reloads cannot expose mixed generations. Provider-specific transport
   timeouts and multi-worker capacity remain open. A process-wide bounded discovery
   semaphore now rejects excess concurrent operations promptly and releases slots on
-  every provider failure/cancellation path.
+  every provider failure/cancellation path. Workspace discovery also caps each
+  authenticated issuer/subject at two concurrent operations and removes idle keyed
+  slots after release; cross-worker aggregate limits and provider termination remain
+  open.
 - X09 UI lifecycle: **implemented-unverified**; initial-load epoch and synchronous
   logout fencing plus stale history/preview/review/publish response checks are fixed.
   Deferred browser tests and full operation-state coverage remain open.
