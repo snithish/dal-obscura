@@ -175,6 +175,23 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
         handle = self._catalog.resolve_table(identifier, _context())
         if not isinstance(handle, TableHandle):
             raise ValueError("Public catalog returned an invalid table handle")
+        if handle.format_plugin_id == "iceberg":
+            from dal_obscura.data_plane.infrastructure.table_formats.iceberg import (
+                IcebergTableFormat,
+            )
+
+            metadata_location = handle.metadata.get("metadata_location")
+            if not isinstance(metadata_location, str) or not metadata_location:
+                raise ValueError("Iceberg plugin handle is missing metadata_location")
+            io_options = handle.metadata.get("io_options", {})
+            if not isinstance(io_options, dict):
+                raise ValueError("Iceberg plugin handle has invalid io_options")
+            return IcebergTableFormat(
+                catalog_name=self._name,
+                table_name=target,
+                metadata_location=metadata_location,
+                io_options=dict(io_options),
+            )
         raw_factory = self._format_factory_loader(handle.format_plugin_id)
         if not callable(raw_factory):
             raise ValueError("Public format factory is not callable")

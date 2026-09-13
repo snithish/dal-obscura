@@ -1,0 +1,19 @@
+[project]
+name = "dal-obscura-iceberg-rest"
+version = "0.1.0"
+description = "Admitted PyIceberg REST catalog plugin for dal-obscura"
+requires-python = ">=3.10"
+dependencies = [
+  "dal-obscura-plugin-api==0.1.0",
+  "pyiceberg>=0.6.0",
+]
+
+[project.entry-points."dal_obscura.catalogs.v1"]
+iceberg.rest = "dal_obscura_iceberg_rest.catalog:rest_catalog_factory"
+
+[tool.setuptools.package-data]
+dal_obscura_iceberg_rest = ["dal_obscura-plugin.json"]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
