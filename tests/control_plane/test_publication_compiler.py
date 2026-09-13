@@ -103,7 +103,7 @@ def test_compiler_publishes_asset_policy_version_and_runtime():
     assert asset.target == "default.users"
     assert asset.compiled_config["policy"]["rules"][0]["row_filter"] == "region = 'us'"
     assert asset.compiled_config["plugins"] == {
-        "catalog": "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog",
+        "catalog": "iceberg.sql",
         "table_format": "iceberg",
     }
     assert isinstance(asset.policy_version, int)
