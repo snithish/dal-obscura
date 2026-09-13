@@ -53,9 +53,19 @@ init_tls() {
       -extfile "$ROOT/secrets/ui.ext" \
       -out "$ROOT/secrets/ui.crt"
   fi
-  if [ ! -f "$ROOT/secrets/flight.key" ]; then
-    cp "$ROOT/secrets/ui.key" "$ROOT/secrets/flight.key"
-    cp "$ROOT/secrets/ui.crt" "$ROOT/secrets/flight.crt"
+  # Flight and the browser edge use separate private keys even though both
+  # certificates are issued by the disposable local CA. Replace the original
+  # profile's copied UI key on the next init so the boundaries are repaired.
+  if [ ! -f "$ROOT/secrets/flight.key" ] || cmp -s "$ROOT/secrets/ui.key" "$ROOT/secrets/flight.key"; then
+    openssl genrsa -out "$ROOT/secrets/flight.key" 2048
+    openssl req -new -key "$ROOT/secrets/flight.key" -subj "/CN=localhost" \
+      -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" -out "$ROOT/secrets/flight.csr"
+    printf 'subjectAltName=DNS:localhost,IP:127.0.0.1\n' > "$ROOT/secrets/flight.ext"
+    openssl x509 -req -in "$ROOT/secrets/flight.csr" -CA "$ROOT/secrets/ca.crt" \
+      -CAkey "$ROOT/secrets/ca.key" -CAcreateserial -days 365 -sha256 \
+      -extfile "$ROOT/secrets/flight.ext" \
+      -out "$ROOT/secrets/flight.crt"
+    rm -f "$ROOT/secrets/flight.csr" "$ROOT/secrets/flight.ext"
   fi
   cp "$ROOT/secrets/ca.crt" "$ROOT/secrets/client-ca.crt"
   chmod 600 "$ROOT/secrets"/*.key

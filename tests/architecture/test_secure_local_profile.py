@@ -22,6 +22,9 @@ def test_secure_local_profile_reuses_production_security_contract() -> None:
         in env
     )
     assert "openssl" in runner
+    assert 'openssl genrsa -out "$ROOT/secrets/flight.key"' in runner
+    assert 'cp "$ROOT/secrets/ui.key" "$ROOT/secrets/flight.key"' not in runner
+    assert "separate `localhost` certificates" in readme
     assert "REPLACE_WITH placeholders" in runner
     assert "Missing readable TLS material" in runner
     assert "same production services and security settings" in readme
