@@ -1,0 +1,63 @@
+#!/usr/bin/env sh
+set -eu
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PRODUCTION="$ROOT/../production/compose.yaml"
+PROFILE="$ROOT/.env"
+OVERRIDE="$ROOT/compose.yaml"
+
+compose() {
+  docker compose --env-file "$PROFILE" -f "$PRODUCTION" -f "$OVERRIDE" "$@"
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./run init       generate local TLS material (never commits it)
+  ./run config     render and validate the layered topology
+  ./run up         migrate and start the secure-local services
+  ./run down       stop services without deleting PostgreSQL data
+  ./run reset      stop services and delete the local database volume
+  ./run logs [svc] show logs (default: edge)
+EOF
+}
+
+init_tls() {
+  mkdir -p "$ROOT/secrets"
+  chmod 700 "$ROOT/secrets"
+  if [ ! -f "$ROOT/secrets/ca.key" ]; then
+    openssl genrsa -out "$ROOT/secrets/ca.key" 3072
+    openssl req -x509 -new -nodes -key "$ROOT/secrets/ca.key" -sha256 -days 365 \
+      -subj "/CN=dal-obscura secure-local CA" -out "$ROOT/secrets/ca.crt"
+  fi
+  if [ ! -f "$ROOT/secrets/ui.key" ]; then
+    openssl genrsa -out "$ROOT/secrets/ui.key" 2048
+    openssl req -new -key "$ROOT/secrets/ui.key" -subj "/CN=localhost" \
+      -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" -out "$ROOT/secrets/ui.csr"
+    printf 'subjectAltName=DNS:localhost,IP:127.0.0.1\n' > "$ROOT/secrets/ui.ext"
+    openssl x509 -req -in "$ROOT/secrets/ui.csr" -CA "$ROOT/secrets/ca.crt" \
+      -CAkey "$ROOT/secrets/ca.key" -CAcreateserial -days 365 -sha256 \
+      -extfile "$ROOT/secrets/ui.ext" \
+      -out "$ROOT/secrets/ui.crt"
+  fi
+  if [ ! -f "$ROOT/secrets/flight.key" ]; then
+    cp "$ROOT/secrets/ui.key" "$ROOT/secrets/flight.key"
+    cp "$ROOT/secrets/ui.crt" "$ROOT/secrets/flight.crt"
+  fi
+  cp "$ROOT/secrets/ca.crt" "$ROOT/secrets/client-ca.crt"
+  chmod 600 "$ROOT/secrets"/*.key
+  chmod 644 "$ROOT/secrets"/*.crt
+  rm -f "$ROOT/secrets/ca.srl" "$ROOT/secrets/ui.csr" "$ROOT/secrets/ui.ext"
+  echo "TLS material written to $ROOT/secrets; copy .env.example to .env and configure a real OIDC issuer."
+}
+
+if [ "$#" -eq 0 ]; then usage >&2; exit 2; fi
+case "$1" in
+  init) init_tls ;;
+  config) [ -f "$PROFILE" ] || { echo "Create $PROFILE first" >&2; exit 2; }; compose config --quiet ;;
+  up) [ -f "$PROFILE" ] || { echo "Create $PROFILE first" >&2; exit 2; }; compose up -d --wait ;;
+  down) [ -f "$PROFILE" ] || exit 0; compose down ;;
+  reset) [ -f "$PROFILE" ] || exit 0; compose down --volumes --remove-orphans ;;
+  logs) [ -f "$PROFILE" ] || { echo "Create $PROFILE first" >&2; exit 2; }; compose logs "${2:-edge}" ;;
+  *) usage >&2; exit 2 ;;
+esac

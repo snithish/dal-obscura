@@ -1,0 +1,48 @@
+name: dal-obscura-local-secure
+
+# Layer this file over the production reference. The application containers,
+# database roles, migration order, TLS settings, and readiness checks are the
+# same; this layer only adds loopback ports and a local HTTPS browser edge.
+services:
+  data-plane:
+    ports:
+      - "127.0.0.1:8815:8815"
+      - "127.0.0.1:8816:8816"
+
+  ui:
+    ports: []
+
+  edge:
+    image: ${DAL_OBSCURA_EDGE_IMAGE:?set DAL_OBSCURA_EDGE_IMAGE}
+    depends_on:
+      ui:
+        condition: service_started
+    ports:
+      - "127.0.0.1:8443:8443"
+    networks:
+      - backend
+    read_only: true
+    tmpfs:
+      - /data
+      - /config
+      - /tmp
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    secrets:
+      - source: ui_cert
+        target: ui.crt
+      - source: ui_key
+        target: ui.key
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+
+networks:
+  backend:
+    internal: true
+
+secrets:
+  ui_cert:
+    file: ${DAL_OBSCURA_UI_TLS_CERT_SOURCE:?set DAL_OBSCURA_UI_TLS_CERT_SOURCE}
+  ui_key:
+    file: ${DAL_OBSCURA_UI_TLS_KEY_SOURCE:?set DAL_OBSCURA_UI_TLS_KEY_SOURCE}

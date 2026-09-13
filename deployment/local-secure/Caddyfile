@@ -1,0 +1,4 @@
+https://localhost:8443 {
+    tls /run/secrets/ui.crt /run/secrets/ui.key
+    reverse_proxy ui:8080
+}
