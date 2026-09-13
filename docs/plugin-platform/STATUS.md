@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `17ab77f` (public option bounds at `17ab77f`; symlink rejection at `6136224`; malformed-entry isolation at `6c129d3`; REST descriptor contract at `7adb4d6`; concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
+Implementation follow-up through `4e2ac7d` (session-expiry fence at `4e2ac7d`; public option bounds at `17ab77f`; symlink rejection at `6136224`; malformed-entry isolation at `6c129d3`; REST descriptor contract at `7adb4d6`; concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -20,6 +20,10 @@ Public catalog configuration objects now reject non-JSON-like values and bounded
 shape violations before factory invocation. The manifest/Parquet plugin rejects
 symlink components in governed paths, and malformed unallowlisted entry points are
 ignored so arbitrary installed metadata cannot block admission reloads.
+The UI API client now broadcasts authenticated `401` responses; the app fences
+loaded policy, schema, plugin, and management state before showing the sign-in
+surface again, covering server-side session expiry and revocation while a page is
+open.
 Local probes are recorded in [the review](IMPLEMENTATION_REVIEW.md).
 Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_STATUS.md).
 
@@ -110,7 +114,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   open.
 - X09 UI lifecycle: **implemented-unverified**; initial-load epoch and synchronous
   logout fencing plus stale history/preview/review/publish response checks are fixed.
-  Deferred browser tests and full operation-state coverage remain open.
+  Authenticated `401` responses now also fence loaded private state and return the
+  browser to the sign-in surface after expiry or revocation. Deferred browser tests
+  and full operation-state coverage remain open.
 - X10 complete authoring/management: **implemented-unverified** for the deny-all UI
   path; controls now expose save/test/review/publish actions when rules are empty.
   Full editor, activation, accessibility, and browser evidence remain open.
