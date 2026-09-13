@@ -454,7 +454,7 @@ function App() {
     const controller = new AbortController();
     assetAbortController.current = controller;
     try {
-      const [fullAsset, schema, history, grants, access] = await Promise.all([controlPlane.getAsset(assetId, controller.signal), controlPlane.getSchema(assetId, controller.signal), controlPlane.listAssetHistory(assetId, controller.signal).catch(() => []), controlPlane.listGrants(assetId, controller.signal).catch(() => []), controlPlane.getAssetAccess(assetId, controller.signal).catch(() => undefined)]);
+      const [fullAsset, schema, history, grants, access] = await Promise.all([controlPlane.getAsset(assetId, controller.signal), controlPlane.getSchema(assetId, controller.signal), controlPlane.listAssetHistory(assetId, controller.signal), controlPlane.listGrants(assetId, controller.signal), controlPlane.getAssetAccess(assetId, controller.signal)]);
       if (epoch !== loadEpoch.current) return;
       fullAsset.schema = schema;
       const draft = await controlPlane.getDraft(assetId, selectedDraftId, controller.signal);
@@ -468,7 +468,7 @@ function App() {
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       if (inheritedEpoch !== undefined && epoch !== loadEpoch.current) return;
-      setNotice("Could not load this asset. Your previous editor state remains unchanged.");
+      setNotice("Could not load this asset and its access metadata. Your previous editor state remains unchanged.");
     }
   }
 

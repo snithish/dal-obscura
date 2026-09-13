@@ -108,6 +108,10 @@ Follow-up `pending` clears read-only draft-handoff mode when the user selects a
 different asset, preventing an author’s review state from leaking into another
 asset’s editor. The existing load and edit epochs continue to fence the switch.
 
+Follow-up `pending` stops asset history, grants, and effective-access failures
+from becoming empty success states. Any protected read failure now leaves the
+previous editor intact and reports that access metadata could not be loaded.
+
 ## Implementation update — identity migration (working slice, 2026-09-13)
 
 - Packet / status / candidate commit / owner: N05/F01 partial / VERIFY / pending atomic commit / control-plane.
