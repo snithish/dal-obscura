@@ -62,6 +62,10 @@ pair, with focused coverage for an oversized caller timeout.
 - Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane tests/interfaces/control_plane tests/application/access_flow tests/infrastructure/adapters/test_published_config.py tests/common/config_store -q` — all collected tests passed; focused demo and identity suites passed; changed-path Ruff and `ty` checks passed.
 - Remaining N05/B07 work: live two-process OIDC freshness, principal-kind persistence in all live IdP paths, revocation/disabled-account timing, and browser login/logout evidence. N02 still needs offline operator execution against real populated records. Release remains HOLD.
 
+Authoritative post-identity qualification (`/tmp/dal-obscura-identity.xml`) collected
+830 tests, passed 816, skipped the same 14 explicit opt-in lanes, and reported zero
+failures/errors in 125.768 seconds with loopback/subprocess permissions enabled.
+
 ## Implementation update — 8a615c3 (2026-09-14)
 
 - Packet / status / candidate commit / owner: N01/B01-B02 / VERIFY / `8a615c3` / toolchain and documentation.
