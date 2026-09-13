@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `85d211b`.
+Implementation follow-up through `27a8720`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -108,7 +108,8 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   schema fingerprints, and unsafe/unbounded declarative config schemas.
   Request-scoped execution contexts now require timezone-aware deadlines, bounded
   correlation/capability values, and callable cancellation hooks in both core and
-  public contracts. Catalog table identifiers in both contracts now enforce a
+  public contracts. Explicit `CatalogFactory` and `TableFormatFactory` protocols
+  now describe the core-injected construction boundary. Catalog table identifiers in both contracts now enforce a
   bounded segment count/length and printable string segments, preventing malformed
   provider identities from crossing the plugin boundary.
   Service-side compatibility contracts and online wheel artifact evidence remain
@@ -124,7 +125,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   artifact evidence remain open. Extended five-part locks now load the bounded
   static descriptor by default and normalize descriptor read/parse failures before
   factory import; legacy three-part locks keep their compatibility fallback.
-  Authenticated plugin diagnostics also expose enabled, not-installed, and
+  Multi-kind static descriptor documents can now describe both catalog and
+  table-format entry points in one wheel; the loader selects exactly the matching
+  kind/ID before any factory import. Authenticated plugin diagnostics also expose enabled, not-installed, and
   incompatible states for operator-expected IDs without importing factories or
   enumerating unapproved installations.
 - X13 plugin routing and migration: **implementing**; immutable compiled asset
@@ -166,7 +169,15 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   exact artifacts in an isolated environment, and runs the conformance suite before
   image publication.
 - X16 REST Iceberg qualification: **not-started**.
-- X17 independent manifest/Parquet plugin: **not-started**.
+- X17 independent manifest/Parquet plugin: **implementing**; the independent
+  `dal-obscura-manifest-parquet` package registers `manifest` and `parquet.dataset`
+  entry points against the public SDK. Its catalog pins an operator-owned manifest,
+  revision, nested Arrow schema, top-level field IDs, and root-scoped immutable file
+  membership; its format validates every member schema and emits one task per
+  Parquet row group with nested projection support. Escape, unreadable-member, and
+  row-group execution tests pass. Core admission wiring, schema-scoped IDs beyond
+  top-level fields, mixed-schema/corrupt-file/retry evidence, and live wheel/UI/
+  consumer qualification remain open.
 - X18 consumer qualification: **not-started**.
 - X19 secure deployment and identity lifecycle: **implementing**; production
   Compose now separates migration/control/data credentials, provisions isolated
