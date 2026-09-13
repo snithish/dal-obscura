@@ -82,6 +82,14 @@ def test_record_batch_validation_stops_unbounded_output_generators():
         check_record_batches(schema, endless_batches(), max_batches=2)
 
 
+def test_record_batch_validation_enforces_per_batch_byte_budget():
+    schema = pa.schema([pa.field("payload", pa.binary())])
+    batch = pa.RecordBatch.from_pylist([{"payload": b"secret"}], schema=schema)
+
+    with pytest.raises(ValueError, match="batch byte budget"):
+        check_record_batches(schema, [batch], max_batch_bytes=1)
+
+
 class _ConformingFormat:
     descriptor = _descriptor()
 

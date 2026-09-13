@@ -24,6 +24,7 @@ DEFAULT_MAX_DISCOVERY_PAGES = 64
 DEFAULT_MAX_DISCOVERY_TABLES = 10_000
 DEFAULT_MAX_SCHEMA_BYTES = 1_048_576
 DEFAULT_MAX_SCHEMA_FIELDS = 4_096
+DEFAULT_MAX_BATCH_BYTES = 16 * 1024 * 1024
 
 
 @dataclass
@@ -127,13 +128,14 @@ def check_discovery_page(page: DiscoveryPage, *, result: ConformanceResult | Non
         result.record_pass("discovery_page")
 
 
-def check_record_batches(
+def check_record_batches(  # noqa: C901
     schema: pa.Schema,
     batches: Iterable[pa.RecordBatch],
     *,
     result: ConformanceResult | None = None,
     max_batches: int = DEFAULT_MAX_OUTPUT_BATCHES,
     max_rows: int = DEFAULT_MAX_OUTPUT_ROWS,
+    max_batch_bytes: int = DEFAULT_MAX_BATCH_BYTES,
     cancel_check: Callable[[], bool] | None = None,
     deadline: datetime | None = None,
 ) -> None:
@@ -144,7 +146,7 @@ def check_record_batches(
     request.  The iterator is deliberately never collected into a table.
     """
 
-    if max_batches <= 0 or max_rows <= 0:
+    if max_batches <= 0 or max_rows <= 0 or max_batch_bytes <= 0:
         raise ValueError("output budgets must be positive")
     row_count = 0
 
@@ -165,6 +167,8 @@ def check_record_batches(
             raise ValueError(f"batch {index} is not an Arrow record batch")
         if batch.schema != schema:
             raise ValueError(f"batch {index} schema differs from the declared output schema")
+        if batch.nbytes > max_batch_bytes:
+            raise ValueError(f"batch {index} exceeds the {max_batch_bytes}-byte batch byte budget")
         if set(batch.schema.names) != set(schema.names):
             raise ValueError(f"batch {index} contains undeclared output columns")
         row_count += batch.num_rows
