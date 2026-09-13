@@ -78,6 +78,14 @@ it can load the correct internal runtime partition.
 | `DAL_OBSCURA_LOCATION` | Data plane | Advertised Flight endpoint location. |
 | `DAL_OBSCURA_TICKET_SECRET` | Data plane | HMAC secret for opaque tickets. |
 | `DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST` | Control plane | Comma-separated exact catalog/object-store hostnames allowed in production. |
+| `DAL_OBSCURA_PLUGIN_LOCK_FILE` | Control plane and data plane | Optional operator-mounted JSON lock containing pinned five-part plugin identities; loaded before any plugin factory import. |
+
+The plugin lock is read-only startup input. Keep it owned by the service account and
+mode `0644` or stricter; symbolic links and group/world-writable files are rejected.
+Its shape is `{"version": 1, "plugins": [{"kind": "catalog"|"table_format",
+"plugin_id": "...", "lock": ["distribution", "version", "api", "descriptor_digest",
+"artifact_digest"]}]}`. The trusted in-tree Iceberg pair remains available when no
+external lock is configured.
 
 See [Security](security.md) and the runnable [OIDC example](../examples/auth/keycloak-oidc/README.md).
 
