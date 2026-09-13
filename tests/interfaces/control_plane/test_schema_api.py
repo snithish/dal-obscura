@@ -378,7 +378,10 @@ def test_production_publication_rejects_schema_drift_after_review(monkeypatch) -
     assert saved_draft.status_code == 200, saved_draft.json()
     admitted = client.put(
         f"/v1/assets/{asset['id']}/schema-fields",
-        json={"fields": [{"name": "id", "field_id": "iceberg:1", "path": ["id"]}]},
+        json={
+            "fields": [{"name": "id", "field_id": "iceberg:1", "path": ["id"]}],
+            "expected_revision": 1,
+        },
         headers=ADMIN_HEADERS,
     )
     assert admitted.status_code == 200, admitted.json()
@@ -399,6 +402,7 @@ def test_production_publication_rejects_schema_drift_after_review(monkeypatch) -
         json={
             "module": ICEBERG_CATALOG_MODULE,
             "options": {"type": "sql", "uri": "sqlite:///catalog-revised.db"},
+            "expected_revision": 0,
         },
         headers=ADMIN_HEADERS,
     )
@@ -421,7 +425,10 @@ def test_production_publication_rejects_schema_drift_after_review(monkeypatch) -
 
     changed_admitted = client.put(
         f"/v1/assets/{asset['id']}/schema-fields",
-        json={"fields": [{"name": "id", "field_id": "iceberg:99", "path": ["id"]}]},
+        json={
+            "fields": [{"name": "id", "field_id": "iceberg:99", "path": ["id"]}],
+            "expected_revision": 2,
+        },
         headers=ADMIN_HEADERS,
     )
     assert changed_admitted.status_code == 200, changed_admitted.json()
@@ -439,7 +446,10 @@ def test_production_publication_rejects_schema_drift_after_review(monkeypatch) -
 
     reset_admitted = client.put(
         f"/v1/assets/{asset['id']}/schema-fields",
-        json={"fields": [{"name": "id", "field_id": "iceberg:1", "path": ["id"]}]},
+        json={
+            "fields": [{"name": "id", "field_id": "iceberg:1", "path": ["id"]}],
+            "expected_revision": 3,
+        },
         headers=ADMIN_HEADERS,
     )
     assert reset_admitted.status_code == 200, reset_admitted.json()
@@ -490,7 +500,7 @@ def test_production_publication_rejects_asset_metadata_change_after_review(monke
     )
     changed = client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["new-owner"], "expected_revision": 0},
+        json={"owners": ["new-owner"], "expected_revision": 1},
         headers=ADMIN_HEADERS,
     )
     published = client.post(
@@ -579,7 +589,7 @@ def test_publisher_can_review_and_publish_editor_draft_by_explicit_id(monkeypatc
     asset = _provision_reviewable_asset(client)
     client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["editor"], "expected_revision": 0},
+        json={"owners": ["editor"], "expected_revision": 1},
         headers=ADMIN_HEADERS,
     )
     client.put(
@@ -588,7 +598,8 @@ def test_publisher_can_review_and_publish_editor_draft_by_explicit_id(monkeypatc
             "grants": [
                 {"principal": "publisher", "capability": "read"},
                 {"principal": "publisher", "capability": "publish"},
-            ]
+            ],
+            "expected_revision": 2,
         },
         headers=ADMIN_HEADERS,
     )
