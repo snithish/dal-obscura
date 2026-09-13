@@ -60,6 +60,16 @@ class RestCatalog(CatalogPlugin):
             raise ValueError("REST catalog URI must be an absolute HTTP(S) URL")
         if parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise ValueError("REST catalog URI cannot contain credentials or query data")
+        if parsed.scheme == "http" and any(
+            key in options for key in ("token", "credential")
+        ):
+            raise ValueError("REST catalog credentials require an HTTPS URI")
+        warehouse = options.get("warehouse")
+        if warehouse is not None:
+            _validate_optional_uri(warehouse, "warehouse")
+        oauth_uri = options.get("oauth2-server-uri")
+        if oauth_uri is not None:
+            _validate_optional_uri(oauth_uri, "oauth2-server-uri", http_only=True)
         self._options = options
         self._catalog = None
 
@@ -161,6 +171,19 @@ def _snapshot_id(table: object) -> str | None:
     snapshot = getattr(table, "current_snapshot", None)
     value = getattr(snapshot, "snapshot_id", snapshot)
     return str(value) if value is not None else None
+
+
+def _validate_optional_uri(value: object, label: str, *, http_only: bool = False) -> None:
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"REST catalog {label} must be a URI")
+    parsed = urlsplit(value)
+    allowed = {"http", "https", "s3", "gs", "abfs", "file"}
+    if not parsed.netloc or parsed.scheme not in allowed:
+        raise ValueError(f"REST catalog {label} must be an absolute HTTP(S) URI")
+    if http_only and parsed.scheme != "https":
+        raise ValueError(f"REST catalog {label} must use HTTPS")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError(f"REST catalog {label} cannot contain credentials or query data")
 
 
 def rest_catalog_factory(config: CatalogConfig, context: ExecutionContext) -> RestCatalog:

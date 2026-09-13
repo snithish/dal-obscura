@@ -51,6 +51,18 @@ def test_rest_catalog_rejects_unsupported_options():
         RestCatalog(_config(script="import os"), _context())
 
 
+def test_rest_catalog_rejects_credentials_over_plain_http():
+    with pytest.raises(ValueError, match="HTTPS"):
+        RestCatalog(_config(uri="http://catalog.example/v1", token="resolved"), _context())
+
+
+def test_rest_catalog_rejects_credential_bearing_auxiliary_uris():
+    with pytest.raises(ValueError, match="warehouse"):
+        RestCatalog(_config(warehouse="s3://user:pass@bucket/warehouse"), _context())
+    with pytest.raises(ValueError, match="oauth2-server-uri"):
+        RestCatalog(_config(**{"oauth2-server-uri": "http://issuer.example/token"}), _context())
+
+
 def test_rest_catalog_rejects_unresolved_secret_objects():
     with pytest.raises(ValueError, match="must be strings"):
         RestCatalog(_config(token={"secret": "REST_TOKEN"}), _context())
