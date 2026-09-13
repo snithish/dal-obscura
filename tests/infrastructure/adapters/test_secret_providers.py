@@ -72,3 +72,25 @@ def test_resolve_secret_refs_rejects_missing_secret():
 
     with pytest.raises(ValueError, match="Secret 'missing' could not be resolved"):
         resolve_secret_refs({"jwt_secret": {"secret": "missing"}}, provider=provider)
+
+
+def test_resolve_secret_refs_requires_matching_scope(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("LOCAL_catalog-password", "value")
+    provider = EnvSecretProvider(config={"prefix": "LOCAL_"})
+
+    assert resolve_secret_refs(
+        {"password": {"secret": "catalog-password", "scope": "catalog:analytics"}},
+        provider=provider,
+        expected_scope="catalog:analytics",
+    ) == {"password": "value"}
+    with pytest.raises(ValueError, match="scope"):
+        resolve_secret_refs(
+            {"password": {"secret": "catalog-password", "scope": "catalog:other"}},
+            provider=provider,
+            expected_scope="catalog:analytics",
+        )
+    with pytest.raises(ValueError, match="scope"):
+        resolve_secret_refs(
+            {"password": {"secret": "catalog-password", "scope": "catalog:analytics"}},
+            provider=provider,
+        )

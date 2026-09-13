@@ -37,6 +37,27 @@ def test_admitted_descriptor_rejects_unknown_and_missing_form_fields() -> None:
         _validate_descriptor_options(descriptor, {})
 
 
+def test_admitted_secret_reference_accepts_bounded_scope() -> None:
+    descriptor = PluginDescriptor(
+        kind="catalog",
+        plugin_id="example.catalog",
+        api_version="1",
+        config_version=1,
+        distribution="example",
+        version="1.0.0",
+        config_schema={"fields": [{"name": "token", "type": "secret_reference"}]},
+    )
+    _validate_descriptor_options(
+        descriptor,
+        {"token": {"secret": "catalog-token", "scope": "catalog:analytics"}},
+    )
+    with pytest.raises(ValidationFailure, match="invalid secret scope"):
+        _validate_descriptor_options(
+            descriptor,
+            {"token": {"secret": "catalog-token", "scope": ""}},
+        )
+
+
 def test_admitted_catalog_options_are_checked_before_factory_use() -> None:
     descriptor = PluginDescriptor(
         kind="catalog",

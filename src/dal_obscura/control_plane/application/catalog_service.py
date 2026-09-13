@@ -109,7 +109,7 @@ def discover_workspace_catalog_tables(
         str(catalog["module"]), catalog_options, plugin_registry
     )
     validate_catalog_options(catalog_options, egress_allowlist=egress_allowlist)
-    catalog_options = _resolve_catalog_secrets(catalog_options)
+    catalog_options = _resolve_catalog_secrets(catalog_options, scope=f"catalog:{name}")
     try:
         with _admit_session_discovery(session_key):
             if (
@@ -174,7 +174,7 @@ def diagnose_workspace_catalog(
         str(catalog["module"]), catalog_options, plugin_registry
     )
     validate_catalog_options(catalog_options, egress_allowlist=egress_allowlist)
-    catalog_options = _resolve_catalog_secrets(catalog_options)
+    catalog_options = _resolve_catalog_secrets(catalog_options, scope=f"catalog:{name}")
     checked_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     try:
         with _admit_session_discovery(session_key):
@@ -312,9 +312,17 @@ def _catalog_revision(catalog: dict[str, object]) -> int:
     return 0
 
 
-def _resolve_catalog_secrets(options: dict[str, Any]) -> dict[str, Any]:
+def _resolve_catalog_secrets(
+    options: dict[str, Any],
+    *,
+    scope: str | None = None,
+) -> dict[str, Any]:
     try:
-        resolved = resolve_secret_refs(options, provider=EnvSecretProvider())
+        resolved = resolve_secret_refs(
+            options,
+            provider=EnvSecretProvider(),
+            expected_scope=scope,
+        )
     except ValueError as exc:
         raise ValidationFailure("Catalog secret could not be resolved") from exc
     return cast(dict[str, Any], resolved)
@@ -412,13 +420,20 @@ def _validate_descriptor_value(name: str, field_type: object, value: object, *, 
     if field_type in (None, "string", "uri") and not isinstance(value, str):
         raise ValidationFailure(f"{kind} option {name!r} must be a string")
     if field_type == "secret_reference":
-        if not isinstance(value, dict) or set(value) != {"secret"}:
+        if not isinstance(value, dict) or set(value) not in ({"secret"}, {"secret", "scope"}):
             raise ValidationFailure(
                 f"{kind} option {name!r} must be an explicit secret reference"
             )
-        secret_name = cast(dict[str, object], value).get("secret")
+        reference = cast(dict[str, object], value)
+        secret_name = reference.get("secret")
         if not isinstance(secret_name, str) or not secret_name.strip():
             raise ValidationFailure(f"{kind} option {name!r} has an invalid secret reference")
+        if "scope" in reference and (
+            not isinstance(reference.get("scope"), str)
+            or not str(reference["scope"]).strip()
+            or len(str(reference["scope"])) > _MAX_OPTION_STRING
+        ):
+            raise ValidationFailure(f"{kind} option {name!r} has an invalid secret scope")
     elif field_type not in (None, "string", "uri"):
         raise ValidationFailure(f"{kind} option {name!r} has an unsupported field type")
 
@@ -494,14 +509,18 @@ def _reject_inline_secrets(value: object, prefix: str = "options") -> None:
 
     if isinstance(value, dict):
         mapping = cast(dict[str, object], value)
-        if set(mapping) == {"secret"} and isinstance(mapping.get("secret"), str):
+        if (
+            set(mapping) in ({"secret"}, {"secret", "scope"})
+            and isinstance(mapping.get("secret"), str)
+            and ("scope" not in mapping or isinstance(mapping.get("scope"), str))
+        ):
             return
         for key, nested in mapping.items():
             name = str(key).strip().lower()
             path = f"{prefix}.{key}"
             if name in _SECRET_OPTION_KEYS and (
                 not isinstance(nested, dict)
-                or set(nested) != {"secret"}
+                or set(nested) not in ({"secret"}, {"secret", "scope"})
                 or not isinstance(cast(dict[str, object], nested).get("secret"), str)
             ):
                 raise ValidationFailure(f"Catalog option {path!r} must use a secret reference")

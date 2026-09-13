@@ -117,7 +117,11 @@ def load_asset_iceberg_schema(
     validate_catalog_options(options, egress_allowlist=egress_allowlist)
     options = cast(
         dict[str, Any],
-        resolve_secret_refs(options, provider=EnvSecretProvider()),
+        resolve_secret_refs(
+            options,
+            provider=EnvSecretProvider(),
+            expected_scope=f"catalog:{catalog['name']}",
+        ),
     )
     if plugin_registry is not None and str(catalog["module"]) != ICEBERG_CATALOG_MODULE:
         return _load_public_plugin_schema(

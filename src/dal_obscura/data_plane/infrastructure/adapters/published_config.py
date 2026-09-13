@@ -436,7 +436,11 @@ class PublishedConfigCatalogRegistry:
                 type=catalog_config.type,
                 options=cast(
                     dict[str, Any],
-                    resolve_secret_refs(catalog_config.options, provider=self._secret_provider),
+                    resolve_secret_refs(
+                        catalog_config.options,
+                        provider=self._secret_provider,
+                        expected_scope=f"catalog:{catalog_config.name}",
+                    ),
                 ),
                 path_enforcer=catalog_config.path_enforcer,
                 plugin_id=catalog_config.plugin_id,

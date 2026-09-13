@@ -71,22 +71,43 @@ def load_secret_provider(
     return EnvSecretProvider(config=provider_config.config)
 
 
-def resolve_secret_refs(value: object, *, provider: SecretProvider) -> object:
-    """Recursively resolves explicit secret references in provider configuration."""
+def resolve_secret_refs(
+    value: object,
+    *,
+    provider: SecretProvider,
+    expected_scope: str | None = None,
+) -> object:
+    """Recursively resolves explicit secret references in provider configuration.
+
+    A reference may include an optional ``scope``. Scoped references are only
+    usable by the matching caller scope; callers that do not declare a scope
+    fail closed instead of silently widening the reference.
+    """
     if isinstance(value, Mapping):
         mapping = cast(Mapping[object, object], value)
         secret_key = mapping.get("secret")
-        if set(mapping) == {"secret"} and isinstance(secret_key, str):
+        reference_scope = mapping.get("scope")
+        if set(mapping) in ({"secret"}, {"secret", "scope"}) and isinstance(secret_key, str):
+            if "scope" in mapping and (
+                not isinstance(reference_scope, str)
+                or not reference_scope.strip()
+                or expected_scope is None
+                or reference_scope != expected_scope
+            ):
+                raise ValueError("Secret reference scope does not match the requesting scope")
             resolved = provider.get_secret(secret_key)
             if resolved is None or not resolved:
                 raise ValueError(f"Secret {secret_key!r} could not be resolved")
             return resolved
         return {
-            str(key): resolve_secret_refs(nested, provider=provider)
+            str(key): resolve_secret_refs(nested, provider=provider, expected_scope=expected_scope)
             for key, nested in mapping.items()
         }
     if isinstance(value, list):
-        return [resolve_secret_refs(item, provider=provider) for item in value]
+        return [
+            resolve_secret_refs(item, provider=provider, expected_scope=expected_scope)
+            for item in value
+        ]
     return value
 
 
