@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `399f311` (CI plugin lifecycle security lane;
+Implementation follow-up through `fe48d54` (backup checksum verification and
+runbook; CI plugin lifecycle security lane;
 PostgreSQL binding CAS race probe;
 PostgreSQL grant CAS race probe;
 plugin lifecycle formatting and
@@ -1469,6 +1470,10 @@ and manifest packages.
   Pickle compatibility is unchanged.
 - This helper/runbook slice does not close A22; an executed recovery drill is
   still mandatory.
+
+The recovery helper now emits a SHA-256 sidecar and verifies it before restore,
+with refusal when either backup or sidecar would be overwritten. This improves
+artifact integrity but does not replace the required isolated drill.
 
 ### X20 recovery/upgrade acceptance probes — `86e1eee`
 
