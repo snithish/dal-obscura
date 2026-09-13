@@ -202,6 +202,12 @@ def create_app(  # noqa: C901
             response.headers["pragma"] = "no-cache"
         response.headers.setdefault("x-content-type-options", "nosniff")
         response.headers.setdefault("referrer-policy", "no-referrer")
+        response.headers.setdefault(
+            "content-security-policy",
+            "default-src 'self'; script-src 'self'; style-src 'self'; "
+            "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; "
+            "base-uri 'self'; form-action 'self'",
+        )
         return response
 
     @app.middleware("http")

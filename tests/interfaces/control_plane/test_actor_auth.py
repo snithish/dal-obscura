@@ -354,6 +354,10 @@ def test_session_reports_admin_token_actor():
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["x-content-type-options"] == "nosniff"
+    csp = response.headers["content-security-policy"]
+    assert "unsafe-eval" not in csp
+    assert "script-src 'self'" in csp
+    assert "frame-ancestors 'none'" in csp
     assert response.json() == {
         "principal": "platform:admin",
         "groups": [],
