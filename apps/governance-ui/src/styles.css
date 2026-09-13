@@ -96,3 +96,25 @@ td small { display: block; color: #61736e; margin-top: 4px; }
 .capability-list { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
 .schema-drift-warning { margin: 12px 0 0; padding: 10px 12px; border: 1px solid #d97706; border-radius: 6px; background: #fff7ed; color: #9a3412; font-size: 12px; line-height: 1.45; }
 @media (max-width: 760px) { .plugin-card { align-items: flex-start; flex-direction: column; } .capability-list { justify-content: flex-start; } }
+
+.theme-control select { border: 1px solid #99b6ac; border-radius: 5px; padding: 7px 8px; background: #fff; color: inherit; font-size: 12px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+@media (max-width: 760px) { .topbar { flex-wrap: wrap; } .actor { display: flex; width: 100%; flex-wrap: wrap; justify-content: flex-end; } .actor > div { margin-right: auto; min-width: 0; } .actor .theme-control { order: 3; } }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { color-scheme: dark; }
+  :root:not([data-theme="light"]) body { background: #0b1220; color: #f8fafc; }
+  :root:not([data-theme="light"]) main, :root:not([data-theme="light"]) .studio, :root:not([data-theme="light"]) .test-card, :root:not([data-theme="light"]) .form-card, :root:not([data-theme="light"]) .management-card { background: #111827; border-color: #64748b; }
+  :root:not([data-theme="light"]) .result-panel { background: #1e293b; }
+  :root:not([data-theme="light"]) .muted, :root:not([data-theme="light"]) .help, :root:not([data-theme="light"]) .actor small { color: #cbd5e1; }
+  :root:not([data-theme="light"]) input, :root:not([data-theme="light"]) textarea, :root:not([data-theme="light"]) select { background: #1e293b; color: #f8fafc; border-color: #64748b; }
+  :root:not([data-theme="light"]) .notice { background: #164e63; border-color: #67e8f9; }
+  :root:not([data-theme="light"]) .secondary { background: #1e293b; color: #e0e7ff; border-color: #64748b; }
+}
+:root[data-theme="dark"] { color-scheme: dark; }
+:root[data-theme="dark"] body { background: #0b1220; color: #f8fafc; }
+:root[data-theme="dark"] main, :root[data-theme="dark"] .studio, :root[data-theme="dark"] .test-card, :root[data-theme="dark"] .form-card, :root[data-theme="dark"] .management-card { background: #111827; border-color: #64748b; }
+:root[data-theme="dark"] .result-panel { background: #1e293b; }
+:root[data-theme="dark"] .muted, :root[data-theme="dark"] .help, :root[data-theme="dark"] .actor small { color: #cbd5e1; }
+:root[data-theme="dark"] input, :root[data-theme="dark"] textarea, :root[data-theme="dark"] select { background: #1e293b; color: #f8fafc; border-color: #64748b; }
+:root[data-theme="dark"] .notice { background: #164e63; border-color: #67e8f9; }
+:root[data-theme="dark"] .secondary { background: #1e293b; color: #e0e7ff; border-color: #64748b; }
