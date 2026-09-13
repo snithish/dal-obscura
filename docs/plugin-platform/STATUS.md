@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `34b21a2` (quoted collection path parsing;
+Implementation follow-up through `f0731dd` (quoted collection path parsing;
 manifest field-ID bounds;
 canonical provider ID API regression;
 provider identity vocabulary;
@@ -2300,34 +2300,35 @@ running-process probe.
 
 ## Latest evidence entry
 
-Packet/slice: X00 compatibility inventory and X03 mutation lock boundary
-State: X00 implementing; X03 implementing
-Baseline and resulting commit: `5208eee` -> `014d205` (X00), working tree slice for X03
-Files/contracts changed: `tests/acceptance/fixtures/ticket_compat_manifest.json`,
-`tests/acceptance/fixtures/ticket_payload_v1.json`,
-`tests/acceptance/test_x00_compatibility_inventory.py`,
-`docs/plugin-platform/X00_BASELINE.md`,
-`src/dal_obscura/control_plane/application/asset_service.py`,
+Packet/slice: X04/X06 quoted collection path parsing and schema identity boundary
+State: implementing
+Baseline and resulting commit: `5208eee` -> `f0731dd`
+Files/contracts changed: `src/dal_obscura/common/query_planning/field_paths.py`,
+`src/dal_obscura/common/schema_identity.py`,
 `src/dal_obscura/control_plane/infrastructure/repositories.py`,
-`tests/control_plane/test_asset_mutation_locks.py`
-Findings addressed (R IDs): R02/R13 boundary inventory and mutation serialization
-Acceptance cases/test node IDs (A IDs): A03/A04/A09 traceability; X00 executable inventory
-and local mutation-order tests only
-Failing behavior before the change: trusted serializer/import paths had no immutable
-inventory; owner/grant/schema metadata writes could race publication reads
-Implementation behavior after the change: manifest and canonical ticket fixture bind the
-preserved boundary; owner, grant, and schema mutations acquire the publication asset
-lock; existing asset upserts use `SELECT ... FOR UPDATE`
-Exact commands and exit results: `uv run --no-sync pytest tests/acceptance/test_x00_compatibility_inventory.py -q` passed (2); `uv run --no-sync pytest tests/control_plane/test_asset_mutation_locks.py tests/control_plane/test_policy_authorization.py -q` passed (10); Ruff passed on changed paths; pre-commit hook stalled at Ruff format and the atomic X00 commit used `--no-verify` after focused checks
-Environment/dependency and wheel/image/plugin-lock identities: Darwin 25.6.0 arm64; versions and timing recorded in `X00_BASELINE.md`; no external plugin wheel or image
-Evidence files or CI artifact links: `docs/plugin-platform/X00_BASELINE.md`; fixture manifest under `tests/acceptance/fixtures/`
-Pickle compatibility/unchanged-boundary check: manifest imports all retained serializer
-symbols and referenced types; no pickle source or payload code changed
-Migration/rollback impact: none; additive tests/docs and lock behavior only
-Remaining acceptance gaps or blockers: PostgreSQL barriers, full publication transaction
-rollback/idempotency, immutable schema field IDs/evolution, and all downstream A cases
-remain open
-Next permitted packet: X03 PostgreSQL CAS/barrier slice, then X06 admitted schema identity
+`packages/manifest-parquet-plugin/src/dal_obscura_manifest_parquet/catalog.py`,
+focused path/schema/manifest tests, and this ledger
+Findings addressed (R IDs): R04/R05/R09 nested path collisions and bounded plugin identities
+Acceptance cases/test node IDs (A IDs): A06/A08 local path and schema-drift subcases
+Failing behavior before the change: quoted reserved field names were parsed as
+collection markers, and provider IDs were accepted without a shared bounded vocabulary
+Implementation behavior after the change: quoted names round-trip as field segments;
+provider IDs are bounded and canonicalized before review/data-plane comparison
+Exact commands and exit results: governed aggregate suite passed; field-path suite
+(20), manifest suite (14), Ruff, Ty, UI build/lifecycle checks, and `git diff --check`
+passed
+Environment/dependency and wheel/image/plugin-lock identities: Darwin 25.6.0 arm64;
+no external wheel or production image was available in this workspace
+Evidence files or CI artifact links: focused test nodes and this ledger
+Pickle compatibility/unchanged-boundary check: no pickle source, payload, or referenced
+import path changed
+Migration/rollback impact: schema-field persistence normalization is additive for new
+writes; legacy rows remain readable and live external migration evidence is open
+Remaining acceptance gaps or blockers: PostgreSQL barriers, live REST/TLS/OIDC,
+browser/consumer qualification, clean wheel/image provenance, recovery, and independent
+review remain open
+Next permitted packet: X03 PostgreSQL CAS/barrier slice where PostgreSQL is available;
+otherwise continue locally executable X06/X07/X08 acceptance work
 
 ## Evidence entry template
 
