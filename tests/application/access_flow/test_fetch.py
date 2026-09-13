@@ -439,3 +439,31 @@ def test_stream_deadline_guard_stops_before_emitting_a_late_batch():
 
     with pytest.raises(TimeoutError, match="Stream deadline exceeded"):
         next(guarded)
+
+
+def test_stream_guard_closes_upstream_when_consumer_stops_early() -> None:
+    from dal_obscura.data_plane.application.use_cases.fetch_stream import _guard_stream_expiry
+
+    class ClosableBatches:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def __iter__(self):
+            yield pa.record_batch([pa.array([1])], names=["id"])
+            yield pa.record_batch([pa.array([2])], names=["id"])
+
+        def close(self) -> None:
+            self.closed = True
+
+    upstream = ClosableBatches()
+    guarded = _guard_stream_expiry(
+        upstream,
+        ticket_expires_at=9999,
+        identity_expires_at=None,
+        stream_deadline_at=9999,
+        now=lambda: 1,
+    )
+    next(guarded)
+    guarded.close()
+
+    assert upstream.closed is True

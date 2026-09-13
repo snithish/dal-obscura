@@ -171,6 +171,7 @@ def fetch_read(
         tenant_id=tenant_id,
         expected_policy_version=payload.policy_version,
     )
+    result_batches = _close_stream_on_termination(result_batches)
 
     output_schema = flow.masking.masked_schema(original_schema, payload.columns, scan.masks)
 
@@ -193,15 +194,18 @@ def _guard_stream_expiry(
     now: Callable[[], int],
 ) -> Iterator[pa.RecordBatch]:
     """Stops a stream before handing over a batch after ticket or identity expiry."""
-    for batch in batches:
-        current_time = now()
-        if current_time >= stream_deadline_at:
-            raise TimeoutError("Stream deadline exceeded")
-        if current_time >= ticket_expires_at:
-            raise PermissionError("Ticket expired")
-        if identity_expires_at is not None and current_time >= identity_expires_at:
-            raise PermissionError("Identity expired")
-        yield batch
+    try:
+        for batch in batches:
+            current_time = now()
+            if current_time >= stream_deadline_at:
+                raise TimeoutError("Stream deadline exceeded")
+            if current_time >= ticket_expires_at:
+                raise PermissionError("Ticket expired")
+            if identity_expires_at is not None and current_time >= identity_expires_at:
+                raise PermissionError("Identity expired")
+            yield batch
+    finally:
+        _close_iterable(batches)
 
 
 def _guard_stream_policy_version(
@@ -219,15 +223,33 @@ def _guard_stream_policy_version(
     publication ID. Checking it for each yielded batch makes a newly activated
     generation take effect before subsequent Flight output is handed over.
     """
-    for batch in batches:
-        current_policy_version = authorizer.current_policy_version(
-            target,
-            catalog,
-            tenant_id=tenant_id,
-        )
-        if current_policy_version != expected_policy_version:
-            raise PermissionError("stale policy version")
-        yield batch
+    try:
+        for batch in batches:
+            current_policy_version = authorizer.current_policy_version(
+                target,
+                catalog,
+                tenant_id=tenant_id,
+            )
+            if current_policy_version != expected_policy_version:
+                raise PermissionError("stale policy version")
+            yield batch
+    finally:
+        _close_iterable(batches)
+
+
+def _close_stream_on_termination(batches: Iterable[pa.RecordBatch]) -> Iterator[pa.RecordBatch]:
+    """Close scanner/transform iterators when a consumer cancels or stops early."""
+
+    try:
+        yield from batches
+    finally:
+        _close_iterable(batches)
+
+
+def _close_iterable(value: object) -> None:
+    close = getattr(value, "close", None)
+    if callable(close):
+        close()
 
 
 def _require_current_authorization(
