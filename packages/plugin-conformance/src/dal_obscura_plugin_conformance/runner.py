@@ -151,6 +151,8 @@ def check_record_batches(
             break
         if index >= max_batches:
             raise ValueError(f"format returned more than {max_batches} output batches")
+        if not isinstance(batch, pa.RecordBatch):
+            raise ValueError(f"batch {index} is not an Arrow record batch")
         if batch.schema != schema:
             raise ValueError(f"batch {index} schema differs from the declared output schema")
         if set(batch.schema.names) != set(schema.names):

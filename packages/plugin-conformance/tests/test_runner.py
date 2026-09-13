@@ -411,6 +411,25 @@ def test_catalog_runner_validates_bounded_discovery_and_coverage():
     assert result.artifact_identity == "sha256:catalog"
 
 
+def test_catalog_runner_rejects_omitted_expected_table():
+    users = TableIdentifier(namespace=("default",), name="users")
+
+    class _IncompleteCatalog:
+        descriptor = _catalog_descriptor()
+
+        def list_tables(self, context, *, continuation, limit):
+            del context, continuation, limit
+            return DiscoveryPage((users,))
+
+    result = run_catalog_checks(
+        cast(CatalogPlugin, _IncompleteCatalog()),
+        _catalog_context(),
+        expected_table_ids={"default.users", "default.orders"},
+    )
+    assert result.to_dict()["status"] == "failed"
+    assert any("do not match expected coverage" in failure for failure in result.failures)
+
+
 @pytest.mark.parametrize(
     ("plugin_type", "message"),
     [("duplicate", "duplicate table identities"), ("cycle", "repeated continuation")],
