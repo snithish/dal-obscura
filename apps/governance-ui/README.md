@@ -7,8 +7,7 @@ separate administrative surface; it does not grant governed data-read access.
 
 The first working slice implements an asset workspace with:
 
-- bounded, searchable asset inventory loading from `GET /v1/assets/page`, with
-  clearly labelled demo content only when `?demo` is explicitly requested;
+- bounded, searchable asset inventory loading from `GET /v1/assets/page`;
 - revisioned draft loading and saving through `/v1/assets/{id}/draft`;
 - schema-field selection, row restriction editing, and all six supported masks;
 - synthetic persona policy evaluation through `/v1/assets/{id}/policy-evaluate`;
@@ -36,9 +35,10 @@ profile, enter the configured `DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN` in the
 labelled local sign-in form; the server exchanges it for the same HttpOnly
 session and CSRF cookie used by OIDC. Production disables this bootstrap route
 and uses the SSO button, which starts the OIDC authorization-code/PKCE flow.
-The labelled synthetic demo workspace appears only when the `?demo` query
-parameter is explicitly present; failed authentication never loads demo policy
-data.
+Failed authentication never loads policy data. Local development uses the same
+authenticated browser session and CSRF flow as production; the only local
+bootstrap is the explicitly configured control-plane token form. Production
+disables that bootstrap route and uses the SSO button.
 
 ```bash
 pnpm run check
