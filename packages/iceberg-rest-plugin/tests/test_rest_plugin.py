@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from time import sleep
 
 import pytest
 from dal_obscura_iceberg_rest.catalog import RestCatalog
@@ -168,3 +170,26 @@ def test_rest_catalog_bounds_namespace_listing():
     plugin._catalog = FakeCatalog()
     with pytest.raises(ValueError, match="namespaces"):
         plugin.list_tables(_context(), limit=10)
+
+
+def test_rest_catalog_initializes_provider_once_under_concurrency(monkeypatch) -> None:
+    plugin = RestCatalog(_config(), _context())
+    calls = 0
+
+    class FakeCatalog:
+        pass
+
+    def load_catalog(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        sleep(0.01)
+        return FakeCatalog()
+
+    import pyiceberg.catalog
+
+    monkeypatch.setattr(pyiceberg.catalog, "load_catalog", load_catalog)
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        values = list(executor.map(lambda _: plugin._load_catalog(_context()), range(8)))
+
+    assert calls == 1
+    assert all(value is values[0] for value in values)

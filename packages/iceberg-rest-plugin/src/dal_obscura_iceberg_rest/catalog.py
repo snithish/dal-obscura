@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from threading import Lock
 from urllib.parse import urlsplit
 
 from dal_obscura_plugin_api import (
@@ -74,6 +75,7 @@ class RestCatalog(CatalogPlugin):
             _validate_optional_uri(oauth_uri, "oauth2-server-uri", http_only=True)
         self._options = options
         self._catalog = None
+        self._catalog_lock = Lock()
 
     def list_tables(
         self,
@@ -128,15 +130,19 @@ class RestCatalog(CatalogPlugin):
     def _load_catalog(self, context: ExecutionContext):
         self._validate_context(context)
         if self._catalog is None:
-            from pyiceberg.catalog import load_catalog
+            with self._catalog_lock:
+                if self._catalog is None:
+                    from pyiceberg.catalog import load_catalog
 
-            properties = {key: str(value) for key, value in self._options.items() if key != "uri"}
-            self._catalog = load_catalog(
-                self._config.instance_id,
-                type="rest",
-                uri=str(self._options["uri"]),
-                **properties,
-            )
+                    properties = {
+                        key: str(value) for key, value in self._options.items() if key != "uri"
+                    }
+                    self._catalog = load_catalog(
+                        self._config.instance_id,
+                        type="rest",
+                        uri=str(self._options["uri"]),
+                        **properties,
+                    )
         return self._catalog
 
     @staticmethod
