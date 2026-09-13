@@ -21,4 +21,6 @@ def test_secure_local_profile_reuses_production_security_contract() -> None:
         in env
     )
     assert "openssl" in runner
+    assert "REPLACE_WITH placeholders" in runner
+    assert "Missing readable TLS material" in runner
     assert "same production services and security settings" in readme

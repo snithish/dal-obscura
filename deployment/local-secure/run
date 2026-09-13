@@ -10,6 +10,19 @@ compose() {
   docker compose --env-file "$PROFILE" -f "$PRODUCTION" -f "$OVERRIDE" "$@"
 }
 
+validate_profile() {
+  if grep -Eq '^[A-Za-z_][A-Za-z0-9_]*=.*REPLACE_WITH' "$PROFILE"; then
+    echo "$PROFILE still contains REPLACE_WITH placeholders; replace every secret and image digest before starting" >&2
+    exit 2
+  fi
+  for required in flight.crt flight.key client-ca.crt ui.crt ui.key; do
+    if [ ! -r "$ROOT/secrets/$required" ]; then
+      echo "Missing readable TLS material: $ROOT/secrets/$required (run ./run init)" >&2
+      exit 2
+    fi
+  done
+}
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -54,10 +67,10 @@ init_tls() {
 if [ "$#" -eq 0 ]; then usage >&2; exit 2; fi
 case "$1" in
   init) init_tls ;;
-  config) [ -f "$PROFILE" ] || { echo "Create $PROFILE first" >&2; exit 2; }; compose config --quiet ;;
-  up) [ -f "$PROFILE" ] || { echo "Create $PROFILE first" >&2; exit 2; }; compose up -d --wait ;;
+  config) [ -f "$PROFILE" ] || { echo "Create $PROFILE first" >&2; exit 2; }; validate_profile; compose config --quiet ;;
+  up) [ -f "$PROFILE" ] || { echo "Create $PROFILE first" >&2; exit 2; }; validate_profile; compose up -d --wait ;;
   down) [ -f "$PROFILE" ] || exit 0; compose down ;;
   reset) [ -f "$PROFILE" ] || exit 0; compose down --volumes --remove-orphans ;;
-  logs) [ -f "$PROFILE" ] || { echo "Create $PROFILE first" >&2; exit 2; }; compose logs "${2:-edge}" ;;
+  logs) [ -f "$PROFILE" ] || { echo "Create $PROFILE first" >&2; exit 2; }; validate_profile; compose logs "${2:-edge}" ;;
   *) usage >&2; exit 2 ;;
 esac
