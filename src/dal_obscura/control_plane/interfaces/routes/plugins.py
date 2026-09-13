@@ -92,6 +92,11 @@ def _pair_payload(descriptors: list[PluginDescriptor]) -> list[dict[str, object]
     pairs: list[dict[str, object]] = []
     for catalog in catalogs:
         for table_format in formats:
+            status = (
+                "admitted"
+                if catalog.capabilities & table_format.capabilities
+                else "incompatible"
+            )
             pairs.append(
                 {
                     "catalog_plugin_id": catalog.plugin_id,
@@ -99,7 +104,7 @@ def _pair_payload(descriptors: list[PluginDescriptor]) -> list[dict[str, object]
                     "capabilities": sorted(
                         catalog.capabilities & table_format.capabilities
                     ),
-                    "status": "admitted",
+                    "status": status,
                 }
             )
     return pairs

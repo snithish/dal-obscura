@@ -640,7 +640,7 @@ function ConnectionsView({ catalogs, publications, plugins, pluginStates, plugin
     if (!target || !identifier) return setMessage("The discovered table has no safe identifier.");
     const catalogRow = catalogs.find((item) => item.name === catalog);
     const catalogPluginId = catalogRow?.module === "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog" ? "iceberg.sql" : catalogRow?.module;
-    const formatId = pluginPairs.find((pair) => pair.catalog_plugin_id === catalogPluginId)?.format_plugin_id;
+    const formatId = pluginPairs.find((pair) => pair.catalog_plugin_id === catalogPluginId && pair.status === "admitted")?.format_plugin_id;
     const formatPlugin = plugins.find((plugin) => plugin.kind === "table_format" && plugin.plugin_id === formatId);
     if (!formatPlugin) return setMessage("No admitted table-format adapter is available for this catalog.");
     try { await controlPlane.saveAsset(catalog, target, formatPlugin.plugin_id, identifier); setMessage(`Governed asset ${target} registered. Assign owners and author a policy in Assets.`); await discover(catalog); } catch { setMessage("Asset registration was rejected; the source table was not changed."); }

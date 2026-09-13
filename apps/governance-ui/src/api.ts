@@ -190,7 +190,7 @@ export type PluginDescriptor = {
   display_name: string;
   capabilities: string[];
   config_schema: Record<string, unknown>;
-  status: "admitted";
+  status: "admitted" | "incompatible";
 };
 
 export type PluginState = {
