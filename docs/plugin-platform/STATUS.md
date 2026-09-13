@@ -317,6 +317,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Evidence: settings and UI-shell tests passed; changed-path Ruff/format checks passed. Full generated TypeScript client regeneration remains open because the UI currently uses handwritten transport types.
 - Remaining N03/B04 work: generate/check browser DTOs from the OpenAPI contract, complete real pair compatibility, and run live consumer/browser evidence. Release remains HOLD.
 
+## Implementation update — 923ad50 (2026-09-13)
+
+- Packet / status / candidate commit / owner: N03/B05 partial / VERIFY / `923ad50` / configuration migration tests.
+- Observable behavior delivered: the idempotent schema migration regression now tracks Alembic head `20260913_0018`, covering the auth-provider revision column introduced in the preceding atomic slice.
+- Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/common/config_store/test_schema_migrations.py -q` — 7 passed.
+- Remaining N03/B05 work: complete generated browser DTO wiring and live process-boundary evidence. Release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
