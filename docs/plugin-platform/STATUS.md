@@ -285,6 +285,14 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Evidence: migrated control-plane/API suites and route inventory passed; direct UI TypeScript/Vite build passed. `rg` finds no production callers for retired route methods. Release remains HOLD.
 - Remaining N02/B03 work: remove remaining duplicate SDK/contract definitions, three-part lock and alias residue, enforce strict old-input rejection and maintenance-mode offline conversion, and prove clean installed-wheel migration.
 
+## Implementation update — d139566 (2026-09-13)
+
+- Packet / status / candidate commit / owner: N03/B05 partial / VERIFY / `d139566` / auth-provider settings + governance UI.
+- Observable behavior delivered: authentication provider chains now persist a shared revision through migration `20260913_0018`. Initial creation uses revision zero; existing replacements require `expected_revision`, stale writes return 409, and omitted preconditions return 428 before mutation. Responses expose the revision and the UI sends it with provider saves. Redacted secret arguments remain preserved.
+- Changed paths: auth-provider ORM/repository/service/route, migration, validation redaction, UI API/editor, and CAS regression fixtures. Pickle serializers, serialized task classes, and import paths were not changed.
+- Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane tests/interfaces/control_plane -q` — all passed; `tests/plugin_platform` and `tests/infrastructure/adapters` passed; UI `tsc` and changed-path Ruff passed.
+- Remaining N03/B05 work: safe structured error envelopes, two-process freshness/race evidence, and generated DTO/browser proof. Release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
