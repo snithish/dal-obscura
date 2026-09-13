@@ -34,6 +34,14 @@ their underlying functionality is wholly absent.
 - N15 — Deployment/recovery/artifact integrity: OPEN; requires N05/N12/N13/N14; B20/B21.
 - N16 — Independent security/UX acceptance: OPEN; requires N01–N15; B22/all G/B.
 
+## Implementation update — 5ad6f38 (2026-09-14)
+
+- Packet / status / candidate commit / owner: N06/B09 foundation partial / VERIFY / \`5ad6f38\` / governance UI.
+- Observable behavior delivered: changes, activity, connections, and settings routing now live in a typed management feature module with one shared management DTO contract. The root remains responsible for session identity, transport orchestration, and route selection.
+- Changed paths: \`apps/governance-ui/src/components/ManagementViews.tsx\`, \`apps/governance-ui/src/main.tsx\`. No backend, session, pickle serializer, serialized class, payload, or import path changed.
+- Evidence: direct UI TypeScript build, Vite production build (272.19 kB JavaScript / 82.35 kB gzip), all 5 UI lifecycle/schema tests, and \`git diff --check\` passed.
+- Remaining N06/B09 work: adopt the selected accessible primitives/icon system, typed deep links, responsive visual review at required sizes, CSP/browser/axe evidence, and keyboard/screen-reader journeys. Remaining N07–N16 packets and live release gates stay open; release remains HOLD.
+
 ## Implementation update — f99f441 (2026-09-14)
 
 - Packet / status / candidate commit / owner: N06/B09 foundation partial / VERIFY / \`f99f441\` / governance UI.
