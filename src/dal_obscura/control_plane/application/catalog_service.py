@@ -15,7 +15,7 @@ from threading import BoundedSemaphore, Lock
 from typing import Any, cast
 from urllib.parse import parse_qsl, urlsplit
 
-from dal_obscura.common.plugin_api import PluginRegistry
+from dal_obscura.common.plugin_api import PluginDescriptor, PluginRegistry
 from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.infrastructure.catalog_discovery import (
     ICEBERG_CATALOG_MODULE,
@@ -239,6 +239,7 @@ def upsert_workspace_catalog(
         admitted = plugin_registry.admitted() or plugin_registry.reload()
         if ("catalog", module) not in admitted:
             raise ValidationFailure("Catalog plugin is not admitted")
+        _validate_descriptor_options(admitted[("catalog", module)], options)
     validate_catalog_options(options, egress_allowlist=egress_allowlist)
     context = store.ensure_default_workspace_context()
     catalog_id = store.upsert_catalog(
@@ -328,6 +329,36 @@ def validate_catalog_options(
             raise ValidationFailure(
                 f"Catalog endpoint host {hostname!r} is outside the configured egress allowlist"
             )
+
+
+def _validate_descriptor_options(descriptor: PluginDescriptor, options: dict[str, Any]) -> None:
+    """Enforce the bounded declarative fields exposed by an admitted plugin."""
+
+    raw_fields = descriptor.config_schema.get("fields")
+    if not isinstance(raw_fields, list):
+        return
+    field_specs = [cast(dict[str, object], item) for item in raw_fields if isinstance(item, dict)]
+    fields = {
+        item.get("name")
+        for item in field_specs
+        if isinstance(item.get("name"), str)
+    }
+    if unknown := sorted(set(options) - fields):
+        raise ValidationFailure(
+            "Catalog options contain unsupported fields: " + ", ".join(unknown)
+        )
+    required: set[str] = set()
+    for item in field_specs:
+        name = item.get("name")
+        if item.get("required") is True and isinstance(name, str):
+            required.add(name)
+    missing = sorted(
+        name for name in required if name not in options or options[name] in (None, "")
+    )
+    if missing:
+        raise ValidationFailure(
+            "Catalog options are missing required fields: " + ", ".join(missing)
+        )
 
 
 def _walk_strings(value: object, prefix: str = "options"):
