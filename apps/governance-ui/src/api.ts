@@ -325,11 +325,18 @@ export const controlPlane = {
     return request<PolicyVersionPage>(`/v1/policy-versions/page${suffix}`);
   },
   listAuditEvents: (assetId?: string) => request<AuditEvent[]>("/v1/audit/events" + (assetId ? "?asset_id=" + encodeURIComponent(assetId) : "")),
-  listAuditEventsPage: async (params: { limit?: number; cursor?: string; assetId?: string } = {}) => {
+  listAuditEventsPage: async (params: { limit?: number; cursor?: string; assetId?: string; actor?: string; action?: string; resourceType?: string; outcome?: string; correlationId?: string; createdAfter?: string; createdBefore?: string } = {}) => {
     const query = new URLSearchParams();
     if (params.limit !== undefined) query.set("limit", String(params.limit));
     if (params.cursor) query.set("cursor", params.cursor);
     if (params.assetId) query.set("asset_id", params.assetId);
+    if (params.actor) query.set("actor", params.actor);
+    if (params.action) query.set("action", params.action);
+    if (params.resourceType) query.set("resource_type", params.resourceType);
+    if (params.outcome) query.set("outcome", params.outcome);
+    if (params.correlationId) query.set("correlation_id", params.correlationId);
+    if (params.createdAfter) query.set("created_after", params.createdAfter);
+    if (params.createdBefore) query.set("created_before", params.createdBefore);
     const suffix = query.toString() ? `?${query.toString()}` : "";
     return request<AuditEventPage>(`/v1/audit/events/page${suffix}`);
   },
