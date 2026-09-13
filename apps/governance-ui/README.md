@@ -15,6 +15,8 @@ The first working slice implements an asset workspace with:
 - editable synthetic principal, group, and claims inputs for server-side review;
 - per-asset consumer handoff snippets for Python/DuckDB, Spark, and raw Arrow;
 - bounded catalog connection diagnostics with redacted provider failures;
+- authenticated Settings editing for the OIDC provider chain, with staged
+  activation guidance and redacted secret preservation;
 - local draft status, explicit save, and stale-test messaging.
 
 Changes are saved as personal drafts and require a current server review before
