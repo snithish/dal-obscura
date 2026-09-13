@@ -209,6 +209,14 @@ exists but required execution or human evidence is missing. DONE requires every
 FR/NFR and acceptance subcase to pass on the candidate. Missing access/environment
 is recorded explicitly; it is never PASS or a waived skip.
 
+## Implementation update — 2b66520 (2026-09-14)
+
+- Packet / status / candidate commit / owner: N06/B09 and N09/B13 deep-link partial / VERIFY / `2b66520` / governance UI.
+- Observable behavior delivered: typed `version` deep links now open the asset History tab, validate the requested revision against the loaded asset history, fetch the immutable policy snapshot with an abort signal, fence stale responses, and render authorized rule details with a restore action. Selecting a revision updates the same-origin URL so the view is reproducible and shareable.
+- Changed paths: `apps/governance-ui/src/api.ts`, `apps/governance-ui/src/components/AssetWorkspace.tsx`, `apps/governance-ui/src/main.tsx`, and `apps/governance-ui/src/styles.css`. No backend, session, pickle serializer, serialized class, payload, or import path changed.
+- Evidence: direct UI TypeScript build, Vite production build (275.83 kB JavaScript / 83.27 kB gzip), all 6 UI lifecycle/schema tests, and `git diff --check` passed.
+- Remaining N06/N09 work: browser back/refresh qualification, accessible primitive/icon system, responsive visual review, CSP/axe and keyboard/screen-reader evidence, plus live review/publication gates. Release remains HOLD.
+
 ## Evidence inherited, with limits
 
 The historical ledger reports Python/socket-enabled suite and PostgreSQL checks
