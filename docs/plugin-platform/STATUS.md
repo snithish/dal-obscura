@@ -237,6 +237,14 @@ from `packages/plugin-api`; the server wheel metadata declares the SDK
 dependency. This is artifact evidence only; live plugin admission and
 maintenance-mode conversion remain open.
 
+## Implementation update — 14edd5b (2026-09-13)
+
+- Packet / status / candidate commit / owner: N02/B03 partial / VERIFY / `14edd5b` / compiler + data-plane manifest reader + offline migration.
+- Observable behavior delivered: newly compiled catalog and asset manifests carry canonical `catalog.type` metadata without a Python module identity. The serving reader rejects legacy module-shaped catalog config before registry/provider resolution. The explicit `dal-obscura-migrate plugin-bindings --apply` path rewrites only the known Iceberg shape, reports changes once, and is idempotent on rerun; unknown records remain unsupported.
+- Changed paths: publication compiler, published-config adapter, plugin-binding migration, and focused migration/serving tests. Pickle serializer and serialized task paths remain untouched.
+- Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/common/config_store/test_plugin_bindings.py tests/infrastructure/adapters/test_published_config.py tests/control_plane/test_publication_compiler.py -q` — all passed; changed-path Ruff and `git diff --check` passed.
+- Remaining N02/B03 work: strict old lock/secret/API input matrix, migration qualification on populated PostgreSQL with maintenance cutover, and release artifact admission. Release remains HOLD.
+
 ## Implementation update — 2e23b25 (2026-09-13)
 
 - Packet / status / candidate commit / owner: N02/N05 UI authentication cleanup / VERIFY / `2e23b25` / governance UI.
