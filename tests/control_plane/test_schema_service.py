@@ -24,6 +24,7 @@ from dal_obscura.control_plane.application.schema_service import (
     MAX_SCHEMA_DEPTH,
     MAX_SCHEMA_NODES,
     _arrow_field_id,
+    _load_legacy_iceberg_schema,
     get_asset_schema,
     schema_fingerprint,
 )
@@ -317,6 +318,64 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
             asset_id,
             ControlPlaneActor.for_platform_admin("admin"),
             plugin_registry=ForgedRegistry(),
+        )
+
+
+def test_legacy_iceberg_format_bridge_loads_external_catalog_handle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    schema = pa.schema([pa.field("id", pa.int64())])
+    identifier = TableIdentifier(namespace=("default",), name="events")
+    handle = TableHandle(
+        catalog_plugin_id="iceberg.rest",
+        catalog_instance_id="analytics",
+        catalog_revision=2,
+        identifier=identifier,
+        format_plugin_id="iceberg",
+        handle_version=1,
+        metadata={"metadata_location": "https://catalog.example/metadata.json"},
+    )
+    received: dict[str, object] = {}
+
+    class FakeIcebergFormat:
+        def __init__(self, **kwargs):
+            received.update(kwargs)
+
+        def get_schema(self):
+            return schema
+
+    monkeypatch.setattr(
+        "dal_obscura.data_plane.infrastructure.table_formats.iceberg.IcebergTableFormat",
+        FakeIcebergFormat,
+    )
+
+    result = _load_legacy_iceberg_schema(
+        handle=handle,
+        catalog_name="analytics",
+        egress_allowlist=("catalog.example",),
+    )
+
+    assert result == schema
+    assert received["metadata_location"] == "https://catalog.example/metadata.json"
+
+
+def test_legacy_iceberg_format_bridge_checks_returned_location_before_io() -> None:
+    identifier = TableIdentifier(namespace=("default",), name="events")
+    handle = TableHandle(
+        catalog_plugin_id="iceberg.rest",
+        catalog_instance_id="analytics",
+        catalog_revision=2,
+        identifier=identifier,
+        format_plugin_id="iceberg",
+        handle_version=1,
+        metadata={"metadata_location": "https://blocked.example/metadata.json"},
+    )
+
+    with pytest.raises(ValidationFailure, match="egress allowlist"):
+        _load_legacy_iceberg_schema(
+            handle=handle,
+            catalog_name="analytics",
+            egress_allowlist=("catalog.example",),
         )
 
 
