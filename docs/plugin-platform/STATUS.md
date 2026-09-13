@@ -241,6 +241,10 @@ is recorded explicitly; it is never PASS or a waived skip.
 - Evidence: direct UI TypeScript build, Vite production build (276.99 kB JavaScript / 83.64 kB gzip), all 7 UI lifecycle/schema/recovery tests, and `git diff --check` passed.
 - Remaining N07 work: session-scoped query/mutation cache, rendered deferred-response race coverage for every workflow, and live recovery qualification for all listed statuses. Release remains HOLD.
 
+Follow-up `1e240c3` expands the recovery mapper evidence to all governed HTTP
+statuses (403, 404, 409, 422, 429, and 503); the UI lifecycle/schema/recovery
+test count is now 8.
+
 ## Evidence inherited, with limits
 
 The historical ledger reports Python/socket-enabled suite and PostgreSQL checks
