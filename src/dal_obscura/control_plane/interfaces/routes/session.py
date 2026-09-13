@@ -347,9 +347,6 @@ def _post_login_redirect(config: dict[str, object], redirect_uri: str) -> str:
     configured = str(config.get("post_login_redirect_uri", "")).strip()
     if configured:
         return configured
-    fallback = str(config.get("post_logout_redirect_uri", "")).strip()
-    if fallback:
-        return fallback
     parsed = urlsplit(redirect_uri)
     return urlunsplit((parsed.scheme, parsed.netloc, "/", "", ""))
 

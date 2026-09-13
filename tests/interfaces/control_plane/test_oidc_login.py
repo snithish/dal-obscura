@@ -11,6 +11,7 @@ from dal_obscura.common.config_store.db import (
 )
 from dal_obscura.control_plane.interfaces import api as api_module
 from dal_obscura.control_plane.interfaces.api import create_app
+from dal_obscura.control_plane.interfaces.routes.session import _post_login_redirect
 
 
 def _client(nonce_resolver) -> TestClient:
@@ -144,3 +145,13 @@ def test_successful_oidc_callback_clears_client_login_limit(monkeypatch) -> None
     # A successful callback resets the client window, so the default limiter
     # can immediately admit another login start.
     assert client.get("/auth/login", follow_redirects=False).status_code == 303
+
+
+def test_login_redirect_does_not_reuse_logout_destination() -> None:
+    assert (
+        _post_login_redirect(
+            {"post_logout_redirect_uri": "https://issuer.example/logout"},
+            "https://gateway.example/auth/callback",
+        )
+        == "https://gateway.example/"
+    )
