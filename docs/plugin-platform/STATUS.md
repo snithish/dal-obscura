@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `ebf71b6` (operator plugin-lock startup loading;
+Implementation follow-up through `165015f` (direct asset mutation row locks;
+operator plugin-lock startup loading;
 forged descriptor regression;
 control-plane descriptor identity checks;
 control-plane built-in registry startup;
@@ -323,6 +324,9 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   `DAL_OBSCURA_PLUGIN_LOCK_FILE`; its bounded parser rejects symlinks,
   group/world-writable files, malformed identities, duplicates, and incomplete
   five-part locks before any factory import.
+  Repository owner, schema-field, and grant replacement methods now acquire the
+  asset row lock themselves, so direct callers cannot bypass the X03 revision
+  serialization boundary.
   Legacy Iceberg discovery now rejects malformed, non-printable, or oversized
   namespace/table segments instead of coercing them into new logical identities.
   Additive migration `20260913_0014` persists qualified catalog/format identities
@@ -435,6 +439,18 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
 Next implementation action: continue X03 with PostgreSQL barrier/CAS evidence and
 then complete X06 provider-derived and collection field identity rules. Do not add new
 providers before Phase A's security/correctness prerequisites are accepted.
+
+### X03 direct mutation row locks — `165015f`
+
+- State: implementing.
+- Behavior: repository owner, schema-field, and grant replacements now issue
+  `SELECT ... FOR UPDATE` on the asset row before checking or advancing its
+  revision. Direct repository callers therefore retain the same compare-and-set
+  serialization as the application service path.
+- Green evidence: publication-store, grant-authorization, and asset API suites
+  (19 passed), Ruff, Ty, and `git diff --check`.
+- Remaining gaps: live PostgreSQL barrier, rollback/idempotency, and multi-process
+  evidence remain open. Pickle compatibility is unchanged.
 
 ### X03 catalog binding replacement — `1771f26`
 
