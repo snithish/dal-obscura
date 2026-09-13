@@ -17,6 +17,10 @@ from dal_obscura.common.plugin_api.contracts import (
     PluginDescriptor,
     PluginKind,
 )
+from dal_obscura.common.plugin_api.lifecycle import (
+    PluginLifecycleState,
+    transition_plugin_lifecycle,
+)
 
 ENTRY_POINT_GROUPS: dict[PluginKind, str] = {
     "catalog": "dal_obscura.catalogs.v1",
@@ -63,6 +67,7 @@ class PluginRegistry:
         self._snapshot_entries: dict[tuple[PluginKind, str], metadata.EntryPoint] = {}
         self._snapshot_builtins: dict[tuple[PluginKind, str], object] = {}
         self._snapshot_lock = RLock()
+        self._lifecycle: dict[tuple[PluginKind, str], PluginLifecycleState] = {}
 
     def discover(self) -> dict[tuple[PluginKind, str], PluginDescriptor]:
         """Reads entry-point metadata without importing factories."""
@@ -75,6 +80,12 @@ class PluginRegistry:
         self._validate_id(plugin_id)
         key = (kind, plugin_id)
         with self._snapshot_lock:
+            lifecycle = self._lifecycle.get(key, PluginLifecycleState.ENABLED)
+            if lifecycle is not PluginLifecycleState.ENABLED:
+                raise PluginAdmissionError(
+                    f"Plugin is {lifecycle.value}; new admissions are disabled: "
+                    f"{kind}:{plugin_id}"
+                )
             entry = self._snapshot_entries.get(key)
             builtin = self._snapshot_builtins.get(key)
             admitted = key in self._snapshot
@@ -93,6 +104,35 @@ class PluginRegistry:
         if builtin is not None:
             return builtin
         return self._factory_loader(entry)
+
+    def set_lifecycle(
+        self,
+        kind: PluginKind,
+        plugin_id: str,
+        target: PluginLifecycleState,
+    ) -> PluginLifecycleState:
+        """Apply an explicit admission transition for an admitted plugin."""
+
+        self._validate_id(plugin_id)
+        key = (kind, plugin_id)
+        with self._snapshot_lock:
+            if (
+                key not in self._snapshot
+                and key not in self._builtins
+                and key not in self._allowlist
+            ):
+                raise PluginAdmissionError(f"Plugin is not configured: {kind}:{plugin_id}")
+            current = self._lifecycle.get(key, PluginLifecycleState.ENABLED)
+            state = transition_plugin_lifecycle(current, target)
+            self._lifecycle[key] = state
+            return state
+
+    def lifecycle_state(self, kind: PluginKind, plugin_id: str) -> PluginLifecycleState:
+        """Return the current admission state without rebuilding the registry."""
+
+        self._validate_id(plugin_id)
+        with self._snapshot_lock:
+            return self._lifecycle.get((kind, plugin_id), PluginLifecycleState.ENABLED)
 
     def reload(self) -> dict[tuple[PluginKind, str], PluginDescriptor]:
         """Builds a complete admission snapshot before atomically swapping it."""
@@ -134,6 +174,7 @@ class PluginRegistry:
             if key in admitted or key in self._builtins:
                 status: PluginStatus = "enabled"
                 reason = None
+                lifecycle = self._lifecycle.get(key, PluginLifecycleState.ENABLED)
             else:
                 entry = entry_by_key.get(key)
                 if entry is None:
@@ -147,6 +188,11 @@ class PluginRegistry:
                 "plugin_id": plugin_id,
                 "status": status,
             }
+            if (
+                (key in admitted or key in self._builtins)
+                and lifecycle is not PluginLifecycleState.ENABLED
+            ):
+                row["lifecycle"] = lifecycle.value
             if reason is not None:
                 row["reason"] = reason
             rows.append(row)
