@@ -12,8 +12,8 @@ import json
 from collections.abc import Callable, Mapping
 from typing import cast
 from urllib.parse import urlencode
+from urllib.request import HTTPRedirectHandler, build_opener
 from urllib.request import Request as UrlRequest
-from urllib.request import urlopen
 
 from fastapi import HTTPException
 
@@ -206,7 +206,7 @@ def exchange_demo_password_token(config: Mapping[str, object], username: str) ->
         headers={"content-type": "application/x-www-form-urlencoded"},
         method="POST",
     )
-    with urlopen(request, timeout=10) as response:
+    with _open_token_endpoint(request) as response:
         payload = json.loads(response.read().decode("utf-8"))
     token = str(payload.get("access_token", "")).strip()
     if not token:
@@ -237,7 +237,7 @@ def exchange_authorization_code(
         method="POST",
     )
     try:
-        with urlopen(request, timeout=10) as response:
+        with _open_token_endpoint(request) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except Exception as exc:
         raise HTTPException(status_code=502, detail="OIDC code exchange failed") from exc
@@ -248,6 +248,19 @@ def exchange_authorization_code(
     if not str(payload.get("id_token", "")).strip():
         raise HTTPException(status_code=502, detail="OIDC token response omitted ID token")
     return cast(Mapping[str, object], payload)
+
+
+class _RejectRedirects(HTTPRedirectHandler):
+    """Keep an operator-configured token endpoint on its exact origin."""
+
+    def redirect_request(self, request, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
+        return None
+
+
+def _open_token_endpoint(request: UrlRequest):
+    """Open a token request without following a cross-origin redirect."""
+
+    return build_opener(_RejectRedirects()).open(request, timeout=10)
 
 
 def oidc_actor_from_header(
