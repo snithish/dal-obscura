@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `102c768` (public stable-ID claim validation at `102c768`; generic admitted catalog labels at `079324e`; manifest nested schema identity validation at `a318b97`; bounded browser session lifetimes at `e6e1fdd`; ledger update for runtime descriptor checks at `f3adebb`; runtime descriptor verification at `e074d5c`; per-batch plugin output validation at `97da8cb`; public task payload boundary at `0f09d42`; ticket-handle metadata bounds at `fc90ddc`; secure REST auxiliary URI checks at `6ee3d81`; REST identifier validation at `4980609`; ledger update for manifest deadline enforcement at `827c6a9`; manifest deadline enforcement at `97663b7`; session-expiry fence at `4e2ac7d`; public option bounds at `17ab77f`; symlink rejection at `6136224`; malformed-entry isolation at `6c129d3`; REST descriptor contract at `7adb4d6`; concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
+Implementation follow-up through `c8d2450` (shared public schema bounds at `c8d2450`; public stable-ID claim validation at `102c768`; generic admitted catalog labels at `079324e`; manifest nested schema identity validation at `a318b97`; bounded browser session lifetimes at `e6e1fdd`; ledger update for runtime descriptor checks at `f3adebb`; runtime descriptor verification at `e074d5c`; per-batch plugin output validation at `97da8cb`; public task payload boundary at `0f09d42`; ticket-handle metadata bounds at `fc90ddc`; secure REST auxiliary URI checks at `6ee3d81`; REST identifier validation at `4980609`; ledger update for manifest deadline enforcement at `827c6a9`; manifest deadline enforcement at `97663b7`; session-expiry fence at `4e2ac7d`; public option bounds at `17ab77f`; symlink rejection at `6136224`; malformed-entry isolation at `6c129d3`; REST descriptor contract at `7adb4d6`; concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -54,6 +54,8 @@ Iceberg-only workflow.
 The public format bridge also rejects a descriptor that claims stable provider
 IDs when its Arrow schema has no provider ID metadata, keeping plugin claims
 aligned with the schema admission contract.
+Public plugin schemas now pass through the shared Arrow node, depth, and encoded
+size budgets before they can be planned or executed.
 Local probes are recorded in [the review](IMPLEMENTATION_REVIEW.md).
 Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_STATUS.md).
 
@@ -804,6 +806,20 @@ remain open.
 - Pickle compatibility: unchanged; no serializer or task payload format changed.
 - Next permitted packet: continue X12/X15 installed-artifact and provider
   conformance evidence after Phase A PostgreSQL correctness gates.
+
+### X05 public schema budget boundary — `c8d2450`
+
+- State: implementing.
+- Behavior: the public plugin bridge applies the shared Arrow schema traversal
+  and encoding budgets before stable-ID checks, projection, or task planning.
+- Green evidence: public adapter suite (7 tests), Ruff, Ty, and `git diff --check`
+  pass, including a schema deeper than the configured limit.
+- Remaining gaps: live route budget coverage, clean wheel compatibility, provider
+  conformance, browser/consumer evidence, and release artifact gates remain open.
+- Pickle compatibility: unchanged; schema validation occurs before the existing
+  trusted task serializer is involved.
+- Next permitted packet: continue X03/X06 correctness and X12/X15 artifact
+  conformance work.
 
 ### X06 duplicate identity rejection — `5c17d04`
 
