@@ -31,7 +31,7 @@ CATALOG_DESCRIPTOR = PluginDescriptor(
     config_version=1,
     distribution="dal-obscura-manifest-parquet",
     version="0.1.0",
-    capabilities=frozenset({"nested_schema", "splittable_scan", "field_id_stability"}),
+    capabilities=frozenset({"nested_schema", "splittable_scan"}),
     display_name="Manifest Parquet dataset",
     config_schema={
         "fields": [
@@ -107,6 +107,7 @@ class ManifestCatalog(CatalogPlugin):
             "files": table.files,
             "schema_ipc": base64.b64encode(table.schema.serialize().to_pybytes()).decode("ascii"),
             "field_ids": table.field_ids,
+            "schema_identities": _schema_identities(table.schema, table.field_ids),
         }
         return TableHandle(
             catalog_plugin_id=self.descriptor.plugin_id,
@@ -201,6 +202,37 @@ def _parse_identifier(raw: str) -> TableIdentifier:
 
 def _identifier_key(identifier: TableIdentifier) -> str:
     return ".".join((*identifier.namespace, identifier.name))
+
+
+def _schema_identities(
+    schema: pa.Schema,
+    field_ids: tuple[str, ...],
+) -> tuple[tuple[str, str], ...]:
+    """Derive deterministic schema-scoped IDs for nested paths."""
+
+    if len(field_ids) != len(schema):
+        raise ValueError("manifest field IDs must cover every top-level field")
+    identities: list[tuple[str, str]] = []
+
+    def visit(field: pa.Field, path: tuple[str, ...], anchor: str) -> None:
+        path_text = ".".join(path)
+        field_id = anchor if len(path) == 1 else "synthetic:" + hashlib.sha256(
+            f"{anchor}:{path_text}".encode()
+        ).hexdigest()[:32]
+        identities.append((path_text, field_id))
+        type_ = field.type
+        if pa.types.is_struct(type_):
+            for child in type_:
+                visit(child, (*path, child.name), field_id)
+        elif pa.types.is_list(type_):
+            visit(type_.value_field, (*path, "[]"), field_id)
+        elif pa.types.is_map(type_):
+            visit(type_.key_field, (*path, "{}key"), field_id)
+            visit(type_.item_field, (*path, "{}value"), field_id)
+
+    for field, anchor in zip(schema, field_ids, strict=True):
+        visit(field, (field.name,), anchor)
+    return tuple(identities)
 
 
 def _required_root(value: object) -> Path:

@@ -28,7 +28,7 @@ FORMAT_DESCRIPTOR = PluginDescriptor(
     config_version=1,
     distribution="dal-obscura-manifest-parquet",
     version="0.1.0",
-    capabilities=frozenset({"nested_schema", "splittable_scan", "field_id_stability"}),
+    capabilities=frozenset({"nested_schema", "splittable_scan"}),
     display_name="Manifest Parquet dataset format",
 )
 
@@ -81,7 +81,7 @@ class ParquetDatasetFormat:
             fingerprint=_schema_fingerprint(self._schema),
             arrow_schema=self._schema,
             snapshot_id=handle.snapshot_id,
-            stable_ids=True,
+            stable_ids=False,
         )
 
     def plan(
