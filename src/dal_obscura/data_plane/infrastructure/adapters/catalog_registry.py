@@ -203,6 +203,7 @@ def _build_catalog(
                 config.plugin_id,
                 cast(Any, factory),
                 lambda plugin_id: plugin_registry.load("table_format", plugin_id),
+                config.path_enforcer,
             )
         constructor = cast(
             Callable[[str, dict[str, Any], PathRuleEnforcer | None], CatalogPlugin],
