@@ -105,3 +105,28 @@ def test_manifest_rejects_member_escape_and_schema_drift(tmp_path):
         assert "escapes" in str(exc)
     else:
         raise AssertionError("expected manifest member escape rejection")
+
+
+def test_parquet_format_accepts_wildcard_projection(tmp_path):
+    root, manifest, table = _write_fixture(tmp_path)
+    context = _context()
+    catalog = ManifestCatalog(
+        CatalogConfig(
+            plugin_id="manifest",
+            instance_id="fixture",
+            revision=1,
+            options={"root": str(root), "manifest_path": str(manifest)},
+        ),
+        context,
+    )
+    handle = catalog.resolve_table(
+        TableIdentifier(namespace=("default",), name="users"),
+        context,
+    )
+    plugin = ParquetDatasetFormat(handle, context)
+    schema = plugin.schema(handle, context)
+    tasks = plugin.plan(handle, schema, context, projection=["*"], row_filter=None, max_tasks=4)
+    assert tasks
+    output_schema, batches = plugin.execute(tasks[0], context)
+    assert output_schema == table.schema
+    assert pa.Table.from_batches(batches).num_rows == 1

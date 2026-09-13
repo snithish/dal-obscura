@@ -177,7 +177,7 @@ def _validate_file_schema(actual: pa.Schema, expected: pa.Schema) -> None:
 
 
 def _projected_columns(schema: pa.Schema, projection: Sequence[str]) -> tuple[str, ...]:
-    if not projection:
+    if not projection or (len(projection) == 1 and projection[0] == "*"):
         return tuple(schema.names)
     selected: list[str] = []
     for path in projection:
