@@ -345,10 +345,21 @@ def _browser_cookie_names(config: Mapping[str, object]) -> tuple[str, str]:
 
 def _post_login_redirect(config: dict[str, object], redirect_uri: str) -> str:
     configured = str(config.get("post_login_redirect_uri", "")).strip()
+    callback = urlsplit(redirect_uri)
     if configured:
+        target = urlsplit(configured)
+        if (
+            target.scheme.lower() != callback.scheme.lower()
+            or target.netloc.lower() != callback.netloc.lower()
+            or target.username is not None
+            or target.password is not None
+            or target.query
+            or target.fragment
+            or not target.netloc
+        ):
+            raise HTTPException(status_code=503, detail="UI post-login redirect is invalid")
         return configured
-    parsed = urlsplit(redirect_uri)
-    return urlunsplit((parsed.scheme, parsed.netloc, "/", "", ""))
+    return urlunsplit((callback.scheme, callback.netloc, "/", "", ""))
 
 
 def _client_rate_key(request: Request) -> str:

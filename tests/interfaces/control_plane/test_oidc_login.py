@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from urllib.parse import parse_qs, urlsplit
 
+import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from dal_obscura.common.config_store.db import (
@@ -155,3 +157,19 @@ def test_login_redirect_does_not_reuse_logout_destination() -> None:
         )
         == "https://gateway.example/"
     )
+
+
+@pytest.mark.parametrize(
+    "configured",
+    [
+        "https://attacker.example/",
+        "https://gateway.example/complete?next=https://attacker.example",
+        "https://user:pass@gateway.example/",
+    ],
+)
+def test_login_redirect_rejects_external_or_ambiguous_destination(configured: str) -> None:
+    with pytest.raises(HTTPException, match="post-login redirect"):
+        _post_login_redirect(
+            {"post_login_redirect_uri": configured},
+            "https://gateway.example/auth/callback",
+        )
