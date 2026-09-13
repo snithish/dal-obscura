@@ -198,6 +198,7 @@ export type PluginState = {
   kind: "catalog" | "table_format";
   plugin_id: string;
   status: "enabled" | "not_installed" | "incompatible";
+  lifecycle?: "enabled" | "draining" | "disabled" | "revoked" | "removed";
   reason?: string;
 };
 
