@@ -407,6 +407,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: the canonical OpenAPI route inventory now includes `GET /v1/assets/{asset_id}/access` and asserts its read-only method set, preventing future route drift from the reviewed contract.
 - Verification: route inventory and asset API tests pass.
 
+## 2026-09-13 — N08/N09 capability-aware editor controls
+
+- Scope: align policy authoring and publication controls with server-derived asset access.
+- Observable behavior delivered: the editor becomes read-only when the authenticated actor lacks `edit`; history restore follows the same boundary; review remains available for an authorized publisher reviewing an explicitly selected draft; publication actions require the server-reported `publish` capability. Backend authorization remains authoritative for every mutation.
+- Verification: UI TypeScript compilation, Vite production build, and control-plane/API suites pass.
+- Remaining gate: rendered multi-actor browser evidence and independent UX/security acceptance remain VERIFY.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
