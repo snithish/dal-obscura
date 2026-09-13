@@ -177,6 +177,14 @@ and relevant plugin contract/config generations. Expanding `*` or a parent at re
 time produces an explicit admitted set: newly added children never become readable
 without new approval. Reject incompatible type, identity, or binding changes.
 
+Federated control-plane principals use the canonical escaped form
+`<issuer>|u|<subject>` for a user and `<issuer>|g|<group>` for a group. The type tag
+is required because a subject may literally be named `group:<name>`; treating that
+string as a group marker would transfer ownership or grants. Local development
+identities retain their separate unscoped representation. Legacy federated values
+are converted only by the maintenance command documented in the operator guide;
+serving requests do not parse or guess old keys.
+
 For formats without stable IDs, use schema-scoped deterministic synthetic IDs;
 these are not evidence of identity across schema versions. Require reapproval after
 any schema change until a separately tested safe migration rule exists. Never reuse

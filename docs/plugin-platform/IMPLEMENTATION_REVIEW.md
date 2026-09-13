@@ -83,14 +83,15 @@ None of these statements certifies the entire original packet or release.
 
 ## Findings still requiring action
 
-### F01 — Identity encoding violates exact-issuer intent (high)
+### F01 — Identity encoding violates exact-issuer intent (high) — addressed in `0bcf2b1`
 
-src/dal_obscura/control_plane/application/access.py::owner_principals and
-identity_key strip issuer trailing slashes and concatenate delimiter strings.
-Exact issuer identity must be preserved and encoding must be unambiguous.
-Provider admission guards may limit exploitability; no exploit is claimed here.
-N05 requires structured issuer/type/subject identities and explicit migration.
-The UI currently repeats the same normalization in AccessView identity hints.
+The original concatenated representation allowed a subject named `group:x` to
+collide with group `x`. Runtime identity keys now preserve the exact issuer and
+carry explicit `u` (subject) or `g` (group) tags with escaped components. The
+offline `identity-keys` command converts exact-issuer legacy values transactionally
+and rejects ambiguous slash-stripped history; current typed keys are idempotent
+even after provider configuration changes. Remaining N05 work is live freshness,
+revocation, and browser evidence rather than the key collision itself.
 
 ### F02 — Shared capabilities incorrectly imply compatible formats (high)
 
