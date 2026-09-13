@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `c8d2450` (shared public schema bounds at `c8d2450`; public stable-ID claim validation at `102c768`; generic admitted catalog labels at `079324e`; manifest nested schema identity validation at `a318b97`; bounded browser session lifetimes at `e6e1fdd`; ledger update for runtime descriptor checks at `f3adebb`; runtime descriptor verification at `e074d5c`; per-batch plugin output validation at `97da8cb`; public task payload boundary at `0f09d42`; ticket-handle metadata bounds at `fc90ddc`; secure REST auxiliary URI checks at `6ee3d81`; REST identifier validation at `4980609`; ledger update for manifest deadline enforcement at `827c6a9`; manifest deadline enforcement at `97663b7`; session-expiry fence at `4e2ac7d`; public option bounds at `17ab77f`; symlink rejection at `6136224`; malformed-entry isolation at `6c129d3`; REST descriptor contract at `7adb4d6`; concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
+Implementation follow-up through `0de9d98` (lazy optional plugin bridge at `0de9d98`; shared public schema bounds at `c8d2450`; public stable-ID claim validation at `102c768`; generic admitted catalog labels at `079324e`; manifest nested schema identity validation at `a318b97`; bounded browser session lifetimes at `e6e1fdd`; ledger update for runtime descriptor checks at `f3adebb`; runtime descriptor verification at `e074d5c`; per-batch plugin output validation at `97da8cb`; public task payload boundary at `0f09d42`; ticket-handle metadata bounds at `fc90ddc`; secure REST auxiliary URI checks at `6ee3d81`; REST identifier validation at `4980609`; ledger update for manifest deadline enforcement at `827c6a9`; manifest deadline enforcement at `97663b7`; session-expiry fence at `4e2ac7d`; public option bounds at `17ab77f`; symlink rejection at `6136224`; malformed-entry isolation at `6c129d3`; REST descriptor contract at `7adb4d6`; concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -56,6 +56,9 @@ IDs when its Arrow schema has no provider ID metadata, keeping plugin claims
 aligned with the schema admission contract.
 Public plugin schemas now pass through the shared Arrow node, depth, and encoded
 size budgets before they can be planned or executed.
+Built-in Iceberg startup no longer imports the optional public plugin SDK unless
+an external catalog plugin is explicitly selected; missing external wheels fail
+at that boundary instead of preventing the core service from starting.
 Local probes are recorded in [the review](IMPLEMENTATION_REVIEW.md).
 Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_STATUS.md).
 
@@ -820,6 +823,22 @@ remain open.
   trusted task serializer is involved.
 - Next permitted packet: continue X03/X06 correctness and X12/X15 artifact
   conformance work.
+
+### X12 optional SDK startup boundary — `0de9d98`
+
+- State: implementing.
+- Behavior: the catalog registry lazily imports the public-plugin bridge only for
+  non-built-in catalog IDs. A minimal installation can start and serve built-in
+  Iceberg without the external SDK; selecting an external plugin still fails
+  closed until its admitted wheel is installed.
+- Green evidence: catalog registry and public adapter suites (15 tests), Ruff,
+  Ty, and direct minimal-environment import probe pass.
+- Remaining gaps: clean wheel dependency declarations, external plugin artifact
+  compatibility, provider conformance, and release image evidence remain open.
+- Pickle compatibility: unchanged; import routing occurs before the existing
+  trusted task serializer.
+- Next permitted packet: continue X12 clean artifact verification and X15
+  provider/consumer conformance.
 
 ### X06 duplicate identity rejection — `5c17d04`
 
