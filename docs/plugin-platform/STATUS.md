@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `ec6ae68` (manifest identity/pagination fix;
+Implementation follow-up through `ee7afa5` (deterministic catalog-generation
+cleanup; manifest identity/pagination fix;
 catalog revision binding and stale
 review protection; explicit plugin API compatibility
 policy and aligned version vocabulary; catalog revision propagation regression
@@ -175,6 +176,9 @@ artifacts.
   authenticated issuer/subject at two concurrent operations and removes idle keyed
   slots after release; cross-worker aggregate limits and provider termination remain
   open.
+  Catalog registries now expose an explicit terminal close, reject reuse after
+  shutdown, and clean up partially built adapters when replacement reload fails;
+  in-flight generation draining and cross-worker provider termination remain open.
 - X09 UI lifecycle: **implemented-unverified**; initial-load epoch and synchronous
   logout fencing plus stale history/preview/review/publish response checks are fixed.
   Authenticated `401` responses now also fence loaded private state and return the
@@ -220,7 +224,8 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   trusted `ScanTask` serializer, recreating request contexts at execution time and
   rejecting plugin output schema changes. Public format instances now close after
   schema/planning and lazy execution; catalog adapters expose idempotent terminal
-  cleanup and reject reuse after close. Public task payloads are constrained to
+  cleanup and reject reuse after close. Registry shutdown now closes cached public
+  catalog generations too. Public task payloads are constrained to
   bounded inert data before entering the trusted ScanTask serializer. Authenticated
   plugin diagnostics also expose enabled, not-installed, and
   incompatible states for operator-expected IDs without importing factories or
