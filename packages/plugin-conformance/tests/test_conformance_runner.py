@@ -90,6 +90,18 @@ def test_record_batch_validation_enforces_per_batch_byte_budget():
         check_record_batches(schema, [batch], max_batch_bytes=1)
 
 
+def test_schema_validation_enforces_nested_depth_budget():
+    nested = pa.field("root", pa.struct([pa.field("child", pa.string())]))
+    schema = SchemaDescriptor(
+        schema_version=1,
+        fingerprint="0" * 64,
+        arrow_schema=pa.schema([nested]),
+    )
+
+    with pytest.raises(ValueError, match="nesting levels"):
+        check_schema_descriptor(schema, max_depth=1)
+
+
 class _ConformingFormat:
     descriptor = _descriptor()
 

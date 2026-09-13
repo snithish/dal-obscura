@@ -24,6 +24,7 @@ DEFAULT_MAX_DISCOVERY_PAGES = 64
 DEFAULT_MAX_DISCOVERY_TABLES = 10_000
 DEFAULT_MAX_SCHEMA_BYTES = 1_048_576
 DEFAULT_MAX_SCHEMA_FIELDS = 4_096
+DEFAULT_MAX_SCHEMA_DEPTH = 64
 DEFAULT_MAX_BATCH_BYTES = 16 * 1024 * 1024
 
 
@@ -97,15 +98,37 @@ def check_schema_descriptor(
     result: ConformanceResult | None = None,
     max_bytes: int = DEFAULT_MAX_SCHEMA_BYTES,
     max_fields: int = DEFAULT_MAX_SCHEMA_FIELDS,
+    max_depth: int = DEFAULT_MAX_SCHEMA_DEPTH,
 ) -> None:
     """Validate the public schema descriptor's bounded identity contract."""
 
     if descriptor.arrow_schema is None or not isinstance(descriptor.arrow_schema, pa.Schema):
         raise ValueError("schema descriptor must contain an Arrow schema")
-    if max_bytes <= 0 or max_fields <= 0:
+    if max_bytes <= 0 or max_fields <= 0 or max_depth <= 0:
         raise ValueError("schema descriptor budgets must be positive")
-    if len(descriptor.arrow_schema) > max_fields:
-        raise ValueError(f"schema descriptor has more than {max_fields} fields")
+    nodes = 0
+    pending = [(field, 1) for field in descriptor.arrow_schema]
+    while pending:
+        field, depth = pending.pop()
+        nodes += 1
+        if nodes > max_fields:
+            raise ValueError(f"schema descriptor has more than {max_fields} fields")
+        if depth > max_depth:
+            raise ValueError(f"schema descriptor exceeds {max_depth} nesting levels")
+        field_type = field.type
+        if pa.types.is_struct(field_type):
+            pending.extend((child, depth + 1) for child in field_type)
+        elif pa.types.is_list(field_type) or pa.types.is_large_list(field_type):
+            pending.append((field_type.value_field, depth + 1))
+        elif pa.types.is_map(field_type):
+            pending.extend(
+                (
+                    (field_type.key_field, depth + 1),
+                    (field_type.item_field, depth + 1),
+                )
+            )
+        elif pa.types.is_fixed_size_list(field_type):
+            pending.append((field_type.value_field, depth + 1))
     if descriptor.arrow_schema.serialize().size > max_bytes:
         raise ValueError(f"schema descriptor exceeds {max_bytes} serialized bytes")
     if result is not None:
@@ -250,13 +273,13 @@ def run_catalog_checks(  # noqa: C901
             continuation = page.continuation
         else:
             raise ValueError(f"catalog returned more than {max_pages} discovery pages")
-        identities = [".".join((*entry.namespace, entry.name)) for entry in identifiers]
+        identities = [(*entry.namespace, entry.name) for entry in identifiers]
         if len(identities) != len(set(identities)):
             raise ValueError("catalog returned duplicate table identities")
         result.record_pass("bounded_discovery")
         if expected_table_ids is None:
             result.record_skip("discovery_coverage", "no expected table identities supplied")
-        elif set(identities) != set(expected_table_ids):
+        elif {".".join(identity) for identity in identities} != set(expected_table_ids):
             raise ValueError("catalog table identities do not match expected coverage")
         else:
             result.record_pass("discovery_coverage")
