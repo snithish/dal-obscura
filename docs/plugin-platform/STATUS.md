@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `b609d69` (explicit plugin API compatibility
+Implementation follow-up through `e32ee60` (catalog revision binding and stale
+review protection; explicit plugin API compatibility
 policy and aligned version vocabulary; catalog revision propagation regression
 at `55f598c`; public adapter resource cleanup at `5afa3ae`; earlier slices remain
 listed in the packet entries below).
@@ -126,6 +127,9 @@ artifacts.
   asset lock, closing revocation windows across all review-affecting mutations.
   Grant capability is also enforced in the application service after locking, so
   direct service callers cannot bypass route-level authorization.
+  Catalog configuration now has its own monotonic revision, locked upserts, and
+  additive migration `20260913_0015`; review evidence records and verifies that
+  revision so provider changes force fresh evaluation.
 - X04 canonical evaluation: **implemented-unverified**; resolved mask values now
   flow from canonical preview and an unmatched-principal regression passes.
 - X05 canonical bounded schemas: **implemented-unverified**; canonical Arrow schema
@@ -240,6 +244,9 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   and optional plugin revisions beside immutable published rows; reads merge those
   identities back into legacy-compatible manifests.
   Published catalog plugin revisions now survive data-plane config resolution and reach public SDK adapters, so resolved handles retain immutable binding-generation identity instead of defaulting to revision zero.
+  Catalog configuration revisions are now carried separately in compiled
+  publication config and take precedence when constructing runtime catalog
+  handles, preventing provider-option edits from reusing old review evidence.
   A deterministic `dal-obscura-migrate plugin-bindings` dry-run reports bound,
   exactly migratable, and unsupported legacy rows; `--apply` fills only exact
   built-in Iceberg identities in one transaction. Runtime registry routing,
