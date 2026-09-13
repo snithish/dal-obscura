@@ -56,7 +56,7 @@ class ManifestCatalog(CatalogPlugin):
     descriptor = CATALOG_DESCRIPTOR
 
     def __init__(self, config: CatalogConfig, context: ExecutionContext) -> None:
-        del context
+        _check_context(context)
         self._config = config
         options = dict(config.options)
         self._root = _required_root(options.get("root"))
