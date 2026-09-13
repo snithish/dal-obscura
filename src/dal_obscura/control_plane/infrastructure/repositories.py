@@ -1552,6 +1552,10 @@ class PublicationStore:
         result: dict[str, object],
         status: str = "committed",
     ) -> dict[str, object]:
+        # Operation rows are part of the asset publication transaction. Keep
+        # direct repository callers on the same lock order as publication so a
+        # duplicate idempotency key cannot race an activation or revocation.
+        self.lock_asset_for_publication(asset_id)
         context = self.get_asset_workspace_context(asset_id)
         record = PublicationOperationRecord(
             id=uuid4(),
