@@ -1,7 +1,9 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `56c5e43` (nested manifest provider IDs;
+Implementation follow-up through `3f46816` (virtualized nested schema navigation;
+persisted catalog option revalidation;
+nested manifest provider IDs;
 bounded synthetic Arrow IDs;
 serialized browser/OIDC auth state;
 manifest standalone boundary;
@@ -538,6 +540,30 @@ providers before Phase A's security/correctness prerequisites are accepted.
   passed.
 - Remaining gaps: live provider evolution, PostgreSQL barriers, external wheels,
   browser/consumer qualification, recovery, and release gates remain open.
+
+### X07 persisted catalog option revalidation — `54855b1`
+
+- State: implementing.
+- Behavior: discovery and schema loading now revalidate restored or legacy external
+  catalog rows against the admitted descriptor before resolving secrets or invoking
+  a provider factory. Unknown and missing fields fail closed; built-in Iceberg keeps
+  its explicit compatibility contract.
+- Green evidence: catalog-option, discovery, and schema suites passed (31), Ruff
+  and `git diff --check` passed.
+- Remaining gaps: provider-specific secret lifecycle, returned-location/DNS
+  enforcement, PostgreSQL barriers, live wheels, browser, consumer, recovery, and
+  release gates remain open.
+
+### X10 virtualized nested schema navigation — `3f46816`
+
+- State: implemented-unverified.
+- Behavior: schema fields are flattened into a bounded scroll window with fixed
+  row height and overscan, keeping mounted rows bounded for very large schemas.
+  Expand/collapse, selection, search expansion, and Arrow-key navigation remain
+  keyboard accessible; the package test command now includes every UI test module.
+- Green evidence: UI type-check, Vite build, and five lifecycle/tree tests passed.
+- Remaining gaps: real browser accessibility audit, 10,000-node measured p95,
+  backend activation journeys, and production artifact evidence remain open.
 
 ### X19 serialized browser and OIDC state — `ac38f89`
 
@@ -2425,21 +2451,25 @@ running-process probe.
 
 ## Latest evidence entry
 
-Packet/slice: X05/X06/X19 bounded schema, nested provider identity, and serialized browser/OIDC state
+Packet/slice: X05/X06/X07/X10/X19 bounded schema, nested provider identity, persisted option validation, virtualized UI navigation, and serialized browser/OIDC state
 State: implementing
-Baseline and resulting commits: `3ba59bb` -> `0dbfc40`, `56c5e43`, `ac38f89`
+Baseline and resulting commits: `3ba59bb` -> `0dbfc40`, `56c5e43`, `54855b1`, `3f46816`, `ac38f89`
 Files/contracts changed: `src/dal_obscura/control_plane/application/schema_service.py`,
 `src/dal_obscura/control_plane/infrastructure/session_store.py`,
 `packages/manifest-parquet-plugin/src/dal_obscura_manifest_parquet/catalog.py`,
-focused schema, manifest, browser-session, and OIDC route tests, and this ledger
-Findings addressed (R IDs): R04/R05 nested identity bounds/provider stability; R13 concurrent auth replay
-Acceptance cases/test node IDs (A IDs): A06/A08 schema subcases; A12 login/replay subcases
+`src/dal_obscura/control_plane/application/catalog_service.py`, focused schema,
+manifest, catalog-option, browser-session, and OIDC route tests, and this ledger
+`apps/governance-ui/src/schema_tree.ts`, governance UI tree tests, and this ledger
+Findings addressed (R IDs): R04/R05 nested identity bounds/provider stability; R06/R07 persisted option boundary; R12/R13 large-schema UI and concurrent auth replay
+Acceptance cases/test node IDs (A IDs): A06/A08 schema subcases; A14 navigation subcases; A12 login/replay subcases
 Failing behavior before the change: synthetic nested Arrow IDs could exceed the 32-bit
 path contract; concurrent callbacks and logout/session refresh were not row-serialized
 Implementation behavior after the change: synthetic IDs are bounded deterministically;
-nested provider IDs survive manifest routing; session and one-time login rows are locked
-during read-modify-write operations
-Exact commands and exit results: schema/API suite (16), manifest suite (15), browser/OIDC suite (8), governed
+nested provider IDs survive manifest routing; restored external catalog options are
+descriptor-validated before provider use; schema navigation mounts a bounded window;
+session and one-time login rows are locked during read-modify-write operations
+Exact commands and exit results: schema/API suite (16), manifest suite (15), catalog
+option/discovery suite (31), UI tree/lifecycle suite (5), browser/OIDC suite (8), governed
 aggregate suite, Ruff, UI build/lifecycle checks, and `git diff --check` passed
 Environment/dependency and wheel/image/plugin-lock identities: Darwin 25.6.0 arm64;
 no external wheel or production image was available in this workspace
