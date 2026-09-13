@@ -32,12 +32,22 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         return deps.with_service(lambda service: service.list_workspace_catalogs())
 
     @api.get("/v1/catalogs/{name}/tables", dependencies=[Depends(deps.require_admin)])
-    def discover_workspace_catalog_tables(name: str) -> object:
-        return deps.with_service(lambda service: service.discover_workspace_catalog_tables(name))
+    def discover_workspace_catalog_tables(
+        name: str,
+        actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
+    ) -> object:
+        return deps.with_service(
+            lambda service: service.discover_workspace_catalog_tables(name, actor=actor)
+        )
 
     @api.get("/v1/catalogs/{name}/diagnostics", dependencies=[Depends(deps.require_admin)])
-    def diagnose_workspace_catalog(name: str) -> object:
-        return deps.with_service(lambda service: service.diagnose_workspace_catalog(name))
+    def diagnose_workspace_catalog(
+        name: str,
+        actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
+    ) -> object:
+        return deps.with_service(
+            lambda service: service.diagnose_workspace_catalog(name, actor=actor)
+        )
 
     @api.put("/v1/catalogs/{name}", dependencies=[Depends(deps.require_admin)])
     async def upsert_workspace_catalog(

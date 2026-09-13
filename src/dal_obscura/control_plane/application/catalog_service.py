@@ -8,8 +8,10 @@ Example:
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from math import isfinite
+from threading import BoundedSemaphore, Lock
 from typing import Any, cast
 from urllib.parse import parse_qsl, urlsplit
 
@@ -28,6 +30,39 @@ _MAX_OPTION_NODES = 1_024
 _MAX_OPTION_KEYS = 128
 _MAX_OPTION_ITEMS = 256
 _MAX_OPTION_STRING = 4_096
+DEFAULT_MAX_ACTIVE_DISCOVERIES_PER_SESSION = 2
+
+
+class _SessionDiscoverySlot:
+    def __init__(self) -> None:
+        self.semaphore = BoundedSemaphore(DEFAULT_MAX_ACTIVE_DISCOVERIES_PER_SESSION)
+        self.active = 0
+
+
+_SESSION_DISCOVERY_SLOTS: dict[str, _SessionDiscoverySlot] = {}
+_SESSION_DISCOVERY_LOCK = Lock()
+
+
+@contextmanager
+def _admit_session_discovery(session_key: str | None):
+    """Admit at most two concurrent discoveries for one authenticated session."""
+
+    if not session_key:
+        yield
+        return
+    with _SESSION_DISCOVERY_LOCK:
+        slot = _SESSION_DISCOVERY_SLOTS.setdefault(session_key, _SessionDiscoverySlot())
+        if not slot.semaphore.acquire(blocking=False):
+            raise ValidationFailure("Catalog discovery session capacity is exhausted; retry later")
+        slot.active += 1
+    try:
+        yield
+    finally:
+        with _SESSION_DISCOVERY_LOCK:
+            slot.semaphore.release()
+            slot.active -= 1
+            if slot.active == 0:
+                _SESSION_DISCOVERY_SLOTS.pop(session_key, None)
 
 
 def list_workspace_catalogs(store: PublicationStore) -> list[dict[str, object]]:
@@ -51,6 +86,7 @@ def discover_workspace_catalog_tables(
     *,
     discover: CatalogDiscoverer = discover_catalog_tables,
     egress_allowlist: tuple[str, ...] = (),
+    session_key: str | None = None,
 ) -> dict[str, object]:
     """Discovers tables for a configured workspace catalog.
 
@@ -66,11 +102,14 @@ def discover_workspace_catalog_tables(
     validate_catalog_options(catalog_options, egress_allowlist=egress_allowlist)
     catalog_options = _resolve_catalog_secrets(catalog_options)
     try:
-        tables = discover(
-            str(catalog["name"]),
-            str(catalog["module"]),
-            catalog_options,
-        )
+        with _admit_session_discovery(session_key):
+            tables = discover(
+                str(catalog["name"]),
+                str(catalog["module"]),
+                catalog_options,
+            )
+    except ValidationFailure:
+        raise
     except Exception as exc:
         # Provider exceptions can include catalog URIs, credentials, or
         # implementation details. Keep those outside the browser/API boundary.
@@ -102,6 +141,7 @@ def diagnose_workspace_catalog(
     *,
     discover: CatalogDiscoverer = discover_catalog_tables,
     egress_allowlist: tuple[str, ...] = (),
+    session_key: str | None = None,
 ) -> dict[str, object]:
     """Runs bounded catalog discovery and returns a redacted readiness result."""
 
@@ -112,13 +152,16 @@ def diagnose_workspace_catalog(
     catalog_options = _resolve_catalog_secrets(catalog_options)
     checked_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     try:
-        tables = list(
-            discover(
-                str(catalog["name"]),
-                str(catalog["module"]),
-                catalog_options,
+        with _admit_session_discovery(session_key):
+            tables = list(
+                discover(
+                    str(catalog["name"]),
+                    str(catalog["module"]),
+                    catalog_options,
+                )
             )
-        )
+    except ValidationFailure:
+        raise
     except Exception:
         # Discovery exceptions can contain URIs, credentials, or provider
         # internals. Return a stable operator-safe message instead.

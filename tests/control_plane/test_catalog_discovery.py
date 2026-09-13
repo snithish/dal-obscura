@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+import dal_obscura.control_plane.application.catalog_service as catalog_service
 import dal_obscura.control_plane.infrastructure.catalog_discovery as discovery
 from dal_obscura.control_plane.infrastructure.catalog_discovery import (
     discover_iceberg_tables,
@@ -144,3 +145,23 @@ def test_iceberg_discovery_releases_capacity_after_provider_failure(
         )
 
     assert (slots.acquired, slots.released) == (1, 1)
+
+
+def test_workspace_discovery_limits_each_authenticated_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(catalog_service, "_SESSION_DISCOVERY_SLOTS", {})
+    first = catalog_service._admit_session_discovery("issuer|operator")
+    second = catalog_service._admit_session_discovery("issuer|operator")
+    first.__enter__()
+    second.__enter__()
+    try:
+        with pytest.raises(
+            catalog_service.ValidationFailure, match="session capacity"
+        ), catalog_service._admit_session_discovery("issuer|operator"):
+            pass
+    finally:
+        second.__exit__(None, None, None)
+        first.__exit__(None, None, None)
+    with catalog_service._admit_session_discovery("issuer|operator"):
+        pass

@@ -202,20 +202,32 @@ class ProvisioningService:
     def list_workspace_catalogs(self) -> list[dict[str, object]]:
         return catalog_service.list_workspace_catalogs(self._store)
 
-    def discover_workspace_catalog_tables(self, name: str) -> dict[str, object]:
+    def discover_workspace_catalog_tables(
+        self,
+        name: str,
+        *,
+        actor: ControlPlaneActor | None = None,
+    ) -> dict[str, object]:
         return catalog_service.discover_workspace_catalog_tables(
             self._store,
             name,
             discover=discover_catalog_tables,
             egress_allowlist=self._catalog_egress_allowlist,
+            session_key=actor.identity_key() if actor is not None else None,
         )
 
-    def diagnose_workspace_catalog(self, name: str) -> dict[str, object]:
+    def diagnose_workspace_catalog(
+        self,
+        name: str,
+        *,
+        actor: ControlPlaneActor | None = None,
+    ) -> dict[str, object]:
         return catalog_service.diagnose_workspace_catalog(
             self._store,
             name,
             discover=discover_catalog_tables,
             egress_allowlist=self._catalog_egress_allowlist,
+            session_key=actor.identity_key() if actor is not None else None,
         )
 
     def list_workspace_assets(
