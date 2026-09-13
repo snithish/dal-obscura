@@ -24,6 +24,10 @@ ingress. Replace every image tag with a verified immutable digest.
    cell and keep `DAL_OBSCURA_DATA_PLANE_PROFILE=production`; the data plane
    rejects an insecure Flight location, weak ticket secret, or non-PostgreSQL
    control-plane store.
+   If external catalog or format wheels are installed, mount one immutable
+   five-part plugin lock into both application containers and set
+   `DAL_OBSCURA_PLUGIN_LOCK_FILE` to that in-container path. Startup rejects
+   malformed or writable lock files before importing factories.
 3. Verify the image signatures/digests and the PostgreSQL backup policy, then
    run `docker compose --env-file .env config` and review the rendered topology.
 4. Run `docker compose --env-file .env up migrate` and require exit code 0.
