@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `5166716` (REST qualification at `96068ee`; authoring routing at `6890b3f`).
+Implementation follow-up through `405b63a` (REST qualification at `96068ee`; authoring routing at `6890b3f`).
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -161,7 +161,8 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   adapter capabilities and descriptor-driven configuration fields, including
   secret-reference inputs, without installation controls. Connections now submit
   the selected admitted catalog and table-format IDs while retaining the legacy
-  Iceberg module compatibility mapping; the management view also renders the
+  Iceberg module compatibility mapping. Pair responses now mark capability-
+  incompatible combinations and the form filters them; the management view also renders the
   authenticated lifecycle status inventory. Browser evidence remains open.
 - X15 conformance kit: **implementing**; a standalone public-API-only package
   now provides nested Arrow goldens, catalog discovery/page checks,
