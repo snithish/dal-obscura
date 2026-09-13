@@ -192,9 +192,7 @@ def _convert(value: str, issuers: tuple[str, ...]) -> str | IdentityMigrationErr
     # only values that look like federated issuer-prefixed keys are candidates.
     if value.startswith(("local|", "group:local|")):
         return None
-    if "%7C" in value or "%25" in value:
-        return value
-    matches: list[tuple[str, str]] = []
+    matches: list[tuple[str, str, bool]] = []
     for configured in issuers:
         variants = (
             (configured, configured.rstrip("/")) if configured.endswith("/") else (configured,)
@@ -202,12 +200,20 @@ def _convert(value: str, issuers: tuple[str, ...]) -> str | IdentityMigrationErr
         for issuer in variants:
             prefix = issuer + "|"
             if value.startswith(prefix):
-                matches.append((configured, value[len(prefix) :]))
+                matches.append((configured, value[len(prefix) :], issuer == configured))
                 break
     if len(matches) != 1:
         reason = "ambiguous" if len(matches) > 1 else "unresolved"
         return IdentityMigrationError(f"{reason} legacy identity key {value!r}")
-    issuer, subject = matches[0]
+    issuer, subject, exact_issuer = matches[0]
+    if exact_issuer and ("%7C" in subject or "%25" in subject):
+        # Already-canonical escaped values are safe to leave in place. A
+        # legacy value using the slash-stripped issuer and escapes is
+        # indistinguishable from a literal encoded subject and must be
+        # reapproved rather than guessed.
+        return value
+    if not exact_issuer and ("%7C" in subject or "%25" in subject):
+        return IdentityMigrationError(f"ambiguous legacy identity key {value!r}")
     if subject.startswith("group:"):
         return encode_federated_group(issuer, subject[6:])
     return encode_federated_identity(issuer, subject)

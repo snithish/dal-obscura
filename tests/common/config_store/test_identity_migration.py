@@ -171,3 +171,56 @@ def test_identity_migration_leaves_local_identity_keys_unchanged() -> None:
         report = inspect_identity_keys(session)
         assert report.safe_to_apply
         assert report.converted == 0
+
+
+def test_identity_migration_leaves_canonical_escaped_keys_and_rejects_legacy_escapes() -> None:
+    with _session() as session:
+        store = PublicationStore(session)
+        context = store.ensure_default_workspace_context()
+        store.upsert_catalog(
+            cell_id=context.cell_id,
+            tenant_id=context.tenant_id,
+            name="analytics",
+            module="iceberg",
+            options={},
+        )
+        asset_id = store.upsert_asset(
+            cell_id=context.cell_id,
+            tenant_id=context.tenant_id,
+            catalog="analytics",
+            target="users",
+            backend="iceberg",
+            table_identifier="users",
+            options={},
+        )
+        session.add(
+            AuthProviderRecord(
+                id=uuid4(),
+                cell_id=context.cell_id,
+                ordinal=1,
+                module="oidc",
+                args_json={"issuer": "https://issuer.example/realm/"},
+                enabled=True,
+            )
+        )
+        session.add_all(
+            [
+                AssetOwnerRecord(
+                    id=uuid4(),
+                    asset_id=asset_id,
+                    ordinal=1,
+                    principal="https://issuer.example/realm/|alice%7Cone",
+                ),
+                AssetOwnerRecord(
+                    id=uuid4(),
+                    asset_id=asset_id,
+                    ordinal=2,
+                    principal="https://issuer.example/realm|alice%7Cone",
+                ),
+            ]
+        )
+        session.commit()
+
+        report = inspect_identity_keys(session)
+        assert report.converted == 0
+        assert report.ambiguous == ("https://issuer.example/realm|alice%7Cone",)
