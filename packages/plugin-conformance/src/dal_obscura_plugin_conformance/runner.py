@@ -294,7 +294,7 @@ def run_catalog_checks(  # noqa: C901
             except Exception as exc:
                 result.record_failure("cleanup", str(exc))
         else:
-            result.record_pass("cleanup")
+            result.record_failure("cleanup", "catalog plugin must expose close()")
     return result
 
 
@@ -382,5 +382,5 @@ def run_format_checks(  # noqa: C901
             except Exception as exc:
                 result.record_failure("cleanup", str(exc))
         else:
-            result.record_pass("cleanup")
+            result.record_failure("cleanup", "table-format plugin must expose close()")
     return result

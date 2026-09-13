@@ -105,6 +105,9 @@ def test_schema_validation_enforces_nested_depth_budget():
 class _ConformingFormat:
     descriptor = _descriptor()
 
+    def close(self):
+        return None
+
     def plan(self, handle, schema, context, *, projection, row_filter, max_tasks):
         del handle, context, projection, row_filter, max_tasks
         return [schema]
@@ -149,6 +152,31 @@ def test_runner_returns_machine_readable_passing_result():
         "splittable_scan": True,
     }
     assert result.checks["bounded_plan"] == "passed"
+
+
+def test_runner_requires_explicit_format_cleanup() -> None:
+    table = pa.table({"id": [1]})
+    schema = SchemaDescriptor(
+        schema_version=1,
+        fingerprint="0" * 64,
+        arrow_schema=table.schema,
+    )
+    handle = TableHandle(
+        catalog_plugin_id="fixture",
+        catalog_instance_id="fixture",
+        catalog_revision=1,
+        identifier=TableIdentifier(namespace=("default",), name="users"),
+        format_plugin_id="fixture",
+        handle_version=1,
+    )
+
+    class NoClose(_ConformingFormat):
+        close = None
+
+    result = run_format_checks(cast(TableFormatPlugin, NoClose()), handle, schema, _context())
+
+    assert result.to_dict()["status"] == "failed"
+    assert any("must expose close" in failure for failure in result.failures)
 
 
 class _EndlessFormat(_ConformingFormat):
@@ -424,6 +452,9 @@ def test_catalog_runner_validates_bounded_discovery_and_coverage():
     class _Catalog:
         descriptor = _catalog_descriptor()
 
+        def close(self):
+            return None
+
         def list_tables(self, context, *, continuation, limit):
             del context, limit
             if continuation is None:
@@ -449,6 +480,9 @@ def test_catalog_runner_rejects_omitted_expected_table():
     class _IncompleteCatalog:
         descriptor = _catalog_descriptor()
 
+        def close(self):
+            return None
+
         def list_tables(self, context, *, continuation, limit):
             del context, continuation, limit
             return DiscoveryPage((users,))
@@ -471,6 +505,9 @@ def test_catalog_runner_rejects_duplicate_and_cyclic_pages(plugin_type, message)
 
     class _BadCatalog:
         descriptor = _catalog_descriptor()
+
+        def close(self):
+            return None
 
         def list_tables(self, context, *, continuation, limit):
             del context, limit
@@ -495,6 +532,9 @@ def test_catalog_runner_stops_before_requesting_after_cancellation():
 
     class _CancelledCatalog:
         descriptor = _catalog_descriptor()
+
+        def close(self):
+            return None
 
         def list_tables(self, context, *, continuation, limit):
             del context, continuation, limit
