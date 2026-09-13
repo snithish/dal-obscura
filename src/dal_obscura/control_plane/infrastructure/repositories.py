@@ -316,6 +316,7 @@ class PublicationStore:
         options: dict[str, Any],
         expected_revision: int | None = None,
     ) -> UUID:
+        self.lock_cell_for_publication(cell_id)
         existing = self._session.scalar(
             select(CatalogRecord).where(
                 CatalogRecord.cell_id == cell_id,
