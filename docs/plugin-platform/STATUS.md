@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `6408704` (discovery page boundary;
+Implementation follow-up through `fb394d6` (descriptor field enforcement;
+discovery page boundary;
 core table-handle boundary;
 core option boundary;
 aggregate catalog checks;
@@ -238,6 +239,8 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   inert bounded metadata before trusted task serialization.
   Core and public `DiscoveryPage` values now reject oversized pages, malformed
   entries, and unsafe continuation tokens at construction time.
+  Admitted catalog descriptor fields are now enforced server-side before catalog
+  persistence, so UI bypasses cannot submit unknown or missing required options.
   Service-side compatibility contracts and online wheel artifact evidence remain
   open.
 - X12 admitted loading and Iceberg adapter: **implementing**; entry-point loading now
@@ -472,6 +475,17 @@ providers before Phase A's security/correctness prerequisites are accepted.
   passed), Ruff, Ty, and `git diff --check`.
 - Remaining gaps: live provider pagination and cross-worker capacity evidence
   remain open. Pickle compatibility is unchanged.
+
+### X14 descriptor field enforcement — `fb394d6`
+
+- State: implementing.
+- Behavior: external catalog writes validate submitted options against the admitted
+  descriptor's declarative fields, rejecting unknown fields and missing required
+  values before persistence or provider construction.
+- Green evidence: catalog validation and API suites (15 passed), Ruff, Ty, and
+  `git diff --check`.
+- Remaining gaps: browser accessibility, live external plugin forms, and clean-wheel
+  evidence remain open. Pickle compatibility is unchanged.
 
 The aggregate local control-plane/plugin lane now passes after the revision field
 contract update: 262 tests across control-plane routes, plugin conformance, REST,
