@@ -436,6 +436,40 @@ def test_public_catalog_adapter_rejects_missing_lifecycle_methods() -> None:
         )
 
 
+@pytest.mark.parametrize("malformed_token", [["unhashable"], "bad\n token", "x" * 4_097])
+def test_public_catalog_adapter_rejects_malformed_continuation(malformed_token) -> None:
+    identifier = TableIdentifier(namespace=("default",), name="users")
+
+    class Catalog:
+        def validate_config(self, context):
+            del context
+
+        def list_namespaces(self, context, *, namespace=()):
+            del context, namespace
+            return ()
+
+        def list_tables(self, context, *, continuation=None, limit):
+            del context, continuation, limit
+            return type("Page", (), {"entries": (identifier,), "continuation": malformed_token})()
+
+        def resolve_table(self, value, context):
+            del value, context
+            raise AssertionError("resolve should not run")
+
+        def close(self):
+            return None
+
+    adapter = PublicPluginCatalogAdapter(
+        "fixture",
+        {},
+        "manifest",
+        lambda config, context: Catalog(),
+        lambda plugin_id: object(),
+    )
+    with pytest.raises(ValueError, match="continuation token"):
+        adapter.list_tables()
+
+
 def test_public_format_rejects_factory_descriptor_mismatch() -> None:
     identifier = TableIdentifier(namespace=("default",), name="users")
     handle = TableHandle(

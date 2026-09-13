@@ -296,6 +296,13 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
             token = page.continuation
             if token is None:
                 break
+            if (
+                not isinstance(token, str)
+                or not token
+                or len(token) > 4_096
+                or any(ord(char) < 0x20 or ord(char) == 0x7F for char in token)
+            ):
+                raise ValueError("Public catalog returned an invalid continuation token")
             if token in seen_tokens:
                 raise ValueError("Public catalog returned a repeated continuation token")
             seen_tokens.add(token)
