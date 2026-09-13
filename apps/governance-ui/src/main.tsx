@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import type { Asset, AssetAccess, AssetGrant, AuditEvent, AuthProvider, Catalog, CatalogDiagnostic, Mask, PluginDescriptor, PluginPair, PluginState, PolicyRule, PolicyVersion, Preview, RuntimeSettings, SchemaNode, Session, SessionOptions, UiAuthConfig, WorkspaceObservations, WorkspacePublication, WorkspaceSummary } from "./api";
+import type { ApiFailure, Asset, AssetAccess, AssetGrant, AuditEvent, AuthProvider, Catalog, CatalogDiagnostic, Mask, PluginDescriptor, PluginPair, PluginState, PolicyRule, PolicyVersion, Preview, RuntimeSettings, SchemaNode, Session, SessionOptions, UiAuthConfig, WorkspaceObservations, WorkspacePublication, WorkspaceSummary } from "./api";
 import { controlPlane } from "./api";
 import { isCurrentEpoch } from "./lifecycle";
 import { pageFromHash, type UiPage } from "./navigation";
@@ -204,8 +204,9 @@ function App() {
     } catch (error) {
       if (!isCurrentEpoch(epoch, managementEpoch.current)) return;
       if (error instanceof DOMException && error.name === "AbortError") return;
-      const status = (error as Error & { status?: number }).status;
-      setManagementError(status === 403 ? "Your account can view the workspace, but it does not have permission to open this management view." : "This management view could not be loaded. The server may be unavailable or the session may have expired.");
+      const failure = error as ApiFailure;
+      const message = failure.status === 403 ? "Your account can view the workspace, but it does not have permission to open this management view." : "This management view could not be loaded. The server may be unavailable or the session may have expired.";
+      setManagementError(`${message}${failure.requestId ? ` Request ID: ${failure.requestId}` : ""}`);
     } finally {
       if (epoch === managementEpoch.current) setManagementLoading(false);
     }

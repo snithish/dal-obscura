@@ -260,7 +260,13 @@ export type WorkspaceObservations = {
   data_plane: { status: string; reason: string };
 };
 
-type ApiFailure = Error & { status?: number };
+export type ApiFailure = Error & {
+  status?: number;
+  code?: string;
+  requestId?: string;
+  currentRevision?: number;
+  fieldErrors?: Record<string, string[]>;
+};
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const csrf = readCookie("dal_obscura_csrf");
@@ -279,8 +285,32 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     if (response.status === 401) {
       window.dispatchEvent(new Event("dal-obscura-auth-expired"));
     }
-    const failure = new Error(`Request failed (${response.status})`) as ApiFailure;
+    let body: unknown;
+    try {
+      body = await response.clone().json();
+    } catch {
+      body = undefined;
+    }
+    const envelope = body && typeof body === "object" && !Array.isArray(body)
+      ? (body as Record<string, unknown>)
+      : {};
+    const errorEnvelope = envelope.error && typeof envelope.error === "object" && !Array.isArray(envelope.error)
+      ? (envelope.error as Record<string, unknown>)
+      : {};
+    const detail = typeof errorEnvelope.message === "string"
+      ? errorEnvelope.message
+      : typeof envelope.detail === "string" ? envelope.detail : `Request failed (${response.status})`;
+    const failure = new Error(detail) as ApiFailure;
     failure.status = response.status;
+    if (typeof errorEnvelope.code === "string") failure.code = errorEnvelope.code;
+    const requestId = typeof errorEnvelope.request_id === "string"
+      ? errorEnvelope.request_id
+      : response.headers.get("x-request-id") ?? undefined;
+    if (requestId) failure.requestId = requestId;
+    if (typeof errorEnvelope.current_revision === "number") failure.currentRevision = errorEnvelope.current_revision;
+    if (errorEnvelope.field_errors && typeof errorEnvelope.field_errors === "object" && !Array.isArray(errorEnvelope.field_errors)) {
+      failure.fieldErrors = errorEnvelope.field_errors as Record<string, string[]>;
+    }
     throw failure;
   }
   return response.json() as Promise<T>;

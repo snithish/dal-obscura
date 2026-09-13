@@ -433,6 +433,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Verification: UI TypeScript compilation, Vite production build, and all UI tests pass.
 - Remaining gate: the plan still calls for a TanStack Query cache migration and rendered deferred-response coverage; those are not claimed complete by this slice.
 
+## 2026-09-13 — N07 structured client failures
+
+- Scope: safe error observability at the browser transport boundary.
+- Observable behavior delivered: the typed UI client now parses the server's structured `code`, `message`, `request_id`, optional `current_revision`, and `field_errors` without exposing response credentials or raw bodies. Management failures include the correlated request ID in the recovery message.
+- Verification: UI TypeScript compilation, Vite production build, UI tests, and settings error-envelope tests pass.
+- Remaining gate: mutation-specific conflict reconciliation and rendered deferred-response coverage remain VERIFY.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
