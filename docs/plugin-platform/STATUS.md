@@ -139,6 +139,13 @@ Post-slice regression: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync 
 - Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane/test_schema_api.py tests/interfaces/control_plane/test_policy_versions_api.py tests/control_plane -q` — all collected tests passed. `ruff check` on changed Python paths — passed. `cd apps/governance-ui && npm run build` — TypeScript and Vite production build passed (263.71 kB JavaScript, 14.22 kB CSS). UI lifecycle/schema tests — 5 passed.
 - Remaining N09/F14 work: rendered browser handoff flow, two-process publisher/editor race evidence, token replay/expiry matrix, and independent security/UX review. Release remains HOLD.
 
+Follow-up `1e83d78` adds an authorized `GET /v1/assets/{asset_id}/draft/{draft_id}`
+handoff endpoint and a same-origin UI link format (`/?asset=...&draft=...#assets`).
+Opening that link loads the immutable saved draft into a read-only editor while
+retaining server-side evaluation, review, and publish actions. Route inventory,
+API, and UI regression/build checks pass; browser rendering and multi-process
+handoff races remain VERIFY.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
