@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `54b6dc1` (exact installed plugin routing CI at `54b6dc1`; environment-independent CLI help at `7dd89d3`; lazy optional plugin bridge at `0de9d98`; shared public schema bounds at `c8d2450`; public stable-ID claim validation at `102c768`; generic admitted catalog labels at `079324e`; manifest nested schema identity validation at `a318b97`; bounded browser session lifetimes at `e6e1fdd`; ledger update for runtime descriptor checks at `f3adebb`; runtime descriptor verification at `e074d5c`; per-batch plugin output validation at `97da8cb`; public task payload boundary at `0f09d42`; ticket-handle metadata bounds at `fc90ddc`; secure REST auxiliary URI checks at `6ee3d81`; REST identifier validation at `4980609`; ledger update for manifest deadline enforcement at `827c6a9`; manifest deadline enforcement at `97663b7`; session-expiry fence at `4e2ac7d`; public option bounds at `17ab77f`; symlink rejection at `6136224`; malformed-entry isolation at `6c129d3`; REST descriptor contract at `7adb4d6`; concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
+Implementation follow-up through `808241a` (fixed-size list evaluation at `808241a`; exact installed plugin routing CI at `54b6dc1`; environment-independent CLI help at `7dd89d3`; lazy optional plugin bridge at `0de9d98`; shared public schema bounds at `c8d2450`; public stable-ID claim validation at `102c768`; generic admitted catalog labels at `079324e`; manifest nested schema identity validation at `a318b97`; bounded browser session lifetimes at `e6e1fdd`; ledger update for runtime descriptor checks at `f3adebb`; runtime descriptor verification at `e074d5c`; per-batch plugin output validation at `97da8cb`; public task payload boundary at `0f09d42`; ticket-handle metadata bounds at `fc90ddc`; secure REST auxiliary URI checks at `6ee3d81`; REST identifier validation at `4980609`; ledger update for manifest deadline enforcement at `827c6a9`; manifest deadline enforcement at `97663b7`; session-expiry fence at `4e2ac7d`; public option bounds at `17ab77f`; symlink rejection at `6136224`; malformed-entry isolation at `6c129d3`; REST descriptor contract at `7adb4d6`; concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -56,6 +56,8 @@ IDs when its Arrow schema has no provider ID metadata, keeping plugin claims
 aligned with the schema admission contract.
 Public plugin schemas now pass through the shared Arrow node, depth, and encoded
 size budgets before they can be planned or executed.
+Synthetic evaluation now supports fixed-size Arrow lists with correctly sized
+typed values and canonical `$element` paths.
 Built-in Iceberg startup no longer imports the optional public plugin SDK unless
 an external catalog plugin is explicitly selected; missing external wheels fail
 at that boundary instead of preventing the core service from starting.
@@ -828,6 +830,19 @@ remain open.
   trusted task serializer is involved.
 - Next permitted packet: continue X03/X06 correctness and X12/X15 artifact
   conformance work.
+
+### X04 fixed-size collection evaluation — `808241a`
+
+- State: implementing.
+- Behavior: synthetic fixtures generate valid fixed-size-list values and expose
+  their top-level and nested element paths consistently with variable/large lists.
+- Green evidence: evaluation service suite (5 tests), Ruff, Ty, and
+  `git diff --check` pass.
+- Remaining gaps: full scalar/mask golden matrix, live schema/provider evidence,
+  browser and Flight consumer runs remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: continue X04/A05–A06 golden evaluation coverage and
+  X03/X06 transaction/evolution evidence.
 
 ### X12 optional SDK startup boundary — `0de9d98`
 
