@@ -138,6 +138,9 @@ function App() {
   }, []);
 
   useEffect(() => () => {
+    loadEpoch.current += 1;
+    inventoryEpoch.current += 1;
+    managementEpoch.current += 1;
     if (searchTimer.current !== undefined) window.clearTimeout(searchTimer.current);
     assetAbortController.current?.abort();
     managementAbortController.current?.abort();

@@ -124,6 +124,10 @@ Follow-up `c77162d` normalizes an omitted additive session-capability field to a
 empty list during rolling upgrades, preserving a fail-closed management shell
 when an older control-plane instance is briefly serving the UI.
 
+Follow-up `pending` advances workspace, inventory, and management epochs during
+component teardown in addition to aborting requests, closing the final fallback
+race where session-option work could pass a stale-state check after unmount.
+
 ## Implementation update — identity migration (working slice, 2026-09-13)
 
 - Packet / status / candidate commit / owner: N05/F01 partial / VERIFY / pending atomic commit / control-plane.
