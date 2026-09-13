@@ -1,3 +1,5 @@
+from typing import Any, cast
+
 import pyarrow as pa
 import pytest
 
@@ -464,6 +466,6 @@ def test_stream_guard_closes_upstream_when_consumer_stops_early() -> None:
         now=lambda: 1,
     )
     next(guarded)
-    guarded.close()
+    cast(Any, guarded).close()
 
     assert upstream.closed is True

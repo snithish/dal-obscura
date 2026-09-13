@@ -1,7 +1,4 @@
-from __future__ import annotations
-
 from pathlib import Path
-
 
 ROOT = Path(__file__).parents[2]
 PROFILE = ROOT / "deployment" / "local-secure"
@@ -19,6 +16,9 @@ def test_secure_local_profile_reuses_production_security_contract() -> None:
     assert "../local-secure/Caddyfile:/etc/caddy/Caddyfile:ro" in compose
     assert "DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED=false" in env
     assert "DAL_OBSCURA_TLS_VERIFY_CLIENT=true" in env
-    assert "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI=https://localhost:8443/auth/callback" in env
+    assert (
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI=https://localhost:8443/auth/callback"
+        in env
+    )
     assert "openssl" in runner
     assert "same production services and security settings" in readme

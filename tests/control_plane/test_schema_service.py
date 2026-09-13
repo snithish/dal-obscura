@@ -332,7 +332,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
 def test_get_asset_schema_rejects_persisted_unknown_catalog_option_before_factory() -> None:
     asset_id = uuid4()
     store = _FakeStore(asset_id)
-    store.get_workspace_catalog = lambda context, name: {
+    cast(Any, store).get_workspace_catalog = lambda context, name: {
         "name": name,
         "module": "fixture.catalog",
         "revision": 1,
