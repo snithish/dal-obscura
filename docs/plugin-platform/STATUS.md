@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `c636b25` (core table-handle boundary;
+Implementation follow-up through `6408704` (discovery page boundary;
+core table-handle boundary;
 core option boundary;
 aggregate catalog checks;
 catalog revision API contract test;
@@ -235,6 +236,8 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   as the public SDK before any adapter receives provider options.
   Core `TableHandle` now validates plugin identities, revisions, snapshots, and
   inert bounded metadata before trusted task serialization.
+  Core and public `DiscoveryPage` values now reject oversized pages, malformed
+  entries, and unsafe continuation tokens at construction time.
   Service-side compatibility contracts and online wheel artifact evidence remain
   open.
 - X12 admitted loading and Iceberg adapter: **implementing**; entry-point loading now
@@ -457,6 +460,17 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Green evidence: plugin contract and public-adapter suites (16 passed), Ruff, Ty,
   and `git diff --check`.
 - Remaining gaps: clean-wheel, external provider, and production admission evidence
+  remain open. Pickle compatibility is unchanged.
+
+### X11 discovery page boundary — `6408704`
+
+- State: implementing.
+- Behavior: core and public `DiscoveryPage` contracts enforce a 500-entry page
+  bound, valid structured identifiers, and bounded printable continuations before
+  discovery traversal consumes them.
+- Green evidence: plugin contract, conformance, and public-adapter suites (39
+  passed), Ruff, Ty, and `git diff --check`.
+- Remaining gaps: live provider pagination and cross-worker capacity evidence
   remain open. Pickle compatibility is unchanged.
 
 The aggregate local control-plane/plugin lane now passes after the revision field
