@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `f0731dd` (quoted collection path parsing;
+Implementation follow-up through `b7ca710` (reserved identity namespaces;
+quoted collection path parsing;
 manifest field-ID bounds;
 canonical provider ID API regression;
 provider identity vocabulary;
@@ -364,6 +365,9 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   Canonical field-path parsing now preserves quoted literal `$element`, `$key`,
   and `$value` names instead of interpreting them as collection markers, so
   reserved names cannot collide with list/map descendants.
+  Provider metadata cannot claim the core-reserved `synthetic:` or `legacy:`
+  namespaces as stable IDs; those values fall back to bounded schema-scoped
+  identities.
   Both service composition roots now accept an optional operator-mounted
   `DAL_OBSCURA_PLUGIN_LOCK_FILE`; its bounded parser rejects symlinks,
   group/world-writable files, malformed identities, duplicates, and incomplete
@@ -565,6 +569,17 @@ providers before Phase A's security/correctness prerequisites are accepted.
   `git diff --check`.
 - Remaining gaps: browser/consumer nested-path evidence and complete schema
   evolution acceptance remain open.
+
+### X06 reserved identity namespaces — `b7ca710`
+
+- State: implementing.
+- Behavior: provider field metadata using the core-generated `synthetic:` or
+  `legacy:` prefixes is rejected as a stable identity and replaced with a
+  schema-scoped synthetic identity.
+- Green evidence: published-config identity suite (25 passed), Ruff, Ty, and
+  `git diff --check`.
+- Remaining gaps: live provider-derived IDs and complete schema-evolution
+  acceptance remain open.
 
 ### X03 direct mutation row locks — `165015f`
 
