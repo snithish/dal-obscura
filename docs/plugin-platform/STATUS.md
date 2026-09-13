@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `06fd323` (catalog lifecycle conformance;
+Implementation follow-up through `b9b2531` (authenticated UI navigation;
+catalog lifecycle conformance;
 descriptor field enforcement;
 discovery page boundary;
 core table-handle boundary;
@@ -200,7 +201,9 @@ artifacts.
   logout fencing plus stale history/preview/review/publish response checks are fixed.
   Authenticated `401` responses now also fence loaded private state and return the
   browser to the sign-in surface after expiry or revocation. Deferred browser tests
-  and full operation-state coverage remain open.
+  and full operation-state coverage remain open. Hash routing and post-login
+  location restoration now preserve management context across refresh and OIDC
+  redirects.
 - X10 complete authoring/management: **implemented-unverified** for the deny-all UI
   path; controls now expose save/test/review/publish actions when rules are empty.
   Full editor, activation, accessibility, and browser evidence remain open.
@@ -232,6 +235,8 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   treating missing cleanup as a pass.
   Catalog conformance also executes `validate_config()` and structured namespace
   listing before table traversal, failing plugins that omit either operation.
+  Governance UI pages now use hash-backed navigation, guard direct hash changes
+  when drafts are unsaved, and restore the selected page after OIDC redirects.
   REST catalog namespace lifecycle now honors provider-scoped traversal and
   safely filters bounded root listings for legacy providers.
   Catalog revisions are now returned in workspace metadata and accepted as an
@@ -437,6 +442,17 @@ providers before Phase A's security/correctness prerequisites are accepted.
   `git diff --check`.
 - Remaining gaps: live provider timeout/termination, consumer cleanup, and external
   wheel evidence remain open. Pickle compatibility is unchanged.
+
+### X09 authenticated UI navigation — `b9b2531`
+
+- State: implemented-unverified.
+- Behavior: management pages are addressable through bounded hashes, direct hash
+  changes honor unsaved-draft confirmation, and SSO login restores the requested
+  page through browser session storage when available.
+- Green evidence: governance UI lifecycle tests (3 passed), local TypeScript compile,
+  Vite production build, and `git diff --check`.
+- Remaining gaps: real-browser accessibility, IdP callback journeys, and complete
+  deferred operation ordering remain open. Pickle compatibility is unchanged.
 
 ### X16 REST namespace lifecycle — `8c73c41`
 
