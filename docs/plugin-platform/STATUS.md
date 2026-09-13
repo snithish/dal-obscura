@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `082783a` (independent plugin-pair conformance;
+Implementation follow-up through `7bfefe8` (bounded Flight readiness polling;
+independent plugin-pair conformance;
 schema-evolution admission guard;
 config-activation generation boundary;
 typed nested Iceberg Flight E2E fixture;
@@ -592,7 +593,9 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   Standalone package test modules now have unique import names and root pytest
   explicitly includes each package source path, removing cross-package collection
   collisions. Capacity profiling, benchmark thresholds, test-lane timing, and
-  dead-code inventory remain open.
+  dead-code inventory remain open. The E2E Flight harness now uses bounded
+  loopback readiness polling with a hard timeout and captured child diagnostics
+  instead of a fixed startup sleep.
 - X22 exact-artifact CI: **implementing**; the container publication job now
   depends on a pinned governance-UI install/type-check/build lane, and the Python
   type-check lane now resolves both independently buildable plugin package source
@@ -827,6 +830,16 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Green evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane/test_schema_evolution.py -q` (2 passed), Ruff, and `git diff --check` passed.
 - Remaining gaps: live stale-ticket behavior, provider evolution matrices, and
   PostgreSQL/multi-worker publication evidence remain open.
+
+### X21 bounded E2E readiness — `7bfefe8`
+
+- State: implemented-unverified.
+- Behavior: the E2E Flight harness probes the assigned loopback port every 100 ms
+  until the child is ready or a 30-second deadline expires; early exits and
+  readiness timeouts include captured child logs.
+- Green evidence: elevated `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/test_e2e_smoke.py::test_e2e_flight_server_with_iceberg -q` (1 passed), Ruff, and `git diff --check` passed.
+- Remaining gaps: benchmark timing baselines, capacity thresholds, cancellation
+  workload evidence, and dead-code inventory remain open.
 
 ### X03 PostgreSQL draft CAS race gate — `ee6b405`
 
