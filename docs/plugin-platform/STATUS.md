@@ -82,19 +82,19 @@ Plugin-platform and architecture regression evidence: `UV_CACHE_DIR=/tmp/dal-obs
 
 ## Implementation update — session capability metadata (working slice, 2026-09-13)
 
-- Packet / status / candidate commit / owner: N05/F01 plus N11/B15 partial / VERIFY / pending atomic commit / control-plane + governance UI.
+- Packet / status / candidate commit / owner: N05/F01 plus N11/B15 partial / VERIFY / `11298ef` / control-plane + governance UI.
 - Observable behavior delivered: authenticated `/v1/session` responses now include a safe workspace capability list. Platform administrators receive `workspace:admin`; ordinary actors receive an empty list. The UI session contract carries the metadata for future workspace-level navigation gates while resource-specific permissions remain derived from `GET /v1/assets/{asset_id}/access`.
 - Changed paths: session API actor response, UI session DTO, and actor-auth exact-contract tests. Pickle serializer and payload paths are unchanged.
 - Evidence: actor-auth and OIDC login tests passed; changed-path Ruff passed; UI TypeScript, Vite production build, and lifecycle tests passed.
 - Remaining N05/N11/B15 work: structured principal-kind persistence, two-process OIDC freshness, browser login/logout/expiry, complete actor capability matrix, and independent security/UX review.
 
-Follow-up `pending` extends abort propagation through plugin, catalog,
+Follow-up `1387657` extends abort propagation through plugin, catalog,
 publication, runtime, and authentication-provider reads. Connections discovery
 and diagnostics abort superseded requests on component teardown or replacement;
 stale errors do not overwrite the current view. Direct UI TypeScript/Vite build
 and lifecycle tests pass.
 
-Follow-up `pending` adds OpenAPI response models for session actor metadata and
+Follow-up `9707ffa` adds OpenAPI response models for session actor metadata and
 effective asset capabilities, with route-inventory assertions that prevent
 future untyped contract drift. Local issuer omission remains compatible with
 the established response shape.
