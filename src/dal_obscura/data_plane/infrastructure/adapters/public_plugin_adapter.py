@@ -197,19 +197,34 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
             revision=revision,
             options=dict(options),
         )
-        self._catalog = catalog_factory(public_config, _context())
+        context = _context()
+        catalog = catalog_factory(public_config, context)
+        try:
+            if not all(
+                callable(getattr(catalog, name, None))
+                for name in (
+                    "validate_config",
+                    "list_namespaces",
+                    "list_tables",
+                    "resolve_table",
+                    "close",
+                )
+            ):
+                raise ValueError("Public catalog factory returned an invalid plugin")
+            _ensure_context_active(context)
+            catalog.validate_config(context)
+            _ensure_context_active(context)
+            descriptor = getattr(catalog, "descriptor", None)
+            if descriptor is not None and (
+                getattr(descriptor, "kind", None) != "catalog"
+                or getattr(descriptor, "plugin_id", None) != self._catalog_plugin_id
+            ):
+                raise ValueError("Public catalog factory returned a mismatched descriptor")
+        except Exception:
+            _close_plugin(catalog)
+            raise
+        self._catalog = catalog
         self._closed = False
-        if not all(
-            callable(getattr(self._catalog, name, None))
-            for name in ("list_tables", "resolve_table", "close")
-        ):
-            raise ValueError("Public catalog factory returned an invalid plugin")
-        descriptor = getattr(self._catalog, "descriptor", None)
-        if descriptor is not None and (
-            getattr(descriptor, "kind", None) != "catalog"
-            or getattr(descriptor, "plugin_id", None) != self._catalog_plugin_id
-        ):
-            raise ValueError("Public catalog factory returned a mismatched descriptor")
 
     @property
     def name(self) -> str:

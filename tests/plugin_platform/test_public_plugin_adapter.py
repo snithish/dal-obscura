@@ -116,6 +116,13 @@ def test_public_iceberg_compatibility_path_enforces_metadata_destination(tmp_pat
         def close(self):
             return None
 
+        def validate_config(self, context):
+            del context
+
+        def list_namespaces(self, context, *, namespace=()):
+            del context, namespace
+            return (("default",),)
+
         def list_tables(self, context: ExecutionContext, *, continuation: str | None, limit: int):
             return DiscoveryPage((identifier,))
 
@@ -373,6 +380,13 @@ def test_public_catalog_adapter_closes_catalog_and_rejects_reuse() -> None:
     class ClosableCatalog:
         descriptor = type("Descriptor", (), {"kind": "catalog", "plugin_id": "manifest"})()
 
+        def validate_config(self, context):
+            del context
+
+        def list_namespaces(self, context, *, namespace=()):
+            del context, namespace
+            return (("default",),)
+
         def list_tables(self, context, *, continuation, limit):
             del context, continuation, limit
             return DiscoveryPage((identifier,))
@@ -397,6 +411,29 @@ def test_public_catalog_adapter_closes_catalog_and_rejects_reuse() -> None:
     assert closed == [True]
     with pytest.raises(ValueError, match="closed"):
         adapter.list_tables()
+
+
+def test_public_catalog_adapter_rejects_missing_lifecycle_methods() -> None:
+    class IncompleteCatalog:
+        def list_tables(self, context, *, continuation, limit):
+            del context, continuation, limit
+            return DiscoveryPage(())
+
+        def resolve_table(self, value, context):
+            del value, context
+            raise AssertionError("resolve should not run")
+
+        def close(self):
+            return None
+
+    with pytest.raises(ValueError, match="invalid plugin"):
+        PublicPluginCatalogAdapter(
+            "fixture",
+            {},
+            "manifest",
+            lambda config, context: IncompleteCatalog(),
+            lambda plugin_id: object(),
+        )
 
 
 def test_public_format_rejects_factory_descriptor_mismatch() -> None:
