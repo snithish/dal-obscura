@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `66adca6` (restored-option route regression;
+Implementation follow-up through `c701665` (virtualized tree keyboard focus and
+activation; restored-option route regression;
 exact scanned image digest promotion;
 virtualized nested schema navigation;
 persisted catalog option revalidation;
@@ -257,7 +258,11 @@ artifacts.
   browser to the sign-in surface after expiry or revocation. Deferred browser tests
   and full operation-state coverage remain open. Hash routing and post-login
   location restoration now preserve management context across refresh and OIDC
-  redirects.
+  redirects. The virtualized schema tree now exposes bounded tree position
+  metadata, activates the selected field with Enter/Space, and scrolls off-screen
+  rows into the mounted window before roving focus. Direct UI tests and the
+  production TypeScript/Vite build pass; real-browser keyboard and screen-reader
+  evidence remains open.
 - X10 complete authoring/management: **implemented-unverified** for the deny-all UI
   path; controls now expose save/test/review/publish actions when rules are empty.
   Full editor, activation, accessibility, and browser evidence remain open.
@@ -519,6 +524,17 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
 Next implementation action: continue X03 with PostgreSQL barrier/CAS evidence and
 then complete X06 provider-derived and collection field identity rules. Do not add new
 providers before Phase A's security/correctness prerequisites are accepted.
+
+### X09 virtualized tree keyboard navigation — `c701665`
+
+- State: implemented-unverified.
+- Behavior: ArrowUp/ArrowDown now scroll a virtualized schema tree before focusing
+  an off-screen row; Enter/Space selects the focused field, and tree position
+  metadata (`aria-setsize`/`aria-posinset`) is exposed for assistive technology.
+- Green evidence: direct UI tests (5), TypeScript check, Vite production build,
+  and `git diff --check` passed.
+- Remaining gaps: real browser/IdP lifecycle, screen-reader, and full operation
+  state evidence remain open.
 
 ### X05 bounded synthetic Arrow field IDs — `0dbfc40`
 
