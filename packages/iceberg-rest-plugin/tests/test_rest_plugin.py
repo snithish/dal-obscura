@@ -87,3 +87,18 @@ def test_rest_catalog_does_not_copy_provider_io_credentials_into_handle():
         _context(),
     )
     assert handle.metadata == {"metadata_location": "https://storage.example/metadata/v1.json"}
+
+
+def test_rest_catalog_bounds_namespace_listing():
+    plugin = RestCatalog(_config(), _context())
+
+    class FakeCatalog:
+        def list_namespaces(self):
+            yield from (("ns", str(index)) for index in range(10_001))
+
+        def list_tables(self, namespace):
+            return []
+
+    plugin._catalog = FakeCatalog()
+    with pytest.raises(ValueError, match="namespaces"):
+        plugin.list_tables(_context(), limit=10)

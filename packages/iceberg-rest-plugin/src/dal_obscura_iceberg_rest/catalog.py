@@ -14,6 +14,7 @@ from dal_obscura_plugin_api import (
 )
 
 MAX_TABLES = 10_000
+MAX_NAMESPACES = 10_000
 MAX_PAGE = 500
 _ALLOWED_OPTIONS = frozenset(
     {"uri", "warehouse", "token", "credential", "scope", "oauth2-server-uri"}
@@ -73,8 +74,12 @@ class RestCatalog(CatalogPlugin):
         offset = _continuation_offset(continuation)
         catalog = self._load_catalog(context)
         identifiers = []
-        for namespace in catalog.list_namespaces():
+        for index, namespace in enumerate(catalog.list_namespaces()):
+            if index >= MAX_NAMESPACES:
+                raise ValueError("REST catalog contains too many namespaces")
+            self._validate_context(context)
             for identifier in catalog.list_tables(namespace):
+                self._validate_context(context)
                 identifiers.append(_identifier(identifier))
                 if len(identifiers) > MAX_TABLES:
                     raise ValueError("REST catalog contains too many tables")
