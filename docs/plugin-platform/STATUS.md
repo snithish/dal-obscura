@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `917a095` (CI PostgreSQL concurrency lane;
+Implementation follow-up through `04ab6b5` (fresh-identity race correction;
+CI PostgreSQL concurrency lane;
 PostgreSQL draft CAS race gate;
 loopback-bound Flight test harness;
 separate local TLS trust domains;
@@ -743,6 +744,16 @@ providers before Phase A's security/correctness prerequisites are accepted.
   locally; hosted execution remains required for database-lock evidence.
 - Remaining gaps: publication/grant/rebind race matrix, rollback injection, and
   multi-process revocation scenarios remain open.
+
+### X03 fresh-identity race correction — `04ab6b5`
+
+- State: implemented-unverified.
+- Behavior: the same-principal conflict assertion now uses a fresh draft owner,
+  so the test proves one revision-zero writer succeeds and its concurrent retry
+  conflicts rather than colliding with the independent-principal setup.
+- Green evidence: targeted Ruff, Ty, and explicit skip behavior passed locally.
+- Remaining gaps: hosted PostgreSQL execution and the broader A03/A04 race and
+  rollback matrix remain open.
 
 ### X14 scoped secret inputs in Connections — `2b81337`
 
