@@ -197,14 +197,14 @@ def test_schema_fields_preserve_literal_dotted_and_nested_paths():
     assert response.json()["fields"] == [
         {
             "name": "a.b",
-            "field_id": "literal-1",
+            "field_id": "iceberg:literal-1",
             "path": ["a.b"],
             "type": "string",
             "nullable": True,
         },
         {
             "name": "b",
-            "field_id": "nested-2",
+            "field_id": "iceberg:nested-2",
             "path": ["a", "b"],
             "type": "string",
             "nullable": True,
