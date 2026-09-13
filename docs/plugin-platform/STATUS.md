@@ -1,7 +1,9 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `585902e` (mandatory CI skip gate;
+Implementation follow-up through `1de2266` (installed-wheel plugin-lock CI;
+deterministic plugin-lock builder;
+mandatory CI skip gate;
 capacity evidence runbook;
 reproducible capacity runner;
 capacity runbook contract guard;
@@ -2969,6 +2971,20 @@ otherwise continue locally executable X06/X07/X08 acceptance work
   remains expected to fail at Flight/E2E socket binds in this sandbox.
 - Architecture, wrapper, capacity-runner, inventory, Ruff, Python compile,
   shell syntax, and `git diff --check` validations also passed locally.
+
+### X12/X22 installed-wheel plugin lock generation — `1298865`, `e856a3e`, `1de2266`
+
+- State: implementing.
+- Behavior: `scripts/build_plugin_lock.py` requires explicit catalog/table-format
+  selections, reads only installed entry-point metadata and static descriptors,
+  derives descriptor and distribution-file SHA-256 digests, sorts the result,
+  and atomically refuses overwrite. The plugin contract CI lane now generates
+  and reloads a lock from the exact installed REST and manifest/Parquet wheels.
+- Green evidence: plugin-lock builder tests (3 passed), CI workflow contract
+  suite (7 passed), targeted Ruff, Python compile, and `git diff --check` passed.
+- Remaining gaps: hosted clean-wheel execution, signed artifact provenance,
+  production lock mounting, provider/consumer/browser/recovery evidence, and
+  independent review remain open.
 
 ## Evidence entry template
 
