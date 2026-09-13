@@ -107,17 +107,12 @@ def discover_workspace_catalog_tables(
     context = _required_workspace_context(store)
     catalog = store.get_workspace_catalog(context, name)
     catalog_options = cast(dict[str, Any], catalog["options"])
-    validate_admitted_catalog_options(
-        str(catalog["module"]), catalog_options, plugin_registry
-    )
+    validate_admitted_catalog_options(str(catalog["module"]), catalog_options, plugin_registry)
     validate_catalog_options(catalog_options, egress_allowlist=egress_allowlist)
     catalog_options = _resolve_catalog_secrets(catalog_options, scope=f"catalog:{name}")
     try:
         with _admit_session_discovery(session_key):
-            if (
-                plugin_registry is not None
-                and str(catalog["module"]) != ICEBERG_CATALOG_MODULE
-            ):
+            if plugin_registry is not None and str(catalog["module"]) != ICEBERG_CATALOG_MODULE:
                 tables = discover_public_catalog_tables(
                     str(catalog["name"]),
                     str(catalog["module"]),
@@ -172,9 +167,7 @@ def diagnose_workspace_catalog(
     context = _required_workspace_context(store)
     catalog = store.get_workspace_catalog(context, name)
     catalog_options = cast(dict[str, Any], catalog["options"])
-    validate_admitted_catalog_options(
-        str(catalog["module"]), catalog_options, plugin_registry
-    )
+    validate_admitted_catalog_options(str(catalog["module"]), catalog_options, plugin_registry)
     validate_catalog_options(catalog_options, egress_allowlist=egress_allowlist)
     catalog_options = _resolve_catalog_secrets(catalog_options, scope=f"catalog:{name}")
     checked_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -188,8 +181,7 @@ def diagnose_workspace_catalog(
                     revision=_catalog_revision(catalog),
                     plugin_registry=plugin_registry,
                 )
-                if plugin_registry is not None
-                and str(catalog["module"]) != ICEBERG_CATALOG_MODULE
+                if plugin_registry is not None and str(catalog["module"]) != ICEBERG_CATALOG_MODULE
                 else discover(
                     str(catalog["name"]),
                     str(catalog["module"]),
@@ -208,9 +200,7 @@ def diagnose_workspace_catalog(
             "checked_at": checked_at,
         }
     sample_tables = [
-        str(table["name"])
-        for table in tables[:10]
-        if isinstance(table, dict) and table.get("name")
+        str(table["name"]) for table in tables[:10] if isinstance(table, dict) and table.get("name")
     ]
     return {
         "catalog": catalog["name"],
@@ -358,9 +348,7 @@ def validate_catalog_options(
             name.lower() in {"access_token", "api_key", "password", "secret", "token"}
             for name, _item in parse_qsl(parsed.query, keep_blank_values=True)
         ):
-            raise ValidationFailure(
-                f"Catalog option {key!r} must not put secrets in a URI query"
-            )
+            raise ValidationFailure(f"Catalog option {key!r} must not put secrets in a URI query")
         hostname = parsed.hostname
         if (
             hostname
@@ -384,15 +372,9 @@ def validate_descriptor_options(
     if not isinstance(raw_fields, list):
         return
     field_specs = [cast(dict[str, object], item) for item in raw_fields if isinstance(item, dict)]
-    fields = {
-        item.get("name")
-        for item in field_specs
-        if isinstance(item.get("name"), str)
-    }
+    fields = {item.get("name") for item in field_specs if isinstance(item.get("name"), str)}
     if unknown := sorted(set(options) - fields):
-        raise ValidationFailure(
-            f"{kind} options contain unsupported fields: " + ", ".join(unknown)
-        )
+        raise ValidationFailure(f"{kind} options contain unsupported fields: " + ", ".join(unknown))
     required: set[str] = set()
     for item in field_specs:
         name = item.get("name")
@@ -402,6 +384,7 @@ def validate_descriptor_options(
                 item.get("type"),
                 options[name],
                 kind=kind,
+                choices=item.get("options"),
             )
         if item.get("required") is True and isinstance(name, str):
             required.add(name)
@@ -414,14 +397,28 @@ def validate_descriptor_options(
         )
 
 
-def _validate_descriptor_value(name: str, field_type: object, value: object, *, kind: str) -> None:
+def _validate_descriptor_value(
+    name: str,
+    field_type: object,
+    value: object,
+    *,
+    kind: str,
+    choices: object = None,
+) -> None:
     if field_type in (None, "string", "uri") and not isinstance(value, str):
         raise ValidationFailure(f"{kind} option {name!r} must be a string")
+    if field_type == "boolean" and not isinstance(value, bool):
+        raise ValidationFailure(f"{kind} option {name!r} must be a boolean")
+    if field_type == "integer" and (isinstance(value, bool) or not isinstance(value, int)):
+        raise ValidationFailure(f"{kind} option {name!r} must be an integer")
+    if field_type == "enum":
+        if not isinstance(choices, list) or not choices:
+            raise ValidationFailure(f"{kind} option {name!r} has no valid enum choices")
+        if value not in choices:
+            raise ValidationFailure(f"{kind} option {name!r} must be one of the declared choices")
     if field_type == "secret_reference":
         if not isinstance(value, dict) or set(value) != {"secret", "scope"}:
-            raise ValidationFailure(
-                f"{kind} option {name!r} must be an explicit secret reference"
-            )
+            raise ValidationFailure(f"{kind} option {name!r} must be an explicit secret reference")
         reference = cast(dict[str, object], value)
         secret_name = reference.get("secret")
         if not isinstance(secret_name, str) or not secret_name.strip():
@@ -432,7 +429,8 @@ def _validate_descriptor_value(name: str, field_type: object, value: object, *, 
             or len(str(reference["scope"])) > _MAX_OPTION_STRING
         ):
             raise ValidationFailure(f"{kind} option {name!r} has an invalid secret scope")
-    elif field_type not in (None, "string", "uri"):
+        return
+    if field_type not in (None, "string", "uri", "boolean", "integer", "enum", "number"):
         raise ValidationFailure(f"{kind} option {name!r} has an unsupported field type")
 
 

@@ -58,6 +58,31 @@ def test_admitted_secret_reference_accepts_bounded_scope() -> None:
         )
 
 
+def test_admitted_descriptor_preserves_typed_boolean_integer_and_enum_values() -> None:
+    descriptor = PluginDescriptor(
+        kind="catalog",
+        plugin_id="typed.catalog",
+        api_version="1",
+        config_version=1,
+        distribution="example",
+        version="1.0.0",
+        config_schema={
+            "fields": [
+                {"name": "enabled", "type": "boolean"},
+                {"name": "timeout", "type": "integer"},
+                {"name": "mode", "type": "enum", "options": ["safe", "fast"]},
+            ]
+        },
+    )
+    validate_descriptor_options(descriptor, {"enabled": True, "timeout": 30, "mode": "safe"})
+    with pytest.raises(ValidationFailure, match="must be a boolean"):
+        validate_descriptor_options(descriptor, {"enabled": "true", "timeout": 30, "mode": "safe"})
+    with pytest.raises(ValidationFailure, match="must be an integer"):
+        validate_descriptor_options(descriptor, {"enabled": True, "timeout": True, "mode": "safe"})
+    with pytest.raises(ValidationFailure, match="declared choices"):
+        validate_descriptor_options(descriptor, {"enabled": True, "timeout": 30, "mode": "unsafe"})
+
+
 def test_admitted_catalog_options_are_checked_before_factory_use() -> None:
     descriptor = PluginDescriptor(
         kind="catalog",
