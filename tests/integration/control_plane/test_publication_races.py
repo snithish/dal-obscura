@@ -32,7 +32,7 @@ def postgres_engine() -> Iterator[Engine]:
         engine.dispose()
 
 
-def _provision_asset(engine: Engine) -> tuple[UUID, UUID]:
+def _provision_asset(engine: Engine) -> tuple[UUID, UUID, UUID]:
     cell_id = uuid4()
     tenant_id = uuid4()
     with engine.begin() as connection:
@@ -65,13 +65,13 @@ def _provision_asset(engine: Engine) -> tuple[UUID, UUID]:
                 table_identifier="default.users",
                 options={},
             )
-            return cell_id, asset_id
+            return cell_id, tenant_id, asset_id
         finally:
             store._session.close()
 
 
 def test_concurrent_draft_cas_allows_one_revision_zero_writer(postgres_engine: Engine) -> None:
-    _cell_id, asset_id = _provision_asset(postgres_engine)
+    _cell_id, _tenant_id, asset_id = _provision_asset(postgres_engine)
     start_barrier = Barrier(2)
 
     def save_draft(principal: str) -> dict[str, object] | Exception:
@@ -137,7 +137,7 @@ def test_concurrent_draft_cas_allows_one_revision_zero_writer(postgres_engine: E
 
 
 def test_concurrent_grant_replacements_use_asset_revision_cas(postgres_engine: Engine) -> None:
-    _cell_id, asset_id = _provision_asset(postgres_engine)
+    _cell_id, _tenant_id, asset_id = _provision_asset(postgres_engine)
     start_barrier = Barrier(2)
 
     def replace_grants(principal: str) -> list[dict[str, str]] | Exception:
@@ -160,4 +160,36 @@ def test_concurrent_grant_replacements_use_asset_revision_cas(postgres_engine: E
         results = list(executor.map(replace_grants, ("user:grant-a", "user:grant-b")))
 
     assert sum(isinstance(result, list) for result in results) == 1
+    assert sum(isinstance(result, PublicationConflictError) for result in results) == 1
+
+
+def test_concurrent_asset_binding_updates_use_revision_cas(postgres_engine: Engine) -> None:
+    _cell_id, tenant_id, asset_id = _provision_asset(postgres_engine)
+    start_barrier = Barrier(2)
+
+    def replace_binding(table_identifier: str) -> UUID | Exception:
+        with Session(postgres_engine, future=True) as session:
+            store = PublicationStore(session)
+            try:
+                start_barrier.wait(timeout=10)
+                result = store.upsert_asset(
+                    cell_id=_cell_id,
+                    tenant_id=tenant_id,
+                    catalog="analytics",
+                    target="default.users",
+                    backend="iceberg",
+                    table_identifier=table_identifier,
+                    options={},
+                    expected_revision=0,
+                )
+                session.commit()
+                return result
+            except Exception as exc:
+                session.rollback()
+                return exc
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(replace_binding, ("default.users", "default.users_v2")))
+
+    assert sum(result == asset_id for result in results) == 1
     assert sum(isinstance(result, PublicationConflictError) for result in results) == 1
