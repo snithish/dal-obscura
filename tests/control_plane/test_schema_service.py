@@ -223,6 +223,8 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
             config_version=1,
             distribution="fixture",
             version="1.0.0",
+            output_formats=frozenset({"fixture.format"}),
+            handle_versions=frozenset({1}),
         )
 
         def validate_config(self, context):
@@ -248,6 +250,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
             config_version=1,
             distribution="fixture",
             version="1.0.0",
+            handle_versions=frozenset({1}),
         )
 
         def schema(self, value, context):
@@ -283,7 +286,6 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
     assert result["stable_field_ids"] is False
     assert cast(list[dict[str, object]], result["fields"])[0]["name"] == "profile"
     assert closed == ["format", "catalog"]
-
 
     class ForgedHandleCatalog(PublicCatalog):
         def resolve_table(self, value, context):

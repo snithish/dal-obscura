@@ -341,6 +341,8 @@ def load_static_plugin_descriptor(entry: metadata.EntryPoint) -> PluginDescripto
         "api_version",
         "config_version",
         "capabilities",
+        "output_formats",
+        "handle_versions",
         "config_schema",
         "display_name",
         "descriptors",
@@ -372,6 +374,8 @@ def load_static_plugin_descriptor(entry: metadata.EntryPoint) -> PluginDescripto
     api_version = descriptor_payload.get("api_version")
     config_version = descriptor_payload.get("config_version")
     capabilities = descriptor_payload.get("capabilities", [])
+    output_formats = descriptor_payload.get("output_formats", [])
+    handle_versions = descriptor_payload.get("handle_versions", [1])
     config_schema = descriptor_payload.get("config_schema", {})
     display_name = descriptor_payload.get("display_name", "")
     if kind != expected_kind or plugin_id != str(entry.name):
@@ -382,6 +386,14 @@ def load_static_plugin_descriptor(entry: metadata.EntryPoint) -> PluginDescripto
         not isinstance(item, str) for item in capabilities
     ):
         raise PluginAdmissionError("Plugin static descriptor capabilities are invalid")
+    if not isinstance(output_formats, list) or any(
+        not isinstance(item, str) for item in output_formats
+    ):
+        raise PluginAdmissionError("Plugin static descriptor output formats are invalid")
+    if not isinstance(handle_versions, list) or any(
+        not isinstance(item, int) or isinstance(item, bool) for item in handle_versions
+    ):
+        raise PluginAdmissionError("Plugin static descriptor handle versions are invalid")
     if not isinstance(config_schema, Mapping) or not isinstance(display_name, str):
         raise PluginAdmissionError("Plugin static descriptor fields are invalid")
     capability_values = cast(list[str], capabilities)
@@ -393,6 +405,8 @@ def load_static_plugin_descriptor(entry: metadata.EntryPoint) -> PluginDescripto
         distribution=distribution.name,
         version=distribution.version,
         capabilities=frozenset(capability_values),
+        output_formats=frozenset(output_formats),
+        handle_versions=frozenset(handle_versions),
         config_schema=config_schema,
         display_name=display_name,
     )
@@ -425,6 +439,8 @@ def _descriptor_digest(descriptor: PluginDescriptor) -> str:
         "distribution": descriptor.distribution,
         "version": descriptor.version,
         "capabilities": sorted(descriptor.capabilities),
+        "output_formats": sorted(descriptor.output_formats),
+        "handle_versions": sorted(descriptor.handle_versions),
         "config_schema": descriptor.config_schema,
         "display_name": descriptor.display_name,
     }

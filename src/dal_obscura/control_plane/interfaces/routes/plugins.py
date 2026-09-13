@@ -16,6 +16,8 @@ _BUILTIN_CATALOG = PluginDescriptor(
     version="0.1.0",
     display_name="Iceberg SQL catalog",
     capabilities=frozenset({"nested_schema", "snapshot_reads", "splittable_scan"}),
+    output_formats=frozenset({"iceberg"}),
+    handle_versions=frozenset({1}),
     config_schema={
         "fields": [
             {"name": "uri", "type": "string", "required": True, "secret": False},
@@ -39,6 +41,7 @@ _BUILTIN_FORMAT = PluginDescriptor(
     version="0.1.0",
     display_name="Apache Iceberg",
     capabilities=frozenset({"nested_schema", "snapshot_reads", "splittable_scan"}),
+    handle_versions=frozenset({1}),
 )
 
 
@@ -81,6 +84,8 @@ def _descriptor_payload(descriptor: PluginDescriptor) -> dict[str, object]:
         "version": descriptor.version,
         "display_name": descriptor.display_name or descriptor.plugin_id,
         "capabilities": sorted(descriptor.capabilities),
+        "output_formats": sorted(descriptor.output_formats),
+        "handle_versions": sorted(descriptor.handle_versions),
         "config_schema": dict(descriptor.config_schema),
         "status": "admitted",
     }
@@ -92,18 +97,21 @@ def _pair_payload(descriptors: list[PluginDescriptor]) -> list[dict[str, object]
     pairs: list[dict[str, object]] = []
     for catalog in catalogs:
         for table_format in formats:
+            capabilities = catalog.capabilities & table_format.capabilities
+            handle_versions = catalog.handle_versions & table_format.handle_versions
             status = (
                 "admitted"
-                if catalog.capabilities & table_format.capabilities
+                if table_format.plugin_id in catalog.output_formats
+                and handle_versions
+                and capabilities
                 else "incompatible"
             )
             pairs.append(
                 {
                     "catalog_plugin_id": catalog.plugin_id,
                     "format_plugin_id": table_format.plugin_id,
-                    "capabilities": sorted(
-                        catalog.capabilities & table_format.capabilities
-                    ),
+                    "capabilities": sorted(capabilities),
+                    "handle_versions": sorted(handle_versions),
                     "status": status,
                 }
             )

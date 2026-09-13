@@ -161,8 +161,7 @@ class PublicPluginTableFormat(TableFormat):
         plugin = self.format_factory(self.handle, context)
         _ensure_context_active(context)
         if not all(
-            callable(getattr(plugin, name, None))
-            for name in ("schema", "plan", "execute", "close")
+            callable(getattr(plugin, name, None)) for name in ("schema", "plan", "execute", "close")
         ):
             raise ValueError("Public format factory returned an invalid plugin")
         descriptor = getattr(plugin, "descriptor", None)
@@ -247,6 +246,12 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
             or handle.identifier != identifier
         ):
             raise ValueError("Public catalog returned a mismatched table handle identity")
+        catalog_descriptor = getattr(self._catalog, "descriptor", None)
+        if catalog_descriptor is not None and (
+            handle.format_plugin_id not in getattr(catalog_descriptor, "output_formats", ())
+            or handle.handle_version not in getattr(catalog_descriptor, "handle_versions", ())
+        ):
+            raise ValueError("Public catalog returned an undeclared table-format handle")
         if handle.format_plugin_id == "iceberg":
             from dal_obscura.data_plane.infrastructure.table_formats.iceberg import (
                 IcebergTableFormat,
@@ -270,6 +275,11 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
         raw_factory = self._format_factory_loader(handle.format_plugin_id)
         if not callable(raw_factory):
             raise ValueError("Public format factory is not callable")
+        format_descriptor = getattr(raw_factory, "descriptor", None)
+        if format_descriptor is not None and handle.handle_version not in getattr(
+            format_descriptor, "handle_versions", ()
+        ):
+            raise ValueError("Public table-format factory does not support this handle version")
         format_factory = cast(PublicFormatFactory, raw_factory)
         return PublicPluginTableFormat(
             catalog_name=self._name,

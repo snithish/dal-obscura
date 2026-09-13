@@ -274,6 +274,8 @@ def test_compiler_accepts_only_admitted_external_catalog_and_format():
                     distribution="fixture",
                     version="1",
                     capabilities=frozenset({"nested_schema"}),
+                    output_formats=frozenset({"parquet.dataset"}),
+                    handle_versions=frozenset({1}),
                 ),
                 ("table_format", "parquet.dataset"): PluginDescriptor(
                     kind="table_format",
@@ -283,6 +285,7 @@ def test_compiler_accepts_only_admitted_external_catalog_and_format():
                     distribution="fixture",
                     version="1",
                     capabilities=frozenset({"nested_schema"}),
+                    handle_versions=frozenset({1}),
                 ),
             }
 

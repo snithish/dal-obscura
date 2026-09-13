@@ -30,6 +30,8 @@ DESCRIPTOR = PluginDescriptor(
     version="0.1.0",
     display_name="Iceberg REST catalog",
     capabilities=frozenset({"nested_schema", "snapshot_reads", "splittable_scan"}),
+    output_formats=frozenset({"iceberg"}),
+    handle_versions=frozenset({1}),
     config_schema={
         "fields": [
             {"name": "uri", "type": "uri", "required": True, "secret": False},

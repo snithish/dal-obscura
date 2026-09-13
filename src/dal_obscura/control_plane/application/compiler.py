@@ -42,6 +42,8 @@ _MASK_TYPES = frozenset({"null", "redact", "hash", "email", "keep_last", "defaul
 _ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )
+
+
 def validate_policy_rule_payloads(rules: list[dict[str, Any]]) -> None:
     """Validate mutable policy-rule payloads before storing draft policy state."""
     compiler = PublicationCompiler()
@@ -221,10 +223,14 @@ class PublicationCompiler:
     def _validate_format_plugin(self, plugin_id: str) -> None:
         if plugin_id in SUPPORTED_BACKENDS:
             return
-        if self._plugin_registry is None or (
-            "table_format",
-            plugin_id,
-        ) not in self._admitted_plugins():
+        if (
+            self._plugin_registry is None
+            or (
+                "table_format",
+                plugin_id,
+            )
+            not in self._admitted_plugins()
+        ):
             raise ValidationFailure(f"Unsupported backend {plugin_id!r}")
 
     def _validate_plugin_pair(self, catalog_module: str, format_id: str) -> None:
@@ -237,14 +243,17 @@ class PublicationCompiler:
         table_format = admitted.get(("table_format", format_id))
         catalog_capabilities = getattr(catalog, "capabilities", frozenset())
         format_capabilities = getattr(table_format, "capabilities", frozenset())
+        output_formats = getattr(catalog, "output_formats", frozenset())
+        catalog_versions = getattr(catalog, "handle_versions", frozenset())
+        format_versions = getattr(table_format, "handle_versions", frozenset())
         if (
             not catalog
             or not table_format
+            or format_id not in output_formats
+            or not catalog_versions.intersection(format_versions)
             or not catalog_capabilities.intersection(format_capabilities)
         ):
-            raise ValidationFailure(
-                f"Unsupported plugin pair {catalog_module!r} + {format_id!r}"
-            )
+            raise ValidationFailure(f"Unsupported plugin pair {catalog_module!r} + {format_id!r}")
 
     def _admitted_plugins(self) -> dict[tuple[str, str], object]:
         assert self._plugin_registry is not None
@@ -252,7 +261,6 @@ class PublicationCompiler:
         if not admitted:
             admitted = self._plugin_registry.reload()
         return cast(dict[tuple[str, str], object], admitted)
-
 
     def _compile_rule(self, rule: PolicyRuleDraft) -> CompiledPolicyRule:
         if rule.effect != "allow":

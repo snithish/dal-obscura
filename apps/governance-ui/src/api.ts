@@ -195,6 +195,8 @@ export type PluginDescriptor = {
   version: string;
   display_name: string;
   capabilities: string[];
+  output_formats: string[];
+  handle_versions: number[];
   config_schema: Record<string, unknown>;
   status: "admitted" | "incompatible";
 };
@@ -211,7 +213,8 @@ export type PluginPair = {
   catalog_plugin_id: string;
   format_plugin_id: string;
   capabilities: string[];
-  status: "admitted";
+  handle_versions: number[];
+  status: "admitted" | "incompatible";
 };
 
 export type AuthProvider = {

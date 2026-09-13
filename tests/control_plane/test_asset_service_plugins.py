@@ -23,6 +23,8 @@ def _registry(*, overlap: bool = True) -> PluginRegistry:
         distribution="fixture",
         version="1.0.0",
         capabilities=capabilities,
+        output_formats=frozenset({"fixture.format"}),
+        handle_versions=frozenset({1}),
     )
     format_descriptor = PluginDescriptor(
         kind="table_format",
@@ -32,9 +34,8 @@ def _registry(*, overlap: bool = True) -> PluginRegistry:
         distribution="fixture",
         version="1.0.0",
         capabilities=frozenset({"nested_schema"}),
-        config_schema={
-            "fields": [{"name": "format_option", "type": "string", "required": True}]
-        },
+        handle_versions=frozenset({1}),
+        config_schema={"fields": [{"name": "format_option", "type": "string", "required": True}]},
     )
     registry = Mock()
     registry.admitted.return_value = {
@@ -102,4 +103,31 @@ def test_asset_binding_rejects_non_overlapping_plugin_capabilities() -> None:
             "default.events",
             {"format_option": "safe"},
             plugin_registry=_registry(overlap=False),
+        )
+
+
+def test_asset_binding_rejects_shared_capabilities_without_declared_output_format() -> None:
+    registry = _registry()
+    catalog = registry.admitted.return_value[("catalog", "fixture.catalog")]
+    catalog = PluginDescriptor(
+        kind=catalog.kind,
+        plugin_id=catalog.plugin_id,
+        api_version=catalog.api_version,
+        config_version=catalog.config_version,
+        distribution=catalog.distribution,
+        version=catalog.version,
+        capabilities=catalog.capabilities,
+        output_formats=frozenset(),
+        handle_versions=frozenset({1}),
+    )
+    registry.admitted.return_value[("catalog", "fixture.catalog")] = catalog
+    with pytest.raises(ValidationFailure, match="does not declare"):
+        upsert_workspace_asset(
+            _store(),
+            "analytics",
+            "events",
+            "fixture.format",
+            "default.events",
+            {"format_option": "safe"},
+            plugin_registry=registry,
         )

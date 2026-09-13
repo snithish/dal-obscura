@@ -46,6 +46,7 @@ ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )
 
+
 def get_asset_schema(
     store: PublicationStore,
     asset_id: UUID,
@@ -210,6 +211,7 @@ def _load_public_plugin_schema(
             raise ValidationFailure("Catalog plugin returned a mismatched table handle identity")
         if handle.format_plugin_id != format_plugin_id:
             raise ValidationFailure("Catalog and table-format plugins do not match")
+        _validate_handle_contract(handle, catalog_plugin, format_plugin_id)
         if format_plugin_id == "iceberg":
             # The built-in Iceberg format remains the legacy compatibility
             # adapter. External catalogs (for example REST) still resolve
@@ -222,6 +224,7 @@ def _load_public_plugin_schema(
             )
         format_plugin = format_factory(handle, context)
         _validate_plugin_descriptor(format_plugin, "table_format", format_plugin_id)
+        _validate_handle_contract(handle, format_plugin, format_plugin_id)
         _require_plugin_methods(format_plugin, ("schema", "close"), "table-format")
         descriptor = format_plugin.schema(handle, context)
         if not isinstance(descriptor, SchemaDescriptor):
@@ -237,6 +240,18 @@ def _load_public_plugin_schema(
             _close_plugin(format_plugin)
         if catalog_plugin is not None:
             _close_plugin(catalog_plugin)
+
+
+def _validate_handle_contract(handle: Any, plugin: Any, format_plugin_id: str) -> None:
+    descriptor = getattr(plugin, "descriptor", None)
+    if descriptor is None:
+        return
+    if getattr(descriptor, "kind", None) == "catalog" and format_plugin_id not in getattr(
+        descriptor, "output_formats", ()
+    ):
+        raise ValidationFailure("Catalog returned an undeclared table-format handle")
+    if handle.handle_version not in getattr(descriptor, "handle_versions", ()):
+        raise ValidationFailure("Table-format plugin does not support this handle version")
 
 
 def _load_legacy_iceberg_schema(
@@ -270,9 +285,7 @@ def _load_legacy_iceberg_schema(
 
         table_format = IcebergTableFormat(
             catalog_name=catalog_name,
-            table_name=".".join(
-                (*handle.identifier.namespace, handle.identifier.name)
-            ),
+            table_name=".".join((*handle.identifier.namespace, handle.identifier.name)),
             metadata_location=metadata_location,
             io_options=cast(dict[str, object], io_options),
         )

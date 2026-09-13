@@ -36,6 +36,8 @@ CATALOG_DESCRIPTOR = PluginDescriptor(
     distribution="dal-obscura-manifest-parquet",
     version="0.1.0",
     capabilities=frozenset({"nested_schema", "splittable_scan"}),
+    output_formats=frozenset({"parquet.dataset"}),
+    handle_versions=frozenset({1}),
     display_name="Manifest Parquet dataset",
     config_schema={
         "fields": [
@@ -197,9 +199,7 @@ def _load_manifest(  # noqa: C901
         ):
             raise ValueError("manifest table files are invalid")
         files = tuple(
-            _safe_child(root, _required_path(item, "table file"))
-            .relative_to(root)
-            .as_posix()
+            _safe_child(root, _required_path(item, "table file")).relative_to(root).as_posix()
             for item in raw_files
         )
         if not isinstance(raw_schema, str) or not raw_schema:
@@ -272,9 +272,9 @@ def _schema_identities(
         else:
             field_id = _provider_field_id(field)
             if field_id is None:
-                field_id = "synthetic:" + hashlib.sha256(
-                    f"{anchor}:{path_text}".encode()
-                ).hexdigest()[:32]
+                field_id = (
+                    "synthetic:" + hashlib.sha256(f"{anchor}:{path_text}".encode()).hexdigest()[:32]
+                )
         if field_id in seen_ids:
             raise ValueError("manifest schema contains duplicate field identities")
         seen_ids.add(field_id)

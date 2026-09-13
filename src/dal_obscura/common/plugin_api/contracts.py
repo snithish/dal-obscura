@@ -62,6 +62,8 @@ class PluginDescriptor:
     capabilities: frozenset[str] = frozenset()
     config_schema: Mapping[str, object] = field(default_factory=dict)
     display_name: str = ""
+    output_formats: frozenset[str] = frozenset()
+    handle_versions: frozenset[int] = frozenset({1})
 
     def __post_init__(self) -> None:
         if not _PLUGIN_ID.fullmatch(self.plugin_id):
@@ -83,6 +85,20 @@ class PluginDescriptor:
                 "Plugin descriptor contains unsupported capability: "
                 + ", ".join(sorted(unsupported))
             )
+        if len(self.output_formats) > 64 or any(
+            not isinstance(format_id, str) or not _PLUGIN_ID.fullmatch(format_id)
+            for format_id in self.output_formats
+        ):
+            raise ValueError("Plugin output format IDs must be valid, bounded IDs")
+        if (
+            len(self.handle_versions) > 16
+            or not self.handle_versions
+            or any(
+                not isinstance(version, int) or version < 1 or version > 255
+                for version in self.handle_versions
+            )
+        ):
+            raise ValueError("Plugin handle versions must be positive bounded integers")
         _validate_config_schema(self.config_schema)
         if len(self.display_name) > _MAX_CONFIG_SCHEMA_STRING:
             raise ValueError("Plugin display name is too long")

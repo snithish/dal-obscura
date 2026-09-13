@@ -33,6 +33,7 @@ FORMAT_DESCRIPTOR = PluginDescriptor(
     distribution="dal-obscura-manifest-parquet",
     version="0.1.0",
     capabilities=frozenset({"nested_schema", "splittable_scan"}),
+    handle_versions=frozenset({1}),
     display_name="Manifest Parquet dataset format",
 )
 

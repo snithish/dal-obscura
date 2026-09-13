@@ -117,6 +117,10 @@ def upsert_workspace_asset(
         format_descriptor = admitted.get(("table_format", backend))
         if catalog_descriptor is None or format_descriptor is None:
             raise ValidationFailure("Plugin pair is not admitted")
+        if backend not in catalog_descriptor.output_formats:
+            raise ValidationFailure("Catalog does not declare this table format")
+        if not catalog_descriptor.handle_versions.intersection(format_descriptor.handle_versions):
+            raise ValidationFailure("Catalog and table-format handle versions do not overlap")
         if not catalog_descriptor.capabilities.intersection(format_descriptor.capabilities):
             raise ValidationFailure("Catalog and table-format capabilities do not overlap")
         validate_descriptor_options(

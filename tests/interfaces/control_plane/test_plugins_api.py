@@ -26,12 +26,12 @@ def test_plugin_descriptors_expose_only_admitted_bounded_capabilities() -> None:
             "catalog_plugin_id": "iceberg.sql",
             "format_plugin_id": "iceberg",
             "capabilities": ["nested_schema", "snapshot_reads", "splittable_scan"],
+            "handle_versions": [1],
             "status": "admitted",
         }
     ]
     catalog = next(item for item in payload["plugins"] if item["plugin_id"] == "iceberg.sql")
     assert catalog["status"] == "admitted"
+    assert catalog["output_formats"] == ["iceberg"]
     assert all("$ref" not in str(value) for value in catalog["config_schema"].values())
-    assert "password" in {
-        field["name"] for field in catalog["config_schema"]["fields"]
-    }
+    assert "password" in {field["name"] for field in catalog["config_schema"]["fields"]}

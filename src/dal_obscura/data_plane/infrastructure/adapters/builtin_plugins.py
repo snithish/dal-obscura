@@ -38,6 +38,8 @@ def create_builtin_plugin_registry(
         version=_BUILTIN_VERSION,
         display_name="Iceberg SQL catalog",
         capabilities=frozenset({"nested_schema", "snapshot_reads", "splittable_scan"}),
+        output_formats=frozenset({_ICEBERG_FORMAT_ID}),
+        handle_versions=frozenset({1}),
         config_schema={
             "fields": [
                 {"name": "uri", "type": "string", "required": True, "secret": False},
@@ -61,13 +63,14 @@ def create_builtin_plugin_registry(
         version=_BUILTIN_VERSION,
         display_name="Apache Iceberg",
         capabilities=frozenset({"nested_schema", "snapshot_reads", "splittable_scan"}),
+        handle_versions=frozenset({1}),
     )
     registry = PluginRegistry(
         allowlist=allowlist,
         builtins={
             ("catalog", _ICEBERG_CATALOG_ID): (catalog_descriptor, IcebergCatalog),
             ("table_format", _ICEBERG_FORMAT_ID): (format_descriptor, IcebergTableFormat),
-        }
+        },
     )
     registry.reload()
     return registry
