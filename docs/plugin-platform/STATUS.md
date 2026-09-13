@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `7b12b68` (public continuation validation;
+Implementation follow-up through `71af4ce` (public page-entry bounds;
+public continuation validation;
 public discovery concurrency bound;
 plugin lock identity validation;
 publication rollback coverage;
@@ -574,6 +575,19 @@ providers before Phase A's security/correctness prerequisites are accepted.
   `git diff --check`.
 - Remaining gaps: live provider pagination, cross-worker capacity, and external
   wheel/consumer evidence remain open. Pickle compatibility is unchanged.
+
+### X08/X13 public page-entry bounds — `71af4ce`
+
+- State: implementing.
+- Behavior: control-plane and data-plane public catalog bridges now require
+  bounded tuple/list page containers and enforce the 500-entry page limit before
+  iterating provider results. Forged endless or oversized iterables cannot
+  bypass discovery memory limits.
+- Green evidence: catalog discovery and public adapter suites (31 passed), Ruff,
+  and `git diff --check`.
+- Remaining gaps: cross-worker aggregate limits, provider interruption, live
+  pagination, and external wheel/consumer evidence remain open. Pickle
+  compatibility is unchanged.
 
 ### X07/X14 asset binding validation — `3c3709b`
 
