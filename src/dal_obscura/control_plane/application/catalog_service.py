@@ -15,6 +15,7 @@ from threading import BoundedSemaphore, Lock
 from typing import Any, cast
 from urllib.parse import parse_qsl, urlsplit
 
+from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.infrastructure.catalog_discovery import discover_catalog_tables
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
@@ -194,6 +195,7 @@ def upsert_workspace_catalog(
     egress_allowlist: tuple[str, ...] = (),
     *,
     actor_principal: str = "system",
+    plugin_registry: PluginRegistry | None = None,
 ) -> dict[str, str]:
     """Creates or updates a workspace catalog definition.
 
@@ -203,6 +205,12 @@ def upsert_workspace_catalog(
         ```
     """
 
+    if module != "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog":
+        if plugin_registry is None:
+            raise ValidationFailure("Catalog plugin is not admitted")
+        admitted = plugin_registry.admitted() or plugin_registry.reload()
+        if ("catalog", module) not in admitted:
+            raise ValidationFailure("Catalog plugin is not admitted")
     validate_catalog_options(options, egress_allowlist=egress_allowlist)
     context = store.ensure_default_workspace_context()
     catalog_id = store.upsert_catalog(

@@ -610,16 +610,15 @@ function ConnectionsView({ catalogs, publications, plugins, pluginStates, canAct
   }, [pluginId]);
   async function save() {
     if (!name.trim()) return setMessage("Connection name is required.");
-    if (pluginId !== "iceberg.sql") return setMessage("This adapter is advertised but its write route is not enabled in this server.");
     const missing = effectiveFields.filter((field) => field.required && !config[field.name]?.trim());
     if (missing.length) return setMessage(`Required configuration missing: ${missing.map((field) => field.name).join(", ")}.`);
-    const options: Record<string, unknown> = { type: "sql" };
+    const options: Record<string, unknown> = pluginId === "iceberg.sql" ? { type: "sql" } : {};
     for (const field of effectiveFields) {
       const value = config[field.name]?.trim();
       if (!value) continue;
       options[field.name] = field.secret ? { secret: value } : value;
     }
-    try { await controlPlane.saveCatalog(name.trim(), options); setMessage("Connection saved. Discovery remains bounded to this configured catalog."); setName(""); setConfig({}); onReload(); } catch { setMessage("Connection was rejected by the control plane."); }
+    try { await controlPlane.saveCatalog(name.trim(), pluginId === "iceberg.sql" ? "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog" : pluginId, options); setMessage("Connection saved. Discovery remains bounded to this configured catalog."); setName(""); setConfig({}); onReload(); } catch { setMessage("Connection was rejected by the control plane."); }
   }
   async function discover(catalog: string) {
     try { setDiscoveredCatalog(catalog); setTables((await controlPlane.discoverCatalogTables(catalog)).tables); setMessage(`Loaded table inventory for ${catalog}.`); } catch { setTables([]); setMessage("Discovery failed; source credentials and endpoint policy were not changed."); }
@@ -639,7 +638,11 @@ function ConnectionsView({ catalogs, publications, plugins, pluginStates, canAct
     const target = String(table.target ?? table.name ?? "").trim();
     const identifier = String(table.table_identifier ?? target).trim();
     if (!target || !identifier) return setMessage("The discovered table has no safe identifier.");
-    try { await controlPlane.saveAsset(catalog, target, identifier); setMessage(`Governed asset ${target} registered. Assign owners and author a policy in Assets.`); await discover(catalog); } catch { setMessage("Asset registration was rejected; the source table was not changed."); }
+    const catalogRow = catalogs.find((item) => item.name === catalog);
+    const catalogPluginId = catalogRow?.module === "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog" ? "iceberg.sql" : catalogRow?.module;
+    const formatPlugin = plugins.find((plugin) => plugin.kind === "table_format" && (catalogPluginId === "iceberg.sql" ? plugin.plugin_id === "iceberg" : plugin.plugin_id !== "iceberg"));
+    if (!formatPlugin) return setMessage("No admitted table-format adapter is available for this catalog.");
+    try { await controlPlane.saveAsset(catalog, target, formatPlugin.plugin_id, identifier); setMessage(`Governed asset ${target} registered. Assign owners and author a policy in Assets.`); await discover(catalog); } catch { setMessage("Asset registration was rejected; the source table was not changed."); }
   }
   async function createPublication() {
     if (!canActivate || publishing) return;

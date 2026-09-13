@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
+from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control_plane.application.policy_service import ensure_asset_capability
@@ -91,6 +92,7 @@ def upsert_workspace_asset(
     table_identifier: str | None,
     options: dict[str, Any],
     expected_revision: int | None = None,
+    plugin_registry: PluginRegistry | None = None,
 ) -> dict[str, str]:
     """Creates or updates a governed asset binding.
 
@@ -100,6 +102,12 @@ def upsert_workspace_asset(
         ```
     """
 
+    if backend != "iceberg":
+        if plugin_registry is None:
+            raise ValidationFailure("Table-format plugin is not admitted")
+        admitted = plugin_registry.admitted() or plugin_registry.reload()
+        if ("table_format", backend) not in admitted:
+            raise ValidationFailure("Table-format plugin is not admitted")
     context = _required_workspace_context(store)
     asset_id = store.upsert_asset(
         cell_id=context.cell_id,

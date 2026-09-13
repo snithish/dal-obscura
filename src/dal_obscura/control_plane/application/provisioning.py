@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
+from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.control_plane.application import (
     asset_service,
     audit_service,
@@ -33,11 +34,13 @@ class ProvisioningService:
         review_secret: str = "",
         require_review: bool = False,
         catalog_egress_allowlist: tuple[str, ...] = (),
+        plugin_registry: PluginRegistry | None = None,
     ) -> None:
         self._store = PublicationStore(session)
         self._review_secret = review_secret
         self._require_review = require_review
         self._catalog_egress_allowlist = catalog_egress_allowlist
+        self._plugin_registry = plugin_registry
 
     def create_tenant(self, slug: str, display_name: str) -> dict[str, str]:
         tenant_id = uuid4()
@@ -282,6 +285,7 @@ class ProvisioningService:
             self._store,
             self.create_publication,
             actor_principal="system" if actor is None else actor.identity_key(),
+            plugin_registry=self._plugin_registry,
         )
 
     def create_asset_policy_version(
@@ -300,6 +304,7 @@ class ProvisioningService:
             actor=actor,
             create_publication=self.create_publication,
             activate_publication=self.activate_publication,
+            plugin_registry=self._plugin_registry,
             expected_draft_revision=expected_draft_revision,
             expected_publication_id=expected_publication_id,
             review_token=review_token,
@@ -405,6 +410,7 @@ class ProvisioningService:
             options=options,
             egress_allowlist=self._catalog_egress_allowlist,
             actor_principal="system" if actor is None else actor.identity_key(),
+            plugin_registry=self._plugin_registry,
         )
 
     def upsert_asset(
@@ -445,6 +451,7 @@ class ProvisioningService:
             table_identifier=table_identifier,
             options=options,
             expected_revision=expected_revision,
+            plugin_registry=self._plugin_registry,
         )
 
     def replace_policy_rules(
@@ -632,8 +639,17 @@ class ProvisioningService:
             actor_principal="system" if actor is None else actor.identity_key(),
         )
 
-    def create_publication(self, cell_id: UUID) -> dict[str, object]:
-        return policy_version_service.create_publication(self._store, cell_id)
+    def create_publication(
+        self,
+        cell_id: UUID,
+        *,
+        plugin_registry: PluginRegistry | None = None,
+    ) -> dict[str, object]:
+        return policy_version_service.create_publication(
+            self._store,
+            cell_id,
+            plugin_registry=self._plugin_registry if plugin_registry is None else plugin_registry,
+        )
 
     def activate_publication(
         self,

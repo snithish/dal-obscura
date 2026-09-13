@@ -3,7 +3,7 @@ export type Asset = {
   revision?: number;
   catalog: string;
   name: string;
-  backend: "iceberg";
+  backend: string;
   table_identifier: string;
   owners: string[];
   schema_fields: SchemaField[];
@@ -323,13 +323,13 @@ export const controlPlane = {
   listPlugins: () => request<{ plugins: PluginDescriptor[]; states: PluginState[] }>("/v1/plugins"),
   getSummary: () => request<WorkspaceSummary>("/v1/workspace/summary"),
   getObservations: () => request<WorkspaceObservations>("/v1/workspace/observations"),
-  saveCatalog: (name: string, options: Record<string, unknown>) => request<{ id: string; name: string }>(`/v1/catalogs/${encodeURIComponent(name)}`, {
+  saveCatalog: (name: string, module: string, options: Record<string, unknown>) => request<{ id: string; name: string }>(`/v1/catalogs/${encodeURIComponent(name)}`, {
     method: "PUT",
-    body: JSON.stringify({ module: "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog", options }),
+    body: JSON.stringify({ module, options }),
   }),
-  saveAsset: (catalog: string, target: string, tableIdentifier: string) => request<{ id: string; catalog: string; target: string }>(`/v1/assets/${encodeURIComponent(catalog)}/${encodeURIComponent(target)}`, {
+  saveAsset: (catalog: string, target: string, backend: string, tableIdentifier: string) => request<{ id: string; catalog: string; target: string }>(`/v1/assets/${encodeURIComponent(catalog)}/${encodeURIComponent(target)}`, {
     method: "PUT",
-    body: JSON.stringify({ backend: "iceberg", table_identifier: tableIdentifier, options: {} }),
+    body: JSON.stringify({ backend, table_identifier: tableIdentifier, options: {} }),
   }),
   saveRuntimeSettings: (settings: RuntimeSettings) => request<RuntimeSettings>("/v1/settings/runtime", {
     method: "PUT",

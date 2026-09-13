@@ -426,6 +426,7 @@ class PublishedConfigCatalogRegistry:
                     resolve_secret_refs(catalog_config.options, provider=self._secret_provider),
                 ),
                 path_enforcer=catalog_config.path_enforcer,
+                plugin_id=catalog_config.plugin_id,
             )
         registry = CatalogRegistry(
             ServiceConfig(catalogs={catalog: catalog_config}),
@@ -458,7 +459,11 @@ def _policy_from_asset(asset: PublishedAsset) -> Policy:
     ).to_policy()
 
 
-def _catalog_config_from_published_catalog(catalog: PublishedCatalog) -> CatalogConfig:
+def _catalog_config_from_published_catalog(
+    catalog: PublishedCatalog,
+    *,
+    plugin_id: str = "iceberg.sql",
+) -> CatalogConfig:
     config = _mapping(catalog.config)
     options = dict(_mapping(config.get("options")))
     options.pop("provider_modules", None)
@@ -466,7 +471,7 @@ def _catalog_config_from_published_catalog(catalog: PublishedCatalog) -> Catalog
         name=catalog.catalog,
         type=_catalog_type(config),
         options=options,
-        plugin_id="iceberg.sql",
+        plugin_id=plugin_id,
     )
 
 
@@ -478,14 +483,24 @@ def _catalog_config_for_asset(
 ) -> CatalogConfig:
     """Build the runtime catalog config with the published asset as its source of truth."""
     _validate_plugin_binding(asset, plugin_registry=plugin_registry)
-    config = _catalog_config_from_published_catalog(catalog)
+    raw_plugins = asset.compiled_config.get("plugins")
+    catalog_plugin_id = "iceberg.sql"
+    if isinstance(raw_plugins, dict) and isinstance(raw_plugins.get("catalog"), str):
+        catalog_plugin_id = (
+            "iceberg.sql"
+            if raw_plugins["catalog"] == _ICEBERG_CATALOG_MODULE
+            else raw_plugins["catalog"]
+        )
+    config = _catalog_config_from_published_catalog(catalog, plugin_id=catalog_plugin_id)
     target = _mapping(asset.compiled_config.get("target"))
     backend = str(target.get("backend") or asset.backend).lower()
-    if config.type == "iceberg":
+    if config.plugin_id == "iceberg.sql":
         if backend != "iceberg":
             raise ValueError("Published Iceberg catalogs require Iceberg assets")
         return config
-    raise ValueError(f"Unsupported published catalog type: {config.type}")
+    if plugin_registry is None:
+        raise ValueError("Published external catalog plugins require an admitted registry")
+    return config
 
 
 _ICEBERG_CATALOG_MODULE = (
@@ -513,13 +528,21 @@ def _validate_plugin_binding(
         raise ValueError("Published plugin binding is invalid")
     catalog_plugin = raw_plugins.get("catalog")
     format_plugin = raw_plugins.get("table_format")
-    if catalog_plugin != _ICEBERG_CATALOG_MODULE or format_plugin != "iceberg":
+    if catalog_plugin == _ICEBERG_CATALOG_MODULE:
+        catalog_plugin = "iceberg.sql"
+    if not isinstance(catalog_plugin, str) or not isinstance(format_plugin, str):
         raise ValueError("Published plugin binding is unsupported")
+    if catalog_plugin == "iceberg.sql" and format_plugin != "iceberg":
+        raise ValueError("Published plugin binding is unsupported")
+    if catalog_plugin != "iceberg.sql" and plugin_registry is None:
+        raise ValueError(
+            "Published plugin binding is unsupported without an admitted registry"
+        )
     if plugin_registry is not None:
         admitted = plugin_registry.admitted()
         if (
-            ("catalog", "iceberg.sql") not in admitted
-            or ("table_format", "iceberg") not in admitted
+            ("catalog", catalog_plugin) not in admitted
+            or ("table_format", format_plugin) not in admitted
         ):
             raise ValueError("Published plugin binding is not admitted")
 
@@ -643,7 +666,9 @@ def _catalog_type(config: dict[str, Any]) -> CatalogType:
     module = str(config.get("module", ""))
     if module.endswith("IcebergCatalog"):
         return "iceberg"
-    return _known_catalog_type(module)
+    # External catalogs are executed through the public-plugin adapter. The
+    # legacy type remains an internal compatibility value for CatalogConfig.
+    return cast(CatalogType, "iceberg")
 
 
 def _known_catalog_type(value: str) -> CatalogType:

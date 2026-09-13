@@ -169,6 +169,36 @@ def test_published_config_requires_both_plugin_identities_in_admitted_snapshot()
     assert resolved.type == "iceberg"
 
 
+def test_published_config_preserves_external_plugin_identity():
+    asset = PublishedAsset(
+        publication_id=uuid4(),
+        tenant_id=uuid4(),
+        catalog="analytics",
+        target="default.users",
+        backend="parquet.dataset",
+        compiled_config={
+            "plugins": {"catalog": "manifest", "table_format": "parquet.dataset"},
+            "target": {"backend": "parquet.dataset", "table": "default.users"},
+        },
+        policy_version=1,
+    )
+    catalog = PublishedCatalog(
+        publication_id=asset.publication_id,
+        tenant_id=asset.tenant_id,
+        catalog="analytics",
+        config={"module": "manifest", "options": {"root": "/srv/data"}},
+    )
+    resolved = _catalog_config_for_asset(
+        catalog,
+        asset,
+        plugin_registry=_AdmittedPluginSnapshot(
+            ("catalog", "manifest"), ("table_format", "parquet.dataset")
+        ),
+    )
+    assert resolved.plugin_id == "manifest"
+    assert resolved.options == {"root": "/srv/data"}
+
+
 def test_schema_without_provider_ids_uses_schema_scoped_nested_synthetic_ids():
     schema = pa.schema(
         [

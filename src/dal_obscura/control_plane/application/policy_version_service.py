@@ -14,6 +14,7 @@ from dataclasses import replace
 from typing import cast
 from uuid import UUID, uuid4
 
+from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.compiler import PublicationCompiler
 from dal_obscura.control_plane.application.errors import PublicationConflictError, ValidationFailure
@@ -131,6 +132,7 @@ def create_workspace_publication(
     create_publication,
     *,
     actor_principal: str = "system",
+    plugin_registry: PluginRegistry | None = None,
 ) -> dict[str, object]:
     """Creates a full workspace publication snapshot.
 
@@ -141,7 +143,7 @@ def create_workspace_publication(
     """
 
     context = _required_workspace_context(store)
-    publication = create_publication(context.cell_id)
+    publication = create_publication(context.cell_id, plugin_registry=plugin_registry)
     store.record_workspace_audit_event(
         cell_id=context.cell_id,
         tenant_id=context.tenant_id,
@@ -177,6 +179,7 @@ def create_asset_policy_version(  # noqa: C901
     review_secret: str = "",
     catalog_egress_allowlist: tuple[str, ...] = (),
     idempotency_key: str | None = None,
+    plugin_registry: PluginRegistry | None = None,
 ) -> dict[str, object]:
     """Publishes and activates a new policy version for one asset.
 
@@ -260,8 +263,8 @@ def create_asset_policy_version(  # noqa: C901
     )
     if not asset.rules and personal_draft is None:
         raise ValidationFailure("Cannot publish a policy version without policy rules.")
-    compiler = PublicationCompiler()
-    compiled_asset = compiler.compile_asset(asset, catalog)
+    compiler = PublicationCompiler(plugin_registry)
+    compiled_asset = PublicationCompiler(plugin_registry).compile_asset(asset, catalog)
     try:
         active = store.load_active_compiled_publication_config(asset.cell_id)
         active_pointer = store.get_active_publication(asset.cell_id)
@@ -427,7 +430,12 @@ def _publication_request_hash(
     ).hexdigest()
 
 
-def create_publication(store: PublicationStore, cell_id: UUID) -> dict[str, object]:
+def create_publication(
+    store: PublicationStore,
+    cell_id: UUID,
+    *,
+    plugin_registry: PluginRegistry | None = None,
+) -> dict[str, object]:
     """Compiles and stores a publication for one cell.
 
     Example:
@@ -438,7 +446,7 @@ def create_publication(store: PublicationStore, cell_id: UUID) -> dict[str, obje
 
     draft = store.load_publish_draft(cell_id)
     _validate_publish_readiness(store, draft)
-    compiled = PublicationCompiler().compile(draft)
+    compiled = PublicationCompiler(plugin_registry).compile(draft)
     publication_id = uuid4()
     store.insert_compiled_publication(
         publication_id=publication_id,

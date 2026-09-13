@@ -12,6 +12,7 @@ from dal_obscura.common.access_control.compiled_policy import (
     CompiledPolicyRule,
 )
 from dal_obscura.common.access_control.filters import deserialize_row_filter
+from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.common.query_planning.field_paths import (
     FieldPath,
     FieldPathSegment,
@@ -51,6 +52,9 @@ def validate_policy_rule_payloads(rules: list[dict[str, Any]]) -> None:
 
 class PublicationCompiler:
     """Compiles mutable authoring resources into immutable published config rows."""
+
+    def __init__(self, plugin_registry: PluginRegistry | None = None) -> None:
+        self._plugin_registry = plugin_registry
 
     def compile(self, draft: PublishDraft) -> CompiledPublication:
         self._validate_runtime_components(draft)
@@ -100,8 +104,7 @@ class PublicationCompiler:
 
     def _validate_runtime_components(self, draft: PublishDraft) -> None:
         for catalog in draft.catalogs:
-            if catalog.module != _ICEBERG_CATALOG_MODULE:
-                raise ValidationFailure("Unsupported catalog module; only Iceberg is supported")
+            self._validate_catalog_plugin(catalog.module)
         validate_auth_provider_payloads(
             [
                 {
@@ -139,7 +142,8 @@ class PublicationCompiler:
         )
 
     def _compile_asset(self, asset: AssetDraft, catalog: CatalogDraft) -> CompiledAsset:
-        if asset.backend not in SUPPORTED_BACKENDS:
+        self._validate_format_plugin(asset.backend)
+        if asset.backend not in SUPPORTED_BACKENDS and self._plugin_registry is None:
             raise ValidationFailure(f"Unsupported backend {asset.backend!r}")
         if not asset.table_identifier or not asset.table_identifier.strip():
             raise ValidationFailure("Asset requires a physical Iceberg identifier")
@@ -202,6 +206,29 @@ class PublicationCompiler:
             compiled_config=compiled_config,
             policy_version=policy_version,
         )
+
+    def _validate_catalog_plugin(self, module: str) -> None:
+        if module == _ICEBERG_CATALOG_MODULE:
+            return
+        if self._plugin_registry is None or ("catalog", module) not in self._admitted_plugins():
+            raise ValidationFailure("Unsupported catalog module; only admitted plugins are allowed")
+
+    def _validate_format_plugin(self, plugin_id: str) -> None:
+        if plugin_id in SUPPORTED_BACKENDS:
+            return
+        if self._plugin_registry is None or (
+            "table_format",
+            plugin_id,
+        ) not in self._admitted_plugins():
+            raise ValidationFailure(f"Unsupported backend {plugin_id!r}")
+
+    def _admitted_plugins(self) -> dict[tuple[str, str], object]:
+        assert self._plugin_registry is not None
+        admitted = self._plugin_registry.admitted()
+        if not admitted:
+            admitted = self._plugin_registry.reload()
+        return admitted
+
 
     def _compile_rule(self, rule: PolicyRuleDraft) -> CompiledPolicyRule:
         if rule.effect != "allow":

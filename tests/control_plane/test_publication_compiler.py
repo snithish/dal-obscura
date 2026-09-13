@@ -257,6 +257,32 @@ def test_compiler_rejects_dynamic_runtime_modules():
         PublicationCompiler().compile(identity_draft)
 
 
+def test_compiler_accepts_only_admitted_external_catalog_and_format():
+    draft = _draft()
+    draft.catalogs[0] = replace(draft.catalogs[0], module="manifest")
+    draft.assets[0].backend = "parquet.dataset"
+
+    class Registry:
+        def admitted(self):
+            return {
+                ("catalog", "manifest"): object(),
+                ("table_format", "parquet.dataset"): object(),
+            }
+
+    compiled = PublicationCompiler(cast(Any, Registry())).compile(draft)
+    assert compiled.assets[0].compiled_config["plugins"] == {
+        "catalog": "manifest",
+        "table_format": "parquet.dataset",
+    }
+
+
+def test_compiler_rejects_external_plugin_without_registry():
+    draft = _draft()
+    draft.catalogs[0] = replace(draft.catalogs[0], module="manifest")
+    with pytest.raises(ValidationFailure, match="admitted plugins"):
+        PublicationCompiler().compile(draft)
+
+
 def test_compiler_rejects_static_jwks_material_in_identity_provider():
     draft = _draft()
     draft.auth_providers[0].args["jwks"] = {"keys": [{"kty": "RSA"}]}

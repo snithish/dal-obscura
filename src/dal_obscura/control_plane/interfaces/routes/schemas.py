@@ -123,9 +123,11 @@ class CatalogRequest(StrictModel):
         ```
     """
 
-    module: Literal[
-        "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
-    ]
+    module: str = Field(
+        min_length=1,
+        max_length=256,
+        pattern=r"^[a-z][a-z0-9_.-]{0,63}$|^dal_obscura\.[A-Za-z0-9_.-]{1,255}$",
+    )
     options: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -138,7 +140,12 @@ class AssetRequest(StrictModel):
         ```
     """
 
-    backend: Literal["iceberg"] = "iceberg"
+    backend: str = Field(
+        default="iceberg",
+        min_length=1,
+        max_length=64,
+        pattern=r"^[a-z][a-z0-9_.-]{0,63}$",
+    )
     table_identifier: str = Field(min_length=1, max_length=1_024)
     options: dict[str, Any] = Field(default_factory=dict)
     expected_revision: int | None = Field(default=None, ge=0)

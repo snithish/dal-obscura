@@ -310,6 +310,7 @@ class ControlPlaneDeps:
                 review_secret=self.review_secret,
                 require_review=self.require_review,
                 catalog_egress_allowlist=self.catalog_egress_allowlist,
+                plugin_registry=self.plugin_registry,
             )
             try:
                 result = callback(service)
