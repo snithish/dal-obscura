@@ -74,6 +74,7 @@ def test_recovery_scripts_require_encryption_and_isolated_restore_confirmation()
     assert "age --encrypt" in backup
     assert "refusing to overwrite existing backup" in backup
     assert "age --decrypt" in restore
+    assert "age identity is not readable" in restore
     assert "pg_restore --single-transaction" in restore
     assert "I_UNDERSTAND_ISOLATED_RESTORE" in restore
     assert "dal-obscura-maintenance invalidate-access" in restore

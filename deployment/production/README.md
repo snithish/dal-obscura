@@ -69,6 +69,34 @@ cell. Verify denied and allowed synthetic reads after invalidation, then open
 the TLS ingress. Keep the restored environment closed if any reconciliation,
 readiness, or synthetic read check fails.
 
+## Encrypted PostgreSQL backup
+
+Use the checked-in helper with an `age` recipient held by the operator backup
+system. The database URL and recipient are read from the environment; backups
+are created with mode `0600`, written atomically, and are never overwritten:
+
+```bash
+DAL_OBSCURA_DATABASE_URL="$DAL_OBSCURA_CONTROL_PLANE_DATABASE_URL" \
+DAL_OBSCURA_BACKUP_RECIPIENT="age1..." \
+  ../../scripts/backup_postgres.sh /secure/backup/dal-obscura-$(date +%Y%m%d%H%M%S).dump.age
+```
+
+Restore only into an isolated PostgreSQL instance with ingress stopped. The
+helper decrypts to a mode-`0600` temporary file, restores in one transaction,
+and revokes restored sessions, login transactions, and tickets before returning:
+
+```bash
+DAL_OBSCURA_DATABASE_URL="$ISOLATED_DATABASE_URL" \
+DAL_OBSCURA_AGE_IDENTITY="/secure/keys/backup.agekey" \
+DAL_OBSCURA_RESTORE_CONFIRM=I_UNDERSTAND_ISOLATED_RESTORE \
+  ../../scripts/restore_postgres.sh /secure/backup/candidate.dump.age "$DAL_OBSCURA_CELL_ID"
+```
+
+Reconcile IdP settings, plugin locks, secret references, active generations, and
+Iceberg metadata retention before opening ingress. Measure backup age (RPO) and
+restore duration (RTO) during the required recovery drill; the scripts alone do
+not constitute recovery acceptance.
+
 ## Ticket-signing key rotation
 
 Set a new `DAL_OBSCURA_TICKET_SECRET` and place the retired key(s), comma

@@ -9,7 +9,7 @@ if [ "$DAL_OBSCURA_RESTORE_CONFIRM" != "I_UNDERSTAND_ISOLATED_RESTORE" ]; then
   echo "refusing restore: set DAL_OBSCURA_RESTORE_CONFIRM=I_UNDERSTAND_ISOLATED_RESTORE" >&2
   exit 2
 fi
-if [ "$#" -lt 1 ] || [ "$#" -gt 3 ]; then
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
   echo "usage: DAL_OBSCURA_DATABASE_URL=... DAL_OBSCURA_AGE_IDENTITY=... $0 BACKUP.age [CELL_ID]" >&2
   exit 2
 fi
@@ -23,6 +23,10 @@ command -v dal-obscura-maintenance >/dev/null 2>&1 || {
 backup=$1
 cell_id=${2:-}
 test -r "$backup" || { echo "backup is not readable: $backup" >&2; exit 2; }
+test -r "$DAL_OBSCURA_AGE_IDENTITY" || {
+  echo "age identity is not readable: $DAL_OBSCURA_AGE_IDENTITY" >&2
+  exit 2
+}
 umask 077
 temporary=$(mktemp "${TMPDIR:-/tmp}/dal-obscura-restore.XXXXXX")
 cleanup() { rm -f "$temporary"; }
