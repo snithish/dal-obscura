@@ -54,6 +54,14 @@ Follow-up `9e15217` makes the REST timeout ceiling unconditional: provider-suppl
 request timeout arguments are overwritten with the active bounded `(connect, read)`
 pair, with focused coverage for an oversized caller timeout.
 
+## Implementation update — 0bcf2b1 (2026-09-14)
+
+- Packet / status / candidate commit / owner: N05/B07 partial plus N02 demo maintenance / VERIFY / `0bcf2b1` / identity boundary and Keycloak fixture.
+- Observable behavior delivered: federated subject and group keys now carry distinct type tags, eliminating the `subject="group:x"` versus `group="x"` collision. The offline migration converts exact-issuer legacy keys (including escaped delimiters) to typed keys, remains idempotent for current keys, and still refuses ambiguous slash-stripped history. The demo provisioner now emits typed owner/grant keys, supplies asset revision preconditions, and uses the revisioned draft/publication API after the retired policy route was removed.
+- Changed paths: identity encoder, offline migration, control-plane identity tests, demo provisioner/tests. No local identity representation or pickle serializer, serialized class, payload, or import path changed.
+- Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane tests/interfaces/control_plane tests/application/access_flow tests/infrastructure/adapters/test_published_config.py tests/common/config_store -q` — all collected tests passed; focused demo and identity suites passed; changed-path Ruff and `ty` checks passed.
+- Remaining N05/B07 work: live two-process OIDC freshness, principal-kind persistence in all live IdP paths, revocation/disabled-account timing, and browser login/logout evidence. N02 still needs offline operator execution against real populated records. Release remains HOLD.
+
 ## Implementation update — 8a615c3 (2026-09-14)
 
 - Packet / status / candidate commit / owner: N01/B01-B02 / VERIFY / `8a615c3` / toolchain and documentation.
