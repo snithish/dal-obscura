@@ -82,8 +82,10 @@ class CatalogRegistry:
             _close_catalogs(candidate_catalogs.values())
             raise
         with self._swap_lock:
+            old_catalogs = tuple(self._catalogs.values())
             self._config = config
             self._catalogs = candidate_catalogs
+        _close_catalogs(old_catalogs)
 
     def resolve(
         self,
@@ -98,9 +100,9 @@ class CatalogRegistry:
             raise ValueError("Catalog name is required to resolve a target")
         with self._swap_lock:
             implementation = self._catalogs.get(catalog)
-        if implementation is None:
-            raise ValueError(f"Unknown catalog: {catalog}")
-        return implementation.resolve_table(target)
+            if implementation is None:
+                raise ValueError(f"Unknown catalog: {catalog}")
+            return implementation.resolve_table(target)
 
     def describe(
         self,
@@ -118,9 +120,9 @@ class CatalogRegistry:
         self._ensure_open()
         with self._swap_lock:
             implementation = self._catalogs.get(catalog_name)
-        if implementation is None:
-            raise ValueError(f"Unknown catalog: {catalog_name}")
-        return implementation.list_tables()
+            if implementation is None:
+                raise ValueError(f"Unknown catalog: {catalog_name}")
+            return implementation.list_tables()
 
     def close(self) -> None:
         with self._swap_lock:

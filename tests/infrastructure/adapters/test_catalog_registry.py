@@ -322,6 +322,42 @@ def test_catalog_registry_reload_closes_partially_built_generation(monkeypatch):
     assert closed == ["catalog"]
 
 
+def test_catalog_registry_reload_closes_retired_generation(monkeypatch):
+    closed: list[str] = []
+
+    class ClosableCatalog:
+        def resolve_table(self, target: str):
+            del target
+            return FakePostgresTableFormat(catalog_name="analytics", table_name="users", format="x")
+
+        def list_tables(self):
+            return []
+
+        def close(self):
+            closed.append("catalog")
+
+    monkeypatch.setattr(
+        registry_module,
+        "_build_catalog",
+        lambda *_args, **_kwargs: ClosableCatalog(),
+    )
+    registry = CatalogRegistry(
+        ServiceConfig(
+            catalogs={
+                "analytics": CatalogConfig(name="analytics", type="iceberg", options={})
+            }
+        )
+    )
+    registry.reload(
+        ServiceConfig(
+            catalogs={
+                "replacement": CatalogConfig(name="replacement", type="iceberg", options={})
+            }
+        )
+    )
+    assert closed == ["catalog"]
+
+
 def test_catalog_registry_rejects_provider_returned_metadata_outside_storage_roots():
     class UnsafeTable:
         metadata_location = "s3://other-bucket/metadata.json"
