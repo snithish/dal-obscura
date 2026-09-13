@@ -355,6 +355,13 @@ def validate_descriptor_options(
     required: set[str] = set()
     for item in field_specs:
         name = item.get("name")
+        if isinstance(name, str) and name in options:
+            _validate_descriptor_value(
+                name,
+                item.get("type"),
+                options[name],
+                kind=kind,
+            )
         if item.get("required") is True and isinstance(name, str):
             required.add(name)
     missing = sorted(
@@ -364,6 +371,25 @@ def validate_descriptor_options(
         raise ValidationFailure(
             f"{kind} options are missing required fields: " + ", ".join(missing)
         )
+
+
+# Compatibility alias for internal callers and existing extension tests.
+_validate_descriptor_options = validate_descriptor_options
+
+
+def _validate_descriptor_value(name: str, field_type: object, value: object, *, kind: str) -> None:
+    if field_type in (None, "string", "uri") and not isinstance(value, str):
+        raise ValidationFailure(f"{kind} option {name!r} must be a string")
+    if field_type == "secret_reference":
+        if not isinstance(value, dict) or set(value) != {"secret"}:
+            raise ValidationFailure(
+                f"{kind} option {name!r} must be an explicit secret reference"
+            )
+        secret_name = cast(dict[str, object], value).get("secret")
+        if not isinstance(secret_name, str) or not secret_name.strip():
+            raise ValidationFailure(f"{kind} option {name!r} has an invalid secret reference")
+    elif field_type not in (None, "string", "uri"):
+        raise ValidationFailure(f"{kind} option {name!r} has an unsupported field type")
 
 
 def _walk_strings(value: object, prefix: str = "options"):

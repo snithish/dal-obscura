@@ -32,7 +32,9 @@ def _registry(*, overlap: bool = True) -> PluginRegistry:
         distribution="fixture",
         version="1.0.0",
         capabilities=frozenset({"nested_schema"}),
-        config_schema={"fields": [{"name": "format_option", "required": True}]},
+        config_schema={
+            "fields": [{"name": "format_option", "type": "string", "required": True}]
+        },
     )
     registry = Mock()
     registry.admitted.return_value = {
@@ -63,6 +65,17 @@ def test_asset_binding_validates_pair_capabilities_and_format_options() -> None:
             "fixture.format",
             "default.events",
             {},
+            plugin_registry=_registry(),
+        )
+
+    with pytest.raises(ValidationFailure, match="must be a string"):
+        upsert_workspace_asset(
+            store,
+            "analytics",
+            "events",
+            "fixture.format",
+            "default.events",
+            {"format_option": 42},
             plugin_registry=_registry(),
         )
 
