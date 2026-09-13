@@ -107,7 +107,7 @@ def test_public_iceberg_compatibility_path_enforces_metadata_destination(tmp_pat
     identifier = TableIdentifier(namespace=("default",), name="users")
     handle = TableHandle(
         catalog_plugin_id="rest.catalog",
-        catalog_instance_id="fixture",
+        catalog_instance_id="analytics",
         catalog_revision=1,
         identifier=identifier,
         format_plugin_id="iceberg",
@@ -140,8 +140,51 @@ def test_public_iceberg_compatibility_path_enforces_metadata_destination(tmp_pat
         lambda config, context: Catalog(),
         lambda plugin_id: object(),
         PathRuleEnforcer([{"root": str(tmp_path)}]),
+        revision=1,
     )
     with pytest.raises(PermissionError, match="not allowed"):
+        adapter.resolve_table("default.users")
+
+
+def test_public_catalog_adapter_rejects_forged_handle_identity() -> None:
+    identifier = TableIdentifier(namespace=("default",), name="users")
+    forged = TableHandle(
+        catalog_plugin_id="other.catalog",
+        catalog_instance_id="fixture",
+        catalog_revision=1,
+        identifier=identifier,
+        format_plugin_id="parquet.dataset",
+        handle_version=1,
+    )
+
+    class Catalog:
+        def validate_config(self, context):
+            del context
+
+        def list_namespaces(self, context, *, namespace=()):
+            del context, namespace
+            return ()
+
+        def list_tables(self, context, *, continuation=None, limit):
+            del context, continuation, limit
+            return DiscoveryPage(())
+
+        def resolve_table(self, value, context):
+            del value, context
+            return forged
+
+        def close(self):
+            return None
+
+    adapter = PublicPluginCatalogAdapter(
+        "fixture",
+        {},
+        "manifest",
+        lambda config, context: Catalog(),
+        lambda plugin_id: object(),
+        revision=1,
+    )
+    with pytest.raises(ValueError, match="mismatched table handle identity"):
         adapter.resolve_table("default.users")
 
 

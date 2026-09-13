@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any, cast
 from uuid import UUID, uuid4
 
@@ -274,6 +275,25 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
     assert result["stable_field_ids"] is False
     assert cast(list[dict[str, object]], result["fields"])[0]["name"] == "profile"
     assert closed == ["format", "catalog"]
+
+    class ForgedHandleCatalog(PublicCatalog):
+        def resolve_table(self, value, context):
+            del value, context
+            return replace(handle, catalog_revision=4)
+
+    class ForgedHandleRegistry(Registry):
+        def load(self, kind, plugin_id):
+            if (kind, plugin_id) == ("catalog", "fixture.catalog"):
+                return lambda config, context: ForgedHandleCatalog()
+            return super().load(kind, plugin_id)
+
+    with pytest.raises(ValidationFailure, match="table handle identity"):
+        get_asset_schema(
+            PublicStore(asset_id),  # type: ignore[arg-type]
+            asset_id,
+            ControlPlaneActor.for_platform_admin("admin"),
+            plugin_registry=ForgedHandleRegistry(),
+        )
 
     class ForgedFormat(PublicFormat):
         descriptor = PluginDescriptor(

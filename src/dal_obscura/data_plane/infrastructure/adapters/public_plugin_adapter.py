@@ -189,6 +189,7 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
     ) -> None:
         self._name = name
         self._catalog_plugin_id = catalog_plugin_id
+        self._catalog_revision = revision
         self._catalog_factory = catalog_factory
         self._format_factory_loader = format_factory_loader
         self._path_enforcer = path_enforcer
@@ -239,6 +240,13 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
         _ensure_context_active(context)
         if not isinstance(handle, TableHandle):
             raise ValueError("Public catalog returned an invalid table handle")
+        if (
+            handle.catalog_plugin_id != self._catalog_plugin_id
+            or handle.catalog_instance_id != self._name
+            or handle.catalog_revision != self._catalog_revision
+            or handle.identifier != identifier
+        ):
+            raise ValueError("Public catalog returned a mismatched table handle identity")
         if handle.format_plugin_id == "iceberg":
             from dal_obscura.data_plane.infrastructure.table_formats.iceberg import (
                 IcebergTableFormat,

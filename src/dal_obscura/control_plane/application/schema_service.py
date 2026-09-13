@@ -186,6 +186,14 @@ def _load_public_plugin_schema(
 
         if not isinstance(handle, TableHandle):
             raise ValidationFailure("Catalog plugin returned an invalid table handle")
+        expected_revision = int(cast(int | str, catalog.get("revision", 0)))
+        if (
+            handle.catalog_plugin_id != catalog_plugin_id
+            or handle.catalog_instance_id != str(catalog["name"])
+            or handle.catalog_revision != expected_revision
+            or handle.identifier != identifier
+        ):
+            raise ValidationFailure("Catalog plugin returned a mismatched table handle identity")
         if handle.format_plugin_id != format_plugin_id:
             raise ValidationFailure("Catalog and table-format plugins do not match")
         format_plugin = format_factory(handle, context)
