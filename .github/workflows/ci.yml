@@ -120,13 +120,18 @@ jobs:
 
       - name: Run integration suite
         run: >-
+          uv run python scripts/require_no_skips.py
+          --junitxml "$RUNNER_TEMP/integration.xml" --
           uv run pytest tests/interfaces tests/infrastructure tests/control_plane
           tests/examples tests/test_e2e_smoke.py -q
 
       - name: Run Python and DuckDB consumer qualification
         env:
           DAL_OBSCURA_RUN_CONSUMER_TESTS: "1"
-        run: uv run pytest tests/consumers/test_governed_reads.py -q
+        run: >-
+          uv run python scripts/require_no_skips.py
+          --junitxml "$RUNNER_TEMP/consumers.xml" --
+          uv run pytest tests/consumers/test_governed_reads.py -q
 
   postgres-race-tests:
     name: PostgreSQL concurrency gates
@@ -170,6 +175,8 @@ jobs:
         env:
           DAL_OBSCURA_POSTGRES_TEST_URL: postgresql+psycopg://dal_obscura:dal_obscura_test_password@127.0.0.1:5432/dal_obscura
         run: >-
+          uv run python scripts/require_no_skips.py
+          --junitxml "$RUNNER_TEMP/postgres.xml" --
           uv run pytest tests/integration/control_plane/test_publication_races.py
           tests/integration/test_recovery_upgrade.py -q
 
