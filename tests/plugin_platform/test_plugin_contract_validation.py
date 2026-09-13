@@ -104,6 +104,20 @@ def test_plugin_contract_value_objects_validate_generation_and_schema_identity()
     assert config.revision == 0
     with pytest.raises(ValueError, match="cannot be negative"):
         CatalogConfig(plugin_id="iceberg.sql", instance_id="analytics", revision=-1)
+    with pytest.raises(ValueError, match="JSON-like"):
+        CatalogConfig(
+            plugin_id="iceberg.sql",
+            instance_id="analytics",
+            revision=0,
+            options={"provider": object()},
+        )
+    with pytest.raises(ValueError, match="too many keys"):
+        CatalogConfig(
+            plugin_id="iceberg.sql",
+            instance_id="analytics",
+            revision=0,
+            options={f"key-{index}": index for index in range(65)},
+        )
 
     with pytest.raises(ValueError, match="SHA-256"):
         SchemaDescriptor(schema_version=1, fingerprint="bad", arrow_schema=pa.schema([]))
