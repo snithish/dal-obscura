@@ -88,6 +88,7 @@ function App() {
   const inventoryEpoch = useRef(0);
   const searchTimer = useRef<number | undefined>(undefined);
   const managementEpoch = useRef(0);
+  const connectionsEpoch = useRef(0);
   const [logoutPending, setLogoutPending] = useState(false);
   const isDemo = workspace === "demo";
 
@@ -231,6 +232,7 @@ function App() {
       setWorkspace("unavailable");
       setSession(null);
       const options = await controlPlane.getSessionOptions().catch(() => null);
+      if (epoch !== loadEpoch.current) return;
       setSessionOptions(options);
       setAuthConfig(options?.oidc ?? await controlPlane.getUiAuthConfig().catch(() => null));
       setNotice("Workspace unavailable. Sign in or reconnect to the control plane; no demo data is shown automatically.");
@@ -331,6 +333,7 @@ function App() {
     setSession(null); setAsset(null); setAssets([]); setRules([]); setPreview(null);
     setManagementData({}); setAssetCursor(null); setAssetHasMore(false); setAssetSearch("");
     setDraftRevision(0); setReviewToken(null); setSaveState("saved");
+    setPublishPending(false);
     setWorkspace("unavailable");
     void controlPlane.getSessionOptions().then((options) => {
       setSessionOptions(options);
@@ -523,21 +526,28 @@ function App() {
         setNotice("Publish failed. Review the saved draft and active generation.");
       }
     } finally {
-      setPublishPending(false);
+      if (loadScope === loadEpoch.current) {
+        setPublishPending(false);
+      }
     }
   }
 
   async function restorePolicyVersion(policyVersion: number) {
     if (!asset || isDemo) return;
     if (saveState === "unsaved" && !window.confirm("You have unsaved policy changes. Restore this published version over them?")) return;
+    const loadScope = loadEpoch.current;
+    const editScope = draftEditEpoch.current;
     try {
       const restored = await controlPlane.restorePolicyVersion(asset.id, policyVersion, draftRevision);
+      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
+      draftEditEpoch.current += 1;
       setRules(restored.rules);
       setDraftRevision(restored.revision);
       setSaveState("saved");
       setPreview(null); setReviewToken(null);
       setNotice(`Version ${policyVersion} restored as draft revision ${restored.revision}. Review and publish it when ready.`);
     } catch {
+      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
       setNotice("Restore failed. The draft may have changed; reload the asset before trying again.");
     }
   }
@@ -718,6 +728,7 @@ function ConnectionsView({ catalogs, publications, plugins, pluginStates, plugin
   const [diagnostics, setDiagnostics] = useState<Record<string, CatalogDiagnostic>>({});
   const [diagnosing, setDiagnosing] = useState("");
   const [publishing, setPublishing] = useState(false);
+  const discoveryEpoch = useRef(0);
   useEffect(() => {
     setPluginId((current) => catalogPlugins.some((plugin) => plugin.plugin_id === current) ? current : (catalogPlugins[0]?.plugin_id ?? "iceberg.sql"));
   }, [plugins]);
@@ -740,15 +751,21 @@ function ConnectionsView({ catalogs, publications, plugins, pluginStates, plugin
     try { await controlPlane.saveCatalog(name.trim(), pluginId === "iceberg.sql" ? "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog" : pluginId, options, existing?.revision); setMessage("Connection saved. Discovery remains bounded to this configured catalog."); setName(""); setConfig({}); onReload(); } catch (error) { setMessage((error as { status?: number })?.status === 409 ? "Connection changed elsewhere. Refresh before saving again." : "Connection was rejected by the control plane."); }
   }
   async function discover(catalog: string) {
+    const epoch = ++discoveryEpoch.current;
     try {
-      setDiscoveredCatalog(catalog);
       const catalogRow = catalogs.find((item) => item.name === catalog);
       const catalogPluginId = catalogRow?.module === "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog" ? "iceberg.sql" : catalogRow?.module;
       const choices = pluginPairs.filter((pair) => pair.catalog_plugin_id === catalogPluginId && pair.status === "admitted");
+      const discovered = await controlPlane.discoverCatalogTables(catalog);
+      if (epoch !== discoveryEpoch.current) return;
+      setDiscoveredCatalog(catalog);
       setSelectedFormatId(choices.length === 1 ? choices[0].format_plugin_id : "");
-      setTables((await controlPlane.discoverCatalogTables(catalog)).tables);
+      setTables(discovered.tables);
       setMessage(`Loaded table inventory for ${catalog}.`);
-    } catch { setTables([]); setMessage("Discovery failed; source credentials and endpoint policy were not changed."); }
+    } catch {
+      if (epoch !== discoveryEpoch.current) return;
+      setTables([]); setMessage("Discovery failed; source credentials and endpoint policy were not changed.");
+    }
   }
   async function diagnose(catalog: string) {
     setDiagnosing(catalog);
