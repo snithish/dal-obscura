@@ -128,6 +128,14 @@ Follow-up `86c0b7a` advances workspace, inventory, and management epochs during
 component teardown in addition to aborting requests, closing the final fallback
 race where session-option work could pass a stale-state check after unmount.
 
+## Implementation update — e2e CAS fixture alignment (2026-09-14)
+
+- Packet / status / candidate commit / owner: N03/B05 maintenance / VERIFY / pending atomic commit / e2e fixtures.
+- Observable behavior delivered: the Iceberg e2e setup now supplies the required asset revision precondition for schema and owner writes, using the revision produced by the preceding schema update. The test no longer relies on a removed unguarded mutation path.
+- Changed paths: `tests/test_e2e_smoke.py`; production CAS and pickle boundaries are unchanged.
+- Evidence: elevated `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/test_e2e_smoke.py -q` — 1 passed.
+- Remaining N03/B05 work: browser mutation evidence, real cross-process races, and live consumer qualification.
+
 ## Implementation update — identity migration (working slice, 2026-09-13)
 
 - Packet / status / candidate commit / owner: N05/F01 partial / VERIFY / pending atomic commit / control-plane.

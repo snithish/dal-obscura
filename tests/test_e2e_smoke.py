@@ -270,6 +270,7 @@ def control_plane_setup(
         )
         service.replace_asset_schema_fields(
             asset_id=UUID(asset["id"]),
+            expected_revision=0,
             fields=[
                 {"name": "id", "field_id": "iceberg:1", "path": ["id"], "type": "int64"},
                 {
@@ -343,7 +344,7 @@ def control_plane_setup(
         service.replace_asset_owners(
             asset_id=UUID(asset["id"]),
             owners=["user:e2e-owner@example.com"],
-            expected_revision=0,
+            expected_revision=1,
         )
         service.replace_auth_providers(
             cell_id=cell_id,
