@@ -380,6 +380,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Evidence: UI TypeScript and Vite production build passed. Manual keyboard focus restoration, responsive rendering, and screen-reader review remain required.
 - Remaining N06/B09 work: menu drawer, Lucide icon system, focus restoration, rendered layout/a11y checks, and full page state coverage. Release remains HOLD.
 
+## Implementation update — 81b4fee (2026-09-13)
+
+- Packet / status / candidate commit / owner: N06/B09 partial / VERIFY / `81b4fee` / governance UI accessibility.
+- Observable behavior delivered: closing the command palette by Escape, backdrop, or command selection restores focus to the element that invoked it, preserving keyboard navigation continuity.
+- Evidence: UI TypeScript and Vite production build passed. Manual keyboard, screen-reader, and responsive layout acceptance remains required.
+- Remaining N06/B09 work: menu drawer, Lucide icon system, full responsive rendering and accessibility review. Release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
