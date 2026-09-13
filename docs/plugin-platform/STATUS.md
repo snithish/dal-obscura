@@ -420,6 +420,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: plugin descriptor parsing now narrows validated output-format and handle-version collections before constructing immutable descriptors; review token validation narrows selected drafts before author checks; settings route adapters preserve typed response contracts; redacted configuration round-tripping uses explicit mapping casts at recursive boundaries. Runtime behavior and pickle serialization are unchanged.
 - Verification: changed-path Ruff passes; policy schema tests pass. Full `ty check` still reports only unresolved optional plugin-package imports and existing test-only typing diagnostics in the uninstalled workspace.
 
+## 2026-09-13 — B15 owner capability regression
+
+- Scope: actor matrix coverage for the access contract.
+- Observable behavior delivered: the API regression suite now verifies an owner receives exactly `read` and `edit`, while `publish` and `grant` remain denied until explicitly delegated.
+- Verification: actor-auth and asset API suites pass.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
