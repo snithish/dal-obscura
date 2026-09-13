@@ -65,7 +65,7 @@ def test_outsider_cannot_replace_policy_rules(db_session):
 
 def test_federated_asset_owner_is_scoped_to_issuer(db_session):
     service, asset_id = _workspace_asset(db_session)
-    service.replace_asset_owners(asset_id, ["https://issuer-a.example|alice"])
+    service.replace_asset_owners(asset_id, ["https://issuer-a.example/|alice"])
 
     service.replace_policy_rules(
         asset_id,
