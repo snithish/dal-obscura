@@ -88,6 +88,11 @@ Its shape is `{"version": 1, "plugins": [{"kind": "catalog"|"table_format",
 "artifact_digest"]}]}`. The trusted in-tree Iceberg pair remains available when no
 external lock is configured.
 
+Each catalog descriptor must declare `output_formats` with the format plugin IDs
+it can produce, and both catalog and table-format descriptors declare their
+supported `handle_versions`. Pair admission uses these declarations before
+capability checks.
+
 Generate a lock only after installing the exact reviewed wheels, and name every
 admitted entry explicitly. The builder reads static wheel descriptors without
 importing plugin factories, derives descriptor and installed-file digests, writes
