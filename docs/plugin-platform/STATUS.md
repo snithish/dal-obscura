@@ -17,7 +17,7 @@ Only N packets are active. Completed parts of X00–X23 were removed through the
 All N packets below contain remaining changes or qualification, not claims that
 their underlying functionality is wholly absent.
 
-- N01 — Baseline/toolchain: READY; B01/B02.
+- N01 — Baseline/toolchain: VERIFY; B01/B02 (CI Node 24 install/image/advisory evidence remains).
 - N02 — Contracts/deletion: OPEN; requires N01; B03/G01–G04.
 - N03 — Pairing/mutation contracts: OPEN; requires N02; B04/B05.
 - N04 — Secret/IO/resource enforcement: OPEN; requires N02/N03; B06.
@@ -45,6 +45,14 @@ their underlying functionality is wholly absent.
 Follow-up `docs/plugin-platform/BASELINE_20260914.md` was corrected after
 source inspection: the standalone SDK is the sole current contract validator;
 `common/plugin_api` now owns only registry, lockfile and lifecycle infrastructure.
+
+## Implementation update — 772a6cb (2026-09-14)
+
+- Packet / status / candidate commit / owner: N01/B02 / VERIFY / `772a6cb` / quality fixtures.
+- Observable behavior delivered: all repository type-check diagnostics are resolved with explicit nullable ORM assertions, typed HTTP test responses, a deliberately untyped mock boundary, and a cast for the intentionally malformed lock fixture. No production validator or security check was weakened.
+- Changed paths: four test modules only; no production logical SLOC or dependency change and no pickle path change.
+- Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync ty check --extra-search-path packages/plugin-api/src --extra-search-path packages/plugin-conformance/src --extra-search-path packages/manifest-parquet-plugin/src --extra-search-path packages/iceberg-rest-plugin/src` — all checks passed; repository Ruff check/format — passed; owning tests — 63 passed.
+- Remaining N01/B02 work: run the Node 24 frozen install, image smoke and advisory/license checks in CI. Release remains HOLD.
 
 ## Implementation update — 96573bb (2026-09-14)
 
