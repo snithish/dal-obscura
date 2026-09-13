@@ -263,6 +263,85 @@ def test_public_format_stops_lazy_batches_when_context_is_cancelled(monkeypatch)
         list(batches)
 
 
+def test_public_format_closes_plugin_after_lazy_output_is_consumed() -> None:
+    identifier = TableIdentifier(namespace=("default",), name="users")
+    handle = TableHandle(
+        catalog_plugin_id="manifest",
+        catalog_instance_id="fixture",
+        catalog_revision=1,
+        identifier=identifier,
+        format_plugin_id="parquet.dataset",
+        handle_version=1,
+    )
+    schema = pa.schema([pa.field("id", pa.int64())])
+    closed = []
+
+    class ClosableFormat:
+        def schema(self, value, context):
+            del value, context
+            from dal_obscura_plugin_api import SchemaDescriptor
+
+            return SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=schema)
+
+        def plan(self, value, descriptor, context, *, projection, row_filter, max_tasks):
+            del value, descriptor, context, projection, row_filter, max_tasks
+            return ["task"]
+
+        def execute(self, task, context):
+            del task, context
+            return schema, [pa.RecordBatch.from_pylist([{"id": 1}], schema=schema)]
+
+        def close(self):
+            closed.append(True)
+
+    table_format = PublicPluginTableFormat(
+        catalog_name="fixture",
+        table_name="default.users",
+        format="parquet.dataset",
+        format_factory=lambda value, context: ClosableFormat(),
+        handle=handle,
+    )
+    plan = table_format.plan(PlanRequest(target="default.users", columns=["*"]), max_tickets=2)
+    _schema, batches = plan.tasks[0].table_format.execute(plan.tasks[0].partition)
+
+    observed = [batch.to_pylist() for batch in batches]
+    assert observed == [[{"id": 1}]]
+    assert closed == [True, True]
+
+
+def test_public_catalog_adapter_closes_catalog_and_rejects_reuse() -> None:
+    identifier = TableIdentifier(namespace=("default",), name="users")
+    closed = []
+
+    class ClosableCatalog:
+        descriptor = type("Descriptor", (), {"kind": "catalog", "plugin_id": "manifest"})()
+
+        def list_tables(self, context, *, continuation, limit):
+            del context, continuation, limit
+            return DiscoveryPage((identifier,))
+
+        def resolve_table(self, value, context):
+            del value, context
+            raise AssertionError("resolve should not run after close")
+
+        def close(self):
+            closed.append(True)
+
+    adapter = PublicPluginCatalogAdapter(
+        "fixture",
+        {},
+        "manifest",
+        lambda config, context: ClosableCatalog(),
+        lambda plugin_id: object(),
+    )
+    adapter.close()
+    adapter.close()
+
+    assert closed == [True]
+    with pytest.raises(ValueError, match="closed"):
+        adapter.list_tables()
+
+
 def test_public_format_rejects_factory_descriptor_mismatch() -> None:
     identifier = TableIdentifier(namespace=("default",), name="users")
     handle = TableHandle(

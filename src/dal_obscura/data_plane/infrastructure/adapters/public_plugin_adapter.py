@@ -74,61 +74,67 @@ class PublicPluginTableFormat(TableFormat):
     def get_schema(self) -> pa.Schema:
         context = _context()
         plugin = self._open(context)
-        descriptor = plugin.schema(self.handle, context)
-        _ensure_context_active(context)
-        _validate_schema_descriptor(descriptor)
-        return descriptor.arrow_schema
+        try:
+            descriptor = plugin.schema(self.handle, context)
+            _ensure_context_active(context)
+            _validate_schema_descriptor(descriptor)
+            return descriptor.arrow_schema
+        finally:
+            _close_plugin(plugin)
 
     def plan(self, request: PlanRequest, max_tickets: int) -> Plan:
         if max_tickets <= 0:
             raise ValueError("max_tickets must be positive")
         context = _context()
         plugin = self._open(context)
-        descriptor = plugin.schema(self.handle, context)
-        _ensure_context_active(context)
-        _validate_schema_descriptor(descriptor)
-        row_filter = None
-        if request.row_filter is not None:
-            row_filter = request.row_filter.expression.sql(dialect="duckdb")
-        planned = plugin.plan(
-            self.handle,
-            descriptor,
-            context,
-            projection=request.columns,
-            row_filter=row_filter,
-            max_tasks=max_tickets,
-        )
-        _ensure_context_active(context)
-        output_schema = _projected_schema(descriptor.arrow_schema, request.columns)
-        tasks: list[object] = []
-        for task in planned:
-            _validate_task_payload(task)
-            tasks.append(task)
-            if len(tasks) > max_tickets:
-                raise ValueError("Plugin returned more tasks than requested")
-        if not tasks:
-            # Preserve schema-only/empty result behavior through one empty task.
-            tasks = [None]
-        partitions = [
-            PublicPluginPartition(
-                task=task,
-                handle=self.handle,
-                format_factory=self.format_factory,
-                schema=output_schema,
+        try:
+            descriptor = plugin.schema(self.handle, context)
+            _ensure_context_active(context)
+            _validate_schema_descriptor(descriptor)
+            row_filter = None
+            if request.row_filter is not None:
+                row_filter = request.row_filter.expression.sql(dialect="duckdb")
+            planned = plugin.plan(
+                self.handle,
+                descriptor,
+                context,
+                projection=request.columns,
+                row_filter=row_filter,
+                max_tasks=max_tickets,
             )
-            for task in tasks
-        ]
-        scan_tasks = [
-            ScanTask(table_format=self, schema=descriptor.arrow_schema, partition=partition)
-            for partition in partitions
-        ]
-        return Plan(
-            schema=descriptor.arrow_schema,
-            tasks=scan_tasks,
-            full_row_filter=request.row_filter,
-            backend_pushdown_row_filter=None,
-            residual_row_filter=request.row_filter,
-        )
+            _ensure_context_active(context)
+            output_schema = _projected_schema(descriptor.arrow_schema, request.columns)
+            tasks: list[object] = []
+            for task in planned:
+                _validate_task_payload(task)
+                tasks.append(task)
+                if len(tasks) > max_tickets:
+                    raise ValueError("Plugin returned more tasks than requested")
+            if not tasks:
+                # Preserve schema-only/empty result behavior through one empty task.
+                tasks = [None]
+            partitions = [
+                PublicPluginPartition(
+                    task=task,
+                    handle=self.handle,
+                    format_factory=self.format_factory,
+                    schema=output_schema,
+                )
+                for task in tasks
+            ]
+            scan_tasks = [
+                ScanTask(table_format=self, schema=descriptor.arrow_schema, partition=partition)
+                for partition in partitions
+            ]
+            return Plan(
+                schema=descriptor.arrow_schema,
+                tasks=scan_tasks,
+                full_row_filter=request.row_filter,
+                backend_pushdown_row_filter=None,
+                residual_row_filter=request.row_filter,
+            )
+        finally:
+            _close_plugin(plugin)
 
     def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
         if not isinstance(partition, PublicPluginPartition):
@@ -137,11 +143,16 @@ class PublicPluginTableFormat(TableFormat):
             raise ValueError("Public plugin partition does not match its format")
         context = _context()
         plugin = self._open(context)
-        output_schema, batches = plugin.execute(partition.task, context)
-        _ensure_context_active(context)
-        if output_schema != partition.schema:
-            raise ValueError("Public plugin changed the declared output schema")
-        return output_schema, _checked_plugin_batches(batches, output_schema, context)
+        try:
+            output_schema, batches = plugin.execute(partition.task, context)
+            _ensure_context_active(context)
+            if output_schema != partition.schema:
+                raise ValueError("Public plugin changed the declared output schema")
+            checked = _checked_plugin_batches(batches, output_schema, context)
+        except Exception:
+            _close_plugin(plugin)
+            raise
+        return output_schema, _close_after(checked, plugin)
 
     def _open(self, context: ExecutionContext | None = None) -> TableFormatPlugin:
         context = context or _context()
@@ -184,6 +195,7 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
             options=dict(options),
         )
         self._catalog = catalog_factory(public_config, _context())
+        self._closed = False
         if not all(
             callable(getattr(self._catalog, name, None))
             for name in ("list_tables", "resolve_table")
@@ -201,6 +213,7 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
         return self._name
 
     def resolve_table(self, target: str) -> TableFormat:
+        self._ensure_open()
         identifier = _legacy_identifier(target)
         context = _context()
         handle = self._catalog.resolve_table(identifier, context)
@@ -240,6 +253,7 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
         )
 
     def list_tables(self) -> list[CatalogTableListing]:
+        self._ensure_open()
         continuation: str | None = None
         seen_tokens: set[str] = set()
         listings: list[CatalogTableListing] = []
@@ -274,6 +288,16 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
             raise ValueError("Public catalog returned duplicate table identities")
         return listings
 
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        _close_plugin(self._catalog)
+
+    def _ensure_open(self) -> None:
+        if self._closed:
+            raise ValueError("Public catalog adapter is closed")
+
 
 def _context() -> ExecutionContext:
     return ExecutionContext(
@@ -298,6 +322,22 @@ def _ensure_context_active(context: ExecutionContext) -> None:
         raise ValueError("Public plugin operation deadline expired")
     if context.cancel_check is not None and context.cancel_check():
         raise ValueError("Public plugin operation was cancelled")
+
+
+def _close_plugin(plugin: object) -> None:
+    close = getattr(plugin, "close", None)
+    if callable(close):
+        close()
+
+
+def _close_after(batches: Iterable[pa.RecordBatch], plugin: object) -> Iterable[pa.RecordBatch]:
+    def closed() -> Iterable[pa.RecordBatch]:
+        try:
+            yield from batches
+        finally:
+            _close_plugin(plugin)
+
+    return closed()
 
 
 def _validate_schema_descriptor(descriptor: SchemaDescriptor) -> None:
