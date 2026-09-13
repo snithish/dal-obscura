@@ -58,6 +58,16 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             )
         )
 
+    @api.get("/v1/assets/{asset_id}/draft/{draft_id}")
+    def get_policy_draft_by_id(
+        asset_id: UUID,
+        draft_id: UUID,
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> object:
+        return deps.with_service(
+            lambda service: service.get_policy_draft_by_id(asset_id, draft_id, actor)
+        )
+
     @api.get("/v1/assets/{asset_id}/policy-rules")
     def list_policy_rules(
         asset_id: UUID,

@@ -386,7 +386,7 @@ export const controlPlane = {
     headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
     body: JSON.stringify({ ...(draftId ? { draft_id: draftId } : {}), ...(expectedDraftRevision === undefined ? {} : { expected_draft_revision: expectedDraftRevision }), ...(reviewToken ? { review_token: reviewToken } : {}) }),
   }),
-  getDraft: (assetId: string) => request<PolicyDraft>(`/v1/assets/${assetId}/draft`),
+  getDraft: (assetId: string, draftId?: string) => request<PolicyDraft>(draftId ? `/v1/assets/${assetId}/draft/${encodeURIComponent(draftId)}` : `/v1/assets/${assetId}/draft`),
   saveDraft: (assetId: string, expectedRevision: number, rules: PolicyRule[]) =>
     request<PolicyDraft>(`/v1/assets/${assetId}/draft`, {
       method: "PUT",

@@ -537,6 +537,11 @@ class ProvisioningService:
     def get_policy_draft(self, asset_id: UUID, actor: ControlPlaneActor) -> dict[str, object]:
         return draft_service.get_policy_draft(self._store, asset_id, actor)
 
+    def get_policy_draft_by_id(
+        self, asset_id: UUID, draft_id: UUID, actor: ControlPlaneActor
+    ) -> dict[str, object]:
+        return draft_service.get_policy_draft_by_id(self._store, asset_id, draft_id, actor)
+
     def save_policy_draft(
         self,
         asset_id: UUID,

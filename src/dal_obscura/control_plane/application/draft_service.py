@@ -38,6 +38,21 @@ def get_policy_draft(
     }
 
 
+def get_policy_draft_by_id(
+    store: PublicationStore,
+    asset_id: UUID,
+    draft_id: UUID,
+    actor: ControlPlaneActor,
+) -> dict[str, object]:
+    """Returns a selected saved draft to an authorized read-only reviewer."""
+
+    ensure_asset_capability(store, asset_id, actor, "read")
+    draft = store.get_asset_policy_draft_by_id(asset_id=asset_id, draft_id=draft_id)
+    if draft is None:
+        raise LookupError("Policy draft not found")
+    return draft
+
+
 def save_policy_draft(
     store: PublicationStore,
     asset_id: UUID,
