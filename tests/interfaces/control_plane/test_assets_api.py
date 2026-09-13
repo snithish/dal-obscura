@@ -406,6 +406,7 @@ def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
             "module": ICEBERG_CATALOG_MODULE,
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
             "status": "configured",
+            "revision": 0,
             "discovered_table_count": 0,
             "governed_asset_count": 1,
         }
