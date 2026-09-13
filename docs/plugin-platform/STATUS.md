@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `7d1119c` (core option boundary;
+Implementation follow-up through `c636b25` (core table-handle boundary;
+core option boundary;
 aggregate catalog checks;
 catalog revision API contract test;
 catalog configuration CAS;
@@ -232,6 +233,8 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   expected write precondition through the API and Connections UI.
   Core `CatalogConfig` now applies the same bounded JSON-like option validation
   as the public SDK before any adapter receives provider options.
+  Core `TableHandle` now validates plugin identities, revisions, snapshots, and
+  inert bounded metadata before trusted task serialization.
   Service-side compatibility contracts and online wheel artifact evidence remain
   open.
 - X12 admitted loading and Iceberg adapter: **implementing**; entry-point loading now
@@ -442,6 +445,16 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Behavior: core `CatalogConfig` now validates bounded JSON-like provider options
   before adapters receive them, matching public SDK enforcement.
 - Green evidence: plugin contract and public adapter suites (16 passed), Ruff, Ty,
+  and `git diff --check`.
+- Remaining gaps: clean-wheel, external provider, and production admission evidence
+  remain open. Pickle compatibility is unchanged.
+
+### X11 core table-handle boundary — `c636b25`
+
+- State: implementing.
+- Behavior: core `TableHandle` now rejects malformed plugin IDs, negative revisions,
+  invalid snapshots, and arbitrary or oversized metadata before trusted serialization.
+- Green evidence: plugin contract and public-adapter suites (16 passed), Ruff, Ty,
   and `git diff --check`.
 - Remaining gaps: clean-wheel, external provider, and production admission evidence
   remain open. Pickle compatibility is unchanged.
