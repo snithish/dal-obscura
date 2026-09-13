@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `40d9cf7` (publication idempotency coverage;
+Implementation follow-up through `a212df7` (idempotency-key validation;
+publication idempotency coverage;
 unsafe schema-identity rejection;
 production plugin-lock configuration;
 descriptor option type validation;
@@ -505,6 +506,19 @@ providers before Phase A's security/correctness prerequisites are accepted.
   conflict.
 - Green evidence: `tests/interfaces/control_plane/test_api_publish_flow.py`
   (1 passed), Ruff, and `git diff --check`.
+- Remaining gaps: PostgreSQL barrier interleavings, injected rollback points,
+  multi-process races, and full audit/operation transaction evidence remain
+  open. Pickle compatibility is unchanged.
+
+### X03 idempotency-key validation — `a212df7`
+
+- State: implementing.
+- Behavior: publication and operation lookup now require a trimmed, bounded,
+  printable idempotency key. Blank, control-character, non-text, and oversized
+  values fail validation instead of disabling replay protection or entering a
+  database lookup.
+- Green evidence: policy-version and API publication suites (3 passed), Ruff,
+  and `git diff --check`.
 - Remaining gaps: PostgreSQL barrier interleavings, injected rollback points,
   multi-process races, and full audit/operation transaction evidence remain
   open. Pickle compatibility is unchanged.
