@@ -18,6 +18,10 @@ _MAX_CONFIG_SCHEMA_NODES = 256
 _MAX_CONFIG_SCHEMA_STRING = 512
 _MAX_IDENTIFIER_SEGMENTS = 32
 _MAX_IDENTIFIER_SEGMENT_LENGTH = 256
+_MAX_OPTION_DEPTH = 8
+_MAX_OPTION_NODES = 512
+_MAX_OPTION_STRING = 4_096
+_MAX_OPTION_KEYS = 64
 _FORBIDDEN_CONFIG_KEYS = frozenset(
     {"$ref", "$schema", "remote", "remote_url", "schema_url", "script", "html"}
 )
@@ -68,6 +72,7 @@ class CatalogConfig:
             raise ValueError("Catalog instance ID must be non-empty and bounded")
         if self.revision < 0:
             raise ValueError("Catalog revision cannot be negative")
+        _validate_options(self.options)
 
 
 @dataclass(frozen=True, slots=True)
@@ -262,5 +267,51 @@ def _validate_config_schema(value: object) -> None:  # noqa: C901
         if isinstance(item, float) and isfinite(item):
             return
         raise ValueError("Plugin config schema must contain JSON-like values")
+
+    visit(value, 0)
+
+
+def _validate_options(value: object) -> None:  # noqa: C901
+    """Bound provider options before a plugin factory receives them."""
+
+    nodes = 0
+
+    def visit(item: object, depth: int) -> None:  # noqa: C901
+        nonlocal nodes
+        nodes += 1
+        if nodes > _MAX_OPTION_NODES:
+            raise ValueError("Catalog options have too many values")
+        if depth > _MAX_OPTION_DEPTH:
+            raise ValueError("Catalog options are too deeply nested")
+        if isinstance(item, Mapping):
+            if len(item) > _MAX_OPTION_KEYS:
+                raise ValueError("Catalog options have too many keys")
+            for key, child in item.items():
+                if (
+                    not isinstance(key, str)
+                    or not key
+                    or len(key) > _MAX_OPTION_STRING
+                    or any(ord(char) < 0x20 or ord(char) == 0x7F for char in key)
+                ):
+                    raise ValueError("Catalog option keys must be bounded printable strings")
+                visit(child, depth + 1)
+            return
+        if isinstance(item, (list, tuple)):
+            if len(item) > _MAX_OPTION_KEYS:
+                raise ValueError("Catalog option arrays are too large")
+            for child in item:
+                visit(child, depth + 1)
+            return
+        if isinstance(item, str):
+            if len(item) > _MAX_OPTION_STRING or any(
+                ord(char) < 0x20 or ord(char) == 0x7F for char in item
+            ):
+                raise ValueError("Catalog option strings must be bounded printable values")
+            return
+        if item is None or isinstance(item, (bool, int)):
+            return
+        if isinstance(item, float) and isfinite(item):
+            return
+        raise ValueError("Catalog options must contain JSON-like values")
 
     visit(value, 0)

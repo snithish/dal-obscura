@@ -5,6 +5,9 @@ from datetime import datetime, timezone
 import pyarrow as pa
 import pytest
 from dal_obscura_plugin_api import (
+    CatalogConfig as PublicCatalogConfig,
+)
+from dal_obscura_plugin_api import (
     ExecutionContext as PublicExecutionContext,
 )
 from dal_obscura_plugin_api import (
@@ -91,6 +94,21 @@ def test_plugin_contract_value_objects_validate_generation_and_schema_identity()
 
     with pytest.raises(ValueError, match="SHA-256"):
         SchemaDescriptor(schema_version=1, fingerprint="bad", arrow_schema=pa.schema([]))
+
+    with pytest.raises(ValueError, match="JSON-like"):
+        PublicCatalogConfig(
+            plugin_id="iceberg.sql",
+            instance_id="analytics",
+            revision=0,
+            options={"provider": object()},
+        )
+    with pytest.raises(ValueError, match="too many keys"):
+        PublicCatalogConfig(
+            plugin_id="iceberg.sql",
+            instance_id="analytics",
+            revision=0,
+            options={f"key-{index}": index for index in range(65)},
+        )
 
 
 @pytest.mark.parametrize("context_type", [ExecutionContext, PublicExecutionContext])
