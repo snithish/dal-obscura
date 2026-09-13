@@ -70,3 +70,16 @@ def test_ci_generates_plugin_lock_from_installed_wheels() -> None:
     assert "--plugin catalog:manifest" in workflow
     assert "--plugin table_format:parquet.dataset" in workflow
     assert "load_plugin_lock_file" in workflow
+
+
+def test_ci_builds_scans_and_records_the_exact_ui_image() -> None:
+    workflow = Path(".github/workflows/ci.yml").read_text()
+
+    assert "name: Build, scan, and publish UI image" in workflow
+    assert "file: ui/Dockerfile" in workflow
+    assert "Scan exact UI candidate digest" in workflow
+    assert "Promote the scanned immutable UI digest" in workflow
+    assert "ui_digest: ${{ steps.image.outputs.digest }}" in workflow
+    assert "Write candidate release manifest" in workflow
+    assert "needs.ui-image.outputs.ui_digest" in workflow
+    assert "actions/upload-artifact@v4" in workflow
