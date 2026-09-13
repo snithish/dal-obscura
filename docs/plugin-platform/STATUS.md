@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `c11c0c2` (idempotency operation write locking;
+Implementation follow-up through `0b4063e` (stream iterator cleanup;
+idempotency operation write locking;
 draft write serialization;
 Iceberg discovery provider cleanup;
 UI catalog-scoped secret inputs;
@@ -509,7 +510,9 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   from structured identifiers, and optional namespace/name fields preserve
   literal dotted table names while retaining legacy dotted manifest keys.
   Core admission wiring, retry evidence, and live wheel/UI/
-  consumer qualification remain open.
+  consumer qualification remain open. Fetch-stream guard wrappers now close
+  upstream scanner/transform iterators when a consumer cancels or stops early,
+  including policy/expiry guard failures.
 - X18 consumer qualification: **implementing**; Python/DuckDB connector tests and
   the Java/Spark Maven reactor pass in the local lanes (the JVM lane required
   socket permission). Real TLS/OIDC Flight runs, exact nested goldens across both
@@ -620,6 +623,16 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Green evidence: policy-version/publication-store suites (17), Ruff, and
   `git diff --check` passed.
 - Remaining gaps: PostgreSQL multi-process race and rollback evidence remain open.
+
+### X17 stream iterator cleanup — `0b4063e`
+
+- State: implementing.
+- Behavior: expiry and policy-version guards close their upstream iterators in
+  `finally` blocks, and the returned stream adds a final termination wrapper so
+  scanner and DuckDB resources release on early consumer close.
+- Green evidence: application fetch suite (11) and Ruff; Flight socket tests are
+  unverified because the sandbox forbids wildcard listener binding.
+- Remaining gaps: real Flight cancellation, provider, consumer, and recovery gates.
 
 ### X14 scoped secret inputs in Connections — `2b81337`
 
