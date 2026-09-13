@@ -359,6 +359,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Evidence: plugin option and route tests passed; UI TypeScript passed; changed-path Ruff/format checks passed.
 - Remaining N03/B04 work: generated DTO/browser proof, real three-pair compatibility and consumer qualification. Release remains HOLD.
 
+## Implementation update — 7884cca (2026-09-13)
+
+- Packet / status / candidate commit / owner: N03/B04 partial / VERIFY / `7884cca` / plugin descriptor validation.
+- Observable behavior delivered: numeric descriptor fields now require finite numbers; booleans, integers, enums, strings, URIs, and secret references retain their declared types and reject coercion or non-finite values before plugin factory use.
+- Evidence: catalog option validation tests passed; changed-path Ruff/format checks passed. Browser and built-wheel typed-form qualification remain open.
+- Remaining N03/B04 work: generated DTO/browser proof, real three-pair compatibility and consumer qualification. Release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
