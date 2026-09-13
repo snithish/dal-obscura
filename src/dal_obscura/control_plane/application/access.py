@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from dal_obscura.common.identity import encode_federated_group, encode_federated_identity
+
 
 @dataclass(frozen=True)
 class ControlPlaneActor:
@@ -28,12 +30,13 @@ class ControlPlaneActor:
         # delimiter in each component so a subject/group containing ``|``
         # cannot collide with a different pair. Local/demo actors retain the
         # historical unscoped form.
-        prefix = f"{_identity_component(self.issuer)}|" if self.issuer else ""
         principals = {
-            f"{prefix}{_identity_component(self.principal) if self.issuer else self.principal}"
+            encode_federated_identity(self.issuer, self.principal)
+            if self.issuer
+            else self.principal
         }
         principals.update(
-            f"{prefix}group:{_identity_component(group) if self.issuer else group}"
+            encode_federated_group(self.issuer, group) if self.issuer else f"group:{group}"
             for group in self.groups
         )
         return principals
@@ -43,10 +46,4 @@ class ControlPlaneActor:
 
         if not self.issuer:
             return self.principal
-        return f"{_identity_component(self.issuer)}|{_identity_component(self.principal)}"
-
-
-def _identity_component(value: str) -> str:
-    """Escapes identity delimiters while preserving ordinary display values."""
-
-    return value.replace("%", "%25").replace("|", "%7C")
+        return encode_federated_identity(self.issuer, self.principal)

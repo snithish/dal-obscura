@@ -23,6 +23,11 @@ from dal_obscura.common.config_store.db import (
     create_engine_from_url,
     migrate_config_store,
 )
+from dal_obscura.common.config_store.identity_migration import (
+    IdentityMigrationError,
+    apply_identity_key_migration,
+    inspect_identity_keys,
+)
 from dal_obscura.common.config_store.plugin_bindings import (
     apply_plugin_bindings,
     inspect_plugin_bindings,
@@ -92,6 +97,19 @@ def run(argv: Sequence[str] | None = None) -> int:
         payload["applied"] = applied
         print(json.dumps(payload, sort_keys=True, separators=(",", ":")))
         return 0
+    if args.command == "identity-keys":
+        with Session(engine) as session:
+            try:
+                if args.apply:
+                    with session.begin():
+                        report = apply_identity_key_migration(session)
+                else:
+                    report = inspect_identity_keys(session)
+            except IdentityMigrationError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+        print(json.dumps(report.to_dict(), sort_keys=True, separators=(",", ":")))
+        return 0
     parser.error(f"unsupported command {args.command!r}")
     return 2
 
@@ -119,6 +137,17 @@ def _parser() -> argparse.ArgumentParser:
         "--apply",
         action="store_true",
         help="apply only exact built-in mappings from the dry-run report",
+    )
+
+    identity = subparsers.add_parser(
+        "identity-keys",
+        help="preview or apply legacy federated identity-key conversion",
+    )
+    identity.add_argument("--database-url", help="SQLAlchemy database URL")
+    identity.add_argument(
+        "--apply",
+        action="store_true",
+        help="apply the conversion transaction after a clean preview",
     )
 
     return parser
