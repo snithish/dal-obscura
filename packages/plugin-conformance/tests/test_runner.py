@@ -7,6 +7,8 @@ from typing import cast
 import pyarrow as pa
 import pytest
 from dal_obscura_plugin_api import (
+    CatalogPlugin,
+    DiscoveryPage,
     ExecutionContext,
     PluginDescriptor,
     SchemaDescriptor,
@@ -16,8 +18,10 @@ from dal_obscura_plugin_api import (
 )
 from dal_obscura_plugin_conformance import (
     check_capabilities,
+    check_discovery_page,
     check_record_batches,
     nested_golden_table,
+    run_catalog_checks,
     run_format_checks,
 )
 
@@ -364,6 +368,101 @@ def test_record_batch_validation_rejects_expired_deadline():
             [batch],
             deadline=datetime.now(timezone.utc) - timedelta(seconds=1),
         )
+
+
+def _catalog_descriptor() -> PluginDescriptor:
+    return PluginDescriptor(
+        kind="catalog",
+        plugin_id="fixture.catalog",
+        api_version="1",
+        config_version=1,
+        distribution="fixture-catalog-package",
+        version="1.0.0",
+    )
+
+
+def _catalog_context(**kwargs):
+    return replace(_context(), **kwargs)
+
+
+def test_catalog_runner_validates_bounded_discovery_and_coverage():
+    users = TableIdentifier(namespace=("default",), name="users")
+    orders = TableIdentifier(namespace=("default",), name="orders")
+
+    class _Catalog:
+        descriptor = _catalog_descriptor()
+
+        def list_tables(self, context, *, continuation, limit):
+            del context, limit
+            if continuation is None:
+                return DiscoveryPage((users,), continuation="next")
+            return DiscoveryPage((orders,))
+
+    result = run_catalog_checks(
+        cast(CatalogPlugin, _Catalog()),
+        _catalog_context(),
+        expected_table_ids={"default.users", "default.orders"},
+        artifact_identity="sha256:catalog",
+    )
+
+    assert result.to_dict()["status"] == "passed"
+    assert result.checks["bounded_discovery"] == "passed"
+    assert result.checks["discovery_coverage"] == "passed"
+    assert result.artifact_identity == "sha256:catalog"
+
+
+@pytest.mark.parametrize(
+    ("plugin_type", "message"),
+    [("duplicate", "duplicate table identities"), ("cycle", "repeated continuation")],
+)
+def test_catalog_runner_rejects_duplicate_and_cyclic_pages(plugin_type, message):
+    users = TableIdentifier(namespace=("default",), name="users")
+
+    class _BadCatalog:
+        descriptor = _catalog_descriptor()
+
+        def list_tables(self, context, *, continuation, limit):
+            del context, limit
+            if plugin_type == "duplicate":
+                return DiscoveryPage((users, users))
+            return DiscoveryPage((), continuation="same")
+
+    result = run_catalog_checks(cast(CatalogPlugin, _BadCatalog()), _catalog_context())
+    assert result.to_dict()["status"] == "failed"
+    assert any(message in failure for failure in result.failures)
+
+
+def test_catalog_runner_stops_before_requesting_after_cancellation():
+    users = TableIdentifier(namespace=("default",), name="users")
+    calls = 0
+    requested = 0
+
+    def cancelled() -> bool:
+        nonlocal calls
+        calls += 1
+        return calls >= 2
+
+    class _CancelledCatalog:
+        descriptor = _catalog_descriptor()
+
+        def list_tables(self, context, *, continuation, limit):
+            del context, continuation, limit
+            nonlocal requested
+            requested += 1
+            return DiscoveryPage((users,), continuation="next")
+
+    result = run_catalog_checks(
+        cast(CatalogPlugin, _CancelledCatalog()),
+        _catalog_context(cancel_check=cancelled),
+    )
+    assert result.to_dict()["status"] == "failed"
+    assert any("cancelled while discovering" in failure for failure in result.failures)
+    assert requested == 1
+
+
+def test_check_discovery_page_rejects_invalid_continuation():
+    with pytest.raises(ValueError, match="continuation"):
+        check_discovery_page(DiscoveryPage((), continuation=""))
 
 
 def test_runner_honors_cancellation_before_plugin_execution():

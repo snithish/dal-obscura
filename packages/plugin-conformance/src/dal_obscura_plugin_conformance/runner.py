@@ -9,14 +9,19 @@ from datetime import datetime, timezone
 
 import pyarrow as pa
 from dal_obscura_plugin_api import (
+    CatalogPlugin,
+    DiscoveryPage,
     ExecutionContext,
     SchemaDescriptor,
     TableFormatPlugin,
     TableHandle,
+    TableIdentifier,
 )
 
 DEFAULT_MAX_OUTPUT_BATCHES = 1_024
 DEFAULT_MAX_OUTPUT_ROWS = 1_000_000
+DEFAULT_MAX_DISCOVERY_PAGES = 64
+DEFAULT_MAX_DISCOVERY_TABLES = 10_000
 
 
 @dataclass
@@ -96,6 +101,22 @@ def check_schema_descriptor(
         result.record_pass("schema_descriptor")
 
 
+def check_discovery_page(page: DiscoveryPage, *, result: ConformanceResult | None = None) -> None:
+    """Validate one catalog page without trusting provider object shapes."""
+
+    if not isinstance(page, DiscoveryPage):
+        raise ValueError("catalog returned an invalid discovery page")
+    for identifier in page.entries:
+        if not isinstance(identifier, TableIdentifier):
+            raise ValueError("catalog returned an invalid table identifier")
+    if page.continuation is not None and (
+        not isinstance(page.continuation, str) or not page.continuation
+    ):
+        raise ValueError("catalog continuation must be a non-empty string or null")
+    if result is not None:
+        result.record_pass("discovery_page")
+
+
 def check_record_batches(
     schema: pa.Schema,
     batches: Iterable[pa.RecordBatch],
@@ -164,6 +185,78 @@ def _check_task_coverage(
     if set(actual) != set(expected):
         raise ValueError("format task identities do not match expected coverage")
     result.record_pass("task_coverage")
+
+
+def run_catalog_checks(  # noqa: C901
+    plugin: CatalogPlugin,
+    context: ExecutionContext,
+    *,
+    page_size: int = 128,
+    max_pages: int = DEFAULT_MAX_DISCOVERY_PAGES,
+    max_tables: int = DEFAULT_MAX_DISCOVERY_TABLES,
+    expected_table_ids: Iterable[str] | None = None,
+    artifact_identity: str | None = None,
+) -> ConformanceResult:
+    """Run bounded discovery checks against one admitted catalog plugin."""
+
+    descriptor = plugin.descriptor
+    result = ConformanceResult(
+        package=descriptor.distribution,
+        plugin_id=descriptor.plugin_id,
+        artifact_identity=artifact_identity,
+        capability_matrix=dict.fromkeys(sorted(descriptor.capabilities), True),
+    )
+    try:
+        if descriptor.kind != "catalog":
+            raise ValueError("catalog conformance requires a catalog plugin descriptor")
+        if page_size <= 0 or max_pages <= 0 or max_tables <= 0:
+            raise ValueError("catalog discovery budgets must be positive")
+        continuation: str | None = None
+        seen_continuations: set[str] = set()
+        identifiers: list[TableIdentifier] = []
+        for _page_index in range(max_pages):
+            if datetime.now(timezone.utc) >= context.deadline:
+                raise TimeoutError("execution context deadline expired while discovering")
+            if context.cancel_check is not None and context.cancel_check():
+                raise RuntimeError("execution context was cancelled while discovering")
+            page = plugin.list_tables(context, continuation=continuation, limit=page_size)
+            check_discovery_page(page)
+            if len(page.entries) > page_size:
+                raise ValueError("catalog returned more entries than requested")
+            identifiers.extend(page.entries)
+            if len(identifiers) > max_tables:
+                raise ValueError(f"catalog returned more than {max_tables} tables")
+            if page.continuation is None:
+                break
+            if page.continuation in seen_continuations:
+                raise ValueError("catalog returned a repeated continuation token")
+            seen_continuations.add(page.continuation)
+            continuation = page.continuation
+        else:
+            raise ValueError(f"catalog returned more than {max_pages} discovery pages")
+        identities = [".".join((*entry.namespace, entry.name)) for entry in identifiers]
+        if len(identities) != len(set(identities)):
+            raise ValueError("catalog returned duplicate table identities")
+        result.record_pass("bounded_discovery")
+        if expected_table_ids is None:
+            result.record_skip("discovery_coverage", "no expected table identities supplied")
+        elif set(identities) != set(expected_table_ids):
+            raise ValueError("catalog table identities do not match expected coverage")
+        else:
+            result.record_pass("discovery_coverage")
+    except Exception as exc:
+        result.record_failure("catalog", str(exc))
+    finally:
+        close = getattr(plugin, "close", None)
+        if callable(close):
+            try:
+                close()
+                result.record_pass("cleanup")
+            except Exception as exc:
+                result.record_failure("cleanup", str(exc))
+        else:
+            result.record_pass("cleanup")
+    return result
 
 
 def run_format_checks(  # noqa: C901

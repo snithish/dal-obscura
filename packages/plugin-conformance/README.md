@@ -11,11 +11,13 @@ PYTHONPATH=packages/plugin-conformance/src:packages/plugin-api/src \
   uv run --no-sync pytest packages/plugin-conformance/tests -q
 ```
 
-`run_format_checks` returns a machine-readable `ConformanceResult` containing
+`run_catalog_checks` and `run_format_checks` return a machine-readable
+`ConformanceResult` containing
 package/plugin identity, Arrow version, pass/fail checks, failures, skips, and a
 JSON representation suitable for CI artifacts. The fixture includes nested
 struct, list, and map values. The kit validates declared capabilities, bounded
-task counts, schema descriptors, output batch schemas, cancellation, and cleanup;
+catalog discovery/page identities, task counts, schema descriptors, output batch
+schemas, cancellation, and cleanup;
 it checks cancellation and deadlines before requesting more plan or output work,
 and it does not pretend to sandbox in-process Python plugins. Provider fixtures can
 also pass `expected_task_ids` with a `task_identity` function to reject duplicate
