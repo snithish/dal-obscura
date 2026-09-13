@@ -301,6 +301,14 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane tests/interfaces/control_plane -q` — all passed; changed-path Ruff, format, and diff checks passed.
 - Remaining N03/B05 work: field-level errors where useful, two-process freshness/race evidence, and generated DTO/browser proof. Release remains HOLD.
 
+## Implementation update — 87d4817 (2026-09-13)
+
+- Packet / status / candidate commit / owner: N12/B16 partial / VERIFY / `87d4817` / PostgreSQL race harness.
+- Observable behavior delivered: the integration race suite now provisions an auth chain and exercises barrier-coordinated concurrent runtime-settings and auth-provider replacements. Each scenario requires exactly one revision-zero commit and one `PublicationConflictError`, complementing existing draft, grant, and binding races.
+- Changed paths: `tests/integration/control_plane/test_publication_races.py`; no production or pickle paths changed.
+- Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/integration/control_plane/test_publication_races.py -q` — 5 scenarios skipped because `DAL_OBSCURA_POSTGRES_TEST_URL` is not configured in this sandbox; Ruff passed. CI PostgreSQL execution is still required for acceptance.
+- Remaining N12/B16 work: run the full two-process PostgreSQL/API/Flight interleaving matrix with termination and lost-response evidence. Release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
