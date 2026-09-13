@@ -235,13 +235,18 @@ def replace_asset_schema_fields(
     # Admitted schema metadata participates in review identity and cannot race
     # a publication candidate.
     store.lock_asset_for_publication(asset_id)
-    if expected_revision is None:
-        return store.replace_asset_schema_fields(asset_id=asset_id, fields=fields)
-    return store.replace_asset_schema_fields(
-        asset_id=asset_id,
-        fields=fields,
-        expected_revision=expected_revision,
-    )
+    try:
+        if expected_revision is None:
+            return store.replace_asset_schema_fields(asset_id=asset_id, fields=fields)
+        return store.replace_asset_schema_fields(
+            asset_id=asset_id,
+            fields=fields,
+            expected_revision=expected_revision,
+        )
+    except ValueError as exc:
+        # Repository normalization errors are caller input failures. Keep
+        # malformed identities out of the generic 500 boundary.
+        raise ValidationFailure(str(exc)) from exc
 
 
 def _required_workspace_context(store: PublicationStore):

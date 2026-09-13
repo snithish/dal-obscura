@@ -3,7 +3,10 @@ from __future__ import annotations
 from unittest.mock import Mock
 from uuid import uuid4
 
+import pytest
+
 from dal_obscura.control_plane.application import asset_service
+from dal_obscura.control_plane.application.errors import ValidationFailure
 
 
 def test_owner_replacement_locks_before_read_and_write() -> None:
@@ -45,3 +48,11 @@ def test_schema_admission_replacement_locks_before_write() -> None:
         ("lock_asset_for_publication", (asset_id,), {}),
         ("replace_asset_schema_fields", (), {"asset_id": asset_id, "fields": []}),
     ]
+
+
+def test_schema_identity_input_errors_are_safe_validation_failures() -> None:
+    store = Mock()
+    store.replace_asset_schema_fields.side_effect = ValueError("field id is unsafe")
+
+    with pytest.raises(ValidationFailure, match="field id is unsafe"):
+        asset_service.replace_asset_schema_fields(store, uuid4(), [{"name": "id"}])

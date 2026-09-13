@@ -179,3 +179,44 @@ def test_catalog_updates_advance_a_revision_only_when_configuration_changes(db_s
             options={"uri": "sqlite:///catalog-stale.db"},
             expected_revision=0,
         )
+
+
+def test_schema_identity_rejects_non_text_and_control_values(db_session):
+    store = PublicationStore(db_session)
+    cell_id = uuid4()
+    tenant_id = uuid4()
+    store.create_cell(cell_id=cell_id, name="default", region="local")
+    store.create_tenant(tenant_id=tenant_id, slug="default", display_name="Default")
+    store.assign_tenant_to_cell(cell_id=cell_id, tenant_id=tenant_id, shard_key="default")
+    store.upsert_catalog(
+        cell_id=cell_id,
+        tenant_id=tenant_id,
+        name="analytics",
+        module="iceberg.sql",
+        options={"type": "sql", "uri": "sqlite:///catalog.db"},
+    )
+    asset_id = store.upsert_asset(
+        cell_id=cell_id,
+        tenant_id=tenant_id,
+        catalog="analytics",
+        target="default.events",
+        backend="iceberg",
+        table_identifier="default.events",
+        options={},
+    )
+
+    with pytest.raises(ValueError, match="field id must be text"):
+        store.replace_asset_schema_fields(
+            asset_id=asset_id,
+            fields=[{"name": "id", "field_id": 1}],
+        )
+    with pytest.raises(ValueError, match="printable"):
+        store.replace_asset_schema_fields(
+            asset_id=asset_id,
+            fields=[{"name": "id", "field_id": "safe\nvalue"}],
+        )
+    with pytest.raises(ValueError, match="bounded printable"):
+        store.replace_asset_schema_fields(
+            asset_id=asset_id,
+            fields=[{"name": "id", "path": ["id", "x" * 257]}],
+        )

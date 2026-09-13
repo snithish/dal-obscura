@@ -2092,33 +2092,52 @@ def _plugin_revision(config: Mapping[str, Any]) -> int | None:
 
 
 def _normalize_schema_fields(fields: list[dict[str, Any]]) -> list[dict[str, object]]:
+    """Normalize schema identities without coercing unsafe caller values.
+
+    These values are persisted into immutable review evidence and later used
+    for schema-drift checks.  Accept only bounded printable strings so direct
+    service callers cannot bypass the HTTP model's limits.
+    """
+
     normalized: list[dict[str, object]] = []
     seen_paths: set[tuple[str, ...]] = set()
     seen_ids: set[str] = set()
     for field in fields:
-        name = str(field.get("name", "")).strip()
+        raw_name = field.get("name", "")
+        if not isinstance(raw_name, str):
+            raise ValueError("Schema field name must be text")
+        name = raw_name.strip()
         if not name:
             continue
+        _validate_schema_text(name, "Schema field name", max_length=256)
         raw_path = field.get("path")
         if raw_path is None:
             path = [name]
         elif (
             not isinstance(raw_path, list)
             or not raw_path
-            or any(not isinstance(segment, str) or not segment.strip() for segment in raw_path)
+            or any(
+                not isinstance(segment, str)
+                or not segment.strip()
+                or len(segment.strip()) > 256
+                or any(ord(char) < 0x20 or ord(char) == 0x7F for char in segment)
+                for segment in raw_path
+            )
         ):
-            raise ValueError("Schema field path must be a non-empty string list")
+            raise ValueError("Schema field path must contain bounded printable text segments")
         else:
             path = [segment.strip() for segment in raw_path]
         path_key = tuple(path)
         if path_key in seen_paths:
             raise ValueError("Schema field paths must be unique")
         raw_field_id = field.get("field_id")
-        field_id = (
-            str(raw_field_id).strip()
-            if raw_field_id is not None
-            else _legacy_field_id(json.dumps(path, separators=(",", ":")))
-        )
+        if raw_field_id is None:
+            field_id = _legacy_field_id(json.dumps(path, separators=(",", ":")))
+        else:
+            if not isinstance(raw_field_id, str):
+                raise ValueError("Schema field id must be text")
+            field_id = raw_field_id.strip()
+            _validate_schema_text(field_id, "Schema field id", max_length=128)
         if not field_id:
             raise ValueError("Schema field id must be non-empty")
         if field_id in seen_ids:
@@ -2135,6 +2154,13 @@ def _normalize_schema_fields(fields: list[dict[str, Any]]) -> list[dict[str, obj
         seen_paths.add(path_key)
         seen_ids.add(field_id)
     return normalized
+
+
+def _validate_schema_text(value: str, label: str, *, max_length: int) -> None:
+    if not value or len(value) > max_length:
+        raise ValueError(f"{label} must contain 1-{max_length} characters")
+    if any(ord(char) < 0x20 or ord(char) == 0x7F for char in value):
+        raise ValueError(f"{label} must contain printable text")
 
 
 def _legacy_field_id(value: str) -> str:
