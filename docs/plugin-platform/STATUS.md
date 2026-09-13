@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `7bfefe8` (bounded Flight readiness polling;
+Implementation follow-up through `78363e9` (dead-code inventory guard;
+bounded Flight readiness polling;
 independent plugin-pair conformance;
 schema-evolution admission guard;
 config-activation generation boundary;
@@ -2913,6 +2914,20 @@ browser/consumer qualification, clean wheel/image provenance, recovery, and inde
 review remain open
 Next permitted packet: X03 PostgreSQL CAS/barrier slice where PostgreSQL is available;
 otherwise continue locally executable X06/X07/X08 acceptance work
+
+### X21 dead-code and compatibility inventory — `78363e9`
+
+- State: implementing.
+- Behavior: `DEAD_CODE_INVENTORY.md` records observed callers, packaging and
+  documentation entry points, public API obligations, and pickle compatibility
+  for the reviewed core/plugin modules. The inventory guard checks every listed
+  source path, limits dispositions to explicit keep categories, and requires
+  the Iceberg format to remain `KEEP-PICKLE`.
+- Green evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/architecture/test_dead_code_inventory.py -q` (1 passed), targeted Ruff, and `git diff --check` passed.
+- Remaining gaps: no deletion is justified by current static evidence. Capacity
+  thresholds, benchmark timing, live consumer/provider lanes, and independent
+  review remain open. Any future deletion requires a new inventory entry and a
+  separate behavioral commit.
 
 ## Evidence entry template
 
