@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `04ab6b5` (fresh-identity race correction;
+Implementation follow-up through `a2f7ff9` (isolated restore runbook and
+recovery helper hardening; encrypted PostgreSQL backup helpers; fresh-identity race correction;
 CI PostgreSQL concurrency lane;
 PostgreSQL draft CAS race gate;
 loopback-bound Flight test harness;
@@ -1437,6 +1438,25 @@ and manifest packages.
   measured recovery objectives remain open. Pickle compatibility is unchanged.
 - Next permitted packet: add backup/restore verification and plugin lifecycle
   state checks once PostgreSQL integration infrastructure is available.
+
+### X20 encrypted PostgreSQL backup helpers — `a2f7ff9`
+
+- State: implemented-unverified.
+- Behavior: checked-in operator helpers create a mode-0600 custom-format
+  `pg_dump`, encrypt it with an explicit `age` recipient, refuse overwrite, and
+  publish it atomically. Restore requires an isolated-restore confirmation,
+  decrypts to a private temporary file, runs transactional `pg_restore`, and
+  invalidates browser sessions, login transactions, and replayable Flight
+  tickets before returning. The production runbook keeps ingress closed until
+  IdP, plugin-lock, secret, generation, and Iceberg-retention reconciliation.
+- Green evidence: shell syntax, production deployment contract tests (2 passed),
+  and `git diff --check` pass.
+- Remaining gaps: real PostgreSQL/`age` isolated restore, backup integrity and
+  retention verification, measured RPO/RTO, plugin drain/remove transitions,
+  mixed-version upgrade/rollback tests, and exact-artifact evidence remain open.
+  Pickle compatibility is unchanged.
+- This helper/runbook slice does not close A22; an executed recovery drill is
+  still mandatory.
 
 ### X19 production database privilege ordering — `18f8e64`
 
