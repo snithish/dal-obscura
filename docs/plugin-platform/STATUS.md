@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `0b4063e` (stream iterator cleanup;
+Implementation follow-up through `4f7d782` (secure-local deployment edge path;
+stream iterator cleanup;
 idempotency operation write locking;
 draft write serialization;
 Iceberg discovery provider cleanup;
@@ -521,9 +522,11 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
 - X19 secure deployment and identity lifecycle: **implementing**; production
   Compose now separates migration/control/data credentials, provisions isolated
   PostgreSQL roles, orders readiness through migration and post-migration ticket
-  grants, and uses `/readyz` for application healthchecks. Real PostgreSQL SQL
-  denial/allowance, TLS, IdP, browser, restart, and clean-artifact evidence remain
-  open.
+  grants, and uses `/readyz` for application healthchecks. A secure-local profile
+  layers loopback-only ports and a local HTTPS Caddy edge over that production
+  topology, with bootstrap disabled and explicit TLS/OIDC settings. Real
+  PostgreSQL SQL denial/allowance, TLS, IdP, browser, restart, and clean-artifact
+  evidence remain open.
 - X20 recovery and upgrades: **implementing**; data-plane ticket signing now
   supports one active HMAC key plus explicitly configured retired verification
   keys, with bounded rotation/rollback instructions and duplicate-key rejection.
@@ -633,6 +636,21 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Green evidence: application fetch suite (11) and Ruff; Flight socket tests are
   unverified because the sandbox forbids wildcard listener binding.
 - Remaining gaps: real Flight cancellation, provider, consumer, and recovery gates.
+
+### X19 secure-local deployment profile — `4f7d782`
+
+- State: implemented-unverified.
+- Behavior: `deployment/local-secure` layers the production Compose contract with
+  loopback-only Flight ports and an HTTPS Caddy edge for the UI. The runner
+  generates a local CA/certificate for `localhost`, keeps bootstrap disabled,
+  and preserves the production migration/readiness/credential separation.
+  Compose-relative paths are explicit so the Caddyfile resolves correctly when
+  the profile is layered over the production file.
+- Green evidence: secure-local architecture test, production topology test,
+  YAML parse, shell syntax, and `git diff --check` passed.
+- Remaining gaps: Docker startup, real TLS/OIDC browser flow, PostgreSQL role
+  denial/allowance, restart/recovery, provider/consumer qualification, and clean
+  image/wheel/security artifacts remain open.
 
 ### X14 scoped secret inputs in Connections — `2b81337`
 
