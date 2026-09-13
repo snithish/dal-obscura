@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `3930e69`.
+Implementation follow-up through `6890b3f` (with Parquet wildcard projection at `efe614f`).
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -142,8 +142,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   generation and invokes the admitted `iceberg.sql` factory rather than selecting
   an implementation from mutable request/config strings.
   Public SDK catalog/format factories can now be resolved through the same registry
-  bridge and execute through the existing ticket path; publication/config model
-  support for non-Iceberg bindings and migration evidence remain open.
+  bridge and execute through the existing ticket path; publication authoring now
+  accepts external IDs only from the admitted registry and persists those IDs into
+  runtime config. PostgreSQL/mixed-version migration evidence remains open.
   Additive migration `20260913_0014` persists qualified catalog/format identities
   and optional plugin revisions beside immutable published rows; reads merge those
   identities back into legacy-compatible manifests.
@@ -155,10 +156,10 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   bounded JSON-like form metadata and reject remote/executable content. An
   authenticated `/v1/plugins` endpoint and Connections view render admitted
   adapter capabilities and descriptor-driven configuration fields, including
-  secret-reference inputs, without installation controls. The built-in
-  Iceberg route remains the only writable adapter until external routing is
-  qualified; the Connections management view now also renders the authenticated
-  lifecycle status inventory. Browser evidence remains open.
+  secret-reference inputs, without installation controls. Connections now submit
+  the selected admitted catalog and table-format IDs while retaining the legacy
+  Iceberg module compatibility mapping; the management view also renders the
+  authenticated lifecycle status inventory. Browser evidence remains open.
 - X15 conformance kit: **implementing**; a standalone public-API-only package
   now provides nested Arrow goldens, catalog discovery/page checks,
   capability-negative checks, bounded plan and output-schema validation, explicit
