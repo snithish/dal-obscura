@@ -158,6 +158,12 @@ matrix remains open where it requires live PostgreSQL concurrency, TLS/OIDC Flig
 browser accessibility, provider endpoints, clean wheel/image builds, or recovery
 artifacts.
 
+The governed integration checkpoint after the scoped-secret and virtual-tree
+changes passed the aggregate Python suite (acceptance, architecture, control
+plane, interfaces, plugin platform, query planning, adapters, conformance,
+manifest, and REST plugin tests), the five direct UI tests, TypeScript/Vite
+production build, Ruff, and Ty with the public SDK source path configured.
+
 ## State meanings
 
 - `not-started`: no implementation under the new packet has begun.
