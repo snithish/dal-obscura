@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `68172f9` (atomic backup checksum preparation;
+Implementation follow-up through `a30f1c1` (executable backup integrity tests;
+atomic backup checksum preparation;
 backup checksum verification and
 runbook; CI plugin lifecycle security lane;
 PostgreSQL binding CAS race probe;
@@ -1473,8 +1474,10 @@ and manifest packages.
   still mandatory.
 
 The recovery helper now emits a SHA-256 sidecar and verifies it before restore,
-with refusal when either backup or sidecar would be overwritten. This improves
-artifact integrity but does not replace the required isolated drill.
+with refusal when either backup or sidecar would be overwritten. Executable
+helper tests cover checksum creation, overwrite refusal, and corrupt-artifact
+rejection before provider tools run. This improves artifact integrity but does
+not replace the required isolated drill.
 
 ### X20 recovery/upgrade acceptance probes — `86e1eee`
 
