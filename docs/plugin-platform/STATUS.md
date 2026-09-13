@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `5d61ea5` (control-plane schema/evaluation plugin
+Implementation follow-up through `5fce4c9` (control-plane built-in registry startup;
+control-plane schema/evaluation plugin
 routing; conformance lifecycle deadlines;
 public discovery identity boundary;
 public discovery lifecycle;
@@ -310,6 +311,9 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   for external IDs. Public Arrow schemas receive the shared bounds and nested path/
   identity treatment before UI evidence is issued; legacy Iceberg module loading and
   pickle-backed task paths remain unchanged.
+  The control-plane CLI now admits the trusted built-in Iceberg catalog/format
+  generation at startup, so authenticated plugin diagnostics and connection
+  authoring use the same registry boundary as the data plane.
   Legacy Iceberg discovery now rejects malformed, non-printable, or oversized
   namespace/table segments instead of coercing them into new logical identities.
   Additive migration `20260913_0014` persists qualified catalog/format identities
@@ -533,6 +537,20 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Remaining gaps: control-plane CLI registry/lock loading, live provider and
   PostgreSQL evidence, external wheel evidence, and browser end-to-end evidence
   remain open. Pickle compatibility is unchanged.
+
+### X12/X13 control-plane startup admission — `5fce4c9`
+
+- State: implementing.
+- Behavior: the control-plane CLI now builds and injects the trusted built-in
+  Iceberg catalog/table-format registry before constructing the FastAPI app. The
+  UI plugin inventory, connection authoring, discovery, schema review, and
+  publication therefore share the same admitted built-in generation as the data
+  plane.
+- Green evidence: control-plane CLI suite (19 passed), Ruff, Ty, and
+  `git diff --check`.
+- Remaining gaps: operator-mounted external plugin-lock parsing, clean external
+  wheel evidence, and live PostgreSQL/browser/provider acceptance remain open.
+  Pickle compatibility is unchanged.
 
 ### X16 REST namespace lifecycle — `8c73c41`
 
