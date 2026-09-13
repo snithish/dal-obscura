@@ -23,6 +23,7 @@ def test_ci_python_jobs_have_single_clear_responsibilities() -> None:
     assert "name: Python integration tests" in workflow
     assert "name: PostgreSQL concurrency gates" in workflow
     assert "DAL_OBSCURA_POSTGRES_TEST_URL" in workflow
+    assert "tests/integration/test_recovery_upgrade.py" in workflow
     assert "timeout-minutes: 20" in workflow
     assert "name: Python package smoke" in workflow
     assert "name: Build, scan, and publish image" in workflow

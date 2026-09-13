@@ -164,7 +164,9 @@ jobs:
       - name: Run PostgreSQL barrier race tests
         env:
           DAL_OBSCURA_POSTGRES_TEST_URL: postgresql+psycopg://dal_obscura:dal_obscura_test_password@127.0.0.1:5432/dal_obscura
-        run: uv run pytest tests/integration/control_plane/test_publication_races.py -q
+        run: >-
+          uv run pytest tests/integration/control_plane/test_publication_races.py
+          tests/integration/test_recovery_upgrade.py -q
 
   python-package:
     name: Python package smoke
