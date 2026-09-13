@@ -389,29 +389,7 @@ jobs:
           annotations: |
             org.opencontainers.image.description=Policy-aware Arrow Flight data access layer
 
-      - name: Build image for vulnerability scan
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile
-          load: true
-          push: false
-          platforms: linux/amd64
-          tags: dal-obscura:ci
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Scan image
-        uses: aquasecurity/trivy-action@v0.35.0
-        with:
-          image-ref: dal-obscura:ci
-          format: table
-          exit-code: "1"
-          ignore-unfixed: true
-          severity: CRITICAL,HIGH
-
-      - name: Log in to GHCR
+      - name: Log in to GHCR for immutable candidate publication
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
         with:
@@ -419,18 +397,43 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish image
-        if: github.event_name != 'pull_request'
+      - name: Build one immutable image candidate
+        id: image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
+          load: ${{ github.event_name == 'pull_request' }}
+          push: ${{ github.event_name != 'pull_request' }}
+          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          tags: |
+            ${{ github.event_name == 'pull_request' && 'dal-obscura:ci' || format('{0}/{1}:candidate-{2}', env.REGISTRY, env.IMAGE_NAME, github.sha) }}
           labels: ${{ steps.meta.outputs.labels }}
-          annotations: ${{ steps.meta.outputs.annotations }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          provenance: true
-          sbom: true
+          provenance: ${{ github.event_name != 'pull_request' }}
+          sbom: ${{ github.event_name != 'pull_request' }}
+
+      - name: Scan exact candidate digest
+        uses: aquasecurity/trivy-action@v0.35.0
+        with:
+          image-ref: ${{ github.event_name == 'pull_request' && 'dal-obscura:ci' || format('{0}/{1}@{2}', env.REGISTRY, env.IMAGE_NAME, steps.image.outputs.digest) }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+      - name: Promote the scanned immutable digest
+        if: github.event_name != 'pull_request'
+        env:
+          PROMOTION_TAGS: ${{ steps.meta.outputs.tags }}
+          CANDIDATE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -eu
+          candidate="${REGISTRY}/${IMAGE_NAME}@${CANDIDATE_DIGEST}"
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            docker buildx imagetools create --tag "$tag" "$candidate"
+          done <<EOF
+          ${PROMOTION_TAGS}
+          EOF

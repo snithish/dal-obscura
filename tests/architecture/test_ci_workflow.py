@@ -30,3 +30,15 @@ def test_ci_governance_ui_runs_lifecycle_tests_before_build() -> None:
     workflow = Path(".github/workflows/ci.yml").read_text()
 
     assert "pnpm --dir apps/governance-ui test" in workflow
+
+
+def test_ci_promotes_the_exact_scanned_image_digest() -> None:
+    workflow = Path(".github/workflows/ci.yml").read_text()
+
+    assert "id: image" in workflow
+    assert "steps.image.outputs.digest" in workflow
+    assert "Scan exact candidate digest" in workflow
+    assert "docker buildx imagetools create --tag" in workflow
+    assert "name: Publish image" not in workflow
+    assert "candidate-{2}" in workflow
+    assert "github.sha" in workflow
