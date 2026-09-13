@@ -1,8 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `c701665` (virtualized tree keyboard focus and
-activation; restored-option route regression;
+Implementation follow-up through `4ea921f` (catalog-scoped secret references;
+virtualized tree keyboard focus and activation; restored-option route regression;
 exact scanned image digest promotion;
 virtualized nested schema navigation;
 persisted catalog option revalidation;
@@ -236,6 +236,10 @@ artifacts.
   Catalog option payloads are also bounded by depth, node count, collection width,
   key length, string length, finite numeric values, and JSON-compatible value types
   before provider calls.
+  Secret references may now carry an explicit `catalog:<name>` scope; control- and
+  data-plane resolution rejects a mismatched or scope-less caller before provider
+  construction, while legacy unscoped references remain supported. Descriptor
+  validation accepts only the bounded `secret`/`scope` shape.
 - X08 budgets and atomic reload: **implementing**; discovery now bounds provider
   iterators before materialization and checks cancellation/deadline per item while
   retaining deque traversal. Synthetic evaluation now bounds encoded fixture bytes
@@ -558,6 +562,18 @@ providers before Phase A's security/correctness prerequisites are accepted.
   passed.
 - Remaining gaps: live provider evolution, PostgreSQL barriers, external wheels,
   browser/consumer qualification, recovery, and release gates remain open.
+
+### X07 catalog-scoped secret references — `4ea921f`
+
+- State: implementing.
+- Behavior: provider options may use a bounded `{"secret": "name", "scope":
+  "catalog:<name>"}` reference. Control-plane discovery/schema loading and
+  data-plane published-config resolution pass the catalog scope and fail closed
+  on mismatches; legacy unscoped references still work.
+- Green evidence: secret-provider, descriptor-option, catalog API, and schema
+  suites passed (37), Ruff and `git diff --check` passed.
+- Remaining gaps: live secret providers, returned-location/DNS enforcement,
+  PostgreSQL, external wheels, browser, consumer, recovery, and release gates.
 
 ### X07 persisted catalog option revalidation — `54855b1`
 
