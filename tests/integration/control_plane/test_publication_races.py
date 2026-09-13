@@ -49,6 +49,17 @@ def _provision_asset(engine: Engine) -> tuple[UUID, UUID, UUID]:
                 tenant_id=tenant_id,
                 shard_key="race",
             )
+            store.replace_auth_providers(
+                cell_id=cell_id,
+                providers=[
+                    {
+                        "ordinal": 1,
+                        "module": "oidc.test.Provider",
+                        "args": {"issuer": "https://issuer.example"},
+                        "enabled": True,
+                    }
+                ],
+            )
             store.upsert_catalog(
                 cell_id=cell_id,
                 tenant_id=tenant_id,
@@ -192,4 +203,72 @@ def test_concurrent_asset_binding_updates_use_revision_cas(postgres_engine: Engi
         results = list(executor.map(replace_binding, ("default.users", "default.users_v2")))
 
     assert sum(result == asset_id for result in results) == 1
+    assert sum(isinstance(result, PublicationConflictError) for result in results) == 1
+
+
+def test_concurrent_runtime_settings_updates_use_revision_cas(postgres_engine: Engine) -> None:
+    cell_id, _tenant_id, _asset_id = _provision_asset(postgres_engine)
+    start_barrier = Barrier(2)
+
+    def replace_runtime(ttl: int) -> None | Exception:
+        with Session(postgres_engine, future=True) as session:
+            store = PublicationStore(session)
+            try:
+                start_barrier.wait(timeout=10)
+                store.upsert_runtime_settings(
+                    cell_id=cell_id,
+                    ticket_ttl_seconds=ttl,
+                    max_tickets=64,
+                    max_ticket_exchanges=2,
+                    expected_revision=0,
+                )
+                session.commit()
+                return None
+            except Exception as exc:  # assert the exact conflict below
+                session.rollback()
+                return exc
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(replace_runtime, (300, 600)))
+
+    assert sum(result is None for result in results) == 1
+    assert sum(isinstance(result, PublicationConflictError) for result in results) == 1
+
+
+def test_concurrent_auth_provider_replacements_use_revision_cas(postgres_engine: Engine) -> None:
+    cell_id, _tenant_id, _asset_id = _provision_asset(postgres_engine)
+    start_barrier = Barrier(2)
+
+    def replace_provider(issuer: str) -> None | Exception:
+        with Session(postgres_engine, future=True) as session:
+            store = PublicationStore(session)
+            try:
+                start_barrier.wait(timeout=10)
+                store.replace_auth_providers(
+                    cell_id=cell_id,
+                    providers=[
+                        {
+                            "ordinal": 1,
+                            "module": "oidc.test.Provider",
+                            "args": {"issuer": issuer},
+                            "enabled": True,
+                        }
+                    ],
+                    expected_revision=0,
+                )
+                session.commit()
+                return None
+            except Exception as exc:  # assert the exact conflict below
+                session.rollback()
+                return exc
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(
+            executor.map(
+                replace_provider,
+                ("https://issuer-a.example", "https://issuer-b.example"),
+            )
+        )
+
+    assert sum(result is None for result in results) == 1
     assert sum(isinstance(result, PublicationConflictError) for result in results) == 1
