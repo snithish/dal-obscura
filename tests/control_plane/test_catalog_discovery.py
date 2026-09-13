@@ -130,6 +130,40 @@ def test_public_catalog_discovery_rejects_missing_lifecycle_methods() -> None:
         )
 
 
+def test_public_catalog_discovery_rejects_forged_table_identifiers() -> None:
+    class ForgedIdentifier:
+        namespace = ("default",)
+        name = "users"
+
+    class PublicCatalog:
+        def validate_config(self, context):
+            del context
+
+        def list_namespaces(self, context, *, namespace=()):
+            del context, namespace
+            return (("default",),)
+
+        def list_tables(self, context, *, continuation=None, limit):
+            del context, continuation, limit
+            return type("Page", (), {"entries": (ForgedIdentifier(),), "continuation": None})()
+
+        def close(self):
+            return None
+
+    class Registry:
+        def load(self, kind, plugin_id):
+            del kind, plugin_id
+            return lambda config, context: PublicCatalog()
+
+    with pytest.raises(ValueError, match="invalid table identifier"):
+        discover_public_catalog_tables(
+            "analytics",
+            "fixture.catalog",
+            {},
+            plugin_registry=Registry(),
+        )
+
+
 def test_iceberg_discovery_rejects_namespace_explosion():
     with pytest.raises(ValueError, match="namespace limit"):
         discover_iceberg_tables(

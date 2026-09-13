@@ -66,7 +66,7 @@ def discover_public_catalog_tables(
     factory = plugin_registry.load("catalog", plugin_id)
     if not callable(factory):
         raise ValueError("Admitted catalog factory is invalid")
-    from dal_obscura_plugin_api import CatalogConfig, ExecutionContext
+    from dal_obscura_plugin_api import CatalogConfig, ExecutionContext, TableIdentifier
 
     context = ExecutionContext(
         deadline=datetime.now(timezone.utc) + timedelta(seconds=DEFAULT_DEADLINE_SECONDS),
@@ -93,7 +93,7 @@ def discover_public_catalog_tables(
             if not hasattr(page, "entries") or not hasattr(page, "continuation"):
                 raise ValueError("Catalog plugin returned an invalid discovery page")
             for identifier in page.entries:
-                if not hasattr(identifier, "namespace") or not hasattr(identifier, "name"):
+                if not isinstance(identifier, TableIdentifier):
                     raise ValueError("Catalog plugin returned an invalid table identifier")
                 name = ".".join((*identifier.namespace, identifier.name))
                 tables.append({"backend": plugin_id, "name": name, "table_identifier": name})
@@ -102,7 +102,13 @@ def discover_public_catalog_tables(
             token = page.continuation
             if token is None:
                 return tables
-            if not isinstance(token, str) or not token or token in seen:
+            if (
+                not isinstance(token, str)
+                or not token
+                or len(token) > 4_096
+                or any(ord(char) < 0x20 or ord(char) == 0x7F for char in token)
+                or token in seen
+            ):
                 raise ValueError("Catalog plugin returned an invalid continuation token")
             seen.add(token)
             continuation = token
