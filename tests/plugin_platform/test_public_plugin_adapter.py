@@ -247,3 +247,46 @@ def test_public_format_rejects_factory_descriptor_mismatch() -> None:
     )
     with pytest.raises(ValueError, match="mismatched descriptor"):
         table_format.get_schema()
+
+
+def test_public_format_rejects_false_stable_id_claim() -> None:
+    identifier = TableIdentifier(namespace=("default",), name="users")
+    handle = TableHandle(
+        catalog_plugin_id="manifest",
+        catalog_instance_id="fixture",
+        catalog_revision=1,
+        identifier=identifier,
+        format_plugin_id="parquet.dataset",
+        handle_version=1,
+    )
+    schema = pa.schema([pa.field("id", pa.int64())])
+
+    class LyingFormat:
+        def schema(self, value, context):
+            del value, context
+            from dal_obscura_plugin_api import SchemaDescriptor
+
+            return SchemaDescriptor(
+                schema_version=1,
+                fingerprint="0" * 64,
+                arrow_schema=schema,
+                stable_ids=True,
+            )
+
+        def plan(self, value, descriptor, context, *, projection, row_filter, max_tasks):
+            del value, descriptor, context, projection, row_filter, max_tasks
+            return []
+
+        def execute(self, task, context):
+            del task, context
+            return schema, []
+
+    table_format = PublicPluginTableFormat(
+        catalog_name="fixture",
+        table_name="default.users",
+        format="parquet.dataset",
+        format_factory=lambda value, context: LyingFormat(),
+        handle=handle,
+    )
+    with pytest.raises(ValueError, match="stable IDs"):
+        table_format.get_schema()
