@@ -153,6 +153,11 @@ export type AuditEvent = {
   created_at: string;
 };
 
+export type AuditEventPage = {
+  items: AuditEvent[];
+  next_cursor: string | null;
+};
+
 export type Catalog = {
   id: string;
   name: string;
@@ -320,6 +325,14 @@ export const controlPlane = {
     return request<PolicyVersionPage>(`/v1/policy-versions/page${suffix}`);
   },
   listAuditEvents: (assetId?: string) => request<AuditEvent[]>("/v1/audit/events" + (assetId ? "?asset_id=" + encodeURIComponent(assetId) : "")),
+  listAuditEventsPage: async (params: { limit?: number; cursor?: string; assetId?: string } = {}) => {
+    const query = new URLSearchParams();
+    if (params.limit !== undefined) query.set("limit", String(params.limit));
+    if (params.cursor) query.set("cursor", params.cursor);
+    if (params.assetId) query.set("asset_id", params.assetId);
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    return request<AuditEventPage>(`/v1/audit/events/page${suffix}`);
+  },
   listAssetHistory: (assetId: string) => request<PolicyVersion[]>(`/v1/assets/${assetId}/policy-versions`),
   getPublicationOperation: (assetId: string, idempotencyKey: string) => request<{ id: string; status: string; result: { asset_id: string; policy_version: number } }>(`/v1/assets/${assetId}/policy-operations/${encodeURIComponent(idempotencyKey)}`),
   getPolicyVersion: (assetId: string, policyVersion: number) => request<PolicyVersionDetail>(`/v1/assets/${assetId}/policy-versions/${policyVersion}`),

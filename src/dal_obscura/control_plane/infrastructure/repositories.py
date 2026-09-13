@@ -9,7 +9,8 @@ from datetime import datetime
 from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, delete, func, or_, select, tuple_, update
+from sqlalchemy import String, and_, delete, exists, func, or_, select, tuple_, update
+from sqlalchemy import cast as sql_cast
 from sqlalchemy.orm import Session
 
 from dal_obscura.common.config_store.orm import (
@@ -116,6 +117,14 @@ class AssetPage:
 @dataclass(frozen=True)
 class PolicyHistoryPage:
     """Cursor-paginated immutable policy history."""
+
+    items: list[dict[str, object]]
+    next_cursor: str | None
+
+
+@dataclass(frozen=True)
+class AuditEventPage:
+    """Cursor-paginated audit events."""
 
     items: list[dict[str, object]]
     next_cursor: str | None
@@ -319,11 +328,13 @@ class PublicationStore:
     ) -> UUID:
         self.lock_cell_for_publication(cell_id)
         existing = self._session.scalar(
-            select(CatalogRecord).where(
+            select(CatalogRecord)
+            .where(
                 CatalogRecord.cell_id == cell_id,
                 CatalogRecord.tenant_id == tenant_id,
                 CatalogRecord.name == name,
-            ).with_for_update()
+            )
+            .with_for_update()
         )
         if existing is None:
             if expected_revision not in (None, 0):
@@ -942,18 +953,14 @@ class PublicationStore:
         """Locks one asset row for the duration of a publication transaction."""
 
         record = self._session.scalar(
-            select(AssetRecord)
-            .where(AssetRecord.id == asset_id)
-            .with_for_update()
+            select(AssetRecord).where(AssetRecord.id == asset_id).with_for_update()
         )
         if record is None:
             raise LookupError(f"No asset {asset_id}")
 
     def _locked_asset(self, asset_id: UUID) -> AssetRecord | None:
         return self._session.scalar(
-            select(AssetRecord)
-            .where(AssetRecord.id == asset_id)
-            .with_for_update()
+            select(AssetRecord).where(AssetRecord.id == asset_id).with_for_update()
         )
 
     def get_asset_workspace_context(self, asset_id: UUID) -> WorkspaceContext:
@@ -1107,11 +1114,13 @@ class PublicationStore:
         if self._locked_asset(asset_id) is None:
             raise LookupError(f"No asset {asset_id}")
         record = self._session.scalar(
-            select(AssetPolicyDraftRecord).where(
+            select(AssetPolicyDraftRecord)
+            .where(
                 AssetPolicyDraftRecord.asset_id == asset_id,
                 AssetPolicyDraftRecord.author_principal == author_principal,
                 AssetPolicyDraftRecord.discarded_at.is_(None),
-            ).with_for_update()
+            )
+            .with_for_update()
         )
         current_revision = 0 if record is None else record.revision
         if current_revision != expected_revision:
@@ -1518,6 +1527,97 @@ class PublicationStore:
             }
             for record in records
         ]
+
+    def list_audit_events_page(
+        self,
+        context: WorkspaceContext,
+        *,
+        asset_id: UUID | None = None,
+        principals: set[str] | None = None,
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> AuditEventPage:
+        """Returns a bounded, tenant-scoped audit page using stable keyset order."""
+
+        if limit <= 0:
+            raise ValueError("Audit page limit must be positive")
+        query = select(AuditEventRecord).where(
+            AuditEventRecord.cell_id == context.cell_id,
+            AuditEventRecord.tenant_id == context.tenant_id,
+        )
+        if asset_id is not None:
+            query = query.where(
+                AuditEventRecord.resource_type == "asset",
+                AuditEventRecord.resource_id == str(asset_id),
+            )
+        if principals is not None:
+            if not principals:
+                return AuditEventPage(items=[], next_cursor=None)
+            visible_asset = exists(
+                select(1).where(
+                    func.replace(sql_cast(AssetRecord.id, String), "-", "")
+                    == func.replace(AuditEventRecord.resource_id, "-", ""),
+                    or_(
+                        exists(
+                            select(1).where(
+                                AssetOwnerRecord.asset_id == AssetRecord.id,
+                                AssetOwnerRecord.principal.in_(principals),
+                            )
+                        ),
+                        exists(
+                            select(1).where(
+                                AssetGrantRecord.asset_id == AssetRecord.id,
+                                AssetGrantRecord.principal.in_(principals),
+                                AssetGrantRecord.capability == "read",
+                            )
+                        ),
+                    ),
+                )
+            )
+            query = query.where(
+                AuditEventRecord.resource_type == "asset",
+                visible_asset,
+            )
+        if cursor:
+            created_at, event_id = _decode_audit_cursor(cursor)
+            query = query.where(
+                or_(
+                    AuditEventRecord.created_at < created_at,
+                    and_(
+                        AuditEventRecord.created_at == created_at,
+                        AuditEventRecord.id < event_id,
+                    ),
+                )
+            )
+        records = list(
+            self._session.scalars(
+                query.order_by(
+                    AuditEventRecord.created_at.desc(), AuditEventRecord.id.desc()
+                ).limit(limit + 1)
+            )
+        )
+        next_cursor = None
+        if len(records) > limit:
+            records = records[:limit]
+            last = records[-1]
+            next_cursor = _encode_audit_cursor(last.created_at, last.id)
+        return AuditEventPage(
+            items=[
+                {
+                    "id": str(record.id),
+                    "actor": record.actor_principal,
+                    "action": record.action,
+                    "resource_type": record.resource_type,
+                    "resource_id": record.resource_id,
+                    "outcome": record.outcome,
+                    "details": dict(record.details_json),
+                    "correlation_id": record.correlation_id,
+                    "created_at": _isoformat(record.created_at),
+                }
+                for record in records
+            ],
+            next_cursor=next_cursor,
+        )
 
     def get_publication_operation(
         self,
@@ -2031,6 +2131,27 @@ def _decode_policy_history_cursor(value: str) -> tuple[datetime, str, UUID, int]
         )
     except Exception as exc:
         raise ValueError("Invalid policy history cursor") from exc
+
+
+def _encode_audit_cursor(created_at: datetime, event_id: UUID) -> str:
+    raw = json.dumps(
+        {"created_at": _isoformat(created_at), "id": str(event_id)},
+        separators=(",", ":"),
+    )
+    return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
+
+
+def _decode_audit_cursor(value: str) -> tuple[datetime, UUID]:
+    try:
+        padded = value + "=" * (-len(value) % 4)
+        raw = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
+        data = json.loads(raw)
+        return (
+            datetime.fromisoformat(str(data["created_at"]).replace("Z", "+00:00")),
+            UUID(str(data["id"])),
+        )
+    except Exception as exc:
+        raise ValueError("Invalid audit cursor") from exc
 
 
 def _escape_like(value: str) -> str:

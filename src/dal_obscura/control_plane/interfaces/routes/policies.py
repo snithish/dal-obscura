@@ -246,4 +246,20 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             )
         )
 
+    @api.get("/v1/audit/events/page")
+    def list_audit_events_page(
+        asset_id: UUID | None = None,
+        limit: int = Query(default=100, ge=1, le=200),
+        cursor: str | None = Query(default=None, max_length=512),
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> object:
+        return deps.with_service(
+            lambda service: service.list_audit_events_page(
+                actor=actor,
+                asset_id=asset_id,
+                limit=limit,
+                cursor=cursor,
+            )
+        )
+
     return api

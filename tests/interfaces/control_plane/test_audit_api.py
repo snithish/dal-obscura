@@ -60,3 +60,42 @@ def test_audit_limit_is_bounded() -> None:
     client = _client()
     response = client.get("/v1/audit/events?limit=201", headers=ADMIN_HEADERS)
     assert response.status_code == 422
+
+
+def test_audit_page_uses_keyset_cursor_and_preserves_scope() -> None:
+    client = _client()
+    asset = _provision_draft(client)
+    client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["asset-owner"]},
+        headers=ADMIN_HEADERS,
+    )
+    client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        json={"owners": ["asset-owner", "backup-owner"]},
+        headers=ADMIN_HEADERS,
+    )
+    first = client.get("/v1/audit/events/page?limit=1", headers=_bearer("owner-token"))
+    assert first.status_code == 200
+    first_payload = first.json()
+    assert len(first_payload["items"]) == 1
+    assert first_payload["next_cursor"]
+
+    second = client.get(
+        "/v1/audit/events/page?limit=1&cursor=" + first_payload["next_cursor"],
+        headers=_bearer("owner-token"),
+    )
+    assert second.status_code == 200
+    second_payload = second.json()
+    assert len(second_payload["items"]) == 1
+    assert second_payload["items"][0]["id"] != first_payload["items"][0]["id"]
+    assert all(
+        item["resource_id"] == asset["id"]
+        for item in first_payload["items"] + second_payload["items"]
+    )
+
+    invalid = client.get(
+        "/v1/audit/events/page?cursor=invalid",
+        headers=ADMIN_HEADERS,
+    )
+    assert invalid.status_code == 400

@@ -302,6 +302,7 @@ class AuditEventRecord(Base):
     __table_args__ = (
         Index("ix_audit_events_cell_created", "cell_id", "created_at"),
         Index("ix_audit_events_tenant_created", "tenant_id", "created_at"),
+        Index("ix_audit_events_workspace_keyset", "cell_id", "tenant_id", "created_at", "id"),
         Index("ix_audit_events_resource", "resource_type", "resource_id"),
     )
 

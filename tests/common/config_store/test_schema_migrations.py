@@ -72,7 +72,7 @@ def test_migrate_config_store_is_idempotent() -> None:
     with engine.connect() as connection:
         version = connection.scalar(text("SELECT version_num FROM alembic_version"))
 
-    assert version == "20260913_0015"
+    assert version == "20260913_0016"
 
 
 def test_migrate_config_store_upgrades_legacy_runtime_settings_column() -> None:
