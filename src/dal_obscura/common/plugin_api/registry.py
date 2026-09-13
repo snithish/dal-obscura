@@ -272,16 +272,37 @@ def load_static_plugin_descriptor(entry: metadata.EntryPoint) -> PluginDescripto
         "capabilities",
         "config_schema",
         "display_name",
+        "descriptors",
     }
     if set(payload) - allowed:
         raise PluginAdmissionError("Plugin static descriptor contains unknown fields")
-    kind = payload.get("kind")
-    plugin_id = payload.get("plugin_id")
-    api_version = payload.get("api_version")
-    config_version = payload.get("config_version")
-    capabilities = payload.get("capabilities", [])
-    config_schema = payload.get("config_schema", {})
-    display_name = payload.get("display_name", "")
+    descriptor_payload: Mapping[str, object]
+    raw_descriptors = payload.get("descriptors")
+    if raw_descriptors is not None:
+        if not isinstance(raw_descriptors, list) or not raw_descriptors:
+            raise PluginAdmissionError("Plugin static descriptors are invalid")
+        candidates = [
+            item
+            for item in raw_descriptors
+            if isinstance(item, Mapping)
+            and item.get("kind") == expected_kind
+            and item.get("plugin_id") == str(entry.name)
+        ]
+        if len(candidates) != 1:
+            raise PluginAdmissionError("Plugin static descriptor identity is ambiguous")
+        descriptor_payload = candidates[0]
+        descriptor_allowed = allowed - {"descriptors"}
+        if set(descriptor_payload) - descriptor_allowed:
+            raise PluginAdmissionError("Plugin static descriptor contains unknown fields")
+    else:
+        descriptor_payload = payload
+    kind = descriptor_payload.get("kind")
+    plugin_id = descriptor_payload.get("plugin_id")
+    api_version = descriptor_payload.get("api_version")
+    config_version = descriptor_payload.get("config_version")
+    capabilities = descriptor_payload.get("capabilities", [])
+    config_schema = descriptor_payload.get("config_schema", {})
+    display_name = descriptor_payload.get("display_name", "")
     if kind != expected_kind or plugin_id != str(entry.name):
         raise PluginAdmissionError("Plugin static descriptor identity mismatch")
     if not isinstance(api_version, str) or not isinstance(config_version, int):

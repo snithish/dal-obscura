@@ -348,6 +348,36 @@ def test_static_descriptor_loader_reads_metadata_without_factory_import() -> Non
     assert descriptor.capabilities == frozenset({"nested"})
 
 
+def test_static_descriptor_loader_selects_matching_descriptor_from_multi_kind_wheel() -> None:
+    descriptor_json = (
+        '{"descriptors":['
+        '{"kind":"catalog","plugin_id":"manifest","api_version":"1",'
+        '"config_version":1,"display_name":"Manifest"},'
+        '{"kind":"table_format","plugin_id":"parquet.dataset",'
+        '"api_version":"1","config_version":1,"display_name":"Parquet"}'
+        ']}'
+    )
+    distribution = SimpleNamespace(
+        name="manifest-wheel",
+        version="1.0.0",
+        read_text=lambda _: descriptor_json,
+    )
+    entry = cast(
+        _Entry,
+        SimpleNamespace(
+            name="parquet.dataset",
+            group="dal_obscura.table_formats.v1",
+            dist=distribution,
+        ),
+    )
+
+    descriptor = load_static_plugin_descriptor(cast(metadata.EntryPoint, entry))
+
+    assert descriptor.kind == "table_format"
+    assert descriptor.plugin_id == "parquet.dataset"
+    assert descriptor.display_name == "Parquet"
+
+
 def test_static_descriptor_loader_rejects_identity_mismatch() -> None:
     distribution = SimpleNamespace(
         name="rest-wheel",
