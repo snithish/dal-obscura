@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pyarrow as pa
 import pytest
+from dal_obscura_plugin_api import ExecutionContext as PublicExecutionContext
 
 from dal_obscura.common.plugin_api.contracts import (
     CatalogConfig,
+    ExecutionContext,
     PluginDescriptor,
     SchemaDescriptor,
 )
@@ -81,3 +85,23 @@ def test_plugin_contract_value_objects_validate_generation_and_schema_identity()
 
     with pytest.raises(ValueError, match="SHA-256"):
         SchemaDescriptor(schema_version=1, fingerprint="bad", arrow_schema=pa.schema([]))
+
+
+@pytest.mark.parametrize("context_type", [ExecutionContext, PublicExecutionContext])
+def test_execution_context_rejects_ambiguous_or_unbounded_values(context_type) -> None:
+    valid = {
+        "deadline": datetime.now(timezone.utc),
+        "correlation_id": "request-1",
+        "capabilities": frozenset({"nested_schema"}),
+    }
+    context = context_type(**valid)
+    assert context.correlation_id == "request-1"
+
+    with pytest.raises(ValueError, match="timezone-aware"):
+        context_type(**{**valid, "deadline": datetime.now()})
+    with pytest.raises(ValueError, match="correlation ID"):
+        context_type(**{**valid, "correlation_id": "\n"})
+    with pytest.raises(ValueError, match="capabilities"):
+        context_type(**{**valid, "capabilities": frozenset({""})})
+    with pytest.raises(ValueError, match="cancellation"):
+        context_type(**{**valid, "cancel_check": "later"})

@@ -132,6 +132,21 @@ class ExecutionContext:
     capabilities: frozenset[str] = frozenset()
     cancel_check: Callable[[], bool] | None = None
 
+    def __post_init__(self) -> None:
+        if self.deadline.tzinfo is None or self.deadline.utcoffset() is None:
+            raise ValueError("Execution deadline must be timezone-aware")
+        if not self.correlation_id or len(self.correlation_id) > 96:
+            raise ValueError("Execution correlation ID must be non-empty and bounded")
+        if any(ord(char) < 0x20 or ord(char) == 0x7F for char in self.correlation_id):
+            raise ValueError("Execution correlation ID contains control characters")
+        if len(self.capabilities) > 64 or any(
+            not isinstance(capability, str) or not capability or len(capability) > 64
+            for capability in self.capabilities
+        ):
+            raise ValueError("Execution capabilities must be bounded non-empty strings")
+        if self.cancel_check is not None and not callable(self.cancel_check):
+            raise ValueError("Execution cancellation check must be callable")
+
 
 @dataclass(frozen=True, slots=True)
 class PluginError(Exception):
