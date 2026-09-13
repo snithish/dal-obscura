@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `a334c42` (operator lock-generation docs;
+Implementation follow-up through `12a2043` (exact UI image/release manifest CI;
+operator lock-generation docs;
 review-probe reconciliation;
 installed-wheel plugin-lock CI;
 deterministic plugin-lock builder;
@@ -3012,6 +3013,20 @@ otherwise continue locally executable X06/X07/X08 acceptance work
   `git diff --check` passed.
 - Remaining gaps: production artifact signing, deployment execution, and live
   plugin/provider/consumer evidence remain open.
+
+### X22 exact UI image and candidate manifest gate — `a91d335`, `12a2043`
+
+- State: implementing.
+- Behavior: CI now builds the production `ui/Dockerfile` image on both advertised
+  architectures, scans the exact Buildx digest, promotes only that digest, and
+  exposes it to the server-image job. The server job uploads a release manifest
+  containing commit, server/UI digests, plugin-lock digest, tested platforms,
+  dependency-audit status, and image-scan status, plus a checksum sidecar.
+- Green evidence: CI workflow contract suite (8 passed), YAML parse, targeted
+  Ruff, and `git diff --check` passed.
+- Remaining gaps: hosted execution, signed attestations/SBOM retrieval, exact
+  wheel/image artifact comparison, browser/provider/consumer/recovery/capacity
+  qualification, and independent review remain open.
 
 ## Evidence entry template
 
