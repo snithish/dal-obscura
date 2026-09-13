@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `0df956a` (manifest standalone boundary;
+Implementation follow-up through `7791809` (typed field-ID range;
+manifest standalone boundary;
 legacy broad-grant admission guard;
 typed path budgets;
 quoted JSON path boundaries;
@@ -378,6 +379,9 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   brackets and escaped characters remain addressable without delimiter bugs.
   Typed field paths now enforce shared segment-count, field-name length, and
   printable-text limits before schema resolution or transport execution.
+  Field IDs in typed paths are also constrained to nonnegative 32-bit integers,
+  matching the protobuf contract and preventing malformed identity values from
+  reaching schema resolution.
   Legacy published policies without persisted schema admission now fail closed
   when they contain wildcard, mask, or nested-parent selectors, preventing
   schema additions from expanding access.
@@ -627,6 +631,16 @@ providers before Phase A's security/correctness prerequisites are accepted.
   Ruff, Ty, and `git diff --check`.
 - Remaining gaps: clean wheel installation and live manifest/consumer
   qualification remain open.
+
+### X05 typed field-ID range — `7791809`
+
+- State: implementing.
+- Behavior: typed path construction rejects boolean, negative, and out-of-range
+  field IDs before wire serialization or schema resolution.
+- Green evidence: field-path suite (23 passed), Ruff, Ty, and
+  `git diff --check`.
+- Remaining gaps: Flight/browser nested-path evidence and full schema-boundary
+  acceptance remain open.
 
 ### X06 legacy broad-grant admission guard — `c43b15e`
 
