@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import type { Asset, AssetGrant, AuditEvent, AuthProvider, Catalog, CatalogDiagnostic, Mask, PluginDescriptor, PluginPair, PluginState, PolicyRule, PolicyVersion, Preview, RuntimeSettings, SchemaNode, Session, SessionOptions, UiAuthConfig, WorkspaceObservations, WorkspacePublication, WorkspaceSummary } from "./api";
 import { controlPlane } from "./api";
-import { demoAsset, demoRules } from "./fixtures";
 import { isCurrentEpoch } from "./lifecycle";
 import { pageFromHash, type UiPage } from "./navigation";
 import { flattenSchemaTree } from "./schema_tree";
@@ -11,7 +10,7 @@ import "./styles.css";
 
 type Page = UiPage;
 type SaveState = "saved" | "saving" | "unsaved" | "failed";
-type WorkspaceState = "loading" | "ready" | "demo" | "unavailable";
+type WorkspaceState = "loading" | "ready" | "unavailable";
 type ManagementData = { history?: PolicyVersion[]; historyNextCursor?: string | null; events?: AuditEvent[]; eventsNextCursor?: string | null; catalogs?: Catalog[]; tables?: Array<Record<string, unknown>>; runtime?: RuntimeSettings | null; providers?: AuthProvider[]; publications?: WorkspacePublication[]; summary?: WorkspaceSummary; observations?: WorkspaceObservations; grants?: AssetGrant[]; plugins?: PluginDescriptor[]; pluginStates?: PluginState[]; pluginPairs?: PluginPair[] };
 type AuditFilters = { actor?: string; action?: string; resourceType?: string; outcome?: string; correlationId?: string; createdAfter?: string; createdBefore?: string };
 
@@ -92,14 +91,7 @@ function App() {
   const managementEpoch = useRef(0);
   const connectionsEpoch = useRef(0);
   const [logoutPending, setLogoutPending] = useState(false);
-  const isDemo = workspace === "demo";
-
   useEffect(() => {
-    if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("demo")) {
-      setAssets([demoAsset]); setAsset(demoAsset); setRules(demoRules); setSelectedField(demoAsset.schema_fields[0].name);
-      setWorkspace("demo"); setNotice("Demo workspace. It never writes to the control plane.");
-      return;
-    }
     void loadInitialWorkspace();
   }, []);
 
@@ -143,9 +135,9 @@ function App() {
   }, [saveState]);
 
   useEffect(() => {
-    if (page === "assets" || !session || isDemo) return;
+    if (page === "assets" || !session) return;
     void loadManagement(page);
-  }, [page, session, isDemo, auditFilters]);
+  }, [page, session, auditFilters]);
 
   async function loadManagement(destination: Page) {
     const epoch = ++managementEpoch.current;
@@ -273,20 +265,6 @@ function App() {
     searchTimer.current = window.setTimeout(() => void refreshAssetInventory(value), 250);
   }
 
-  async function demoLogin(loginHint: string) {
-    setLoggingIn(true);
-    try {
-      await controlPlane.demoLogin(loginHint);
-      loadEpoch.current += 1;
-      await loadInitialWorkspace();
-    } catch {
-      setWorkspace("unavailable");
-      setNotice("Sign-in failed. No policy data was loaded.");
-    } finally {
-      setLoggingIn(false);
-    }
-  }
-
   async function bootstrapLogin() {
     const token = bootstrapToken.trim();
     if (!token) {
@@ -382,7 +360,7 @@ function App() {
       const [fullAsset, schema, history, grants] = await Promise.all([controlPlane.getAsset(assetId), controlPlane.getSchema(assetId), controlPlane.listAssetHistory(assetId).catch(() => []), controlPlane.listGrants(assetId).catch(() => [])]);
       if (epoch !== loadEpoch.current) return;
       fullAsset.schema = schema;
-      const draft = isDemo ? null : await controlPlane.getDraft(assetId, selectedDraftId);
+      const draft = await controlPlane.getDraft(assetId, selectedDraftId);
       if (epoch !== loadEpoch.current) return;
       const effectiveRules = draft?.rules ?? [];
       setManagementData((current) => ({ ...current, history, grants }));
@@ -449,20 +427,18 @@ function App() {
     const loadScope = loadEpoch.current;
     setSaveState("saving");
     try {
-      if (!isDemo) {
-        const saved = await controlPlane.saveDraft(assetId, revision, rules);
-        if (loadScope !== loadEpoch.current || editEpoch !== draftEditEpoch.current) {
-          if (loadScope === loadEpoch.current) setSaveState("unsaved");
-          return;
-        }
-        setDraftRevision(saved.revision);
-        setDraftId(saved.id);
-      }
+      const saved = await controlPlane.saveDraft(assetId, revision, rules);
       if (loadScope !== loadEpoch.current || editEpoch !== draftEditEpoch.current) {
         if (loadScope === loadEpoch.current) setSaveState("unsaved");
         return;
       }
-      setSaveState("saved"); setReviewToken(null); setNotice(isDemo ? "Demo draft resets when this page closes." : "Policy draft saved to the control plane.");
+      setDraftRevision(saved.revision);
+      setDraftId(saved.id);
+      if (loadScope !== loadEpoch.current || editEpoch !== draftEditEpoch.current) {
+        if (loadScope === loadEpoch.current) setSaveState("unsaved");
+        return;
+      }
+      setSaveState("saved"); setReviewToken(null); setNotice("Policy draft saved to the control plane.");
     } catch {
       if (loadScope !== loadEpoch.current || editEpoch !== draftEditEpoch.current) return;
       setSaveState("failed"); setNotice("Save failed. The unsaved draft remains in this browser.");
@@ -470,7 +446,7 @@ function App() {
   }
   async function runPreview() {
     if (!asset) return;
-    if (!isDemo && saveState !== "saved") {
+    if (saveState !== "saved") {
       setNotice("Save the draft before running a server-side policy test.");
       return;
     }
@@ -483,9 +459,9 @@ function App() {
         if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") throw new Error("Claims must be a JSON object");
         claims = parsed as Record<string, unknown>;
       }
-      const result: Preview = isDemo ? { decision: "allow", allowed_columns: activeRule?.columns ?? [], masks: activeRule?.masks ?? {}, row_filter: activeRule?.row_filter ?? null, policy_version: 1 } : await controlPlane.evaluate(asset.id, { principal: previewPrincipal.trim(), groups: previewGroups.split(",").map((value) => value.trim()).filter(Boolean), claims, draft_id: draftId ?? undefined, draft_revision: draftRevision });
+      const result: Preview = await controlPlane.evaluate(asset.id, { principal: previewPrincipal.trim(), groups: previewGroups.split(",").map((value) => value.trim()).filter(Boolean), claims, draft_id: draftId ?? undefined, draft_revision: draftRevision });
       if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
-      setPreview(result); setReviewToken(null); setNotice(isDemo ? "Demo evaluation is local and cannot be published." : `Server-side evaluation completed: ${result.decision === "allow" ? "allowed" : "denied"}.`);
+      setPreview(result); setReviewToken(null); setNotice(`Server-side evaluation completed: ${result.decision === "allow" ? "allowed" : "denied"}.`);
     } catch {
       if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
       setPreview(null); setReviewToken(null); setNotice("Policy test could not run. This draft is not validated.");
@@ -493,7 +469,7 @@ function App() {
   }
 
   async function requestReview() {
-    if (!asset || isDemo || saveState !== "saved" || publishPending) return;
+    if (!asset || saveState !== "saved" || publishPending) return;
     const loadScope = loadEpoch.current;
     const editScope = draftEditEpoch.current;
     try {
@@ -509,7 +485,7 @@ function App() {
   }
 
   async function publishAsset() {
-    if (!asset || isDemo || !reviewToken || publishPending) return;
+    if (!asset || !reviewToken || publishPending) return;
     const loadScope = loadEpoch.current;
     const editScope = draftEditEpoch.current;
     const idempotencyKey = crypto.randomUUID();
@@ -541,7 +517,7 @@ function App() {
   }
 
   async function restorePolicyVersion(policyVersion: number) {
-    if (!asset || isDemo) return;
+    if (!asset) return;
     if (saveState === "unsaved" && !window.confirm("You have unsaved policy changes. Restore this published version over them?")) return;
     const loadScope = loadEpoch.current;
     const editScope = draftEditEpoch.current;
@@ -560,13 +536,13 @@ function App() {
     }
   }
 
-  const signedOut = !isDemo && (workspace === "unavailable" || (workspace === "loading" && !session));
-  const accessView = <WorkspaceMessage showAuth={workspace === "unavailable"} title={workspace === "loading" ? "Loading governed workspace" : "Sign in to your workspace"} message={workspace === "loading" ? "Checking your workspace access and available assets." : notice} retry={workspace === "unavailable" ? loadInitialWorkspace : undefined} authConfig={authConfig} sessionOptions={sessionOptions} bootstrapToken={bootstrapToken} onBootstrapToken={setBootstrapToken} onBootstrapLogin={() => void bootstrapLogin()} onLogin={demoLogin} loggingIn={loggingIn} authError={authError} />;
+  const signedOut = workspace === "unavailable" || (workspace === "loading" && !session);
+  const accessView = <WorkspaceMessage showAuth={workspace === "unavailable"} title={workspace === "loading" ? "Loading governed workspace" : "Sign in to your workspace"} message={workspace === "loading" ? "Checking your workspace access and available assets." : notice} retry={workspace === "unavailable" ? loadInitialWorkspace : undefined} authConfig={authConfig} sessionOptions={sessionOptions} bootstrapToken={bootstrapToken} onBootstrapToken={setBootstrapToken} onBootstrapLogin={() => void bootstrapLogin()} loggingIn={loggingIn} authError={authError} />;
   return <div className="app-shell">
     <aside className="sidebar" aria-label="Primary navigation">
       <a className="brand" href="#assets" onClick={() => navigateTo("assets")}>DAL OBSCURA<span>GOVERNANCE</span></a>
       <nav>{(["assets", "changes", "activity", "connections", "settings"] as Page[]).map((item) => <button key={item} className={page === item ? "nav-item active" : "nav-item"} onClick={() => navigateTo(item)}>{item}</button>)}</nav>
-      <div className="sidebar-foot"><span className={"status-dot " + workspace} /> Workspace: {workspace === "ready" || isDemo ? "connected" : "unavailable"}<br /><small>{workspaceLabel(workspace)}{asset?.catalog ? ` · catalog ${asset.catalog}` : ""}</small></div>
+      <div className="sidebar-foot"><span className={"status-dot " + workspace} /> Workspace: {workspace === "ready" ? "connected" : "unavailable"}<br /><small>{workspaceLabel(workspace)}{asset?.catalog ? ` · catalog ${asset.catalog}` : ""}</small></div>
     </aside>
     <main>
       <header className="topbar"><div><span className="eyebrow">{page === "assets" ? "ASSET WORKSPACE" : page.toUpperCase()}</span><h1>{page === "assets" ? asset?.name ?? "Assets" : titleFor(page)}</h1></div><div className="actor"><span className="avatar">{session?.principal.slice(0, 1).toUpperCase() ?? "?"}</span><div><strong>{session?.principal ?? "Not signed in"}</strong><small>{session?.platform_admin ? "Platform admin" : "Authenticated user"}{session?.issuer ? ` · ${session.issuer}` : ""}</small></div>{session && <button className="text-button" onClick={() => void logout()}>Sign out</button>}{logoutPending && <button className="text-button" onClick={() => void logout()}>Retry sign out</button>}</div></header>
@@ -858,10 +834,10 @@ function SettingsView({ runtime, providers, publications, onReload }: { runtime?
   const stagedCount = publications.filter((publication) => !publication.active).length;
   return <section className="management-view"><div className="management-head"><div><span className="eyebrow">SETTINGS</span><h2>Runtime and identity</h2><p className="muted">These controls affect ticket fan-out and authentication. Changes are server-validated and do not expose secrets.</p></div><button className="secondary" onClick={onReload}>Refresh</button></div><div className="form-card"><h3>Runtime limits</h3><div className="form-grid three"><label>Ticket TTL (seconds)<input type="number" min="1" value={form.ticket_ttl_seconds} onChange={(event) => setForm({ ...form, ticket_ttl_seconds: Number(event.target.value) })} /></label><label>Max tickets<input type="number" min="1" value={form.max_tickets} onChange={(event) => setForm({ ...form, max_tickets: Number(event.target.value) })} /></label><label>Ticket exchanges<input type="number" min="1" value={form.max_ticket_exchanges} onChange={(event) => setForm({ ...form, max_ticket_exchanges: Number(event.target.value) })} /></label></div><button className="primary" onClick={() => void save()}>Save runtime settings</button>{message && <p className="notice">{message}</p>}</div><div className="form-card"><h3>Configuration state</h3>{active ? <p><span className="status-dot ready" /> Serving generation <code>{active.id.slice(0, 12)}</code> · {active.asset_count} assets · {active.catalog_count} catalogs</p> : <p><span className="status-dot unavailable" /> No generation is serving yet.</p>}<p className="help">{stagedCount ? `${stagedCount} staged generation${stagedCount === 1 ? " is" : "s are"} waiting for explicit administrator activation.` : "Save settings creates draft configuration; create and activate a snapshot from Connections when ready."}</p></div><div className="form-card"><h3>Authentication providers</h3>{providerRows.length ? providerRows.map((provider, index) => <div className="provider-editor" key={provider.id}><div className="management-head"><div><strong>OIDC provider {index + 1}</strong><small>{provider.module}</small></div><label className="checkbox-label"><input type="checkbox" checked={provider.enabled} onChange={(event) => setProviderRows((current) => current.map((item, row) => row === index ? { ...item, enabled: event.target.checked } : item))} /> Enabled</label></div><div className="form-grid"><label>Issuer<input value={String(provider.args.issuer ?? "")} onChange={(event) => updateProvider(index, "issuer", event.target.value)} /></label><label>Audience<input value={String(provider.args.audience ?? "")} onChange={(event) => updateProvider(index, "audience", event.target.value)} /></label><label>JWKS URL<input value={String(provider.args.jwks_url ?? "")} onChange={(event) => updateProvider(index, "jwks_url", event.target.value)} /></label><label>Group claims<input value={Array.isArray(provider.args.group_claims) ? provider.args.group_claims.join(", ") : String(provider.args.group_claims ?? "groups")} onChange={(event) => updateProvider(index, "group_claims", event.target.value)} /></label></div><p className="help">Secret references remain redacted and are preserved by the server. Provider changes stay staged until an administrator activates a reviewed snapshot.</p></div>) : <div className="empty-result"><strong>No provider configured</strong><p>Production startup must fail closed until an approved identity provider is enabled.</p></div>}<button className="primary" onClick={() => void saveProviders()}>Save identity providers</button></div></section>;
 }
-function WorkspaceMessage({ showAuth = false, title, message, retry, authConfig, sessionOptions, bootstrapToken, onBootstrapToken, onBootstrapLogin, onLogin, loggingIn, authError }: { showAuth?: boolean; title: string; message: string; retry?: () => void; authConfig?: UiAuthConfig | null; sessionOptions?: SessionOptions | null; bootstrapToken?: string; onBootstrapToken?: (value: string) => void; onBootstrapLogin?: () => void; onLogin?: (loginHint: string) => void; loggingIn?: boolean; authError?: string }) {
-  const hasLoginMethod = Boolean(authConfig?.authority || sessionOptions?.bootstrap_enabled || authConfig?.login_shortcuts?.some((shortcut) => shortcut.demo_login_path));
-  return <section className={showAuth ? "coming-soon auth-panel" : "coming-soon"}><span className="eyebrow">{showAuth ? "WORKSPACE ACCESS" : "WORKSPACE"}</span><h2>{title}</h2><p>{message}</p>{showAuth && authConfig?.authority && <button className="primary login-shortcut" onClick={controlPlane.startLogin}>Sign in with SSO</button>}{showAuth && sessionOptions?.bootstrap_enabled && onBootstrapToken && onBootstrapLogin && <form className="bootstrap-login" onSubmit={(event) => { event.preventDefault(); onBootstrapLogin(); }}><label>Local control-plane token<input type="password" autoComplete="current-password" value={bootstrapToken ?? ""} onChange={(event) => onBootstrapToken(event.target.value)} placeholder="Paste the configured local token" /></label><button className="secondary" type="submit" disabled={loggingIn}>{loggingIn ? "Signing in…" : "Sign in locally"}</button></form>}{showAuth && authConfig?.login_shortcuts?.map((shortcut) => shortcut.demo_login_path && onLogin ? <button className="secondary login-shortcut" disabled={loggingIn} key={shortcut.login_hint} onClick={() => onLogin(shortcut.login_hint)}>{loggingIn ? "Signing in…" : `Use demo persona · ${shortcut.label}`}</button> : null)}{showAuth && authError && <p className="auth-error" role="alert">{authError}</p>}{showAuth && !hasLoginMethod && <p className="help">No browser identity provider is configured. Ask an operator to configure OIDC before signing in.</p>}{retry && <button className="secondary" onClick={() => void retry()}>Retry connection</button>}</section>; }
+function WorkspaceMessage({ showAuth = false, title, message, retry, authConfig, sessionOptions, bootstrapToken, onBootstrapToken, onBootstrapLogin, loggingIn, authError }: { showAuth?: boolean; title: string; message: string; retry?: () => void; authConfig?: UiAuthConfig | null; sessionOptions?: SessionOptions | null; bootstrapToken?: string; onBootstrapToken?: (value: string) => void; onBootstrapLogin?: () => void; loggingIn?: boolean; authError?: string }) {
+  const hasLoginMethod = Boolean(authConfig?.authority || sessionOptions?.bootstrap_enabled);
+  return <section className={showAuth ? "coming-soon auth-panel" : "coming-soon"}><span className="eyebrow">{showAuth ? "WORKSPACE ACCESS" : "WORKSPACE"}</span><h2>{title}</h2><p>{message}</p>{showAuth && authConfig?.authority && <button className="primary login-shortcut" onClick={controlPlane.startLogin}>Sign in with SSO</button>}{showAuth && sessionOptions?.bootstrap_enabled && onBootstrapToken && onBootstrapLogin && <form className="bootstrap-login" onSubmit={(event) => { event.preventDefault(); onBootstrapLogin(); }}><label>Local control-plane token<input type="password" autoComplete="current-password" value={bootstrapToken ?? ""} onChange={(event) => onBootstrapToken(event.target.value)} placeholder="Paste the configured local token" /></label><button className="secondary" type="submit" disabled={loggingIn}>{loggingIn ? "Signing in…" : "Sign in locally"}</button></form>}{showAuth && authError && <p className="auth-error" role="alert">{authError}</p>}{showAuth && !hasLoginMethod && <p className="help">No browser identity provider is configured. Ask an operator to configure OIDC before signing in.</p>}{retry && <button className="secondary" onClick={() => void retry()}>Retry connection</button>}</section>; }
 function titleFor(page: Page) { return ({ changes: "Changes", activity: "Activity", connections: "Connections", settings: "Settings", assets: "Assets" })[page]; }
 function saveLabel(state: SaveState) { return ({ saved: "Saved draft", saving: "Saving draft", unsaved: "Unsaved changes", failed: "Save failed" })[state]; }
-function workspaceLabel(state: WorkspaceState) { return ({ loading: "Checking access", ready: "Connected", demo: "Explicit demo", unavailable: "Unavailable" })[state]; }
+function workspaceLabel(state: WorkspaceState) { return ({ loading: "Checking access", ready: "Connected", unavailable: "Unavailable" })[state]; }
 createRoot(document.getElementById("root")!).render(<App />);

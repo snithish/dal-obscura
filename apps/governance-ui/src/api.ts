@@ -104,7 +104,6 @@ export type UiAuthConfig = {
   authority?: string;
   client_id?: string;
   redirect_uri?: string;
-  login_shortcuts?: Array<{ label: string; login_hint: string; demo_login_path?: string }>;
 };
 
 export type SessionOptions = {
@@ -287,10 +286,6 @@ export const controlPlane = {
   bootstrapLogin: (token: string) => request<{ authenticated: true }>("/v1/session/bootstrap", {
     method: "POST",
     headers: { authorization: `Bearer ${token}` },
-  }),
-  demoLogin: (loginHint: string) => request<{ authenticated: true }>("/v1/demo-login", {
-    method: "POST",
-    body: JSON.stringify({ login_hint: loginHint }),
   }),
   logout: () => request<{ authenticated: false }>("/v1/logout", { method: "POST" }),
   listAssets: async () => (await request<Asset[]>("/v1/assets")).map(normalizeAsset),
