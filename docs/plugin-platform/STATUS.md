@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `6d57686` (nested conformance bounds and
+Implementation follow-up through `32fec12` (admitted control-plane catalog
+discovery; nested conformance bounds and
 structured identities; retired catalog-generation draining;
 deterministic catalog-generation
 cleanup; manifest identity/pagination fix;
@@ -249,6 +250,9 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   registry, requires overlapping declared capabilities for the selected pair, and
   persists those IDs into runtime config. PostgreSQL/mixed-version migration evidence
   remains open.
+  Control-plane discovery and diagnostics now use the same admitted public catalog
+  factory for external IDs, with bounded continuation pages, catalog revisions,
+  and deterministic plugin cleanup; live provider and browser evidence remains open.
   Additive migration `20260913_0014` persists qualified catalog/format identities
   and optional plugin revisions beside immutable published rows; reads merge those
   identities back into legacy-compatible manifests.
