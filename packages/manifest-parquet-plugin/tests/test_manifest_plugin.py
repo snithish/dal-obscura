@@ -94,6 +94,52 @@ def test_manifest_catalog_and_parquet_format_split_nested_rows(tmp_path):
     assert identities["profile.email"].startswith("synthetic:")
 
 
+def test_manifest_catalog_paginates_with_string_continuation_tokens(tmp_path):
+    root, manifest, _table = _write_fixture(tmp_path)
+    payload = json.loads(manifest.read_text())
+    payload["tables"]["default.orders"] = dict(payload["tables"]["default.users"])
+    manifest.write_text(json.dumps(payload))
+
+    catalog = ManifestCatalog(
+        CatalogConfig(
+            plugin_id="manifest",
+            instance_id="fixture",
+            revision=1,
+            options={"root": str(root), "manifest_path": str(manifest)},
+        ),
+        _context(),
+    )
+    first = catalog.list_tables(_context(), limit=1)
+    assert first.continuation == "default.orders"
+    second = catalog.list_tables(_context(), continuation=first.continuation, limit=1)
+    assert second.entries == (TableIdentifier(namespace=("default",), name="users"),)
+    assert second.continuation is None
+
+
+def test_manifest_catalog_accepts_structured_dotted_table_names(tmp_path):
+    root, manifest, _table = _write_fixture(tmp_path)
+    payload = json.loads(manifest.read_text())
+    entry = payload["tables"].pop("default.users")
+    entry["namespace"] = ["default"]
+    entry["name"] = "users.with.dot"
+    payload["tables"]["opaque-key"] = entry
+    manifest.write_text(json.dumps(payload))
+
+    catalog = ManifestCatalog(
+        CatalogConfig(
+            plugin_id="manifest",
+            instance_id="fixture",
+            revision=1,
+            options={"root": str(root), "manifest_path": str(manifest)},
+        ),
+        _context(),
+    )
+    page = catalog.list_tables(_context(), limit=1)
+    assert page.entries == (
+        TableIdentifier(namespace=("default",), name="users.with.dot"),
+    )
+
+
 def test_manifest_identity_paths_use_core_collection_markers(tmp_path):
     schema = pa.schema(
         [

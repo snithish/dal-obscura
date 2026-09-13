@@ -8,6 +8,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import cast
 
 import pyarrow as pa
 from dal_obscura_plugin_api import (
@@ -77,18 +78,19 @@ class ManifestCatalog(CatalogPlugin):
         _check_context(context)
         if limit <= 0 or limit > _MAX_TABLES:
             raise ValueError("catalog page limit is invalid")
-        names = sorted(
+        tables = sorted(
             self._tables,
             key=lambda table: (*table.identifier.namespace, table.identifier.name),
         )
         start = 0
         if continuation is not None:
+            identifiers = [_identifier_key(item.identifier) for item in tables]
             try:
-                start = names.index(continuation) + 1
+                start = identifiers.index(continuation) + 1
             except ValueError as exc:
                 raise ValueError("catalog continuation is invalid") from exc
-        page = names[start : start + limit]
-        next_token = page[-1] if start + limit < len(names) else None
+        page = tables[start : start + limit]
+        next_token = _identifier_key(page[-1].identifier) if start + limit < len(tables) else None
         return DiscoveryPage(tuple(item.identifier for item in page), next_token)
 
     def resolve_table(self, identifier: TableIdentifier, context: ExecutionContext) -> TableHandle:
@@ -159,7 +161,7 @@ def _load_manifest(  # noqa: C901
     for raw_identifier, raw_table in tables.items():
         if not isinstance(raw_identifier, str) or not isinstance(raw_table, dict):
             raise ValueError("manifest table entry is invalid")
-        identifier = _parse_identifier(raw_identifier)
+        identifier = _parse_identifier_entry(raw_identifier, raw_table)
         raw_files = raw_table.get("files")
         raw_schema = raw_table.get("schema_ipc")
         raw_field_ids = raw_table.get("field_ids", [])
@@ -199,6 +201,25 @@ def _parse_identifier(raw: str) -> TableIdentifier:
     if len(parts) < 1 or any(not part for part in parts):
         raise ValueError("manifest table identifier is invalid")
     return TableIdentifier(namespace=parts[:-1], name=parts[-1])
+
+
+def _parse_identifier_entry(raw_identifier: str, raw_table: dict[str, object]) -> TableIdentifier:
+    """Parse structured identifiers while retaining the legacy dotted-key form."""
+
+    raw_namespace = raw_table.get("namespace")
+    raw_name = raw_table.get("name")
+    if raw_namespace is None and raw_name is None:
+        return _parse_identifier(raw_identifier)
+    if not isinstance(raw_namespace, list) or any(
+        not isinstance(part, str) for part in raw_namespace
+    ):
+        raise ValueError("manifest table namespace is invalid")
+    if not isinstance(raw_name, str) or not raw_name:
+        raise ValueError("manifest table name is invalid")
+    return TableIdentifier(
+        namespace=tuple(cast(str, part) for part in raw_namespace),
+        name=raw_name,
+    )
 
 
 def _identifier_key(identifier: TableIdentifier) -> str:
