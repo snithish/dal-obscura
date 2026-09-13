@@ -66,6 +66,14 @@ their underlying functionality is wholly absent.
 - Evidence: settings and auth-provider tests passed (7 tests); Ruff and \`ty\` checks passed.
 - Remaining N04/B06 and N05/B08 work: real hostile transport counters, DNS/private-address policy, cancellation cleanup, live IdP/browser journeys, session freshness/revocation, and supported-profile bootstrap retirement. Release remains HOLD.
 
+## Implementation update — 8ee68fc (2026-09-14)
+
+- Packet / status / candidate commit / owner: N07/B10 async recovery partial / VERIFY / \`8ee68fc\` / governance UI.
+- Observable behavior delivered: asset search and pagination now carry a dedicated abort signal. Superseded inventory requests are cancelled during a new search/page, logout, authentication expiry, and component teardown; epoch checks still fence any response that races cancellation.
+- Changed paths: \`apps/governance-ui/src/main.tsx\`. No backend, session, pickle serializer, serialized class, payload, or import path changed.
+- Evidence: direct UI TypeScript build, Vite production build (272.19 kB JavaScript / 82.36 kB gzip), and all 5 lifecycle/schema tests passed.
+- Remaining N07/B10 work: replace manual epoch state with a session-scoped query/mutation cache, add rendered deferred-response race tests across every workflow, and qualify 403/404/409/422/429/503 recovery states. Release remains HOLD.
+
 ## Implementation update — b7bc1e8 (2026-09-14)
 
 - Packet / status / candidate commit / owner: N04/B06 partial / VERIFY / `b7bc1e8` / Iceberg REST plugin.
