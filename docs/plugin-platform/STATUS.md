@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `a57a1f6` (conformance lifecycle deadlines;
+Implementation follow-up through `5d61ea5` (control-plane schema/evaluation plugin
+routing; conformance lifecycle deadlines;
 public discovery identity boundary;
 public discovery lifecycle;
 data-plane catalog lifecycle validation; public adapter cleanup;
@@ -304,6 +305,11 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   Control-plane discovery and diagnostics now use the same admitted public catalog
   factory for external IDs, with bounded continuation pages, catalog revisions,
   and deterministic plugin cleanup; live provider and browser evidence remains open.
+  Control-plane schema loading, synthetic evaluation, review-token verification, and
+  policy-version publication now resolve the same admitted catalog/table-format pair
+  for external IDs. Public Arrow schemas receive the shared bounds and nested path/
+  identity treatment before UI evidence is issued; legacy Iceberg module loading and
+  pickle-backed task paths remain unchanged.
   Legacy Iceberg discovery now rejects malformed, non-printable, or oversized
   namespace/table segments instead of coercing them into new logical identities.
   Additive migration `20260913_0014` persists qualified catalog/format identities
@@ -512,6 +518,21 @@ providers before Phase A's security/correctness prerequisites are accepted.
   (25 passed), Ruff, Ty, and `git diff --check`.
 - Remaining gaps: provider interruption, real consumer cleanup, and external wheel
   evidence remain open. Pickle compatibility is unchanged.
+
+### X13 control-plane schema routing — `5d61ea5`
+
+- State: implementing.
+- Behavior: schema loading, synthetic policy evaluation, review-token live-schema
+  checks, and policy-version publication now accept the active admitted plugin
+  registry. External catalog/table-format pairs are resolved through the public SDK
+  lifecycle with bounded execution contexts, strict handle/descriptor identity
+  checks, nested Arrow path identities, and deterministic cleanup. The exact legacy
+  Iceberg loader remains the compatibility path when no external binding is selected.
+- Green evidence: control-plane schema/evaluation/review/API suites (19 passed),
+  Ruff, Ty, and `git diff --check`.
+- Remaining gaps: control-plane CLI registry/lock loading, live provider and
+  PostgreSQL evidence, external wheel evidence, and browser end-to-end evidence
+  remain open. Pickle compatibility is unchanged.
 
 ### X16 REST namespace lifecycle — `8c73c41`
 
