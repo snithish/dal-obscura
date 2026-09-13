@@ -156,6 +156,9 @@ identities in completed review evidence, closing the authorship distinction in
 the handoff response. Full before/after diff rendering and independent browser
 acceptance remain VERIFY.
 
+Follow-up `67e6475` keeps the selected draft ID on read-only handoff refreshes,
+so reload/access actions cannot silently switch back to the publisher's draft.
+
 Regression after the handoff slices: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv
 run --no-sync pytest tests/control_plane tests/interfaces/control_plane
 tests/common/config_store tests/plugin_platform tests/architecture -q` passed
