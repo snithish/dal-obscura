@@ -22,6 +22,16 @@ def _client() -> TestClient:
     return TestClient(create_app(session_factory(engine), admin_token="test-admin"))
 
 
+def _save_policy_draft(client: TestClient, asset_id: str, rules: list[dict]) -> None:
+    draft = client.get(f"/v1/assets/{asset_id}/draft", headers=ADMIN_HEADERS).json()
+    response = client.put(
+        f"/v1/assets/{asset_id}/draft",
+        json={"expected_revision": draft["revision"], "rules": rules},
+        headers=ADMIN_HEADERS,
+    )
+    assert response.status_code == 200, response.text
+
+
 def test_inventory_reads_require_admin_token():
     client = _client()
 
@@ -158,22 +168,20 @@ def _provision_draft(client: TestClient) -> dict[str, str]:
         json={"backend": "iceberg", "table_identifier": "prod.users", "options": {"snapshot": 1}},
         headers=ADMIN_HEADERS,
     ).json()
-    client.put(
-        f"/v1/assets/{asset['id']}/policy-rules",
-        json={
-            "rules": [
-                {
-                    "ordinal": 10,
-                    "effect": "allow",
-                    "principals": ["user1"],
-                    "when": {"tenant": "default"},
-                    "columns": ["id", "email"],
-                    "masks": {"email": {"type": "email"}},
-                    "row_filter": "region = 'us'",
-                }
-            ]
-        },
-        headers=ADMIN_HEADERS,
+    _save_policy_draft(
+        client,
+        asset["id"],
+        [
+            {
+                "ordinal": 10,
+                "effect": "allow",
+                "principals": ["user1"],
+                "when": {"tenant": "default"},
+                "columns": ["id", "email"],
+                "masks": {"email": {"type": "email"}},
+                "row_filter": "region = 'us'",
+            }
+        ],
     )
     client.put(
         f"/v1/assets/{asset['id']}/owners",
@@ -207,7 +215,7 @@ def test_reads_workspace_draft_resources_after_writes():
     ).json()
     catalogs = client.get("/v1/catalogs", headers=ADMIN_HEADERS).json()
     assets = client.get("/v1/assets", headers=ADMIN_HEADERS).json()
-    rules = client.get(f"/v1/assets/{asset['id']}/policy-rules", headers=ADMIN_HEADERS).json()
+    rules = client.get(f"/v1/assets/{asset['id']}/draft", headers=ADMIN_HEADERS).json()["rules"]
     auth = client.get("/v1/settings/auth-providers", headers=ADMIN_HEADERS).json()
 
     assert runtime == {
@@ -225,8 +233,6 @@ def test_reads_workspace_draft_resources_after_writes():
     assert assets[0]["policy_status"] == "configured"
     assert rules == [
         {
-            "id": rules[0]["id"],
-            "asset_id": asset["id"],
             "ordinal": 10,
             "effect": "allow",
             "principals": ["user1"],

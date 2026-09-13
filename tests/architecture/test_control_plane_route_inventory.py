@@ -28,15 +28,13 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
         "/v1/assets",
         "/v1/assets/page",
         "/v1/assets/{asset_id}",
-            "/v1/assets/{asset_id}/draft",
-            "/v1/assets/{asset_id}/draft/{draft_id}",
+        "/v1/assets/{asset_id}/draft",
+        "/v1/assets/{asset_id}/draft/{draft_id}",
         "/v1/assets/{asset_id}/owners",
         "/v1/assets/{asset_id}/grants",
         "/v1/assets/{asset_id}/schema",
-        "/v1/assets/{asset_id}/policy-preview",
         "/v1/assets/{asset_id}/policy-evaluate",
         "/v1/assets/{asset_id}/policy-review",
-        "/v1/assets/{asset_id}/policy-rules",
         "/v1/assets/{asset_id}/policy-versions",
         "/v1/assets/{asset_id}/policy-versions/{policy_version}",
         "/v1/assets/{asset_id}/policy-versions/{policy_version}/restore",
@@ -65,7 +63,6 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
         "/v1/workspace/publications",
         "/v1/workspace/publications/{publication_id}/activate",
     }
-    assert set(paths["/v1/assets/{asset_id}/policy-rules"]) == {"get", "put"}
     assert set(paths["/v1/assets/{asset_id}/grants"]) == {"get", "put"}
     assert set(paths["/v1/assets/{catalog}/{target}"]) == {"put"}
     assert set(paths["/v1/workspace/publications"]) == {"get", "post"}

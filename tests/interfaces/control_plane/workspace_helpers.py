@@ -64,9 +64,11 @@ def _provision_draft(client: TestClient) -> dict[str, str]:
         json={"backend": "iceberg", "table_identifier": "prod.users", "options": {"snapshot": 1}},
         headers=ADMIN_HEADERS,
     ).json()
+    draft = client.get(f"/v1/assets/{asset['id']}/draft", headers=ADMIN_HEADERS).json()
     client.put(
-        f"/v1/assets/{asset['id']}/policy-rules",
+        f"/v1/assets/{asset['id']}/draft",
         json={
+            "expected_revision": draft["revision"],
             "rules": [
                 {
                     "ordinal": 10,
@@ -77,7 +79,7 @@ def _provision_draft(client: TestClient) -> dict[str, str]:
                     "masks": {"email": {"type": "email"}},
                     "row_filter": "region = 'us'",
                 }
-            ]
+            ],
         },
         headers=ADMIN_HEADERS,
     )
@@ -96,6 +98,23 @@ def _provision_draft(client: TestClient) -> dict[str, str]:
         headers=ADMIN_HEADERS,
     )
     return asset
+
+
+def save_policy_draft(
+    client: TestClient,
+    asset_id: str,
+    rules: list[dict[str, object]],
+    headers: dict[str, str] = ADMIN_HEADERS,
+):
+    """Replace the revisioned policy draft used by public API tests."""
+
+    current = client.get(f"/v1/assets/{asset_id}/draft", headers=headers)
+    assert current.status_code == 200, current.text
+    return client.put(
+        f"/v1/assets/{asset_id}/draft",
+        json={"expected_revision": current.json()["revision"], "rules": rules},
+        headers=headers,
+    )
 
 
 def _keys_recursive(value: object) -> set[str]:

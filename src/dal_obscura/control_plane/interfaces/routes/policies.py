@@ -18,9 +18,7 @@ from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 from dal_obscura.control_plane.interfaces.routes.schemas import (
     PolicyDraftRequest,
     PolicyEvaluationRequest,
-    PolicyPreviewRequest,
     PolicyRestoreRequest,
-    PolicyRulesRequest,
     PolicyVersionPublishRequest,
 )
 
@@ -68,44 +66,17 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             lambda service: service.get_policy_draft_by_id(asset_id, draft_id, actor)
         )
 
-    @api.get("/v1/assets/{asset_id}/policy-rules")
-    def list_policy_rules(
-        asset_id: UUID,
-        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
-        return deps.with_service(lambda service: service.list_policy_rules(asset_id, actor=actor))
+    @api.api_route(
+        "/v1/assets/{asset_id}/policy-rules",
+        methods=["GET", "PUT"],
+        include_in_schema=False,
+    )
+    def retired_policy_rules() -> object:
+        raise HTTPException(status_code=404, detail="Policy rules route has been retired")
 
-    @api.put("/v1/assets/{asset_id}/policy-rules")
-    def replace_policy_rules(
-        asset_id: UUID,
-        request: PolicyRulesRequest,
-        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
-        return deps.with_service(
-            lambda service: service.replace_policy_rules(
-                asset_id=asset_id,
-                rules=request.rules,
-                actor=actor,
-            )
-        ) or {"asset_id": str(asset_id)}
-
-    @api.post("/v1/assets/{asset_id}/policy-preview")
-    def preview_asset_policy(
-        asset_id: UUID,
-        request: PolicyPreviewRequest,
-        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
-        return deps.with_service(
-            lambda service: service.preview_asset_policy(
-                asset_id=asset_id,
-                principal=request.principal,
-                groups=request.groups,
-                claims=request.claims,
-                actor=actor,
-                requested_columns=request.columns or None,
-                draft_id=request.draft_id,
-            )
-        )
+    @api.post("/v1/assets/{asset_id}/policy-preview", include_in_schema=False)
+    def retired_policy_preview() -> object:
+        raise HTTPException(status_code=404, detail="Policy preview route has been retired")
 
     @api.post("/v1/assets/{asset_id}/policy-evaluate")
     def evaluate_asset_policy(

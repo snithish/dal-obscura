@@ -379,12 +379,12 @@ function App() {
   ) {
     const epoch = inheritedEpoch ?? ++loadEpoch.current;
     try {
-      const [fullAsset, loadedRules, schema, history, grants] = await Promise.all([controlPlane.getAsset(assetId), controlPlane.listRules(assetId), controlPlane.getSchema(assetId), controlPlane.listAssetHistory(assetId).catch(() => []), controlPlane.listGrants(assetId).catch(() => [])]);
+      const [fullAsset, schema, history, grants] = await Promise.all([controlPlane.getAsset(assetId), controlPlane.getSchema(assetId), controlPlane.listAssetHistory(assetId).catch(() => []), controlPlane.listGrants(assetId).catch(() => [])]);
       if (epoch !== loadEpoch.current) return;
       fullAsset.schema = schema;
       const draft = isDemo ? null : await controlPlane.getDraft(assetId, selectedDraftId);
       if (epoch !== loadEpoch.current) return;
-      const effectiveRules = draft?.rules ?? loadedRules;
+      const effectiveRules = draft?.rules ?? [];
       setManagementData((current) => ({ ...current, history, grants }));
       setAssets(knownAssets); setAsset(fullAsset); setRules(effectiveRules); setDraftRevision(draft?.revision ?? 0); setDraftId(draft?.id ?? null); setSelectedRule(0); setReviewToken(null);
       draftEditEpoch.current += 1;

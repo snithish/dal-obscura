@@ -212,7 +212,7 @@ def test_schema_fields_preserve_literal_dotted_and_nested_paths():
     ]
 
 
-def test_workspace_policy_rules_can_be_replaced_from_asset_detail():
+def test_workspace_policy_draft_can_be_replaced_from_asset_detail():
     client = _client()
     client.put(
         "/v1/catalogs/analytics",
@@ -228,9 +228,11 @@ def test_workspace_policy_rules_can_be_replaced_from_asset_detail():
         headers=ADMIN_HEADERS,
     ).json()
 
+    current = client.get(f"/v1/assets/{asset['id']}/draft", headers=ADMIN_HEADERS)
     response = client.put(
-        f"/v1/assets/{asset['id']}/policy-rules",
+        f"/v1/assets/{asset['id']}/draft",
         json={
+            "expected_revision": current.json()["revision"],
             "rules": [
                 {
                     "ordinal": 1,
@@ -249,10 +251,9 @@ def test_workspace_policy_rules_can_be_replaced_from_asset_detail():
 
     assert response.status_code == 200
     assert detail["policy_status"] == "configured"
-    assert detail["policy_rules"] == [
+    draft = client.get(f"/v1/assets/{asset['id']}/draft", headers=ADMIN_HEADERS).json()
+    assert draft["rules"] == [
         {
-            "id": detail["policy_rules"][0]["id"],
-            "asset_id": asset["id"],
             "ordinal": 1,
             "effect": "allow",
             "principals": ["group:data-stewards"],
@@ -264,7 +265,7 @@ def test_workspace_policy_rules_can_be_replaced_from_asset_detail():
     ]
 
 
-def test_asset_policy_preview_uses_server_policy_semantics():
+def test_retired_asset_policy_preview_route_is_absent():
     client = _client()
     client.put(
         "/v1/catalogs/analytics",
@@ -279,60 +280,12 @@ def test_asset_policy_preview_uses_server_policy_semantics():
         json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
         headers=ADMIN_HEADERS,
     ).json()
-    client.put(
-        f"/v1/assets/{asset['id']}/schema-fields",
-        json={
-            "fields": [
-                {"name": "id", "type": "long", "nullable": False},
-                {"name": "email", "type": "string", "nullable": True},
-                {"name": "region", "type": "string", "nullable": True},
-            ]
-        },
-        headers=ADMIN_HEADERS,
-    )
-    client.put(
-        f"/v1/assets/{asset['id']}/policy-rules",
-        json={
-            "rules": [
-                {
-                    "ordinal": 10,
-                    "effect": "allow",
-                    "principals": ["group:data-stewards"],
-                    "when": {"tenant": "default"},
-                    "columns": ["id", "email"],
-                    "masks": {"email": {"type": "email"}},
-                    "row_filter": "region = 'us'",
-                }
-            ]
-        },
-        headers=ADMIN_HEADERS,
-    )
-
-    unauthorized = client.post(
-        f"/v1/assets/{asset['id']}/policy-preview",
-        json={"principal": "user:alice@example.com"},
-    )
     response = client.post(
         f"/v1/assets/{asset['id']}/policy-preview",
-        json={
-            "principal": "user:alice@example.com",
-            "groups": ["data-stewards"],
-            "claims": {"tenant": "default"},
-        },
+        json={"principal": "user:alice@example.com"},
         headers=ADMIN_HEADERS,
     )
-
-    assert unauthorized.status_code == 401
-    assert response.status_code == 200
-    assert response.json() == {
-        "decision": "allow",
-        "matched_ordinal": 10,
-        "reason": "Rule 10 matched.",
-        "visible_columns": ["id", "email"],
-        "masks": [{"column": "email", "type": "email"}],
-        "row_filter": "(region = 'us')",
-    }
-    assert "tenant" not in _keys_recursive(response.json())
+    assert response.status_code == 404
     assert "cell" not in _keys_recursive(response.json())
 
 
@@ -429,19 +382,7 @@ def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
         "revision": 0,
         "options": {"snapshot": 1},
         "schema_fields": [],
-        "policy_rules": [
-            {
-                "id": asset_detail["policy_rules"][0]["id"],
-                "asset_id": asset["id"],
-                "ordinal": 10,
-                "effect": "allow",
-                "principals": ["user1"],
-                "when": {"tenant": "default"},
-                "columns": ["id", "email"],
-                "masks": {"email": {"type": "email"}},
-                "row_filter": "region = 'us'",
-            }
-        ],
+            "policy_rules": [],
     }
     assert "tenant" not in _keys_recursive(summary | {"catalogs": catalogs, "assets": assets})
     assert "cell" not in _keys_recursive(summary | {"catalogs": catalogs, "assets": assets})

@@ -34,10 +34,12 @@ def test_activation_freezes_a_reviewed_generation_until_a_new_publication() -> N
     assert before["available"] is True
     generation = before["generation"]
 
+    draft = client.get(f"/v1/assets/{asset['id']}/draft", headers=ADMIN_HEADERS).json()
     changed = client.put(
-        f"/v1/assets/{asset['id']}/policy-rules",
+        f"/v1/assets/{asset['id']}/draft",
         headers=ADMIN_HEADERS,
         json={
+            "expected_revision": draft["revision"],
             "rules": [
                 {
                     "ordinal": 10,

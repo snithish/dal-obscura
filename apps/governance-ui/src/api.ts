@@ -246,13 +246,6 @@ export type WorkspaceObservations = {
   data_plane: { status: string; reason: string };
 };
 
-type RawPreview = {
-  decision: "allow" | "deny";
-  visible_columns: string[];
-  masks: Array<{ column: string; type: Mask["type"] }>;
-  row_filter: string | null;
-};
-
 type ApiFailure = Error & { status?: number };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -321,7 +314,6 @@ export const controlPlane = {
     body: JSON.stringify({ grants, ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }) }),
   }),
   getSchema: (assetId: string) => request<AssetSchema>(`/v1/assets/${assetId}/schema`),
-  listRules: (assetId: string) => request<PolicyRule[]>(`/v1/assets/${assetId}/policy-rules`),
   listHistory: () => request<PolicyVersion[]>("/v1/policy-versions"),
   listHistoryPage: async (params: { limit?: number; cursor?: string } = {}) => {
     const query = new URLSearchParams();
@@ -395,24 +387,6 @@ export const controlPlane = {
       method: "PUT",
       body: JSON.stringify({ expected_revision: expectedRevision, rules }),
     }),
-  saveRules: (assetId: string, rules: PolicyRule[]) =>
-    request(`/v1/assets/${assetId}/policy-rules`, {
-      method: "PUT",
-      body: JSON.stringify({ rules }),
-    }),
-  preview: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, unknown>; draft_id?: string; draft_revision?: number }) => {
-    const raw = await request<RawPreview>(`/v1/assets/${assetId}/policy-preview`, {
-      method: "POST",
-      body: JSON.stringify(persona),
-    });
-    return {
-      decision: raw.decision,
-      allowed_columns: raw.decision === "allow" ? raw.visible_columns : [],
-      masks: Object.fromEntries(raw.masks.map((mask) => [mask.column, { type: mask.type }])),
-      row_filter: raw.row_filter,
-      policy_version: 0,
-    } satisfies Preview;
-  },
   evaluate: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, unknown>; draft_id?: string; draft_revision?: number }) => {
     const raw = await request<{ decision: "allow" | "deny"; allowed_columns: string[]; masks: Array<{ column: string; type: Mask["type"] }>; row_filter: string | null; output_rows: number; rows: Array<Record<string, unknown>>; evidence: Record<string, unknown> }>(`/v1/assets/${assetId}/policy-evaluate`, {
       method: "POST",

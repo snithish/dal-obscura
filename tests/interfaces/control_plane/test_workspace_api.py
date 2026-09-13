@@ -13,6 +13,7 @@ from tests.interfaces.control_plane.workspace_helpers import (
     _active_policy_versions,
     _client,
     _provision_draft,
+    save_policy_draft,
 )
 
 
@@ -189,10 +190,12 @@ def test_workspace_policy_rules_reject_deny_effect_before_save():
     client = _client()
     asset = _provision_draft(client)
 
+    draft = client.get(f"/v1/assets/{asset['id']}/draft", headers=ADMIN_HEADERS).json()
     response = client.put(
-        f"/v1/assets/{asset['id']}/policy-rules",
+        f"/v1/assets/{asset['id']}/draft",
         headers=ADMIN_HEADERS,
         json={
+            "expected_revision": draft["revision"],
             "rules": [
                 {
                     "ordinal": 1,
@@ -212,8 +215,7 @@ def test_workspace_policy_rules_reject_deny_effect_before_save():
         "Policy rules are explicit grants; use effect='allow' or omit deny rules."
     )
     detail = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
-    assert len(detail["policy_rules"]) == 1
-    assert detail["policy_rules"][0]["effect"] == "allow"
+    assert detail["policy_status"] == "configured"
 
 
 def test_policy_publish_versions_one_asset_without_publishing_other_drafts():
@@ -241,22 +243,18 @@ def test_policy_publish_versions_one_asset_without_publishing_other_drafts():
         json={"owners": ["user:owner@example.com"]},
         headers=ADMIN_HEADERS,
     )
-    client.put(
-        f"/v1/assets/{second_asset['id']}/policy-rules",
-        json={
-            "rules": [
-                {
-                    "ordinal": 1,
-                    "principals": ["user:owner@example.com"],
-                    "columns": ["id", "account_id"],
-                    "effect": "allow",
-                    "when": {},
-                    "masks": {},
-                    "row_filter": None,
-                }
-            ]
-        },
-        headers=ADMIN_HEADERS,
+    save_policy_draft(
+        client,
+        second_asset["id"],
+        [{
+            "ordinal": 1,
+            "principals": ["user:owner@example.com"],
+            "columns": ["id", "account_id"],
+            "effect": "allow",
+            "when": {},
+            "masks": {},
+            "row_filter": None,
+        }],
     )
     initial_response = client.post(
         f"/v1/assets/{first_asset['id']}/policy-versions",
@@ -266,22 +264,18 @@ def test_policy_publish_versions_one_asset_without_publishing_other_drafts():
 
     before_versions = _active_policy_versions(factory)
     assert set(before_versions) == {("analytics", "default.users")}
-    client.put(
-        f"/v1/assets/{first_asset['id']}/policy-rules",
-        json={
-            "rules": [
-                {
-                    "ordinal": 1,
-                    "principals": ["user:owner@example.com"],
-                    "columns": ["id", "email"],
-                    "effect": "allow",
-                    "when": {},
-                    "masks": {"email": {"type": "redact", "value": "[redacted]"}},
-                    "row_filter": "id > 10",
-                }
-            ]
-        },
-        headers=ADMIN_HEADERS,
+    save_policy_draft(
+        client,
+        first_asset["id"],
+        [{
+            "ordinal": 1,
+            "principals": ["user:owner@example.com"],
+            "columns": ["id", "email"],
+            "effect": "allow",
+            "when": {},
+            "masks": {"email": {"type": "redact", "value": "[redacted]"}},
+            "row_filter": "id > 10",
+        }],
     )
     response = client.post(
         f"/v1/assets/{first_asset['id']}/policy-versions",

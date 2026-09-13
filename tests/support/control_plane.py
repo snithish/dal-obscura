@@ -74,10 +74,11 @@ def provision_default_published_asset(
             headers=headers,
         )
     )
+    draft = _checked_json(client.get(f"/v1/assets/{asset['id']}/draft", headers=headers))
     _checked_json(
         client.put(
-            f"/v1/assets/{asset['id']}/policy-rules",
-            json={"rules": policy_rules},
+            f"/v1/assets/{asset['id']}/draft",
+            json={"expected_revision": draft["revision"], "rules": policy_rules},
             headers=headers,
         )
     )

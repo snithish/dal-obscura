@@ -59,6 +59,16 @@ def _client() -> TestClient:
     )
 
 
+def _save_policy_draft(client: TestClient, asset_id: UUID, rules: list[dict], headers) -> object:
+    current = client.get(f"/v1/assets/{asset_id}/draft", headers=headers)
+    assert current.status_code == 200, current.text
+    return client.put(
+        f"/v1/assets/{asset_id}/draft",
+        json={"expected_revision": current.json()["revision"], "rules": rules},
+        headers=headers,
+    )
+
+
 def _client_with_ui_auth_config() -> TestClient:
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
     migrate_config_store(engine)
@@ -167,13 +177,13 @@ def test_cookie_session_requires_csrf_header_for_mutations(monkeypatch):
     )
     session = client.get("/v1/session", headers={"cookie": cookie_header})
     rejected = client.put(
-        "/v1/assets/00000000-0000-0000-0000-000000000000/policy-rules",
-        json={"rules": []},
+        "/v1/assets/00000000-0000-0000-0000-000000000000/draft",
+        json={"expected_revision": 0, "rules": []},
         headers={"cookie": cookie_header},
     )
     csrf = client.put(
-        "/v1/assets/00000000-0000-0000-0000-000000000000/policy-rules",
-        json={"rules": []},
+        "/v1/assets/00000000-0000-0000-0000-000000000000/draft",
+        json={"expected_revision": 0, "rules": []},
         headers={"cookie": cookie_header, "x-csrf-token": login.cookies["dal_obscura_csrf"]},
     )
 
@@ -479,14 +489,12 @@ def test_asset_owner_can_replace_policy_rules_through_api():
     client = _client()
     asset = _provision_owned_asset(client)
 
-    response = client.put(
-        f"/v1/assets/{asset}/policy-rules",
-        json={"rules": [_allow_rule(row_filter="region = 'us'")]},
-        headers=_bearer("owner-token"),
+    response = _save_policy_draft(
+        client, asset, [_allow_rule(row_filter="region = 'us'")], _bearer("owner-token")
     )
 
     assert response.status_code == 200
-    rules = client.get(f"/v1/assets/{asset}/policy-rules", headers=ADMIN_HEADERS).json()
+    rules = client.get(f"/v1/assets/{asset}/draft", headers=_bearer("owner-token")).json()["rules"]
     assert rules[0]["row_filter"] == "region = 'us'"
 
 
@@ -498,11 +506,7 @@ def test_group_owner_can_publish_policy_version_through_api():
         json={"grants": [{"principal": "group:asset-owners", "capability": "publish"}]},
         headers=ADMIN_HEADERS,
     )
-    client.put(
-        f"/v1/assets/{asset}/policy-rules",
-        json={"rules": [_allow_rule(row_filter="region = 'eu'")]},
-        headers=_bearer("owner-token"),
-    )
+    _save_policy_draft(client, asset, [_allow_rule(row_filter="region = 'eu'")], _bearer("owner-token"))
 
     response = client.post(
         f"/v1/assets/{asset}/policy-versions",
@@ -553,8 +557,8 @@ def test_non_owner_cannot_change_policy_rules_or_publish_policy_version():
     asset = _provision_owned_asset(client)
 
     replace = client.put(
-        f"/v1/assets/{asset}/policy-rules",
-        json={"rules": [_allow_rule(row_filter="region = 'us'")]},
+        f"/v1/assets/{asset}/draft",
+        json={"expected_revision": 0, "rules": [_allow_rule(row_filter="region = 'us'")]},
         headers=_bearer("outsider-token"),
     )
     publish = client.post(
@@ -572,9 +576,9 @@ def test_non_owner_cannot_read_asset_policy_or_preview():
 
     inventory = client.get("/v1/assets", headers=_bearer("outsider-token"))
     detail = client.get(f"/v1/assets/{asset}", headers=_bearer("outsider-token"))
-    rules = client.get(f"/v1/assets/{asset}/policy-rules", headers=_bearer("outsider-token"))
+    rules = client.get(f"/v1/assets/{asset}/draft", headers=_bearer("outsider-token"))
     preview = client.post(
-        f"/v1/assets/{asset}/policy-preview",
+        f"/v1/assets/{asset}/policy-evaluate",
         json={"principal": "analyst", "groups": [], "claims": {}},
         headers=_bearer("outsider-token"),
     )
@@ -604,11 +608,7 @@ def test_workspace_summary_is_scoped_to_visible_assets():
 def test_policy_history_is_scoped_to_owned_assets():
     client = _client()
     asset = _provision_owned_asset(client)
-    client.put(
-        f"/v1/assets/{asset}/policy-rules",
-        json={"rules": [_allow_rule(row_filter=None)]},
-        headers=ADMIN_HEADERS,
-    )
+    _save_policy_draft(client, asset, [_allow_rule(row_filter=None)], ADMIN_HEADERS)
     client.post(f"/v1/assets/{asset}/policy-versions", headers=ADMIN_HEADERS)
 
     outsider = client.get("/v1/policy-versions", headers=_bearer("outsider-token"))
@@ -648,10 +648,10 @@ def test_asset_owner_can_delegate_read_without_edit_or_publish():
 
     inventory = client.get("/v1/assets", headers=_bearer("outsider-token"))
     detail = client.get(f"/v1/assets/{asset}", headers=_bearer("outsider-token"))
-    rules = client.get(f"/v1/assets/{asset}/policy-rules", headers=_bearer("outsider-token"))
+    rules = client.get(f"/v1/assets/{asset}/draft", headers=_bearer("outsider-token"))
     replace = client.put(
-        f"/v1/assets/{asset}/policy-rules",
-        json={"rules": [_allow_rule(row_filter=None)]},
+        f"/v1/assets/{asset}/draft",
+        json={"expected_revision": 0, "rules": [_allow_rule(row_filter=None)]},
         headers=_bearer("outsider-token"),
     )
 
@@ -726,10 +726,8 @@ def test_policy_save_rejects_invalid_row_filter_before_publish():
     client = _client()
     asset = _provision_owned_asset(client)
 
-    response = client.put(
-        f"/v1/assets/{asset}/policy-rules",
-        json={"rules": [_allow_rule(row_filter="region =")]},
-        headers=_bearer("owner-token"),
+    response = _save_policy_draft(
+        client, asset, [_allow_rule(row_filter="region =")], _bearer("owner-token")
     )
 
     assert response.status_code == 400
@@ -743,11 +741,7 @@ def test_policy_save_rejects_deny_rule_with_mask_before_publish():
     rule["effect"] = "deny"
     rule["masks"] = {"email": {"type": "email"}}
 
-    response = client.put(
-        f"/v1/assets/{asset}/policy-rules",
-        json={"rules": [rule]},
-        headers=_bearer("owner-token"),
-    )
+    response = _save_policy_draft(client, asset, [rule], _bearer("owner-token"))
 
     assert response.status_code == 400
     assert "Policy rules are explicit grants" in response.json()["detail"]
@@ -762,11 +756,7 @@ def test_platform_admin_can_assign_owner_and_bootstrap_policy():
         json={"owners": ["group:asset-owners"]},
         headers=_bearer("admin-oidc-token"),
     )
-    policy = client.put(
-        f"/v1/assets/{asset}/policy-rules",
-        json={"rules": [_allow_rule(row_filter=None)]},
-        headers=_bearer("admin-oidc-token"),
-    )
+    policy = _save_policy_draft(client, asset, [_allow_rule(row_filter=None)], _bearer("admin-oidc-token"))
 
     assert owners.status_code == 200
     assert owners.json()["owners"] == ["group:asset-owners"]
@@ -830,11 +820,7 @@ def _provision_asset_without_owner(client: TestClient) -> UUID:
         },
         headers=ADMIN_HEADERS,
     )
-    client.put(
-        f"/v1/assets/{asset['id']}/policy-rules",
-        json={"rules": [_allow_rule(row_filter=None)]},
-        headers=ADMIN_HEADERS,
-    )
+    _save_policy_draft(client, asset["id"], [_allow_rule(row_filter=None)], ADMIN_HEADERS)
     return UUID(asset["id"])
 
 

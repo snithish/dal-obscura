@@ -86,27 +86,21 @@ def _provision_reviewable_asset(client: TestClient) -> dict[str, object]:
         headers=ADMIN_HEADERS,
     ).json()
     client.put(
-        f"/v1/assets/{asset['id']}/policy-rules",
-        json={
-            "rules": [
-                {
-                    "ordinal": 10,
-                    "effect": "allow",
-                    "principals": ["user1"],
-                    "columns": ["id"],
-                    "masks": {},
-                    "row_filter": None,
-                }
-            ]
-        },
-        headers=ADMIN_HEADERS,
-    )
-    client.put(
         f"/v1/assets/{asset['id']}/owners",
         json={"owners": ["user1"]},
         headers=ADMIN_HEADERS,
     )
     draft = client.get(f"/v1/assets/{asset['id']}/draft", headers=ADMIN_HEADERS).json()
+    draft["rules"] = [
+        {
+            "ordinal": 10,
+            "effect": "allow",
+            "principals": ["user1"],
+            "columns": ["id"],
+            "masks": {},
+            "row_filter": None,
+        }
+    ]
     saved = client.put(
         f"/v1/assets/{asset['id']}/draft",
         json={"expected_revision": draft["revision"], "rules": draft["rules"]},
@@ -166,9 +160,11 @@ def test_policy_evaluation_returns_duckdb_transformed_synthetic_rows(monkeypatch
         },
         headers=ADMIN_HEADERS,
     )
+    draft = client.get(f"/v1/assets/{asset['id']}/draft", headers=ADMIN_HEADERS).json()
     client.put(
-        f"/v1/assets/{asset['id']}/policy-rules",
+        f"/v1/assets/{asset['id']}/draft",
         json={
+            "expected_revision": draft["revision"],
             "rules": [
                 {
                     "ordinal": 1,
@@ -188,7 +184,7 @@ def test_policy_evaluation_returns_duckdb_transformed_synthetic_rows(monkeypatch
                     "masks": {"email": {"type": "redact", "value": "[right]"}},
                     "row_filter": "region = 'us'",
                 },
-            ]
+            ],
         },
         headers=ADMIN_HEADERS,
     )
@@ -291,9 +287,14 @@ def test_production_publication_requires_current_server_review(monkeypatch) -> N
         json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
         headers={"authorization": "Bearer review-secret-for-test"},
     ).json()
+    current_draft = client.get(
+        f"/v1/assets/{asset['id']}/draft",
+        headers={"authorization": "Bearer review-secret-for-test"},
+    ).json()
     client.put(
-        f"/v1/assets/{asset['id']}/policy-rules",
+        f"/v1/assets/{asset['id']}/draft",
         json={
+            "expected_revision": current_draft["revision"],
             "rules": [
                 {
                     "ordinal": 10,
@@ -303,7 +304,7 @@ def test_production_publication_requires_current_server_review(monkeypatch) -> N
                     "masks": {},
                     "row_filter": None,
                 }
-            ]
+            ],
         },
         headers={"authorization": "Bearer review-secret-for-test"},
     )
@@ -317,25 +318,6 @@ def test_production_publication_requires_current_server_review(monkeypatch) -> N
         "load_catalog",
         lambda *args, **kwargs: _EvaluationCatalog(),
     )
-    missing_draft_review = client.post(
-        f"/v1/assets/{asset['id']}/policy-review",
-        json={"principal": "analyst", "groups": [], "claims": {}},
-        headers={"authorization": "Bearer review-secret-for-test"},
-    )
-    assert missing_draft_review.status_code == 400
-    assert missing_draft_review.json() == {
-        "detail": "Save an explicit policy draft before requesting server review."
-    }
-    draft = client.get(
-        f"/v1/assets/{asset['id']}/draft",
-        headers={"authorization": "Bearer review-secret-for-test"},
-    ).json()
-    saved_draft = client.put(
-        f"/v1/assets/{asset['id']}/draft",
-        json={"expected_revision": draft["revision"], "rules": draft["rules"]},
-        headers={"authorization": "Bearer review-secret-for-test"},
-    )
-    assert saved_draft.status_code == 200, saved_draft.json()
     monkeypatch.setattr(
         schema_service,
         "load_catalog",
@@ -540,9 +522,10 @@ def test_explicit_empty_draft_is_reviewable_and_publishable_as_deny_all(monkeypa
         json={"owners": ["platform:admin"]},
         headers=ADMIN_HEADERS,
     )
+    current = client.get(f"/v1/assets/{asset['id']}/draft", headers=ADMIN_HEADERS).json()
     saved = client.put(
         f"/v1/assets/{asset['id']}/draft",
-        json={"expected_revision": 0, "rules": []},
+        json={"expected_revision": current["revision"], "rules": []},
         headers=ADMIN_HEADERS,
     )
     assert saved.status_code == 200, saved.json()

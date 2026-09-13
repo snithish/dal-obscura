@@ -45,9 +45,11 @@ def test_api_provisions_and_activates_default_policy_version():
         json={"backend": "iceberg", "table_identifier": "prod.users", "options": {}},
         headers=headers,
     ).json()
+    draft = client.get(f"/v1/assets/{asset['id']}/draft", headers=headers).json()
     client.put(
-        f"/v1/assets/{asset['id']}/policy-rules",
+        f"/v1/assets/{asset['id']}/draft",
         json={
+            "expected_revision": draft["revision"],
             "rules": [
                 {
                     "ordinal": 10,
@@ -58,7 +60,7 @@ def test_api_provisions_and_activates_default_policy_version():
                     "masks": {"email": {"type": "email"}},
                     "row_filter": "region = 'us'",
                 }
-            ]
+            ],
         },
         headers=headers,
     )

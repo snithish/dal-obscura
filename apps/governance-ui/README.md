@@ -9,9 +9,9 @@ The first working slice implements an asset workspace with:
 
 - bounded, searchable asset inventory loading from `GET /v1/assets/page`, with
   clearly labelled demo content only when `?demo` is explicitly requested;
-- existing-rule loading and saving through `/v1/assets/{id}/policy-rules`;
+- revisioned draft loading and saving through `/v1/assets/{id}/draft`;
 - schema-field selection, row restriction editing, and all six supported masks;
-- synthetic persona policy evaluation through `/policy-preview`;
+- synthetic persona policy evaluation through `/v1/assets/{id}/policy-evaluate`;
 - editable synthetic principal, group, and claims inputs for server-side review;
 - per-asset consumer handoff snippets for Python/DuckDB, Spark, and raw Arrow;
 - bounded catalog connection diagnostics with redacted provider failures;

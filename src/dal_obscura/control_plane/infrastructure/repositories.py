@@ -1820,7 +1820,7 @@ class PublicationStore:
             select(AssetRecord).where(AssetRecord.cell_id == cell_id)
         ):
             catalog = catalog_by_id[asset.catalog_id]
-            rules = [
+            persisted_rules = [
                 PolicyRuleDraft(
                     ordinal=rule.ordinal,
                     effect=_normalize_policy_rule_effect(rule.effect),
@@ -1836,6 +1836,30 @@ class PublicationStore:
                     .order_by(PolicyRuleRecord.ordinal)
                 )
             ]
+            latest_draft = self._session.scalar(
+                select(AssetPolicyDraftRecord)
+                .where(
+                    AssetPolicyDraftRecord.asset_id == asset.id,
+                    AssetPolicyDraftRecord.discarded_at.is_(None),
+                )
+                .order_by(AssetPolicyDraftRecord.updated_at.desc(), AssetPolicyDraftRecord.id.desc())
+            )
+            rules = (
+                [
+                    PolicyRuleDraft(
+                        ordinal=int(raw.get("ordinal", 0)),
+                        effect="allow",
+                        principals=[str(item) for item in raw.get("principals", [])],
+                        when=cast(dict[str, str | list[str]], dict(raw.get("when", {}))),
+                        columns=[str(item) for item in raw.get("columns", [])],
+                        masks=dict(raw.get("masks", {})),
+                        row_filter=cast(str | None, raw.get("row_filter")),
+                    )
+                    for raw in latest_draft.rules_json
+                ]
+                if latest_draft is not None
+                else persisted_rules
+            )
             assets.append(
                 AssetDraft(
                     id=asset.id,
@@ -2105,6 +2129,15 @@ class PublicationStore:
                 .group_by(PolicyRuleRecord.asset_id)
             )
         }
+        for asset_id, rules_json in self._session.execute(
+            select(AssetPolicyDraftRecord.asset_id, AssetPolicyDraftRecord.rules_json)
+            .where(
+                AssetPolicyDraftRecord.asset_id.in_(asset_ids),
+                AssetPolicyDraftRecord.discarded_at.is_(None),
+            )
+        ):
+            if isinstance(rules_json, list) and rules_json:
+                assets_with_rules.add(asset_id)
         rows = []
         for record in records:
             catalog = catalog_by_id[record.catalog_id]
