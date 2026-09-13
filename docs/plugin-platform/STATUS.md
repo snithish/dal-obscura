@@ -183,12 +183,20 @@ so reload/access actions cannot silently switch back to the publisher's draft.
 - Primary tests: secret-provider, catalog-option, catalog API, schema, and data-plane interface suites passed; changed-path Ruff passed.
 - Remaining N04/B06 work: prove scoped secret behavior across all provider/config callers, leak-boundary checks, and production credential rotation evidence.
 
-## Implementation update — pending canonical manifest cutover (2026-09-13)
+## Implementation update — 2467b29 (2026-09-13)
 
-- Packet / status / candidate commit / owner: N02/B03 partial / VERIFY / pending atomic commit / publication compiler.
+- Packet / status / candidate commit / owner: N02/B03 partial / VERIFY / `2467b29` / publication compiler.
 - Observable behavior delivered: compiled Iceberg manifests now persist the canonical `iceberg.sql` catalog plugin ID instead of the retired Python class-path identity. Internal catalog construction metadata remains unchanged, and the strict data-plane binding validator accepts newly published rows.
 - Primary tests: publication compiler suite and elevated end-to-end Iceberg Flight smoke passed; pickle boundary unchanged.
 - Remaining N02/B03 work: clean installed-wheel migration proof and removal of remaining legacy readers from migration-only code.
+
+Regression evidence after the canonical manifest cutover: elevated local-socket
+`UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q` completed with
+all collected tests passing and only the repository's existing marked skips. The
+socket-backed connector, Flight, and E2E Iceberg lanes also passed separately.
+Direct UI TypeScript/Vite production build remains green (264.44 kB JavaScript,
+14.22 kB CSS). Release remains HOLD for the unresolved N03–N16 live qualification,
+capacity, recovery, and independent review gates.
 
 Regression after the handoff slices: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv
 run --no-sync pytest tests/control_plane tests/interfaces/control_plane
