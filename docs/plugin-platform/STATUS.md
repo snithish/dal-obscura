@@ -42,6 +42,10 @@ their underlying functionality is wholly absent.
 - Evidence: authoritative `uv run --no-sync pytest --durations=20 --junitxml=/tmp/dal-obscura-baseline.xml -q -rs` — 820 collected, 806 passed, 14 explicit skips, 0 failures in 125.531s; `uv run --no-sync ruff check .` and `ruff format --check .` — passed; governance UI `tsc -b`, Vite build and 5 lifecycle tests — passed (82.09 kB gzip JS). The Node 24 clean-install/image job remains a CI qualification gate.
 - Remaining N01/B02 work: execute the Node 24 clean install and immutable image/advisory checks in CI, then advance N02 contract consolidation. Release remains HOLD.
 
+Follow-up `docs/plugin-platform/BASELINE_20260914.md` was corrected after
+source inspection: the standalone SDK is the sole current contract validator;
+`common/plugin_api` now owns only registry, lockfile and lifecycle infrastructure.
+
 READY means all prerequisites pass. OPEN means remaining work with prerequisites
 not yet complete. ACTIVE means an agent owns a bounded slice. VERIFY means code
 exists but required execution or human evidence is missing. DONE requires every
