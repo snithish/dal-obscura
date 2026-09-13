@@ -64,10 +64,11 @@ def test_catalog_registry_routes_public_manifest_plugin_through_legacy_port(tmp_
         ServiceConfig(
             catalogs={
                 "datasets": CatalogConfig(
-                    name="datasets",
-                    type=cast(Any, "iceberg"),
-                    plugin_id="manifest",
-                    options={"root": str(root), "manifest_path": "manifest.json"},
+                name="datasets",
+                type=cast(Any, "iceberg"),
+                plugin_id="manifest",
+                revision=17,
+                options={"root": str(root), "manifest_path": "manifest.json"},
                 )
             }
         ),
@@ -80,6 +81,7 @@ def test_catalog_registry_routes_public_manifest_plugin_through_legacy_port(tmp_
     assert table_format.get_schema() == table.schema
     plan = table_format.plan(PlanRequest(target="default.users", columns=["*"]), max_tickets=4)
     assert len(plan.tasks) == 2
+    assert plan.tasks[0].partition.handle.catalog_revision == 17
     serialized = pickle.dumps(plan.tasks[0])
     restored = pickle.loads(serialized)
     output_schema, batches = restored.table_format.execute(restored.partition)
