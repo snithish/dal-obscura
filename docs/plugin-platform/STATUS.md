@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `1771f26` (catalog binding replacement;
+Implementation follow-up through `b178cc3` (conformance cleanup gate;
+catalog binding replacement;
 public-response compatibility fix;
 strict provider identity validation;
 admitted control-plane catalog
@@ -215,6 +216,8 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   namespace listing, and deterministic close operations. REST and manifest
   adapters implement bounded lifecycle methods; clean-wheel and external
   lifecycle evidence remain open.
+  The conformance runner now fails a plugin that omits `close()` instead of
+  treating missing cleanup as a pass.
   Service-side compatibility contracts and online wheel artifact evidence remain
   open.
 - X12 admitted loading and Iceberg adapter: **implementing**; entry-point loading now
@@ -386,6 +389,17 @@ providers before Phase A's security/correctness prerequisites are accepted.
   and `git diff --check`.
 - Remaining gaps: clean isolated wheels, external provider lifecycle, and complete
   X11/X12 acceptance evidence remain open. Pickle compatibility is unchanged.
+
+### X15 explicit cleanup conformance — `b178cc3`
+
+- State: implementing.
+- Behavior: catalog and format conformance now require an explicit callable
+  `close()` and record missing cleanup as a failure. Fixture plugins declare the
+  lifecycle contract; the redundant cancellation branch was removed.
+- Green evidence: `packages/plugin-conformance/tests/test_conformance_runner.py`
+  (23 passed), Ruff, Ty, and `git diff --check`.
+- Remaining gaps: provider interruption, real consumer cleanup, and external wheel
+  evidence remain open. Pickle compatibility is unchanged.
 
 ### X05 shared Arrow schema bounds — `fd20e72`
 
