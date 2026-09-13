@@ -25,6 +25,7 @@ from dal_obscura.common.config_store.db import (
     create_engine_from_url,
     session_factory,
 )
+from dal_obscura.common.plugin_api import load_plugin_lock_file
 from dal_obscura.control_plane.interfaces.api import (
     _create_oidc_nonce_actor_resolver,
     create_app,
@@ -61,7 +62,10 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
         engine = create_engine_from_url(database_url)
         check_config_store_schema(engine)
         oidc_resolver = _oidc_resolver(values)
-        plugin_registry = create_builtin_plugin_registry()
+        plugin_lock_file = _optional(values, "DAL_OBSCURA_PLUGIN_LOCK_FILE")
+        plugin_registry = create_builtin_plugin_registry(
+            allowlist=load_plugin_lock_file(plugin_lock_file) if plugin_lock_file else None
+        )
         app = create_app(
             session_factory(engine),
             admin_token=admin_token,

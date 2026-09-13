@@ -58,6 +58,7 @@ class DataPlaneRuntimeConfig:
     secret_provider: SecretProviderConfig = field(default_factory=SecretProviderConfig)
     profile: str = "local"
     ticket_cleanup_interval_seconds: int = 60
+    plugin_lock_file: str | None = None
 
 
 def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
@@ -106,6 +107,7 @@ def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
             default=60,
         ),
         secret_provider=_secret_provider_config(),
+        plugin_lock_file=_optional_env("DAL_OBSCURA_PLUGIN_LOCK_FILE"),
     )
     _validate_profile(config)
     return config

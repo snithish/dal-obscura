@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from dal_obscura.common.plugin_api import PluginDescriptor, PluginRegistry
+from collections.abc import Mapping
+
+from dal_obscura.common.plugin_api import (
+    PluginDescriptor,
+    PluginLock,
+    PluginRegistry,
+)
+from dal_obscura.common.plugin_api.contracts import PluginKind
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import IcebergCatalog
 from dal_obscura.data_plane.infrastructure.table_formats.iceberg import IcebergTableFormat
 
@@ -12,7 +19,9 @@ _BUILTIN_DISTRIBUTION = "dal-obscura"
 _BUILTIN_VERSION = "0.1.0"
 
 
-def create_builtin_plugin_registry() -> PluginRegistry:
+def create_builtin_plugin_registry(
+    *, allowlist: Mapping[tuple[PluginKind, str], PluginLock] | None = None
+) -> PluginRegistry:
     """Build and admit the trusted in-tree Iceberg catalog/format pair.
 
     The classes are kept behind the registry boundary so future external
@@ -54,6 +63,7 @@ def create_builtin_plugin_registry() -> PluginRegistry:
         capabilities=frozenset({"nested_schema", "snapshot_reads", "splittable_scan"}),
     )
     registry = PluginRegistry(
+        allowlist=allowlist,
         builtins={
             ("catalog", _ICEBERG_CATALOG_ID): (catalog_descriptor, IcebergCatalog),
             ("table_format", _ICEBERG_FORMAT_ID): (format_descriptor, IcebergTableFormat),

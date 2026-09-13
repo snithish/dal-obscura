@@ -17,6 +17,7 @@ from dal_obscura.common.config_store.db import (
     create_engine_from_url,
     session_factory,
 )
+from dal_obscura.common.plugin_api import load_plugin_lock_file
 from dal_obscura.data_plane.application.access_flow import AccessFlow
 from dal_obscura.data_plane.application.ports.identity import IdentityPort
 from dal_obscura.data_plane.application.use_cases.get_schema import GetSchemaUseCase
@@ -89,7 +90,13 @@ def main() -> None:
 
     identity = _identity_from_runtime(published_runtime, secret_provider=secret_provider)
     authorizer = PublishedConfigAuthorizer(config_store)
-    plugin_registry = create_builtin_plugin_registry()
+    plugin_registry = create_builtin_plugin_registry(
+        allowlist=(
+            load_plugin_lock_file(runtime_config.plugin_lock_file)
+            if runtime_config.plugin_lock_file
+            else None
+        )
+    )
     catalog_registry = PublishedConfigCatalogRegistry(
         config_store,
         secret_provider=secret_provider,

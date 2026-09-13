@@ -22,6 +22,7 @@ from dal_obscura.common.plugin_api.contracts import (
     TableHandle,
     TableIdentifier,
 )
+from dal_obscura.common.plugin_api.lockfile import load_plugin_lock_file
 from dal_obscura.common.plugin_api.registry import (
     PluginAdmissionError,
     PluginLock,
@@ -51,5 +52,6 @@ __all__ = [
     "TableHandle",
     "TableIdentifier",
     "build_plugin_lock",
+    "load_plugin_lock_file",
     "load_static_plugin_descriptor",
 ]
