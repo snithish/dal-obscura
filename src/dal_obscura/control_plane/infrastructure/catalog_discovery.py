@@ -83,6 +83,7 @@ def discover_public_catalog_tables(
     )
     try:
         deadline_at = monotonic() + DEFAULT_DEADLINE_SECONDS
+        _validate_public_catalog_lifecycle(plugin, context, deadline_at)
         continuation: str | None = None
         seen: set[str] = set()
         tables: list[CatalogTable] = []
@@ -110,6 +111,31 @@ def discover_public_catalog_tables(
         close = getattr(plugin, "close", None)
         if callable(close):
             close()
+
+
+def _validate_public_catalog_lifecycle(
+    plugin: Any,
+    context: Any,
+    deadline_at: float,
+) -> None:
+    required = ("validate_config", "list_namespaces", "list_tables", "close")
+    if not all(callable(getattr(plugin, name, None)) for name in required):
+        raise ValueError("Catalog plugin does not implement the required lifecycle")
+    _check_budget(deadline_at, context.cancel_check)
+    plugin.validate_config(context)
+    _check_budget(deadline_at, context.cancel_check)
+    namespaces = plugin.list_namespaces(context, namespace=())
+    for index, namespace in enumerate(namespaces):
+        _check_budget(deadline_at, context.cancel_check)
+        if index >= DEFAULT_MAX_NAMESPACES:
+            raise ValueError("Catalog discovery exceeded the namespace limit")
+        if not isinstance(namespace, (tuple, list)) or not namespace:
+            raise ValueError("Catalog plugin returned an invalid namespace")
+        if any(
+            not isinstance(segment, str) or not _valid_identifier_segment(segment)
+            for segment in namespace
+        ):
+            raise ValueError("Catalog plugin returned an invalid namespace")
 
 
 def _catalog_type(module: str) -> CatalogType:

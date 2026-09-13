@@ -41,6 +41,8 @@ def test_iceberg_discovery_lists_tables_across_namespaces():
 def test_public_catalog_discovery_uses_admitted_plugin_and_closes_it():
     closed = []
     received_revision = []
+    validated = []
+    listed_namespaces = []
 
     class PublicCatalog:
         descriptor = PluginDescriptor(
@@ -51,6 +53,15 @@ def test_public_catalog_discovery_uses_admitted_plugin_and_closes_it():
             distribution="fixture",
             version="1.0.0",
         )
+
+        def validate_config(self, context):
+            del context
+            validated.append(True)
+
+        def list_namespaces(self, context, *, namespace=()):
+            del context, namespace
+            listed_namespaces.append(True)
+            return (("default",),)
 
         def list_tables(self, context, *, continuation=None, limit):
             del context, limit
@@ -91,7 +102,32 @@ def test_public_catalog_discovery_uses_admitted_plugin_and_closes_it():
         }
     ]
     assert received_revision == [4]
+    assert validated == [True]
+    assert listed_namespaces == [True]
     assert closed == [True]
+
+
+def test_public_catalog_discovery_rejects_missing_lifecycle_methods() -> None:
+    class IncompleteCatalog:
+        def list_tables(self, context, *, continuation=None, limit):
+            del context, continuation, limit
+            return DiscoveryPage(entries=(), continuation=None)
+
+        def close(self):
+            return None
+
+    class Registry:
+        def load(self, kind, plugin_id):
+            del kind, plugin_id
+            return lambda config, context: IncompleteCatalog()
+
+    with pytest.raises(ValueError, match="required lifecycle"):
+        discover_public_catalog_tables(
+            "analytics",
+            "fixture.catalog",
+            {},
+            plugin_registry=Registry(),
+        )
 
 
 def test_iceberg_discovery_rejects_namespace_explosion():
