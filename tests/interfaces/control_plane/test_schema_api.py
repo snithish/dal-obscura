@@ -647,6 +647,25 @@ def test_publisher_can_review_and_publish_editor_draft_by_explicit_id(monkeypatc
     )
     assert published.status_code == 200, published.json()
 
+    changed = client.put(
+        f"/v1/assets/{asset['id']}/draft",
+        json={"expected_revision": selected["revision"], "rules": selected["rules"]},
+        headers=_bearer("editor-token"),
+    )
+    assert changed.status_code == 200, changed.json()
+    stale = client.post(
+        f"/v1/assets/{asset['id']}/policy-evaluate",
+        json={
+            "principal": "user1",
+            "groups": [],
+            "claims": {"tenant": "default"},
+            "draft_id": selected["id"],
+            "draft_revision": selected["revision"],
+        },
+        headers=_bearer("publisher-token"),
+    )
+    assert stale.status_code == 409
+
     foreign = client.post(
         f"/v1/assets/{asset['id']}/policy-review",
         json={"principal": "user1", "groups": [], "claims": {}, "draft_id": str(asset["id"])},

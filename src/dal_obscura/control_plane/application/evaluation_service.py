@@ -23,7 +23,7 @@ from dal_obscura.common.query_planning.field_paths import (
 )
 from dal_obscura.control_plane.application import policy_service, schema_service
 from dal_obscura.control_plane.application.access import ControlPlaneActor
-from dal_obscura.control_plane.application.errors import ValidationFailure
+from dal_obscura.control_plane.application.errors import PublicationConflictError, ValidationFailure
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
@@ -82,7 +82,7 @@ def evaluate_asset_policy(
         raise ValidationFailure("Policy draft not found")
     revision = 0 if draft is None else int(cast(int | str, draft["revision"]))
     if draft_revision is not None and revision != draft_revision:
-        raise ValidationFailure(
+        raise PublicationConflictError(
             "Policy draft revision changed; reread the draft before evaluating."
         )
     schema_digest = schema_service.schema_fingerprint(arrow_schema)

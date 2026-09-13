@@ -253,7 +253,7 @@ def create_asset_policy_version(  # noqa: C901
         else store.get_asset_policy_draft(asset_id=asset_id, author_principal=actor.identity_key())
     )
     if draft_id is not None and personal_draft is None:
-        raise ValidationFailure("Policy draft not found")
+        raise LookupError("Policy draft not found")
     if expected_draft_revision is not None:
         current_revision = (
             0 if personal_draft is None else int(cast(int | str, personal_draft["revision"]))
