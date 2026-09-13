@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `a318b97` (manifest nested schema identity validation at `a318b97`; bounded browser session lifetimes at `e6e1fdd`; ledger update for runtime descriptor checks at `f3adebb`; runtime descriptor verification at `e074d5c`; per-batch plugin output validation at `97da8cb`; public task payload boundary at `0f09d42`; ticket-handle metadata bounds at `fc90ddc`; secure REST auxiliary URI checks at `6ee3d81`; REST identifier validation at `4980609`; ledger update for manifest deadline enforcement at `827c6a9`; manifest deadline enforcement at `97663b7`; session-expiry fence at `4e2ac7d`; public option bounds at `17ab77f`; symlink rejection at `6136224`; malformed-entry isolation at `6c129d3`; REST descriptor contract at `7adb4d6`; concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
+Implementation follow-up through `079324e` (generic admitted catalog labels at `079324e`; manifest nested schema identity validation at `a318b97`; bounded browser session lifetimes at `e6e1fdd`; ledger update for runtime descriptor checks at `f3adebb`; runtime descriptor verification at `e074d5c`; per-batch plugin output validation at `97da8cb`; public task payload boundary at `0f09d42`; ticket-handle metadata bounds at `fc90ddc`; secure REST auxiliary URI checks at `6ee3d81`; REST identifier validation at `4980609`; ledger update for manifest deadline enforcement at `827c6a9`; manifest deadline enforcement at `97663b7`; session-expiry fence at `4e2ac7d`; public option bounds at `17ab77f`; symlink rejection at `6136224`; malformed-entry isolation at `6c129d3`; REST descriptor contract at `7adb4d6`; concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -48,6 +48,9 @@ The manifest/Parquet adapter now validates its ticket-bound schema identity meta
 against the pinned Arrow schema before opening a format. Collection paths use the
 same `$element`, `$key`, and `$value` markers as core policy resolution, including
 large-list and fixed-size-list encodings.
+Connections UI cards now show each catalog's admitted adapter identity and use
+backend-neutral onboarding copy, so plugin catalogs are not presented as an
+Iceberg-only workflow.
 Local probes are recorded in [the review](IMPLEMENTATION_REVIEW.md).
 Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_STATUS.md).
 
@@ -770,6 +773,20 @@ remain open.
   used.
 - Next permitted packet: continue X06 explicit schema-evolution policy and X03
   PostgreSQL transaction-barrier evidence.
+
+### X14 generic catalog onboarding copy — `079324e`
+
+- State: implementing.
+- Behavior: configured catalog cards render the persisted adapter identity, and
+  the empty onboarding state no longer assumes Iceberg. The existing descriptor
+  driven form and plugin-pair routing remain the source of selectable adapters.
+- Green evidence: governance UI TypeScript build and lifecycle tests pass; diff
+  checks pass.
+- Remaining gaps: browser accessibility journeys, live provider discovery,
+  activation semantics, and clean artifact evidence remain open.
+- Pickle compatibility: unchanged.
+- Next permitted packet: continue X03/X06 correctness work and X14 browser
+  acceptance evidence.
 
 ### X06 duplicate identity rejection — `5c17d04`
 
