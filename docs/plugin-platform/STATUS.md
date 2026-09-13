@@ -42,6 +42,14 @@ their underlying functionality is wholly absent.
 - Evidence: direct UI TypeScript build, Vite production build (272.19 kB JavaScript / 82.35 kB gzip), all 5 UI lifecycle/schema tests, and \`git diff --check\` passed.
 - Remaining N06/B09 work: adopt the selected accessible primitives/icon system, typed deep links, responsive visual review at required sizes, CSP/browser/axe evidence, and keyboard/screen-reader journeys. Remaining N07–N16 packets and live release gates stay open; release remains HOLD.
 
+## Implementation update — b2e559d (2026-09-14)
+
+- Packet / status / candidate commit / owner: N06/B09 and N09/B13 deep-link partial / VERIFY / \`b2e559d\` / governance UI.
+- Observable behavior delivered: URL locations now have a typed parser for page, asset, draft, tab, and positive history-version parameters. Asset workspace tabs restore on refresh, tab changes update same-origin history, and copied review links retain the active tab alongside the exact asset and draft IDs.
+- Changed paths: \`apps/governance-ui/src/navigation.ts\`, \`apps/governance-ui/src/main.tsx\`, \`apps/governance-ui/src/components/AssetWorkspace.tsx\`, and navigation tests. No backend, session, pickle serializer, serialized class, payload, or import path changed.
+- Evidence: 6 UI tests, direct TypeScript build, Vite production build (272.94 kB JavaScript / 82.59 kB gzip), and \`git diff --check\` passed.
+- Remaining N06/N09 work: browser route/back/refresh qualification, semantic version detail links, accessible primitive/icon system, responsive visual review, CSP/axe and keyboard/screen-reader evidence. Release remains HOLD.
+
 ## Implementation update — f99f441 (2026-09-14)
 
 - Packet / status / candidate commit / owner: N06/B09 foundation partial / VERIFY / \`f99f441\` / governance UI.
