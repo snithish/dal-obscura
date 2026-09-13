@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `44e6a0c` (draft write serialization;
+Implementation follow-up through `c11c0c2` (idempotency operation write locking;
+draft write serialization;
 Iceberg discovery provider cleanup;
 UI catalog-scoped secret inputs;
 catalog-scoped secret references;
@@ -212,6 +213,9 @@ production build, Ruff, and Ty with the public SDK source path configured.
   revision so provider changes force fresh evaluation. Personal draft saves now
   acquire the asset lock and lock the active draft row before revision comparison,
   closing the remaining direct write interleaving at the repository boundary.
+  Idempotency operation writes now acquire the same asset lock, so direct
+  repository callers cannot record a duplicate outcome outside the publication
+  serialization boundary.
 - X04 canonical evaluation: **implemented-unverified**; resolved mask values now
   flow from canonical preview and an unmatched-principal regression passes.
 - X05 canonical bounded schemas: **implemented-unverified**; canonical Arrow schema
@@ -607,6 +611,15 @@ providers before Phase A's security/correctness prerequisites are accepted.
   `git diff --check` passed.
 - Remaining gaps: PostgreSQL barrier-controlled interleavings and full rollback/
   multi-process evidence remain open.
+
+### X03 idempotency operation write locking — `c11c0c2`
+
+- State: implementing.
+- Behavior: publication operation records acquire the asset lock before insert,
+  preserving the publication lock order for direct callers and duplicate-key races.
+- Green evidence: policy-version/publication-store suites (17), Ruff, and
+  `git diff --check` passed.
+- Remaining gaps: PostgreSQL multi-process race and rollback evidence remain open.
 
 ### X14 scoped secret inputs in Connections — `2b81337`
 
