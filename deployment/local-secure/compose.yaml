@@ -35,7 +35,9 @@ services:
       - source: ui_key
         target: ui.key
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Compose resolves relative host paths against the first compose file
+      # (the production base), so keep the explicit local-secure prefix.
+      - ../local-secure/Caddyfile:/etc/caddy/Caddyfile:ro
 
 networks:
   backend:
