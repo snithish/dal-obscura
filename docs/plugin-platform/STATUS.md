@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `5d590b8` (control-plane descriptor identity checks;
+Implementation follow-up through `0bf6b1b` (forged descriptor regression;
+control-plane descriptor identity checks;
 control-plane built-in registry startup;
 control-plane schema/evaluation plugin
 routing; conformance lifecycle deadlines;
@@ -555,18 +556,17 @@ providers before Phase A's security/correctness prerequisites are accepted.
   wheel evidence, and live PostgreSQL/browser/provider acceptance remain open.
   Pickle compatibility is unchanged.
 
-### X13 control-plane descriptor identity — `5d590b8`
+### X13 control-plane descriptor identity — `0bf6b1b`
 
 - State: implementing.
 - Behavior: control-plane schema discovery now requires returned catalog and
   table-format instances to expose public descriptors whose kind and plugin ID
   exactly match the admitted binding before validation, resolution, or schema
   access proceeds.
-- Green evidence: `tests/control_plane/test_schema_service.py` (10 passed), Ruff,
+- Green evidence: `tests/control_plane/test_schema_service.py` (11 passed), Ruff,
   Ty, and `git diff --check`.
-- Remaining gaps: forged-descriptor negative coverage, external wheel/provider
-  evidence, and live PostgreSQL/browser acceptance remain open. Pickle
-  compatibility is unchanged.
+- Remaining gaps: external wheel/provider evidence and live PostgreSQL/browser
+  acceptance remain open. Pickle compatibility is unchanged.
 
 ### X16 REST namespace lifecycle — `8c73c41`
 
