@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `bf0d3e6` (secure-local parity contract tests;
+Implementation follow-up through `d2b7b72` (Python/DuckDB consumer CI lane;
+secure-local parity contract tests;
 executable backup integrity tests;
 atomic backup checksum preparation;
 backup checksum verification and
@@ -544,6 +545,10 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   socket permission). Real TLS/OIDC Flight runs, exact nested goldens across both
   admitted pairs, retry/expiry/revocation behavior, and clean version-matrix
   artifacts remain open.
+  A dedicated consumer acceptance path now exercises nested masked Arrow values
+  and DuckDB relation aggregation through the same loopback Flight server. The
+  CI integration lane enables it; this sandbox cannot bind Flight sockets, so
+  local execution remains an explicit environment limitation.
 - X19 secure deployment and identity lifecycle: **implementing**; production
   Compose now separates migration/control/data credentials, provisions isolated
   PostgreSQL roles, orders readiness through migration and post-migration ticket
