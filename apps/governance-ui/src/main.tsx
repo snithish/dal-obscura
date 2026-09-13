@@ -698,7 +698,9 @@ function ConnectionsView({ catalogs, publications, plugins, pluginStates, plugin
     for (const field of effectiveFields) {
       const value = config[field.name]?.trim();
       if (!value) continue;
-      options[field.name] = field.secret ? { secret: value } : value;
+      options[field.name] = field.secret
+        ? { secret: value, scope: `catalog:${name.trim()}` }
+        : value;
     }
     const existing = catalogs.find((catalog) => catalog.name === name.trim());
     try { await controlPlane.saveCatalog(name.trim(), pluginId === "iceberg.sql" ? "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog" : pluginId, options, existing?.revision); setMessage("Connection saved. Discovery remains bounded to this configured catalog."); setName(""); setConfig({}); onReload(); } catch (error) { setMessage((error as { status?: number })?.status === 409 ? "Connection changed elsewhere. Refresh before saving again." : "Connection was rejected by the control plane."); }
