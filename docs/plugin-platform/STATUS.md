@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `a2f7ff9` (isolated restore runbook and
+Implementation follow-up through `86e1eee` (A22 recovery/upgrade acceptance
+probes; isolated restore runbook and
 recovery helper hardening; encrypted PostgreSQL backup helpers; fresh-identity race correction;
 CI PostgreSQL concurrency lane;
 PostgreSQL draft CAS race gate;
@@ -1457,6 +1458,23 @@ and manifest packages.
   Pickle compatibility is unchanged.
 - This helper/runbook slice does not close A22; an executed recovery drill is
   still mandatory.
+
+### X20 recovery/upgrade acceptance probes — `86e1eee`
+
+- State: implemented-unverified.
+- Behavior: the A22 integration path now verifies trusted ticket fixtures across
+  bounded signing-key overlap, rejects restore without the exact isolated
+  confirmation, and provides an opt-in PostgreSQL drill that creates a real
+  session/ticket pair and verifies post-restore invalidation through the same
+  maintenance service.
+- Green evidence: `tests/integration/test_recovery_upgrade.py` passes its two
+  local probes and explicitly skips the PostgreSQL case when
+  `DAL_OBSCURA_POSTGRES_TEST_URL` is absent; Ruff, Ty, and `git diff --check`
+  pass.
+- Remaining gaps: run the PostgreSQL case against a disposable instance,
+  execute encrypted backup/restore with real `age` tooling, measure RPO/RTO,
+  and complete plugin drain/remove plus mixed-version upgrade/rollback evidence.
+  Pickle compatibility is unchanged.
 
 ### X19 production database privilege ordering — `18f8e64`
 
