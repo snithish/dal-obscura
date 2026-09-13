@@ -33,6 +33,14 @@ def test_field_path_preserves_quoted_reserved_collection_names():
     assert parse_field_path(rendered) == literal
 
 
+def test_field_path_preserves_brackets_inside_quoted_names():
+    literal = FieldPath((FieldSegment("name]with[brackets"),))
+
+    rendered = literal.to_human()
+
+    assert parse_field_path(rendered) == literal
+
+
 def test_field_path_resolves_nested_struct_list_and_map_nodes():
     schema = pa.schema(
         [

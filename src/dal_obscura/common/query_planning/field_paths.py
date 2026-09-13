@@ -231,15 +231,15 @@ def _split_path(value: str) -> list[tuple[str, bool]]:
     offset = 0
     while offset < len(value):
         if value[offset] == "[":
-            closing = value.find("]", offset)
-            if closing == -1:
-                raise ValueError("Unterminated quoted field name")
             try:
-                token = json.loads(value[offset + 1 : closing])
+                token, consumed = json.JSONDecoder().raw_decode(value[offset + 1 :])
             except json.JSONDecodeError as exc:
                 raise ValueError("Quoted field names must use JSON string syntax") from exc
             if not isinstance(token, str) or not token:
                 raise ValueError("Quoted field names must be non-empty text")
+            closing = offset + 1 + consumed
+            if closing >= len(value) or value[closing] != "]":
+                raise ValueError("Unterminated quoted field name")
             offset = closing + 1
             quoted = True
         else:
