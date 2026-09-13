@@ -136,10 +136,14 @@ class RestCatalog(CatalogPlugin):
 
 
 def _identifier(value: object) -> TableIdentifier:
-    if isinstance(value, (tuple, list)):
-        parts = tuple(str(part) for part in value)
-    else:
+    if not isinstance(value, (tuple, list)):
         raise ValueError("REST catalog returned an invalid table identifier")
+    parts_list: list[str] = []
+    for part in value:
+        if not isinstance(part, str):
+            raise ValueError("REST catalog returned an invalid table identifier")
+        parts_list.append(part)
+    parts = tuple(parts_list)
     if len(parts) < 2:
         raise ValueError("REST catalog returned an invalid table identifier")
     return TableIdentifier(namespace=parts[:-1], name=parts[-1])

@@ -85,6 +85,21 @@ def test_rest_catalog_paginates_bounded_sorted_identifiers():
     assert second.continuation is None
 
 
+def test_rest_catalog_rejects_non_string_provider_identifier_segments():
+    plugin = RestCatalog(_config(), _context())
+
+    class FakeCatalog:
+        def list_namespaces(self):
+            return [("default",)]
+
+        def list_tables(self, namespace):
+            return [("default", 42)]
+
+    plugin._catalog = FakeCatalog()
+    with pytest.raises(ValueError, match="identifier"):
+        plugin.list_tables(_context(), limit=10)
+
+
 def test_rest_catalog_does_not_copy_provider_io_credentials_into_handle():
     plugin = RestCatalog(_config(), _context())
 
