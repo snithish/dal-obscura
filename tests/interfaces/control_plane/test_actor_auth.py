@@ -177,7 +177,10 @@ def test_cookie_session_requires_csrf_header_for_mutations(monkeypatch):
     assert session.json()["principal"] == "asset-owner"
     assert rejected.status_code == 403
     assert rejected.json()["detail"] == "CSRF validation failed"
-    assert csrf.status_code == 403
+    # A valid CSRF token reaches the resource authorization boundary. The
+    # actor has no visibility of this synthetic asset, so the API deliberately
+    # conceals it as a not-found response rather than leaking its existence.
+    assert csrf.status_code == 404
     assert csrf.json()["detail"] != "CSRF validation failed"
 
 
