@@ -70,6 +70,14 @@ Follow-up `54bea07` makes typed-key migration rerunnable after an issuer is remo
 from configuration; current `issuer|u|subject` and `issuer|g|group` shapes are
 recognized without treating them as unresolved legacy data. Five migration tests pass.
 
+## Implementation update — 17e6855 (2026-09-14)
+
+- Packet / status / candidate commit / owner: N04/B06 plus N05/B08 partial / VERIFY / `17e6855` / OIDC token transport.
+- Observable behavior delivered: authorization-code and local demo token exchanges now use a no-redirect opener. A configured token endpoint cannot redirect a code, client credentials, or password exchange to another origin; the existing bounded ten-second timeout and generic failure response remain in force.
+- Changed paths: `control_plane/interfaces/session_api.py` only. No cookie, identity, pickle serializer, serialized class, payload, or import path changed.
+- Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane/test_oidc_login.py tests/interfaces/control_plane/test_actor_auth.py -q` — 40 passed; changed-path Ruff and `ty` checks passed.
+- Remaining N04/B06 work: live hostile transport counters, DNS/private-address policy, credential redaction, cancellation cleanup and deployment network controls. Remaining N05/B08 work is live IdP/browser evidence. Release remains HOLD.
+
 ## Implementation update — 8a615c3 (2026-09-14)
 
 - Packet / status / candidate commit / owner: N01/B01-B02 / VERIFY / `8a615c3` / toolchain and documentation.
