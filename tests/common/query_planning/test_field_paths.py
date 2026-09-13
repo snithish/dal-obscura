@@ -113,6 +113,13 @@ def test_field_path_rejects_unbounded_or_control_bearing_names():
         FieldPath(tuple([FieldSegment("root")] + [FieldSegment("child")] * MAX_FIELD_PATH_SEGMENTS))
 
 
+def test_field_path_rejects_out_of_range_field_ids():
+    with pytest.raises(ValueError, match="nonnegative 32-bit"):
+        FieldPath((FieldSegment("id", field_id=-1),))
+    with pytest.raises(ValueError, match="nonnegative 32-bit"):
+        FieldPath((FieldSegment("id", field_id=2**31),))
+
+
 def test_field_path_wire_round_trip_preserves_ids_and_collection_nodes():
     path = FieldPath(
         (

@@ -19,6 +19,7 @@ _SIMPLE_FIELD_NAME: Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*$")
 _COLLECTION_SEGMENTS: Final = {"$element", "$key", "$value"}
 MAX_FIELD_PATH_SEGMENTS: Final = 64
 MAX_FIELD_NAME_LENGTH: Final = 256
+MAX_FIELD_ID: Final = 2**31 - 1
 
 
 @dataclass(frozen=True)
@@ -70,6 +71,12 @@ class FieldPath:
                 or any(ord(char) < 0x20 or ord(char) == 0x7F for char in segment.name)
             ):
                 raise ValueError("Field segment names must be bounded printable text")
+            if isinstance(segment, FieldSegment) and segment.field_id is not None and (
+                isinstance(segment.field_id, bool)
+                or not isinstance(segment.field_id, int)
+                or not 0 <= segment.field_id <= MAX_FIELD_ID
+            ):
+                raise ValueError("Field segment IDs must be nonnegative 32-bit integers")
 
     def to_wire(self) -> dict[str, object]:
         """Returns the stable typed representation used by protocol payloads."""
