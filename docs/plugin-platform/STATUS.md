@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `6e6ec62` (REST qualification at `96068ee`; authoring routing at `6890b3f`).
+Implementation follow-up through `f76c0ef` (REST qualification at `96068ee`; authoring routing at `6890b3f`).
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -186,9 +186,10 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   entry points against the public SDK. Its catalog pins an operator-owned manifest,
   revision, nested Arrow schema, top-level field IDs, and root-scoped immutable file
   membership; its format validates every member schema and emits one task per
-  Parquet row group with nested projection support. Escape, unreadable-member, and
-  row-group, schema-drift, and corrupt-member execution tests pass. Core admission wiring, schema-scoped IDs beyond
-  top-level fields, retry evidence, and live wheel/UI/
+  Parquet row group with nested projection support. Nested descendants now receive
+  deterministic schema-scoped synthetic IDs anchored to manifest top-level IDs.
+  Escape, unreadable-member, schema-drift, and corrupt-member execution tests pass.
+  Core admission wiring, retry evidence, and live wheel/UI/
   consumer qualification remain open.
 - X18 consumer qualification: **implementing**; Python/DuckDB connector tests and
   the Java/Spark Maven reactor pass in the local lanes (the JVM lane required
