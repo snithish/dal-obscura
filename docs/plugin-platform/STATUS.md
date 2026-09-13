@@ -214,6 +214,14 @@ and schema tests passed (5). No pickle fixture or serializer paths changed.
 - Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/plugin_platform tests/control_plane tests/interfaces/control_plane tests/infrastructure/adapters -q`; `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/plugin_platform tests/architecture -q`; targeted `ruff check`; `uv build`.
 - Remaining N02/B03 work: strict old-input rejection and maintenance-mode conversion for known persisted records, removal of any remaining migration-only legacy readers where safe, and clean installed-wheel migration proof. Release remains HOLD.
 
+## Implementation update — 38f9dc2 (2026-09-13)
+
+- Packet / status / candidate commit / owner: N03/B05 partial / VERIFY / `38f9dc2` / control-plane repository + API.
+- Observable behavior delivered: existing catalog updates and asset metadata, owner, grant, and schema replacements now require the current revision. Missing preconditions fail with HTTP 428 and stale values retain HTTP 409 compare-and-set behavior; create-at-zero remains valid. Rejected writes leave the resource revision and data unchanged.
+- Changed paths: control-plane revision error, repository guards, shared route error mapping, and catalog/asset/repository regression tests. No pickle serializer, payload class, or import path changed.
+- Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane/test_catalogs_api.py tests/interfaces/control_plane/test_assets_api.py tests/control_plane/test_publication_store.py tests/control_plane/test_asset_grant_authorization.py -q` — 34 passed; changed-path Ruff and `git diff --check` passed.
+- Remaining N03/B05 work: runtime/auth-provider write preconditions, explicit activation generation precondition, safe structured error envelopes, process race evidence, and generated DTO/browser proof. Release remains HOLD.
+
 ## Implementation update — 2e23b25 (2026-09-13)
 
 - Packet / status / candidate commit / owner: N02/N05 UI authentication cleanup / VERIFY / `2e23b25` / governance UI.
