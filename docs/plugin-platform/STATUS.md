@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `56e9f91` (provider identity vocabulary;
+Implementation follow-up through `bd710ea` (canonical provider ID API regression;
+provider identity vocabulary;
 bounded provider field identities;
 external-catalog Iceberg schema bridge;
 catalog mutation lock ordering;
@@ -523,6 +524,16 @@ providers before Phase A's security/correctness prerequisites are accepted.
   suites (40 passed), Ruff, Ty, and `git diff --check`.
 - Remaining gaps: full provider-derived identity propagation through live
   external schemas and schema-evolution/reapproval evidence remain open.
+
+### X06 canonical provider ID API regression — `bd710ea`
+
+- State: implementing.
+- Behavior: the control-plane asset schema API regression now asserts that
+  unqualified submitted provider IDs are returned in the canonical
+  `iceberg:<id>` vocabulary while literal dotted and nested paths remain distinct.
+- Green evidence: targeted asset API test, Ruff, and `git diff --check`.
+- Remaining gaps: live provider-derived identity propagation and the complete
+  schema-evolution/reapproval matrix remain open.
 
 ### X03 direct mutation row locks — `165015f`
 
