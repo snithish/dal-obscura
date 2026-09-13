@@ -22,6 +22,25 @@ def test_static_descriptor_uses_the_public_admission_shape() -> None:
     assert "version" not in descriptor
 
 
+def test_static_descriptor_advertises_all_supported_rest_auth_options() -> None:
+    descriptor_path = (
+        Path(__file__).parents[1]
+        / "src"
+        / "dal_obscura_iceberg_rest"
+        / "dal_obscura-plugin.json"
+    )
+    descriptor = json.loads(descriptor_path.read_text(encoding="utf-8"))
+    fields = {field["name"]: field for field in descriptor["config_schema"]["fields"]}
+
+    assert fields["scope"]["type"] == "string"
+    assert fields["oauth2-server-uri"] == {
+        "name": "oauth2-server-uri",
+        "type": "uri",
+        "required": False,
+        "secret": False,
+    }
+
+
 def _context() -> ExecutionContext:
     return ExecutionContext(
         deadline=datetime.now(timezone.utc) + timedelta(minutes=1),

@@ -35,6 +35,8 @@ DESCRIPTOR = PluginDescriptor(
             {"name": "warehouse", "type": "string", "required": False, "secret": False},
             {"name": "token", "type": "secret_reference", "required": False, "secret": True},
             {"name": "credential", "type": "secret_reference", "required": False, "secret": True},
+            {"name": "scope", "type": "string", "required": False, "secret": False},
+            {"name": "oauth2-server-uri", "type": "uri", "required": False, "secret": False},
         ]
     },
 )
