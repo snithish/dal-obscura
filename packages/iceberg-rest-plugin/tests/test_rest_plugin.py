@@ -1,10 +1,25 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 from dal_obscura_iceberg_rest.catalog import RestCatalog
 from dal_obscura_plugin_api import CatalogConfig, ExecutionContext, TableIdentifier
+
+
+def test_static_descriptor_uses_the_public_admission_shape() -> None:
+    descriptor_path = (
+        Path(__file__).parents[1]
+        / "src"
+        / "dal_obscura_iceberg_rest"
+        / "dal_obscura-plugin.json"
+    )
+    descriptor = json.loads(descriptor_path.read_text(encoding="utf-8"))
+    assert descriptor["plugin_id"] == "iceberg.rest"
+    assert "distribution" not in descriptor
+    assert "version" not in descriptor
 
 
 def _context() -> ExecutionContext:
