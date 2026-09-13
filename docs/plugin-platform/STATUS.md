@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `1de2266` (installed-wheel plugin-lock CI;
+Implementation follow-up through `aab9d48` (review-probe reconciliation;
+installed-wheel plugin-lock CI;
 deterministic plugin-lock builder;
 mandatory CI skip gate;
 capacity evidence runbook;
@@ -2985,6 +2986,18 @@ otherwise continue locally executable X06/X07/X08 acceptance work
 - Remaining gaps: hosted clean-wheel execution, signed artifact provenance,
   production lock mounting, provider/consumer/browser/recovery evidence, and
   independent review remain open.
+
+### Review baseline reconciliation — `aab9d48`
+
+- State: implementing.
+- Behavior: the historical implementation review now maps each reproduced local
+  probe to its current regression evidence and distinguishes fixed local logic
+  from live PostgreSQL/provider/TLS/OIDC/browser/consumer/recovery/capacity and
+  independent-review gates. The pickle boundary remains explicitly unresolved
+  by design and protected by X00 fixtures.
+- Green evidence: documentation links and focused test paths were checked; the
+  full socket-enabled Python suite and architecture suite pass at the current
+  tree. No production-readiness claim is made.
 
 ## Evidence entry template
 
