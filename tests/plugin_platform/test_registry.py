@@ -50,6 +50,17 @@ def test_discovery_does_not_import_unapproved_entry_points() -> None:
     assert registry.discover() == {}
 
 
+def test_discovery_ignores_malformed_unallowlisted_entry_point() -> None:
+    registry = PluginRegistry(
+        allowlist={},
+        entry_points_fn=lambda: _EntryPoints(
+            [cast(_Entry, SimpleNamespace(name="../../escape", group="dal_obscura.catalogs.v1"))]
+        ),
+    )
+
+    assert registry.discover() == {}
+
+
 def test_admitted_entry_point_loads_only_after_lock_match() -> None:
     entry = _entry("iceberg.sql", "dal_obscura.catalogs.v1")
     registry = PluginRegistry(

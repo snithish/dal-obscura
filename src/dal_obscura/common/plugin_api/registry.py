@@ -169,7 +169,12 @@ class PluginRegistry:
         for kind, group in ENTRY_POINT_GROUPS.items():
             for entry in self._select(group):
                 plugin_id = str(entry.name)
-                self._validate_id(plugin_id)
+                # Ignore malformed, unallowlisted metadata. An installed
+                # third-party distribution must not be able to make reload
+                # fail or cause a denial of service before admission is even
+                # considered.
+                if not _PLUGIN_ID.fullmatch(plugin_id):
+                    continue
                 key = (kind, plugin_id)
                 if key in descriptors:
                     raise PluginAdmissionError(f"Duplicate plugin ID: {kind}:{plugin_id}")
