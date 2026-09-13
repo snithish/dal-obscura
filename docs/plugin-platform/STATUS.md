@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `cef5de4` (public-response compatibility fix;
+Implementation follow-up through `1771f26` (catalog binding replacement;
+public-response compatibility fix;
 strict provider identity validation;
 admitted control-plane catalog
 discovery; nested conformance bounds and
@@ -210,6 +211,10 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   `docs/plugin-platform/PLUGIN_API_COMPATIBILITY.md` defines additive, breaking,
   and migration rules. The SDK regression statically verifies that its import
   surface excludes service, FastAPI, SQLAlchemy, and PyIceberg modules.
+  Catalog and table-format protocols now expose config validation, structured
+  namespace listing, and deterministic close operations. REST and manifest
+  adapters implement bounded lifecycle methods; clean-wheel and external
+  lifecycle evidence remain open.
   Service-side compatibility contracts and online wheel artifact evidence remain
   open.
 - X12 admitted loading and Iceberg adapter: **implementing**; entry-point loading now
@@ -264,6 +269,9 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   Catalog configuration revisions are now carried separately in compiled
   publication config and take precedence when constructing runtime catalog
   handles, preventing provider-option edits from reusing old review evidence.
+  Republishing an existing catalog now replaces its compiled module, options, and
+  revision in the next immutable generation; stale catalog settings cannot survive
+  a reviewed configuration change.
   A deterministic `dal-obscura-migrate plugin-bindings` dry-run reports bound,
   exactly migratable, and unsupported legacy rows; `--apply` fills only exact
   built-in Iceberg identities in one transaction. Runtime registry routing,
@@ -357,6 +365,27 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
 Next implementation action: continue X03 with PostgreSQL barrier/CAS evidence and
 then complete X06 provider-derived and collection field identity rules. Do not add new
 providers before Phase A's security/correctness prerequisites are accepted.
+
+### X03 catalog binding replacement — `1771f26`
+
+- State: implementing.
+- Behavior: republishing a catalog with changed module, options, or revision now
+  replaces the matching compiled catalog entry in the next immutable generation.
+- Green evidence: policy-version, compiler, and API publication tests (51 passed),
+  Ruff, and `git diff --check`.
+- Remaining gaps: PostgreSQL barrier/rollback/idempotency and mixed-version evidence
+  remain open. Pickle compatibility is unchanged.
+
+### X11 catalog lifecycle contract — `364f4cc`
+
+- State: implementing.
+- Behavior: public and core SDK catalog protocols expose config validation,
+  structured namespace listing, and terminal close; table-format protocols expose
+  close. REST and manifest adapters implement the lifecycle methods.
+- Green evidence: REST/manifest package suites (27 passed), Ruff, Ty, UI type check,
+  and `git diff --check`.
+- Remaining gaps: clean isolated wheels, external provider lifecycle, and complete
+  X11/X12 acceptance evidence remain open. Pickle compatibility is unchanged.
 
 ### X05 shared Arrow schema bounds — `fd20e72`
 
