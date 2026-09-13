@@ -130,6 +130,62 @@ def test_public_catalog_discovery_rejects_missing_lifecycle_methods() -> None:
         )
 
 
+def test_public_catalog_discovery_rejects_when_process_capacity_is_exhausted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class OccupiedSlots:
+        def acquire(self, *, blocking: bool) -> bool:
+            assert blocking is False
+            return False
+
+        def release(self) -> None:
+            raise AssertionError("an unacquired slot must not be released")
+
+    monkeypatch.setattr(discovery, "_DISCOVERY_SLOTS", OccupiedSlots())
+
+    with pytest.raises(RuntimeError, match="capacity is exhausted"):
+        discover_public_catalog_tables(
+            "analytics",
+            "fixture.catalog",
+            {},
+            plugin_registry=object(),
+        )
+
+
+def test_public_catalog_discovery_releases_capacity_after_factory_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Slots:
+        acquired = 0
+        released = 0
+
+        def acquire(self, *, blocking: bool) -> bool:
+            assert blocking is False
+            self.acquired += 1
+            return True
+
+        def release(self) -> None:
+            self.released += 1
+
+    slots = Slots()
+    monkeypatch.setattr(discovery, "_DISCOVERY_SLOTS", slots)
+
+    class Registry:
+        def load(self, kind, plugin_id):
+            del kind, plugin_id
+            raise RuntimeError("factory lookup failed")
+
+    with pytest.raises(RuntimeError, match="factory lookup failed"):
+        discover_public_catalog_tables(
+            "analytics",
+            "fixture.catalog",
+            {},
+            plugin_registry=Registry(),
+        )
+
+    assert (slots.acquired, slots.released) == (1, 1)
+
+
 def test_public_catalog_discovery_rejects_forged_table_identifiers() -> None:
     class ForgedIdentifier:
         namespace = ("default",)

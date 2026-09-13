@@ -63,25 +63,28 @@ def discover_public_catalog_tables(
 
     if plugin_registry is None:
         raise ValueError("An admitted plugin registry is required for external discovery")
-    factory = plugin_registry.load("catalog", plugin_id)
-    if not callable(factory):
-        raise ValueError("Admitted catalog factory is invalid")
-    from dal_obscura_plugin_api import CatalogConfig, ExecutionContext, TableIdentifier
-
-    context = ExecutionContext(
-        deadline=datetime.now(timezone.utc) + timedelta(seconds=DEFAULT_DEADLINE_SECONDS),
-        correlation_id=f"catalog-discovery-{catalog_name}",
-    )
-    plugin = factory(
-        CatalogConfig(
-            plugin_id=plugin_id,
-            instance_id=catalog_name,
-            revision=revision,
-            options=dict(options),
-        ),
-        context,
-    )
+    if not _DISCOVERY_SLOTS.acquire(blocking=False):
+        raise RuntimeError("Catalog discovery capacity is exhausted; retry later")
+    plugin: Any | None = None
     try:
+        factory = plugin_registry.load("catalog", plugin_id)
+        if not callable(factory):
+            raise ValueError("Admitted catalog factory is invalid")
+        from dal_obscura_plugin_api import CatalogConfig, ExecutionContext, TableIdentifier
+
+        context = ExecutionContext(
+            deadline=datetime.now(timezone.utc) + timedelta(seconds=DEFAULT_DEADLINE_SECONDS),
+            correlation_id=f"catalog-discovery-{catalog_name}",
+        )
+        plugin = factory(
+            CatalogConfig(
+                plugin_id=plugin_id,
+                instance_id=catalog_name,
+                revision=revision,
+                options=dict(options),
+            ),
+            context,
+        )
         deadline_at = monotonic() + DEFAULT_DEADLINE_SECONDS
         _validate_public_catalog_lifecycle(plugin, context, deadline_at)
         continuation: str | None = None
@@ -117,6 +120,7 @@ def discover_public_catalog_tables(
         close = getattr(plugin, "close", None)
         if callable(close):
             close()
+        _DISCOVERY_SLOTS.release()
 
 
 def _validate_public_catalog_lifecycle(
