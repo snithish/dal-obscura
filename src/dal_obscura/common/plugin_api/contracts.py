@@ -16,6 +16,8 @@ _PLUGIN_ID = re.compile(r"[a-z][a-z0-9_.-]{0,63}\Z")
 _MAX_CONFIG_SCHEMA_DEPTH = 8
 _MAX_CONFIG_SCHEMA_NODES = 256
 _MAX_CONFIG_SCHEMA_STRING = 512
+_MAX_IDENTIFIER_SEGMENTS = 32
+_MAX_IDENTIFIER_SEGMENT_LENGTH = 256
 _FORBIDDEN_CONFIG_KEYS = frozenset(
     {"$ref", "$schema", "remote", "remote_url", "schema_url", "script", "html"}
 )
@@ -80,8 +82,17 @@ class TableIdentifier:
     name: str
 
     def __post_init__(self) -> None:
-        if not self.name or any(not part for part in (*self.namespace, self.name)):
-            raise ValueError("Table identifier segments must be non-empty")
+        segments = (*self.namespace, self.name)
+        if len(segments) > _MAX_IDENTIFIER_SEGMENTS:
+            raise ValueError("Table identifier has too many segments")
+        if any(
+            not isinstance(part, str)
+            or not part
+            or len(part) > _MAX_IDENTIFIER_SEGMENT_LENGTH
+            or any(ord(char) < 0x20 or ord(char) == 0x7F for char in part)
+            for part in segments
+        ):
+            raise ValueError("Table identifier segments must be bounded printable strings")
 
 
 @dataclass(frozen=True, slots=True)

@@ -4,13 +4,19 @@ from datetime import datetime, timezone
 
 import pyarrow as pa
 import pytest
-from dal_obscura_plugin_api import ExecutionContext as PublicExecutionContext
+from dal_obscura_plugin_api import (
+    ExecutionContext as PublicExecutionContext,
+)
+from dal_obscura_plugin_api import (
+    TableIdentifier as PublicTableIdentifier,
+)
 
 from dal_obscura.common.plugin_api.contracts import (
     CatalogConfig,
     ExecutionContext,
     PluginDescriptor,
     SchemaDescriptor,
+    TableIdentifier,
 )
 
 
@@ -105,3 +111,13 @@ def test_execution_context_rejects_ambiguous_or_unbounded_values(context_type) -
         context_type(**{**valid, "capabilities": frozenset({""})})
     with pytest.raises(ValueError, match="cancellation"):
         context_type(**{**valid, "cancel_check": "later"})
+
+
+@pytest.mark.parametrize("identifier_type", [TableIdentifier, PublicTableIdentifier])
+def test_table_identifier_rejects_unbounded_or_non_printable_segments(identifier_type) -> None:
+    with pytest.raises(ValueError, match="too many segments"):
+        identifier_type(namespace=tuple("ns" for _ in range(32)), name="users")
+    with pytest.raises(ValueError, match="bounded printable"):
+        identifier_type(namespace=("default",), name="orders\narchive")
+    with pytest.raises(ValueError, match="bounded printable"):
+        identifier_type(namespace=("default",), name=42)
