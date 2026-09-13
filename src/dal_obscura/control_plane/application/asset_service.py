@@ -13,6 +13,10 @@ from uuid import UUID
 
 from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.control_plane.application.access import ControlPlaneActor
+from dal_obscura.control_plane.application.catalog_service import (
+    ICEBERG_CATALOG_MODULE,
+    validate_descriptor_options,
+)
 from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control_plane.application.policy_service import ensure_asset_capability
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
@@ -102,13 +106,24 @@ def upsert_workspace_asset(
         ```
     """
 
-    if backend != "iceberg":
-        if plugin_registry is None:
-            raise ValidationFailure("Table-format plugin is not admitted")
-        admitted = plugin_registry.admitted() or plugin_registry.reload()
-        if ("table_format", backend) not in admitted:
-            raise ValidationFailure("Table-format plugin is not admitted")
     context = _required_workspace_context(store)
+    catalog_record = store.get_workspace_catalog(context, catalog)
+    catalog_module = str(catalog_record["module"])
+    if backend != "iceberg" or catalog_module != ICEBERG_CATALOG_MODULE:
+        if plugin_registry is None:
+            raise ValidationFailure("Plugin pair is not admitted")
+        admitted = plugin_registry.admitted() or plugin_registry.reload()
+        catalog_descriptor = admitted.get(("catalog", catalog_module))
+        format_descriptor = admitted.get(("table_format", backend))
+        if catalog_descriptor is None or format_descriptor is None:
+            raise ValidationFailure("Plugin pair is not admitted")
+        if not catalog_descriptor.capabilities.intersection(format_descriptor.capabilities):
+            raise ValidationFailure("Catalog and table-format capabilities do not overlap")
+        validate_descriptor_options(
+            format_descriptor,
+            options,
+            kind="Table-format",
+        )
     asset_id = store.upsert_asset(
         cell_id=context.cell_id,
         tenant_id=context.tenant_id,

@@ -239,7 +239,7 @@ def upsert_workspace_catalog(
         admitted = plugin_registry.admitted() or plugin_registry.reload()
         if ("catalog", module) not in admitted:
             raise ValidationFailure("Catalog plugin is not admitted")
-        _validate_descriptor_options(admitted[("catalog", module)], options)
+        validate_descriptor_options(admitted[("catalog", module)], options)
     validate_catalog_options(options, egress_allowlist=egress_allowlist)
     context = store.ensure_default_workspace_context()
     catalog_id = store.upsert_catalog(
@@ -331,7 +331,12 @@ def validate_catalog_options(
             )
 
 
-def _validate_descriptor_options(descriptor: PluginDescriptor, options: dict[str, Any]) -> None:
+def validate_descriptor_options(
+    descriptor: PluginDescriptor,
+    options: dict[str, Any],
+    *,
+    kind: str = "Catalog",
+) -> None:
     """Enforce the bounded declarative fields exposed by an admitted plugin."""
 
     raw_fields = descriptor.config_schema.get("fields")
@@ -345,7 +350,7 @@ def _validate_descriptor_options(descriptor: PluginDescriptor, options: dict[str
     }
     if unknown := sorted(set(options) - fields):
         raise ValidationFailure(
-            "Catalog options contain unsupported fields: " + ", ".join(unknown)
+            f"{kind} options contain unsupported fields: " + ", ".join(unknown)
         )
     required: set[str] = set()
     for item in field_specs:
@@ -357,7 +362,7 @@ def _validate_descriptor_options(descriptor: PluginDescriptor, options: dict[str
     )
     if missing:
         raise ValidationFailure(
-            "Catalog options are missing required fields: " + ", ".join(missing)
+            f"{kind} options are missing required fields: " + ", ".join(missing)
         )
 
 
