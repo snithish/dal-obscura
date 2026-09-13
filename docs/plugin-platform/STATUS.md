@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `a568309` (immutable infrastructure image
+Implementation follow-up through `70261b1` (separate local TLS trust domains;
+immutable infrastructure image
 digests; secure-local fail-closed preflight;
 strict test typing; secure-local
 deployment edge path;
@@ -687,6 +688,18 @@ providers before Phase A's security/correctness prerequisites are accepted.
   shell syntax, and `git diff --check` passed.
 - Remaining gaps: operators must supply verified digests; image signature/SBOM
   scans and a real Docker startup remain open.
+
+### X19 separate local TLS trust domains — `70261b1`
+
+- State: implemented-unverified.
+- Behavior: secure-local initialization now issues independent UI-edge and Flight
+  certificates/keys from the same local CA. A migration guard replaces the
+  earlier profile's copied UI key on the next `./run init`, preserving client-CA
+  verification without sharing a private key across services.
+- Green evidence: shell syntax, secure-local architecture test, YAML parse, and
+  `git diff --check` passed.
+- Remaining gaps: real TLS client/server handshake, browser OIDC flow, and
+  production certificate rotation evidence remain open.
 
 ### X14 scoped secret inputs in Connections — `2b81337`
 
