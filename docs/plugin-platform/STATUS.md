@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `e32ee60` (catalog revision binding and stale
+Implementation follow-up through `ec6ae68` (manifest identity/pagination fix;
+catalog revision binding and stale
 review protection; explicit plugin API compatibility
 policy and aligned version vocabulary; catalog revision propagation regression
 at `55f598c`; public adapter resource cleanup at `5afa3ae`; earlier slices remain
@@ -297,7 +298,9 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   deterministic schema-scoped synthetic IDs anchored to manifest top-level IDs.
   Escape, symlink, unreadable-member, schema-drift, and corrupt-member execution
   tests pass; deadline/cancellation checks run during manifest and row-group
-  planning.
+  planning. Discovery now emits and consumes string continuation tokens derived
+  from structured identifiers, and optional namespace/name fields preserve
+  literal dotted table names while retaining legacy dotted manifest keys.
   Core admission wiring, retry evidence, and live wheel/UI/
   consumer qualification remain open.
 - X18 consumer qualification: **implementing**; Python/DuckDB connector tests and
