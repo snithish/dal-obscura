@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `aab9d48` (review-probe reconciliation;
+Implementation follow-up through `a334c42` (operator lock-generation docs;
+review-probe reconciliation;
 installed-wheel plugin-lock CI;
 deterministic plugin-lock builder;
 mandatory CI skip gate;
@@ -2998,6 +2999,19 @@ otherwise continue locally executable X06/X07/X08 acceptance work
 - Green evidence: documentation links and focused test paths were checked; the
   full socket-enabled Python suite and architecture suite pass at the current
   tree. No production-readiness claim is made.
+
+### Operator plugin-lock workflow documentation — `2f0733a`, `a334c42`
+
+- State: implementing.
+- Behavior: the operator guide now documents generating a lock from exact
+  installed wheels, explicit catalog/table-format selections, factory-free
+  static descriptor inspection, atomic write/refusal to overwrite, and mounting
+  the same lock in both planes. An architecture test guards the command and
+  security wording.
+- Green evidence: operator-docs contract test (1 passed), targeted Ruff, and
+  `git diff --check` passed.
+- Remaining gaps: production artifact signing, deployment execution, and live
+  plugin/provider/consumer evidence remain open.
 
 ## Evidence entry template
 
