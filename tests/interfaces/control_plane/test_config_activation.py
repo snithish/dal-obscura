@@ -16,7 +16,7 @@ def test_activation_freezes_a_reviewed_generation_until_a_new_publication() -> N
         client.put(
             f"/v1/assets/{asset['id']}/owners",
             headers=ADMIN_HEADERS,
-            json={"owners": ["platform:admin"]},
+            json={"owners": ["platform:admin"], "expected_revision": 0},
         ).status_code
         == 200
     )

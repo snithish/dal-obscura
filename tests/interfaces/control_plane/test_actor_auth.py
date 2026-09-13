@@ -503,10 +503,15 @@ def test_group_owner_can_publish_policy_version_through_api():
     asset = _provision_owned_asset(client)
     grant = client.put(
         f"/v1/assets/{asset}/grants",
-        json={"grants": [{"principal": "group:asset-owners", "capability": "publish"}]},
+        json={
+            "grants": [{"principal": "group:asset-owners", "capability": "publish"}],
+            "expected_revision": 1,
+        },
         headers=ADMIN_HEADERS,
     )
-    _save_policy_draft(client, asset, [_allow_rule(row_filter="region = 'eu'")], _bearer("owner-token"))
+    _save_policy_draft(
+        client, asset, [_allow_rule(row_filter="region = 'eu'")], _bearer("owner-token")
+    )
 
     response = client.post(
         f"/v1/assets/{asset}/policy-versions",
@@ -525,7 +530,10 @@ def test_publish_uses_saved_draft_and_rejects_stale_draft_revision():
     owner = _bearer("owner-token")
     grant = client.put(
         f"/v1/assets/{asset}/grants",
-        json={"grants": [{"principal": "group:asset-owners", "capability": "publish"}]},
+        json={
+            "grants": [{"principal": "group:asset-owners", "capability": "publish"}],
+            "expected_revision": 1,
+        },
         headers=ADMIN_HEADERS,
     )
 
@@ -637,12 +645,18 @@ def test_asset_owner_can_delegate_read_without_edit_or_publish():
     asset = _provision_owned_asset(client)
     grant = client.put(
         f"/v1/assets/{asset}/grants",
-        json={"grants": [{"principal": "group:asset-owners", "capability": "grant"}]},
+        json={
+            "grants": [{"principal": "group:asset-owners", "capability": "grant"}],
+            "expected_revision": 1,
+        },
         headers=ADMIN_HEADERS,
     )
     grants = client.put(
         f"/v1/assets/{asset}/grants",
-        json={"grants": [{"principal": "outsider", "capability": "read"}]},
+        json={
+            "grants": [{"principal": "outsider", "capability": "read"}],
+            "expected_revision": 2,
+        },
         headers=_bearer("owner-token"),
     )
 
@@ -671,7 +685,10 @@ def test_asset_owner_cannot_delegate_grant_management():
     asset = _provision_owned_asset(client)
     grant = client.put(
         f"/v1/assets/{asset}/grants",
-        json={"grants": [{"principal": "group:asset-owners", "capability": "grant"}]},
+        json={
+            "grants": [{"principal": "group:asset-owners", "capability": "grant"}],
+            "expected_revision": 1,
+        },
         headers=ADMIN_HEADERS,
     )
 
@@ -692,7 +709,10 @@ def test_grant_manager_cannot_self_escalate_but_can_delegate_held_authority():
 
     delegated = client.put(
         f"/v1/assets/{asset}/grants",
-        json={"grants": [{"principal": "grant-manager", "capability": "grant"}]},
+        json={
+            "grants": [{"principal": "grant-manager", "capability": "grant"}],
+            "expected_revision": 1,
+        },
         headers=ADMIN_HEADERS,
     )
     self_escalation = client.put(
@@ -701,7 +721,8 @@ def test_grant_manager_cannot_self_escalate_but_can_delegate_held_authority():
             "grants": [
                 {"principal": "grant-manager", "capability": "grant"},
                 {"principal": "grant-manager", "capability": "edit"},
-            ]
+            ],
+            "expected_revision": 2,
         },
         headers=_bearer("grant-manager-token"),
     )
@@ -711,7 +732,8 @@ def test_grant_manager_cannot_self_escalate_but_can_delegate_held_authority():
             "grants": [
                 {"principal": "grant-manager", "capability": "grant"},
                 {"principal": "outsider", "capability": "edit"},
-            ]
+            ],
+            "expected_revision": 2,
         },
         headers=_bearer("grant-manager-token"),
     )
@@ -753,10 +775,12 @@ def test_platform_admin_can_assign_owner_and_bootstrap_policy():
 
     owners = client.put(
         f"/v1/assets/{asset}/owners",
-        json={"owners": ["group:asset-owners"]},
+        json={"owners": ["group:asset-owners"], "expected_revision": 0},
         headers=_bearer("admin-oidc-token"),
     )
-    policy = _save_policy_draft(client, asset, [_allow_rule(row_filter=None)], _bearer("admin-oidc-token"))
+    policy = _save_policy_draft(
+        client, asset, [_allow_rule(row_filter=None)], _bearer("admin-oidc-token")
+    )
 
     assert owners.status_code == 200
     assert owners.json()["owners"] == ["group:asset-owners"]
@@ -767,7 +791,7 @@ def _provision_owned_asset(client: TestClient) -> UUID:
     asset = _provision_asset_without_owner(client)
     response = client.put(
         f"/v1/assets/{asset}/owners",
-        json={"owners": ["group:asset-owners"]},
+        json={"owners": ["group:asset-owners"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
     assert response.status_code == 200

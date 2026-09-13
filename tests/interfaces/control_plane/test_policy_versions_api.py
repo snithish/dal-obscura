@@ -73,7 +73,7 @@ def test_policy_version_publish_rejects_assets_without_policy_rules():
     ).json()
     client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["user:alice@example.com"]},
+        json={"owners": ["user:alice@example.com"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
     client.put(
@@ -110,7 +110,7 @@ def test_policy_version_publish_rejects_missing_auth_provider():
     )
     client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["user:owner@example.com"]},
+        json={"owners": ["user:owner@example.com"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
 
@@ -130,7 +130,7 @@ def test_policy_version_publish_bootstraps_default_runtime_context():
     asset = _provision_draft(client)
     client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["user:owner@example.com"]},
+        json={"owners": ["user:owner@example.com"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
 
@@ -169,7 +169,7 @@ def test_policy_version_history_is_asset_focused():
     asset = _provision_draft(client)
     client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["user:owner@example.com"]},
+        json={"owners": ["user:owner@example.com"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
     created = client.post(
@@ -200,7 +200,7 @@ def test_policy_version_history_page_is_cursor_paginated():
     asset = _provision_draft(client)
     client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["user:owner@example.com"]},
+        json={"owners": ["user:owner@example.com"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
     created = [
@@ -228,7 +228,7 @@ def test_asset_policy_history_detail_and_restore_are_revisioned():
     asset = _provision_draft(client)
     client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["user:owner@example.com"]},
+        json={"owners": ["user:owner@example.com"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
     created = client.post(
@@ -277,7 +277,7 @@ def test_asset_policy_history_is_capability_scoped():
     asset = _provision_draft(client)
     client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["asset-owner"]},
+        json={"owners": ["asset-owner"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
     created = client.post(
@@ -306,7 +306,7 @@ def test_publish_idempotency_key_replays_committed_result_and_rejects_mismatch()
     asset = _provision_draft(client)
     client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["owner"]},
+        json={"owners": ["owner"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
     headers = {**ADMIN_HEADERS, "Idempotency-Key": "publish-once"}
@@ -355,7 +355,7 @@ def test_publication_failure_after_activation_rolls_back_audit_and_generation(mo
     asset = _provision_draft(client)
     client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["owner"]},
+        json={"owners": ["owner"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
     with session_factory(engine)() as session:
@@ -392,7 +392,7 @@ def test_replacement_publication_failure_preserves_previous_active_generation(mo
     asset = _provision_draft(client)
     client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["owner"]},
+        json={"owners": ["owner"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
     first = client.post(

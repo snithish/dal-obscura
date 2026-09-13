@@ -185,7 +185,7 @@ def _provision_draft(client: TestClient) -> dict[str, str]:
     )
     client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["user:owner@example.com"]},
+        json={"owners": ["user:owner@example.com"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
     client.put(

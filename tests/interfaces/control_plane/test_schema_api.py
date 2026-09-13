@@ -87,7 +87,7 @@ def _provision_reviewable_asset(client: TestClient) -> dict[str, object]:
     ).json()
     client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["user1"]},
+        json={"owners": ["user1"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
     draft = client.get(f"/v1/assets/{asset['id']}/draft", headers=ADMIN_HEADERS).json()
@@ -310,7 +310,7 @@ def test_production_publication_requires_current_server_review(monkeypatch) -> N
     )
     client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["analyst"]},
+        json={"owners": ["analyst"], "expected_revision": 0},
         headers={"authorization": "Bearer review-secret-for-test"},
     )
     monkeypatch.setattr(
@@ -366,7 +366,7 @@ def test_production_publication_rejects_schema_drift_after_review(monkeypatch) -
     asset = _provision_draft(client)
     client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["platform:admin"]},
+        json={"owners": ["platform:admin"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
     draft = client.get(f"/v1/assets/{asset['id']}/draft", headers=ADMIN_HEADERS).json()
@@ -490,7 +490,7 @@ def test_production_publication_rejects_asset_metadata_change_after_review(monke
     )
     changed = client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["new-owner"]},
+        json={"owners": ["new-owner"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
     published = client.post(
@@ -519,7 +519,7 @@ def test_explicit_empty_draft_is_reviewable_and_publishable_as_deny_all(monkeypa
     asset = _provision_draft(client)
     client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["platform:admin"]},
+        json={"owners": ["platform:admin"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
     current = client.get(f"/v1/assets/{asset['id']}/draft", headers=ADMIN_HEADERS).json()
@@ -579,7 +579,7 @@ def test_publisher_can_review_and_publish_editor_draft_by_explicit_id(monkeypatc
     asset = _provision_reviewable_asset(client)
     client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["editor"]},
+        json={"owners": ["editor"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
     client.put(

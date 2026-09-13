@@ -15,7 +15,7 @@ ICEBERG_CATALOG_MODULE = (
 
 def test_asset_owner_can_replace_policy_rules(db_session):
     service, asset_id = _workspace_asset(db_session)
-    service.replace_asset_owners(asset_id, ["user:alice@example.com"])
+    service.replace_asset_owners(asset_id, ["user:alice@example.com"], expected_revision=0)
 
     service.replace_policy_rules(
         asset_id,
@@ -32,7 +32,7 @@ def test_asset_owner_can_replace_policy_rules(db_session):
 
 def test_group_owner_can_replace_policy_rules(db_session):
     service, asset_id = _workspace_asset(db_session)
-    service.replace_asset_owners(asset_id, ["group:data-owners"])
+    service.replace_asset_owners(asset_id, ["group:data-owners"], expected_revision=0)
 
     service.replace_policy_rules(
         asset_id,
@@ -49,7 +49,7 @@ def test_group_owner_can_replace_policy_rules(db_session):
 
 def test_outsider_cannot_replace_policy_rules(db_session):
     service, asset_id = _workspace_asset(db_session)
-    service.replace_asset_owners(asset_id, ["user:alice@example.com"])
+    service.replace_asset_owners(asset_id, ["user:alice@example.com"], expected_revision=0)
 
     with pytest.raises(AuthorizationFailure, match="Only platform admins or asset owners"):
         service.replace_policy_rules(
@@ -65,7 +65,9 @@ def test_outsider_cannot_replace_policy_rules(db_session):
 
 def test_federated_asset_owner_is_scoped_to_issuer(db_session):
     service, asset_id = _workspace_asset(db_session)
-    service.replace_asset_owners(asset_id, ["https://issuer-a.example/|alice"])
+    service.replace_asset_owners(
+        asset_id, ["https://issuer-a.example/|alice"], expected_revision=0
+    )
 
     service.replace_policy_rules(
         asset_id,
@@ -91,7 +93,7 @@ def test_federated_asset_owner_is_scoped_to_issuer(db_session):
 
 def test_asset_owner_does_not_receive_publish_or_grant_implicitly(db_session):
     service, asset_id = _workspace_asset(db_session)
-    service.replace_asset_owners(asset_id, ["user:alice@example.com"])
+    service.replace_asset_owners(asset_id, ["user:alice@example.com"], expected_revision=0)
     owner = ControlPlaneActor(
         principal="user:alice@example.com",
         groups=(),
@@ -125,6 +127,7 @@ def test_policy_preview_uses_server_policy_resolution(db_session):
             {"name": "email", "type": "string", "nullable": True},
             {"name": "region", "type": "string", "nullable": True},
         ],
+        expected_revision=0,
     )
     service.replace_policy_rules(
         asset_id,

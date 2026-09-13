@@ -9,7 +9,7 @@ def test_audit_events_are_transactional_redacted_and_scoped() -> None:
     asset = _provision_draft(client)
     client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["asset-owner"]},
+        json={"owners": ["asset-owner"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
     current_draft = client.get(f"/v1/assets/{asset['id']}/draft", headers=ADMIN_HEADERS).json()
@@ -69,12 +69,12 @@ def test_audit_page_uses_keyset_cursor_and_preserves_scope() -> None:
     asset = _provision_draft(client)
     client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["asset-owner"]},
+        json={"owners": ["asset-owner"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
     client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["asset-owner", "backup-owner"]},
+        json={"owners": ["asset-owner", "backup-owner"], "expected_revision": 1},
         headers=ADMIN_HEADERS,
     )
     first = client.get("/v1/audit/events/page?limit=1", headers=_bearer("owner-token"))

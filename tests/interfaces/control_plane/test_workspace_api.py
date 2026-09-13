@@ -56,7 +56,7 @@ def test_workspace_observations_bind_to_active_generation_without_claiming_fligh
     owners = client.put(
         f"/v1/assets/{asset['id']}/owners",
         headers=ADMIN_HEADERS,
-        json={"owners": ["platform:admin"]},
+        json={"owners": ["platform:admin"], "expected_revision": 0},
     )
     assert owners.status_code == 200, owners.json()
     published = client.post(
@@ -97,7 +97,7 @@ def test_workspace_publication_management_is_admin_scoped_and_staged():
     assert client.put(
         f"/v1/assets/{asset['id']}/owners",
         headers=ADMIN_HEADERS,
-        json={"owners": ["platform:admin"]},
+        json={"owners": ["platform:admin"], "expected_revision": 0},
     ).status_code == 200
 
     created = client.post("/v1/workspace/publications", headers=ADMIN_HEADERS)
@@ -139,7 +139,7 @@ def test_workspace_publication_activation_rejects_stale_generation_precondition(
     assert client.put(
         f"/v1/assets/{asset['id']}/owners",
         headers=ADMIN_HEADERS,
-        json={"owners": ["platform:admin"]},
+        json={"owners": ["platform:admin"], "expected_revision": 0},
     ).status_code == 200
     first = client.post("/v1/workspace/publications", headers=ADMIN_HEADERS).json()
     second = client.post("/v1/workspace/publications", headers=ADMIN_HEADERS).json()
@@ -226,7 +226,7 @@ def test_policy_publish_versions_one_asset_without_publishing_other_drafts():
     first_asset = _provision_draft(client)
     client.put(
         f"/v1/assets/{first_asset['id']}/owners",
-        json={"owners": ["user:owner@example.com"]},
+        json={"owners": ["user:owner@example.com"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
     second_asset = client.put(
@@ -240,7 +240,7 @@ def test_policy_publish_versions_one_asset_without_publishing_other_drafts():
     ).json()
     client.put(
         f"/v1/assets/{second_asset['id']}/owners",
-        json={"owners": ["user:owner@example.com"]},
+        json={"owners": ["user:owner@example.com"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
     save_policy_draft(

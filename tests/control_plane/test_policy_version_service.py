@@ -97,7 +97,7 @@ def test_publication_failure_rolls_back_generation_audit_and_operation(
         ],
         actor=admin,
     )
-    service.replace_asset_owners(asset_id, ["user:owner@example.com"])
+    service.replace_asset_owners(asset_id, ["user:owner@example.com"], expected_revision=0)
     service.replace_workspace_auth_providers(
         [
             {

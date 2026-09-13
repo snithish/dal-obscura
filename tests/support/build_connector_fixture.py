@@ -602,6 +602,7 @@ def _provision_control_plane(
         service.replace_asset_owners(
             asset_id=UUID(asset["id"]),
             owners=["user:fixture-owner@example.com"],
+            expected_revision=0,
         )
         service.replace_auth_providers(
             cell_id=cell_id,

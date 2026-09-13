@@ -66,7 +66,7 @@ def test_api_provisions_and_activates_default_policy_version():
     )
     client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={"owners": ["user:owner@example.com"]},
+        json={"owners": ["user:owner@example.com"], "expected_revision": 0},
         headers=headers,
     )
     client.put(
