@@ -6,6 +6,7 @@ operator-provided database rather than silently substituting SQLite.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -64,6 +65,90 @@ def test_restore_helper_requires_explicit_isolated_confirmation() -> None:
     )
     assert result.returncode == 2
     assert "I_UNDERSTAND_ISOLATED_RESTORE" in result.stderr
+
+
+def _fake_command(directory: Path, name: str, body: str) -> None:
+    command = directory / name
+    command.write_text(f"#!/bin/sh\nset -eu\n{body}\n")
+    command.chmod(0o700)
+
+
+def test_backup_helper_writes_checksum_and_refuses_overwrite(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _fake_command(bin_dir, "pg_dump", "printf 'synthetic-backup'")
+    _fake_command(
+        bin_dir,
+        "age",
+        """
+        out=""
+        while [ "$#" -gt 0 ]; do
+          if [ "$1" = "--output" ]; then out=$2; shift 2; else shift; fi
+        done
+        cat > "$out"
+        """,
+    )
+    output = tmp_path / "backup.age"
+    script = Path(__file__).parents[2] / "scripts" / "backup_postgres.sh"
+    environment = {
+        **os.environ,
+        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "DAL_OBSCURA_DATABASE_URL": "postgresql://synthetic",
+        "DAL_OBSCURA_BACKUP_RECIPIENT": "age1synthetic",
+    }
+
+    first = subprocess.run(
+        ["sh", str(script), str(output)],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert first.returncode == 0, first.stderr
+    assert output.read_bytes() == b"synthetic-backup"
+    checksum = output.with_name(output.name + ".sha256")
+    assert checksum.read_text() == (
+        f"{hashlib.sha256(b'synthetic-backup').hexdigest()}  {output}\n"
+    )
+
+    second = subprocess.run(
+        ["sh", str(script), str(output)],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert second.returncode == 2
+    assert "refusing to overwrite" in second.stderr
+
+
+def test_restore_helper_rejects_corrupt_checksum_before_provider_tools(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _fake_command(bin_dir, "age", "cat >/dev/null; exit 99")
+    _fake_command(bin_dir, "pg_restore", "exit 99")
+    _fake_command(bin_dir, "dal-obscura-maintenance", "exit 99")
+    backup = tmp_path / "backup.age"
+    backup.write_bytes(b"synthetic-backup")
+    backup.with_name(backup.name + ".sha256").write_text("0" * 64 + f"  {backup}\n")
+    identity = tmp_path / "identity"
+    identity.write_text("AGE-SECRET-KEY-1SYNTHETIC\n")
+    script = Path(__file__).parents[2] / "scripts" / "restore_postgres.sh"
+    result = subprocess.run(
+        ["sh", str(script), str(backup)],
+        env={
+            **os.environ,
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "DAL_OBSCURA_DATABASE_URL": "postgresql://synthetic",
+            "DAL_OBSCURA_AGE_IDENTITY": str(identity),
+            "DAL_OBSCURA_RESTORE_CONFIRM": "I_UNDERSTAND_ISOLATED_RESTORE",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "checksum verification failed" in result.stderr
 
 
 @pytest.fixture()
