@@ -34,6 +34,14 @@ their underlying functionality is wholly absent.
 - N15 — Deployment/recovery/artifact integrity: OPEN; requires N05/N12/N13/N14; B20/B21.
 - N16 — Independent security/UX acceptance: OPEN; requires N01–N15; B22/all G/B.
 
+## Implementation update — b7bc1e8 (2026-09-14)
+
+- Packet / status / candidate commit / owner: N04/B06 partial / VERIFY / `b7bc1e8` / Iceberg REST plugin.
+- Observable behavior delivered: the REST catalog adapter now applies bounded connect/read timeouts to every PyIceberg HTTP request, including the provider's initial configuration fetch. An active execution deadline narrows both values per request, and cancellation is checked immediately before transport. Timeout options are admitted as typed integer milliseconds with strict lower and upper bounds; invalid values fail before provider construction.
+- Changed paths: `packages/iceberg-rest-plugin/src/dal_obscura_iceberg_rest/catalog.py`, its static plugin descriptor, and focused REST plugin tests. No pickle serializer, serialized class, payload, or import path changed.
+- Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest packages/iceberg-rest-plugin/tests/test_rest_plugin.py tests/plugin_platform tests/interfaces/control_plane/test_plugins_api.py -q` — all collected tests passed; plugin Ruff check and format check passed; `ty check packages/iceberg-rest-plugin/src` passed. The timeout propagation test records a two-second execution budget being applied as a smaller `(connect, read)` pair.
+- Remaining N04/B06 work: real hostile local transport counters, redirect/DNS/private-address enforcement across metadata/data/delete destinations, cancellation that closes provider tasks, credential redaction scans, deployment network policy and live storage qualification. Release remains HOLD.
+
 ## Implementation update — 8a615c3 (2026-09-14)
 
 - Packet / status / candidate commit / owner: N01/B01-B02 / VERIFY / `8a615c3` / toolchain and documentation.
