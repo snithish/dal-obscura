@@ -90,6 +90,9 @@ def issue_review_token(
         **evaluation,
         "review_token": token,
         "review_expires_at": payload["expires_at"],
+        "review_draft_id": payload["draft_id"],
+        "review_draft_author": payload["draft_author"],
+        "reviewer": actor.identity_key(),
     }
 
 

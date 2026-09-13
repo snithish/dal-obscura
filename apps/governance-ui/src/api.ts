@@ -88,6 +88,9 @@ export type Preview = {
   evidence?: Record<string, unknown>;
   review_token?: string;
   review_expires_at?: number;
+  review_draft_id?: string | null;
+  review_draft_author?: string | null;
+  reviewer?: string;
 };
 
 export type Session = {
@@ -428,7 +431,7 @@ export const controlPlane = {
     } satisfies Preview;
   },
   review: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, unknown>; draft_id?: string; draft_revision?: number }) => {
-    const raw = await request<{ decision: "allow" | "deny"; allowed_columns: string[]; masks: Array<{ column: string; type: Mask["type"] }>; row_filter: string | null; output_rows: number; rows: Array<Record<string, unknown>>; evidence: Record<string, unknown>; review_token: string; review_expires_at: number }>("/v1/assets/" + assetId + "/policy-review", {
+    const raw = await request<{ decision: "allow" | "deny"; allowed_columns: string[]; masks: Array<{ column: string; type: Mask["type"] }>; row_filter: string | null; output_rows: number; rows: Array<Record<string, unknown>>; evidence: Record<string, unknown>; review_token: string; review_expires_at: number; review_draft_id: string | null; review_draft_author: string | null; reviewer: string }>("/v1/assets/" + assetId + "/policy-review", {
       method: "POST",
       body: JSON.stringify(persona),
     });
@@ -444,6 +447,9 @@ export const controlPlane = {
       evidence: raw.evidence,
       review_token: raw.review_token,
       review_expires_at: raw.review_expires_at,
+      review_draft_id: raw.review_draft_id,
+      review_draft_author: raw.review_draft_author,
+      reviewer: raw.reviewer,
     } satisfies Preview;
   },
 };
