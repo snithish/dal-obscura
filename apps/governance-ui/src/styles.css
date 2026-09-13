@@ -118,3 +118,12 @@ td small { display: block; color: #61736e; margin-top: 4px; }
 :root[data-theme="dark"] input, :root[data-theme="dark"] textarea, :root[data-theme="dark"] select { background: #1e293b; color: #f8fafc; border-color: #64748b; }
 :root[data-theme="dark"] .notice { background: #164e63; border-color: #67e8f9; }
 :root[data-theme="dark"] .secondary { background: #1e293b; color: #e0e7ff; border-color: #64748b; }
+.palette-backdrop { position: fixed; inset: 0; z-index: 20; display: grid; place-items: start center; padding-top: 15vh; background: rgb(15 23 42 / 55%); }
+.command-palette { width: min(560px, calc(100vw - 32px)); background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 20px 60px rgb(15 23 42 / 25%); padding: 14px; }
+.command-palette > input { width: 100%; min-height: 40px; border: 1px solid #94a3b8; border-radius: 6px; padding: 9px 11px; font-size: 16px; }
+.command-palette [role="listbox"] { display: grid; gap: 4px; margin-top: 10px; }
+.command-palette [role="option"] { border: 0; border-radius: 6px; background: transparent; color: #0f172a; text-align: left; padding: 11px; font-size: 15px; }
+.command-palette [role="option"]:hover, .command-palette [role="option"]:focus-visible { background: #eef2ff; color: #3730a3; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .command-palette { background: #111827; border-color: #64748b; } :root:not([data-theme="light"]) .command-palette [role="option"] { color: #f8fafc; } }
+:root[data-theme="dark"] .command-palette { background: #111827; border-color: #64748b; }
+:root[data-theme="dark"] .command-palette [role="option"] { color: #f8fafc; }
