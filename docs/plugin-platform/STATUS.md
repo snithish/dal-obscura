@@ -344,6 +344,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane tests/interfaces/control_plane tests/plugin_platform tests/infrastructure/adapters -q` passed with all collected tests green after the persistent auth revision changes. The UI TypeScript/Vite build and changed-path Ruff checks also pass. No pickle serializer or task payload files were modified.
 - Release remains HOLD for the required PostgreSQL two-process barriers, live OIDC/browser lifecycle, generated DTO/browser proof, real catalog/consumer matrix, capacity/recovery, and independent security/UX acceptance.
 
+## Implementation update — 1a33f92 (2026-09-13)
+
+- Packet / status / candidate commit / owner: N05/B08 partial / VERIFY / `1a33f92` / control-plane security headers.
+- Observable behavior delivered: API and auth responses now emit a strict same-origin Content-Security-Policy with no `unsafe-eval`, unrestricted scripts, framing, or form targets, alongside existing anti-sniff/referrer protections.
+- Evidence: actor-auth security-header regression passed; changed-path Ruff passed. A built-browser CSP inspection remains part of the live OIDC/browser gate.
+- Remaining N05/B08 work: real OIDC code/PKCE browser journey, cookie/expiry/role freshness, and production profile bootstrap/recovery evidence. Release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
