@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `7629316` (secure-local fail-closed preflight;
+Implementation follow-up through `a568309` (immutable infrastructure image
+digests; secure-local fail-closed preflight;
 strict test typing; secure-local
 deployment edge path;
 stream iterator cleanup;
@@ -675,6 +676,17 @@ providers before Phase A's security/correctness prerequisites are accepted.
   `git diff --check` passed.
 - Remaining gaps: real Docker startup, IdP/TLS browser flow, PostgreSQL role
   denial/allowance, and production artifact/recovery evidence remain open.
+
+### X19 immutable infrastructure images — `a568309`
+
+- State: implemented-unverified.
+- Behavior: production Compose now requires a digest-pinned PostgreSQL image for
+  both the database and grants job. The secure-local profile requires digest-
+  pinned PostgreSQL and Caddy images alongside the application images.
+- Green evidence: production and secure-local architecture tests, YAML parse,
+  shell syntax, and `git diff --check` passed.
+- Remaining gaps: operators must supply verified digests; image signature/SBOM
+  scans and a real Docker startup remain open.
 
 ### X14 scoped secret inputs in Connections — `2b81337`
 
