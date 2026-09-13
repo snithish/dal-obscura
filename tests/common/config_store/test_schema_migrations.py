@@ -52,6 +52,8 @@ def test_migrate_config_store_creates_current_schema_from_empty_database() -> No
     assert "data_plane_tickets" in inspector.get_table_names()
     runtime_columns = {column["name"] for column in inspector.get_columns("cell_runtime_settings")}
     assert "max_ticket_exchanges" in runtime_columns
+    catalog_columns = {column["name"] for column in inspector.get_columns("catalogs")}
+    assert "revision" in catalog_columns
 
 
 def test_check_config_store_schema_passes_after_explicit_migration() -> None:
@@ -70,7 +72,7 @@ def test_migrate_config_store_is_idempotent() -> None:
     with engine.connect() as connection:
         version = connection.scalar(text("SELECT version_num FROM alembic_version"))
 
-    assert version == "20260913_0014"
+    assert version == "20260913_0015"
 
 
 def test_migrate_config_store_upgrades_legacy_runtime_settings_column() -> None:

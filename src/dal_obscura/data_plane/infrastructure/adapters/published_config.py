@@ -472,12 +472,20 @@ def _catalog_config_from_published_catalog(
     config = _mapping(catalog.config)
     options = dict(_mapping(config.get("options")))
     options.pop("provider_modules", None)
+    raw_revision = config.get("revision")
+    revision = (
+        raw_revision
+        if isinstance(raw_revision, int)
+        and not isinstance(raw_revision, bool)
+        and raw_revision >= 0
+        else catalog.plugin_revision if catalog.plugin_revision is not None else 0
+    )
     return CatalogConfig(
         name=catalog.catalog,
         type=_catalog_type(config),
         options=options,
         plugin_id=plugin_id,
-        revision=catalog.plugin_revision if catalog.plugin_revision is not None else 0,
+        revision=revision,
     )
 
 

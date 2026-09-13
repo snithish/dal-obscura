@@ -28,6 +28,7 @@ class CatalogDraft:
     name: str
     module: str
     options: dict[str, Any]
+    revision: int = 0
 
 
 @dataclass(frozen=True)

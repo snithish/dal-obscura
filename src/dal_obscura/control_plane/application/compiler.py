@@ -63,7 +63,11 @@ class PublicationCompiler:
             CompiledCatalog(
                 tenant_id=catalog.tenant_id,
                 catalog=catalog.name,
-                config={"module": catalog.module, "options": dict(catalog.options)},
+                config={
+                    "module": catalog.module,
+                    "options": dict(catalog.options),
+                    "revision": catalog.revision,
+                },
             )
             for catalog in draft.catalogs
         ]

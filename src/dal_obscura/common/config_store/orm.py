@@ -102,6 +102,9 @@ class CatalogRecord(Base):
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     module: Mapped[str] = mapped_column(Text, nullable=False)
     options_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    # Monotonic generation for provider configuration changes. Published
+    # reviews bind to this value so a catalog edit cannot reuse old evidence.
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class AssetRecord(Base):

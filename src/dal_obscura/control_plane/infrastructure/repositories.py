@@ -319,7 +319,7 @@ class PublicationStore:
                 CatalogRecord.cell_id == cell_id,
                 CatalogRecord.tenant_id == tenant_id,
                 CatalogRecord.name == name,
-            )
+            ).with_for_update()
         )
         if existing is None:
             catalog_id = uuid4()
@@ -335,8 +335,10 @@ class PublicationStore:
             )
         else:
             catalog_id = existing.id
-            existing.module = module
-            existing.options_json = options
+            if existing.module != module or existing.options_json != options:
+                existing.module = module
+                existing.options_json = options
+                existing.revision += 1
         self._session.flush()
         return catalog_id
 
@@ -725,6 +727,7 @@ class PublicationStore:
                 "name": record.name,
                 "module": record.module,
                 "options": dict(record.options_json),
+                "revision": record.revision,
             }
             for record in self._session.scalars(
                 select(CatalogRecord)
@@ -910,6 +913,7 @@ class PublicationStore:
         return {
             **self._workspace_asset_row(record, catalog),
             "revision": record.revision,
+            "catalog_revision": catalog.revision,
             "options": dict(record.options_json),
             "schema_fields": self.list_asset_schema_fields(asset_id),
             "policy_rules": self.list_policy_rules(asset_id),
@@ -1617,6 +1621,7 @@ class PublicationStore:
                 name=item.name,
                 module=item.module,
                 options=dict(item.options_json),
+                revision=item.revision,
             )
             for item in catalog_records
         ]
@@ -1689,6 +1694,7 @@ class PublicationStore:
             name=catalog.name,
             module=catalog.module,
             options=dict(catalog.options_json),
+            revision=catalog.revision,
         )
         rules = [
             PolicyRuleDraft(

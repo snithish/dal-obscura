@@ -133,3 +133,39 @@ def test_store_compare_and_swap_activation_rejects_stale_generation(db_session):
         )
 
     assert store.get_active_publication(cell_id).publication_id == second_publication_id
+
+
+def test_catalog_updates_advance_a_revision_only_when_configuration_changes(db_session):
+    store = PublicationStore(db_session)
+    cell_id = uuid4()
+    tenant_id = uuid4()
+    store.create_cell(cell_id=cell_id, name="default", region="local")
+    store.create_tenant(tenant_id=tenant_id, slug="default", display_name="Default")
+    store.assign_tenant_to_cell(cell_id=cell_id, tenant_id=tenant_id, shard_key="default")
+
+    catalog_id = store.upsert_catalog(
+        cell_id=cell_id,
+        tenant_id=tenant_id,
+        name="analytics",
+        module="iceberg.sql",
+        options={"uri": "sqlite:///catalog.db"},
+    )
+    assert store.list_catalogs(cell_id)[0]["revision"] == 0
+
+    store.upsert_catalog(
+        cell_id=cell_id,
+        tenant_id=tenant_id,
+        name="analytics",
+        module="iceberg.sql",
+        options={"uri": "sqlite:///catalog.db"},
+    )
+    assert store.list_catalogs(cell_id)[0]["revision"] == 0
+
+    assert store.upsert_catalog(
+        cell_id=cell_id,
+        tenant_id=tenant_id,
+        name="analytics",
+        module="iceberg.sql",
+        options={"uri": "sqlite:///catalog-revised.db"},
+    ) == catalog_id
+    assert store.list_catalogs(cell_id)[0]["revision"] == 1

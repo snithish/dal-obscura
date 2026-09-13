@@ -410,6 +410,31 @@ def test_production_publication_rejects_schema_drift_after_review(monkeypatch) -
     )
     assert reviewed.status_code == 200, reviewed.json()
 
+    changed_catalog = client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog-revised.db"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+    assert changed_catalog.status_code == 200, changed_catalog.json()
+    stale_catalog_review = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        json={"review_token": reviewed.json()["review_token"]},
+        headers=ADMIN_HEADERS,
+    )
+    assert stale_catalog_review.status_code == 400
+    assert stale_catalog_review.json() == {
+        "detail": "Catalog configuration changed after review; review again."
+    }
+    reviewed = client.post(
+        f"/v1/assets/{asset['id']}/policy-review",
+        json={"principal": "user1", "groups": [], "claims": {"tenant": "default"}},
+        headers=ADMIN_HEADERS,
+    )
+    assert reviewed.status_code == 200, reviewed.json()
+
     changed_admitted = client.put(
         f"/v1/assets/{asset['id']}/schema-fields",
         json={"fields": [{"name": "id", "field_id": "iceberg:99", "path": ["id"]}]},
