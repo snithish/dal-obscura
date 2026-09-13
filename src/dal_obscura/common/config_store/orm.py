@@ -82,6 +82,7 @@ class CellRuntimeSettingsRecord(Base):
     ticket_ttl_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
     max_tickets: Mapped[int] = mapped_column(Integer, nullable=False)
     max_ticket_exchanges: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     path_rules_json: Mapped[list[dict[str, Any]]] = mapped_column(
         JSON, nullable=False, default=list
     )

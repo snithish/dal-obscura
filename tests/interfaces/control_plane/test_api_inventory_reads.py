@@ -222,6 +222,7 @@ def test_reads_workspace_draft_resources_after_writes():
         "ticket_ttl_seconds": 900,
         "max_tickets": 64,
         "max_ticket_exchanges": 2,
+        "revision": 0,
     }
     assert catalogs[0]["name"] == "analytics"
     assert catalogs[0]["module"] == ICEBERG_CATALOG_MODULE

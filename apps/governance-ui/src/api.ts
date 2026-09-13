@@ -186,6 +186,7 @@ export type RuntimeSettings = {
   ticket_ttl_seconds: number;
   max_tickets: number;
   max_ticket_exchanges: number;
+  revision?: number;
 };
 
 export type PluginDescriptor = {
@@ -369,7 +370,7 @@ export const controlPlane = {
   }),
   saveRuntimeSettings: (settings: RuntimeSettings) => request<RuntimeSettings>("/v1/settings/runtime", {
     method: "PUT",
-    body: JSON.stringify(settings),
+    body: JSON.stringify({ ticket_ttl_seconds: settings.ticket_ttl_seconds, max_tickets: settings.max_tickets, max_ticket_exchanges: settings.max_ticket_exchanges, ...(settings.revision === undefined ? {} : { expected_revision: settings.revision }) }),
   }),
   publishAsset: (assetId: string, expectedDraftRevision?: number, reviewToken?: string, idempotencyKey?: string, draftId?: string) => request<{ asset_id: string; policy_version: number }>(`/v1/assets/${assetId}/policy-versions`, {
     method: "POST",

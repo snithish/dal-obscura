@@ -405,13 +405,15 @@ class ProvisioningService:
         ttl: int,
         max_tickets: int,
         max_ticket_exchanges: int,
+        expected_revision: int | None = None,
         actor: ControlPlaneActor | None = None,
-    ) -> None:
-        workspace_service.upsert_workspace_runtime_settings(
+    ) -> dict[str, object]:
+        return workspace_service.upsert_workspace_runtime_settings(
             self._store,
             ttl=ttl,
             max_tickets=max_tickets,
             max_ticket_exchanges=max_ticket_exchanges,
+            expected_revision=expected_revision,
             actor_principal="system" if actor is None else actor.identity_key(),
         )
 

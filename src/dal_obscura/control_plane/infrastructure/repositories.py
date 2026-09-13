@@ -299,6 +299,7 @@ class PublicationStore:
         ticket_ttl_seconds: int,
         max_tickets: int,
         max_ticket_exchanges: int,
+        expected_revision: int | None = None,
     ) -> None:
         self.lock_cell_for_publication(cell_id)
         existing = self._session.get(CellRuntimeSettingsRecord, cell_id)
@@ -313,10 +314,29 @@ class PublicationStore:
                 )
             )
         else:
+            if expected_revision is None:
+                raise RevisionPreconditionRequired(
+                    "Runtime settings revision is required for updates "
+                    f"(current {existing.revision}); reread before writing."
+                )
+            if existing.revision != expected_revision:
+                raise PublicationConflictError(
+                    "Runtime settings revision changed "
+                    f"(expected {expected_revision}, current {existing.revision}); "
+                    "reread before writing."
+                )
+            changed = (
+                existing.ticket_ttl_seconds != ticket_ttl_seconds
+                or existing.max_tickets != max_tickets
+                or existing.max_ticket_exchanges != max_ticket_exchanges
+                or existing.path_rules_json != []
+            )
             existing.ticket_ttl_seconds = ticket_ttl_seconds
             existing.max_tickets = max_tickets
             existing.max_ticket_exchanges = max_ticket_exchanges
             existing.path_rules_json = []
+            if changed:
+                existing.revision += 1
         self._session.flush()
 
     def upsert_catalog(
@@ -761,6 +781,7 @@ class PublicationStore:
             "ticket_ttl_seconds": record.ticket_ttl_seconds,
             "max_tickets": record.max_tickets,
             "max_ticket_exchanges": record.max_ticket_exchanges,
+            "revision": record.revision,
         }
 
     def list_catalogs(self, cell_id: UUID) -> list[dict[str, object]]:

@@ -30,12 +30,36 @@ def test_workspace_runtime_settings_can_be_configured_without_tenant_or_cell_ids
         "ticket_ttl_seconds": 1200,
         "max_tickets": 32,
         "max_ticket_exchanges": 3,
+        "revision": 0,
     }
+    updated = client.put(
+        "/v1/settings/runtime",
+        json={
+            "ticket_ttl_seconds": 1800,
+            "max_tickets": 32,
+            "max_ticket_exchanges": 3,
+            "expected_revision": 0,
+        },
+        headers=ADMIN_HEADERS,
+    )
+    stale = client.put(
+        "/v1/settings/runtime",
+        json={
+            "ticket_ttl_seconds": 2400,
+            "max_tickets": 32,
+            "max_ticket_exchanges": 3,
+            "expected_revision": 0,
+        },
+        headers=ADMIN_HEADERS,
+    )
+    assert updated.status_code == 200
+    assert updated.json()["revision"] == 1
+    assert stale.status_code == 409
     events = client.get("/v1/audit/events", headers=ADMIN_HEADERS).json()
     runtime_events = [event for event in events if event["action"] == "workspace.runtime.update"]
     assert runtime_events[0]["actor"] == "platform:admin"
     assert runtime_events[0]["details"] == {
-        "ticket_ttl_seconds": 1200,
+        "ticket_ttl_seconds": 1800,
         "max_tickets": 32,
         "max_ticket_exchanges": 3,
     }

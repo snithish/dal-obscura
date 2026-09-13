@@ -112,6 +112,7 @@ class RuntimeSettingsRequest(StrictModel):
     ticket_ttl_seconds: int = Field(gt=0)
     max_tickets: int = Field(gt=0)
     max_ticket_exchanges: int = Field(gt=0)
+    expected_revision: int | None = Field(default=None, ge=0)
 
 
 class CatalogRequest(StrictModel):

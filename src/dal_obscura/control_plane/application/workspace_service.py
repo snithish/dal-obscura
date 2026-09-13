@@ -83,6 +83,7 @@ def get_workspace_runtime_settings(store: PublicationStore) -> dict[str, object]
         "ticket_ttl_seconds": settings["ticket_ttl_seconds"],
         "max_tickets": settings["max_tickets"],
         "max_ticket_exchanges": settings["max_ticket_exchanges"],
+        "revision": settings["revision"],
     }
 
 
@@ -202,9 +203,10 @@ def upsert_workspace_runtime_settings(
     ttl: int,
     max_tickets: int,
     max_ticket_exchanges: int,
+    expected_revision: int | None = None,
     *,
     actor_principal: str = "system",
-) -> None:
+) -> dict[str, object]:
     """Creates or updates workspace runtime ticket settings.
 
     Example:
@@ -219,6 +221,7 @@ def upsert_workspace_runtime_settings(
         ticket_ttl_seconds=ttl,
         max_tickets=max_tickets,
         max_ticket_exchanges=max_ticket_exchanges,
+        expected_revision=expected_revision,
     )
     store.record_workspace_audit_event(
         cell_id=context.cell_id,
@@ -233,6 +236,13 @@ def upsert_workspace_runtime_settings(
             "max_ticket_exchanges": max_ticket_exchanges,
         },
     )
+    settings = store.get_runtime_settings(context.cell_id)
+    return {} if settings is None else {
+        "ticket_ttl_seconds": settings["ticket_ttl_seconds"],
+        "max_tickets": settings["max_tickets"],
+        "max_ticket_exchanges": settings["max_ticket_exchanges"],
+        "revision": settings["revision"],
+    }
 
 
 def activate_workspace_publication(

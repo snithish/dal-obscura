@@ -47,12 +47,14 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
                 ttl=request.ticket_ttl_seconds,
                 max_tickets=request.max_tickets,
                 max_ticket_exchanges=request.max_ticket_exchanges,
+                expected_revision=request.expected_revision,
                 actor=actor,
             )
         ) or {
             "ticket_ttl_seconds": request.ticket_ttl_seconds,
             "max_tickets": request.max_tickets,
             "max_ticket_exchanges": request.max_ticket_exchanges,
+            "revision": 0,
         }
 
     @api.put("/v1/settings/auth-providers", dependencies=[Depends(deps.require_admin)])
