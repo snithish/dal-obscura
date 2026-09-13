@@ -1,5 +1,8 @@
 # Governance application execution status
 
+**Current ledger:** [N01–N16 status](../plugin-platform/STATUS.md), baseline c464152,
+2026-09-13. Entries below preserve historical evidence only.
+
 **Latest review, baseline `5208eee`:** see the
 [implementation findings](../plugin-platform/IMPLEMENTATION_REVIEW.md) and
 [new execution ledger](../plugin-platform/STATUS.md). Confirmed publication/review

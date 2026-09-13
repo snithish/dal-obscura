@@ -1,70 +1,57 @@
-# Plugin platform: review and implementation handoff
+# Plugin platform: current implementation handoff
 
-Created 2026-09-12 against commit `5208eee`. **This is a review and a proposed
-implementation plan. It does not implement plugins or certify production readiness.**
-Paid-production release remains **HOLD**.
+Reviewed 2026-09-13 at c464152. **Planning documents only; paid-production HOLD.**
+The active queue is N01–N16. Start with N01, not the archived X00 queue.
 
-## Read in this order
+## Read in order
 
-1. [Implementation review](IMPLEMENTATION_REVIEW.md): observed defects, missing
-   functionality, evidence limits, and the repair task for each finding.
-2. [Architecture contract](ARCHITECTURE.md): the boundaries and decisions that
-   implementations must preserve.
-3. [Implementation packets](IMPLEMENTATION_PLAN.md): ordered, bounded tasks for
-   an implementation agent, including tests and strict completion criteria.
-4. [Acceptance specification](ACCEPTANCE.md): exact scenarios and release gates.
-5. [Progress ledger](STATUS.md): current state and evidence requirements.
+1. [Review and 24-packet reconciliation](IMPLEMENTATION_REVIEW.md): what exists,
+   concrete remaining defects and evidence limits.
+2. [Remaining implementation packets](IMPLEMENTATION_PLAN.md): dependencies,
+   functional/non-functional requirements and atomic completion criteria.
+3. [Acceptance specification](ACCEPTANCE.md): G01–G05 regression groups and
+   B01–B22 remaining scenarios, fixtures and measurable release gates.
+4. [UI and UX contract](UX_REQUIREMENTS.md): visual foundation, full workflows,
+   accessibility and backend obligations.
+5. [Technology decisions](TECHNOLOGY.md) and [cleanup plan](CLEANUP_PLAN.md):
+   supported stable tooling, one implementation per responsibility, deletion proof.
+6. [Progress ledger](STATUS.md): ready work, status definitions and evidence template.
+7. [Architecture contract](ARCHITECTURE.md): extension boundaries retained by this plan.
 
 ## Authority and scope
 
-The owner's latest request adds a plugin-based design for multiple catalogs and
-data formats. This supersedes the **planning restriction** to one Iceberg backend
-in the earlier [UI handoff](../ui-v2/EXECUTION_HANDOFF.md). It does not authorize
-advertising untested integrations. Iceberg remains the reference implementation.
+The owner's latest request authorizes breaking changes and deletion of replaced
+API/config/plugin/UI paths. No compatibility shims or dual-version runtime.
+The earlier specific instruction preserving pickle logic/classes/import paths/
+semantics remains in force. This is the only historical compatibility boundary
+that broad cleanup may not silently rewrite.
 
-This plan is the next execution sequence. Existing UI P00–P16 and gateway W task
-IDs remain historical requirements/evidence, not a second competing queue. The
-packets below link their remaining requirements into this sequence. A previously
-green test or completed task does not close a newly identified regression.
+Preserve policy authoring/management UI, backend enforcement, authentication,
+authorization, nested schemas and equally secure local operation. Flight workers
+remain stateless, masks/filters are core-validated DuckDB SQL, and scans stream
+Arrow with bounded parallelism. Use the existing control-plane database; do not
+add another state service. Target one isolated deployment/database/key set per
+customer. Shared customer hosting is outside this release scope.
 
-Preserve these owner constraints:
+The plugin architecture already exists. Finish and qualify SQL-Iceberg/Iceberg,
+REST-Iceberg/Iceberg and manifest/Parquet with Python/Arrow, DuckDB and Spark/JVM.
+Further frameworks use the Arrow contract; advertise only executed support cells.
+Plugins are explicitly installed/pinned trusted operator code. Browser uploads,
+unrestricted dynamic imports and bypassing core authorization are not extensibility.
 
-- Policy authoring and management UI, backend enforcement, authentication,
-  authorization, nested schemas, and secure local operation are required.
-- Preserve the existing pickle-based logic exactly, including serialized class
-  import paths and execution semantics. This plan does not approve replacing it.
-- Flight workers remain stateless. Use the existing control-plane database for
-  approved durable configuration; do not introduce a new state service.
-- Masks and row filters remain DuckDB SQL expressions under core validation.
-- One isolated deployment, database, and key set per customer is the release
-  assumption. Shared multi-customer hosting is not covered by this plan.
-- Commit small, verified units. Do not deploy, delete customer data, contact
-  reviewers, publish packages, or change the serialization boundary as part of
-  completing a packet without the relevant authorization.
+## One active source of work
 
-## Definition of the desired output
+These documents supersede conflicting execution instructions in the earlier UI,
+gateway and X plans. Keep old functional guarantees except the explicitly replaced
+compatibility rule; [acceptance](ACCEPTANCE.md) maps them into current ownership.
 
-A third-party developer can build and install a catalog or table-format wheel
-against a versioned SDK, pass a reusable conformance suite, and add an approved
-integration without editing the core router, compiler, policy engine, or UI source.
-Operators explicitly install, pin, and enable trusted plugins. The UI configures
-only those approved plugins. All supported integrations use the same governed
-publication, authentication, authorization, schema, and Flight read paths.
+Historical snapshots: [plan](IMPLEMENTATION_PLAN_ARCHIVE_20260913.md),
+[review](IMPLEMENTATION_REVIEW_ARCHIVE_20260913.md),
+[acceptance](ACCEPTANCE_ARCHIVE_20260913.md),
+[ledger](STATUS_ARCHIVE_20260913.md). They are evidence, not another queue.
 
-Prove this with separate SQL-Iceberg and REST-Iceberg catalog configurations and
-an independently packaged manifest catalog plus Parquet dataset format. These
-are proposed qualification targets, not claims of current support. Additional
-catalogs and formats follow the same onboarding contract; there is no automatic
-promise that every catalog can serve every format.
-
-## Instructions to the implementation agent
-
-Start at **X00**. Read its prerequisites and acceptance scenarios. Add failing
-behavioral tests, make the smallest implementation change, run the required
-checks, then record exact evidence and an atomic commit. Continue only when the
-packet's prerequisites are satisfied. Never mark an unexecuted live test passed.
-
-Do not reinterpret “extensible” as unrestricted dynamic imports, user-uploaded
-Python, a browser plugin marketplace, optional authorization, or a single generic
-dictionary forwarded into arbitrary provider constructors. Do not silently
-remove difficult nested-schema, security, or UI requirements to finish sooner.
+An implementation agent must read packet dependencies, reuse completed code,
+write the smallest behavioral regression case, deliver one atomic slice, remove
+replaced paths and record executed evidence. A source check or mocked provider
+does not qualify real operation. Do not claim production readiness until all gates
+pass. This planning task changes no runtime, dependencies or executable tests.

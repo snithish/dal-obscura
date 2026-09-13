@@ -1,5 +1,11 @@
 # Dead-code and compatibility inventory
 
+**Historical inventory, superseded for planning on 2026-09-13.** Use
+[CLEANUP_PLAN.md](CLEANUP_PLAN.md) for current deletion decisions. The KEEP-only
+rule and mixed-version recommendations below are no longer execution requirements.
+N14 must replace the executable prose guard alongside actual cleanup; this
+documentation-only review does not change that test or the protected pickle code.
+
 This inventory is the X21 deletion gate. It records the source evidence used
 before removing a module or dependency. A module is a deletion candidate only
 when its callers, packaging entry points, documentation references, and
@@ -51,4 +57,3 @@ atomic commit.
    record the exact command and artifact identity in `STATUS.md`.
 5. Delete only in a standalone conventional-commit unit; update this inventory
    and the rollback note in the same change.
-

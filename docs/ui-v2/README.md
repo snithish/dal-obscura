@@ -1,5 +1,9 @@
 # A new governance workspace
 
+**Current work, 2026-09-13:** use the [N01–N16 handoff](../plugin-platform/README.md)
+and [replacement UX contract](../plugin-platform/UX_REQUIREMENTS.md). This folder
+preserves earlier design/evidence; it is not a second implementation queue.
+
 Status: product specification exists; implementation and validation are incomplete.
 Paid-production release is **on hold**. See the code-backed
 [production readiness review and required backend/deployment work](PRODUCTION_READINESS.md).

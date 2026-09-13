@@ -1,36 +1,66 @@
-# Acceptance case registry
+# Acceptance case ownership registry
 
-This registry maps each acceptance scenario to its owning implementation packet.
-It is intentionally a manifest, not a claim that the scenario already passes.
-Each row names the first executable test location; later packets may add required
-integration, browser, consumer, or production evidence.
+The active specification is [G01–G05 and B01–B22](../../docs/plugin-platform/ACCEPTANCE.md).
+The active queue is [N01–N16](../../docs/plugin-platform/IMPLEMENTATION_PLAN.md).
+This Markdown registry defines future executable ownership; it is not a pass report.
+Old A01–A23 cases remain in the [archived specification](../../docs/plugin-platform/ACCEPTANCE_ARCHIVE_20260913.md)
+and are grouped under G guarantees. Do not create a second runner per packet.
 
-| Case | Owner packet | Initial test location | Required evidence |
-| --- | --- | --- | --- |
-| A01 | X01 | `tests/interfaces/control_plane/test_workspace_api.py` | SQLite + governed Flight |
-| A02 | X02 | `tests/interfaces/control_plane/test_schema_api.py` | strict review API |
-| A03 | X03 | `tests/integration/control_plane/test_publication_races.py` | PostgreSQL barriers |
-| A04 | X03 | `tests/control_plane/test_publication_store.py` | rollback/idempotency |
-| A05 | X04 | `tests/interfaces/control_plane/test_schema_api.py` | evaluation/Flight goldens |
-| A06 | X04/X05 | `tests/control_plane/test_evaluation_service.py` | nested Arrow goldens |
-| A07 | X05 | `tests/control_plane/test_schema_service.py` | canonical digest/bounds |
-| A08 | X06 | `tests/control_plane/test_schema_evolution.py` | stale/new ticket reads |
-| A09 | X07 | `tests/interfaces/control_plane/test_catalogs_api.py` | import/secret spies |
-| A10 | X07 | `tests/integration/test_io_boundary.py` | redirects/DNS/path roots |
-| A11 | X08 | `tests/control_plane/test_catalog_discovery.py` | bounded cleanup |
-| A12 | X03/X19 | `tests/interfaces/control_plane/test_actor_auth.py` | auth matrix/processes |
-| A13 | X09 | `apps/governance-ui/src/*.test.tsx` | deferred response browser tests |
-| A14 | X10 | `apps/governance-ui/src/*.test.tsx` | authoring/a11y journeys |
-| A15 | X10/X13 | `tests/interfaces/control_plane/test_config_activation.py` | active generation |
-| A16 | X12/X14 | `tests/plugin_platform/test_registry.py` | installed wheel admission |
-| A17 | X08/X12 | `tests/interfaces/flight/test_service_streaming.py` | task/cancel lifecycle |
-| A18 | X16/X17 | `tests/plugin_conformance/test_pairs.py` | independent distributions |
-| A19 | X18 | `tests/consumers/test_governed_reads.py` | Python/DuckDB/Spark |
-| A20 | X19 | `tests/production/test_local_parity.py` | clean artifacts/TLS/OIDC |
-| A21 | X21 | `tests/benchmarks/` | fixed runner thresholds |
-| A22 | X20 | `tests/integration/test_recovery_upgrade.py` | restore/rotation/pickle |
-| A23 | X23 | CI release manifest | candidate artifact evidence |
+## Primary locations and evidence
 
-When a path does not exist yet, the packet must create it. An absent path is an
-open deliverable. Update this table only when ownership changes; record passing
-commands and artifacts in [the progress ledger](../../docs/plugin-platform/STATUS.md).
+- **B01/B02, N01:** existing package/import/build CI and baseline report. Inventory
+  resolved toolchains/collection/durations; no executable test of packet prose.
+- **B03, N02:** tests/plugin_platform and tests/architecture plus installed-wheel
+  CI. Strict obsolete-input rejection, canonical imports, offline migration,
+  protected serialized fixtures. Replace retention-only prose checks in N14.
+- **B04/B05, N03:** tests/interfaces/control_plane and tests/control_plane.
+  Pair declarations/returned handles, authoritative DTOs and revisions.
+- **B06, N04:** tests/integration/test_io_boundary.py extended with real local
+  transports/counters and provider cancellation. Validators alone are insufficient.
+- **B07/B08, N05:** existing actor/session API tests plus real OIDC browser fixture.
+  Exact typed identity and two-process authority revocation.
+- **B09, N06:** planned apps/governance-ui/e2e/shell.spec.ts using the built app;
+  theme/responsive/keyboard/axe plus manual assistive-technology evidence.
+- **B10, N07:** planned apps/governance-ui/src/features/session/async-scope.test.tsx
+  mounts actual feature components with deferred responses; one live wiring case.
+  Do not recreate tests of epoch increment/equality.
+- **B11/B12, N08:** planned policy editor component tests and
+  apps/governance-ui/e2e/policy.spec.ts; existing backend nested goldens; 10k-node
+  measured browser fixture. Typed mask/condition roundtrip and keyboard navigation.
+- **B13, N09:** extend the same policy browser journey and existing operation API
+  tests. Saved semantic diff/lost-response/history/restore.
+- **B14, N10:** planned apps/governance-ui/e2e/connections.spec.ts parameterized by
+  the three pairs, backed by catalog/activation API tests.
+- **B15, N11:** planned apps/governance-ui/e2e/management.spec.ts and existing actor,
+  grant, settings and audit API tests. One explicit capability matrix.
+- **B16, N12:** tests/integration/control_plane/test_publication_races.py extended
+  to real PostgreSQL and two API processes, plus actual Flight output.
+- **B17, N13:** tests/plugin_conformance/test_pairs.py,
+  tests/consumers/test_governed_reads.py and connectors/jvm integration tests.
+  Reuse the wheel admission/conformance runner and fixture data for nine live
+  pair/consumer cells. Stubs remain fast tests only.
+- **B18/B19, N14:** existing benchmarks/capacity runner, UI browser measurements,
+  CI duration/collection artifacts and resource metrics.
+- **B20/B21, N15:** tests/production, tests/integration/test_recovery_upgrade.py,
+  existing secure-local/production Compose and release manifest lane.
+  Real encrypted restore, exact hashes, TLS/OIDC and failure evidence.
+- **B22, N16:** candidate dossier, owner visual acceptance, authorized user study
+  and independent security review. These cannot be generated as unit-test passes.
+
+Planned paths are instructions for where to add the smallest missing test, not
+claims that files exist. Reuse/rename the nearest owning suite if that produces
+less duplication; update this registry in the same slice. Keep G01–G05 owning
+regression tests mapped to their original A cases and new B boundary proof.
+
+## Rules for economical coverage
+
+One primary behavioral oracle per invariant. Add integration coverage only when
+it crosses a real distinct boundary: serialization, process/database, browser,
+provider/network, installed artifact or consumer. Parameterize identical semantics;
+retain distinct failure checks. Mocking is valid for deterministic UI ordering but
+not for qualification of real auth/providers/restore. Never replace negative
+security tests with line coverage or generic snapshots.
+
+Record commands/results and candidate/artifact identities in
+[STATUS.md](../../docs/plugin-platform/STATUS.md). Missing mandatory environment
+means VERIFY; skipped or unexecuted tests never establish acceptance.

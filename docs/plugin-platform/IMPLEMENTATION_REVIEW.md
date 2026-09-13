@@ -1,374 +1,167 @@
-# Implementation review
-
-Baseline: `5208eee`, reviewed 2026-09-12. Scope: control-plane workflows, UI state,
-catalog/format boundaries, schema/evaluation, publication, deployment, and tests.
-This is a targeted code review with local probes, not a complete security audit.
-
-## Result
-
-The repository has useful foundations: separate application and infrastructure
-layers, executable table-format contracts, canonical policy resolution, signed
-tickets, durable publication/draft/session records, nested schema support, and a
-working set of focused tests. A total rewrite would discard useful behavior.
-Repair the security and correctness gaps first, then extract plugin seams with
-compatibility tests. Current evidence does not justify serving paying customers.
-
-Evidence labels used below:
-
-- **Reproduced** means a local test or probe demonstrated the behavior at this
-  commit. Its environment limits are stated.
-- **Code-confirmed** means the cited execution path contains the gap, but the
-  complete deployed workflow was not run during this review.
-- **Unverified** means release evidence is missing or a risk still needs a
-  reproducer. Do not report it as an exploited vulnerability.
-
-## R01 — First publication activates unrelated asset drafts
-
-**Priority: release blocker. Evidence: reproduced in SQLite/TestClient. Repair: X01.**
-
-In [policy_version_service.py](../../src/dal_obscura/control_plane/application/policy_version_service.py),
-`create_asset_policy_version()` loads and compiles the entire workspace draft
-when no active publication exists. Replacing the selected asset's rules does not
-remove the other assets. Later publications use a different, selected-asset path.
-
-Probe: provision `default.users`, add `default.other` with a separate allow rule,
-give both owners, and publish only `default.users`. The HTTP result was 200;
-publication history contained **both** targets. This probe used the non-review
-test app; the same initial-publication branch also follows strict review checks.
-No live external-reader exploit is claimed.
-
-Expected: publishing A activates only A and the required reviewed configuration.
-B must remain unavailable, even if B has complete draft rules. Readiness checks
-must not require unrelated unfinished assets to be publishable.
-
-## R02 — Review can authorize content other than the evaluated draft
-
-**Priority: release blocker. Evidence: reproduced; additional races code-confirmed.
-Repair: X02 and X03.**
-
-[review_service.py](../../src/dal_obscura/control_plane/application/review_service.py)
-accepts the absence of a personal draft as revision 0/content hash null.
-[policies.py](../../src/dal_obscura/control_plane/interfaces/routes/policies.py)
-still permits revisionless shared `PUT policy-rules` updates. Verification checks
-the absent personal draft again, not a digest of the changed shared rules.
-
-Probe used `create_app(require_review=True, bootstrap_enabled=True)` with separate
-review secret, SQLite, and a fake authoritative catalog. Review for `user1` returned
-200. Shared rules were then replaced with unmasked access for `different-reader`
-(200). Publishing with the old review token returned **200**. Bootstrap supplied
-an authorized test actor; this is a review-integrity failure, not an authentication
-bypass or evidence of a live OIDC exploit.
-
-Further gaps: evaluation resolves policy, then reads draft metadata separately;
-token issuance reads the draft again. It does not assert that evaluation evidence
-equals the token's current draft hash. Publication verifies, then reloads content.
-Publication row locking alone does not serialize draft, grant, asset-binding, and
-connection changes. Reproduce these interleavings on PostgreSQL before fixing.
-
-Expected: strict publication requires an explicit immutable saved-draft snapshot.
-Bind evaluation, review, authorization generation, asset/connection binding,
-schema, plugin configuration, and committed publication to that same snapshot.
-Any relevant change must conflict or require fresh review. Keep deny-all supported.
-
-## R03 — Synthetic evaluation reconstructs the wrong mask parameters
-
-**Priority: high. Evidence: code-confirmed. Repair: X04.**
-
-[policy_service.py](../../src/dal_obscura/control_plane/application/policy_service.py)
-returns mask types but drops their resolved values from preview.
-[evaluation_service.py](../../src/dal_obscura/control_plane/application/evaluation_service.py)
-reconstructs values with `setdefault()` over all raw rules, including rules that
-do not match the persona. This can disagree with canonical mask merging, such as
-the most restrictive `keep_last` value. Synthetic evidence can misrepresent the
-data-plane result used to justify publication.
-
-Expected: return/reuse the full canonical resolved policy internally. A rule for
-another principal must never determine this persona's mask value. Golden tests
-must compare actual values and Arrow schemas between evaluation and Flight.
-
-## R04 — Nested evaluation paths and fixture generation are incomplete
-
-**Priority: high. Evidence: reproduced path collision; other gaps code-confirmed.
-Repair: X04 and X05.**
-
-`evaluation_service._leaf_paths()` concatenates field names with dots. A literal
-top-level field `a.b` and nested `a -> b` both yielded `a.b` in a probe. Top-level
-list/map paths do not follow the same recursion as collection children of structs.
-Use the existing typed `FieldPath` contract, including escaping and collection
-segments, throughout evaluation.
-
-`_sample_value()` makes string map keys even for non-string map key types and
-returns strings for several non-string scalar types. Arrow table construction is
-outside the redacted transform error handler. Empty input is replaced with a sample
-through `rows or [...]`; empty transform output falls back to a schema-less table.
-Evidence has no synthetic fixture digest. Per-request adapter construction also
-does not establish a process-wide concurrency budget.
-
-Expected: type-correct nested fixtures, explicit omitted-versus-empty input
-semantics, preserved empty output schema, bounded/redacted failures, fixture-bound
-review, and shared resource admission. Unsupported types must produce an explicit
-safe capability error, never invented “successful” data.
-
-## R05 — Schema fingerprint and resource limits do not protect every path
-
-**Priority: high. Evidence: reproduced digest collision; other gaps code-confirmed.
-Repair: X05 and X06.**
-
-[schema_service.py](../../src/dal_obscura/control_plane/application/schema_service.py)
-hashes `str(schema)`. In a probe, otherwise identical Iceberg list schemas with
-element IDs 2 and 99 produced the same digest. API responses fingerprint Iceberg
-objects while evaluation/review fingerprint Arrow objects; this is not one shared
-versioned schema identity contract. `schema_version: 1` is a response version, not
-the authoritative Iceberg schema ID.
-
-The 10,000-node/64-depth checks run in `get_asset_schema()`, but direct
-`load_asset_iceberg_schema()` callers in review/evaluation bypass those checks.
-They also lack total metadata byte and operation deadline enforcement.
-
-Persisted policy approval does not capture a complete admitted stable field-ID
-set. The effect of parent/wildcard grants under field additions/rebinding requires
-a consumer-level regression test; do not assume existing path validation secures
-schema evolution. Define and test rename, add, drop/re-add, list/map ID, nullability,
-and type changes before adding non-Iceberg schemas.
-
-## R06 — Provider configuration can reach nested dynamic loaders
-
-**Priority: release blocker for broader plugin exposure. Evidence: reproduced
-validator acceptance and installed-dependency inspection. Repair: X07.**
-
-[catalog_service.py](../../src/dal_obscura/control_plane/application/catalog_service.py)
-accepts arbitrary option keys. `validate_catalog_options()` accepted both
-`py-catalog-impl` and `py-io-impl` set to a class-name string, even with an egress
-allowlist. The installed PyIceberg `catalog/__init__.py` and `io/__init__.py`
-interpret these properties via `importlib`. This is a path to selecting installed
-implementation classes outside the apparent top-level catalog allowlist; this
-review did not load a malicious class or demonstrate remote code installation.
-
-Checking only the catalog's outer module string is insufficient. Use per-provider
-typed option allowlists and reject implementation-loader settings from API input,
-stored config, and returned metadata unless a specific operator-owned adapter
-supplies a fixed, audited value. Never convert this into “allow any import path.”
-
-## R07 — Secret resolution and egress are inconsistent across control/data planes
-
-**Priority: high. Evidence: code-confirmed. Repair: X07 and X13.**
-
-Schema loading calls `pyiceberg.load_catalog()` directly with stored options.
-Discovery validates options but forwards secret-reference dictionaries unresolved.
-The data plane has separate resolution in
-[published_config.py](../../src/dal_obscura/data_plane/infrastructure/adapters/published_config.py).
-The UI's secret-reference guidance therefore lacks a verified end-to-end connection
-path. Do not assume SQL provider credentials work as arbitrary separate options.
-
-Egress validation inspects strings containing `://` and initial hostnames. It does
-not establish bounds for redirects, DNS changes, file paths, manifest/delete-file
-locations, or object-store endpoints returned by a catalog. Exact secret-key
-matching is also not a provider-specific sensitive-field policy.
-
-Expected: one configured connection resolver for diagnostics, discovery, schemas,
-review, and reads; scoped secret references; safe connection builders; enforced IO
-policy across all external resources; sanitized response, logs, traces, and audit.
-
-## R08 — Discovery caps are applied after unbounded materialization
-
-**Priority: high for availability. Evidence: code-confirmed. Repair: X08.**
-
-[catalog_discovery.py](../../src/dal_obscura/control_plane/infrastructure/catalog_discovery.py)
-calls `list(registry.list_tables())` before applying its table cap. A separate
-bounded Iceberg discovery helper is not the path used by this entry point.
-[catalog_registry.py](../../src/dal_obscura/data_plane/infrastructure/adapters/catalog_registry.py)
-walks/materializes namespaces and tables without a total deadline/page budget.
-Its namespace queue uses `pop(0)`, adding avoidable repeated list shifts.
-
-Registry reload updates shared configuration before completing a rebuild.
-Expected: bounded incremental traversal and immutable registry generations built
-off to the side, with a single successful swap. Failed reload preserves the prior
-generation; explicit revocation must not silently preserve revoked access.
-
-## R09 — Existing catalog/format ports do not form an installable plugin system
-
-**Priority: architectural requirement. Evidence: code-confirmed. Repair: X09–X17.**
-
-[catalog ports](../../src/dal_obscura/common/catalog/ports.py) and
-[format ports](../../src/dal_obscura/common/table_format/ports.py) are useful seams,
-but the registry constructs Iceberg directly. The compiler, API schemas, published
-config adapter, schema service, and UI each repeat Iceberg/class-path knowledge.
-There is no versioned SDK, installed-plugin admission, compatibility contract,
-generic schema service, conformance kit, or independently packaged second format.
-
-Adding another branch to each switch is not completion. See
-[the architecture contract](ARCHITECTURE.md) for separate catalog and format
-factories, operator trust, typed configuration, and migration requirements.
-
-## R10 — Serialized scan objects constrain extraction and upgrades
-
-**Priority: compatibility/security constraint. Evidence: code-confirmed. Repair: X00,
-X12, X20. Serialization changes are prohibited.**
-
-[plan_access.py](../../src/dal_obscura/data_plane/application/use_cases/plan_access.py)
-pickles scan tasks containing executable format objects;
-[fetch_stream.py](../../src/dal_obscura/data_plane/application/use_cases/fetch_stream.py)
-unpickles them after ticket checks. Iceberg also serializes trusted internal tasks.
-Moving classes into new wheels can break outstanding tickets or alter trusted
-execution. Database/ticket storage and installed packages are part of the trusted
-computing base. A Python Protocol cannot sandbox a malicious plugin.
-
-Expected: preserve exact serializer behavior and legacy import paths; maintain
-golden old-ticket compatibility tests; qualify package combinations; drain or
-explicitly invalidate tickets before incompatible deployment. Record unresolved
-pickle-boundary risk honestly rather than silently declaring it fixed.
-
-## R11 — UI lifecycle still admits stale results and a stuck loading state
-
-**Priority: high. Evidence: code-confirmed; browser reproduction required. Repair: X09.**
-
-In [main.tsx](../../apps/governance-ui/src/main.tsx), `loadInitialWorkspace()` captures
-an epoch and calls `loadAsset()`, which increments the same epoch. The caller's
-post-load equality check then returns before setting the workspace ready.
-
-Save, preview, review, restore, and history pagination lack consistent operation
-scope checks. An old save can mark newer edits saved; late responses can update a
-different asset/session. Persona changes and add/remove operations do not uniformly
-invalidate review evidence. Logout clears private state after awaiting its request,
-and management rendering has a separate path from the workspace auth gate.
-
-Expected: explicit session/asset/draft/persona operation identities, immediate local
-logout fencing, ignored stale success AND failure responses, and recovery actions.
-Server authorization remains mandatory even when the UI disables an action.
-
-## R12 — UI and management workflows are not feature complete
-
-**Priority: high. Evidence: code-confirmed; full journeys unverified. Repair: X10,
-X14, X18.**
-
-The empty-rule UI hides Save/Test/Review/Publish, preventing an intentional deny-all
-workflow even though backend support exists. Rule reordering and `when` editing are
-missing; typed mask values are incomplete. The schema summary unions all rules
-while presenting selected-rule context. Large trees lack measured virtualization
-and complete keyboard/focus behavior.
-
-Connection creation assumes SQL Iceberg. Management fetch failures can render as
-empty data. Configuration writes can update workspace drafts without an explicit
-UI/backend activation workflow: subsequent policy publication keeps active runtime
-settings and may retain an existing catalog configuration. Full-list grant updates
-lack conflict protection. Consumer snippets lack complete verified TLS and dependency
-instructions. Disable/repair/retirement semantics need a backend contract first.
-
-Expected: each visible control has an authorized backend action and clear draft vs
-active status, including deny-all, conflict handling, connection activation, and
-consumer handoff. Unsupported features explain why and cannot be submitted.
-
-## R13 — Identity and privilege lifecycle require production evidence
-
-**Priority: release gate. Evidence: code-confirmed details; deployment effects
-unverified. Repair: X03 and X19.**
-
-[access.py](../../src/dal_obscura/control_plane/application/access.py) scopes identities
-using an issuer/subject string and strips trailing issuer slashes. Define a
-collision-free identity representation without silently merging distinct exact
-OIDC issuers. Production ownership must use stable subjects, not mutable usernames.
-Migrate existing owner/grant/draft records explicitly; never rewrite them on restart.
-
-Stored browser sessions contain role/group snapshots; evidence for upstream role
-removal, privilege freshness, logout/reauthentication, bootstrap closure, and
-multi-process revocation is incomplete. Decide grant-manager delegation scope and
-enforce it consistently. Authorize asset visibility without leaking existence
-through different inaccessible-object responses. This review does not claim an
-unauthorized cross-tenant exploit; shared-tenant hosting is out of scope.
-
-## R14 — Production deployment and operational closure are incomplete
-
-**Priority: release gate. Evidence: code-confirmed config risks and missing live
-evidence. Repair: X19–X23.**
-
-[production Compose](../../deployment/production/compose.yaml) passes one database
-URL to migration, control-plane, and data-plane services despite distinct privilege
-needs. Its example Flight location uses an external hostname/443 while the service
-exposes 8815; verify separate bind and advertised endpoint configuration. Test TLS
-file ownership with actual unprivileged containers. Readiness must prove useful
-dependencies, not merely HTTP liveness.
-
-Local fixtures share application security code, but HTTP/development IdP shortcuts
-do not demonstrate production TLS, cookie, proxy, and restart parity. Backup/PITR,
-restore invalidation, upgrade drains, rotation, aggregate capacity, and alerts lack
-complete release evidence. Sanitizing HTTP errors is not enough if provider exception
-tracebacks log secrets: [data-plane health](../../src/dal_obscura/data_plane/interfaces/health.py)
-uses `LOGGER.exception` for readiness failures. Scan logs/traces as well as responses
-with sentinel credentials.
-
-## R15 — Test coverage, efficiency, and cleanup need behavioral ownership
-
-**Priority: medium; missing security/live tests remain release gates. Repair: X00,
-X09, X21, X22.**
-
-[UI package scripts](../../apps/governance-ui/package.json) contain build/type checks
-but no behavioral test command. There is no complete browser/real-IdP acceptance
-lane tied to the production artifacts. Focused SQLite success is not PostgreSQL
-race evidence. Existing release CI must prove that the exact promoted server and
-UI images, including every advertised architecture, are those tested and scanned.
-
-The workspace test helper defines `_client()` twice. Several compatibility objects
-and discovery helpers appear redundant, but reference and serialization analysis
-must precede deletion. Do not call a module useless merely because one search finds
-no direct import. Replace fixed waits with bounded readiness polling where present;
-profile test duration before consolidating fixtures. Avoid repeated complete-suite
-runs for unrelated documentation or UI styling changes.
-
-## Follow-up reconciliation
-
-The review above is intentionally retained as the historical 2026-09-12
-baseline. Subsequent implementation slices addressed the reproduced local
-probes as follows:
-
-| Historical probe | Current evidence | Current status |
-| --- | --- | --- |
-| Initial publication activated unrelated drafts | `tests/control_plane/test_policy_version_service.py` and selected-asset publication API tests; X01 ledger entries | Local regression fixed; PostgreSQL/Flight publication evidence remains open. |
-| Review token authorized changed shared rules | Immutable draft/review hash and policy-version tests; X02/X03 ledger entries | Local snapshot binding and lock ordering fixed; multi-process race/recovery evidence remains open. |
-| Literal dotted field collided with a nested path | `tests/control_plane/test_evaluation_service.py`, `tests/common/query_planning/test_field_paths.py`, and DuckDB transform tests | Canonical typed paths now preserve the distinction. |
-| Collection field IDs collided in schema digest | `tests/control_plane/test_schema_service.py` and published-config schema-admission tests | Canonical nested/collection identity digest now includes IDs and shape. |
-| Provider class-loader options were admitted | `tests/interfaces/control_plane/test_catalogs_api.py::test_workspace_catalog_rejects_nested_dynamic_loader_options` | Nested loader keys are rejected before provider construction. |
-
-These tests prove the local code paths at the current commit; they do not prove
-the live PostgreSQL, provider, TLS/OIDC, browser, consumer, recovery, capacity,
-artifact, or independent-review gates. The unresolved pickle constraint is
-deliberate and remains covered by the X00 compatibility fixtures.
-
-## Evidence recorded during this review
-
-The following focused command completed successfully at the baseline:
-
-```sh
-UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest \
-  tests/interfaces/control_plane/test_schema_api.py \
-  tests/interfaces/control_plane/test_actor_auth.py \
-  tests/control_plane/test_schema_service.py \
-  tests/examples/test_demo_initialization.py -q
-```
-
-Separate in-memory probes produced:
-
-```json
-{
-  "first_publication_status": 200,
-  "published_targets": ["default.other", "default.users"],
-  "literal_dot_paths": ["a.b", "a.b"],
-  "collection_id_change_same_schema_digest": true,
-  "review_before_shared_rule_change": 200,
-  "shared_rule_change": 200,
-  "publication_with_old_review": 200,
-  "unrestricted_import_options_accepted": ["py-catalog-impl", "py-io-impl"]
-}
-```
-
-Reproduction ingredients are existing `workspace_helpers._client`,
-`workspace_helpers._provision_draft`, `_EvaluationCatalog` in `test_schema_api.py`,
-`schema_service.schema_fingerprint`, and `evaluation_service._leaf_paths`.
-[Acceptance cases](ACCEPTANCE.md) specify the complete failing expectations to turn
-these probes into durable regressions. The first strict probe omitted bootstrap
-enablement and failed during fixture setup; the corrected strict probe above passed
-setup and demonstrated the stale review result. This is not hidden test success.
-
-Not executed for this review: complete Python suite, browser journeys, PostgreSQL
-race suite, live IdP, production Compose/TLS, consumer matrix, benchmarks, recovery
-drill, or independent security review. CocoIndex refresh failed because its daemon
-log was outside the writable sandbox; exact-text/source exploration used `rg`.
+# Implementation reconciliation — 2026-09-13
+
+Reviewed source baseline: `c46415282a2a796cf737a9c3b7f7ba941f19bf7b`.
+Documentation-only review. No runtime, UI, dependency, database or executable test
+changes. Paid-production release: **HOLD**.
+
+## Conclusion and evidence limits
+
+The project has substantial governed gateway and plugin functionality. Recreating
+publication, schema identity, plugin loading or session storage would duplicate
+completed work. Priority now: close identity/pairing/UI defects, delete obsolete
+runtime branches, finish management journeys, qualify real deployments/consumers.
+
+Source, tests, manifests, CI and previous ledgers were inspected. Application,
+integration suites, benchmarks and hosted CI were not rerun. “Implemented” means
+source plus relevant tests exist, not a newly observed pass. Archived evidence
+records a socket-enabled Python suite pass, PostgreSQL checks and a local
+Python/DuckDB probe. The consumer probe uses StubTableFormat and local JWTs;
+descriptor intersection checks do not qualify independent wheels/providers.
+
+The old plan said all X packets were not-started, while the ledger recorded many
+implementations. Its conclusion still called repaired baseline defects unfixed.
+Only remaining N01–N16 work is active now. Old A01–A23 guarantees remain regression
+or release obligations. Archived documents are evidence, not competing queues.
+
+## Reconciliation of all 24 old packets
+
+Remove the following completed implementation steps from the active backlog.
+None of these statements certifies the entire original packet or release.
+
+- **X00:** baseline fixtures, acceptance registry and constraints exist in
+  tests/acceptance. Remove baseline creation. N01 records the new candidate.
+- **X01:** selected-only publication exists in policy_version_service and API tests.
+  Remove initial repair. Retain G01 regression and N12 live qualification.
+- **X02:** saved-draft review hashes, schema and catalog revisions exist. Remove
+  initial implementation. N03/N09/N12 own mandatory preconditions, UX and races.
+- **X03:** row locks, revision CAS, operation idempotency and PostgreSQL barrier
+  tests exist. Remove primitive creation. N03/N12 close remaining contracts/proof.
+- **X04:** canonical masks and typed synthetic fixtures exist. Remove evaluator
+  repair. Retain G02 regression; qualify actual reads in N12/N13.
+- **X05:** shared schema budgets/fingerprints exist. Remove original digest work.
+  Retain G02; measure complete entry paths in N14.
+- **X06:** admitted IDs, provider IDs, synthetic scoping and drift rejection exist.
+  Remove original path/ID implementation. N12/N13 prove live evolution/tickets.
+- **X07:** loader rejection, bounded options, scoped references and egress validators
+  exist. N02/N04 remove fallback and qualify transport enforcement.
+- **X08:** discovery budgets, principal/process admission, atomic reload and cleanup
+  exist. Remove initial semaphore/reload work. N04/N14 prove provider/worker bounds.
+- **X09:** private-page gates, 401 clearing, hash restoration and some epoch guards
+  exist. Remove those initial tasks. N05/N07 fix uncovered operations and test UI.
+- **X10:** conditions JSON, reordering, six masks, deny-all, grant/connection forms
+  and activation controls exist. N08–N11 complete usable, lossless workflows.
+- **X11:** standalone SDK/conformance packages exist. Remove scaffolding.
+  N02 consolidates duplicate contracts; N13 qualifies built artifacts.
+- **X12:** admission, lock builder, descriptors and lifecycle exist. Remove
+  scaffolding. N02 removes short locks; N03 fixes pairs; N13/N15 qualify artifacts.
+- **X13:** both planes route through registry/public adapters and publish IDs/
+  revisions. Remove original routing/backfill work. N02/N03 finish canonical APIs.
+- **X14:** descriptor forms, lifecycle status and scoped secret inputs exist.
+  Remove initial form/status tasks. N10 completes editing, types and lifecycle.
+- **X15:** reusable conformance runner and wheel CI exist. N13 executes real and
+  deliberately faulty distributions; do not create another harness.
+- **X16:** REST Iceberg package/lifecycle exists. Remove package creation.
+  N13 owns live provider/TLS/delete/snapshot qualification.
+- **X17:** manifest/Parquet package, path bounds and cleanup exist. Remove package
+  creation. N13 owns independent-wheel/provider/consumer qualification.
+- **X18:** Python/DuckDB smoke and CI lane exist. Remove scaffolding.
+  All real three-pair/TLS/OIDC/Spark cells remain N13 work.
+- **X19:** local/production profile validation, TLS edge, OIDC/session and bootstrap
+  paths exist. N05/N15 close identity/parity requirements.
+- **X20:** encrypted-backup helpers, checksum tests and access invalidation exist.
+  Remove helper creation. N15 performs timed real restore/rotation.
+- **X21:** capacity runner/inventory exist. Remove harness creation.
+  N01/N02 enable real cleanup; N14 measures capacity and simplifies tests.
+- **X22:** no-skip/audit/wheel/image/manifest CI exists. Remove scaffolding.
+  N15 links all mandatory lanes to exact candidate artifacts.
+- **X23:** release remains open. N16 owns independent security/UX acceptance.
+
+## Findings still requiring action
+
+### F01 — Identity encoding violates exact-issuer intent (high)
+
+src/dal_obscura/control_plane/application/access.py::owner_principals and
+identity_key strip issuer trailing slashes and concatenate delimiter strings.
+Exact issuer identity must be preserved and encoding must be unambiguous.
+Provider admission guards may limit exploitability; no exploit is claimed here.
+N05 requires structured issuer/type/subject identities and explicit migration.
+The UI currently repeats the same normalization in AccessView identity hints.
+
+### F02 — Shared capabilities incorrectly imply compatible formats (high)
+
+routes/plugins.py::_pair_payload and application/asset_service.py admit pairs
+based on any shared capability. main.tsx::ConnectionsView.govern chooses the first
+admitted format. Nested-schema support does not prove format compatibility.
+N03 must declare catalog output formats, verify returned handles and require
+explicit selection when multiple formats are supported.
+
+### F03 — Stale mutation responses remain possible (high)
+
+main.tsx::restorePolicyVersion has no captured session/asset/edit guard.
+publishAsset checks scope before operation lookup but not after successful lookup;
+finally clears pending state unconditionally. Connections discovery applies tables
+without checking that the selected catalog is unchanged. Initial-load error handling
+awaits options without another epoch check. N07 must test these rendered workflows.
+
+### F04 — Permission/error and management workflows remain incomplete (high)
+
+loadManagement converts failure to cleared data; child views can show empty lists
+or default runtime values. SettingsView lists identity providers but cannot edit
+them despite an existing backend PUT. Grant controls are always rendered; owner
+controls inspect only platform_admin. N05/N11 require effective capabilities,
+distinct forbidden/error/empty states and last-admin-safe identity management.
+
+### F05 — UI remains a functional prototype (medium)
+
+main.tsx has 769 lines with many large one-line components and manual form,
+routing and request state. styles.css has 98 dense global-rule lines; under 760px
+it hides .actor, including sign-out. Navigation has no icon library or semantic
+theme tokens. Conditions use raw JSON; connection editing requires retyping values.
+N06–N11 specify the complete replacement experience. No live visual review was
+performed in this review.
+
+### F06 — Duplicate contracts and fallback paths increase complexity (medium)
+
+common/plugin_api/contracts.py and the standalone SDK duplicate descriptor/config/
+identifier/handle/schema/context validation. Registry accepts three- and five-part
+locks. UI/API use module aliases and built-in fallback descriptors. Secret resolution
+accepts scope-less references. N02 consolidates non-serialized contracts and removes
+old paths with their callers. Keep the public adapter's security validation function;
+do not confuse necessary boundary enforcement with a compatibility shim.
+
+### F07 — Cleanup tests protect obsolete implementation (medium)
+
+test_dead_code_inventory.py permits only KEEP dispositions and asserts the sentence
+“No module currently has sufficient evidence for deletion.” Tests for operator docs
+and capacity runbooks inspect prose/script substrings. UI lifecycle tests prove epoch
+arithmetic, not component behavior. N01/N14 replace redundant tests with owned
+behavioral checks; never delete a unique security oracle merely to lower counts.
+
+### F08 — IO qualification does not prove actual destinations (high release gap)
+
+tests/integration/test_io_boundary.py exercises validators without live redirects,
+DNS changes or denied-destination counters. Deadline checks cannot alone interrupt
+blocking provider IO. N04 requires transport/network enforcement; N14 measures
+multi-worker bounds. Installed Python plugins are trusted code, not SDK-sandboxed.
+
+### F09 — Several evidence labels exceed the exercised scope (high release gap)
+
+test_pairs.py compares descriptors. The consumer probe uses a stub format, two rows
+and a DuckDB count. PostgreSQL barriers use threads/independent sessions at repository
+level rather than competing API processes. Recovery checks exercise helper/invalidation
+behavior rather than timed encrypted restore. N12/N13/N15 retain the missing evidence.
+
+### F10 — Toolchain and testing require consolidation (medium)
+
+Python metadata advertises >=3.10; CI uses 3.12. UI ranges start at React 19.1,
+Vite 7.1 and TypeScript 5.9; the lock determines resolved versions. CI uses Node 22.
+Pre-commit invokes broad tests and type checks on every commit. N01/N14 align the
+support matrix and shorten feedback. Do not infer installed age from lower bounds.
+
+## Handoff
+
+Use [remaining packets](IMPLEMENTATION_PLAN.md), [acceptance](ACCEPTANCE.md),
+[UX requirements](UX_REQUIREMENTS.md), [technology](TECHNOLOGY.md),
+[cleanup](CLEANUP_PLAN.md) and [status](STATUS.md).
+[Previous review](IMPLEMENTATION_REVIEW_ARCHIVE_20260913.md) and
+[previous ledger](STATUS_ARCHIVE_20260913.md) retain historical evidence.

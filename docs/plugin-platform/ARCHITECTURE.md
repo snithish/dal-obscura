@@ -1,7 +1,9 @@
 # Plugin architecture contract
 
-Status: proposed implementation contract, baseline `5208eee`. Requirements below
-are normative for [X00–X23](IMPLEMENTATION_PLAN.md), not descriptions of shipped code.
+Updated planning contract, 2026-09-13. The active queue is
+[N01–N16](IMPLEMENTATION_PLAN.md). This describes required boundaries, not a
+production-readiness claim. [Cleanup](CLEANUP_PLAN.md) and [acceptance](ACCEPTANCE.md)
+supersede old compatibility requirements outside the protected pickle boundary.
 
 ## 1. Extension boundaries
 
@@ -232,29 +234,30 @@ publication records. The current process-local registry enforces the admission
 boundary; persistence, lease accounting, and ticket invalidation remain required
 before lifecycle controls can be treated as a production drain workflow.
 
-## 6. Persistence and compatibility migration
+## 6. Persistence and deliberate cutover
 
-Use additive migrations in the existing database for stable plugin IDs, config
-schema versions, catalog configuration revisions, asset binding revisions,
-canonical schema/admitted IDs, and publication requirements. Do not mutate immutable
-historical publications. Add a compatibility interpretation layer for old rows.
+Use the existing database for stable plugin IDs, config schema versions,
+configuration/binding revisions, canonical schema IDs and publication requirements.
+Preserve immutable historical publications. Remove replaced runtime readers; valid
+old mutable records may use an explicit offline migration, never a compatibility
+interpretation layer in serving requests.
 
 Map only known exact legacy class strings through a static mapping; reject unknown
 legacy strings. Do not retain suffix-based Iceberg inference or generic imports.
 Provide an operator dry-run showing every migrated/unsupported record. Apply only
 explicitly; restart cannot migrate, reset, reseed, or republish.
 
-Keep existing pickle serialization functions, payload shape, and referenced class
-paths intact. Built-in Iceberg extraction may require a permanent compatibility
-facade at the old import path. Do not remove it for aesthetic cleanup. Test trusted
-old ticket fixtures against supported new workers and mixed versions. If a package
-combination cannot execute old tasks unchanged, stop admissions and drain/expire or
-explicitly invalidate tickets before deployment; never opportunistically reinterpret
-payloads. Do not add fields to serialized task objects without separate owner approval.
+Keep existing pickle serialization functions, payload shape, referenced classes
+and import paths intact. Leave original definitions in place; do not move them and
+create a facade. Test trusted fixtures against the selected worker artifact.
+Stop admissions and drain/expire or explicitly invalidate tickets before a breaking
+cutover to one artifact set. Never opportunistically reinterpret payloads.
+Do not add fields to serialized task objects without separate owner approval.
 
-Registry/package compatibility checks should use existing publication/runtime
-metadata or additive database records outside unchanged pickle blobs. A change to
-that mechanism must still be tested against older workers and the upgrade policy.
+Registry/package checks use existing publication/runtime metadata or explicit
+database records outside unchanged pickle blobs. Reject unsupported versions at
+startup. Test maintenance-mode upgrade and rollback through an isolated backup and
+the previous complete artifact set; do not add mixed-version runtime shims.
 
 ## 7. UI and configuration lifecycle
 

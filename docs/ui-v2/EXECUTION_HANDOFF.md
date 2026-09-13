@@ -1,5 +1,8 @@
 # Remaining implementation plan
 
+**Superseded execution queue:** follow [N01–N16](../plugin-platform/IMPLEMENTATION_PLAN.md)
+and its acceptance criteria. P/X tasks below are historical; do not restart them.
+
 **2026-09-12 follow-up:** the owner requested a multi-catalog/multi-format plugin
 architecture. The [plugin-platform handoff](../plugin-platform/README.md) now controls
 the next execution sequence and supersedes this document's Iceberg-only planning

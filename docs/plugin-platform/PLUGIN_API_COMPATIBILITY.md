@@ -1,5 +1,12 @@
 # Plugin API compatibility policy
 
+**Planning update, 2026-09-13:** this file records the baseline v1 policy.
+[N02/N03](IMPLEMENTATION_PLAN.md) replace duplicated internal contracts with the
+canonical public SDK and one explicitly supported version set. Breaking changes
+require version bumps and offline cutover, not runtime compatibility shims.
+The future multiple-major-version option below is outside the approved scope.
+Protected pickle definitions remain unchanged. See [cleanup](CLEANUP_PLAN.md).
+
 The plugin SDK is a separately built distribution. Its public contract is
 identified by `PLUGIN_API_VERSION`, currently `"1"`, and by the integer
 `config_version` carried in each descriptor. The service admits only the
