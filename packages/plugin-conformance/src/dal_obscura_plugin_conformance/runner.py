@@ -248,6 +248,20 @@ def run_catalog_checks(  # noqa: C901
     try:
         if descriptor.kind != "catalog":
             raise ValueError("catalog conformance requires a catalog plugin descriptor")
+        validate_config = getattr(plugin, "validate_config", None)
+        list_namespaces = getattr(plugin, "list_namespaces", None)
+        if not callable(validate_config) or not callable(list_namespaces):
+            raise ValueError("catalog plugin must expose validate_config() and list_namespaces()")
+        validate_config(context)
+        namespaces = list_namespaces(context)
+        if not isinstance(namespaces, tuple) or any(
+            not isinstance(namespace, tuple)
+            or not namespace
+            or any(not isinstance(part, str) or not part for part in namespace)
+            for namespace in namespaces
+        ):
+            raise ValueError("catalog plugin returned invalid namespaces")
+        result.record_pass("catalog_lifecycle")
         if page_size <= 0 or max_pages <= 0 or max_tables <= 0:
             raise ValueError("catalog discovery budgets must be positive")
         continuation: str | None = None

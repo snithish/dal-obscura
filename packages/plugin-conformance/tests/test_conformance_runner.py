@@ -452,6 +452,13 @@ def test_catalog_runner_validates_bounded_discovery_and_coverage():
     class _Catalog:
         descriptor = _catalog_descriptor()
 
+        def validate_config(self, context):
+            del context
+
+        def list_namespaces(self, context):
+            del context
+            return (("default",),)
+
         def close(self):
             return None
 
@@ -474,11 +481,35 @@ def test_catalog_runner_validates_bounded_discovery_and_coverage():
     assert result.artifact_identity == "sha256:catalog"
 
 
+def test_catalog_runner_requires_lifecycle_operations() -> None:
+    class NoLifecycle:
+        descriptor = _catalog_descriptor()
+
+        def list_tables(self, context, *, continuation, limit):
+            del context, continuation, limit
+            return DiscoveryPage(())
+
+        def close(self):
+            return None
+
+    result = run_catalog_checks(cast(CatalogPlugin, NoLifecycle()), _catalog_context())
+
+    assert result.to_dict()["status"] == "failed"
+    assert any("validate_config" in failure for failure in result.failures)
+
+
 def test_catalog_runner_rejects_omitted_expected_table():
     users = TableIdentifier(namespace=("default",), name="users")
 
     class _IncompleteCatalog:
         descriptor = _catalog_descriptor()
+
+        def validate_config(self, context):
+            del context
+
+        def list_namespaces(self, context):
+            del context
+            return (("default",),)
 
         def close(self):
             return None
@@ -506,6 +537,13 @@ def test_catalog_runner_rejects_duplicate_and_cyclic_pages(plugin_type, message)
     class _BadCatalog:
         descriptor = _catalog_descriptor()
 
+        def validate_config(self, context):
+            del context
+
+        def list_namespaces(self, context):
+            del context
+            return (("default",),)
+
         def close(self):
             return None
 
@@ -532,6 +570,13 @@ def test_catalog_runner_stops_before_requesting_after_cancellation():
 
     class _CancelledCatalog:
         descriptor = _catalog_descriptor()
+
+        def validate_config(self, context):
+            del context
+
+        def list_namespaces(self, context):
+            del context
+            return (("default",),)
 
         def close(self):
             return None
