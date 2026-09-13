@@ -92,6 +92,10 @@ Follow-up `bf62ca0` closes a migration edge case: local `local|...` and
 `group:local|...` keys are intentionally left untouched, with a focused mixed
 workspace regression test (3 migration tests passed).
 
+Follow-up `79314a7` also distinguishes exact-issuer canonical escaped keys from
+slash-stripped history and rejects the latter when escapes make the original
+subject ambiguous (4 migration tests passed).
+
 ## Implementation update — 7c20db5 (2026-09-13)
 
 - Packet / status / candidate commit / owner: N03/B04 partial / VERIFY / `7c20db5` / plugin SDK + control-plane + governance UI.
