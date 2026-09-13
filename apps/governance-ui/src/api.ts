@@ -97,6 +97,7 @@ export type Session = {
   principal: string;
   groups: string[];
   platform_admin: boolean;
+  capabilities: string[];
   issuer?: string;
 };
 

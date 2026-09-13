@@ -113,6 +113,7 @@ def actor_response(actor: ControlPlaneActor) -> dict[str, object]:
         "principal": actor.principal,
         "groups": list(actor.groups),
         "platform_admin": actor.platform_admin,
+        "capabilities": ["workspace:admin"] if actor.platform_admin else [],
         **({"issuer": actor.issuer} if actor.issuer else {}),
     }
 

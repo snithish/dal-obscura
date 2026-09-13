@@ -362,6 +362,7 @@ def test_session_reports_admin_token_actor():
         "principal": "platform:admin",
         "groups": [],
         "platform_admin": True,
+        "capabilities": ["workspace:admin"],
     }
 
 
@@ -425,12 +426,14 @@ def test_session_reports_oidc_actor_and_platform_admin_group():
         "principal": "asset-owner",
         "groups": ["asset-owners"],
         "platform_admin": False,
+        "capabilities": [],
     }
     assert admin.status_code == 200
     assert admin.json() == {
         "principal": "demo-admin",
         "groups": ["platform-admins"],
         "platform_admin": True,
+        "capabilities": ["workspace:admin"],
     }
 
 

@@ -80,6 +80,14 @@ Direct UI production verification also passed: `apps/governance-ui/node_modules/
 
 Plugin-platform and architecture regression evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/plugin_platform tests/architecture -q` — all collected tests passed (100%).
 
+## Implementation update — session capability metadata (working slice, 2026-09-13)
+
+- Packet / status / candidate commit / owner: N05/F01 plus N11/B15 partial / VERIFY / pending atomic commit / control-plane + governance UI.
+- Observable behavior delivered: authenticated `/v1/session` responses now include a safe workspace capability list. Platform administrators receive `workspace:admin`; ordinary actors receive an empty list. The UI session contract carries the metadata for future workspace-level navigation gates while resource-specific permissions remain derived from `GET /v1/assets/{asset_id}/access`.
+- Changed paths: session API actor response, UI session DTO, and actor-auth exact-contract tests. Pickle serializer and payload paths are unchanged.
+- Evidence: actor-auth and OIDC login tests passed; changed-path Ruff passed; UI TypeScript, Vite production build, and lifecycle tests passed.
+- Remaining N05/N11/B15 work: structured principal-kind persistence, two-process OIDC freshness, browser login/logout/expiry, complete actor capability matrix, and independent security/UX review.
+
 ## Implementation update — identity migration (working slice, 2026-09-13)
 
 - Packet / status / candidate commit / owner: N05/F01 partial / VERIFY / pending atomic commit / control-plane.
