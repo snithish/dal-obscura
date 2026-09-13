@@ -21,15 +21,11 @@ from dal_obscura_plugin_api import (
     TableIdentifier,
 )
 
-from dal_obscura.common.schema_identity import (
-    MAX_PROVIDER_FIELD_ID_LENGTH,
-    canonical_provider_field_id,
-)
-
 _MAX_MANIFEST_BYTES = 1_048_576
 _MAX_TABLES = 10_000
 _MAX_FILES_PER_TABLE = 100_000
 _MAX_PATH_LENGTH = 1_024
+_MAX_PROVIDER_FIELD_ID_LENGTH = 128
 
 CATALOG_DESCRIPTOR = PluginDescriptor(
     kind="catalog",
@@ -214,7 +210,7 @@ def _load_manifest(  # noqa: C901
         if not isinstance(raw_field_ids, list) or any(
             not isinstance(item, str)
             or not item
-            or len(item) > MAX_PROVIDER_FIELD_ID_LENGTH
+            or len(item) > _MAX_PROVIDER_FIELD_ID_LENGTH
             or any(ord(char) < 0x20 or ord(char) == 0x7F for char in item)
             for item in raw_field_ids
         ):
@@ -270,7 +266,7 @@ def _schema_identities(
     def visit(field: pa.Field, path: tuple[str, ...], anchor: str) -> None:
         path_text = ".".join(path)
         if len(path) == 1:
-            field_id = canonical_provider_field_id(anchor)
+            field_id = _canonical_provider_field_id(anchor)
         else:
             field_id = "synthetic:" + hashlib.sha256(
                 f"{anchor}:{path_text}".encode()
@@ -296,6 +292,12 @@ def _schema_identities(
     for field, anchor in zip(schema, field_ids, strict=True):
         visit(field, (field.name,), anchor)
     return tuple(identities)
+
+
+def _canonical_provider_field_id(value: str) -> str:
+    """Normalize manifest IDs without importing core service modules."""
+
+    return value if ":" in value else f"iceberg:{value}"
 
 
 def _required_root(value: object) -> Path:
