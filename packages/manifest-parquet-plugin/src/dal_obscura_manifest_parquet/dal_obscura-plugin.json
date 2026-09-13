@@ -1,0 +1,26 @@
+{
+  "descriptors": [
+    {
+      "kind": "catalog",
+      "plugin_id": "manifest",
+      "api_version": "1",
+      "config_version": 1,
+      "capabilities": ["nested_schema", "splittable_scan", "field_id_stability"],
+      "display_name": "Manifest Parquet dataset",
+      "config_schema": {
+        "fields": [
+          {"name": "manifest_path", "type": "string", "required": true},
+          {"name": "root", "type": "string", "required": true}
+        ]
+      }
+    },
+    {
+      "kind": "table_format",
+      "plugin_id": "parquet.dataset",
+      "api_version": "1",
+      "config_version": 1,
+      "capabilities": ["nested_schema", "splittable_scan", "field_id_stability"],
+      "display_name": "Manifest Parquet dataset format"
+    }
+  ]
+}
