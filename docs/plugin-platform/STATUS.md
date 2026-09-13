@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `51feac9` (typed nested Iceberg Flight E2E fixture;
+Implementation follow-up through `cb4a8f1` (config-activation generation boundary;
+typed nested Iceberg Flight E2E fixture;
 nested Iceberg Flight E2E qualification;
 IO boundary qualification tests;
 locked Python/UI dependency audit;
@@ -486,6 +487,8 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   exactly migratable, and unsupported legacy rows; `--apply` fills only exact
   built-in Iceberg identities in one transaction. Runtime registry routing,
   migration of legacy manifests, and mixed-version rollout evidence remain open.
+  A dedicated activation regression confirms an active reviewed generation remains
+  stable while later draft policy edits wait for a new publication.
 - X14 plugin UI: **implementing**; standalone plugin descriptors now enforce
   bounded JSON-like form metadata and reject remote/executable content. An
   authenticated `/v1/plugins` endpoint and Connections view render admitted
@@ -790,6 +793,16 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Green evidence: elevated `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/test_e2e_smoke.py::test_e2e_flight_server_with_iceberg -q` (1 passed) and full `pytest -q` (all collected tests passed; external-service lanes skipped) with Ruff, Ty, and `git diff --check`.
 - Remaining gaps: hosted TLS/OIDC, real provider, Spark/DuckDB consumer matrix,
   restart/revocation, and clean artifact evidence remain open.
+
+### X15 config-activation generation boundary — `cb4a8f1`
+
+- State: implemented-unverified.
+- Behavior: an active reviewed publication remains the workspace generation after
+  a subsequent policy draft edit; the edit is staged for a later publication and
+  cannot mutate the serving generation in place.
+- Green evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane/test_config_activation.py -q` (1 passed), Ruff, and `git diff --check` passed.
+- Remaining gaps: PostgreSQL/multi-worker activation races, live data-plane restart,
+  and production artifact evidence remain open.
 
 ### X03 PostgreSQL draft CAS race gate — `ee6b405`
 
