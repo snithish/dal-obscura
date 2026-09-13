@@ -252,8 +252,11 @@ def run_catalog_checks(  # noqa: C901
         list_namespaces = getattr(plugin, "list_namespaces", None)
         if not callable(validate_config) or not callable(list_namespaces):
             raise ValueError("catalog plugin must expose validate_config() and list_namespaces()")
+        _check_context(context, "validating catalog configuration")
         validate_config(context)
+        _check_context(context, "listing catalog namespaces")
         namespaces = list_namespaces(context)
+        _check_context(context, "checking catalog namespaces")
         if not isinstance(namespaces, tuple) or any(
             not isinstance(namespace, tuple)
             or not namespace
@@ -310,6 +313,13 @@ def run_catalog_checks(  # noqa: C901
         else:
             result.record_failure("cleanup", "catalog plugin must expose close()")
     return result
+
+
+def _check_context(context: ExecutionContext, operation: str) -> None:
+    if datetime.now(timezone.utc) >= context.deadline:
+        raise TimeoutError(f"execution context deadline expired while discovering ({operation})")
+    if context.cancel_check is not None and context.cancel_check():
+        raise RuntimeError(f"execution context was cancelled while discovering ({operation})")
 
 
 def run_format_checks(  # noqa: C901

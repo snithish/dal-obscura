@@ -498,6 +498,37 @@ def test_catalog_runner_requires_lifecycle_operations() -> None:
     assert any("validate_config" in failure for failure in result.failures)
 
 
+def test_catalog_runner_honors_expired_context_before_lifecycle() -> None:
+    called = []
+
+    class ExpiredCatalog:
+        descriptor = _catalog_descriptor()
+
+        def validate_config(self, context):
+            del context
+            called.append(True)
+
+        def list_namespaces(self, context):
+            del context
+            return (("default",),)
+
+        def list_tables(self, context, *, continuation, limit):
+            del context, continuation, limit
+            return DiscoveryPage(())
+
+        def close(self):
+            return None
+
+    result = run_catalog_checks(
+        cast(CatalogPlugin, ExpiredCatalog()),
+        _catalog_context(deadline=datetime.now(timezone.utc)),
+    )
+
+    assert result.to_dict()["status"] == "failed"
+    assert any("deadline expired" in failure for failure in result.failures)
+    assert called == []
+
+
 def test_catalog_runner_rejects_omitted_expected_table():
     users = TableIdentifier(namespace=("default",), name="users")
 
@@ -593,7 +624,7 @@ def test_catalog_runner_stops_before_requesting_after_cancellation():
     )
     assert result.to_dict()["status"] == "failed"
     assert any("cancelled while discovering" in failure for failure in result.failures)
-    assert requested == 1
+    assert requested == 0
 
 
 def test_check_discovery_page_rejects_invalid_continuation():
