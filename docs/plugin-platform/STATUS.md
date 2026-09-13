@@ -120,6 +120,10 @@ Follow-up `5408068` removes hard-coded runtime values from the unconfigured
 settings state. Blank fields with examples now require positive operator input,
 so a successful `null` runtime read cannot be mistaken for serving configuration.
 
+Follow-up `pending` normalizes an omitted additive session-capability field to an
+empty list during rolling upgrades, preserving a fail-closed management shell
+when an older control-plane instance is briefly serving the UI.
+
 ## Implementation update — identity migration (working slice, 2026-09-13)
 
 - Packet / status / candidate commit / owner: N05/F01 partial / VERIFY / pending atomic commit / control-plane.

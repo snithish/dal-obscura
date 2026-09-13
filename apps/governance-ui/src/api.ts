@@ -326,7 +326,15 @@ export const controlPlane = {
     }
     window.location.assign("/auth/login");
   },
-  getSession: (signal?: AbortSignal) => request<Session>("/v1/session", { signal }),
+  getSession: async (signal?: AbortSignal) => {
+    const session = await request<Session>("/v1/session", { signal });
+    return {
+      ...session,
+      // Older control-plane instances may omit the additive field during a
+      // rolling upgrade. Missing metadata must fail closed for management UI.
+      capabilities: Array.isArray(session.capabilities) ? session.capabilities : [],
+    };
+  },
   getUiAuthConfig: (signal?: AbortSignal) => request<UiAuthConfig>("/v1/ui-auth-config", { signal }),
   getSessionOptions: (signal?: AbortSignal) => request<SessionOptions>("/v1/session/options", { signal }),
   bootstrapLogin: (token: string) => request<{ authenticated: true }>("/v1/session/bootstrap", {
