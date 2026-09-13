@@ -76,6 +76,8 @@ Regression evidence after the N11 slices: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cach
 
 Direct UI production verification also passed: `apps/governance-ui/node_modules/.bin/tsc -p apps/governance-ui/tsconfig.json && apps/governance-ui/node_modules/.bin/vite build` produced the Vite bundle (260.29 kB JavaScript, 14.22 kB CSS). The package-manager wrapper remains blocked only when it attempts to fetch its pinned Corepack metadata.
 
+Plugin-platform and architecture regression evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/plugin_platform tests/architecture -q` — all collected tests passed (100%).
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
