@@ -1,4 +1,4 @@
-FROM node:22-alpine AS build
+FROM node:24-alpine AS build
 
 WORKDIR /app
 COPY apps/governance-ui/package.json apps/governance-ui/pnpm-lock.yaml apps/governance-ui/pnpm-workspace.yaml ./

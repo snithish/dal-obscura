@@ -18,8 +18,7 @@ def test_secure_local_profile_reuses_production_security_contract() -> None:
     assert "DAL_OBSCURA_TLS_VERIFY_CLIENT=true" in env
     assert "DAL_OBSCURA_EDGE_IMAGE=caddy@sha256:" in env
     assert (
-        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI=https://localhost:8443/auth/callback"
-        in env
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI=https://localhost:8443/auth/callback" in env
     )
     assert "openssl" in runner
     assert 'openssl genrsa -out "$ROOT/secrets/flight.key"' in runner

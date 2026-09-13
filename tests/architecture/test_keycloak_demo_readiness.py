@@ -16,7 +16,7 @@ KEYCLOAK_READY_CHECK = (
 
 def _http_ready_check(port: int) -> str:
     return (
-        "python -c \"from urllib.request import urlopen; raise "
+        'python -c "from urllib.request import urlopen; raise '
         f"SystemExit(urlopen('http://127.0.0.1:{port}/readyz', timeout=2).status != 200)\""
     )
 

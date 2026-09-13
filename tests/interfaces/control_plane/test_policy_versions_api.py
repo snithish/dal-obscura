@@ -286,19 +286,28 @@ def test_asset_policy_history_is_capability_scoped():
     ).json()
 
     outsider = _bearer("outsider-token")
-    assert client.get(
-        f"/v1/assets/{asset['id']}/policy-versions",
-        headers=outsider,
-    ).status_code == 403
-    assert client.get(
-        f"/v1/assets/{asset['id']}/policy-versions/{created['policy_version']}",
-        headers=outsider,
-    ).status_code == 403
-    assert client.post(
-        f"/v1/assets/{asset['id']}/policy-versions/{created['policy_version']}/restore",
-        json={"expected_revision": 0},
-        headers=outsider,
-    ).status_code == 403
+    assert (
+        client.get(
+            f"/v1/assets/{asset['id']}/policy-versions",
+            headers=outsider,
+        ).status_code
+        == 403
+    )
+    assert (
+        client.get(
+            f"/v1/assets/{asset['id']}/policy-versions/{created['policy_version']}",
+            headers=outsider,
+        ).status_code
+        == 403
+    )
+    assert (
+        client.post(
+            f"/v1/assets/{asset['id']}/policy-versions/{created['policy_version']}/restore",
+            json={"expected_revision": 0},
+            headers=outsider,
+        ).status_code
+        == 403
+    )
 
 
 def test_publish_idempotency_key_replays_committed_result_and_rejects_mismatch():

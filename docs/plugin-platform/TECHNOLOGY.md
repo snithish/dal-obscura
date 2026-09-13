@@ -77,7 +77,7 @@ one maintained primitive only when measured behavior requires it.
 ## Required upgrade record
 
 Include the UI base image and its web server in the same support/advisory matrix.
-The current Dockerfile uses Node 22 and nginx-unprivileged 1.27; verify maintained
+The current Dockerfile uses Node 24 and nginx-unprivileged 1.27; verify maintained
 target tags and digests at N01, rather than preserving a tag because a test quotes
 it. Build tools (Vite and its React plugin) belong in devDependencies; only actual
 browser runtime packages belong in dependencies. Preserve the production CSP,

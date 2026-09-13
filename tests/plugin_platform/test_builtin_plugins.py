@@ -18,4 +18,3 @@ def test_builtin_registry_admits_qualified_iceberg_pair_and_factories() -> None:
     }
     assert registry.load("catalog", "iceberg.sql") is IcebergCatalog
     assert registry.load("table_format", "iceberg") is IcebergTableFormat
-

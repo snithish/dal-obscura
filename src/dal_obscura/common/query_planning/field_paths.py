@@ -71,10 +71,14 @@ class FieldPath:
                 or any(ord(char) < 0x20 or ord(char) == 0x7F for char in segment.name)
             ):
                 raise ValueError("Field segment names must be bounded printable text")
-            if isinstance(segment, FieldSegment) and segment.field_id is not None and (
-                isinstance(segment.field_id, bool)
-                or not isinstance(segment.field_id, int)
-                or not 0 <= segment.field_id <= MAX_FIELD_ID
+            if (
+                isinstance(segment, FieldSegment)
+                and segment.field_id is not None
+                and (
+                    isinstance(segment.field_id, bool)
+                    or not isinstance(segment.field_id, int)
+                    or not 0 <= segment.field_id <= MAX_FIELD_ID
+                )
             ):
                 raise ValueError("Field segment IDs must be nonnegative 32-bit integers")
 

@@ -498,10 +498,12 @@ def test_asset_owner_can_replace_policy_rules_through_api():
 
     access = client.get(f"/v1/assets/{asset}/access", headers=_bearer("owner-token"))
     assert access.status_code == 200
-    assert {
-        item["capability"]: item["allowed"]
-        for item in access.json()["capabilities"]
-    } == {"read": True, "edit": True, "publish": False, "grant": False}
+    assert {item["capability"]: item["allowed"] for item in access.json()["capabilities"]} == {
+        "read": True,
+        "edit": True,
+        "publish": False,
+        "grant": False,
+    }
 
     response = _save_policy_draft(
         client, asset, [_allow_rule(row_filter="region = 'us'")], _bearer("owner-token")

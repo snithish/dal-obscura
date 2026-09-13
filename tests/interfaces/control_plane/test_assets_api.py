@@ -17,8 +17,7 @@ def test_asset_access_reports_effective_capabilities_and_reasons():
     assert admin.json()["principal"] == "platform:admin"
     assert all(item["allowed"] for item in admin.json()["capabilities"])
     assert all(
-        item["reasons"] == ["Platform administrator"]
-        for item in admin.json()["capabilities"]
+        item["reasons"] == ["Platform administrator"] for item in admin.json()["capabilities"]
     )
 
 
@@ -144,24 +143,24 @@ def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail():
 
     assert response.status_code == 200
     assert response.json() == {
-            "asset_id": asset["id"],
-            "fields": [
-                {
-                    "name": "id",
-                    "field_id": "legacy:fc949a4dac6b077d1c847c8706688fbb",
-                    "path": ["id"],
-                    "type": "long",
-                    "nullable": False,
-                },
-                {
-                    "name": "email",
-                    "field_id": "legacy:663d341058bb4332eba62bf5887ed38d",
-                    "path": ["email"],
-                    "type": "string",
-                    "nullable": True,
-                },
-            ],
-        }
+        "asset_id": asset["id"],
+        "fields": [
+            {
+                "name": "id",
+                "field_id": "legacy:fc949a4dac6b077d1c847c8706688fbb",
+                "path": ["id"],
+                "type": "long",
+                "nullable": False,
+            },
+            {
+                "name": "email",
+                "field_id": "legacy:663d341058bb4332eba62bf5887ed38d",
+                "path": ["email"],
+                "type": "string",
+                "nullable": True,
+            },
+        ],
+    }
     assert second_response.status_code == 200
     assert detail["schema_fields"] == [
         {
@@ -259,7 +258,7 @@ def test_workspace_policy_draft_can_be_replaced_from_asset_detail():
                     "masks": {"email": {"type": "email"}},
                     "row_filter": "region = 'us'",
                 }
-            ]
+            ],
         },
         headers=ADMIN_HEADERS,
     )
@@ -427,7 +426,7 @@ def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
         "revision": 0,
         "options": {"snapshot": 1},
         "schema_fields": [],
-            "policy_rules": [],
+        "policy_rules": [],
     }
     assert "tenant" not in _keys_recursive(summary | {"catalogs": catalogs, "assets": assets})
     assert "cell" not in _keys_recursive(summary | {"catalogs": catalogs, "assets": assets})

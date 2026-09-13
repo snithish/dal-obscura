@@ -85,11 +85,13 @@ class BrowserSessionStore:
         digest = _token_hash(token)
         now = utcnow()
         record = self._session.scalar(
-            select(BrowserSessionRecord).where(
+            select(BrowserSessionRecord)
+            .where(
                 BrowserSessionRecord.token_hash == digest,
                 BrowserSessionRecord.revoked_at.is_(None),
                 BrowserSessionRecord.expires_at > now,
-            ).with_for_update()
+            )
+            .with_for_update()
         )
         if record is None:
             return None
@@ -119,10 +121,12 @@ class BrowserSessionStore:
 
     def revoke(self, token: str) -> bool:
         record = self._session.scalar(
-            select(BrowserSessionRecord).where(
+            select(BrowserSessionRecord)
+            .where(
                 BrowserSessionRecord.token_hash == _token_hash(token),
                 BrowserSessionRecord.revoked_at.is_(None),
-            ).with_for_update()
+            )
+            .with_for_update()
         )
         if record is None:
             return False
@@ -333,11 +337,13 @@ class LoginTransactionStore:
 
     def consume(self, state: str) -> LoginTransaction | None:
         record = self._session.scalar(
-            select(LoginTransactionRecord).where(
+            select(LoginTransactionRecord)
+            .where(
                 LoginTransactionRecord.state_hash == _token_hash(state),
                 LoginTransactionRecord.consumed_at.is_(None),
                 LoginTransactionRecord.expires_at > utcnow(),
-            ).with_for_update()
+            )
+            .with_for_update()
         )
         if record is None:
             return None

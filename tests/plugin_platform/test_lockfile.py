@@ -37,9 +37,7 @@ def test_load_plugin_lock_file_returns_five_part_allowlist(tmp_path) -> None:
         (
             {
                 "version": 1,
-                "plugins": [
-                    {"kind": "catalog", "plugin_id": "fixture.catalog", "lock": ["x"]}
-                ],
+                "plugins": [{"kind": "catalog", "plugin_id": "fixture.catalog", "lock": ["x"]}],
             },
             "five-part",
         ),

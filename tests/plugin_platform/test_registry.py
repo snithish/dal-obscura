@@ -33,12 +33,14 @@ class _EntryPoints:
 def _entry(name: str, group: str, distribution: str = "plugin-wheel", version: str = "1.2.3"):
     loaded = {"name": name}
     kind = "catalog" if group.endswith("catalogs.v1") else "table_format"
-    descriptor_json = json.dumps({
-        "kind": kind,
-        "plugin_id": name,
-        "api_version": "1",
-        "config_version": 1,
-    })
+    descriptor_json = json.dumps(
+        {
+            "kind": kind,
+            "plugin_id": name,
+            "api_version": "1",
+            "config_version": 1,
+        }
+    )
     return cast(
         _Entry,
         SimpleNamespace(

@@ -55,9 +55,7 @@ def test_resolve_secret_refs_uses_explicit_secret_shape_only(monkeypatch: pytest
         {
             "jwt_secret": {"secret": "jwt-signing", "scope": "identity"},
             "plain_env_ref": {"key": "DAL_OBSCURA_JWT_SECRET"},
-            "keys": [
-                {"id": "svc", "secret": {"secret": "api-key", "scope": "identity"}}
-            ],
+            "keys": [{"id": "svc", "secret": {"secret": "api-key", "scope": "identity"}}],
         },
         provider=provider,
         expected_scope="identity",

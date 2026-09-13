@@ -51,7 +51,7 @@ def test_activation_freezes_a_reviewed_generation_until_a_new_publication() -> N
                     "masks": {},
                     "row_filter": None,
                 }
-            ]
+            ],
         },
     )
     assert changed.status_code == 200, changed.json()

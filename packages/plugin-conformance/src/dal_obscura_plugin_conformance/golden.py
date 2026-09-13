@@ -36,4 +36,3 @@ def nested_golden_table() -> pa.Table:
         ],
         schema=schema,
     )
-

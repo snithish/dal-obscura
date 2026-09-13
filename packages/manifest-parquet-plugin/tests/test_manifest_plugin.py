@@ -87,9 +87,7 @@ def test_manifest_catalog_and_parquet_format_split_nested_rows(tmp_path):
     output_schema, batches = format_plugin.execute(tasks[0], context)
     assert output_schema.names == ["profile"]
     assert pa.Table.from_batches(batches).to_pylist() == [{"profile": {"email": "a@example.com"}}]
-    identities = dict(
-        cast(tuple[tuple[str, str], ...], handle.metadata["schema_identities"])
-    )
+    identities = dict(cast(tuple[tuple[str, str], ...], handle.metadata["schema_identities"]))
     assert identities["id"] == "iceberg:id"
     assert identities["profile.email"].startswith("synthetic:")
 
@@ -99,9 +97,7 @@ def test_manifest_schema_identities_preserve_nested_provider_ids() -> None:
         [
             pa.field(
                 "profile",
-                pa.struct(
-                    [pa.field("email", pa.string(), metadata={b"PARQUET:field_id": b"17"})]
-                ),
+                pa.struct([pa.field("email", pa.string(), metadata={b"PARQUET:field_id": b"17"})]),
             )
         ]
     )
@@ -169,9 +165,7 @@ def test_manifest_catalog_accepts_structured_dotted_table_names(tmp_path):
         _context(),
     )
     page = catalog.list_tables(_context(), limit=1)
-    assert page.entries == (
-        TableIdentifier(namespace=("default",), name="users.with.dot"),
-    )
+    assert page.entries == (TableIdentifier(namespace=("default",), name="users.with.dot"),)
 
 
 def test_manifest_identity_paths_use_core_collection_markers(tmp_path):
@@ -318,9 +312,7 @@ def test_parquet_format_rejects_member_schema_drift(tmp_path):
     root, manifest, table = _write_fixture(tmp_path)
     drifted = root / "drifted.parquet"
     pq.write_table(
-        pa.table(
-            {"id": pa.array([4], type=pa.int32()), "profile": table["profile"].slice(0, 1)}
-        ),
+        pa.table({"id": pa.array([4], type=pa.int32()), "profile": table["profile"].slice(0, 1)}),
         drifted,
     )
     payload = json.loads(manifest.read_text())

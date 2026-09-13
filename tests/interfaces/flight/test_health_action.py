@@ -45,9 +45,7 @@ def test_health_payload_exposes_only_bounded_metrics_aggregates():
     )
 
     assert payload["metrics"] == {
-        "flight.do_get": {
-            "success": {"count": 1, "duration_seconds": 0.25}
-        }
+        "flight.do_get": {"success": {"count": 1, "duration_seconds": 0.25}}
     }
 
 

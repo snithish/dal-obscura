@@ -50,8 +50,7 @@ def test_plugin_api_import_boundary_excludes_service_and_provider_modules() -> N
     assert not {
         module
         for module in modules
-        if not module.startswith("dal_obscura_plugin_api")
-        and module.startswith(forbidden_prefixes)
+        if not module.startswith("dal_obscura_plugin_api") and module.startswith(forbidden_prefixes)
     }
 
 

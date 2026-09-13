@@ -179,9 +179,7 @@ class PublicationCompiler:
             # manifest so future plugin routing never infers them from options.
             "plugins": {
                 "catalog": (
-                    "iceberg.sql"
-                    if catalog.module == _ICEBERG_CATALOG_MODULE
-                    else catalog.module
+                    "iceberg.sql" if catalog.module == _ICEBERG_CATALOG_MODULE else catalog.module
                 ),
                 "table_format": asset.backend,
             },

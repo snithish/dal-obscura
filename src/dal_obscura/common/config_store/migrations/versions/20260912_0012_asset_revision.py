@@ -18,9 +18,7 @@ depends_on = None
 
 def upgrade() -> None:
     with op.batch_alter_table("assets") as batch:
-        batch.add_column(
-            sa.Column("revision", sa.Integer(), nullable=False, server_default="0")
-        )
+        batch.add_column(sa.Column("revision", sa.Integer(), nullable=False, server_default="0"))
 
 
 def downgrade() -> None:

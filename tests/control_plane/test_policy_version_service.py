@@ -69,9 +69,7 @@ def test_publication_failure_rolls_back_generation_audit_and_operation(
     service.upsert_workspace_runtime_settings(900, 8, 1)
     service.upsert_workspace_catalog(
         name="analytics",
-        module=(
-            "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
-        ),
+        module=("dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"),
         options={"type": "sql", "uri": "sqlite:///catalog.db"},
     )
     asset = service.upsert_workspace_asset(

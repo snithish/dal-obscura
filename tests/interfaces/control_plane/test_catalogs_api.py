@@ -210,9 +210,7 @@ def test_workspace_catalog_rejects_inline_sensitive_options_but_accepts_secret_r
         "/v1/catalogs/analytics",
         json={
             "module": ICEBERG_CATALOG_MODULE,
-            "options": {
-                "password": {"secret": "CATALOG_PASSWORD", "scope": "catalog:analytics"}
-            },
+            "options": {"password": {"secret": "CATALOG_PASSWORD", "scope": "catalog:analytics"}},
         },
         headers=ADMIN_HEADERS,
     )
@@ -319,7 +317,7 @@ def test_workspace_catalog_discovery_resolves_secret_references(monkeypatch):
             "module": ICEBERG_CATALOG_MODULE,
             "options": {
                 "uri": "https://catalog.example/api",
-                    "token": {"secret": "CATALOG_TOKEN", "scope": "catalog:analytics"},
+                "token": {"secret": "CATALOG_TOKEN", "scope": "catalog:analytics"},
             },
         },
         headers=ADMIN_HEADERS,

@@ -268,10 +268,7 @@ def test_public_catalog_discovery_rejects_oversized_page() -> None:
 
         def list_tables(self, context, *, continuation=None, limit):
             del context, continuation, limit
-            entries = [
-                TableIdentifier(namespace=("default",), name=str(i))
-                for i in range(501)
-            ]
+            entries = [TableIdentifier(namespace=("default",), name=str(i)) for i in range(501)]
             return type(
                 "Page",
                 (),

@@ -34,4 +34,3 @@ def downgrade() -> None:
     with op.batch_alter_table("published_catalogs") as batch:
         batch.drop_column("plugin_revision")
         batch.drop_column("plugin_id")
-

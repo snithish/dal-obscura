@@ -161,8 +161,8 @@ def test_published_config_requires_both_plugin_identities_in_admitted_snapshot()
         target="default.users",
         backend="iceberg",
         compiled_config={
-                "plugins": {
-                    "catalog": "iceberg.sql",
+            "plugins": {
+                "catalog": "iceberg.sql",
                 "table_format": "iceberg",
             },
             "target": {"backend": "iceberg", "table": "default.users"},
@@ -365,9 +365,7 @@ def test_legacy_parent_policy_requires_schema_admission():
         compiled_config={"policy": {"rules": [{"columns": ["profile"], "masks": {}}]}},
         policy_version=1,
     )
-    schema = pa.schema(
-        [pa.field("profile", pa.struct([pa.field("email", pa.string())]))]
-    )
+    schema = pa.schema([pa.field("profile", pa.struct([pa.field("email", pa.string())]))])
 
     with pytest.raises(ValueError, match="requires schema admission"):
         _validate_schema_admission(asset, schema)
@@ -598,9 +596,7 @@ def test_published_schema_admission_accepts_iceberg_numeric_metadata_and_aliases
     ],
 )
 def test_schema_identity_rejects_unbounded_or_malformed_provider_ids(metadata: dict[bytes, bytes]):
-    identities = _schema_identities(
-        pa.schema([pa.field("id", pa.int64(), metadata=metadata)])
-    )
+    identities = _schema_identities(pa.schema([pa.field("id", pa.int64(), metadata=metadata)]))
 
     [(path, field_id)] = list(identities)
     assert path == ("id",)
@@ -781,18 +777,14 @@ def test_published_schema_admission_rejects_tampered_admission_digest():
         catalog="analytics",
         target="default.tampered",
         backend="iceberg",
-        compiled_config={
-            "schema": {"encoding": 1, "fields": fields, "digest": "0" * 64}
-        },
+        compiled_config={"schema": {"encoding": 1, "fields": fields, "digest": "0" * 64}},
         policy_version=1,
     )
 
     with pytest.raises(ValueError, match="admission digest"):
         _validate_schema_admission(
             asset,
-            pa.schema(
-                [pa.field("id", pa.int64(), metadata={b"PARQUET:field_id": b"1"})]
-            ),
+            pa.schema([pa.field("id", pa.int64(), metadata={b"PARQUET:field_id": b"1"})]),
         )
 
 

@@ -115,9 +115,7 @@ def get_asset_access(
             explanations["edit"].append("Asset owner")
         for grant in store.list_asset_grants(asset_id):
             if grant["principal"] in principals and grant["capability"] in explanations:
-                explanations[grant["capability"]].append(
-                    f"Delegated to {grant['principal']}"
-                )
+                explanations[grant["capability"]].append(f"Delegated to {grant['principal']}")
     return {
         "asset_id": str(asset_id),
         "principal": actor.principal,

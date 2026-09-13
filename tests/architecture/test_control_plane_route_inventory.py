@@ -72,9 +72,9 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
     assert set(paths["/v1/workspace/publications/{publication_id}/activate"]) == {"post"}
     assert set(paths["/v1/settings/auth-providers/revision"]) == {"get"}
     assert (
-        paths["/v1/session"]["get"]["responses"]["200"]["content"]["application/json"][
-            "schema"
-        ]["$ref"]
+        paths["/v1/session"]["get"]["responses"]["200"]["content"]["application/json"]["schema"][
+            "$ref"
+        ]
         == "#/components/schemas/SessionResponse"
     )
     assert (

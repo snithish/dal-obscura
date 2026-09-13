@@ -59,14 +59,15 @@ def load_plugin_lock_file(path: str | Path) -> dict[tuple[PluginKind, str], Plug
             or not _PLUGIN_ID.fullmatch(plugin_id)
         ):
             raise PluginAdmissionError("Plugin lock entry identity is invalid")
-        if not isinstance(lock, list) or len(lock) != 5 or any(
-            not isinstance(value, str) or not value for value in lock
+        if (
+            not isinstance(lock, list)
+            or len(lock) != 5
+            or any(not isinstance(value, str) or not value for value in lock)
         ):
             raise PluginAdmissionError("Plugin lock entry must contain a five-part lock")
         distribution, version, api_version, descriptor_digest, artifact_digest = lock
         if any(
-            any(ord(char) < 0x20 or ord(char) == 0x7F for char in value)
-            or len(value) > 256
+            any(ord(char) < 0x20 or ord(char) == 0x7F for char in value) or len(value) > 256
             for value in (distribution, version, api_version)
         ):
             raise PluginAdmissionError("Plugin lock identity values must be printable and bounded")

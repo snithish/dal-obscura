@@ -41,9 +41,7 @@ def test_python_and_duckdb_consumers_receive_identical_nested_governed_data() ->
             },
             {
                 "id": 2,
-                "metadata": {
-                    "preferences": [{"name": "desktop", "theme": "dark"}]
-                },
+                "metadata": {"preferences": [{"name": "desktop", "theme": "dark"}]},
             },
         ],
         schema=schema,

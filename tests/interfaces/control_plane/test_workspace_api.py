@@ -94,11 +94,14 @@ def test_workspace_routes_require_admin_token():
 def test_workspace_publication_management_is_admin_scoped_and_staged():
     client = _client()
     asset = _provision_draft(client)
-    assert client.put(
-        f"/v1/assets/{asset['id']}/owners",
-        headers=ADMIN_HEADERS,
-        json={"owners": ["platform:admin"], "expected_revision": 0},
-    ).status_code == 200
+    assert (
+        client.put(
+            f"/v1/assets/{asset['id']}/owners",
+            headers=ADMIN_HEADERS,
+            json={"owners": ["platform:admin"], "expected_revision": 0},
+        ).status_code
+        == 200
+    )
 
     created = client.post("/v1/workspace/publications", headers=ADMIN_HEADERS)
     assert created.status_code == 200, created.json()
@@ -137,19 +140,25 @@ def test_workspace_publication_management_is_admin_scoped_and_staged():
 def test_workspace_publication_activation_rejects_stale_generation_precondition():
     client = _client()
     asset = _provision_draft(client)
-    assert client.put(
-        f"/v1/assets/{asset['id']}/owners",
-        headers=ADMIN_HEADERS,
-        json={"owners": ["platform:admin"], "expected_revision": 0},
-    ).status_code == 200
+    assert (
+        client.put(
+            f"/v1/assets/{asset['id']}/owners",
+            headers=ADMIN_HEADERS,
+            json={"owners": ["platform:admin"], "expected_revision": 0},
+        ).status_code
+        == 200
+    )
     first = client.post("/v1/workspace/publications", headers=ADMIN_HEADERS).json()
     second = client.post("/v1/workspace/publications", headers=ADMIN_HEADERS).json()
 
-    assert client.post(
-        f"/v1/workspace/publications/{first['publication_id']}/activate",
-        headers=ADMIN_HEADERS,
-        json={"expected_publication_id": None},
-    ).status_code == 200
+    assert (
+        client.post(
+            f"/v1/workspace/publications/{first['publication_id']}/activate",
+            headers=ADMIN_HEADERS,
+            json={"expected_publication_id": None},
+        ).status_code
+        == 200
+    )
     activated = client.post(
         f"/v1/workspace/publications/{second['publication_id']}/activate",
         headers=ADMIN_HEADERS,
@@ -168,11 +177,14 @@ def test_workspace_publication_activation_rejects_stale_generation_precondition(
 def test_workspace_publication_activation_requires_generation_precondition():
     client = _client()
     asset = _provision_draft(client)
-    assert client.put(
-        f"/v1/assets/{asset['id']}/owners",
-        headers=ADMIN_HEADERS,
-        json={"owners": ["platform:admin"], "expected_revision": 0},
-    ).status_code == 200
+    assert (
+        client.put(
+            f"/v1/assets/{asset['id']}/owners",
+            headers=ADMIN_HEADERS,
+            json={"owners": ["platform:admin"], "expected_revision": 0},
+        ).status_code
+        == 200
+    )
     publication = client.post("/v1/workspace/publications", headers=ADMIN_HEADERS).json()
 
     missing = client.post(
@@ -226,7 +238,7 @@ def test_workspace_policy_rules_reject_deny_effect_before_save():
                     "masks": {},
                     "row_filter": None,
                 }
-            ]
+            ],
         },
     )
 
@@ -266,15 +278,17 @@ def test_policy_publish_versions_one_asset_without_publishing_other_drafts():
     save_policy_draft(
         client,
         second_asset["id"],
-        [{
-            "ordinal": 1,
-            "principals": ["user:owner@example.com"],
-            "columns": ["id", "account_id"],
-            "effect": "allow",
-            "when": {},
-            "masks": {},
-            "row_filter": None,
-        }],
+        [
+            {
+                "ordinal": 1,
+                "principals": ["user:owner@example.com"],
+                "columns": ["id", "account_id"],
+                "effect": "allow",
+                "when": {},
+                "masks": {},
+                "row_filter": None,
+            }
+        ],
     )
     initial_response = client.post(
         f"/v1/assets/{first_asset['id']}/policy-versions",
@@ -287,15 +301,17 @@ def test_policy_publish_versions_one_asset_without_publishing_other_drafts():
     save_policy_draft(
         client,
         first_asset["id"],
-        [{
-            "ordinal": 1,
-            "principals": ["user:owner@example.com"],
-            "columns": ["id", "email"],
-            "effect": "allow",
-            "when": {},
-            "masks": {"email": {"type": "redact", "value": "[redacted]"}},
-            "row_filter": "id > 10",
-        }],
+        [
+            {
+                "ordinal": 1,
+                "principals": ["user:owner@example.com"],
+                "columns": ["id", "email"],
+                "effect": "allow",
+                "when": {},
+                "masks": {"email": {"type": "redact", "value": "[redacted]"}},
+                "row_filter": "id > 10",
+            }
+        ],
     )
     response = client.post(
         f"/v1/assets/{first_asset['id']}/policy-versions",

@@ -77,8 +77,7 @@ def test_store_persists_qualified_plugin_ids_with_published_asset(db_session):
         compiled_config={
             "catalog": {
                 "module": (
-                    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry."
-                    "IcebergCatalog"
+                    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
                 ),
                 "options": {},
             },
@@ -163,14 +162,17 @@ def test_catalog_updates_advance_a_revision_only_when_configuration_changes(db_s
     )
     assert store.list_catalogs(cell_id)[0]["revision"] == 0
 
-    assert store.upsert_catalog(
-        cell_id=cell_id,
-        tenant_id=tenant_id,
-        name="analytics",
-        module="iceberg.sql",
-        options={"uri": "sqlite:///catalog-revised.db"},
-        expected_revision=0,
-    ) == catalog_id
+    assert (
+        store.upsert_catalog(
+            cell_id=cell_id,
+            tenant_id=tenant_id,
+            name="analytics",
+            module="iceberg.sql",
+            options={"uri": "sqlite:///catalog-revised.db"},
+            expected_revision=0,
+        )
+        == catalog_id
+    )
     assert store.list_catalogs(cell_id)[0]["revision"] == 1
 
     with pytest.raises(PublicationConflictError, match="Catalog revision changed"):

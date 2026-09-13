@@ -174,8 +174,7 @@ def _replace_authorized_asset_grants(
     grants = [item.model_dump() for item in request.grants]
     if not actor.platform_admin:
         existing_grants = {
-            (item["principal"], item["capability"])
-            for item in service.list_asset_grants(asset_id)
+            (item["principal"], item["capability"]) for item in service.list_asset_grants(asset_id)
         }
         if any(
             item["capability"] == "grant"

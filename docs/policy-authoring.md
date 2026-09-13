@@ -1,9 +1,11 @@
 # Policy Authoring
 
 Policies describe who can read an asset and how rows and columns are shaped
-before data is returned. Operators author a versioned manifest, validate it,
-preview its effective grants against supplied personas, and publish it through
-the administrative CLI.
+before data is returned. Operators author a versioned draft in the authenticated
+governance UI, validate it, preview its effective grants against supplied
+personas, send it through review, and publish it with a compare-and-swap
+precondition. The administrative CLI remains available for offline validation,
+migrations and recovery; it is not a second policy authority.
 
 ## Contents
 
@@ -53,7 +55,10 @@ and define masks. Multiple matching grants combine by:
 
 ## Authoring Checklist
 
-- Run the CLI only with operator credentials on an administrative host.
+- Sign in through the control-plane UI with an operator account and confirm the
+  selected asset and current revision before editing.
+- Use the CLI only with operator credentials on an administrative host for
+  offline validation, migrations or recovery procedures.
 - Grant the smallest useful column set.
 - Express row filters as DuckDB SQL boolean expressions.
 - Use one supported mask type per masked field.
@@ -128,9 +133,12 @@ Test every policy with representative principals:
 | Reader without a matching grant | Receives an authorization failure. |
 | Operator | Validates and publishes the manifest after preview. |
 
-Use `dal-obscura-admin preview manifest.json --personas personas.json` for an
-offline, caller-supplied policy preview. It never authenticates a persona or
-substitutes for a real gateway authorization decision.
+Use the UI's **Test policy** action for the normal review workflow. For an
+offline, caller-supplied preview, run
+`dal-obscura-admin preview manifest.json --personas personas.json`. It never
+authenticates a persona or substitutes for a real gateway authorization
+decision. Publishing requires the server-side review and revision checks in
+either path.
 
 For code changes to policy resolution, add focused tests under
 `tests/domain/access_control/` and data-plane tests under `tests/interfaces/` or

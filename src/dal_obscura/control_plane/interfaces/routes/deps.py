@@ -144,9 +144,7 @@ class ControlPlaneDeps:
 
     def _allowed_browser_origins(self) -> set[str]:
         origins = {
-            normalized
-            for value in self.allowed_origins
-            if (normalized := _canonical_origin(value))
+            normalized for value in self.allowed_origins if (normalized := _canonical_origin(value))
         }
         if self.ui_auth_config is None:
             return origins

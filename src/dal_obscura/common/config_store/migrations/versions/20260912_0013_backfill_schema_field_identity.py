@@ -55,9 +55,7 @@ def upgrade() -> None:
         if not isinstance(field_id, str) or not field_id.strip():
             field_id = "legacy:" + hashlib.sha256(encoded_path.encode("utf-8")).hexdigest()[:32]
         bind.execute(
-            table.update()
-            .where(table.c.id == row["id"])
-            .values(field_id=field_id, path_json=path)
+            table.update().where(table.c.id == row["id"]).values(field_id=field_id, path_json=path)
         )
 
 

@@ -265,11 +265,7 @@ def test_catalog_registry_close_releases_adapters_and_rejects_reuse(monkeypatch)
     )
     registry = CatalogRegistry(
         ServiceConfig(
-            catalogs={
-                "analytics": CatalogConfig(
-                    name="analytics", type="iceberg", options={}
-                )
-            }
+            catalogs={"analytics": CatalogConfig(name="analytics", type="iceberg", options={})}
         )
     )
 
@@ -305,9 +301,7 @@ def test_catalog_registry_reload_closes_partially_built_generation(monkeypatch):
     monkeypatch.setattr(registry_module, "_build_catalog", build)
     registry = CatalogRegistry(
         ServiceConfig(
-            catalogs={
-                "analytics": CatalogConfig(name="analytics", type="iceberg", options={})
-            }
+            catalogs={"analytics": CatalogConfig(name="analytics", type="iceberg", options={})}
         )
     )
     with pytest.raises(ValueError, match="factory failed"):
@@ -343,16 +337,12 @@ def test_catalog_registry_reload_closes_retired_generation(monkeypatch):
     )
     registry = CatalogRegistry(
         ServiceConfig(
-            catalogs={
-                "analytics": CatalogConfig(name="analytics", type="iceberg", options={})
-            }
+            catalogs={"analytics": CatalogConfig(name="analytics", type="iceberg", options={})}
         )
     )
     registry.reload(
         ServiceConfig(
-            catalogs={
-                "replacement": CatalogConfig(name="replacement", type="iceberg", options={})
-            }
+            catalogs={"replacement": CatalogConfig(name="replacement", type="iceberg", options={})}
         )
     )
     assert closed == ["catalog"]
@@ -363,9 +353,7 @@ def test_catalog_registry_rejects_provider_returned_metadata_outside_storage_roo
         metadata_location = "s3://other-bucket/metadata.json"
 
         class io:
-            properties: ClassVar[dict[str, str]] = {
-                "warehouse": "s3://analytics-demo/warehouse"
-            }
+            properties: ClassVar[dict[str, str]] = {"warehouse": "s3://analytics-demo/warehouse"}
 
     class Catalog:
         def load_table(self, identifier: str) -> UnsafeTable:

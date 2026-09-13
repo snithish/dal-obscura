@@ -58,9 +58,7 @@ def test_build_document_uses_static_descriptor_and_sorts_rows(monkeypatch) -> No
         ),
     )
 
-    document = build_document(
-        [("catalog", "zeta"), ("catalog", "alpha")], entry_points=entries
-    )
+    document = build_document([("catalog", "zeta"), ("catalog", "alpha")], entry_points=entries)
 
     assert document["version"] == 1
     rows = cast(list[dict[str, object]], document["plugins"])

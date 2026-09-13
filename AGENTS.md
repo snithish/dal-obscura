@@ -12,11 +12,16 @@ This repo implements a governed Iceberg data access layer exposed through Arrow 
 
 ## How to Run
 ```bash
-uv venv
-uv sync
+uv sync --dev --extra server --extra sqlite
 uv run dal-obscura --help
-uv run dal-obscura --app-config app.yaml
+uv run dal-obscura-control-plane --help
 ```
+
+The data plane reads `DAL_OBSCURA_*` environment variables from an already
+migrated and published database. Start the authenticated governance UI with
+the control-plane command; use the local bootstrap token only for disposable
+development profiles. Run `uv run dal-obscura-migrate upgrade` before either
+service.
 
 ## Tests
 ```bash
@@ -54,21 +59,22 @@ mvn -f connectors/jvm/pom.xml verify
 
 ## Architecture (Current)
 - **Interfaces (transport adapters)**
-  - `interfaces/flight/`: Arrow Flight server, header middleware, request parsing, streaming.
-  - `interfaces/cli/`: composition root that wires adapters and starts the server.
+  - `data_plane/interfaces/flight/`: Arrow Flight server, header middleware, request parsing, streaming.
+  - `data_plane/interfaces/cli/`: data-plane composition root and startup command.
+  - `control_plane/interfaces/`: authenticated HTTP routes, UI shell, admin and maintenance CLIs.
 - **Application (use cases + ports)**
-  - `application/use_cases/plan_access.py`: authenticate, authorize, plan, mint tickets.
-  - `application/use_cases/fetch_stream.py`: verify ticket, re-auth, execute, stream.
-  - `application/ports/`: identity, authorization, ticket, masking, row transforms.
+  - `data_plane/application/use_cases/plan_access.py`: authenticate, authorize, plan, mint tickets.
+  - `data_plane/application/use_cases/fetch_stream.py`: verify ticket, re-auth, execute, stream.
+  - `data_plane/application/ports/`: identity, authorization, ticket, masking, row transforms.
+  - `control_plane/application/`: catalog, asset, policy, publication, session and audit use cases.
 - **Domain (pure models + policies)**
-  - `domain/access_control/`: policy models + resolution rules.
-  - `domain/query_planning/`: plan request/read spec.
-  - `domain/ticket_delivery/`: ticket payload value object.
-  - `domain/catalog/`, `common/table_format/`: catalog and executable table format ports.
+  - `common/access_control/`: policy models + resolution rules.
+  - `common/query_planning/`: plan request/read spec.
+  - `common/ticket_delivery/`: ticket payload value object.
+  - `common/catalog/`, `common/table_format/`: catalog and executable table format ports.
 - **Infrastructure (adapters)**
-  - Catalog registry, policy file authorizer, JWT identity, HMAC ticket codec.
-  - Iceberg table format.
-  - DuckDB masking + row-transform implementation.
+  - `control_plane/infrastructure/`: catalog registry, repositories, sessions and policy storage.
+  - `data_plane/infrastructure/`: published configuration, JWT identity, HMAC tickets, Iceberg and DuckDB adapters.
 
 ### Request Flow
 1. `get_flight_info` -> `PlanAccessUseCase`
@@ -84,13 +90,12 @@ mvn -f connectors/jvm/pom.xml verify
    - Apply row filters + masking via DuckDB and stream results.
 
 ## Repo Map (Key Files)
-- `src/dal_obscura/interfaces/cli/main.py`: composition root / CLI wiring
-- `src/dal_obscura/interfaces/flight/server.py`: Flight server adapter
-- `src/dal_obscura/interfaces/flight/contracts.py`: header middleware + request parsing
-- `src/dal_obscura/application/use_cases/plan_access.py`: planning + ticket minting
-- `src/dal_obscura/application/use_cases/fetch_stream.py`: ticket verification + streaming
-- `src/dal_obscura/domain/access_control/`: policy models + resolution
-- `src/dal_obscura/infrastructure/adapters/`: catalog registry, format registry, masking, etc.
+- `src/dal_obscura/data_plane/interfaces/cli/`: data-plane composition root / CLI wiring
+- `src/dal_obscura/data_plane/interfaces/flight/`: Flight adapter and request contracts
+- `src/dal_obscura/data_plane/application/use_cases/`: planning, ticketing and streaming
+- `src/dal_obscura/control_plane/interfaces/routes/`: authenticated HTTP API and UI shell
+- `src/dal_obscura/common/access_control/`: policy models + resolution
+- `src/dal_obscura/data_plane/infrastructure/adapters/`: published config, catalogs, masking and tickets
 - `tests/`: unit tests
 
 ## Common Tasks

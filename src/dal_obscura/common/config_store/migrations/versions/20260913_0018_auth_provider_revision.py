@@ -15,7 +15,9 @@ def upgrade() -> None:
     with op.batch_alter_table("auth_providers") as batch:
         batch.add_column(sa.Column("revision", sa.Integer(), nullable=False, server_default="0"))
     with op.batch_alter_table("cells") as batch:
-        batch.add_column(sa.Column("auth_provider_revision", sa.Integer(), nullable=False, server_default="0"))
+        batch.add_column(
+            sa.Column("auth_provider_revision", sa.Integer(), nullable=False, server_default="0")
+        )
 
 
 def downgrade() -> None:

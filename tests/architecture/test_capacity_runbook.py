@@ -31,4 +31,3 @@ def test_capacity_runbook_and_runner_encode_a21_measurement_contract() -> None:
     assert "--benchmark-json" in script
     assert "refusing to overwrite existing capacity evidence" in script
     assert "uv_lock_sha256" in script
-

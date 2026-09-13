@@ -166,9 +166,13 @@ def test_schema_identity_migration_backfills_legacy_rows() -> None:
     migrate_config_store(engine)
 
     with engine.connect() as connection:
-        row = connection.execute(
-            text("SELECT field_id, path_json FROM asset_schema_fields WHERE id = :id"),
-            {"id": field},
-        ).mappings().one()
+        row = (
+            connection.execute(
+                text("SELECT field_id, path_json FROM asset_schema_fields WHERE id = :id"),
+                {"id": field},
+            )
+            .mappings()
+            .one()
+        )
     assert json.loads(row["path_json"]) == ["profile.email"]
     assert str(row["field_id"]).startswith("legacy:")
