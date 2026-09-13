@@ -431,7 +431,7 @@ class PublicationStore:
         owners: list[str],
         expected_revision: int | None = None,
     ) -> list[str]:
-        asset = self._session.get(AssetRecord, asset_id)
+        asset = self._locked_asset(asset_id)
         if asset is None:
             raise LookupError(f"No asset {asset_id}")
         _assert_asset_revision(asset, expected_revision)
@@ -462,7 +462,7 @@ class PublicationStore:
         fields: list[dict[str, Any]],
         expected_revision: int | None = None,
     ) -> list[dict[str, object]]:
-        asset = self._session.get(AssetRecord, asset_id)
+        asset = self._locked_asset(asset_id)
         if asset is None:
             raise LookupError(f"No asset {asset_id}")
         _assert_asset_revision(asset, expected_revision)
@@ -942,6 +942,13 @@ class PublicationStore:
         if record is None:
             raise LookupError(f"No asset {asset_id}")
 
+    def _locked_asset(self, asset_id: UUID) -> AssetRecord | None:
+        return self._session.scalar(
+            select(AssetRecord)
+            .where(AssetRecord.id == asset_id)
+            .with_for_update()
+        )
+
     def get_asset_workspace_context(self, asset_id: UUID) -> WorkspaceContext:
         """Returns the internal workspace scope for one asset."""
 
@@ -982,7 +989,7 @@ class PublicationStore:
         grants: list[dict[str, str]],
         expected_revision: int | None = None,
     ) -> list[dict[str, str]]:
-        asset = self._session.get(AssetRecord, asset_id)
+        asset = self._locked_asset(asset_id)
         if asset is None:
             raise LookupError(f"No asset {asset_id}")
         _assert_asset_revision(asset, expected_revision)
