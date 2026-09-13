@@ -860,7 +860,7 @@ function ConnectionsView({ catalogs, publications, plugins, pluginStates, plugin
       else options[field.name] = value;
     }
     const existing = catalogs.find((catalog) => catalog.name === name.trim());
-    try { await controlPlane.saveCatalog(name.trim(), pluginId === "iceberg.sql" ? "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog" : pluginId, options, existing?.revision); setMessage("Connection saved. Discovery remains bounded to this configured catalog."); setName(""); setConfig({}); onReload(); } catch (error) { setMessage((error as { status?: number })?.status === 409 ? "Connection changed elsewhere. Refresh before saving again." : "Connection was rejected by the control plane."); }
+    try { await controlPlane.saveCatalog(name.trim(), pluginId, options, existing?.revision); setMessage("Connection saved. Discovery remains bounded to this configured catalog."); setName(""); setConfig({}); onReload(); } catch (error) { setMessage((error as { status?: number })?.status === 409 ? "Connection changed elsewhere. Refresh before saving again." : "Connection was rejected by the control plane."); }
   }
   async function discover(catalog: string) {
     const epoch = ++discoveryEpoch.current;
