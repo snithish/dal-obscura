@@ -36,6 +36,7 @@ The REST catalog descriptor now advertises its supported `scope` and
 `oauth2-server-uri` options in both the runtime and packaged static descriptor, so
 normal authenticated UI configuration can express the full admitted REST auth shape.
 REST catalog lazy provider construction is now serialized with a lock and double-check, preventing concurrent discovery requests from creating duplicate PyIceberg sessions. A thread-pool regression verifies one provider instance is reused.
+REST catalogs now expose idempotent terminal `close()` behavior, releasing provider/catalog sessions and rejecting reuse after cleanup; focused tests verify cleanup exactly once.
 Public `TableHandle` values now validate plugin identities, revisions, versions,
 snapshot IDs, and bounded JSON-like metadata before any handle can enter trusted
 ticket serialization.
