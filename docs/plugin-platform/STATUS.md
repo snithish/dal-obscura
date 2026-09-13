@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `df6d257`.
+Implementation follow-up through `85d211b`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -159,7 +159,8 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   are checked before requesting each planned task or output batch. Catalog checks
   reject malformed identifiers, duplicate identities, repeated continuation tokens,
   and page/table budget overruns; missing expected catalog entries are covered by
-  an explicit negative fixture. Deliberately
+  an explicit negative fixture. Oversized schema descriptors are rejected by
+  bounded field and serialized-byte checks before format execution. Deliberately
   bad fixture plugins, provider/Flight/consumer lanes, and external distribution
   evidence remain open. CI now builds both standalone plugin wheels, installs those
   exact artifacts in an isolated environment, and runs the conformance suite before
