@@ -63,6 +63,13 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
     ) -> object:
         return deps.with_service(lambda service: service.get_workspace_asset(asset_id, actor))
 
+    @api.get("/v1/assets/{asset_id}/access")
+    def get_asset_access(
+        asset_id: UUID,
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> object:
+        return deps.with_service(lambda service: service.get_asset_access(asset_id, actor))
+
     @api.get("/v1/assets/{asset_id}/schema")
     def get_asset_schema(
         asset_id: UUID,

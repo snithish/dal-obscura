@@ -387,6 +387,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Evidence: UI TypeScript and Vite production build passed. Manual keyboard, screen-reader, and responsive layout acceptance remains required.
 - Remaining N06/B09 work: menu drawer, Lucide icon system, full responsive rendering and accessibility review. Release remains HOLD.
 
+## 2026-09-13 — N11 access capability contract
+
+- Scope: effective asset capability visibility for the authenticated UI.
+- Observable behavior delivered: `GET /v1/assets/{asset_id}/access` is read-authorized and derives all four asset capabilities on the server. It reports an allow flag and deduplicated explanation for platform-admin, owner-derived, delegated, and denied capabilities. The Access view renders this response before owner/grant mutation controls, so role labels and client-side guesses cannot grant authority.
+- Verification: asset API tests pass; UI TypeScript compilation and Vite production build pass; targeted Ruff checks pass after formatting.
+- Remaining gate: browser and multi-actor acceptance still require the N11/B15 live journey and independent UX/security review.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.

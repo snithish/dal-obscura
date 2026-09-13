@@ -9,6 +9,19 @@ from tests.interfaces.control_plane.workspace_helpers import (
 )
 
 
+def test_asset_access_reports_effective_capabilities_and_reasons():
+    client = _client()
+    asset = _provision_draft(client)
+    admin = client.get(f"/v1/assets/{asset['id']}/access", headers=ADMIN_HEADERS)
+    assert admin.status_code == 200
+    assert admin.json()["principal"] == "platform:admin"
+    assert all(item["allowed"] for item in admin.json()["capabilities"])
+    assert all(
+        item["reasons"] == ["Platform administrator"]
+        for item in admin.json()["capabilities"]
+    )
+
+
 def test_workspace_asset_upsert_uses_default_workspace_context():
     client = _client()
     client.put(

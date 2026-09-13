@@ -21,6 +21,8 @@ from dal_obscura.control_plane.application.errors import AuthorizationFailure, V
 from dal_obscura.control_plane.application.policy_service import ensure_asset_capability
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 
+_ASSET_CAPABILITIES = ("read", "edit", "publish", "grant")
+
 
 def list_workspace_assets(
     store: PublicationStore,
@@ -86,6 +88,49 @@ def get_workspace_asset(
     if actor is not None:
         ensure_asset_capability(store, asset_id, actor, "read")
     return asset
+
+
+def get_asset_access(
+    store: PublicationStore,
+    asset_id: UUID,
+    actor: ControlPlaneActor,
+) -> dict[str, object]:
+    """Returns the actor's effective asset capabilities and explanations.
+
+    Capability resolution stays server-side so the UI cannot infer authority
+    from role labels or stale grant data. Reading this contract requires the
+    asset's ``read`` capability, just like the other asset metadata routes.
+    """
+
+    ensure_asset_capability(store, asset_id, actor, "read")
+    principals = actor.owner_principals()
+    owners = set(store.list_asset_owners(asset_id))
+    explanations: dict[str, list[str]] = {capability: [] for capability in _ASSET_CAPABILITIES}
+    if actor.platform_admin:
+        for capability in _ASSET_CAPABILITIES:
+            explanations[capability].append("Platform administrator")
+    else:
+        if owners.intersection(principals):
+            explanations["read"].append("Asset owner")
+            explanations["edit"].append("Asset owner")
+        for grant in store.list_asset_grants(asset_id):
+            if grant["principal"] in principals and grant["capability"] in explanations:
+                explanations[grant["capability"]].append(
+                    f"Delegated to {grant['principal']}"
+                )
+    return {
+        "asset_id": str(asset_id),
+        "principal": actor.principal,
+        "issuer": actor.issuer or None,
+        "capabilities": [
+            {
+                "capability": capability,
+                "allowed": bool(explanations[capability]),
+                "reasons": sorted(set(explanations[capability])),
+            }
+            for capability in _ASSET_CAPABILITIES
+        ],
+    }
 
 
 def upsert_workspace_asset(

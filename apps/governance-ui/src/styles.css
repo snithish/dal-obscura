@@ -127,3 +127,17 @@ td small { display: block; color: #61736e; margin-top: 4px; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .command-palette { background: #111827; border-color: #64748b; } :root:not([data-theme="light"]) .command-palette [role="option"] { color: #f8fafc; } }
 :root[data-theme="dark"] .command-palette { background: #111827; border-color: #64748b; }
 :root[data-theme="dark"] .command-palette [role="option"] { color: #f8fafc; }
+.capability-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.capability-card { display: grid; gap: 4px; min-width: 0; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #f8fafc; }
+.capability-card strong { text-transform: capitalize; }
+.capability-card span { font-size: 12px; font-weight: 700; }
+.capability-card small { color: #52635e; line-height: 1.35; }
+.capability-card.allowed { border-color: #86efac; background: #f0fdf4; }
+.capability-card.allowed span { color: #166534; }
+.capability-card.denied { border-color: #cbd5e1; }
+.capability-card.denied span { color: #64748b; }
+@media (max-width: 760px) { .capability-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+:root[data-theme="dark"] .capability-card, :root:not([data-theme="light"]) .capability-card { background: #1e293b; border-color: #64748b; }
+:root[data-theme="dark"] .capability-card.allowed, :root:not([data-theme="light"]) .capability-card.allowed { background: #14352a; border-color: #4ade80; }
+:root[data-theme="dark"] .capability-card.allowed span, :root:not([data-theme="light"]) .capability-card.allowed span { color: #86efac; }
+:root[data-theme="dark"] .capability-card small, :root:not([data-theme="light"]) .capability-card small { color: #cbd5e1; }

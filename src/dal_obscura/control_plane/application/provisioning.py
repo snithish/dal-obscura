@@ -295,6 +295,13 @@ class ProvisioningService:
     ) -> dict[str, object]:
         return asset_service.get_workspace_asset(self._store, asset_id, actor)
 
+    def get_asset_access(
+        self,
+        asset_id: UUID,
+        actor: ControlPlaneActor,
+    ) -> dict[str, object]:
+        return asset_service.get_asset_access(self._store, asset_id, actor)
+
     def get_asset_schema(
         self,
         asset_id: UUID,

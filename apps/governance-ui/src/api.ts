@@ -182,6 +182,19 @@ export type AssetGrant = {
   capability: "read" | "edit" | "publish" | "grant";
 };
 
+export type AssetCapability = {
+  capability: AssetGrant["capability"];
+  allowed: boolean;
+  reasons: string[];
+};
+
+export type AssetAccess = {
+  asset_id: string;
+  principal: string;
+  issuer: string | null;
+  capabilities: AssetCapability[];
+};
+
 export type RuntimeSettings = {
   ticket_ttl_seconds: number;
   max_tickets: number;
@@ -301,6 +314,7 @@ export const controlPlane = {
     return { ...page, items: page.items.map(normalizeAsset) };
   },
   getAsset: async (assetId: string) => normalizeAsset(await request<Asset>(`/v1/assets/${assetId}`)),
+  getAssetAccess: (assetId: string) => request<AssetAccess>(`/v1/assets/${assetId}/access`),
   listGrants: (assetId: string) => request<AssetGrant[]>(`/v1/assets/${assetId}/grants`),
   saveOwners: (assetId: string, owners: string[], expectedRevision?: number) => request<{ asset_id: string; owners: string[] }>(`/v1/assets/${assetId}/owners`, {
     method: "PUT",
