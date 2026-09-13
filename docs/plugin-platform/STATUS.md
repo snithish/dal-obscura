@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `b06e102` (retired catalog-generation draining;
+Implementation follow-up through `6d57686` (nested conformance bounds and
+structured identities; retired catalog-generation draining;
 deterministic catalog-generation
 cleanup; manifest identity/pagination fix;
 catalog revision binding and stale
@@ -280,7 +281,8 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   reject malformed identifiers, duplicate identities, repeated continuation tokens,
   and page/table budget overruns; missing expected catalog entries are covered by
   an explicit negative fixture. Oversized schema descriptors are rejected by
-  bounded field and serialized-byte checks before format execution. Deliberately
+  bounded nested-node/depth, field, and serialized-byte checks before format
+  execution. Deliberately
   bad fixture plugins, provider/Flight/consumer lanes, and external distribution
   evidence remain open. CI now builds the API, conformance, manifest/Parquet, and
   REST wheels, installs those exact artifacts in an isolated environment, and runs
