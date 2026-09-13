@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
@@ -59,6 +59,11 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         request: PublicationActivationRequest | None = None,
         actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
     ) -> object:
+        if request is None or "expected_publication_id" not in request.model_fields_set:
+            raise HTTPException(
+                status_code=428,
+                detail="Active publication precondition is required; reread before activating.",
+            )
         return deps.with_service(
             lambda service: service.activate_workspace_publication(
                 publication_id,

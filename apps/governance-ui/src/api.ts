@@ -346,7 +346,7 @@ export const controlPlane = {
   createWorkspacePublication: () => request<{ publication_id: string; asset_count: number; catalog_count: number; manifest_hash: string }>("/v1/workspace/publications", { method: "POST" }),
   activateWorkspacePublication: (publicationId: string, expectedPublicationId?: string) => request<{ publication_id: string }>(`/v1/workspace/publications/${encodeURIComponent(publicationId)}/activate`, {
     method: "POST",
-    body: JSON.stringify(expectedPublicationId ? { expected_publication_id: expectedPublicationId } : {}),
+    body: JSON.stringify({ expected_publication_id: expectedPublicationId ?? null }),
   }),
   discoverCatalogTables: (name: string) => request<{ catalog: string; tables: Array<Record<string, unknown>> }>(`/v1/catalogs/${encodeURIComponent(name)}/tables`),
   diagnoseCatalog: (name: string) => request<CatalogDiagnostic>(`/v1/catalogs/${encodeURIComponent(name)}/diagnostics`),

@@ -27,6 +27,7 @@ def test_activation_freezes_a_reviewed_generation_until_a_new_publication() -> N
     activated = client.post(
         f"/v1/workspace/publications/{publication_id}/activate",
         headers=ADMIN_HEADERS,
+        json={"expected_publication_id": None},
     )
     assert activated.status_code == 200, activated.json()
 

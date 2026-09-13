@@ -118,6 +118,7 @@ def test_workspace_publication_management_is_admin_scoped_and_staged():
     activated = client.post(
         f"/v1/workspace/publications/{publication['publication_id']}/activate",
         headers=ADMIN_HEADERS,
+        json={"expected_publication_id": None},
     )
     assert activated.status_code == 200
     assert activated.json() == {"publication_id": publication["publication_id"]}
@@ -147,6 +148,7 @@ def test_workspace_publication_activation_rejects_stale_generation_precondition(
     assert client.post(
         f"/v1/workspace/publications/{first['publication_id']}/activate",
         headers=ADMIN_HEADERS,
+        json={"expected_publication_id": None},
     ).status_code == 200
     activated = client.post(
         f"/v1/workspace/publications/{second['publication_id']}/activate",
@@ -161,6 +163,24 @@ def test_workspace_publication_activation_rejects_stale_generation_precondition(
 
     assert activated.status_code == 200
     assert stale.status_code == 409
+
+
+def test_workspace_publication_activation_requires_generation_precondition():
+    client = _client()
+    asset = _provision_draft(client)
+    assert client.put(
+        f"/v1/assets/{asset['id']}/owners",
+        headers=ADMIN_HEADERS,
+        json={"owners": ["platform:admin"], "expected_revision": 0},
+    ).status_code == 200
+    publication = client.post("/v1/workspace/publications", headers=ADMIN_HEADERS).json()
+
+    missing = client.post(
+        f"/v1/workspace/publications/{publication['publication_id']}/activate",
+        headers=ADMIN_HEADERS,
+    )
+
+    assert missing.status_code == 428
 
 
 def test_tenant_and_cell_routes_are_not_public_workspace_api():
