@@ -50,6 +50,10 @@ their underlying functionality is wholly absent.
 - Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane/test_oidc_login.py -q` — 8 passed; changed-path Ruff and `ty` checks passed.
 - Remaining N05/B08 work: live OIDC code/PKCE browser journey, exact typed principal persistence, freshness/revocation and two-process evidence, secure cookie/CSP inspection, and supported-profile bootstrap retirement. Release remains HOLD.
 
+Follow-up `9e15217` makes the REST timeout ceiling unconditional: provider-supplied
+request timeout arguments are overwritten with the active bounded `(connect, read)`
+pair, with focused coverage for an oversized caller timeout.
+
 ## Implementation update — 8a615c3 (2026-09-14)
 
 - Packet / status / candidate commit / owner: N01/B01-B02 / VERIFY / `8a615c3` / toolchain and documentation.
