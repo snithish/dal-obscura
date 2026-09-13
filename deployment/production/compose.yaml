@@ -2,7 +2,7 @@ name: dal-obscura-production
 
 services:
   postgres:
-    image: postgres:16.4-alpine
+    image: ${DAL_OBSCURA_POSTGRES_IMAGE:?set DAL_OBSCURA_POSTGRES_IMAGE}
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
@@ -55,7 +55,7 @@ services:
       - no-new-privileges:true
 
   postgres-grants:
-    image: postgres:16.4-alpine
+    image: ${DAL_OBSCURA_POSTGRES_IMAGE:?set DAL_OBSCURA_POSTGRES_IMAGE}
     environment:
       PGHOST: postgres
       PGUSER: ${POSTGRES_USER:?set POSTGRES_USER}

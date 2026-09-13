@@ -14,6 +14,7 @@ def test_production_reference_contains_immutable_and_private_topology() -> None:
 
     assert "${DAL_OBSCURA_IMAGE:?set DAL_OBSCURA_IMAGE}" in compose
     assert "${DAL_OBSCURA_UI_IMAGE:?set DAL_OBSCURA_UI_IMAGE}" in compose
+    assert "${DAL_OBSCURA_POSTGRES_IMAGE:?set DAL_OBSCURA_POSTGRES_IMAGE}" in compose
     assert '"127.0.0.1:8080:8080"' in compose
     control_block = compose.split("  control-plane:", 1)[1].split("  data-plane:", 1)[0]
     data_block = compose.split("  data-plane:", 1)[1].split("  ui:", 1)[0]
@@ -40,6 +41,7 @@ def test_production_reference_contains_immutable_and_private_topology() -> None:
     assert "DAL_OBSCURA_CONTROL_PLANE_REVIEW_SECRET=" in env_example
     assert "DAL_OBSCURA_CONTROL_PLANE_REVIEW_SECRET" in compose
     assert "DAL_OBSCURA_TLS_VERIFY_CLIENT=true" in env_example
+    assert "DAL_OBSCURA_POSTGRES_IMAGE=postgres@sha256:" in env_example
     assert "DAL_OBSCURA_MIGRATION_DATABASE_URL" in compose
     assert "DAL_OBSCURA_CONTROL_PLANE_DATABASE_URL" in compose
     assert "DAL_OBSCURA_DATA_PLANE_DATABASE_URL" in compose

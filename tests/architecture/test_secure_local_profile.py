@@ -16,6 +16,7 @@ def test_secure_local_profile_reuses_production_security_contract() -> None:
     assert "../local-secure/Caddyfile:/etc/caddy/Caddyfile:ro" in compose
     assert "DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED=false" in env
     assert "DAL_OBSCURA_TLS_VERIFY_CLIENT=true" in env
+    assert "DAL_OBSCURA_EDGE_IMAGE=caddy@sha256:" in env
     assert (
         "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI=https://localhost:8443/auth/callback"
         in env
