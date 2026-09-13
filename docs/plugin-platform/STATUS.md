@@ -253,6 +253,14 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane/test_config_activation.py tests/interfaces/control_plane/test_workspace_api.py -q` — 7 passed; UI `tsc` and changed-path Ruff passed.
 - Remaining N03/B05 work: runtime/auth-provider write preconditions, safe structured error envelopes, process race evidence, and generated DTO/browser proof. Release remains HOLD.
 
+## Implementation update — 21290df (2026-09-13)
+
+- Packet / status / candidate commit / owner: N03/B05 partial / VERIFY / `21290df` / runtime settings + control-plane UI.
+- Observable behavior delivered: runtime ticket settings now carry a persisted revision through migration `20260913_0017`. First creation remains revision zero; existing updates require `expected_revision`, stale values return 409, and omitted values return 428 before mutation. Authenticated GET/PUT responses expose the revision, while the UI sends it as a request precondition without submitting it as an unknown field.
+- Changed paths: runtime ORM/repository/workspace service, settings route schemas, Alembic migration, UI transport, schema migration/settings/inventory tests. Pickle serializers and task payloads are unchanged.
+- Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane tests/interfaces/control_plane -q` — all passed; runtime/settings migration tests and changed-path Ruff passed; UI TypeScript passed.
+- Remaining N03/B05 work: auth-provider chain revision preconditions, safe structured error envelopes, process race evidence, and generated DTO/browser proof. Release remains HOLD.
+
 ## Implementation update — 14edd5b (2026-09-13)
 
 - Packet / status / candidate commit / owner: N02/B03 partial / VERIFY / `14edd5b` / compiler + data-plane manifest reader + offline migration.
