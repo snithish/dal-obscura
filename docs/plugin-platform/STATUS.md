@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `4abb24f` (quoted JSON path boundaries;
+Implementation follow-up through `86e9f01` (typed path budgets;
+quoted JSON path boundaries;
 reserved identity namespaces;
 quoted collection path parsing;
 manifest field-ID bounds;
@@ -371,6 +372,8 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   identities.
   Quoted path parsing now uses JSON decoder boundaries, so field names containing
   brackets and escaped characters remain addressable without delimiter bugs.
+  Typed field paths now enforce shared segment-count, field-name length, and
+  printable-text limits before schema resolution or transport execution.
   Both service composition roots now accept an optional operator-mounted
   `DAL_OBSCURA_PLUGIN_LOCK_FILE`; its bounded parser rejects symlinks,
   group/world-writable files, malformed identities, duplicates, and incomplete
@@ -594,6 +597,18 @@ providers before Phase A's security/correctness prerequisites are accepted.
   `git diff --check`.
 - Remaining gaps: browser/consumer nested-path evidence and complete schema
   evolution acceptance remain open.
+
+### X05 typed field-path budgets — `86e9f01`
+
+- State: implementing.
+- Behavior: `FieldPath` enforces a 64-segment maximum and 256-character
+  printable field-name limit. The same contract covers wire values and Flight
+  descriptor paths before nested schema resolution.
+- Green evidence: field-path suite (22 passed), Ruff, Ty, and
+  `git diff --check`.
+- Remaining gaps: Flight/browser nested-path evidence and full schema-boundary
+  acceptance remain open; sandboxed Flight socket tests remain environment
+  restricted.
 
 ### X03 direct mutation row locks — `165015f`
 
