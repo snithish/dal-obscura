@@ -46,6 +46,21 @@ def get_free_port() -> int:
         return s.getsockname()[1]
 
 
+def wait_for_flight_server(
+    process: subprocess.Popen[str], port: int, *, timeout: float = 30.0
+) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            return False
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.settimeout(0.2)
+            if probe.connect_ex(("127.0.0.1", port)) == 0:
+                return True
+        time.sleep(0.1)
+    return False
+
+
 @pytest.fixture
 def iceberg_setup(tmp_path: Path) -> tuple[str, Path]:
     """Sets up a sqlite pyiceberg catalog with a deeply nested table structure."""
@@ -399,8 +414,11 @@ def test_e2e_flight_server_with_iceberg(control_plane_setup: dict[str, str]):
         env=env,
     )
 
-    # Wait for server to be healthy
-    time.sleep(20)
+    if not wait_for_flight_server(process, port):
+        if process.poll() is None:
+            process.terminate()
+        stdout, stderr = process.communicate(timeout=5)
+        raise RuntimeError(f"Server did not become ready:\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}")
 
     client = None
     try:
