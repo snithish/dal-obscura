@@ -50,6 +50,8 @@ class RestCatalog(CatalogPlugin):
         unknown = set(options) - _ALLOWED_OPTIONS
         if unknown:
             raise ValueError("REST catalog options contain unsupported keys")
+        if any(not isinstance(value, str) for value in options.values()):
+            raise ValueError("REST catalog options must be strings or resolved secrets")
         uri = options.get("uri")
         if not isinstance(uri, str) or not uri:
             raise ValueError("REST catalog requires a URI")

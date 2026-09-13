@@ -36,6 +36,11 @@ def test_rest_catalog_rejects_unsupported_options():
         RestCatalog(_config(script="import os"), _context())
 
 
+def test_rest_catalog_rejects_unresolved_secret_objects():
+    with pytest.raises(ValueError, match="must be strings"):
+        RestCatalog(_config(token={"secret": "REST_TOKEN"}), _context())
+
+
 def test_rest_catalog_context_cancellation_is_fail_closed():
     context = ExecutionContext(
         deadline=datetime.now(timezone.utc) + timedelta(minutes=1),
