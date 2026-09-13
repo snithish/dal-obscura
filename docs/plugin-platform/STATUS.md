@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `4ea921f` (catalog-scoped secret references;
+Implementation follow-up through `2b81337` (UI catalog-scoped secret inputs;
+catalog-scoped secret references;
 virtualized tree keyboard focus and activation; restored-option route regression;
 exact scanned image digest promotion;
 virtualized nested schema navigation;
@@ -239,7 +240,9 @@ artifacts.
   Secret references may now carry an explicit `catalog:<name>` scope; control- and
   data-plane resolution rejects a mismatched or scope-less caller before provider
   construction, while legacy unscoped references remain supported. Descriptor
-  validation accepts only the bounded `secret`/`scope` shape.
+  validation accepts only the bounded `secret`/`scope` shape. The Connections UI
+  emits that scope automatically for every secret field, so normal authoring uses
+  the same boundary without asking operators to hand-edit JSON.
 - X08 budgets and atomic reload: **implementing**; discovery now bounds provider
   iterators before materialization and checks cancellation/deadline per item while
   retaining deque traversal. Synthetic evaluation now bounds encoded fixture bytes
@@ -574,6 +577,15 @@ providers before Phase A's security/correctness prerequisites are accepted.
   suites passed (37), Ruff and `git diff --check` passed.
 - Remaining gaps: live secret providers, returned-location/DNS enforcement,
   PostgreSQL, external wheels, browser, consumer, recovery, and release gates.
+
+### X14 scoped secret inputs in Connections — `2b81337`
+
+- State: implementing.
+- Behavior: descriptor-driven secret fields now submit `catalog:<name>` scoped
+  references automatically; credentials stay as references and are never rendered
+  back into catalog cards.
+- Green evidence: TypeScript check, Vite production build, and `git diff --check`.
+- Remaining gaps: real browser authoring and provider/production evidence remain open.
 
 ### X07 persisted catalog option revalidation — `54855b1`
 
