@@ -29,7 +29,10 @@ from dal_obscura.common.schema_bounds import (
 )
 from dal_obscura.common.schema_identity import schema_has_stable_ids, schema_scope_digest
 from dal_obscura.control_plane.application.access import ControlPlaneActor
-from dal_obscura.control_plane.application.catalog_service import validate_catalog_options
+from dal_obscura.control_plane.application.catalog_service import (
+    validate_admitted_catalog_options,
+    validate_catalog_options,
+)
 from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.application.policy_service import ensure_asset_capability
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
@@ -106,6 +109,11 @@ def load_asset_iceberg_schema(
         str(asset["catalog"]),
     )
     options = cast(dict[str, Any], catalog["options"])
+    validate_admitted_catalog_options(
+        str(catalog.get("module", ICEBERG_CATALOG_MODULE)),
+        options,
+        plugin_registry,
+    )
     validate_catalog_options(options, egress_allowlist=egress_allowlist)
     options = cast(
         dict[str, Any],

@@ -105,6 +105,9 @@ def discover_workspace_catalog_tables(
     context = _required_workspace_context(store)
     catalog = store.get_workspace_catalog(context, name)
     catalog_options = cast(dict[str, Any], catalog["options"])
+    validate_admitted_catalog_options(
+        str(catalog["module"]), catalog_options, plugin_registry
+    )
     validate_catalog_options(catalog_options, egress_allowlist=egress_allowlist)
     catalog_options = _resolve_catalog_secrets(catalog_options)
     try:
@@ -167,6 +170,9 @@ def diagnose_workspace_catalog(
     context = _required_workspace_context(store)
     catalog = store.get_workspace_catalog(context, name)
     catalog_options = cast(dict[str, Any], catalog["options"])
+    validate_admitted_catalog_options(
+        str(catalog["module"]), catalog_options, plugin_registry
+    )
     validate_catalog_options(catalog_options, egress_allowlist=egress_allowlist)
     catalog_options = _resolve_catalog_secrets(catalog_options)
     checked_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -260,6 +266,31 @@ def upsert_workspace_catalog(
         details={"name": name, "module": module, "option_keys": sorted(options)},
     )
     return {"id": str(catalog_id), "name": name}
+
+
+def validate_admitted_catalog_options(
+    module: str,
+    options: dict[str, Any],
+    plugin_registry: PluginRegistry | Any | None,
+) -> None:
+    """Validate persisted external catalog options before provider use.
+
+    Catalog rows can predate descriptor validation or be restored from an
+    older deployment. Every discovery and schema path therefore repeats the
+    admitted descriptor check before resolving secrets or loading a factory.
+    The built-in Iceberg compatibility module retains its legacy option
+    contract and is validated by ``validate_catalog_options``.
+    """
+
+    if module == ICEBERG_CATALOG_MODULE:
+        return
+    if plugin_registry is None:
+        raise ValidationFailure("Catalog plugin is not admitted")
+    admitted = plugin_registry.admitted() or plugin_registry.reload()
+    descriptor = admitted.get(("catalog", module))
+    if descriptor is None:
+        raise ValidationFailure("Catalog plugin is not admitted")
+    validate_descriptor_options(descriptor, options)
 
 
 def _required_workspace_context(store: PublicationStore):

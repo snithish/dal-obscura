@@ -259,6 +259,11 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
             closed.append("format")
 
     class Registry:
+        def admitted(self):
+            return {
+                ("catalog", "fixture.catalog"): PublicCatalog.descriptor,
+            }
+
         def load(self, kind, plugin_id):
             if (kind, plugin_id) == ("catalog", "fixture.catalog"):
                 return lambda config, context: PublicCatalog()
