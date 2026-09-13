@@ -77,7 +77,7 @@ def redact_auth_provider(provider: Mapping[str, object]) -> dict[str, object]:
 
     result = {
         key: provider[key]
-        for key in ("id", "ordinal", "module", "args", "enabled")
+        for key in ("id", "ordinal", "module", "args", "enabled", "revision")
         if key in provider
     }
     args = provider.get("args", {})

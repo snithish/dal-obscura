@@ -204,6 +204,7 @@ class AuthProviderRecord(Base):
     module: Mapped[str] = mapped_column(Text, nullable=False)
     args_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class BrowserSessionRecord(Base):

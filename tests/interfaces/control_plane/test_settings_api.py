@@ -112,6 +112,7 @@ def test_workspace_auth_providers_can_be_configured_without_cell_ids():
             "module": DEFAULT_AUTH_MODULE,
             "args": {"issuer": "https://issuer.example"},
             "enabled": True,
+            "revision": 0,
         }
     ]
     assert "cell" not in _keys_recursive(after_setup.json())
@@ -121,6 +122,37 @@ def test_workspace_auth_providers_can_be_configured_without_cell_ids():
     ]
     assert provider_events[0]["actor"] == "platform:admin"
     assert provider_events[0]["details"] == {"provider_count": 1, "enabled_count": 1}
+
+    updated = client.put(
+        "/v1/settings/auth-providers",
+        json={
+            "providers": [
+                {
+                    "ordinal": 1,
+                    "module": DEFAULT_AUTH_MODULE,
+                    "args": {"issuer": "https://issuer.example"},
+                    "enabled": False,
+                }
+            ],
+            "expected_revision": 0,
+        },
+        headers=ADMIN_HEADERS,
+    )
+    assert updated.status_code == 200
+    assert updated.json()[0]["revision"] == 1
+
+    missing = client.put(
+        "/v1/settings/auth-providers",
+        json={"providers": []},
+        headers=ADMIN_HEADERS,
+    )
+    stale = client.put(
+        "/v1/settings/auth-providers",
+        json={"providers": [], "expected_revision": 0},
+        headers=ADMIN_HEADERS,
+    )
+    assert missing.status_code == 428
+    assert stale.status_code == 409
 
 
 def test_workspace_auth_providers_reject_unsupported_modules_and_inline_key_material():

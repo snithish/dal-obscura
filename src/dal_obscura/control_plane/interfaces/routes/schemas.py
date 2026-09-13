@@ -284,6 +284,7 @@ class AuthProvidersRequest(StrictModel):
     """
 
     providers: list[dict[str, Any]] = Field(max_length=16)
+    expected_revision: int | None = Field(default=None, ge=0)
 
 
 class DemoLoginRequest(StrictModel):

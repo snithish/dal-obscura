@@ -105,7 +105,7 @@ def test_policy_version_publish_rejects_missing_auth_provider():
     asset = _provision_draft(client)
     client.put(
         "/v1/settings/auth-providers",
-        json={"providers": []},
+        json={"providers": [], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
     client.put(

@@ -62,11 +62,15 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         request: AuthProvidersRequest,
         actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
     ) -> object:
-        return deps.with_service(
-            lambda service: service.replace_workspace_auth_providers(
-                providers=request.providers,
-                actor=actor,
+        return (
+            deps.with_service(
+                lambda service: service.replace_workspace_auth_providers(
+                    providers=request.providers,
+                    expected_revision=request.expected_revision,
+                    actor=actor,
+                )
             )
-        ) or {"providers": request.providers}
+            or []
+        )
 
     return api

@@ -814,7 +814,7 @@ function SettingsView({ runtime, providers, publications, onReload }: { runtime?
   async function save() { try { await controlPlane.saveRuntimeSettings(form); setMessage("Runtime settings saved as draft configuration. Publish to make worker behavior change."); onReload(); } catch { setMessage("Settings update was rejected; the previous values remain active."); } }
   async function saveProviders() {
     try {
-      await controlPlane.saveAuthProviders(providerRows.map((provider, index) => ({ ordinal: index + 1, module: provider.module, args: provider.args, enabled: provider.enabled })));
+      await controlPlane.saveAuthProviders(providerRows.map((provider, index) => ({ ordinal: index + 1, module: provider.module, args: provider.args, enabled: provider.enabled })), providerRows[0]?.revision);
       setMessage("Identity provider settings saved as draft configuration. Publish a snapshot to activate them.");
       onReload();
     } catch {

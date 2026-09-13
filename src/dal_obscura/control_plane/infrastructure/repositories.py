@@ -535,17 +535,34 @@ class PublicationStore:
         self._session.flush()
         return normalized
 
-    def replace_auth_providers(self, *, cell_id: UUID, providers: list[dict[str, Any]]) -> None:
+    def replace_auth_providers(
+        self,
+        *,
+        cell_id: UUID,
+        providers: list[dict[str, Any]],
+        expected_revision: int | None = None,
+    ) -> None:
         self.lock_cell_for_publication(cell_id)
-        existing_args = {
-            record.ordinal: dict(record.args_json)
-            for record in self._session.scalars(
+        existing = list(
+            self._session.scalars(
                 select(AuthProviderRecord).where(AuthProviderRecord.cell_id == cell_id)
             )
-        }
-        for record in self._session.scalars(
-            select(AuthProviderRecord).where(AuthProviderRecord.cell_id == cell_id)
-        ):
+        )
+        current_revision = max((record.revision for record in existing), default=0)
+        if existing and expected_revision is None:
+            raise RevisionPreconditionRequired(
+                "Authentication provider revision is required for updates "
+                f"(current {current_revision}); reread before writing."
+            )
+        if existing and expected_revision != current_revision:
+            raise PublicationConflictError(
+                "Authentication provider revision changed "
+                f"(expected {expected_revision}, current {current_revision}); "
+                "reread before writing."
+            )
+        existing_args = {record.ordinal: dict(record.args_json) for record in existing}
+        new_revision = 0 if not existing else current_revision + 1
+        for record in existing:
             self._session.delete(record)
         self._session.flush()
         for raw in providers:
@@ -559,6 +576,7 @@ class PublicationStore:
                         dict(raw.get("args", {})), existing_args.get(int(raw["ordinal"]))
                     ),
                     enabled=bool(raw.get("enabled", True)),
+                    revision=new_revision,
                 )
             )
         self._session.flush()
@@ -1236,6 +1254,7 @@ class PublicationStore:
                 "module": record.module,
                 "args": dict(record.args_json),
                 "enabled": record.enabled,
+                "revision": record.revision,
             }
             for record in self._session.scalars(
                 select(AuthProviderRecord)
@@ -2166,8 +2185,7 @@ class PublicationStore:
             )
         }
         for asset_id, rules_json in self._session.execute(
-            select(AssetPolicyDraftRecord.asset_id, AssetPolicyDraftRecord.rules_json)
-            .where(
+            select(AssetPolicyDraftRecord.asset_id, AssetPolicyDraftRecord.rules_json).where(
                 AssetPolicyDraftRecord.asset_id.in_(asset_ids),
                 AssetPolicyDraftRecord.discarded_at.is_(None),
             )

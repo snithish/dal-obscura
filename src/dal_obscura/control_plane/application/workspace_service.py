@@ -122,9 +122,7 @@ def get_workspace_observations(
                 "data_plane": {"status": "unobserved", "reason": "no_visible_assets"},
             }
     try:
-        generation: dict[str, str] | None = store.get_active_publication_summary(
-            context.cell_id
-        )
+        generation: dict[str, str] | None = store.get_active_publication_summary(context.cell_id)
     except LookupError:
         generation = None
     return {
@@ -171,8 +169,9 @@ def replace_workspace_auth_providers(
     store: PublicationStore,
     providers: list[dict[str, Any]],
     *,
+    expected_revision: int | None = None,
     actor_principal: str = "system",
-) -> None:
+) -> list[dict[str, object]]:
     """Replaces the workspace authentication provider chain.
 
     Example:
@@ -183,7 +182,9 @@ def replace_workspace_auth_providers(
 
     validate_auth_provider_payloads(providers)
     context = store.ensure_default_workspace_context()
-    store.replace_auth_providers(cell_id=context.cell_id, providers=providers)
+    store.replace_auth_providers(
+        cell_id=context.cell_id, providers=providers, expected_revision=expected_revision
+    )
     store.record_workspace_audit_event(
         cell_id=context.cell_id,
         tenant_id=context.tenant_id,
@@ -196,6 +197,7 @@ def replace_workspace_auth_providers(
             "enabled_count": sum(1 for provider in providers if provider.get("enabled", True)),
         },
     )
+    return list_workspace_auth_providers(store)
 
 
 def upsert_workspace_runtime_settings(
@@ -237,12 +239,16 @@ def upsert_workspace_runtime_settings(
         },
     )
     settings = store.get_runtime_settings(context.cell_id)
-    return {} if settings is None else {
-        "ticket_ttl_seconds": settings["ticket_ttl_seconds"],
-        "max_tickets": settings["max_tickets"],
-        "max_ticket_exchanges": settings["max_ticket_exchanges"],
-        "revision": settings["revision"],
-    }
+    return (
+        {}
+        if settings is None
+        else {
+            "ticket_ttl_seconds": settings["ticket_ttl_seconds"],
+            "max_tickets": settings["max_tickets"],
+            "max_ticket_exchanges": settings["max_ticket_exchanges"],
+            "revision": settings["revision"],
+        }
+    )
 
 
 def activate_workspace_publication(

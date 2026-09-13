@@ -689,11 +689,13 @@ class ProvisioningService:
     def replace_workspace_auth_providers(
         self,
         providers: list[dict[str, Any]],
+        expected_revision: int | None = None,
         actor: ControlPlaneActor | None = None,
-    ) -> None:
-        workspace_service.replace_workspace_auth_providers(
+    ) -> list[dict[str, object]]:
+        return workspace_service.replace_workspace_auth_providers(
             self._store,
             providers,
+            expected_revision=expected_revision,
             actor_principal="system" if actor is None else actor.identity_key(),
         )
 

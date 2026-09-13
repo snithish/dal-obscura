@@ -250,6 +250,7 @@ def test_reads_workspace_draft_resources_after_writes():
             "module": DEFAULT_AUTH_MODULE,
             "args": {"issuer": "https://issuer.example"},
             "enabled": True,
+            "revision": 0,
         }
     ]
     assert len(catalogs) == 1
