@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `1f5e793` (Iceberg discovery provider cleanup;
+Implementation follow-up through `44e6a0c` (draft write serialization;
+Iceberg discovery provider cleanup;
 UI catalog-scoped secret inputs;
 catalog-scoped secret references;
 virtualized tree keyboard focus and activation; restored-option route regression;
@@ -208,7 +209,9 @@ production build, Ruff, and Ty with the public SDK source path configured.
   direct service callers cannot bypass route-level authorization.
   Catalog configuration now has its own monotonic revision, locked upserts, and
   additive migration `20260913_0015`; review evidence records and verifies that
-  revision so provider changes force fresh evaluation.
+  revision so provider changes force fresh evaluation. Personal draft saves now
+  acquire the asset lock and lock the active draft row before revision comparison,
+  closing the remaining direct write interleaving at the repository boundary.
 - X04 canonical evaluation: **implemented-unverified**; resolved mask values now
   flow from canonical preview and an unmatched-principal regression passes.
 - X05 canonical bounded schemas: **implemented-unverified**; canonical Arrow schema
@@ -594,6 +597,16 @@ providers before Phase A's security/correctness prerequisites are accepted.
   on success and failure while retaining semaphore release behavior.
 - Green evidence: catalog discovery suite (19), Ruff, and `git diff --check`.
 - Remaining gaps: cross-worker capacity/termination and live provider evidence remain open.
+
+### X03 draft write serialization — `44e6a0c`
+
+- State: implementing.
+- Behavior: review-affecting draft saves lock the asset and draft row before
+  compare-and-swap, rejecting unknown assets without creating draft state.
+- Green evidence: policy-draft and policy-version API suites (15), Ruff, and
+  `git diff --check` passed.
+- Remaining gaps: PostgreSQL barrier-controlled interleavings and full rollback/
+  multi-process evidence remain open.
 
 ### X14 scoped secret inputs in Connections — `2b81337`
 
