@@ -57,6 +57,14 @@ timed restore. See F08/F09 and N12/N13/N15. Reuse the existing harnesses.
 - Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane/test_audit_api.py tests/architecture/test_control_plane_route_inventory.py tests/common/config_store -q` — 20 passed. `pnpm --dir apps/governance-ui check` — passed. `ruff check` on changed Python paths — passed. UI production build is VERIFY because local Corepack could not fetch pinned `pnpm@12.3.4` from the npm registry.
 - Remaining N11/B15 work: filter/pagination controls in the activity UI, complete actor/resource/time/outcome/request-ID filters, full permission matrix, settings/access/consumer qualification, and independent security/UX evidence.
 
+## Implementation update — 018929a (2026-09-13)
+
+- Packet / status / candidate commit / owner: N11 partial / VERIFY / `018929a` / control-plane.
+- Observable behavior delivered: the audit page accepts bounded actor, action, resource type, outcome, correlation/request ID, and inclusive time-window filters. Filters are applied in SQL before the stable keyset limit, with text lengths enforced at the HTTP boundary.
+- Primary test: `tests/interfaces/control_plane/test_audit_api.py::test_audit_page_filters_before_pagination` covers compound filtering, actor filtering, and overlong input rejection.
+- Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane/test_audit_api.py tests/architecture/test_control_plane_route_inventory.py -q` — 5 passed; changed Python `ruff check` — passed.
+- Remaining N11/B15 work: activity filter controls still need UI wiring and the complete permission/settings/consumer qualification remains open.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
