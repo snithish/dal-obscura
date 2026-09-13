@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `27a8720`.
+Implementation follow-up through `3930e69`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -127,7 +127,10 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   factory import; legacy three-part locks keep their compatibility fallback.
   Multi-kind static descriptor documents can now describe both catalog and
   table-format entry points in one wheel; the loader selects exactly the matching
-  kind/ID before any factory import. Authenticated plugin diagnostics also expose enabled, not-installed, and
+  kind/ID before any factory import. The data-plane catalog registry now bridges
+  public SDK catalog/format factories into the existing governed `TableFormat` and
+  trusted `ScanTask` serializer, recreating request contexts at execution time and
+  rejecting plugin output schema changes. Authenticated plugin diagnostics also expose enabled, not-installed, and
   incompatible states for operator-expected IDs without importing factories or
   enumerating unapproved installations.
 - X13 plugin routing and migration: **implementing**; immutable compiled asset
@@ -138,6 +141,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   trusted Iceberg generation at startup. Catalog construction now receives that
   generation and invokes the admitted `iceberg.sql` factory rather than selecting
   an implementation from mutable request/config strings.
+  Public SDK catalog/format factories can now be resolved through the same registry
+  bridge and execute through the existing ticket path; publication/config model
+  support for non-Iceberg bindings and migration evidence remain open.
   Additive migration `20260913_0014` persists qualified catalog/format identities
   and optional plugin revisions beside immutable published rows; reads merge those
   identities back into legacy-compatible manifests.
