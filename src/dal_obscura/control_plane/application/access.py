@@ -24,12 +24,18 @@ class ControlPlaneActor:
         return cls(principal=principal, groups=(), platform_admin=True)
 
     def owner_principals(self) -> set[str]:
-        # Federated identities are scoped by issuer so two providers cannot
-        # collide on the same subject or group display name. Local/demo actors
-        # retain the historical unscoped form for compatibility.
-        prefix = f"{self.issuer.rstrip('/')}|" if self.issuer else ""
-        principals = {f"{prefix}{self.principal}"}
-        principals.update(f"{prefix}group:{group}" for group in self.groups)
+        # Federated identities are scoped by the exact issuer. Escape the
+        # delimiter in each component so a subject/group containing ``|``
+        # cannot collide with a different pair. Local/demo actors retain the
+        # historical unscoped form.
+        prefix = f"{_identity_component(self.issuer)}|" if self.issuer else ""
+        principals = {
+            f"{prefix}{_identity_component(self.principal) if self.issuer else self.principal}"
+        }
+        principals.update(
+            f"{prefix}group:{_identity_component(group) if self.issuer else group}"
+            for group in self.groups
+        )
         return principals
 
     def identity_key(self) -> str:
@@ -37,4 +43,10 @@ class ControlPlaneActor:
 
         if not self.issuer:
             return self.principal
-        return f"{self.issuer.rstrip('/')}|{self.principal}"
+        return f"{_identity_component(self.issuer)}|{_identity_component(self.principal)}"
+
+
+def _identity_component(value: str) -> str:
+    """Escapes identity delimiters while preserving ordinary display values."""
+
+    return value.replace("%", "%25").replace("|", "%7C")
