@@ -42,3 +42,9 @@ test("recovery messages distinguish actionable HTTP failures and retain request 
   );
   assert.equal(recoveryMessage({ status: 418 }, "fallback"), "fallback");
 });
+
+test("recovery mapper covers every governed HTTP recovery status", () => {
+  const messages = [403, 404, 409, 422, 429, 503].map((status) => recoveryMessage({ status }, "fallback"));
+  assert.equal(new Set(messages).size, 6);
+  assert.ok(messages.every((message) => message !== "fallback"));
+});
