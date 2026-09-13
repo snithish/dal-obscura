@@ -225,11 +225,18 @@ def _schema_identities(
         if pa.types.is_struct(type_):
             for child in type_:
                 visit(child, (*path, child.name), field_id)
-        elif pa.types.is_list(type_):
-            visit(type_.value_field, (*path, "[]"), field_id)
+        elif (
+            pa.types.is_list(type_)
+            or pa.types.is_large_list(type_)
+            or pa.types.is_fixed_size_list(type_)
+        ):
+            # Keep collection paths identical to the core FieldPath contract.
+            # The element marker is semantic, so list width/physical encoding
+            # must not create a second identity vocabulary.
+            visit(type_.value_field, (*path, "$element"), field_id)
         elif pa.types.is_map(type_):
-            visit(type_.key_field, (*path, "{}key"), field_id)
-            visit(type_.item_field, (*path, "{}value"), field_id)
+            visit(type_.key_field, (*path, "$key"), field_id)
+            visit(type_.item_field, (*path, "$value"), field_id)
 
     for field, anchor in zip(schema, field_ids, strict=True):
         visit(field, (field.name,), anchor)

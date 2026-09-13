@@ -17,7 +17,11 @@ from dal_obscura_plugin_api import (
     TableHandle,
 )
 
-from dal_obscura_manifest_parquet.catalog import _check_context, _reject_symlink_components
+from dal_obscura_manifest_parquet.catalog import (
+    _check_context,
+    _reject_symlink_components,
+    _schema_identities,
+)
 
 _MAX_BATCH_ROWS = 65_536
 
@@ -67,6 +71,7 @@ class ParquetDatasetFormat:
             self._schema = pa.ipc.read_schema(pa.BufferReader(base64.b64decode(schema_ipc)))
         except Exception as exc:
             raise ValueError("Parquet handle schema is invalid") from exc
+        _validate_handle_schema_identity(self._schema, metadata)
         self._root = Path(root).resolve(strict=True)
         self._files = tuple(cast(str, item) for item in files)
         self._manifest_hash = manifest_hash
@@ -177,6 +182,39 @@ def _safe_member(root: Path, relative_path: str) -> Path:
 def _validate_file_schema(actual: pa.Schema, expected: pa.Schema) -> None:
     if actual != expected:
         raise ValueError("Parquet member schema differs from the pinned manifest schema")
+
+
+def _validate_handle_schema_identity(schema: pa.Schema, metadata: dict[str, object]) -> None:
+    """Verify the catalog's immutable identity claim before opening a format.
+
+    The handle is ticket-bound, but its metadata still crosses the public plugin
+    boundary. Recomputing the identity list from the pinned schema prevents a
+    forged or stale handle from silently changing which nested fields a policy
+    refers to. Collection markers use the same ``$element``/``$key``/``$value``
+    vocabulary as the core schema and policy paths.
+    """
+
+    raw_field_ids = metadata.get("field_ids")
+    raw_identities = metadata.get("schema_identities")
+    if (
+        not isinstance(raw_field_ids, (tuple, list))
+        or len(raw_field_ids) != len(schema)
+        or any(not isinstance(item, str) or not item for item in raw_field_ids)
+        or not isinstance(raw_identities, (tuple, list))
+    ):
+        raise ValueError("Parquet handle schema identities are incomplete")
+    expected = _schema_identities(schema, tuple(cast(str, item) for item in raw_field_ids))
+    normalized: list[tuple[str, str]] = []
+    for item in raw_identities:
+        if (
+            not isinstance(item, (tuple, list))
+            or len(item) != 2
+            or any(not isinstance(value, str) or not value for value in item)
+        ):
+            raise ValueError("Parquet handle schema identities are invalid")
+        normalized.append((cast(str, item[0]), cast(str, item[1])))
+    if tuple(normalized) != expected:
+        raise ValueError("Parquet handle schema identities do not match the pinned schema")
 
 
 def _projected_columns(schema: pa.Schema, projection: Sequence[str]) -> tuple[str, ...]:

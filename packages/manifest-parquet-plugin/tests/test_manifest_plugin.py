@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import base64
 import json
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from typing import cast
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
-from dal_obscura_manifest_parquet.catalog import ManifestCatalog
+from dal_obscura_manifest_parquet.catalog import ManifestCatalog, _schema_identities
 from dal_obscura_manifest_parquet.format import ParquetDatasetFormat
 from dal_obscura_plugin_api import CatalogConfig, ExecutionContext, TableIdentifier
 
@@ -91,6 +92,41 @@ def test_manifest_catalog_and_parquet_format_split_nested_rows(tmp_path):
     )
     assert identities["id"] == "id"
     assert identities["profile.email"].startswith("synthetic:")
+
+
+def test_manifest_identity_paths_use_core_collection_markers(tmp_path):
+    schema = pa.schema(
+        [
+            pa.field("tags", pa.large_list(pa.field("item", pa.string()))),
+            pa.field("attributes", pa.map_(pa.string(), pa.int64())),
+            pa.field("fixed", pa.list_(pa.field("item", pa.bool_()), 2)),
+        ]
+    )
+    identities = dict(_schema_identities(schema, ("tags", "attributes", "fixed")))
+    assert "tags.$element" in identities
+    assert "attributes.$key" in identities
+    assert "attributes.$value" in identities
+    assert "fixed.$element" in identities
+
+
+def test_parquet_format_rejects_forged_schema_identity_metadata(tmp_path):
+    root, manifest, _table = _write_fixture(tmp_path)
+    context = _context()
+    catalog = ManifestCatalog(
+        CatalogConfig(
+            plugin_id="manifest",
+            instance_id="fixture",
+            revision=1,
+            options={"root": str(root), "manifest_path": str(manifest)},
+        ),
+        context,
+    )
+    handle = catalog.resolve_table(TableIdentifier(namespace=("default",), name="users"), context)
+    metadata = dict(handle.metadata)
+    metadata["schema_identities"] = (("id", "id"),)
+    forged = replace(handle, metadata=metadata)
+    with pytest.raises(ValueError, match="schema identities"):
+        ParquetDatasetFormat(forged, context)
 
 
 def test_manifest_rejects_member_escape_and_schema_drift(tmp_path):
