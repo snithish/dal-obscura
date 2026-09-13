@@ -87,6 +87,23 @@ Its shape is `{"version": 1, "plugins": [{"kind": "catalog"|"table_format",
 "artifact_digest"]}]}`. The trusted in-tree Iceberg pair remains available when no
 external lock is configured.
 
+Generate a lock only after installing the exact reviewed wheels, and name every
+admitted entry explicitly. The builder reads static wheel descriptors without
+importing plugin factories, derives descriptor and installed-file digests, writes
+atomically, and refuses to overwrite an existing lock:
+
+```sh
+PYTHONPATH=src uv run python scripts/build_plugin_lock.py \
+  --output /etc/dal-obscura/plugin-lock.json \
+  --plugin catalog:iceberg.rest \
+  --plugin catalog:manifest \
+  --plugin table_format:parquet.dataset
+```
+
+Review the generated file into the immutable deployment artifact. Both planes
+must mount the same file; a missing, changed, or incompatible lock fails startup
+before any factory import.
+
 See [Security](security.md) and the runnable [OIDC example](../examples/auth/keycloak-oidc/README.md).
 
 ## Startup Order
