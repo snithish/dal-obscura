@@ -398,6 +398,14 @@ class PublishedConfigCatalogRegistry:
         self._plugin_registry = plugin_registry
         self._registry_cache: dict[tuple[UUID, UUID, str, str], CatalogRegistry] = {}
 
+    def close(self) -> None:
+        """Close cached catalog generations and release provider sessions."""
+
+        registries = tuple(self._registry_cache.values())
+        self._registry_cache.clear()
+        for registry in registries:
+            registry.close()
+
     def describe(self, catalog: str | None, target: str, *, tenant_id: str) -> TableFormat:
         if catalog is None:
             raise ValueError("Catalog name is required to resolve a target")

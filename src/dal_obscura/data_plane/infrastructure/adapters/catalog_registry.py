@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from threading import RLock
 from typing import Any, Literal, cast
@@ -54,6 +54,7 @@ class CatalogRegistry:
     ) -> None:
         self._config = config
         self._plugin_registry = plugin_registry
+        self._closed = False
         self._catalogs = {
             name: _build_catalog(catalog_config, plugin_registry=plugin_registry)
             for name, catalog_config in config.catalogs.items()
@@ -66,13 +67,20 @@ class CatalogRegistry:
             return self._config
 
     def reload(self, config: ServiceConfig) -> None:
+        self._ensure_open()
         # Build the complete candidate generation before exposing either its
         # metadata or executable adapters. A factory failure therefore leaves
         # both views on the previous generation.
-        candidate_catalogs = {
-            name: _build_catalog(catalog_config, plugin_registry=self._plugin_registry)
-            for name, catalog_config in config.catalogs.items()
-        }
+        candidate_catalogs: dict[str, CatalogPlugin] = {}
+        try:
+            for name, catalog_config in config.catalogs.items():
+                candidate_catalogs[name] = _build_catalog(
+                    catalog_config,
+                    plugin_registry=self._plugin_registry,
+                )
+        except Exception:
+            _close_catalogs(candidate_catalogs.values())
+            raise
         with self._swap_lock:
             self._config = config
             self._catalogs = candidate_catalogs
@@ -84,6 +92,7 @@ class CatalogRegistry:
         *,
         tenant_id: str = "default",
     ) -> TableFormat:
+        self._ensure_open()
         del tenant_id
         if catalog is None:
             raise ValueError("Catalog name is required to resolve a target")
@@ -106,11 +115,25 @@ class CatalogRegistry:
         return self.resolve(catalog_name, target)
 
     def list_tables(self, catalog_name: str) -> list[CatalogTableListing]:
+        self._ensure_open()
         with self._swap_lock:
             implementation = self._catalogs.get(catalog_name)
         if implementation is None:
             raise ValueError(f"Unknown catalog: {catalog_name}")
         return implementation.list_tables()
+
+    def close(self) -> None:
+        with self._swap_lock:
+            if self._closed:
+                return
+            self._closed = True
+            catalogs = tuple(self._catalogs.values())
+            self._catalogs = {}
+        _close_catalogs(catalogs)
+
+    def _ensure_open(self) -> None:
+        if self._closed:
+            raise ValueError("Catalog registry is closed")
 
 
 DynamicCatalogRegistry = CatalogRegistry
@@ -185,6 +208,20 @@ class IcebergCatalog(CatalogPlugin):
             )
             for table_name in table_names
         ]
+
+    def close(self) -> None:
+        catalog = self._catalog
+        self._catalog = None
+        close = getattr(catalog, "close", None)
+        if callable(close):
+            close()
+
+
+def _close_catalogs(catalogs: Iterable[object]) -> None:
+    for catalog in catalogs:
+        close = getattr(catalog, "close", None)
+        if callable(close):
+            close()
 
 
 def _build_catalog(

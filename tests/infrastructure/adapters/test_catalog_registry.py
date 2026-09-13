@@ -244,6 +244,84 @@ def test_catalog_registry_reload_failure_keeps_previous_generation(monkeypatch):
     assert set(registry._catalogs) == {"analytics"}
 
 
+def test_catalog_registry_close_releases_adapters_and_rejects_reuse(monkeypatch):
+    closed: list[str] = []
+
+    class ClosableCatalog:
+        def resolve_table(self, target: str):
+            del target
+            return FakePostgresTableFormat(catalog_name="analytics", table_name="users", format="x")
+
+        def list_tables(self):
+            return []
+
+        def close(self):
+            closed.append("catalog")
+
+    monkeypatch.setattr(
+        registry_module,
+        "_build_catalog",
+        lambda *_args, **_kwargs: ClosableCatalog(),
+    )
+    registry = CatalogRegistry(
+        ServiceConfig(
+            catalogs={
+                "analytics": CatalogConfig(
+                    name="analytics", type="iceberg", options={}
+                )
+            }
+        )
+    )
+
+    registry.close()
+    registry.close()
+    assert closed == ["catalog"]
+    with pytest.raises(ValueError, match="Catalog registry is closed"):
+        registry.list_tables("analytics")
+
+
+def test_catalog_registry_reload_closes_partially_built_generation(monkeypatch):
+    closed: list[str] = []
+    calls = 0
+
+    class ClosableCatalog:
+        def resolve_table(self, target: str):
+            del target
+            return FakePostgresTableFormat(catalog_name="analytics", table_name="users", format="x")
+
+        def list_tables(self):
+            return []
+
+        def close(self):
+            closed.append("catalog")
+
+    def build(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 3:
+            raise ValueError("factory failed")
+        return ClosableCatalog()
+
+    monkeypatch.setattr(registry_module, "_build_catalog", build)
+    registry = CatalogRegistry(
+        ServiceConfig(
+            catalogs={
+                "analytics": CatalogConfig(name="analytics", type="iceberg", options={})
+            }
+        )
+    )
+    with pytest.raises(ValueError, match="factory failed"):
+        registry.reload(
+            ServiceConfig(
+                catalogs={
+                    "analytics": CatalogConfig(name="analytics", type="iceberg", options={}),
+                    "replacement": CatalogConfig(name="replacement", type="iceberg", options={}),
+                }
+            )
+        )
+    assert closed == ["catalog"]
+
+
 def test_catalog_registry_rejects_provider_returned_metadata_outside_storage_roots():
     class UnsafeTable:
         metadata_location = "s3://other-bucket/metadata.json"
