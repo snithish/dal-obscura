@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `feaa6a9` (Python/DuckDB consumer CI lane;
+Implementation follow-up through `9941211` (locked Python/UI dependency audit;
+Python/DuckDB consumer CI lane;
 secure-local parity contract tests;
 executable backup integrity tests;
 atomic backup checksum preparation;
@@ -579,6 +580,9 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   depends on a pinned governance-UI install/type-check/build lane, and the Python
   type-check lane now resolves both independently buildable plugin package source
   roots explicitly, and standalone plugin wheel tests now gate image publication.
+  A required dependency-audit job now exports the frozen production Python lock,
+  runs `pip-audit --strict`, audits the locked UI dependencies, and is a container
+  promotion prerequisite.
   Artifact
   digest, browser, provider, consumer, recovery, and mandatory-security gates
   remain open.
@@ -587,6 +591,16 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
 Next implementation action: continue X03 with PostgreSQL barrier/CAS evidence and
 then complete X06 provider-derived and collection field identity rules. Do not add new
 providers before Phase A's security/correctness prerequisites are accepted.
+
+### X22 locked dependency audit — `9941211`
+
+- State: implementing.
+- Behavior: CI now audits the frozen server dependency graph with `pip-audit --strict`
+  and the locked production UI graph with `pnpm audit --prod --audit-level high`.
+  The image job cannot promote a candidate unless this lane passes.
+- Green evidence: CI workflow contract suite (5) and `git diff --check` passed.
+- Remaining gaps: hosted dependency-audit execution, exact wheel/image provenance,
+  provider/consumer/browser/recovery gates, and independent release review remain open.
 
 ### X09 virtualized tree keyboard navigation — `c701665`
 
