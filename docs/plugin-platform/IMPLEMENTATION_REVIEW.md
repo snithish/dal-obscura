@@ -314,6 +314,25 @@ no direct import. Replace fixed waits with bounded readiness polling where prese
 profile test duration before consolidating fixtures. Avoid repeated complete-suite
 runs for unrelated documentation or UI styling changes.
 
+## Follow-up reconciliation
+
+The review above is intentionally retained as the historical 2026-09-12
+baseline. Subsequent implementation slices addressed the reproduced local
+probes as follows:
+
+| Historical probe | Current evidence | Current status |
+| --- | --- | --- |
+| Initial publication activated unrelated drafts | `tests/control_plane/test_policy_version_service.py` and selected-asset publication API tests; X01 ledger entries | Local regression fixed; PostgreSQL/Flight publication evidence remains open. |
+| Review token authorized changed shared rules | Immutable draft/review hash and policy-version tests; X02/X03 ledger entries | Local snapshot binding and lock ordering fixed; multi-process race/recovery evidence remains open. |
+| Literal dotted field collided with a nested path | `tests/control_plane/test_evaluation_service.py`, `tests/common/query_planning/test_field_paths.py`, and DuckDB transform tests | Canonical typed paths now preserve the distinction. |
+| Collection field IDs collided in schema digest | `tests/control_plane/test_schema_service.py` and published-config schema-admission tests | Canonical nested/collection identity digest now includes IDs and shape. |
+| Provider class-loader options were admitted | `tests/interfaces/control_plane/test_catalogs_api.py::test_workspace_catalog_rejects_nested_dynamic_loader_options` | Nested loader keys are rejected before provider construction. |
+
+These tests prove the local code paths at the current commit; they do not prove
+the live PostgreSQL, provider, TLS/OIDC, browser, consumer, recovery, capacity,
+artifact, or independent-review gates. The unresolved pickle constraint is
+deliberate and remains covered by the X00 compatibility fixtures.
+
 ## Evidence recorded during this review
 
 The following focused command completed successfully at the baseline:
