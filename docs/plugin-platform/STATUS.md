@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `52cdd04` (manifest field-ID bounds;
+Implementation follow-up through `34b21a2` (quoted collection path parsing;
+manifest field-ID bounds;
 canonical provider ID API regression;
 provider identity vocabulary;
 bounded provider field identities;
@@ -360,6 +361,9 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   Manifest field-ID entries are also bounded and printable before identity
   derivation, so an operator-controlled manifest cannot inject oversized or
   control-bearing grant keys.
+  Canonical field-path parsing now preserves quoted literal `$element`, `$key`,
+  and `$value` names instead of interpreting them as collection markers, so
+  reserved names cannot collide with list/map descendants.
   Both service composition roots now accept an optional operator-mounted
   `DAL_OBSCURA_PLUGIN_LOCK_FILE`; its bounded parser rejects symlinks,
   group/world-writable files, malformed identities, duplicates, and incomplete
@@ -550,6 +554,17 @@ providers before Phase A's security/correctness prerequisites are accepted.
   `git diff --check`.
 - Remaining gaps: live manifest wheel/consumer qualification and complete
   provider-derived schema-evolution evidence remain open.
+
+### X04/X06 quoted collection path parsing — `34b21a2`
+
+- State: implementing.
+- Behavior: human field paths retain whether a segment was quoted. Literal
+  reserved collection names now round-trip as field segments while unquoted
+  markers continue to resolve list elements and map keys/values.
+- Green evidence: field-path suite (20 passed), Ruff, Ty, and
+  `git diff --check`.
+- Remaining gaps: browser/consumer nested-path evidence and complete schema
+  evolution acceptance remain open.
 
 ### X03 direct mutation row locks — `165015f`
 
