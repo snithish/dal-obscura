@@ -13,9 +13,6 @@ from dal_obscura.common.catalog.ports import (
 )
 from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
-from dal_obscura.data_plane.infrastructure.adapters.public_plugin_adapter import (
-    PublicPluginCatalogAdapter,
-)
 from dal_obscura.data_plane.infrastructure.table_formats.iceberg import IcebergTableFormat
 
 CatalogType = Literal["iceberg"]
@@ -197,6 +194,13 @@ def _build_catalog(
         if not callable(factory):
             raise ValueError(f"Plugin factory is invalid: {config.plugin_id}")
         if config.plugin_id != "iceberg.sql":
+            # The public SDK is an optional runtime dependency. Keep the
+            # built-in Iceberg service importable in a minimal installation;
+            # only an explicitly selected external plugin needs this bridge.
+            from dal_obscura.data_plane.infrastructure.adapters.public_plugin_adapter import (
+                PublicPluginCatalogAdapter,
+            )
+
             return PublicPluginCatalogAdapter(
                 config.name,
                 config.options,
