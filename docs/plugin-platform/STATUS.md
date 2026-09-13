@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `c43b15e` (legacy broad-grant admission guard;
+Implementation follow-up through `0df956a` (manifest standalone boundary;
+legacy broad-grant admission guard;
 typed path budgets;
 quoted JSON path boundaries;
 reserved identity namespaces;
@@ -365,6 +366,8 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   Manifest field-ID entries are also bounded and printable before identity
   derivation, so an operator-controlled manifest cannot inject oversized or
   control-bearing grant keys.
+  The independent manifest package keeps this validation local and imports only
+  the public plugin SDK; core service modules are not required by its wheel.
   Canonical field-path parsing now preserves quoted literal `$element`, `$key`,
   and `$value` names instead of interpreting them as collection markers, so
   reserved names cannot collide with list/map descendants.
@@ -613,6 +616,17 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Remaining gaps: Flight/browser nested-path evidence and full schema-boundary
   acceptance remain open; sandboxed Flight socket tests remain environment
   restricted.
+
+### X11/X17 manifest standalone boundary — `0df956a`
+
+- State: implementing.
+- Behavior: manifest field-ID validation and canonicalization are implemented
+  locally inside the independent package, preserving its public-SDK-only import
+  surface while retaining the bounded identity contract.
+- Green evidence: manifest plugin suite (14 passed), standalone import scan,
+  Ruff, Ty, and `git diff --check`.
+- Remaining gaps: clean wheel installation and live manifest/consumer
+  qualification remain open.
 
 ### X06 legacy broad-grant admission guard — `c43b15e`
 
