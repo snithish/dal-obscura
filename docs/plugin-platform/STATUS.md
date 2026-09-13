@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `959a03f` (IO boundary qualification tests;
+Implementation follow-up through `ed8aebf` (nested Iceberg Flight E2E qualification;
+IO boundary qualification tests;
 locked Python/UI dependency audit;
 Python/DuckDB consumer CI lane;
 secure-local parity contract tests;
@@ -554,6 +555,9 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   and DuckDB relation aggregation through the same loopback Flight server. The
   CI integration lane enables it; this sandbox cannot bind Flight sockets, so
   local execution remains an explicit environment limitation.
+  The elevated full Python suite now passes with the nested Iceberg E2E lane,
+  including a local RSA JWKS endpoint and schema-bound policy admission; hosted
+  TLS/OIDC and consumer matrix evidence remain required.
 - X19 secure deployment and identity lifecycle: **implementing**; production
   Compose now separates migration/control/data credentials, provisions isolated
   PostgreSQL roles, orders readiness through migration and post-migration ticket
@@ -773,6 +777,18 @@ providers before Phase A's security/correctness prerequisites are accepted.
   denied, including loopback.
 - Remaining gaps: socket-enabled CI must execute the Python/DuckDB, Flight, and
   E2E consumer lanes.
+
+### X18 nested Iceberg Flight E2E qualification — `ed8aebf`
+
+- State: implemented-unverified.
+- Behavior: the end-to-end fixture now uses a local RSA JWKS endpoint, explicit
+  issuer/tenant claims, and complete nested Iceberg schema identities (including
+  parent and collection nodes). The data plane therefore starts through the same
+  OIDC verification and schema-drift gates as production and serves the nested
+  Arrow result over Flight.
+- Green evidence: elevated `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/test_e2e_smoke.py::test_e2e_flight_server_with_iceberg -q` (1 passed) and full `pytest -q` (all collected tests passed; external-service lanes skipped) with Ruff and `git diff --check`.
+- Remaining gaps: hosted TLS/OIDC, real provider, Spark/DuckDB consumer matrix,
+  restart/revocation, and clean artifact evidence remain open.
 
 ### X03 PostgreSQL draft CAS race gate — `ee6b405`
 
