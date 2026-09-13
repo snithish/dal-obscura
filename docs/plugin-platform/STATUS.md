@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `71af4ce` (public page-entry bounds;
+Implementation follow-up through `7bff5d8` (table-handle identity binding;
+public page-entry bounds;
 public continuation validation;
 public discovery concurrency bound;
 plugin lock identity validation;
@@ -587,6 +588,19 @@ providers before Phase A's security/correctness prerequisites are accepted.
   and `git diff --check`.
 - Remaining gaps: cross-worker aggregate limits, provider interruption, live
   pagination, and external wheel/consumer evidence remain open. Pickle
+  compatibility is unchanged.
+
+### X13 table-handle identity binding — `7bff5d8`
+
+- State: implementing.
+- Behavior: control-plane schema routing and the data-plane public catalog
+  bridge now require a resolved handle to match the admitted catalog plugin,
+  catalog instance, catalog revision, and requested table identifier before a
+  format adapter is constructed.
+- Green evidence: schema-service and public-adapter suites (28 passed), Ruff,
+  and `git diff --check`.
+- Remaining gaps: live provider identity evidence, mixed-version PostgreSQL
+  migration, and external wheel/consumer qualification remain open. Pickle
   compatibility is unchanged.
 
 ### X07/X14 asset binding validation — `3c3709b`
