@@ -253,6 +253,14 @@ test count is now 8.
 - Evidence: 34 actor/auth tests, changed-path Ruff, and `ty` checks passed, including an HTTPS TestClient assertion for HSTS.
 - Remaining N04/N05 work: hostile transport/DNS/private-address enforcement, credential redaction, cancellation/resource cleanup, live IdP/browser freshness and revocation journeys, and deployment network controls. Release remains HOLD.
 
+## Implementation update — 16dea42 (2026-09-14)
+
+- Packet / status / candidate commit / owner: N07/B10 and N10/N11 recovery partial / VERIFY / `16dea42` / governance UI.
+- Observable behavior delivered: connection discovery, diagnostics, catalog and asset registration, snapshot creation/activation, runtime settings, identity-provider settings, owner changes, and delegated grants now use the shared status-aware recovery mapper. Operators see permission, missing-resource, stale-revision, validation, throttling, and outage guidance consistently while prior serving state remains intact.
+- Changed paths: `apps/governance-ui/src/components/ConnectionsView.tsx`, `apps/governance-ui/src/components/SettingsView.tsx`, and `apps/governance-ui/src/components/AssetWorkspace.tsx`. No backend, session, pickle serializer, serialized class, payload, or import path changed.
+- Evidence: direct UI TypeScript build, Vite production build (276.86 kB JavaScript / 83.62 kB gzip), all 8 UI lifecycle/schema/recovery tests, and `git diff --check` passed.
+- Remaining N07/N10/N11 work: session-scoped query/mutation cache, rendered deferred-response race coverage, live status recovery journeys, permission matrix/browser evidence, and production qualification. Release remains HOLD.
+
 ## Evidence inherited, with limits
 
 The historical ledger reports Python/socket-enabled suite and PostgreSQL checks
