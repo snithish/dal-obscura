@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `fe48d54` (backup checksum verification and
+Implementation follow-up through `68172f9` (atomic backup checksum preparation;
+backup checksum verification and
 runbook; CI plugin lifecycle security lane;
 PostgreSQL binding CAS race probe;
 PostgreSQL grant CAS race probe;
