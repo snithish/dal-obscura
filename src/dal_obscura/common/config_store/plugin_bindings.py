@@ -80,6 +80,17 @@ def inspect_plugin_bindings(session: Session) -> PluginBindingReport:
     )
     for record in catalogs:
         if record.plugin_id is not None:
+            if _needs_catalog_shape_migration(record.config_json):
+                candidates.append(
+                    PluginBindingCandidate(
+                        kind="catalog",
+                        record_id=f"{record.publication_id}:{record.tenant_id}:{record.catalog}",
+                        status="migratable",
+                        catalog_plugin_id=record.plugin_id,
+                        key=(str(record.publication_id), str(record.tenant_id), record.catalog),
+                    )
+                )
+                continue
             candidates.append(
                 PluginBindingCandidate(
                     kind="catalog",
@@ -112,6 +123,23 @@ def inspect_plugin_bindings(session: Session) -> PluginBindingReport:
     )
     for record in assets:
         if record.catalog_plugin_id is not None and record.format_plugin_id is not None:
+            if _needs_catalog_shape_migration(record.compiled_config_json):
+                candidates.append(
+                    PluginBindingCandidate(
+                        kind="asset",
+                        record_id=f"{record.publication_id}:{record.tenant_id}:{record.catalog}:{record.target}",
+                        status="migratable",
+                        catalog_plugin_id=record.catalog_plugin_id,
+                        format_plugin_id=record.format_plugin_id,
+                        key=(
+                            str(record.publication_id),
+                            str(record.tenant_id),
+                            record.catalog,
+                            record.target,
+                        ),
+                    )
+                )
+                continue
             candidates.append(
                 PluginBindingCandidate(
                     kind="asset",
@@ -165,8 +193,14 @@ def apply_plugin_bindings(session: Session, report: PluginBindingReport) -> int:
                     "catalog": catalog,
                 },
             )
+            changed = False
             if record is not None and record.plugin_id is None and candidate.catalog_plugin_id:
                 record.plugin_id = candidate.catalog_plugin_id
+                changed = True
+            if record is not None and _needs_catalog_shape_migration(record.config_json):
+                record.config_json = _canonicalize_catalog_config(record.config_json)
+                changed = True
+            if changed:
                 applied += 1
         elif candidate.kind == "asset" and len(candidate.key) == 4:
             publication_id, tenant_id, catalog, target = candidate.key
@@ -186,6 +220,11 @@ def apply_plugin_bindings(session: Session, report: PluginBindingReport) -> int:
                     changed = True
                 if record.format_plugin_id is None and candidate.format_plugin_id:
                     record.format_plugin_id = candidate.format_plugin_id
+                    changed = True
+                if _needs_catalog_shape_migration(record.compiled_config_json):
+                    record.compiled_config_json = _canonicalize_compiled_config(
+                        record.compiled_config_json
+                    )
                     changed = True
                 if changed:
                     applied += 1
@@ -213,3 +252,26 @@ def _format_plugin_id(config: dict[str, Any], backend: str) -> str | None:
     if isinstance(plugins, dict) and plugins.get("table_format") == "iceberg":
         return "iceberg"
     return "iceberg" if backend == "iceberg" else None
+
+
+def _needs_catalog_shape_migration(config: dict[str, Any]) -> bool:
+    catalog = config.get("catalog")
+    return (isinstance(catalog, dict) and catalog.get("module") == _ICEBERG_CATALOG_MODULE) or (
+        "module" in config and config.get("module") == _ICEBERG_CATALOG_MODULE
+    )
+
+
+def _canonicalize_catalog_config(config: dict[str, Any]) -> dict[str, Any]:
+    result = dict(config)
+    result.pop("module", None)
+    result.setdefault("type", "iceberg")
+    result.setdefault("options", {})
+    return result
+
+
+def _canonicalize_compiled_config(config: dict[str, Any]) -> dict[str, Any]:
+    result = dict(config)
+    catalog = result.get("catalog")
+    if isinstance(catalog, dict):
+        result["catalog"] = _canonicalize_catalog_config(catalog)
+    return result

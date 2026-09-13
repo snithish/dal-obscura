@@ -491,6 +491,8 @@ def _catalog_config_from_published_catalog(
     plugin_id: str = "iceberg.sql",
 ) -> CatalogConfig:
     config = _mapping(catalog.config)
+    if "module" in config:
+        raise ValueError("Published catalog config uses a retired module identity")
     options = dict(_mapping(config.get("options")))
     options.pop("provider_modules", None)
     raw_revision = config.get("revision")
@@ -720,14 +722,9 @@ def _mapping(value: object) -> dict[str, Any]:
 
 def _catalog_type(config: dict[str, Any]) -> CatalogType:
     raw_type = config.get("type")
-    if raw_type is not None:
-        return _known_catalog_type(str(raw_type))
-    module = str(config.get("module", ""))
-    if module.endswith("IcebergCatalog"):
-        return "iceberg"
-    # External catalogs are executed through the public-plugin adapter. The
-    # legacy type remains an internal compatibility value for CatalogConfig.
-    return "iceberg"
+    if raw_type is None:
+        raise ValueError("Published catalog config type is missing")
+    return _known_catalog_type(str(raw_type))
 
 
 def _known_catalog_type(value: str) -> CatalogType:

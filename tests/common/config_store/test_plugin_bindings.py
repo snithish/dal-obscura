@@ -89,3 +89,19 @@ def test_plugin_binding_migration_dry_run_and_apply_are_explicit(tmp_path, capsy
             "default.users:partition": "iceberg",
             "unknown": None,
         }
+
+        catalog = session.get(
+            PublishedCatalogRecord,
+            {
+                "publication_id": publication_id,
+                "tenant_id": tenant_id,
+                "catalog": "analytics",
+            },
+        )
+        assert catalog is not None
+        assert catalog.config_json == {"type": "iceberg", "options": {}}
+
+    assert run(["plugin-bindings", "--database-url", database_url]) == 0
+    rerun = json.loads(capsys.readouterr().out)
+    assert rerun["migratable"] == 0
+    assert rerun["applied"] == 0

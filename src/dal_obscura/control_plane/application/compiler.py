@@ -66,7 +66,7 @@ class PublicationCompiler:
                 tenant_id=catalog.tenant_id,
                 catalog=catalog.name,
                 config={
-                    "module": catalog.module,
+                    "type": "iceberg",
                     "options": dict(catalog.options),
                     "revision": catalog.revision,
                 },
@@ -172,7 +172,7 @@ class PublicationCompiler:
             "options": target_options,
         }
         compiled_config: dict[str, object] = {
-            "catalog": {"module": catalog.module, "options": dict(catalog.options)},
+            "catalog": {"type": "iceberg", "options": dict(catalog.options)},
             "target": target_config,
             "policy": policy_json,
             # Keep the selected adapter identities explicit in the immutable

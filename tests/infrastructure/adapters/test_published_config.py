@@ -114,10 +114,34 @@ def test_published_config_rejects_tampered_plugin_binding():
         publication_id=asset.publication_id,
         tenant_id=asset.tenant_id,
         catalog="analytics",
-        config={"module": ICEBERG_CATALOG_MODULE, "options": {}},
+        config={"type": "iceberg", "options": {}},
     )
 
     with pytest.raises(ValueError, match="plugin binding is unsupported"):
+        _catalog_config_for_asset(catalog, asset)
+
+
+def test_published_config_rejects_legacy_catalog_module_shape():
+    asset = PublishedAsset(
+        publication_id=uuid4(),
+        tenant_id=uuid4(),
+        catalog="analytics",
+        target="default.users",
+        backend="iceberg",
+        compiled_config={
+            "plugins": {"catalog": "iceberg.sql", "table_format": "iceberg"},
+            "target": {"backend": "iceberg", "table": "default.users"},
+        },
+        policy_version=1,
+    )
+    catalog = PublishedCatalog(
+        publication_id=asset.publication_id,
+        tenant_id=asset.tenant_id,
+        catalog="analytics",
+        config={"module": ICEBERG_CATALOG_MODULE, "options": {}},
+    )
+
+    with pytest.raises(ValueError, match="retired module identity"):
         _catalog_config_for_asset(catalog, asset)
 
 
@@ -149,7 +173,7 @@ def test_published_config_requires_both_plugin_identities_in_admitted_snapshot()
         publication_id=asset.publication_id,
         tenant_id=asset.tenant_id,
         catalog="analytics",
-        config={"module": ICEBERG_CATALOG_MODULE, "options": {}},
+        config={"type": "iceberg", "options": {}},
     )
 
     with pytest.raises(ValueError, match="plugin binding is not admitted"):
@@ -204,7 +228,7 @@ def test_published_config_preserves_external_plugin_identity():
         publication_id=asset.publication_id,
         tenant_id=asset.tenant_id,
         catalog="analytics",
-        config={"module": "manifest", "options": {"root": "/srv/data"}},
+        config={"type": "iceberg", "options": {"root": "/srv/data"}},
     )
     resolved = _catalog_config_for_asset(
         catalog,
@@ -234,7 +258,7 @@ def test_published_config_preserves_catalog_plugin_revision():
         publication_id=asset.publication_id,
         tenant_id=asset.tenant_id,
         catalog="analytics",
-        config={"module": "manifest", "options": {"root": "/srv/data"}},
+        config={"type": "iceberg", "options": {"root": "/srv/data"}},
         plugin_id="manifest",
         plugin_revision=17,
     )
