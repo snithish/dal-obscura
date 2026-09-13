@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `644bcd4` (REST qualification at `96068ee`; authoring routing at `6890b3f`).
+Implementation follow-up through `5166716` (REST qualification at `96068ee`; authoring routing at `6890b3f`).
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -144,8 +144,10 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   Public SDK catalog/format factories can now be resolved through the same registry
   bridge and execute through the existing ticket path; external Iceberg metadata
   locations are checked against the configured storage allowlist before executor
-  construction. Publication authoring now accepts external IDs only from the admitted registry and persists those IDs into
-  runtime config. PostgreSQL/mixed-version migration evidence remains open.
+  construction. Publication authoring now accepts external IDs only from the admitted
+  registry, requires overlapping declared capabilities for the selected pair, and
+  persists those IDs into runtime config. PostgreSQL/mixed-version migration evidence
+  remains open.
   Additive migration `20260913_0014` persists qualified catalog/format identities
   and optional plugin revisions beside immutable published rows; reads merge those
   identities back into legacy-compatible manifests.
