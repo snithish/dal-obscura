@@ -22,6 +22,7 @@ from dal_obscura.common.plugin_api.contracts import (
     ExecutionContext,
     PluginDescriptor,
     SchemaDescriptor,
+    TableHandle,
     TableIdentifier,
 )
 
@@ -117,6 +118,25 @@ def test_plugin_contract_value_objects_validate_generation_and_schema_identity()
             instance_id="analytics",
             revision=0,
             options={f"key-{index}": index for index in range(65)},
+        )
+    with pytest.raises(ValueError, match="Invalid catalog plugin ID"):
+        TableHandle(
+            catalog_plugin_id="../loader",
+            catalog_instance_id="analytics",
+            catalog_revision=0,
+            identifier=TableIdentifier(namespace=("default",), name="users"),
+            format_plugin_id="iceberg",
+            handle_version=1,
+        )
+    with pytest.raises(ValueError, match="JSON-like"):
+        TableHandle(
+            catalog_plugin_id="iceberg.sql",
+            catalog_instance_id="analytics",
+            catalog_revision=0,
+            identifier=TableIdentifier(namespace=("default",), name="users"),
+            format_plugin_id="iceberg",
+            handle_version=1,
+            metadata={"provider": object()},
         )
 
     with pytest.raises(ValueError, match="SHA-256"):
