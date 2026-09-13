@@ -37,6 +37,19 @@ export function AssetWorkspace(props: { initialTab?: AssetTab; initialVersion?: 
     setVersionError("");
   }, [props.asset.id, props.initialVersion]);
   useEffect(() => {
+    const syncLocation = () => {
+      const location = new URLSearchParams(window.location.search);
+      const rawTab = location.get("tab");
+      const nextTab = ["policy", "tests", "history", "access", "consumers"].includes(rawTab ?? "") ? rawTab as AssetTab : "policy";
+      const rawVersion = location.get("version");
+      const nextVersion = rawVersion && /^\d+$/.test(rawVersion) && Number(rawVersion) > 0 ? Number(rawVersion) : undefined;
+      setTab(nextTab);
+      setSelectedVersion(nextVersion);
+    };
+    window.addEventListener("popstate", syncLocation);
+    return () => window.removeEventListener("popstate", syncLocation);
+  }, []);
+  useEffect(() => {
     const history = props.history.filter((item) => item.asset_id === props.asset.id);
     const version = selectedVersion && history.some((item) => item.policy_version === selectedVersion) ? selectedVersion : undefined;
     versionAbortController.current?.abort();
@@ -86,7 +99,7 @@ export function AssetWorkspace(props: { initialTab?: AssetTab; initialVersion?: 
     const params = new URLSearchParams(window.location.search);
     if (next === "policy") params.delete("tab"); else params.set("tab", next);
     const query = params.toString();
-    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}#assets`);
+    window.history.pushState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}#assets`);
   }
   function selectVersion(version: number) {
     setSelectedVersion(version);
@@ -96,7 +109,7 @@ export function AssetWorkspace(props: { initialTab?: AssetTab; initialVersion?: 
     params.set("tab", "history");
     params.set("version", String(version));
     const query = params.toString();
-    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}#assets`);
+    window.history.pushState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}#assets`);
   }
   return <><div className="asset-summary"><div className="asset-picker"><label htmlFor="asset-search">Find governed asset<input id="asset-search" type="search" value={props.assetSearch} onChange={(event) => props.onSearch(event.target.value)} placeholder="Search catalog or asset" disabled={readOnly} /></label><label htmlFor="asset-select">Selected asset<select id="asset-select" value={props.asset.id} onChange={(event) => props.onAsset(event.target.value)} disabled={readOnly}>{listedAssets.map((item) => <option key={item.id} value={item.id}>{item.catalog} / {item.name}</option>)}</select></label><div className="asset-page-actions"><small>{props.assets.length} loaded</small>{props.assetHasMore && <button className="secondary compact" disabled={props.assetInventoryLoading} onClick={props.onLoadMore}>{props.assetInventoryLoading ? "Loading…" : "Load more"}</button>}{props.assetInventoryLoading && <span className="muted" role="status">Updating inventory…</span>}</div></div><div className="save-status" aria-live="polite"><span className={"save-dot " + props.saveState} /> {saveLabel(props.saveState)}</div></div><div className="notice" role="status">{props.notice}</div>{props.draftId && !readOnly && <button className="secondary compact" onClick={() => void copyReviewLink()}>Copy review link</button>}<div className="asset-tabs" role="tablist" aria-label="Asset views">{(["policy", "tests", "history", "access", "consumers"] as const).map((item) => <button key={item} role="tab" aria-selected={tab === item} className={tab === item ? "selected" : ""} onClick={() => selectTab(item)}>{item === "policy" ? "Policy" : item === "tests" ? "Tests" : item === "history" ? "History" : item === "access" ? "Access" : "Consumers"}</button>)}</div>{tab === "policy" ? <div className="studio">
     <section className="schema-panel" aria-label="Schema and field selection"><div className="panel-head"><div><span className="eyebrow">SCHEMA</span><h2>Fields & access</h2></div></div><p className="help">Fields retain server-defined paths. A checked field is visible through the selected rule.</p>{props.asset.schema?.stable_field_ids === false && <p className="schema-drift-warning" role="status"><strong>Schema identity requires reapproval</strong><br />This adapter does not provide stable field IDs. Any schema change must be reviewed again before access is served.</p>}<label className="schema-search">Search fields<input type="search" value={schemaSearch} onChange={(event) => setSchemaSearch(event.target.value)} placeholder="name or nested path" /></label>{visibleFields.length ? <VirtualSchemaTree nodes={visibleFields} selectedField={props.selectedField} effectiveFields={props.effectiveFields} onField={readOnly ? () => undefined : props.onField} forceExpanded={Boolean(schemaSearch)} /> : <div className="empty-result"><strong>No matching fields</strong><p>Clear the search to browse the authoritative Iceberg schema.</p></div>}<div className="schema-note"><strong>Nested fields</strong><p>Struct, list, and map paths come from the control plane. Collection nodes expose explicit <code>$element</code>, <code>$key</code>, and <code>$value</code> segments.</p></div></section>

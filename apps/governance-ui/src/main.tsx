@@ -118,17 +118,29 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const handleHashChange = () => {
-      const next = pageFromHash(window.location.hash);
+    const syncBrowserLocation = () => {
+      const location = locationFromUrl(window.location.hash, window.location.search);
+      const next = location.page;
       if (next !== page && !confirmDiscardUnsaved()) {
         window.history.replaceState(null, "", `#${page}`);
         return;
       }
       setPage(next);
+      if (next === "assets" && session && location.assetId && location.assetId !== asset?.id) {
+        const target = assets.find((item) => item.id === location.assetId);
+        if (target && confirmDiscardUnsaved()) {
+          setReviewOnly(Boolean(location.draftId));
+          void loadAsset(target.id, assets, undefined, location.draftId);
+        }
+      }
     };
-    window.addEventListener("hashchange", handleHashChange);
-    return () => window.removeEventListener("hashchange", handleHashChange);
-  }, [page, saveState]);
+    window.addEventListener("hashchange", syncBrowserLocation);
+    window.addEventListener("popstate", syncBrowserLocation);
+    return () => {
+      window.removeEventListener("hashchange", syncBrowserLocation);
+      window.removeEventListener("popstate", syncBrowserLocation);
+    };
+  }, [asset?.id, assets, page, saveState, session]);
 
   useEffect(() => {
     const handleAuthExpired = () => {
