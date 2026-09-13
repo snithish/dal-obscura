@@ -59,6 +59,8 @@ jobs:
           uv run ty check
           --extra-search-path packages/plugin-api/src
           --extra-search-path packages/plugin-conformance/src
+          --extra-search-path packages/manifest-parquet-plugin/src
+          --extra-search-path packages/iceberg-rest-plugin/src
 
   python-contract-tests:
     name: Python contract and security tests

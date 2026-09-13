@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 from datetime import datetime, timedelta, timezone
+from typing import cast
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -85,7 +86,9 @@ def test_manifest_catalog_and_parquet_format_split_nested_rows(tmp_path):
     output_schema, batches = format_plugin.execute(tasks[0], context)
     assert output_schema.names == ["profile"]
     assert pa.Table.from_batches(batches).to_pylist() == [{"profile": {"email": "a@example.com"}}]
-    identities = dict(handle.metadata["schema_identities"])
+    identities = dict(
+        cast(tuple[tuple[str, str], ...], handle.metadata["schema_identities"])
+    )
     assert identities["id"] == "id"
     assert identities["profile.email"].startswith("synthetic:")
 

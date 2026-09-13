@@ -195,7 +195,7 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
                 catalog_name=self._name,
                 table_name=target,
                 metadata_location=metadata_location,
-                io_options=dict(io_options),
+                io_options=cast(dict[str, object], io_options),
                 path_enforcer=self._path_enforcer,
             )
         raw_factory = self._format_factory_loader(handle.format_plugin_id)
