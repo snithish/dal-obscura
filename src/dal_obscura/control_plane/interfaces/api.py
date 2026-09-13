@@ -208,6 +208,16 @@ def create_app(  # noqa: C901
             "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; "
             "base-uri 'self'; form-action 'self'",
         )
+        response.headers.setdefault("x-frame-options", "DENY")
+        response.headers.setdefault("cross-origin-opener-policy", "same-origin")
+        response.headers.setdefault(
+            "permissions-policy",
+            "camera=(), geolocation=(), microphone=(), payment=(), usb=()",
+        )
+        if request.url.scheme == "https":
+            response.headers.setdefault(
+                "strict-transport-security", "max-age=31536000; includeSubDomains"
+            )
         return response
 
     @app.middleware("http")

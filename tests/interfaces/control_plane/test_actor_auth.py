@@ -47,7 +47,7 @@ def _actor_for_token(token: str) -> DemoToken:
     raise PermissionError("bad token")
 
 
-def _client() -> TestClient:
+def _client(*, secure: bool = False) -> TestClient:
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
     migrate_config_store(engine)
     return TestClient(
@@ -56,7 +56,8 @@ def _client() -> TestClient:
             admin_token="test-admin",
             oidc_actor_resolver=_actor_for_token,
             oidc_admin_group="platform-admins",
-        )
+        ),
+        base_url="https://testserver" if secure else "http://testserver",
     )
 
 
@@ -355,6 +356,9 @@ def test_session_reports_admin_token_actor():
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["cross-origin-opener-policy"] == "same-origin"
+    assert "camera=()" in response.headers["permissions-policy"]
     csp = response.headers["content-security-policy"]
     assert "unsafe-eval" not in csp
     assert "script-src 'self'" in csp
@@ -365,6 +369,13 @@ def test_session_reports_admin_token_actor():
         "platform_admin": True,
         "capabilities": ["workspace:admin"],
     }
+
+
+def test_secure_requests_include_transport_isolation_headers():
+    response = _client(secure=True).get("/v1/session", headers=ADMIN_HEADERS)
+
+    assert response.status_code == 200
+    assert response.headers["strict-transport-security"] == "max-age=31536000; includeSubDomains"
 
 
 def test_local_bootstrap_login_exchanges_bearer_for_browser_session():
