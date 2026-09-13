@@ -200,6 +200,13 @@ export type PluginState = {
   reason?: string;
 };
 
+export type PluginPair = {
+  catalog_plugin_id: string;
+  format_plugin_id: string;
+  capabilities: string[];
+  status: "admitted";
+};
+
 export type AuthProvider = {
   id: string;
   ordinal: number;
@@ -320,7 +327,7 @@ export const controlPlane = {
   diagnoseCatalog: (name: string) => request<CatalogDiagnostic>(`/v1/catalogs/${encodeURIComponent(name)}/diagnostics`),
   getRuntimeSettings: () => request<RuntimeSettings | null>("/v1/settings/runtime"),
   getAuthProviders: () => request<AuthProvider[]>("/v1/settings/auth-providers"),
-  listPlugins: () => request<{ plugins: PluginDescriptor[]; states: PluginState[] }>("/v1/plugins"),
+  listPlugins: () => request<{ plugins: PluginDescriptor[]; states: PluginState[]; pairs: PluginPair[] }>("/v1/plugins"),
   getSummary: () => request<WorkspaceSummary>("/v1/workspace/summary"),
   getObservations: () => request<WorkspaceObservations>("/v1/workspace/observations"),
   saveCatalog: (name: string, module: string, options: Record<string, unknown>) => request<{ id: string; name: string }>(`/v1/catalogs/${encodeURIComponent(name)}`, {

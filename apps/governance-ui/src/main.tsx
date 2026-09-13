@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import type { Asset, AssetGrant, AuditEvent, AuthProvider, Catalog, CatalogDiagnostic, Mask, PluginDescriptor, PluginState, PolicyRule, PolicyVersion, Preview, RuntimeSettings, SchemaNode, Session, SessionOptions, UiAuthConfig, WorkspaceObservations, WorkspacePublication, WorkspaceSummary } from "./api";
+import type { Asset, AssetGrant, AuditEvent, AuthProvider, Catalog, CatalogDiagnostic, Mask, PluginDescriptor, PluginPair, PluginState, PolicyRule, PolicyVersion, Preview, RuntimeSettings, SchemaNode, Session, SessionOptions, UiAuthConfig, WorkspaceObservations, WorkspacePublication, WorkspaceSummary } from "./api";
 import { controlPlane } from "./api";
 import { demoAsset, demoRules } from "./fixtures";
 import { isCurrentEpoch } from "./lifecycle";
@@ -10,7 +10,7 @@ import "./styles.css";
 type Page = "assets" | "changes" | "activity" | "connections" | "settings";
 type SaveState = "saved" | "saving" | "unsaved" | "failed";
 type WorkspaceState = "loading" | "ready" | "demo" | "unavailable";
-type ManagementData = { history?: PolicyVersion[]; historyNextCursor?: string | null; events?: AuditEvent[]; catalogs?: Catalog[]; tables?: Array<Record<string, unknown>>; runtime?: RuntimeSettings | null; providers?: AuthProvider[]; publications?: WorkspacePublication[]; summary?: WorkspaceSummary; observations?: WorkspaceObservations; grants?: AssetGrant[]; plugins?: PluginDescriptor[]; pluginStates?: PluginState[] };
+type ManagementData = { history?: PolicyVersion[]; historyNextCursor?: string | null; events?: AuditEvent[]; catalogs?: Catalog[]; tables?: Array<Record<string, unknown>>; runtime?: RuntimeSettings | null; providers?: AuthProvider[]; publications?: WorkspacePublication[]; summary?: WorkspaceSummary; observations?: WorkspaceObservations; grants?: AssetGrant[]; plugins?: PluginDescriptor[]; pluginStates?: PluginState[]; pluginPairs?: PluginPair[] };
 
 const maskOptions: Array<{ type: Mask["type"]; label: string; needsValue?: boolean }> = [
   { type: "null", label: "Null" }, { type: "redact", label: "Redact", needsValue: true },
@@ -121,7 +121,7 @@ function App() {
       let next: ManagementData = {};
       if (destination === "changes") { const pageResult = await controlPlane.listHistoryPage({ limit: 50 }); next = { history: pageResult.items, historyNextCursor: pageResult.next_cursor }; }
       if (destination === "activity") next = { history: await controlPlane.listHistory(), events: await controlPlane.listAuditEvents(), summary: await controlPlane.getSummary(), observations: await controlPlane.getObservations() };
-      if (destination === "connections") { const pluginData = await controlPlane.listPlugins(); next = { catalogs: await controlPlane.listCatalogs(), publications: session?.platform_admin ? await controlPlane.listWorkspacePublications() : [], plugins: pluginData.plugins, pluginStates: pluginData.states }; }
+      if (destination === "connections") { const pluginData = await controlPlane.listPlugins(); next = { catalogs: await controlPlane.listCatalogs(), publications: session?.platform_admin ? await controlPlane.listWorkspacePublications() : [], plugins: pluginData.plugins, pluginStates: pluginData.states, pluginPairs: pluginData.pairs }; }
       if (destination === "settings") next = { runtime: await controlPlane.getRuntimeSettings(), providers: await controlPlane.getAuthProviders(), publications: session?.platform_admin ? await controlPlane.listWorkspacePublications() : [] };
       if (!isCurrentEpoch(epoch, managementEpoch.current)) return;
       setManagementData(next);
@@ -576,7 +576,7 @@ function ManagementView({ page, data, loading, onReload, onLoadMore, historyLoad
   if (loading) return <section className="coming-soon"><span className="eyebrow">{page.toUpperCase()}</span><h2>Loading {page}</h2><p>Checking the current workspace state and your capabilities.</p></section>;
   if (page === "changes") return <ChangesView history={data.history ?? []} nextCursor={data.historyNextCursor} onReload={onReload} onLoadMore={onLoadMore} loading={historyLoading ?? false} />;
   if (page === "activity") return <ActivityView history={data.history ?? []} events={data.events ?? []} summary={data.summary} observations={data.observations} />;
-  if (page === "connections") return <ConnectionsView catalogs={data.catalogs ?? []} publications={data.publications ?? []} plugins={data.plugins ?? []} pluginStates={data.pluginStates ?? []} canActivate={Boolean(session?.platform_admin)} onReload={onReload} />;
+  if (page === "connections") return <ConnectionsView catalogs={data.catalogs ?? []} publications={data.publications ?? []} plugins={data.plugins ?? []} pluginStates={data.pluginStates ?? []} pluginPairs={data.pluginPairs ?? []} canActivate={Boolean(session?.platform_admin)} onReload={onReload} />;
   return <SettingsView runtime={data.runtime} providers={data.providers ?? []} publications={data.publications ?? []} onReload={onReload} />;
 }
 
@@ -588,7 +588,7 @@ function ActivityView({ history, events, summary, observations }: { history: Pol
   return <section className="management-view"><span className="eyebrow">ACTIVITY</span><h2>Workspace status</h2><p className="muted">Live counts and redacted audit observations from the control plane. Data is limited to the assets your session can see.</p>{summary ? <div className="metric-grid">{[["Assets", summary.asset_count], ["Catalogs", summary.catalog_count], ["Draft changes", summary.draft_change_count], ["Missing policy", summary.missing_policy_count], ["Enabled auth", summary.enabled_auth_provider_count]].map(([label, value]) => <div className="metric-card" key={String(label)}><strong>{String(value)}</strong><span>{label}</span></div>)}</div> : <div className="empty-result"><strong>Status unavailable</strong><p>Reconnect with a session that can read workspace observations.</p></div>}{observations && <div className="form-card observation-card"><h3>Runtime observation</h3><p><span className={"status-dot " + (observations.available ? "ready" : "unavailable")} /> {observations.available ? "Control plane connected" : "Workspace unavailable"}</p>{observations.generation ? <p><strong>Active generation:</strong> <code>{observations.generation.publication_id.slice(0, 12)}</code> · {observations.generation.status}</p> : <p>No active publication is recorded.</p>}<p className="help">Data-plane health: <strong>{observations.data_plane.status}</strong> ({observations.data_plane.reason}). Observed {new Date(observations.observed_at).toLocaleString()} from {observations.source}.</p></div>}<h3 className="activity-title">Recent governed actions</h3>{events.length ? <ul className="activity-list">{events.slice(0, 8).map((event) => <li key={event.id}><span className={"status-dot " + (event.outcome === "success" ? "ready" : "unavailable")} /><div><strong>{event.action}</strong><small>{event.actor} · {event.resource_type} {event.resource_id.slice(0, 8)}</small></div><time>{new Date(event.created_at).toLocaleString()}</time></li>)}</ul> : history.length ? <ul className="activity-list">{history.slice(-8).reverse().map((item) => <li key={`${item.asset_id}-${item.policy_version}`}><span className="status-dot ready" /><div><strong>{item.asset_name}</strong><small>Policy version {item.policy_version} · {item.active ? "active" : "published"}</small></div><time>{new Date(item.created_at).toLocaleString()}</time></li>)}</ul> : <div className="empty-result"><strong>No activity yet</strong><p>Draft, restore, and publication actions will appear here after the first governed change.</p></div>}</section>;
 }
 
-function ConnectionsView({ catalogs, publications, plugins, pluginStates, canActivate, onReload }: { catalogs: Catalog[]; publications: WorkspacePublication[]; plugins: PluginDescriptor[]; pluginStates: PluginState[]; canActivate: boolean; onReload: () => void }) {
+function ConnectionsView({ catalogs, publications, plugins, pluginStates, pluginPairs, canActivate, onReload }: { catalogs: Catalog[]; publications: WorkspacePublication[]; plugins: PluginDescriptor[]; pluginStates: PluginState[]; pluginPairs: PluginPair[]; canActivate: boolean; onReload: () => void }) {
   const [name, setName] = useState("");
   const catalogPlugins = plugins.filter((plugin) => plugin.kind === "catalog");
   const [pluginId, setPluginId] = useState(catalogPlugins[0]?.plugin_id ?? "iceberg.sql");
@@ -640,7 +640,8 @@ function ConnectionsView({ catalogs, publications, plugins, pluginStates, canAct
     if (!target || !identifier) return setMessage("The discovered table has no safe identifier.");
     const catalogRow = catalogs.find((item) => item.name === catalog);
     const catalogPluginId = catalogRow?.module === "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog" ? "iceberg.sql" : catalogRow?.module;
-    const formatPlugin = plugins.find((plugin) => plugin.kind === "table_format" && (catalogPluginId === "iceberg.sql" ? plugin.plugin_id === "iceberg" : plugin.plugin_id !== "iceberg"));
+    const formatId = pluginPairs.find((pair) => pair.catalog_plugin_id === catalogPluginId)?.format_plugin_id;
+    const formatPlugin = plugins.find((plugin) => plugin.kind === "table_format" && plugin.plugin_id === formatId);
     if (!formatPlugin) return setMessage("No admitted table-format adapter is available for this catalog.");
     try { await controlPlane.saveAsset(catalog, target, formatPlugin.plugin_id, identifier); setMessage(`Governed asset ${target} registered. Assign owners and author a policy in Assets.`); await discover(catalog); } catch { setMessage("Asset registration was rejected; the source table was not changed."); }
   }
