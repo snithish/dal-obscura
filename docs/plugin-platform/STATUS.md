@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `fb394d6` (descriptor field enforcement;
+Implementation follow-up through `af14daa` (catalog lifecycle conformance;
+descriptor field enforcement;
 discovery page boundary;
 core table-handle boundary;
 core option boundary;
@@ -229,6 +230,8 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   values before factory invocation.
   The conformance runner now fails a plugin that omits `close()` instead of
   treating missing cleanup as a pass.
+  Catalog conformance also executes `validate_config()` and structured namespace
+  listing before table traversal, failing plugins that omit either operation.
   REST catalog namespace lifecycle now honors provider-scoped traversal and
   safely filters bounded root listings for legacy providers.
   Catalog revisions are now returned in workspace metadata and accepted as an
@@ -423,6 +426,17 @@ providers before Phase A's security/correctness prerequisites are accepted.
   (23 passed), Ruff, Ty, and `git diff --check`.
 - Remaining gaps: provider interruption, real consumer cleanup, and external wheel
   evidence remain open. Pickle compatibility is unchanged.
+
+### X15 catalog lifecycle conformance — `af14daa`
+
+- State: implementing.
+- Behavior: catalog conformance now requires and executes config validation and
+  namespace listing before bounded table discovery; missing lifecycle operations
+  fail the run.
+- Green evidence: conformance runner suite (24 passed), Ruff, Ty, and
+  `git diff --check`.
+- Remaining gaps: live provider timeout/termination, consumer cleanup, and external
+  wheel evidence remain open. Pickle compatibility is unchanged.
 
 ### X16 REST namespace lifecycle — `8c73c41`
 
