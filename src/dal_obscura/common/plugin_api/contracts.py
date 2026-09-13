@@ -33,6 +33,8 @@ _MAX_CONFIG_SCHEMA_NODES = 256
 _MAX_CONFIG_SCHEMA_STRING = 512
 _MAX_IDENTIFIER_SEGMENTS = 32
 _MAX_IDENTIFIER_SEGMENT_LENGTH = 256
+_MAX_DISCOVERY_PAGE_ENTRIES = 500
+_MAX_CONTINUATION_LENGTH = 4_096
 _MAX_OPTION_DEPTH = 8
 _MAX_OPTION_NODES = 512
 _MAX_OPTION_STRING = 4_096
@@ -132,6 +134,18 @@ class DiscoveryPage:
 
     entries: tuple[TableIdentifier, ...]
     continuation: str | None = None
+
+    def __post_init__(self) -> None:
+        if len(self.entries) > _MAX_DISCOVERY_PAGE_ENTRIES:
+            raise ValueError("Discovery page contains too many entries")
+        if any(not isinstance(entry, TableIdentifier) for entry in self.entries):
+            raise ValueError("Discovery page entries must be table identifiers")
+        if self.continuation is not None and (
+            not self.continuation
+            or len(self.continuation) > _MAX_CONTINUATION_LENGTH
+            or any(ord(char) < 0x20 or ord(char) == 0x7F for char in self.continuation)
+        ):
+            raise ValueError("Discovery continuation must be bounded printable text")
 
 
 @dataclass(frozen=True, slots=True)

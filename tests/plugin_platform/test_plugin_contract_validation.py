@@ -19,6 +19,7 @@ from dal_obscura_plugin_api import (
 
 from dal_obscura.common.plugin_api.contracts import (
     CatalogConfig,
+    DiscoveryPage,
     ExecutionContext,
     PluginDescriptor,
     SchemaDescriptor,
@@ -138,6 +139,15 @@ def test_plugin_contract_value_objects_validate_generation_and_schema_identity()
             handle_version=1,
             metadata={"provider": object()},
         )
+    with pytest.raises(ValueError, match="too many entries"):
+        DiscoveryPage(
+            tuple(
+                TableIdentifier(namespace=("default",), name=f"table-{index}")
+                for index in range(501)
+            )
+        )
+    with pytest.raises(ValueError, match="printable"):
+        DiscoveryPage((), continuation="bad\ncontinuation")
 
     with pytest.raises(ValueError, match="SHA-256"):
         SchemaDescriptor(schema_version=1, fingerprint="bad", arrow_schema=pa.schema([]))
