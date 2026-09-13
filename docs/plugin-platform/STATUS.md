@@ -46,6 +46,14 @@ Follow-up `docs/plugin-platform/BASELINE_20260914.md` was corrected after
 source inspection: the standalone SDK is the sole current contract validator;
 `common/plugin_api` now owns only registry, lockfile and lifecycle infrastructure.
 
+## Implementation update — 96573bb (2026-09-14)
+
+- Packet / status / candidate commit / owner: N02/F13 partial / VERIFY / `96573bb` / control-plane API.
+- Observable behavior delivered: the retired `/v1/assets/{asset_id}/policy-rules` and `/v1/assets/{asset_id}/policy-preview` handlers are deleted. The revisioned `/draft`, `/policy-evaluate`, `/policy-review`, and `/policy-versions` routes remain the sole policy workflow; the absence test confirms the retired path cannot dispatch or reveal resource metadata.
+- Changed paths: `control_plane/interfaces/routes/policies.py` and its owning API test. No persisted policy records, internal evaluator helper, pickle serializer, serialized class, or payload changed. Production logical SLOC decreased by 9; test logical SLOC increased by 5 for the explicit 405/no-leak assertion.
+- Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane/test_assets_api.py tests/architecture/test_control_plane_route_inventory.py -q` — 17 passed; changed-route Ruff check — passed.
+- Remaining N02/F13 work: verify all direct callers and remove any obsolete lock/config aliases in their owning slices; preserve internal evaluation and published history. Release remains HOLD.
+
 READY means all prerequisites pass. OPEN means remaining work with prerequisites
 not yet complete. ACTIVE means an agent owns a bounded slice. VERIFY means code
 exists but required execution or human evidence is missing. DONE requires every
