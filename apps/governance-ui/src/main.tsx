@@ -558,6 +558,7 @@ const TREE_OVERSCAN = 8;
 function VirtualSchemaTree({ nodes, selectedField, effectiveFields, onField, forceExpanded = false }: { nodes: SchemaNode[]; selectedField: string; effectiveFields: Set<string>; onField: (name: string) => void; forceExpanded?: boolean }) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(nodes.filter((node) => node.children?.length).map((node) => node.human_path)));
   const [scrollTop, setScrollTop] = useState(0);
+  const viewportRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     setExpanded(new Set(nodes.filter((node) => node.children?.length).map((node) => node.human_path)));
     setScrollTop(0);
@@ -571,15 +572,26 @@ function VirtualSchemaTree({ nodes, selectedField, effectiveFields, onField, for
     if (next.has(path)) next.delete(path); else next.add(path);
     return next;
   });
-  const focusIndex = (index: number) => document.querySelector<HTMLElement>(`[data-schema-index="${index}"]`)?.focus();
-  return <div className="field-tree-viewport" role="tree" aria-label="Schema fields" style={{ maxHeight: TREE_VIEWPORT_HEIGHT }} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}><div className="field-tree-window" style={{ height: flattened.length * TREE_ROW_HEIGHT }}>{windowed.map(({ node, depth, index }) => {
+  const focusIndex = (index: number) => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const targetTop = index * TREE_ROW_HEIGHT;
+    const visibleTop = viewport.scrollTop;
+    const visibleBottom = visibleTop + TREE_VIEWPORT_HEIGHT;
+    if (targetTop < visibleTop || targetTop + TREE_ROW_HEIGHT > visibleBottom) {
+      viewport.scrollTo({ top: Math.max(0, targetTop - (TREE_VIEWPORT_HEIGHT - TREE_ROW_HEIGHT) / 2) });
+    }
+    window.requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-schema-index="${index}"]`)?.focus());
+  };
+  return <div ref={viewportRef} className="field-tree-viewport" role="tree" aria-label="Schema fields" aria-setsize={flattened.length} style={{ maxHeight: TREE_VIEWPORT_HEIGHT }} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}><div className="field-tree-window" style={{ height: flattened.length * TREE_ROW_HEIGHT }}>{windowed.map(({ node, depth, index }) => {
     const hasChildren = Boolean(node.children?.length);
     const isExpanded = hasChildren && (forceExpanded || expanded.has(node.human_path));
-    return <div className="field-tree-item" key={node.human_path} data-schema-index={index} role="treeitem" aria-level={depth + 1} aria-expanded={hasChildren ? isExpanded : undefined} style={{ top: index * TREE_ROW_HEIGHT }} tabIndex={selectedField === node.human_path ? 0 : -1} onKeyDown={(event) => {
+    return <div className="field-tree-item" key={node.human_path} data-schema-index={index} role="treeitem" aria-level={depth + 1} aria-posinset={index + 1} aria-setsize={flattened.length} aria-expanded={hasChildren ? isExpanded : undefined} style={{ top: index * TREE_ROW_HEIGHT }} tabIndex={selectedField === node.human_path ? 0 : -1} onKeyDown={(event) => {
       if (event.key === "ArrowRight" && hasChildren && !isExpanded) { event.preventDefault(); toggle(node.human_path); }
       else if (event.key === "ArrowLeft" && hasChildren && isExpanded && !forceExpanded) { event.preventDefault(); toggle(node.human_path); }
       else if (event.key === "ArrowDown" && index < flattened.length - 1) { event.preventDefault(); focusIndex(index + 1); }
       else if (event.key === "ArrowUp" && index > 0) { event.preventDefault(); focusIndex(index - 1); }
+      else if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onField(node.human_path); }
     }}><div className="field-row-wrap">{hasChildren ? <button className="tree-toggle" type="button" aria-label={`${isExpanded ? "Collapse" : "Expand"} ${node.human_path}`} aria-expanded={isExpanded} onClick={() => toggle(node.human_path)}>{isExpanded ? "▾" : "▸"}</button> : <span className="tree-toggle spacer" aria-hidden="true" /> }<button className={selectedField === node.human_path ? "field-row selected" : "field-row"} style={{ paddingLeft: `${8 + depth * 16}px` }} onClick={() => onField(node.human_path)} aria-label={`Select ${node.human_path}`}><span className="field-name">{node.name}</span><span className="field-type">{node.type}{node.nullable ? " · nullable" : ""}</span>{effectiveFields.has(node.human_path) && <span className="grant">Granted</span>}</button></div></div>;
   })}</div></div>;
 }
