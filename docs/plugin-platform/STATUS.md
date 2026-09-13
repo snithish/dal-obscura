@@ -124,7 +124,7 @@ Follow-up `c77162d` normalizes an omitted additive session-capability field to a
 empty list during rolling upgrades, preserving a fail-closed management shell
 when an older control-plane instance is briefly serving the UI.
 
-Follow-up `pending` advances workspace, inventory, and management epochs during
+Follow-up `86c0b7a` advances workspace, inventory, and management epochs during
 component teardown in addition to aborting requests, closing the final fallback
 race where session-option work could pass a stale-state check after unmount.
 
