@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `12a2043` (exact UI image/release manifest CI;
+Implementation follow-up through `233ae3f` (live Python/DuckDB consumer fixture;
+exact UI image/release manifest CI;
 operator lock-generation docs;
 review-probe reconciliation;
 installed-wheel plugin-lock CI;
@@ -3027,6 +3028,16 @@ otherwise continue locally executable X06/X07/X08 acceptance work
 - Remaining gaps: hosted execution, signed attestations/SBOM retrieval, exact
   wheel/image artifact comparison, browser/provider/consumer/recovery/capacity
   qualification, and independent review remain open.
+
+### Live PostgreSQL and consumer qualification — `233ae3f`
+
+- State: implementing-unverified.
+- Behavior: the governed Python/DuckDB consumer lane now uses a two-row nested
+  golden fixture, so Arrow row-count and DuckDB aggregate parity assertions
+  exercise multiple authorized nested rows.
+- Green evidence: `DAL_OBSCURA_POSTGRES_TEST_URL=postgresql+psycopg://dal_obscura:dal_obscura_test_password@127.0.0.1:15432/dal_obscura UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/integration/control_plane/test_publication_races.py tests/integration/test_recovery_upgrade.py -q` (8 passed), and `DAL_OBSCURA_RUN_CONSUMER_TESTS=1 UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/consumers/test_governed_reads.py -q` (1 passed). PostgreSQL image: `postgres:16.4-alpine`, Linux arm64, pulled repository digests `sha256:5660c2cbfea50c7a9127d17dc4e48543eedd3d7a41a595a2dfa572471e37e64c` and `sha256:ab472914707ce7b505750a96d769feb4136cbe5b40dc993116a3a3a1bac40631`.
+- Remaining gaps: TLS/OIDC consumer matrix, Spark/JVM execution, provider endpoints,
+  recovery RPO/RTO measurement, and independent release review remain open.
 
 ## Evidence entry template
 
