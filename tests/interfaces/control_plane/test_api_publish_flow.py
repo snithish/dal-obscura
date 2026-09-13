@@ -85,14 +85,37 @@ def test_api_provisions_and_activates_default_policy_version():
         headers=headers,
     )
 
-    published = client.post(
+    published_response = client.post(
         f"/v1/assets/{asset['id']}/policy-versions",
-        headers=headers,
+        headers={**headers, "Idempotency-Key": "publish-001"},
+    )
+    published = published_response.json()
+    replayed = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        headers={**headers, "Idempotency-Key": "publish-001"},
     ).json()
+
+    assert published_response.status_code == 200
+    assert replayed == published
+
+    operation = client.get(
+        f"/v1/assets/{asset['id']}/policy-operations/publish-001",
+        headers=headers,
+    )
 
     assert catalog["name"] == "analytics"
     assert published["asset_id"] == asset["id"]
     assert published["policy_version"] > 0
+    assert operation.status_code == 200
+    assert operation.json()["status"] == "committed"
+    assert operation.json()["result"] == published
+
+    conflicting = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        json={"expected_draft_revision": 0},
+        headers={**headers, "Idempotency-Key": "publish-001"},
+    )
+    assert conflicting.status_code == 409
 
     session_maker = session_factory(engine)
     with session_maker() as db_session:
