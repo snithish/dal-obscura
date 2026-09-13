@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `5b152aa` (external-catalog Iceberg schema bridge;
+Implementation follow-up through `c52fc89` (bounded provider field identities;
+external-catalog Iceberg schema bridge;
 catalog mutation lock ordering;
 workspace generation lock ordering;
 direct policy mutation locking;
@@ -347,6 +348,9 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   storage egress allowlist before any storage access, preserving the public
   catalog identity boundary while keeping legacy Iceberg and pickle paths
   unchanged.
+  Arrow provider field IDs are now bounded, UTF-8, and printable before they
+  become stable identities; malformed metadata falls back to a schema-scoped
+  synthetic identity and cannot widen a reviewed field grant.
   Both service composition roots now accept an optional operator-mounted
   `DAL_OBSCURA_PLUGIN_LOCK_FILE`; its bounded parser rejects symlinks,
   group/world-writable files, malformed identities, duplicates, and incomplete
@@ -491,6 +495,18 @@ providers before Phase A's security/correctness prerequisites are accepted.
   `git diff --check`.
 - Remaining gaps: live REST provider, TLS/OIDC, clean wheel, and mixed-version
   migration evidence remain open.
+
+### X06 bounded provider field identities — `c52fc89`
+
+- State: implementing.
+- Behavior: provider field IDs read from Arrow metadata must be valid UTF-8,
+  printable, non-empty, and at most 128 characters. Invalid metadata is treated
+  as absent and receives a schema-scoped synthetic identity, so malformed IDs
+  cannot become trusted stable grant keys.
+- Green evidence: `tests/infrastructure/adapters/test_published_config.py`
+  (26 passed), Ruff, Ty, and `git diff --check`.
+- Remaining gaps: live provider-derived IDs and the complete schema-evolution
+  acceptance matrix remain open.
 
 ### X03 direct mutation row locks — `165015f`
 
