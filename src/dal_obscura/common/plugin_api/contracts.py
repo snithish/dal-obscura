@@ -12,6 +12,9 @@ from typing import Literal, Protocol
 import pyarrow as pa
 
 PluginKind = Literal["catalog", "table_format"]
+PLUGIN_API_VERSION = "1"
+SUPPORTED_PLUGIN_API_VERSIONS = frozenset({PLUGIN_API_VERSION})
+SUPPORTED_PLUGIN_CONFIG_VERSIONS = frozenset({1})
 _PLUGIN_ID = re.compile(r"[a-z][a-z0-9_.-]{0,63}\Z")
 SUPPORTED_CAPABILITIES = frozenset(
     {

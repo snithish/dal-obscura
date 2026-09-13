@@ -5,7 +5,10 @@ perform authorization or expose the control-plane database.
 """
 
 from dal_obscura.common.plugin_api.contracts import (
+    PLUGIN_API_VERSION,
     SUPPORTED_CAPABILITIES,
+    SUPPORTED_PLUGIN_API_VERSIONS,
+    SUPPORTED_PLUGIN_CONFIG_VERSIONS,
     CatalogConfig,
     CatalogFactory,
     CatalogPlugin,
@@ -28,7 +31,10 @@ from dal_obscura.common.plugin_api.registry import (
 )
 
 __all__ = [
+    "PLUGIN_API_VERSION",
     "SUPPORTED_CAPABILITIES",
+    "SUPPORTED_PLUGIN_API_VERSIONS",
+    "SUPPORTED_PLUGIN_CONFIG_VERSIONS",
     "CatalogConfig",
     "CatalogFactory",
     "CatalogPlugin",

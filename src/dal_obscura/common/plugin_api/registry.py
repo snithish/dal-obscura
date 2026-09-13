@@ -11,7 +11,12 @@ from pathlib import Path
 from threading import RLock
 from typing import Any, Literal, cast
 
-from dal_obscura.common.plugin_api.contracts import PluginDescriptor, PluginKind
+from dal_obscura.common.plugin_api.contracts import (
+    SUPPORTED_PLUGIN_API_VERSIONS,
+    SUPPORTED_PLUGIN_CONFIG_VERSIONS,
+    PluginDescriptor,
+    PluginKind,
+)
 
 ENTRY_POINT_GROUPS: dict[PluginKind, str] = {
     "catalog": "dal_obscura.catalogs.v1",
@@ -19,8 +24,6 @@ ENTRY_POINT_GROUPS: dict[PluginKind, str] = {
 }
 STATIC_DESCRIPTOR_FILENAME = "dal_obscura-plugin.json"
 MAX_STATIC_DESCRIPTOR_BYTES = 65_536
-SUPPORTED_PLUGIN_API_VERSIONS = frozenset({"1"})
-SUPPORTED_PLUGIN_CONFIG_VERSIONS = frozenset({1})
 _PLUGIN_ID = re.compile(r"[a-z][a-z0-9_.-]{0,63}\Z")
 _MODULE_PATH = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*\Z")
 
