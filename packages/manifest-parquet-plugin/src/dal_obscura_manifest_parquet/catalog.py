@@ -21,7 +21,10 @@ from dal_obscura_plugin_api import (
     TableIdentifier,
 )
 
-from dal_obscura.common.schema_identity import canonical_provider_field_id
+from dal_obscura.common.schema_identity import (
+    MAX_PROVIDER_FIELD_ID_LENGTH,
+    canonical_provider_field_id,
+)
 
 _MAX_MANIFEST_BYTES = 1_048_576
 _MAX_TABLES = 10_000
@@ -209,7 +212,11 @@ def _load_manifest(  # noqa: C901
         except Exception as exc:
             raise ValueError("manifest table schema is invalid") from exc
         if not isinstance(raw_field_ids, list) or any(
-            not isinstance(item, str) or not item for item in raw_field_ids
+            not isinstance(item, str)
+            or not item
+            or len(item) > MAX_PROVIDER_FIELD_ID_LENGTH
+            or any(ord(char) < 0x20 or ord(char) == 0x7F for char in item)
+            for item in raw_field_ids
         ):
             raise ValueError("manifest field IDs are invalid")
         if len(raw_field_ids) != len(schema):

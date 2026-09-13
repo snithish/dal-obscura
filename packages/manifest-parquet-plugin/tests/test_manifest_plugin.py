@@ -212,6 +212,25 @@ def test_manifest_rejects_member_escape_and_schema_drift(tmp_path):
         raise AssertionError("expected manifest member escape rejection")
 
 
+@pytest.mark.parametrize("field_id", ["bad\nvalue", "x" * 129])
+def test_manifest_rejects_unsafe_provider_field_ids(tmp_path, field_id):
+    _root, manifest, _table = _write_fixture(tmp_path)
+    payload = json.loads(manifest.read_text())
+    payload["tables"]["default.users"]["field_ids"][0] = field_id
+    manifest.write_text(json.dumps(payload))
+
+    with pytest.raises(ValueError, match="field IDs"):
+        ManifestCatalog(
+            CatalogConfig(
+                plugin_id="manifest",
+                instance_id="fixture",
+                revision=1,
+                options={"root": str(tmp_path / "dataset"), "manifest_path": str(manifest)},
+            ),
+            _context(),
+        )
+
+
 def test_manifest_rejects_symlinked_member(tmp_path):
     root, manifest, _table = _write_fixture(tmp_path)
     link = root / "linked.parquet"
