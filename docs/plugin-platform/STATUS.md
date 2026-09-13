@@ -597,25 +597,25 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   principals, tables, URIs, and correlation IDs cannot become metric labels.
   Standalone package test modules now have unique import names and root pytest
   explicitly includes each package source path, removing cross-package collection
-  collisions. Capacity profiling, benchmark thresholds, test-lane timing, and
-  dead-code inventory remain open. The E2E Flight harness now uses bounded
-  loopback readiness polling with a hard timeout and captured child diagnostics
-  instead of a fixed startup sleep.
+  collisions. The executable capacity runner/runbook and source-backed dead-code
+  inventory are now in place; benchmark thresholds, the 60-minute mixed
+  workload, and measured test-lane timing remain open. The E2E Flight harness
+  now uses bounded loopback readiness polling with a hard timeout and captured
+  child diagnostics instead of a fixed startup sleep.
 - X22 exact-artifact CI: **implementing**; the container publication job now
   depends on a pinned governance-UI install/type-check/build lane, and the Python
   type-check lane now resolves both independently buildable plugin package source
   roots explicitly, and standalone plugin wheel tests now gate image publication.
   A required dependency-audit job now exports the frozen production Python lock,
   runs `pip-audit --strict`, audits the locked UI dependencies, and is a container
-  promotion prerequisite.
-  Artifact
-  digest, browser, provider, consumer, recovery, and mandatory-security gates
-  remain open.
+  promotion prerequisite. Required integration/consumer/PostgreSQL lanes now
+  fail on pytest skips through a JUnit gate. Artifact digest, browser, provider,
+  consumer, recovery, and mandatory-security gates remain open.
 - X23 independent review/release decision: **not-started**.
 
-Next implementation action: continue X03 with PostgreSQL barrier/CAS evidence and
-then complete X06 provider-derived and collection field identity rules. Do not add new
-providers before Phase A's security/correctness prerequisites are accepted.
+Next implementation action: execute the X21 capacity workload and X22 hosted
+artifact/browser/provider/recovery gates on their required runners. Do not add
+new providers before Phase A's security/correctness prerequisites are accepted.
 
 ### X22 locked dependency audit — `9941211`
 
