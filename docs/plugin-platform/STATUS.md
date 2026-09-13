@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `9941211` (locked Python/UI dependency audit;
+Implementation follow-up through `959a03f` (IO boundary qualification tests;
+locked Python/UI dependency audit;
 Python/DuckDB consumer CI lane;
 secure-local parity contract tests;
 executable backup integrity tests;
@@ -286,6 +287,9 @@ production build, Ruff, and Ty with the public SDK source path configured.
   validation accepts only the bounded `secret`/`scope` shape. The Connections UI
   emits that scope automatically for every secret field, so normal authoring uses
   the same boundary without asking operators to hand-edit JSON.
+  The integration IO-boundary suite now composes storage-root, catalog-egress, and
+  REST endpoint rejection checks; live DNS pinning, redirect handling, and provider
+  secret lifecycle evidence remain open.
 - X08 budgets and atomic reload: **implementing**; discovery now bounds provider
   iterators before materialization and checks cancellation/deadline per item while
   retaining deque traversal. Synthetic evaluation now bounds encoded fixture bytes
@@ -601,6 +605,16 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Green evidence: CI workflow contract suite (5) and `git diff --check` passed.
 - Remaining gaps: hosted dependency-audit execution, exact wheel/image provenance,
   provider/consumer/browser/recovery gates, and independent release review remain open.
+
+### X07 IO boundary qualification — `959a03f`
+
+- State: implementing.
+- Behavior: the integration boundary suite exercises canonical storage-root checks,
+  catalog host allowlists, URI credential/query rejection, and REST HTTPS/warehouse
+  endpoint validation before provider setup.
+- Green evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/integration/test_io_boundary.py -q` (6 passed), Ruff, and `git diff --check` passed.
+- Remaining gaps: live redirect/DNS behavior, provider-returned location enforcement
+  against real endpoints, secret-provider lifecycle, and production egress evidence remain open.
 
 ### X09 virtualized tree keyboard navigation — `c701665`
 
