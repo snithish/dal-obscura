@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `80fedc2` (direct policy mutation locking;
+Implementation follow-up through `3bd526c` (workspace generation lock ordering;
+direct policy mutation locking;
 bounded discovery page typing;
 table-handle identity binding;
 public page-entry bounds;
@@ -555,6 +556,19 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Remaining gaps: PostgreSQL barrier interleavings, full revision/CAS coverage,
   and multi-process grant/binding evidence remain open. Pickle compatibility is
   unchanged.
+
+### X03 workspace generation lock ordering — `3bd526c`
+
+- State: implementing.
+- Behavior: publication acquires the workspace cell lock after its asset lock
+  and before reading/compiling the candidate. Runtime settings and auth-provider
+  repository mutations acquire that same cell lock internally, preventing
+  workspace-generation inputs from committing between candidate construction
+  and activation.
+- Green evidence: policy-version, publication-store, workspace API, and publish
+  flow suites (18 passed), Ruff, Ty, and `git diff --check`.
+- Remaining gaps: PostgreSQL barrier/process evidence and failure injection at
+  every transaction boundary remain open. Pickle compatibility is unchanged.
 
 ### X12 plugin lock identity validation — `ca88316`
 
