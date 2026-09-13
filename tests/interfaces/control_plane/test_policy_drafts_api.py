@@ -43,3 +43,14 @@ def test_policy_draft_body_is_hidden_from_non_owner() -> None:
     response = client.get(f"/v1/assets/{asset}/draft", headers=_bearer("outsider-token"))
 
     assert response.status_code == 403
+
+
+def test_policy_draft_save_rejects_unknown_asset_before_creating_state() -> None:
+    client = _client()
+    response = client.put(
+        "/v1/assets/00000000-0000-0000-0000-000000000000/draft",
+        json={"expected_revision": 0, "rules": [_allow_rule(row_filter=None)]},
+        headers=_bearer("owner-token"),
+    )
+
+    assert response.status_code in {403, 404}

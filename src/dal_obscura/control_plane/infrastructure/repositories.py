@@ -1101,12 +1101,17 @@ class PublicationStore:
         content_hash: str,
         base_policy_version: int,
     ) -> dict[str, object]:
+        # Draft content participates in review validity and publication. Lock
+        # the asset before reading the draft so a concurrent grant, owner,
+        # schema, or binding mutation cannot race this compare-and-swap.
+        if self._locked_asset(asset_id) is None:
+            raise LookupError(f"No asset {asset_id}")
         record = self._session.scalar(
             select(AssetPolicyDraftRecord).where(
                 AssetPolicyDraftRecord.asset_id == asset_id,
                 AssetPolicyDraftRecord.author_principal == author_principal,
                 AssetPolicyDraftRecord.discarded_at.is_(None),
-            )
+            ).with_for_update()
         )
         current_revision = 0 if record is None else record.revision
         if current_revision != expected_revision:
