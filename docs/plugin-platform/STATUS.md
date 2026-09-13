@@ -99,7 +99,7 @@ effective asset capabilities, with route-inventory assertions that prevent
 future untyped contract drift. Local issuer omission remains compatible with
 the established response shape.
 
-Follow-up `pending` validates helper/service payloads into those response models
+Follow-up `4f65f4b` validates helper/service payloads into those response models
 inside the routes, removing the production type-check diagnostics caused by the
 generic service wrapper while retaining the same JSON contract.
 
