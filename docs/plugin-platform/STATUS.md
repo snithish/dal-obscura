@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `b5dd0d4` (public discovery concurrency bound;
+Implementation follow-up through `7b12b68` (public continuation validation;
+public discovery concurrency bound;
 plugin lock identity validation;
 publication rollback coverage;
 idempotency-key validation;
@@ -561,6 +562,18 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Remaining gaps: cross-worker aggregate limits, provider interruption, and
   live timeout/termination evidence remain open. Pickle compatibility is
   unchanged.
+
+### X13 public continuation validation — `7b12b68`
+
+- State: implementing.
+- Behavior: the data-plane public catalog bridge now validates continuation
+  tokens as bounded printable strings before hashing or retaining traversal
+  state. Malformed, oversized, control-character, and unhashable provider
+  values fail closed with deterministic validation errors.
+- Green evidence: public plugin adapter suite (15 passed), Ruff, and
+  `git diff --check`.
+- Remaining gaps: live provider pagination, cross-worker capacity, and external
+  wheel/consumer evidence remain open. Pickle compatibility is unchanged.
 
 ### X07/X14 asset binding validation — `3c3709b`
 
