@@ -16,11 +16,13 @@ from pyiceberg.types import (
     StructType,
 )
 
+from dal_obscura.common.schema_identity import schema_scope_digest
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control_plane.application.schema_service import (
     MAX_SCHEMA_DEPTH,
     MAX_SCHEMA_NODES,
+    _arrow_field_id,
     get_asset_schema,
     schema_fingerprint,
 )
@@ -146,6 +148,24 @@ def test_get_asset_schema_returns_typed_nested_paths() -> None:
         "attributes.$key",
         "attributes.$value",
     ]
+
+
+def test_arrow_synthetic_field_ids_are_schema_scoped() -> None:
+    integer_schema = pa.schema([pa.field("value", pa.int64())])
+    string_schema = pa.schema([pa.field("value", pa.string())])
+
+    integer_id = _arrow_field_id(
+        integer_schema.field("value"),
+        ("value",),
+        schema_scope_digest(integer_schema),
+    )
+    string_id = _arrow_field_id(
+        string_schema.field("value"),
+        ("value",),
+        schema_scope_digest(string_schema),
+    )
+
+    assert integer_id != string_id
 
 
 def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None:  # noqa: C901

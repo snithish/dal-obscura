@@ -27,7 +27,7 @@ from dal_obscura.common.schema_bounds import (
     MAX_SCHEMA_NODES,
     validate_arrow_schema_bounds,
 )
-from dal_obscura.common.schema_identity import schema_has_stable_ids
+from dal_obscura.common.schema_identity import schema_has_stable_ids, schema_scope_digest
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.catalog_service import validate_catalog_options
 from dal_obscura.control_plane.application.errors import ValidationFailure
@@ -77,7 +77,10 @@ def get_asset_schema(
                 for field in schema.fields
             ]
             if isinstance(schema, Schema)
-            else [_arrow_field_node(field, (field.name,)) for field in arrow_schema]
+            else [
+                _arrow_field_node(field, (field.name,), schema_scope_digest(arrow_schema))
+                for field in arrow_schema
+            ]
         ),
     }
 
@@ -381,8 +384,12 @@ def _field_node(field: NestedField, path: tuple[FieldPathSegment, ...]) -> dict[
     return node
 
 
-def _arrow_field_node(field: pa.Field, path: tuple[str, ...]) -> dict[str, object]:
-    field_id = _arrow_field_id(field, path)
+def _arrow_field_node(
+    field: pa.Field,
+    path: tuple[str, ...],
+    scope_digest: str,
+) -> dict[str, object]:
+    field_id = _arrow_field_id(field, path, scope_digest)
     field_type = field.type
     if pa.types.is_struct(field_type):
         kind = "struct"
@@ -405,7 +412,7 @@ def _arrow_field_node(field: pa.Field, path: tuple[str, ...]) -> dict[str, objec
     }
     if pa.types.is_struct(field_type):
         node["children"] = [
-            _arrow_field_node(child, (*path, child.name)) for child in field_type
+            _arrow_field_node(child, (*path, child.name), scope_digest) for child in field_type
         ]
     elif (
         pa.types.is_list(field_type)
@@ -413,12 +420,12 @@ def _arrow_field_node(field: pa.Field, path: tuple[str, ...]) -> dict[str, objec
         or pa.types.is_fixed_size_list(field_type)
     ):
         node["children"] = [
-            _arrow_field_node(field_type.value_field, (*path, "$element"))
+            _arrow_field_node(field_type.value_field, (*path, "$element"), scope_digest)
         ]
     elif pa.types.is_map(field_type):
         node["children"] = [
-            _arrow_field_node(field_type.key_field, (*path, "$key")),
-            _arrow_field_node(field_type.item_field, (*path, "$value")),
+            _arrow_field_node(field_type.key_field, (*path, "$key"), scope_digest),
+            _arrow_field_node(field_type.item_field, (*path, "$value"), scope_digest),
         ]
     return node
 
@@ -437,7 +444,7 @@ def _arrow_field_path(path: tuple[str, ...], field_id: int) -> dict[str, object]
     return FieldPath(tuple(segments)).to_wire()
 
 
-def _arrow_field_id(field: pa.Field, path: tuple[str, ...]) -> int:
+def _arrow_field_id(field: pa.Field, path: tuple[str, ...], scope_digest: str) -> int:
     metadata = field.metadata or {}
     for key in (b"PARQUET:field_id", b"iceberg.field.id"):
         raw = metadata.get(key)
@@ -446,5 +453,5 @@ def _arrow_field_id(field: pa.Field, path: tuple[str, ...]) -> int:
                 return int(raw.decode("utf-8"))
             except (TypeError, ValueError):
                 break
-    digest = hashlib.sha256("\\x1f".join(path).encode("utf-8")).digest()
+    digest = hashlib.sha256("\x1f".join((scope_digest, *path)).encode("utf-8")).digest()
     return int.from_bytes(digest[:8], "big", signed=False)
