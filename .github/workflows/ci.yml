@@ -123,6 +123,49 @@ jobs:
           uv run pytest tests/interfaces tests/infrastructure tests/control_plane
           tests/examples tests/test_e2e_smoke.py -q
 
+  postgres-race-tests:
+    name: PostgreSQL concurrency gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:16.4-alpine
+        env:
+          POSTGRES_USER: dal_obscura
+          POSTGRES_PASSWORD: dal_obscura_test_password
+          POSTGRES_DB: dal_obscura
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dal_obscura -d dal_obscura"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install PostgreSQL test dependencies
+        run: uv sync --dev --extra server --extra postgres --frozen
+
+      - name: Run PostgreSQL barrier race tests
+        env:
+          DAL_OBSCURA_POSTGRES_TEST_URL: postgresql+psycopg://dal_obscura:dal_obscura_test_password@127.0.0.1:5432/dal_obscura
+        run: uv run pytest tests/integration/control_plane/test_publication_races.py -q
+
   python-package:
     name: Python package smoke
     runs-on: ubuntu-24.04
@@ -351,6 +394,7 @@ jobs:
       - python-quality
       - python-contract-tests
       - python-integration-tests
+      - postgres-race-tests
       - python-package
       - python-plugin-contract
       - python-plugin-integration
