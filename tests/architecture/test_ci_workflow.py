@@ -59,3 +59,14 @@ def test_ci_promotes_the_exact_scanned_image_digest() -> None:
     assert "name: Publish image" not in workflow
     assert "candidate-{2}" in workflow
     assert "github.sha" in workflow
+
+
+def test_ci_generates_plugin_lock_from_installed_wheels() -> None:
+    workflow = Path(".github/workflows/ci.yml").read_text()
+
+    assert "Generate and validate lock from installed plugin wheels" in workflow
+    assert "scripts/build_plugin_lock.py" in workflow
+    assert "--plugin catalog:iceberg.rest" in workflow
+    assert "--plugin catalog:manifest" in workflow
+    assert "--plugin table_format:parquet.dataset" in workflow
+    assert "load_plugin_lock_file" in workflow
