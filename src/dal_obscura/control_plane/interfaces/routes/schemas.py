@@ -129,6 +129,7 @@ class CatalogRequest(StrictModel):
         pattern=r"^[a-z][a-z0-9_.-]{0,63}$|^dal_obscura\.[A-Za-z0-9_.-]{1,255}$",
     )
     options: dict[str, Any] = Field(default_factory=dict)
+    expected_revision: int | None = Field(default=None, ge=0)
 
 
 class AssetRequest(StrictModel):

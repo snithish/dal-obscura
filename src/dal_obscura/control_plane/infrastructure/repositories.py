@@ -313,6 +313,7 @@ class PublicationStore:
         name: str,
         module: str,
         options: dict[str, Any],
+        expected_revision: int | None = None,
     ) -> UUID:
         existing = self._session.scalar(
             select(CatalogRecord).where(
@@ -322,6 +323,11 @@ class PublicationStore:
             ).with_for_update()
         )
         if existing is None:
+            if expected_revision not in (None, 0):
+                raise PublicationConflictError(
+                    "Catalog revision changed (expected "
+                    f"{expected_revision}, current 0); reread before writing."
+                )
             catalog_id = uuid4()
             self._session.add(
                 CatalogRecord(
@@ -334,6 +340,11 @@ class PublicationStore:
                 )
             )
         else:
+            if expected_revision is not None and existing.revision != expected_revision:
+                raise PublicationConflictError(
+                    "Catalog revision changed (expected "
+                    f"{expected_revision}, current {existing.revision}); reread before writing."
+                )
             catalog_id = existing.id
             if existing.module != module or existing.options_json != options:
                 existing.module = module
@@ -754,6 +765,7 @@ class PublicationStore:
                 "module": record.module,
                 "options": dict(record.options_json),
                 "status": "configured",
+                "revision": record.revision,
                 "discovered_table_count": 0,
                 "governed_asset_count": assets_by_catalog.get(record.id, 0),
             }

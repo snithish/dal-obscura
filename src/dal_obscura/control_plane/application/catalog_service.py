@@ -221,6 +221,7 @@ def upsert_workspace_catalog(
     options: dict[str, Any],
     egress_allowlist: tuple[str, ...] = (),
     *,
+    expected_revision: int | None = None,
     actor_principal: str = "system",
     plugin_registry: PluginRegistry | None = None,
 ) -> dict[str, str]:
@@ -246,6 +247,7 @@ def upsert_workspace_catalog(
         name=name,
         module=module,
         options=options,
+        expected_revision=expected_revision,
     )
     store.record_workspace_audit_event(
         cell_id=context.cell_id,

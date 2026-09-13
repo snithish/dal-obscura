@@ -169,3 +169,13 @@ def test_catalog_updates_advance_a_revision_only_when_configuration_changes(db_s
         options={"uri": "sqlite:///catalog-revised.db"},
     ) == catalog_id
     assert store.list_catalogs(cell_id)[0]["revision"] == 1
+
+    with pytest.raises(PublicationConflictError, match="Catalog revision changed"):
+        store.upsert_catalog(
+            cell_id=cell_id,
+            tenant_id=tenant_id,
+            name="analytics",
+            module="iceberg.sql",
+            options={"uri": "sqlite:///catalog-stale.db"},
+            expected_revision=0,
+        )

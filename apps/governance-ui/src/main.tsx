@@ -632,7 +632,8 @@ function ConnectionsView({ catalogs, publications, plugins, pluginStates, plugin
       if (!value) continue;
       options[field.name] = field.secret ? { secret: value } : value;
     }
-    try { await controlPlane.saveCatalog(name.trim(), pluginId === "iceberg.sql" ? "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog" : pluginId, options); setMessage("Connection saved. Discovery remains bounded to this configured catalog."); setName(""); setConfig({}); onReload(); } catch { setMessage("Connection was rejected by the control plane."); }
+    const existing = catalogs.find((catalog) => catalog.name === name.trim());
+    try { await controlPlane.saveCatalog(name.trim(), pluginId === "iceberg.sql" ? "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog" : pluginId, options, existing?.revision); setMessage("Connection saved. Discovery remains bounded to this configured catalog."); setName(""); setConfig({}); onReload(); } catch (error) { setMessage((error as { status?: number })?.status === 409 ? "Connection changed elsewhere. Refresh before saving again." : "Connection was rejected by the control plane."); }
   }
   async function discover(catalog: string) {
     try { setDiscoveredCatalog(catalog); setTables((await controlPlane.discoverCatalogTables(catalog)).tables); setMessage(`Loaded table inventory for ${catalog}.`); } catch { setTables([]); setMessage("Discovery failed; source credentials and endpoint policy were not changed."); }

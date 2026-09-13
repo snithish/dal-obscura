@@ -403,6 +403,7 @@ class ProvisioningService:
         name: str,
         module: str,
         options: dict[str, Any],
+        expected_revision: int | None = None,
         actor: ControlPlaneActor | None = None,
     ) -> dict[str, str]:
         return catalog_service.upsert_workspace_catalog(
@@ -410,6 +411,7 @@ class ProvisioningService:
             name=name,
             module=module,
             options=options,
+            expected_revision=expected_revision,
             egress_allowlist=self._catalog_egress_allowlist,
             actor_principal="system" if actor is None else actor.identity_key(),
             plugin_registry=self._plugin_registry,

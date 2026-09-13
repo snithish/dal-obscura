@@ -39,6 +39,7 @@ def test_workspace_catalog_upsert_bootstraps_default_workspace():
             "module": ICEBERG_CATALOG_MODULE,
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
             "status": "configured",
+            "revision": 0,
             "discovered_table_count": 0,
             "governed_asset_count": 0,
         }
@@ -55,6 +56,40 @@ def test_workspace_catalog_upsert_bootstraps_default_workspace():
         "module": ICEBERG_CATALOG_MODULE,
         "option_keys": ["type", "uri"],
     }
+
+
+def test_workspace_catalog_upsert_rejects_a_stale_revision():
+    client = _client()
+    first = client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+    assert first.status_code == 200
+    updated = client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog-new.db"},
+            "expected_revision": 0,
+        },
+        headers=ADMIN_HEADERS,
+    )
+    stale = client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"type": "sql", "uri": "sqlite:///catalog-stale.db"},
+            "expected_revision": 0,
+        },
+        headers=ADMIN_HEADERS,
+    )
+    assert updated.status_code == 200
+    assert stale.status_code == 409
+    assert "Catalog revision changed" in stale.json()["detail"]
 
 
 def test_workspace_catalog_rejects_non_iceberg_module():

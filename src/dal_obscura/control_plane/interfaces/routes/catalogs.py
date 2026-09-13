@@ -64,6 +64,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
                 name=name,
                 module=payload.module,
                 options=payload.options,
+                expected_revision=payload.expected_revision,
                 actor=actor,
             )
         )

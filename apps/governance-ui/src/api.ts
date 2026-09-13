@@ -158,6 +158,7 @@ export type Catalog = {
   name: string;
   module: string;
   options: Record<string, unknown>;
+  revision?: number;
 };
 
 export type CatalogDiagnostic = {
@@ -333,9 +334,9 @@ export const controlPlane = {
   listPlugins: () => request<{ plugins: PluginDescriptor[]; states: PluginState[]; pairs: PluginPair[] }>("/v1/plugins"),
   getSummary: () => request<WorkspaceSummary>("/v1/workspace/summary"),
   getObservations: () => request<WorkspaceObservations>("/v1/workspace/observations"),
-  saveCatalog: (name: string, module: string, options: Record<string, unknown>) => request<{ id: string; name: string }>(`/v1/catalogs/${encodeURIComponent(name)}`, {
+  saveCatalog: (name: string, module: string, options: Record<string, unknown>, expectedRevision?: number) => request<{ id: string; name: string }>(`/v1/catalogs/${encodeURIComponent(name)}`, {
     method: "PUT",
-    body: JSON.stringify({ module, options }),
+    body: JSON.stringify({ module, options, ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }) }),
   }),
   saveAsset: (catalog: string, target: string, backend: string, tableIdentifier: string) => request<{ id: string; catalog: string; target: string }>(`/v1/assets/${encodeURIComponent(catalog)}/${encodeURIComponent(target)}`, {
     method: "PUT",
