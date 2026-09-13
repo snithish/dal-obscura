@@ -43,6 +43,15 @@ def test_openapi_schema_describes_control_plane_api() -> None:
     assert payload["info"]["title"] == "dal-obscura control-plane API"
     assert "/v1/assets" in payload["paths"]
     assert "/v1/ui-auth-config" in payload["paths"]
+    runtime_get = payload["paths"]["/v1/settings/runtime"]["get"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"]
+    provider_get = payload["paths"]["/v1/settings/auth-providers"]["get"]["responses"]["200"][
+        "content"
+    ]["application/json"]["schema"]
+    assert runtime_get["anyOf"]
+    assert provider_get["type"] == "array"
+    assert provider_get["items"]["$ref"].endswith("AuthProviderResponse")
 
 
 def test_ui_paths_do_not_mask_missing_api_routes() -> None:

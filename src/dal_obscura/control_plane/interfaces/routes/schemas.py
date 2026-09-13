@@ -115,6 +115,26 @@ class RuntimeSettingsRequest(StrictModel):
     expected_revision: int | None = Field(default=None, ge=0)
 
 
+class RuntimeSettingsResponse(BaseModel):
+    """Authoritative runtime settings returned to management clients."""
+
+    ticket_ttl_seconds: int
+    max_tickets: int
+    max_ticket_exchanges: int
+    revision: int
+
+
+class AuthProviderResponse(BaseModel):
+    """Redacted authentication-provider record returned to management clients."""
+
+    id: str
+    ordinal: int
+    module: str
+    args: dict[str, Any]
+    enabled: bool
+    revision: int
+
+
 class CatalogRequest(StrictModel):
     """Catalog configuration request.
 
