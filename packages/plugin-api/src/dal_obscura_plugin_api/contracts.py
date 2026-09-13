@@ -22,6 +22,11 @@ _MAX_OPTION_DEPTH = 8
 _MAX_OPTION_NODES = 512
 _MAX_OPTION_STRING = 4_096
 _MAX_OPTION_KEYS = 64
+_MAX_HANDLE_METADATA_DEPTH = 12
+_MAX_HANDLE_METADATA_NODES = 2_048
+_MAX_HANDLE_METADATA_STRING = 1_048_576
+_MAX_HANDLE_METADATA_BYTES = 16 * 1_048_576
+_MAX_HANDLE_METADATA_KEYS = 128
 _FORBIDDEN_CONFIG_KEYS = frozenset(
     {"$ref", "$schema", "remote", "remote_url", "schema_url", "script", "html"}
 )
@@ -110,6 +115,25 @@ class TableHandle:
     handle_version: int
     snapshot_id: str | None = None
     metadata: Mapping[str, object] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not _PLUGIN_ID.fullmatch(self.catalog_plugin_id):
+            raise ValueError("Invalid catalog plugin ID")
+        if not _PLUGIN_ID.fullmatch(self.format_plugin_id):
+            raise ValueError("Invalid table-format plugin ID")
+        if not self.catalog_instance_id or len(self.catalog_instance_id) > 128:
+            raise ValueError("Catalog instance ID must be non-empty and bounded")
+        if self.catalog_revision < 0:
+            raise ValueError("Catalog revision cannot be negative")
+        if self.handle_version < 1:
+            raise ValueError("Table handle version must be positive")
+        if self.snapshot_id is not None and (
+            not self.snapshot_id
+            or len(self.snapshot_id) > 256
+            or any(ord(char) < 0x20 or ord(char) == 0x7F for char in self.snapshot_id)
+        ):
+            raise ValueError("Table handle snapshot ID must be bounded and printable")
+        _validate_handle_metadata(self.metadata)
 
 
 @dataclass(frozen=True, slots=True)
@@ -314,4 +338,54 @@ def _validate_options(value: object) -> None:  # noqa: C901
             return
         raise ValueError("Catalog options must contain JSON-like values")
 
+    visit(value, 0)
+
+
+def _validate_handle_metadata(value: object) -> None:  # noqa: C901
+    """Keep ticket-bound plugin metadata inert, bounded, and serializable."""
+
+    nodes = 0
+    string_bytes = 0
+
+    def visit(item: object, depth: int) -> None:  # noqa: C901
+        nonlocal nodes, string_bytes
+        nodes += 1
+        if nodes > _MAX_HANDLE_METADATA_NODES:
+            raise ValueError("Table handle metadata has too many values")
+        if depth > _MAX_HANDLE_METADATA_DEPTH:
+            raise ValueError("Table handle metadata is too deeply nested")
+        if isinstance(item, Mapping):
+            if len(item) > _MAX_HANDLE_METADATA_KEYS:
+                raise ValueError("Table handle metadata has too many keys")
+            for key, child in item.items():
+                if (
+                    not isinstance(key, str)
+                    or not key
+                    or len(key) > 256
+                    or any(ord(char) < 0x20 or ord(char) == 0x7F for char in key)
+                ):
+                    raise ValueError("Table handle metadata keys are invalid")
+                visit(child, depth + 1)
+            return
+        if isinstance(item, (list, tuple)):
+            if len(item) > _MAX_HANDLE_METADATA_KEYS:
+                raise ValueError("Table handle metadata arrays are too large")
+            for child in item:
+                visit(child, depth + 1)
+            return
+        if isinstance(item, str):
+            string_bytes += len(item.encode("utf-8"))
+            if len(item) > _MAX_HANDLE_METADATA_STRING or string_bytes > _MAX_HANDLE_METADATA_BYTES:
+                raise ValueError("Table handle metadata strings are too large")
+            if any(ord(char) < 0x20 or ord(char) == 0x7F for char in item):
+                raise ValueError("Table handle metadata strings must be printable")
+            return
+        if item is None or isinstance(item, (bool, int)):
+            return
+        if isinstance(item, float) and isfinite(item):
+            return
+        raise ValueError("Table handle metadata must contain JSON-like values")
+
+    if not isinstance(value, Mapping):
+        raise ValueError("Table handle metadata must be a mapping")
     visit(value, 0)

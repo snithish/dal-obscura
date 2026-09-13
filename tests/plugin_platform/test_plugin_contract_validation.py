@@ -11,6 +11,9 @@ from dal_obscura_plugin_api import (
     ExecutionContext as PublicExecutionContext,
 )
 from dal_obscura_plugin_api import (
+    TableHandle as PublicTableHandle,
+)
+from dal_obscura_plugin_api import (
     TableIdentifier as PublicTableIdentifier,
 )
 
@@ -108,6 +111,27 @@ def test_plugin_contract_value_objects_validate_generation_and_schema_identity()
             instance_id="analytics",
             revision=0,
             options={f"key-{index}": index for index in range(65)},
+        )
+
+    identifier = PublicTableIdentifier(namespace=("default",), name="users")
+    with pytest.raises(ValueError, match="JSON-like"):
+        PublicTableHandle(
+            catalog_plugin_id="manifest",
+            catalog_instance_id="fixture",
+            catalog_revision=1,
+            identifier=identifier,
+            format_plugin_id="parquet.dataset",
+            handle_version=1,
+            metadata={"task": object()},
+        )
+    with pytest.raises(ValueError, match="Invalid table-format plugin ID"):
+        PublicTableHandle(
+            catalog_plugin_id="manifest",
+            catalog_instance_id="fixture",
+            catalog_revision=1,
+            identifier=identifier,
+            format_plugin_id="../pickle",
+            handle_version=1,
         )
 
 
