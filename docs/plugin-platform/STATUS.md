@@ -366,6 +366,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Evidence: catalog option validation tests passed; changed-path Ruff/format checks passed. Browser and built-wheel typed-form qualification remain open.
 - Remaining N03/B04 work: generated DTO/browser proof, real three-pair compatibility and consumer qualification. Release remains HOLD.
 
+## Implementation update — 9854b45 (2026-09-13)
+
+- Packet / status / candidate commit / owner: N06/B09 partial / VERIFY / `9854b45` / governance UI shell.
+- Observable behavior delivered: account identity and sign-out remain visible below the mobile breakpoint, and users can select System, Light, or Dark theme. Only the non-sensitive theme preference is persisted; dark-mode surfaces and controls use the documented contrast-oriented palette.
+- Evidence: UI TypeScript and Vite production build passed; no private session or policy state is persisted by the theme control. Manual responsive/accessibility review remains required.
+- Remaining N06/B09 work: command palette, icon system, menu drawer, rendered 390/768/1440 layouts, keyboard/screen-reader and axe review. Release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
