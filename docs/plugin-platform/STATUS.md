@@ -86,6 +86,11 @@ recognized without treating them as unresolved legacy data. Five migration tests
 - Evidence: direct UI `tsc -b`, Vite production build (272.04 kB JavaScript / 82.06 kB gzip), and all 5 lifecycle/component-adjacent tests passed.
 - Remaining N06/B09 work: componentize the full shell/pages, adopt the selected accessible primitives/icon system, typed deep links, responsive visual review at required sizes, CSP/browser/axe evidence, and keyboard/screen-reader journeys. Release remains HOLD.
 
+Follow-up `f640759` extracts runtime and identity-provider management into a typed
+`SettingsView` component. Revisioned saves, staged-generation status, redaction
+messaging, and the production-empty-provider state remain intact; direct UI
+TypeScript/Vite and lifecycle checks pass.
+
 ## Implementation update — 8a615c3 (2026-09-14)
 
 - Packet / status / candidate commit / owner: N01/B01-B02 / VERIFY / `8a615c3` / toolchain and documentation.
