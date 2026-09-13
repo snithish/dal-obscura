@@ -22,12 +22,12 @@ from dal_obscura.common.plugin_api.contracts import (
     TableHandle,
     TableIdentifier,
 )
-from dal_obscura.common.plugin_api.lockfile import load_plugin_lock_file
 from dal_obscura.common.plugin_api.lifecycle import (
     PluginLifecycleError,
     PluginLifecycleState,
     transition_plugin_lifecycle,
 )
+from dal_obscura.common.plugin_api.lockfile import load_plugin_lock_file
 from dal_obscura.common.plugin_api.registry import (
     PluginAdmissionError,
     PluginLock,
@@ -49,9 +49,9 @@ __all__ = [
     "PluginAdmissionError",
     "PluginDescriptor",
     "PluginError",
-    "PluginLock",
     "PluginLifecycleError",
     "PluginLifecycleState",
+    "PluginLock",
     "PluginRegistry",
     "SchemaDescriptor",
     "TableFormatFactory",
