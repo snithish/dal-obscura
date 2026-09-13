@@ -132,7 +132,7 @@ class PublicPluginTableFormat(TableFormat):
         output_schema, batches = plugin.execute(partition.task, _context())
         if output_schema != partition.schema:
             raise ValueError("Public plugin changed the declared output schema")
-        return output_schema, batches
+        return output_schema, _checked_plugin_batches(batches, output_schema)
 
     def _open(self) -> TableFormatPlugin:
         plugin = self.format_factory(self.handle, _context())
@@ -340,3 +340,21 @@ def _validate_task_payload(value: object) -> None:  # noqa: C901
         raise ValueError("Public plugin task payload must be inert JSON-like data")
 
     visit(value, 0)
+
+
+def _checked_plugin_batches(
+    batches: Iterable[pa.RecordBatch], schema: pa.Schema
+) -> Iterable[pa.RecordBatch]:
+    """Validate each lazy batch before it reaches DuckDB or Flight output."""
+
+    def checked() -> Iterable[pa.RecordBatch]:
+        for batch in batches:
+            if not isinstance(batch, pa.RecordBatch):
+                raise ValueError("Public plugin returned a non-Arrow batch")
+            if batch.schema != schema:
+                raise ValueError("Public plugin batch schema differs from the declared schema")
+            if batch.nbytes > MAX_PLUGIN_TASK_BYTES:
+                raise ValueError("Public plugin batch exceeds the byte limit")
+            yield batch
+
+    return checked()

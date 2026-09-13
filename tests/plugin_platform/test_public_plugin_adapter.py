@@ -163,3 +163,44 @@ def test_public_format_rejects_opaque_task_payloads_before_ticket_serialization(
     )
     with pytest.raises(ValueError, match="inert JSON-like"):
         table_format.plan(PlanRequest(target="default.users", columns=["*"]), max_tickets=2)
+
+
+def test_public_format_validates_lazy_batch_schema_before_streaming() -> None:
+    identifier = TableIdentifier(namespace=("default",), name="users")
+    handle = TableHandle(
+        catalog_plugin_id="manifest",
+        catalog_instance_id="fixture",
+        catalog_revision=1,
+        identifier=identifier,
+        format_plugin_id="parquet.dataset",
+        handle_version=1,
+    )
+    schema = pa.schema([pa.field("id", pa.int64())])
+
+    class BadBatchFormat:
+        def schema(self, value, context):
+            del value, context
+            from dal_obscura_plugin_api import SchemaDescriptor
+
+            return SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=schema)
+
+        def plan(self, value, descriptor, context, *, projection, row_filter, max_tasks):
+            del value, descriptor, context, projection, row_filter, max_tasks
+            return ["task"]
+
+        def execute(self, task, context):
+            del task, context
+            wrong_schema = pa.schema([pa.field("secret", pa.string())])
+            return schema, [pa.RecordBatch.from_pylist([{"secret": "hidden"}], schema=wrong_schema)]
+
+    table_format = PublicPluginTableFormat(
+        catalog_name="fixture",
+        table_name="default.users",
+        format="parquet.dataset",
+        format_factory=lambda value, context: BadBatchFormat(),
+        handle=handle,
+    )
+    plan = table_format.plan(PlanRequest(target="default.users", columns=["*"]), max_tickets=2)
+    _schema, batches = plan.tasks[0].table_format.execute(plan.tasks[0].partition)
+    with pytest.raises(ValueError, match="batch schema"):
+        list(batches)
