@@ -42,6 +42,14 @@ their underlying functionality is wholly absent.
 - Evidence: direct UI TypeScript build, Vite production build (271.97 kB JavaScript / 82.27 kB gzip), and all 5 UI lifecycle/schema tests passed; \`git diff --check\` passed.
 - Remaining N06/B09 work: componentize the remaining asset/editor and management pages, adopt the selected accessible primitives/icon system, typed deep links, responsive visual review at required sizes, CSP/browser/axe evidence, and keyboard/screen-reader journeys. Release remains HOLD.
 
+## Implementation update — bdff349 (2026-09-14)
+
+- Packet / status / candidate commit / owner: N06/B09 foundation partial / VERIFY / \`bdff349\` / governance UI.
+- Observable behavior delivered: the full asset workspace is now a dedicated typed feature component, including nested schema virtualization, policy rule authoring, deny-all drafts, policy tests, immutable history restore, access delegation, and Python/DuckDB/Spark/Arrow consumer snippets. Existing authorization gates, review tokens, revision checks, unsaved-change protection, and callback-driven async behavior remain unchanged.
+- Changed paths: \`apps/governance-ui/src/components/AssetWorkspace.tsx\`, \`apps/governance-ui/src/main.tsx\`. No backend, session, pickle serializer, serialized class, payload, or import path changed.
+- Evidence: direct UI TypeScript build, Vite production build (271.97 kB JavaScript / 82.29 kB gzip), all 5 UI lifecycle/schema tests, and \`git diff --check\` passed.
+- Remaining N06/B09 work: adopt the selected accessible primitives/icon system, typed deep links, responsive visual review at required sizes, CSP/browser/axe evidence, and keyboard/screen-reader journeys. Remaining N07–N16 packets and live release gates stay open; release remains HOLD.
+
 ## Implementation update — b7bc1e8 (2026-09-14)
 
 - Packet / status / candidate commit / owner: N04/B06 partial / VERIFY / `b7bc1e8` / Iceberg REST plugin.
