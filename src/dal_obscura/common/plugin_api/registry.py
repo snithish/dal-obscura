@@ -39,7 +39,7 @@ class PluginAdmissionError(ValueError):
 FactoryLoader = Callable[[metadata.EntryPoint], object]
 BuiltinRegistration = tuple[PluginDescriptor, object]
 DescriptorLoader = Callable[[metadata.EntryPoint], PluginDescriptor]
-PluginLock = tuple[str, str, str] | tuple[str, str, str, str, str]
+PluginLock = tuple[str, str, str, str, str]
 PluginStatus = Literal["enabled", "not_installed", "incompatible"]
 
 
@@ -228,9 +228,9 @@ class PluginRegistry:
                 admitted = self._allowlist.get(key)
                 if admitted is None:
                     continue
-                if len(admitted) not in (3, 5):
+                if len(admitted) != 5:
                     raise PluginAdmissionError(f"Invalid plugin lock for {kind}:{plugin_id}")
-                distribution, version, api_version, *digests = admitted
+                distribution, version, api_version, descriptor_digest, artifact_digest = admitted
                 if entry.dist is None:
                     raise PluginAdmissionError(
                         f"Plugin provenance is unavailable for {kind}:{plugin_id}"
@@ -241,21 +241,11 @@ class PluginRegistry:
                     raise PluginAdmissionError(f"Plugin lock mismatch for {kind}:{plugin_id}")
                 if self._descriptor_loader is not None:
                     descriptor = self._descriptor_loader(entry)
-                elif digests:
-                    # Extended locks require the wheel's static descriptor;
-                    # importing the factory to discover metadata would defeat
-                    # the admission boundary.
-                    descriptor = load_static_plugin_descriptor(entry)
                 else:
-                    # Three-part locks retain the legacy descriptor fallback.
-                    descriptor = PluginDescriptor(
-                        kind=kind,
-                        plugin_id=plugin_id,
-                        api_version=api_version,
-                        config_version=1,
-                        distribution=distribution,
-                        version=version,
-                    )
+                    # The static descriptor is the only factory-free source of
+                    # plugin metadata.  The former three-part fallback was
+                    # removed because it fabricated capabilities and config.
+                    descriptor = load_static_plugin_descriptor(entry)
                 if (
                     descriptor.kind != kind
                     or descriptor.plugin_id != plugin_id
@@ -272,16 +262,14 @@ class PluginRegistry:
                     raise PluginAdmissionError(
                         f"Plugin descriptor uses unsupported config version for {kind}:{plugin_id}"
                     )
-                if digests:
-                    descriptor_digest, artifact_digest = digests
-                    if _descriptor_digest(descriptor) != descriptor_digest:
-                        raise PluginAdmissionError(
-                            f"Plugin descriptor digest mismatch for {kind}:{plugin_id}"
-                        )
-                    if _artifact_digest(entry) != artifact_digest:
-                        raise PluginAdmissionError(
-                            f"Plugin artifact digest mismatch for {kind}:{plugin_id}"
-                        )
+                if _descriptor_digest(descriptor) != descriptor_digest:
+                    raise PluginAdmissionError(
+                        f"Plugin descriptor digest mismatch for {kind}:{plugin_id}"
+                    )
+                if _artifact_digest(entry) != artifact_digest:
+                    raise PluginAdmissionError(
+                        f"Plugin artifact digest mismatch for {kind}:{plugin_id}"
+                    )
                 descriptors[key] = descriptor
                 entries[key] = entry
         return descriptors, entries, builtins
@@ -299,7 +287,8 @@ def load_static_plugin_descriptor(entry: metadata.EntryPoint) -> PluginDescripto
     descriptor is parsed from the installed distribution's metadata and its
     identity is tied to the entry-point group/name and package provenance.  A
     missing or malformed file fails closed; callers that need legacy entry-point
-    compatibility can continue to provide an explicit fallback loader.
+    compatibility is intentionally unsupported; every admitted wheel must
+    provide a static descriptor.
     """
 
     distribution = entry.dist
@@ -418,11 +407,11 @@ def _status_incompatibility(
 ) -> str:
     if lock is None:
         return "plugin is installed but not allowlisted"
-    if len(lock) not in (3, 5):
+    if len(lock) != 5:
         return "plugin lock is invalid"
     if entry.dist is None:
         return "plugin provenance is unavailable"
-    distribution, version, _api_version, *_digests = lock
+    distribution, version, _api_version, _descriptor_digest_value, _artifact_digest_value = lock
     if (entry.dist.name, entry.dist.version) != (distribution, version):
         return "installed distribution does not match the plugin lock"
     if _api_version not in SUPPORTED_PLUGIN_API_VERSIONS:

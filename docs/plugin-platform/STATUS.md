@@ -159,6 +159,14 @@ acceptance remain VERIFY.
 Follow-up `67e6475` keeps the selected draft ID on read-only handoff refreshes,
 so reload/access actions cannot silently switch back to the publisher's draft.
 
+## Implementation update — pending N02 lock cutover (2026-09-13)
+
+- Packet / status / candidate commit / owner: N02/B03 partial / VERIFY / pending atomic commit / plugin registry.
+- Observable behavior delivered: runtime admission and lock-file loading now require the exact five-part distribution/version/API/descriptor-digest/artifact-digest lock. The registry always reads a factory-free static descriptor (or an explicitly injected descriptor loader in tests); the fabricated three-part descriptor fallback is deleted.
+- Changed paths: `common/plugin_api/registry.py` and plugin registry tests. No pickle serializer, payload class, or import path changed.
+- Primary tests: `tests/plugin_platform/test_registry.py`, `tests/plugin_platform/test_lockfile.py` — all passed; changed-path Ruff passed.
+- Remaining N02/B03 work: remove legacy module-name aliases and permissive serving readers, retain bounded offline conversion for known persisted records, and prove clean installed-wheel migration.
+
 Regression after the handoff slices: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv
 run --no-sync pytest tests/control_plane tests/interfaces/control_plane
 tests/common/config_store tests/plugin_platform tests/architecture -q` passed
