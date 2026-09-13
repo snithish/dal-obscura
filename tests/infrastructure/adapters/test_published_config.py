@@ -512,6 +512,24 @@ def test_published_schema_admission_accepts_iceberg_numeric_metadata_and_aliases
     )
 
 
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        {b"PARQUET:field_id": b"bad\x00id"},
+        {b"iceberg.field.id": b"x" * 129},
+        {b"PARQUET:field_id": b"\xff"},
+    ],
+)
+def test_schema_identity_rejects_unbounded_or_malformed_provider_ids(metadata: dict[bytes, bytes]):
+    identities = _schema_identities(
+        pa.schema([pa.field("id", pa.int64(), metadata=metadata)])
+    )
+
+    [(path, field_id)] = list(identities)
+    assert path == ("id",)
+    assert field_id.startswith("synthetic:")
+
+
 def test_published_schema_admission_tracks_collection_element_and_map_value_paths():
     asset = PublishedAsset(
         publication_id=uuid4(),

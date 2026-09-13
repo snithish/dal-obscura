@@ -9,6 +9,7 @@ from collections.abc import Iterable
 import pyarrow as pa
 
 SYNTHETIC_ID_PREFIX = "synthetic:"
+MAX_PROVIDER_FIELD_ID_LENGTH = 128
 _FIELD_ID_KEYS = (b"PARQUET:field_id", b"iceberg.field.id")
 
 
@@ -73,8 +74,15 @@ def _provider_field_id(field: pa.Field) -> str | None:
     for key in _FIELD_ID_KEYS:
         raw_id = metadata.get(key)
         if raw_id is not None:
-            value = raw_id.decode("utf-8", "replace").strip()
-            if value:
+            try:
+                value = raw_id.decode("utf-8").strip()
+            except UnicodeDecodeError:
+                continue
+            if (
+                value
+                and len(value) <= MAX_PROVIDER_FIELD_ID_LENGTH
+                and not any(ord(char) < 0x20 or ord(char) == 0x7F for char in value)
+            ):
                 return value
     return None
 
