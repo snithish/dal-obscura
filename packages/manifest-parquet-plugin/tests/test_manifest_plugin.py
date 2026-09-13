@@ -94,6 +94,22 @@ def test_manifest_catalog_and_parquet_format_split_nested_rows(tmp_path):
     assert identities["profile.email"].startswith("synthetic:")
 
 
+def test_manifest_catalog_exposes_namespace_and_config_lifecycle(tmp_path):
+    root, manifest, _table = _write_fixture(tmp_path)
+    catalog = ManifestCatalog(
+        CatalogConfig(
+            plugin_id="manifest",
+            instance_id="fixture",
+            revision=1,
+            options={"root": str(root), "manifest_path": str(manifest)},
+        ),
+        _context(),
+    )
+    catalog.validate_config(_context())
+    assert catalog.list_namespaces(_context()) == (("default",),)
+    assert catalog.list_namespaces(_context(), namespace=("default",)) == (("default",),)
+
+
 def test_manifest_catalog_paginates_with_string_continuation_tokens(tmp_path):
     root, manifest, _table = _write_fixture(tmp_path)
     payload = json.loads(manifest.read_text())

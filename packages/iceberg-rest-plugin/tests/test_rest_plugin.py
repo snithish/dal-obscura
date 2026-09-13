@@ -118,6 +118,20 @@ def test_rest_catalog_paginates_bounded_sorted_identifiers():
     assert second.continuation is None
 
 
+def test_rest_catalog_exposes_validated_namespace_and_config_lifecycle():
+    plugin = RestCatalog(_config(), _context())
+
+    class FakeCatalog:
+        def list_namespaces(self):
+            return [("z",), ("default",), ("z",)]
+
+    plugin._catalog = FakeCatalog()
+    plugin.validate_config(_context())
+    assert plugin.list_namespaces(_context()) == (("default",), ("z",))
+    with pytest.raises(ValueError, match="root namespace"):
+        plugin.list_namespaces(_context(), namespace=("default",))
+
+
 def test_rest_catalog_rejects_non_string_provider_identifier_segments():
     plugin = RestCatalog(_config(), _context())
 

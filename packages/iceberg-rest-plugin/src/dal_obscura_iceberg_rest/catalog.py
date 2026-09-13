@@ -78,6 +78,35 @@ class RestCatalog(CatalogPlugin):
         self._catalog_lock = Lock()
         self._closed = False
 
+    def validate_config(self, context: ExecutionContext) -> None:
+        """Validate the already-admitted configuration without provider I/O."""
+
+        self._validate_context(context)
+        if self._closed:
+            raise ValueError("REST catalog is closed")
+
+    def list_namespaces(
+        self,
+        context: ExecutionContext,
+        *,
+        namespace: tuple[str, ...] = (),
+    ) -> tuple[tuple[str, ...], ...]:
+        self._validate_context(context)
+        if namespace:
+            raise ValueError("REST namespace traversal accepts only the root namespace")
+        catalog = self._load_catalog(context)
+        result: set[tuple[str, ...]] = set()
+        for raw in catalog.list_namespaces():
+            self._validate_context(context)
+            if not isinstance(raw, (tuple, list)) or not raw or any(
+                not isinstance(part, str) or not part for part in raw
+            ):
+                raise ValueError("REST catalog returned an invalid namespace")
+            result.add(tuple(raw))
+            if len(result) > MAX_NAMESPACES:
+                raise ValueError("REST catalog contains too many namespaces")
+        return tuple(sorted(result))
+
     def list_tables(
         self,
         context: ExecutionContext,

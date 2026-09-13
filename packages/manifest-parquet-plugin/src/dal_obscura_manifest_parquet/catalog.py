@@ -68,6 +68,28 @@ class ManifestCatalog(CatalogPlugin):
             self._manifest_path, self._root
         )
 
+    def validate_config(self, context: ExecutionContext) -> None:
+        _check_context(context)
+
+    def list_namespaces(
+        self,
+        context: ExecutionContext,
+        *,
+        namespace: tuple[str, ...] = (),
+    ) -> tuple[tuple[str, ...], ...]:
+        _check_context(context)
+        if namespace:
+            return tuple(
+                sorted(
+                    {
+                        item.identifier.namespace
+                        for item in self._tables
+                        if item.identifier.namespace[: len(namespace)] == namespace
+                    }
+                )
+            )
+        return tuple(sorted({item.identifier.namespace for item in self._tables}))
+
     def list_tables(
         self,
         context: ExecutionContext,

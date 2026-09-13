@@ -196,6 +196,15 @@ class CatalogPlugin(Protocol):
 
     descriptor: PluginDescriptor
 
+    def validate_config(self, context: ExecutionContext) -> None: ...
+
+    def list_namespaces(
+        self,
+        context: ExecutionContext,
+        *,
+        namespace: tuple[str, ...] = (),
+    ) -> tuple[tuple[str, ...], ...]: ...
+
     def list_tables(
         self,
         context: ExecutionContext,
@@ -209,6 +218,8 @@ class CatalogPlugin(Protocol):
         identifier: TableIdentifier,
         context: ExecutionContext,
     ) -> TableHandle: ...
+
+    def close(self) -> None: ...
 
 
 class CatalogFactory(Protocol):
@@ -246,6 +257,8 @@ class TableFormatPlugin(Protocol):
         task: object,
         context: ExecutionContext,
     ) -> tuple[pa.Schema, Sequence[pa.RecordBatch]]: ...
+
+    def close(self) -> None: ...
 
 
 class TableFormatFactory(Protocol):
