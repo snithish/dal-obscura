@@ -199,6 +199,39 @@ def test_published_config_preserves_external_plugin_identity():
     assert resolved.options == {"root": "/srv/data"}
 
 
+def test_published_config_preserves_catalog_plugin_revision():
+    asset = PublishedAsset(
+        publication_id=uuid4(),
+        tenant_id=uuid4(),
+        catalog="analytics",
+        target="default.users",
+        backend="parquet.dataset",
+        compiled_config={
+            "plugins": {"catalog": "manifest", "table_format": "parquet.dataset"},
+            "target": {"backend": "parquet.dataset", "table": "default.users"},
+        },
+        policy_version=1,
+    )
+    catalog = PublishedCatalog(
+        publication_id=asset.publication_id,
+        tenant_id=asset.tenant_id,
+        catalog="analytics",
+        config={"module": "manifest", "options": {"root": "/srv/data"}},
+        plugin_id="manifest",
+        plugin_revision=17,
+    )
+
+    resolved = _catalog_config_for_asset(
+        catalog,
+        asset,
+        plugin_registry=_AdmittedPluginSnapshot(
+            ("catalog", "manifest"), ("table_format", "parquet.dataset")
+        ),
+    )
+
+    assert resolved.revision == 17
+
+
 def test_schema_without_provider_ids_uses_schema_scoped_nested_synthetic_ids():
     schema = pa.schema(
         [

@@ -27,10 +27,13 @@ class CatalogConfig:
     options: dict[str, Any] = field(default_factory=dict)
     path_enforcer: PathRuleEnforcer | None = None
     plugin_id: str = "iceberg.sql"
+    revision: int = 0
 
     def __post_init__(self) -> None:
         if not self.name.strip():
             raise ValueError("Catalog configuration requires a non-empty logical name")
+        if self.revision < 0:
+            raise ValueError("Catalog configuration revision cannot be negative")
 
 
 @dataclass(frozen=True)
@@ -208,6 +211,7 @@ def _build_catalog(
                 cast(Any, factory),
                 lambda plugin_id: plugin_registry.load("table_format", plugin_id),
                 config.path_enforcer,
+                config.revision,
             )
         constructor = cast(
             Callable[[str, dict[str, Any], PathRuleEnforcer | None], CatalogPlugin],

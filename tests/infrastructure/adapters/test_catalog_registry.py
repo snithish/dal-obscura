@@ -56,6 +56,9 @@ def test_catalog_config_requires_logical_name():
     else:
         raise AssertionError("expected blank catalog name rejection")
 
+    with pytest.raises(ValueError, match="revision cannot be negative"):
+        CatalogConfig(name="analytics", type="iceberg", revision=-1)
+
 
 def test_iceberg_catalog_uses_provider_catalog_name_from_options(monkeypatch):
     loaded: dict[str, object] = {}

@@ -95,6 +95,8 @@ class PublishedCatalog:
     tenant_id: UUID
     catalog: str
     config: dict[str, Any]
+    plugin_id: str | None = None
+    plugin_revision: int | None = None
 
 
 class AdmittedPluginSnapshot(Protocol):
@@ -256,6 +258,8 @@ class PublishedConfigStore:
                 tenant_id=record.tenant_id,
                 catalog=record.catalog,
                 config=dict(record.config_json),
+                plugin_id=record.plugin_id,
+                plugin_revision=record.plugin_revision,
             )
             for record in records
         ]
@@ -427,6 +431,7 @@ class PublishedConfigCatalogRegistry:
                 ),
                 path_enforcer=catalog_config.path_enforcer,
                 plugin_id=catalog_config.plugin_id,
+                revision=catalog_config.revision,
             )
         registry = CatalogRegistry(
             ServiceConfig(catalogs={catalog: catalog_config}),
@@ -472,6 +477,7 @@ def _catalog_config_from_published_catalog(
         type=_catalog_type(config),
         options=options,
         plugin_id=plugin_id,
+        revision=catalog.plugin_revision if catalog.plugin_revision is not None else 0,
     )
 
 

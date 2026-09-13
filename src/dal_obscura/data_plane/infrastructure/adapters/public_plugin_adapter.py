@@ -170,6 +170,7 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
         catalog_factory: PublicCatalogFactory,
         format_factory_loader: Callable[[str], object],
         path_enforcer: PathRuleEnforcer | None = None,
+        revision: int = 0,
     ) -> None:
         self._name = name
         self._catalog_plugin_id = catalog_plugin_id
@@ -179,7 +180,7 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
         public_config = PublicCatalogConfig(
             plugin_id=catalog_plugin_id,
             instance_id=name,
-            revision=0,
+            revision=revision,
             options=dict(options),
         )
         self._catalog = catalog_factory(public_config, _context())
