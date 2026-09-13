@@ -100,6 +100,18 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const handleAuthExpired = () => {
+      loadEpoch.current += 1;
+      inventoryEpoch.current += 1;
+      managementEpoch.current += 1;
+      clearPrivateState();
+      setNotice("Your session expired or was revoked. Sign in again to continue.");
+    };
+    window.addEventListener("dal-obscura-auth-expired", handleAuthExpired);
+    return () => window.removeEventListener("dal-obscura-auth-expired", handleAuthExpired);
+  }, []);
+
+  useEffect(() => {
     if (saveState !== "unsaved") return;
     const warn = (event: BeforeUnloadEvent) => {
       event.preventDefault();

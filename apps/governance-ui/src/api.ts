@@ -256,6 +256,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers,
   });
   if (!response.ok) {
+    if (response.status === 401) {
+      window.dispatchEvent(new Event("dal-obscura-auth-expired"));
+    }
     const failure = new Error(`Request failed (${response.status})`) as ApiFailure;
     failure.status = response.status;
     throw failure;
