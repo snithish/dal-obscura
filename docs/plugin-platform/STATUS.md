@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `a212df7` (idempotency-key validation;
+Implementation follow-up through `5b34f9b` (publication rollback coverage;
+idempotency-key validation;
 publication idempotency coverage;
 unsafe schema-identity rejection;
 production plugin-lock configuration;
@@ -522,6 +523,18 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Remaining gaps: PostgreSQL barrier interleavings, injected rollback points,
   multi-process races, and full audit/operation transaction evidence remain
   open. Pickle compatibility is unchanged.
+
+### X03 publication rollback coverage — `5b34f9b`
+
+- State: implementing.
+- Behavior: an injected failure after publication generation/pointer work and
+  before the audit completes rolls back the active pointer, immutable
+  generation, audit event, and idempotency operation in one session transaction.
+- Green evidence: `tests/control_plane/test_policy_version_service.py` (3
+  passed), Ruff, and `git diff --check`.
+- Remaining gaps: PostgreSQL barrier interleavings, independent-process races,
+  failure injection at every transaction boundary, and production recovery
+  evidence remain open. Pickle compatibility is unchanged.
 
 ### X07/X14 asset binding validation — `3c3709b`
 
