@@ -172,10 +172,14 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   an explicit negative fixture. Oversized schema descriptors are rejected by
   bounded field and serialized-byte checks before format execution. Deliberately
   bad fixture plugins, provider/Flight/consumer lanes, and external distribution
-  evidence remain open. CI now builds both standalone plugin wheels, installs those
-  exact artifacts in an isolated environment, and runs the conformance suite before
-  image publication.
-- X16 REST Iceberg qualification: **not-started**.
+  evidence remain open. CI now builds the API, conformance, manifest/Parquet, and
+  REST wheels, installs those exact artifacts in an isolated environment, and runs
+  their tests before image publication.
+- X16 REST Iceberg qualification: **implementing**; an independently buildable
+  `dal-obscura-iceberg-rest` wheel now exposes an admitted PyIceberg REST catalog,
+  validates endpoint/config boundaries, paginates bounded table discovery, and
+  returns immutable metadata locations for the trusted Iceberg executor. Live
+  REST server, auth, TLS, and clean-wheel evidence remain open.
 - X17 independent manifest/Parquet plugin: **implementing**; the independent
   `dal-obscura-manifest-parquet` package registers `manifest` and `parquet.dataset`
   entry points against the public SDK. Its catalog pins an operator-owned manifest,
@@ -207,8 +211,8 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
 - X22 exact-artifact CI: **implementing**; the container publication job now
   depends on a pinned governance-UI install/type-check/build lane, and the Python
   type-check lane now resolves both independently buildable plugin package source
-  roots explicitly, and standalone plugin wheel conformance now gates image
-  publication. Artifact
+  roots explicitly, and standalone plugin wheel tests now gate image publication.
+  Artifact
   digest, browser, provider, consumer, recovery, and mandatory-security gates
   remain open.
 - X23 independent review/release decision: **not-started**.

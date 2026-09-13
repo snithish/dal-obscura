@@ -197,13 +197,21 @@ jobs:
           mkdir -p "$RUNNER_TEMP/plugin-conformance-dist"
           uv build --wheel --out-dir "$RUNNER_TEMP/plugin-conformance-dist" packages/plugin-conformance
 
+      - name: Build independent catalog and format wheels
+        run: |
+          mkdir -p "$RUNNER_TEMP/independent-plugin-dist"
+          uv build --wheel --out-dir "$RUNNER_TEMP/independent-plugin-dist" packages/manifest-parquet-plugin
+          uv build --wheel --out-dir "$RUNNER_TEMP/independent-plugin-dist" packages/iceberg-rest-plugin
+
       - name: Install exact wheels and run conformance tests
         run: |
           uv venv "$RUNNER_TEMP/plugin-env"
           uv pip install --python "$RUNNER_TEMP/plugin-env/bin/python" pytest \
             "$RUNNER_TEMP/plugin-api-dist"/*.whl \
-            "$RUNNER_TEMP/plugin-conformance-dist"/*.whl
+            "$RUNNER_TEMP/plugin-conformance-dist"/*.whl \
+            "$RUNNER_TEMP/independent-plugin-dist"/*.whl
           "$RUNNER_TEMP/plugin-env/bin/python" -m pytest packages/plugin-conformance/tests -q
+          "$RUNNER_TEMP/plugin-env/bin/python" -m pytest packages/manifest-parquet-plugin/tests packages/iceberg-rest-plugin/tests -q
 
   python-native-iceberg:
     name: Native Iceberg conformance
