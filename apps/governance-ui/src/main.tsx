@@ -87,7 +87,7 @@ function App() {
   const isDemo = workspace === "demo";
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).has("demo")) {
+    if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("demo")) {
       setAssets([demoAsset]); setAsset(demoAsset); setRules(demoRules); setSelectedField(demoAsset.schema_fields[0].name);
       setWorkspace("demo"); setNotice("Demo workspace. It never writes to the control plane.");
       return;
