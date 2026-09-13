@@ -177,6 +177,41 @@ def test_identity_migration_leaves_local_identity_keys_unchanged() -> None:
         assert report.converted == 0
 
 
+def test_identity_migration_is_idempotent_after_provider_removal() -> None:
+    with _session() as session:
+        store = PublicationStore(session)
+        context = store.ensure_default_workspace_context()
+        store.upsert_catalog(
+            cell_id=context.cell_id,
+            tenant_id=context.tenant_id,
+            name="analytics",
+            module="iceberg",
+            options={},
+        )
+        asset_id = store.upsert_asset(
+            cell_id=context.cell_id,
+            tenant_id=context.tenant_id,
+            catalog="analytics",
+            target="users",
+            backend="iceberg",
+            table_identifier="users",
+            options={},
+        )
+        session.add(
+            AssetOwnerRecord(
+                id=uuid4(),
+                asset_id=asset_id,
+                ordinal=1,
+                principal="https://removed.example|u|alice",
+            )
+        )
+        session.commit()
+
+        report = inspect_identity_keys(session)
+        assert report.safe_to_apply
+        assert report.converted == 0
+
+
 def test_identity_migration_converts_exact_issuer_escapes_and_rejects_legacy_escapes() -> None:
     with _session() as session:
         store = PublicationStore(session)

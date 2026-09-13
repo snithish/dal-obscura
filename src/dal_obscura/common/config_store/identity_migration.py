@@ -219,14 +219,11 @@ def _convert(value: str, issuers: tuple[str, ...]) -> str | IdentityMigrationErr
 
 
 def _has_typed_identity_shape(value: str, issuers: tuple[str, ...]) -> bool:
-    """Recognize only current keys for configured issuers."""
+    """Recognize current keys even after provider configuration changes."""
 
-    return any(
-        value.startswith(
-            (f"{_escape_component(issuer)}|u|", f"{_escape_component(issuer)}|g|")
-        )
-        for issuer in issuers
-    )
+    del issuers
+    parts = value.split("|", 2)
+    return len(parts) == 3 and parts[1] in {"u", "g"} and bool(parts[0]) and bool(parts[2])
 
 
 def _escape_component(value: str) -> str:
