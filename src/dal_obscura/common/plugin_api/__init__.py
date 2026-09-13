@@ -6,12 +6,14 @@ perform authorization or expose the control-plane database.
 
 from dal_obscura.common.plugin_api.contracts import (
     CatalogConfig,
+    CatalogFactory,
     CatalogPlugin,
     DiscoveryPage,
     ExecutionContext,
     PluginDescriptor,
     PluginError,
     SchemaDescriptor,
+    TableFormatFactory,
     TableFormatPlugin,
     TableHandle,
     TableIdentifier,
@@ -26,6 +28,7 @@ from dal_obscura.common.plugin_api.registry import (
 
 __all__ = [
     "CatalogConfig",
+    "CatalogFactory",
     "CatalogPlugin",
     "DiscoveryPage",
     "ExecutionContext",
@@ -35,6 +38,7 @@ __all__ = [
     "PluginLock",
     "PluginRegistry",
     "SchemaDescriptor",
+    "TableFormatFactory",
     "TableFormatPlugin",
     "TableHandle",
     "TableIdentifier",

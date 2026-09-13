@@ -190,6 +190,18 @@ class CatalogPlugin(Protocol):
     ) -> TableHandle: ...
 
 
+class CatalogFactory(Protocol):
+    """Factory called by core with one validated config and request context."""
+
+    descriptor: PluginDescriptor
+
+    def __call__(
+        self,
+        config: CatalogConfig,
+        context: ExecutionContext,
+    ) -> CatalogPlugin: ...
+
+
 class TableFormatPlugin(Protocol):
     """Format factory instance opened for one catalog-resolved handle."""
 
@@ -213,6 +225,18 @@ class TableFormatPlugin(Protocol):
         task: object,
         context: ExecutionContext,
     ) -> tuple[pa.Schema, Sequence[pa.RecordBatch]]: ...
+
+
+class TableFormatFactory(Protocol):
+    """Factory called by core with one catalog-resolved immutable handle."""
+
+    descriptor: PluginDescriptor
+
+    def __call__(
+        self,
+        handle: TableHandle,
+        context: ExecutionContext,
+    ) -> TableFormatPlugin: ...
 
 
 def _validate_config_schema(value: object) -> None:  # noqa: C901

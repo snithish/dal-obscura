@@ -2,12 +2,14 @@
 
 from dal_obscura_plugin_api.contracts import (
     CatalogConfig,
+    CatalogFactory,
     CatalogPlugin,
     DiscoveryPage,
     ExecutionContext,
     PluginDescriptor,
     PluginError,
     SchemaDescriptor,
+    TableFormatFactory,
     TableFormatPlugin,
     TableHandle,
     TableIdentifier,
@@ -15,12 +17,14 @@ from dal_obscura_plugin_api.contracts import (
 
 __all__ = [
     "CatalogConfig",
+    "CatalogFactory",
     "CatalogPlugin",
     "DiscoveryPage",
     "ExecutionContext",
     "PluginDescriptor",
     "PluginError",
     "SchemaDescriptor",
+    "TableFormatFactory",
     "TableFormatPlugin",
     "TableHandle",
     "TableIdentifier",
