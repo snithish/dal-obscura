@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `70261b1` (separate local TLS trust domains;
+Implementation follow-up through `32d0623` (loopback-bound Flight test harness;
+separate local TLS trust domains;
 immutable infrastructure image
 digests; secure-local fail-closed preflight;
 strict test typing; secure-local
@@ -702,6 +703,19 @@ providers before Phase A's security/correctness prerequisites are accepted.
   verification, and `git diff --check` passed.
 - Remaining gaps: real TLS client/server handshake, browser OIDC flow, and
   production certificate rotation evidence remain open.
+
+### X18 Flight test harness binding — `32d0623`
+
+- State: implemented-unverified.
+- Behavior: test-only Flight servers and the E2E free-port helper now request
+  explicit loopback addresses instead of wildcard binds, matching the least-
+  exposure deployment contract and making the harness portable to restricted
+  runners.
+- Green evidence: targeted Ruff and `git diff --check` passed. Runtime Flight
+  execution remains unavailable in this sandbox because all socket binds are
+  denied, including loopback.
+- Remaining gaps: socket-enabled CI must execute the Python/DuckDB, Flight, and
+  E2E consumer lanes.
 
 ### X14 scoped secret inputs in Connections — `2b81337`
 
