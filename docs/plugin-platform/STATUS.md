@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `ac04fba` (strict test typing; secure-local
+Implementation follow-up through `7629316` (secure-local fail-closed preflight;
+strict test typing; secure-local
 deployment edge path;
 stream iterator cleanup;
 idempotency operation write locking;
@@ -662,6 +663,18 @@ providers before Phase A's security/correctness prerequisites are accepted.
   targeted Ruff, and `git diff --check` passed.
 - Remaining gaps: network-bound Flight/subprocess benchmark lanes remain
   sandbox-blocked and must run in a socket-enabled CI environment.
+
+### X19 secure-local fail-closed preflight — `7629316`
+
+- State: implemented-unverified.
+- Behavior: `deployment/local-secure/run config|up|logs` now rejects unresolved
+  `REPLACE_WITH_*` values and missing readable generated TLS files before Docker
+  Compose is invoked. This keeps placeholder credentials and an uninitialized
+  certificate boundary from reaching a running service.
+- Green evidence: shell syntax, secure-local architecture test, YAML parse, and
+  `git diff --check` passed.
+- Remaining gaps: real Docker startup, IdP/TLS browser flow, PostgreSQL role
+  denial/allowance, and production artifact/recovery evidence remain open.
 
 ### X14 scoped secret inputs in Connections — `2b81337`
 
