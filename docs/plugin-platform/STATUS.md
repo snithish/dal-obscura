@@ -1,7 +1,7 @@
 # Remaining-work ledger
 
 Review baseline: c46415282a2a796cf737a9c3b7f7ba941f19bf7b (2026-09-13).
-**Release HOLD. Planning update only. No new runtime test results.**
+**Release HOLD. Implementation continues; unresolved live gates remain VERIFY.**
 Execution authority: [implementation plan](IMPLEMENTATION_PLAN.md).
 Previous completion notes: [archived ledger](STATUS_ARCHIVE_20260913.md).
 
@@ -47,6 +47,15 @@ and a local Python/DuckDB probe. This review did not rerun them. Repository-leve
 race tests do not establish two-process API races; stub consumer reads and pair
 descriptors do not qualify live catalogs; backup helper tests do not establish
 timed restore. See F08/F09 and N12/N13/N15. Reuse the existing harnesses.
+
+## Implementation update — c1b4866 (2026-09-13)
+
+- Packet / status / candidate commit / owner: N11 partial / VERIFY / `c1b4866` / control-plane + UI.
+- Observable behavior delivered: `/v1/audit/events/page` provides bounded keyset pagination ordered by `(created_at, id)`; non-admin visibility is enforced with database `EXISTS` predicates and asset-specific reads still require the read capability. The existing list endpoint now uses the same scoped query. Activity loads 50 events and can request later pages without an unbounded fetch.
+- Changed paths: audit application/repository/service, policy routes, UI API/activity view, ORM and migration `20260913_0016_audit_keyset_index.py`. No pickle serializer, payload class, or import path changed.
+- Primary tests: `tests/interfaces/control_plane/test_audit_api.py`, `tests/architecture/test_control_plane_route_inventory.py`, `tests/common/config_store/test_schema_migrations.py`.
+- Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane/test_audit_api.py tests/architecture/test_control_plane_route_inventory.py tests/common/config_store -q` — 20 passed. `pnpm --dir apps/governance-ui check` — passed. `ruff check` on changed Python paths — passed. UI production build is VERIFY because local Corepack could not fetch pinned `pnpm@12.3.4` from the npm registry.
+- Remaining N11/B15 work: filter/pagination controls in the activity UI, complete actor/resource/time/outcome/request-ID filters, full permission matrix, settings/access/consumer qualification, and independent security/UX evidence.
 
 ## Per-packet record template
 
