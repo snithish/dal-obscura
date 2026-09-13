@@ -221,6 +221,12 @@ def create_asset_policy_version(  # noqa: C901
     # the publication candidate. Otherwise a revocation that commits while the
     # request waits on the row lock could be bypassed by a stale snapshot.
     ensure_asset_capability(store, asset_id, actor, "publish")
+    # Workspace-wide runtime/auth configuration participates in the same
+    # publication generation. Acquire the cell lock after the asset lock and
+    # before reading the draft so settings cannot commit between candidate
+    # construction and activation.
+    context = store.get_asset_workspace_context(asset_id)
+    store.lock_cell_for_publication(context.cell_id)
     request_hash = _publication_request_hash(
         expected_draft_revision=expected_draft_revision,
         expected_publication_id=expected_publication_id,

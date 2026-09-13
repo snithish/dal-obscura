@@ -287,6 +287,7 @@ class PublicationStore:
         max_tickets: int,
         max_ticket_exchanges: int,
     ) -> None:
+        self.lock_cell_for_publication(cell_id)
         existing = self._session.get(CellRuntimeSettingsRecord, cell_id)
         if existing is None:
             self._session.add(
@@ -494,6 +495,7 @@ class PublicationStore:
         return normalized
 
     def replace_auth_providers(self, *, cell_id: UUID, providers: list[dict[str, Any]]) -> None:
+        self.lock_cell_for_publication(cell_id)
         for record in self._session.scalars(
             select(AuthProviderRecord).where(AuthProviderRecord.cell_id == cell_id)
         ):
