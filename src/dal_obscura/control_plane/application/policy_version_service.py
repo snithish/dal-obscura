@@ -195,6 +195,9 @@ def create_asset_policy_version(  # noqa: C901
         ```
     """
 
+    if idempotency_key is not None:
+        idempotency_key = _validate_idempotency_key(idempotency_key)
+
     if require_review:
         if not review_token:
             raise ValidationFailure("A current server review is required before publishing.")
@@ -398,8 +401,7 @@ def get_publication_operation(
     """Returns a caller-scoped committed publication operation."""
 
     ensure_asset_capability(store, asset_id, actor, "publish")
-    if not 1 <= len(idempotency_key) <= 128:
-        raise ValidationFailure("Idempotency key must contain between 1 and 128 characters")
+    idempotency_key = _validate_idempotency_key(idempotency_key)
     operation = store.get_publication_operation(
         asset_id=asset_id,
         actor_principal=actor.identity_key(),
@@ -412,6 +414,19 @@ def get_publication_operation(
         "status": operation["status"],
         "result": operation["result"],
     }
+
+
+def _validate_idempotency_key(value: str) -> str:
+    """Validate a caller-supplied idempotency key before persistence/lookup."""
+
+    if not isinstance(value, str):
+        raise ValidationFailure("Idempotency key must be text")
+    normalized = value.strip()
+    if not 1 <= len(normalized) <= 128:
+        raise ValidationFailure("Idempotency key must contain between 1 and 128 characters")
+    if any(ord(char) < 0x20 or ord(char) == 0x7F for char in normalized):
+        raise ValidationFailure("Idempotency key must contain printable text")
+    return normalized
 
 
 def _publication_request_hash(

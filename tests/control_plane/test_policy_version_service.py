@@ -2,8 +2,12 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+import pytest
+
+from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.application.policy_version_service import (
     _catalogs_with_selected,
+    _validate_idempotency_key,
 )
 from dal_obscura.control_plane.domain.models import CatalogDraft, CompiledCatalog
 
@@ -33,3 +37,14 @@ def test_republishing_a_catalog_replaces_its_compiled_configuration() -> None:
         "options": {"uri": "https://new.example"},
         "revision": 3,
     }
+
+
+def test_idempotency_keys_are_bounded_printable_text() -> None:
+    assert _validate_idempotency_key("  publish-1  ") == "publish-1"
+
+    with pytest.raises(ValidationFailure, match="between 1 and 128"):
+        _validate_idempotency_key("   ")
+    with pytest.raises(ValidationFailure, match="printable"):
+        _validate_idempotency_key("publish\n1")
+    with pytest.raises(ValidationFailure, match="128"):
+        _validate_idempotency_key("x" * 129)
