@@ -54,6 +54,13 @@ build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 addopts = "-q --benchmark-skip"
+pythonpath = [
+  "src",
+  "packages/plugin-api/src",
+  "packages/plugin-conformance/src",
+  "packages/manifest-parquet-plugin/src",
+  "packages/iceberg-rest-plugin/src",
+]
 markers = [
   "heavy: tests that are intentionally excluded from the default pre-commit pytest hook",
 ]
