@@ -8,8 +8,10 @@ from typing import Any, cast
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pytest
 from dal_obscura_manifest_parquet.catalog import CATALOG_DESCRIPTOR, manifest_factory
 from dal_obscura_manifest_parquet.format import FORMAT_DESCRIPTOR, parquet_factory
+from dal_obscura_plugin_api import DiscoveryPage, ExecutionContext, TableHandle, TableIdentifier
 
 from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.common.query_planning.models import PlanRequest
@@ -18,7 +20,9 @@ from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     CatalogRegistry,
     ServiceConfig,
 )
+from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 from dal_obscura.data_plane.infrastructure.adapters.public_plugin_adapter import (
+    PublicPluginCatalogAdapter,
     PublicPluginTableFormat,
 )
 
@@ -89,3 +93,35 @@ def test_catalog_registry_routes_public_manifest_plugin_through_legacy_port(tmp_
     )
     assert projected_schema.names == ["id"]
     assert pa.Table.from_batches(list(projected_batches)).to_pylist() == [{"id": 1}]
+
+
+def test_public_iceberg_compatibility_path_enforces_metadata_destination(tmp_path: Path) -> None:
+    identifier = TableIdentifier(namespace=("default",), name="users")
+    handle = TableHandle(
+        catalog_plugin_id="rest.catalog",
+        catalog_instance_id="fixture",
+        catalog_revision=1,
+        identifier=identifier,
+        format_plugin_id="iceberg",
+        handle_version=1,
+        metadata={"metadata_location": "s3://untrusted/metadata.json"},
+    )
+
+    class Catalog:
+        def list_tables(self, context: ExecutionContext, *, continuation: str | None, limit: int):
+            return DiscoveryPage((identifier,))
+
+        def resolve_table(self, value: TableIdentifier, context: ExecutionContext):
+            assert value == identifier
+            return handle
+
+    adapter = PublicPluginCatalogAdapter(
+        "analytics",
+        {},
+        "rest.catalog",
+        lambda config, context: Catalog(),
+        lambda plugin_id: object(),
+        PathRuleEnforcer([{"root": str(tmp_path)}]),
+    )
+    with pytest.raises(PermissionError, match="not allowed"):
+        adapter.resolve_table("default.users")

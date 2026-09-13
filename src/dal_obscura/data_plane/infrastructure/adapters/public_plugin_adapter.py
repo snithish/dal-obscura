@@ -39,6 +39,7 @@ from dal_obscura.common.catalog.ports import (
 )
 from dal_obscura.common.query_planning.models import PlanRequest
 from dal_obscura.common.table_format.ports import InputPartition, Plan, ScanTask
+from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 
 MAX_PLUGIN_TASK_BYTES = 16 * 1024 * 1024
 MAX_PLUGIN_DISCOVERY_PAGES = 128
@@ -148,11 +149,13 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
         catalog_plugin_id: str,
         catalog_factory: PublicCatalogFactory,
         format_factory_loader: Callable[[str], object],
+        path_enforcer: PathRuleEnforcer | None = None,
     ) -> None:
         self._name = name
         self._catalog_plugin_id = catalog_plugin_id
         self._catalog_factory = catalog_factory
         self._format_factory_loader = format_factory_loader
+        self._path_enforcer = path_enforcer
         public_config = PublicCatalogConfig(
             plugin_id=catalog_plugin_id,
             instance_id=name,
@@ -183,6 +186,8 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
             metadata_location = handle.metadata.get("metadata_location")
             if not isinstance(metadata_location, str) or not metadata_location:
                 raise ValueError("Iceberg plugin handle is missing metadata_location")
+            if self._path_enforcer is not None:
+                self._path_enforcer.check(metadata_location)
             io_options = handle.metadata.get("io_options", {})
             if not isinstance(io_options, dict):
                 raise ValueError("Iceberg plugin handle has invalid io_options")
@@ -191,6 +196,7 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
                 table_name=target,
                 metadata_location=metadata_location,
                 io_options=dict(io_options),
+                path_enforcer=self._path_enforcer,
             )
         raw_factory = self._format_factory_loader(handle.format_plugin_id)
         if not callable(raw_factory):
