@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `171ed74`.
+Implementation follow-up through `c8f914e`.
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -106,6 +106,9 @@ Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_ST
   offline compile/metadata regression. Core and SDK contracts now reject malformed
   plugin IDs, unbounded capabilities, invalid catalog revisions, and non-canonical
   schema fingerprints, and unsafe/unbounded declarative config schemas.
+  Request-scoped execution contexts now require timezone-aware deadlines, bounded
+  correlation/capability values, and callable cancellation hooks in both core and
+  public contracts.
   Service-side compatibility contracts and online wheel artifact evidence remain
   open.
 - X12 admitted loading and Iceberg adapter: **implementing**; entry-point loading now
