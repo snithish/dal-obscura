@@ -351,6 +351,14 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Evidence: actor-auth security-header regression passed; changed-path Ruff passed. A built-browser CSP inspection remains part of the live OIDC/browser gate.
 - Remaining N05/B08 work: real OIDC code/PKCE browser journey, cookie/expiry/role freshness, and production profile bootstrap/recovery evidence. Release remains HOLD.
 
+## Implementation update — 64642e1 (2026-09-13)
+
+- Packet / status / candidate commit / owner: N03/B04 partial / VERIFY / `64642e1` / plugin configuration forms.
+- Observable behavior delivered: admitted plugin descriptors now validate boolean, integer, numeric, enum, string, URI, and secret-reference values with declared choices. The Connections UI renders typed controls and serializes values without coercing booleans or numbers to strings; unsupported descriptor types still fail closed.
+- Changed paths: catalog descriptor validation, Connections form rendering/serialization, and focused tests. Pickle serializers and task payloads are unchanged.
+- Evidence: plugin option and route tests passed; UI TypeScript passed; changed-path Ruff/format checks passed.
+- Remaining N03/B04 work: generated DTO/browser proof, real three-pair compatibility and consumer qualification. Release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
