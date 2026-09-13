@@ -76,6 +76,7 @@ class RestCatalog(CatalogPlugin):
         self._options = options
         self._catalog = None
         self._catalog_lock = Lock()
+        self._closed = False
 
     def list_tables(
         self,
@@ -127,10 +128,34 @@ class RestCatalog(CatalogPlugin):
             },
         )
 
+    def close(self) -> None:
+        """Release the provider session and make this catalog unusable."""
+
+        with self._catalog_lock:
+            if self._closed:
+                return
+            self._closed = True
+            catalog = self._catalog
+            self._catalog = None
+            if catalog is None:
+                return
+            close = getattr(catalog, "close", None)
+            if callable(close):
+                close()
+                return
+            session = getattr(catalog, "_session", None)
+            close = getattr(session, "close", None)
+            if callable(close):
+                close()
+
     def _load_catalog(self, context: ExecutionContext):
         self._validate_context(context)
+        if self._closed:
+            raise ValueError("REST catalog is closed")
         if self._catalog is None:
             with self._catalog_lock:
+                if self._closed:
+                    raise ValueError("REST catalog is closed")
                 if self._catalog is None:
                     from pyiceberg.catalog import load_catalog
 

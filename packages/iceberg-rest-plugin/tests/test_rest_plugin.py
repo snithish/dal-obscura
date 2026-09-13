@@ -193,3 +193,23 @@ def test_rest_catalog_initializes_provider_once_under_concurrency(monkeypatch) -
 
     assert calls == 1
     assert all(value is values[0] for value in values)
+
+
+def test_rest_catalog_close_releases_provider_session_and_is_terminal() -> None:
+    plugin = RestCatalog(_config(), _context())
+    closed = []
+
+    class Session:
+        def close(self):
+            closed.append(True)
+
+    class FakeCatalog:
+        _session = Session()
+
+    plugin._catalog = FakeCatalog()
+    plugin.close()
+    plugin.close()
+
+    assert closed == [True]
+    with pytest.raises(ValueError, match="closed"):
+        plugin.list_tables(_context(), limit=1)
