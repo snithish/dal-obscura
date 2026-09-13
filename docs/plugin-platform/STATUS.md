@@ -156,6 +156,13 @@ identities in completed review evidence, closing the authorship distinction in
 the handoff response. Full before/after diff rendering and independent browser
 acceptance remain VERIFY.
 
+Regression after the handoff slices: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv
+run --no-sync pytest tests/control_plane tests/interfaces/control_plane
+tests/common/config_store tests/plugin_platform tests/architecture -q` passed
+all collected tests. Plugin conformance passed (2 tests); direct UI TypeScript/
+Vite production build passed (264.88 kB JavaScript, 14.22 kB CSS); UI lifecycle
+and schema tests passed (5). No pickle fixture or serializer paths changed.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
