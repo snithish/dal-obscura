@@ -16,6 +16,7 @@ from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.errors import AuthorizationFailure
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 from dal_obscura.control_plane.interfaces.routes.schemas import (
+    AssetAccessResponse,
     AssetGrantsRequest,
     AssetOwnersRequest,
     AssetRequest,
@@ -63,11 +64,15 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
     ) -> object:
         return deps.with_service(lambda service: service.get_workspace_asset(asset_id, actor))
 
-    @api.get("/v1/assets/{asset_id}/access")
+    @api.get(
+        "/v1/assets/{asset_id}/access",
+        response_model=AssetAccessResponse,
+        response_model_exclude_none=True,
+    )
     def get_asset_access(
         asset_id: UUID,
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
+    ) -> AssetAccessResponse:
         return deps.with_service(lambda service: service.get_asset_access(asset_id, actor))
 
     @api.get("/v1/assets/{asset_id}/schema")

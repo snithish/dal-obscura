@@ -124,6 +124,33 @@ class RuntimeSettingsResponse(BaseModel):
     revision: int
 
 
+class SessionResponse(BaseModel):
+    """Safe authenticated actor metadata for browser and API clients."""
+
+    principal: str
+    groups: list[str]
+    platform_admin: bool
+    capabilities: list[str]
+    issuer: str | None = None
+
+
+class AssetCapabilityResponse(BaseModel):
+    """One server-resolved capability and its explainable reasons."""
+
+    capability: Literal["read", "edit", "publish", "grant"]
+    allowed: bool
+    reasons: list[str]
+
+
+class AssetAccessResponse(BaseModel):
+    """Effective capabilities for one governed asset and actor."""
+
+    asset_id: str
+    principal: str
+    issuer: str | None = None
+    capabilities: list[AssetCapabilityResponse]
+
+
 class AuthProviderResponse(BaseModel):
     """Redacted authentication-provider record returned to management clients."""
 

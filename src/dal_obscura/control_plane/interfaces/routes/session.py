@@ -20,7 +20,7 @@ from fastapi.responses import RedirectResponse
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
-from dal_obscura.control_plane.interfaces.routes.schemas import DemoLoginRequest
+from dal_obscura.control_plane.interfaces.routes.schemas import DemoLoginRequest, SessionResponse
 from dal_obscura.control_plane.interfaces.session_api import (
     actor_response,
     demo_login_config,
@@ -150,8 +150,8 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         result.delete_cookie(key="dal_obscura_auth_state", path="/")
         return result
 
-    @api.get("/v1/session")
-    def get_session(actor: ControlPlaneActor = Depends(deps.require_actor)) -> object:  # noqa: B008
+    @api.get("/v1/session", response_model=SessionResponse, response_model_exclude_none=True)
+    def get_session(actor: ControlPlaneActor = Depends(deps.require_actor)) -> SessionResponse:  # noqa: B008
         return actor_response(actor)
 
     @api.get("/v1/session/options")
