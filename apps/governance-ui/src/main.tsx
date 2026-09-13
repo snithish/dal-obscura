@@ -4,6 +4,7 @@ import type { ApiFailure, Asset, Mask, PolicyRule, Preview, Session, SessionOpti
 import { controlPlane } from "./api";
 import { isCurrentEpoch } from "./lifecycle";
 import { locationFromUrl, pageFromHash, type UiPage } from "./navigation";
+import { recoveryMessage } from "./recovery";
 import { LoginPanel } from "./components/LoginPanel";
 import { SettingsView } from "./components/SettingsView";
 import { ConnectionsView } from "./components/ConnectionsView";
@@ -194,8 +195,7 @@ function App() {
       if (!isCurrentEpoch(epoch, managementEpoch.current)) return;
       if (error instanceof DOMException && error.name === "AbortError") return;
       const failure = error as ApiFailure;
-      const message = failure.status === 403 ? "Your account can view the workspace, but it does not have permission to open this management view." : "This management view could not be loaded. The server may be unavailable or the session may have expired.";
-      setManagementError(`${message}${failure.requestId ? ` Request ID: ${failure.requestId}` : ""}`);
+      setManagementError(recoveryMessage(failure, "This management view could not be loaded. The server may be unavailable or the session may have expired."));
     } finally {
       if (epoch === managementEpoch.current) setManagementLoading(false);
     }
@@ -216,7 +216,7 @@ function App() {
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       if (!isCurrentEpoch(scope, managementEpoch.current)) return;
-      setNotice("More history could not be loaded. The entries already visible remain available.");
+      setNotice(recoveryMessage(error, "More history could not be loaded. The entries already visible remain available."));
     } finally {
       if (scope === managementEpoch.current) setHistoryLoading(false);
       if (controller === historyAbortController.current) historyAbortController.current = null;
@@ -238,7 +238,7 @@ function App() {
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       if (!isCurrentEpoch(scope, managementEpoch.current)) return;
-      setNotice("More activity could not be loaded. The entries already visible remain available.");
+      setNotice(recoveryMessage(error, "More activity could not be loaded. The entries already visible remain available."));
     } finally {
       if (scope === managementEpoch.current) setAuditLoading(false);
       if (controller === auditAbortController.current) auditAbortController.current = null;
@@ -314,10 +314,10 @@ function App() {
       setAssetCursor(pageResult.next_cursor);
       setAssetHasMore(Boolean(pageResult.next_cursor));
       if (!append && !pageResult.items.length) setNotice("No governed assets match this search.");
-    } catch {
+    } catch (error) {
       if (controller.signal.aborted) return;
       if (epoch !== inventoryEpoch.current) return;
-      setNotice("Asset inventory could not be loaded. Your current editor state remains unchanged.");
+      setNotice(recoveryMessage(error, "Asset inventory could not be loaded. Your current editor state remains unchanged."));
     } finally {
       if (epoch === inventoryEpoch.current) setAssetInventoryLoading(false);
       if (controller === inventoryAbortController.current) inventoryAbortController.current = null;
@@ -459,7 +459,7 @@ function App() {
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       if (inheritedEpoch !== undefined && epoch !== loadEpoch.current) return;
-      setNotice("Could not load this asset and its access metadata. Your previous editor state remains unchanged.");
+      setNotice(recoveryMessage(error, "Could not load this asset and its access metadata. Your previous editor state remains unchanged."));
     }
   }
 
@@ -528,9 +528,9 @@ function App() {
         return;
       }
       setSaveState("saved"); setReviewToken(null); setNotice("Policy draft saved to the control plane.");
-    } catch {
+    } catch (error) {
       if (loadScope !== loadEpoch.current || editEpoch !== draftEditEpoch.current) return;
-      setSaveState("failed"); setNotice("Save failed. The unsaved draft remains in this browser.");
+      setSaveState("failed"); setNotice(recoveryMessage(error, "Save failed. The unsaved draft remains in this browser."));
     }
   }
   async function runPreview() {
@@ -551,9 +551,9 @@ function App() {
       const result: Preview = await controlPlane.evaluate(asset.id, { principal: previewPrincipal.trim(), groups: previewGroups.split(",").map((value) => value.trim()).filter(Boolean), claims, draft_id: draftId ?? undefined, draft_revision: draftRevision });
       if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
       setPreview(result); setReviewToken(null); setNotice(`Server-side evaluation completed: ${result.decision === "allow" ? "allowed" : "denied"}.`);
-    } catch {
+    } catch (error) {
       if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
-      setPreview(null); setReviewToken(null); setNotice("Policy test could not run. This draft is not validated.");
+      setPreview(null); setReviewToken(null); setNotice(recoveryMessage(error, "Policy test could not run. This draft is not validated."));
     }
   }
 
@@ -567,9 +567,9 @@ function App() {
       const result = await controlPlane.review(asset.id, { principal: previewPrincipal.trim(), groups: previewGroups.split(",").map((value) => value.trim()).filter(Boolean), claims, draft_id: draftId ?? undefined, draft_revision: draftRevision });
       if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
       setPreview(result); setReviewToken(result.review_token ?? null); setNotice("Server review is current for this saved draft revision. You can publish it now.");
-    } catch {
+    } catch (error) {
       if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
-      setReviewToken(null); setNotice("Review was rejected. Run a successful test against the saved draft and resolve any policy or schema errors.");
+      setReviewToken(null); setNotice(recoveryMessage(error, "Review was rejected. Run a successful test against the saved draft and resolve any policy or schema errors."));
     }
   }
 
@@ -594,9 +594,9 @@ function App() {
         } else {
           setNotice("Publish outcome is still pending. Refresh Activity before retrying.");
         }
-      } catch {
+      } catch (error) {
         if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
-        setNotice("Publish failed. Review the saved draft and active generation.");
+        setNotice(recoveryMessage(error, "Publish failed. Review the saved draft and active generation."));
       }
     } finally {
       if (loadScope === loadEpoch.current) {
@@ -619,9 +619,9 @@ function App() {
       setSaveState("saved");
       setPreview(null); setReviewToken(null);
       setNotice(`Version ${policyVersion} restored as draft revision ${restored.revision}. Review and publish it when ready.`);
-    } catch {
+    } catch (error) {
       if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
-      setNotice("Restore failed. The draft may have changed; reload the asset before trying again.");
+      setNotice(recoveryMessage(error, "Restore failed. The draft may have changed; reload the asset before trying again."));
     }
   }
 
