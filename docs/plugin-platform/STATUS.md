@@ -166,6 +166,14 @@ all collected tests. Plugin conformance passed (2 tests); direct UI TypeScript/
 Vite production build passed (264.88 kB JavaScript, 14.22 kB CSS); UI lifecycle
 and schema tests passed (5). No pickle fixture or serializer paths changed.
 
+## Implementation update — 96bfdf6 (2026-09-13)
+
+- Packet / status / candidate commit / owner: N02/B03 partial / VERIFY / `96bfdf6` / control-plane + governance UI + test fixtures.
+- Observable behavior delivered: public `/policy-rules` and `/policy-preview` routes are absent from OpenAPI and return side-effect-free 404 tombstones. The UI and test fixtures use revisioned `/draft`; evaluation uses `/policy-evaluate`. Workspace publication consumes the latest saved draft per asset, and inventory policy status recognizes non-empty saved drafts.
+- Changed paths: policy route adapter, repository publication/status assembly, UI API and README, route inventory, and migrated API fixtures. Internal policy helpers and protected pickle paths remain intact.
+- Evidence: migrated control-plane/API suites and route inventory passed; direct UI TypeScript/Vite build passed. `rg` finds no production callers for retired route methods. Release remains HOLD.
+- Remaining N02/B03 work: remove remaining duplicate SDK/contract definitions, three-part lock and alias residue, enforce strict old-input rejection and maintenance-mode offline conversion, and prove clean installed-wheel migration.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
