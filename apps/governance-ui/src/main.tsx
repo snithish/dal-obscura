@@ -73,6 +73,7 @@ function App() {
   const assetAbortController = useRef<AbortController | null>(null);
   const managementAbortController = useRef<AbortController | null>(null);
   const workspaceAbortController = useRef<AbortController | null>(null);
+  const inventoryAbortController = useRef<AbortController | null>(null);
   const historyAbortController = useRef<AbortController | null>(null);
   const auditAbortController = useRef<AbortController | null>(null);
   const [logoutPending, setLogoutPending] = useState(false);
@@ -111,6 +112,7 @@ function App() {
     managementEpoch.current += 1;
     if (searchTimer.current !== undefined) window.clearTimeout(searchTimer.current);
     assetAbortController.current?.abort();
+    inventoryAbortController.current?.abort();
     managementAbortController.current?.abort();
     workspaceAbortController.current?.abort();
     historyAbortController.current?.abort();
@@ -136,6 +138,7 @@ function App() {
       inventoryEpoch.current += 1;
       managementEpoch.current += 1;
       assetAbortController.current?.abort();
+      inventoryAbortController.current?.abort();
       managementAbortController.current?.abort();
       workspaceAbortController.current?.abort();
       historyAbortController.current?.abort();
@@ -285,12 +288,16 @@ function App() {
 
   async function refreshAssetInventory(search: string, append = false) {
     const epoch = ++inventoryEpoch.current;
+    inventoryAbortController.current?.abort();
+    const controller = new AbortController();
+    inventoryAbortController.current = controller;
     setAssetInventoryLoading(true);
     try {
       const pageResult = await controlPlane.listAssetPage({
         limit: 50,
         cursor: append ? assetCursor ?? undefined : undefined,
         search: search.trim() || undefined,
+        signal: controller.signal,
       });
       if (epoch !== inventoryEpoch.current) return;
       setAssets((current) => append ? [...current, ...pageResult.items] : pageResult.items);
@@ -298,10 +305,12 @@ function App() {
       setAssetHasMore(Boolean(pageResult.next_cursor));
       if (!append && !pageResult.items.length) setNotice("No governed assets match this search.");
     } catch {
+      if (controller.signal.aborted) return;
       if (epoch !== inventoryEpoch.current) return;
       setNotice("Asset inventory could not be loaded. Your current editor state remains unchanged.");
     } finally {
       if (epoch === inventoryEpoch.current) setAssetInventoryLoading(false);
+      if (controller === inventoryAbortController.current) inventoryAbortController.current = null;
     }
   }
 
@@ -341,6 +350,7 @@ function App() {
     inventoryEpoch.current += 1;
     managementEpoch.current += 1;
     assetAbortController.current?.abort();
+    inventoryAbortController.current?.abort();
     managementAbortController.current?.abort();
     workspaceAbortController.current?.abort();
     historyAbortController.current?.abort();
