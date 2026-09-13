@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `36633af` (catalog mutation lock ordering;
+Implementation follow-up through `5b152aa` (external-catalog Iceberg schema bridge;
+catalog mutation lock ordering;
 workspace generation lock ordering;
 direct policy mutation locking;
 bounded discovery page typing;
@@ -340,6 +341,12 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   authoring use the same registry boundary as the data plane.
   Control-plane schema discovery also verifies each returned catalog and
   table-format descriptor against the admitted kind/ID before provider work.
+  External catalog handles bound to the admitted `iceberg` format now use an
+  explicit compatibility bridge into the built-in Iceberg schema adapter. The
+  bridge validates provider-returned metadata locations against the configured
+  storage egress allowlist before any storage access, preserving the public
+  catalog identity boundary while keeping legacy Iceberg and pickle paths
+  unchanged.
   Both service composition roots now accept an optional operator-mounted
   `DAL_OBSCURA_PLUGIN_LOCK_FILE`; its bounded parser rejects symlinks,
   group/world-writable files, malformed identities, duplicates, and incomplete
@@ -468,6 +475,22 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
 Next implementation action: continue X03 with PostgreSQL barrier/CAS evidence and
 then complete X06 provider-derived and collection field identity rules. Do not add new
 providers before Phase A's security/correctness prerequisites are accepted.
+
+### X13 external-catalog Iceberg schema bridge — `5b152aa`
+
+- State: implementing.
+- Behavior: admitted external catalog handles whose format identity is the
+  built-in `iceberg` adapter now route through an explicit compatibility path
+  that constructs the legacy Iceberg schema reader from the provider's bounded
+  metadata location. The location is checked against the configured egress
+  allowlist before storage access; malformed metadata and invalid Arrow schemas
+  fail closed. Existing legacy discovery and pickle-backed execution paths are
+  unchanged.
+- Green evidence: `tests/control_plane/test_schema_service.py` (13 passed),
+  aggregate plugin/control-plane acceptance suite (all passed), Ruff, Ty, and
+  `git diff --check`.
+- Remaining gaps: live REST provider, TLS/OIDC, clean wheel, and mixed-version
+  migration evidence remain open.
 
 ### X03 direct mutation row locks — `165015f`
 
