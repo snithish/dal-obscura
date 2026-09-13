@@ -332,6 +332,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Evidence: settings, OpenAPI, and migration tests passed; UI TypeScript passed; changed-path Ruff/format checks passed.
 - Remaining N03/B05 work: generated DTO/browser proof and live process-boundary execution. Release remains HOLD.
 
+## Implementation update — local parity verification (2026-09-13)
+
+- Packet / status / candidate commit / owner: N03/B05 / VERIFY / working tree verification / control-plane + UI.
+- Observable behavior delivered: the disposable UI database was upgraded from `20260913_0016` to packaged head `20260913_0018`; the updated control plane restarted successfully and serves the authenticated provider list and revision endpoint. `GET /v1/settings/auth-providers/revision` with the local admin bearer returned `{"revision":0}`, the provider list returned `[]`, and the Vite UI root returned HTTP 200.
+- Evidence: `DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:////private/tmp/dal-obscura-ui-dev-8821.db uv run dal-obscura-migrate upgrade`; live curl checks against `127.0.0.1:8821` and `127.0.0.1:5173`.
+- Remaining release gates: production OIDC/browser lifecycle, generated DTO/browser proof, real PostgreSQL race matrix, live catalog/consumer qualification, capacity/recovery, and independent security/UX review. Release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
