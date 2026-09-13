@@ -1,7 +1,7 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `e6e1fdd` (bounded browser session lifetimes at `e6e1fdd`; ledger update for runtime descriptor checks at `f3adebb`; runtime descriptor verification at `e074d5c`; per-batch plugin output validation at `97da8cb`; public task payload boundary at `0f09d42`; ticket-handle metadata bounds at `fc90ddc`; secure REST auxiliary URI checks at `6ee3d81`; REST identifier validation at `4980609`; ledger update for manifest deadline enforcement at `827c6a9`; manifest deadline enforcement at `97663b7`; session-expiry fence at `4e2ac7d`; public option bounds at `17ab77f`; symlink rejection at `6136224`; malformed-entry isolation at `6c129d3`; REST descriptor contract at `7adb4d6`; concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
+Implementation follow-up through `a318b97` (manifest nested schema identity validation at `a318b97`; bounded browser session lifetimes at `e6e1fdd`; ledger update for runtime descriptor checks at `f3adebb`; runtime descriptor verification at `e074d5c`; per-batch plugin output validation at `97da8cb`; public task payload boundary at `0f09d42`; ticket-handle metadata bounds at `fc90ddc`; secure REST auxiliary URI checks at `6ee3d81`; REST identifier validation at `4980609`; ledger update for manifest deadline enforcement at `827c6a9`; manifest deadline enforcement at `97663b7`; session-expiry fence at `4e2ac7d`; public option bounds at `17ab77f`; symlink rejection at `6136224`; malformed-entry isolation at `6c129d3`; REST descriptor contract at `7adb4d6`; concealed-resource auth expectation at `7aa68da`; package-local descriptor admission at `68cb011`; authenticated UI gate and REST descriptor packaging at `67ec022`; REST qualification at `96068ee`; authoring routing at `6890b3f`).
 Review date: 2026-09-13. **Paid-production release: HOLD.**
 
 This task began with review/planning documents and now includes incremental runtime,
@@ -44,6 +44,10 @@ Admitted catalog/format factories that expose runtime descriptors are checked fo
 kind and plugin identity before use.
 Browser session and idle lifetimes are bounded at control-plane construction (24
 hours absolute, 2 hours idle) so cached UI privilege cannot be indefinite.
+The manifest/Parquet adapter now validates its ticket-bound schema identity metadata
+against the pinned Arrow schema before opening a format. Collection paths use the
+same `$element`, `$key`, and `$value` markers as core policy resolution, including
+large-list and fixed-size-list encodings.
 Local probes are recorded in [the review](IMPLEMENTATION_REVIEW.md).
 Earlier implementation evidence remains in [the UI ledger](../ui-v2/EXECUTION_STATUS.md).
 
@@ -749,6 +753,23 @@ remain open.
 - Pickle compatibility: unchanged.
 - Next permitted packet: continue X06 explicit schema-evolution policy tests,
   while X03 PostgreSQL transaction barriers remain an external gate.
+
+### X06 manifest handle identity boundary — `a318b97`
+
+- State: implementing.
+- Behavior: manifest catalog handles are checked again by the Parquet format
+  adapter before file access. Missing, malformed, reordered, or forged identity
+  metadata is rejected; list, large-list, fixed-size-list, and map paths use the
+  core collection markers.
+- Green evidence: manifest plugin suite (9 tests), Ruff, Ty, and `git diff --check`
+  pass.
+- Remaining gaps: provider-native nested IDs for other adapters, persisted schema
+  scope/evolution policy, PostgreSQL/browser/consumer acceptance, and clean wheel
+  evidence remain open.
+- Pickle compatibility: unchanged; only the pre-existing trusted task boundary is
+  used.
+- Next permitted packet: continue X06 explicit schema-evolution policy and X03
+  PostgreSQL transaction-barrier evidence.
 
 ### X06 duplicate identity rejection — `5c17d04`
 
