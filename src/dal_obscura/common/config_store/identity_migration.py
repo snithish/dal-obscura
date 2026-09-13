@@ -188,6 +188,10 @@ def _set_policy_principal(
 def _convert(value: str, issuers: tuple[str, ...]) -> str | IdentityMigrationError | None:
     if not isinstance(value, str) or "|" not in value:
         return None
+    # Local actors intentionally retain their legacy unscoped representation;
+    # only values that look like federated issuer-prefixed keys are candidates.
+    if value.startswith(("local|", "group:local|")):
+        return None
     if "%7C" in value or "%25" in value:
         return value
     matches: list[tuple[str, str]] = []
