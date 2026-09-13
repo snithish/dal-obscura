@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `86e1eee` (A22 recovery/upgrade acceptance
+Implementation follow-up through `0d224ee` (explicit plugin admission lifecycle
+transitions; A22 recovery/upgrade acceptance
 probes; isolated restore runbook and
 recovery helper hardening; encrypted PostgreSQL backup helpers; fresh-identity race correction;
 CI PostgreSQL concurrency lane;
@@ -1474,6 +1475,21 @@ and manifest packages.
 - Remaining gaps: run the PostgreSQL case against a disposable instance,
   execute encrypted backup/restore with real `age` tooling, measure RPO/RTO,
   and complete plugin drain/remove plus mixed-version upgrade/rollback evidence.
+  Pickle compatibility is unchanged.
+
+### X20 plugin admission lifecycle — `0d224ee`
+
+- State: implementing.
+- Behavior: the registry now carries explicit `enabled`, `draining`, `disabled`,
+  `revoked`, and terminal `removed` states. Invalid transitions fail closed;
+  draining/disabled/revoked/removed plugins reject new factory admissions, while
+  status diagnostics expose non-enabled lifecycle state without enumerating
+  unapproved installations. Locks and historical publications remain immutable.
+- Green evidence: registry and authenticated plugin-route tests pass (26), Ruff,
+  Ty, and `git diff --check` pass.
+- Remaining gaps: persist/operator-authorize lifecycle changes, track in-flight
+  leases for a measured drain, wire disable/revoke to publication admission and
+  ticket invalidation, and exercise upgrade/remove transitions across workers.
   Pickle compatibility is unchanged.
 
 ### X19 production database privilege ordering — `18f8e64`
