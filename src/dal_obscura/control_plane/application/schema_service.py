@@ -141,7 +141,11 @@ def _load_public_plugin_schema(
 
     from datetime import datetime, timedelta, timezone
 
-    from dal_obscura_plugin_api import CatalogConfig, ExecutionContext, TableIdentifier
+    from dal_obscura_plugin_api import (
+        CatalogConfig,
+        ExecutionContext,
+        TableIdentifier,
+    )
 
     catalog_plugin_id = str(catalog["module"])
     format_plugin_id = str(asset["backend"])
@@ -165,6 +169,7 @@ def _load_public_plugin_schema(
             ),
             context,
         )
+        _validate_plugin_descriptor(catalog_plugin, "catalog", catalog_plugin_id)
         _require_plugin_methods(
             catalog_plugin,
             ("validate_config", "list_namespaces", "resolve_table", "close"),
@@ -181,6 +186,7 @@ def _load_public_plugin_schema(
         if handle.format_plugin_id != format_plugin_id:
             raise ValidationFailure("Catalog and table-format plugins do not match")
         format_plugin = format_factory(handle, context)
+        _validate_plugin_descriptor(format_plugin, "table_format", format_plugin_id)
         _require_plugin_methods(format_plugin, ("schema", "close"), "table-format")
         descriptor = format_plugin.schema(handle, context)
         if not isinstance(descriptor, SchemaDescriptor):
@@ -201,6 +207,16 @@ def _load_public_plugin_schema(
 def _require_plugin_methods(plugin: object, names: tuple[str, ...], kind: str) -> None:
     if not all(callable(getattr(plugin, name, None)) for name in names):
         raise ValidationFailure(f"Admitted {kind} plugin has an incomplete lifecycle")
+
+
+def _validate_plugin_descriptor(plugin: object, kind: str, plugin_id: str) -> None:
+    from dal_obscura_plugin_api import PluginDescriptor
+
+    descriptor = getattr(plugin, "descriptor", None)
+    if not isinstance(descriptor, PluginDescriptor):
+        raise ValidationFailure(f"Admitted {kind} plugin has an invalid descriptor")
+    if descriptor.kind != kind or descriptor.plugin_id != plugin_id:
+        raise ValidationFailure(f"Admitted {kind} plugin identity does not match its binding")
 
 
 def _close_plugin(plugin: object) -> None:

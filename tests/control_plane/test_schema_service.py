@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 
 import pyarrow as pa
 import pytest
-from dal_obscura_plugin_api import SchemaDescriptor, TableHandle, TableIdentifier
+from dal_obscura_plugin_api import PluginDescriptor, SchemaDescriptor, TableHandle, TableIdentifier
 from pyiceberg.schema import Schema
 from pyiceberg.types import (
     IntegerType,
@@ -192,6 +192,15 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None:
     )
 
     class PublicCatalog:
+        descriptor = PluginDescriptor(
+            kind="catalog",
+            plugin_id="fixture.catalog",
+            api_version="1",
+            config_version=1,
+            distribution="fixture",
+            version="1.0.0",
+        )
+
         def validate_config(self, context):
             del context
 
@@ -208,6 +217,15 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None:
             closed.append("catalog")
 
     class PublicFormat:
+        descriptor = PluginDescriptor(
+            kind="table_format",
+            plugin_id="fixture.format",
+            api_version="1",
+            config_version=1,
+            distribution="fixture",
+            version="1.0.0",
+        )
+
         def schema(self, value, context):
             del context
             assert value == handle
