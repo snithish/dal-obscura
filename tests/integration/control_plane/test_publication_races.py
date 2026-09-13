@@ -134,3 +134,30 @@ def test_concurrent_draft_cas_allows_one_revision_zero_writer(postgres_engine: E
 
     assert sum(isinstance(result, dict) for result in results) == 1
     assert sum(isinstance(result, PublicationConflictError) for result in results) == 1
+
+
+def test_concurrent_grant_replacements_use_asset_revision_cas(postgres_engine: Engine) -> None:
+    _cell_id, asset_id = _provision_asset(postgres_engine)
+    start_barrier = Barrier(2)
+
+    def replace_grants(principal: str) -> list[dict[str, str]] | Exception:
+        with Session(postgres_engine, future=True) as session:
+            store = PublicationStore(session)
+            try:
+                start_barrier.wait(timeout=10)
+                result = store.replace_asset_grants(
+                    asset_id=asset_id,
+                    expected_revision=0,
+                    grants=[{"principal": principal, "capability": "read"}],
+                )
+                session.commit()
+                return result
+            except Exception as exc:
+                session.rollback()
+                return exc
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(replace_grants, ("user:grant-a", "user:grant-b")))
+
+    assert sum(isinstance(result, list) for result in results) == 1
+    assert sum(isinstance(result, PublicationConflictError) for result in results) == 1
