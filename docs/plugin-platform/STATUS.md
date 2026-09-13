@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `cede42f` (schema-scoped synthetic field IDs;
+Implementation follow-up through `3c3709b` (asset binding plugin validation;
+schema-scoped synthetic field IDs;
 direct asset mutation row locks;
 operator plugin-lock startup loading;
 forged descriptor regression;
@@ -334,6 +335,8 @@ Registry admission now rejects self-consistent locks that claim unsupported API 
   Control-plane Arrow synthetic field IDs now include the complete schema-shape
   digest and logical path, matching the data-plane identity rule so semantic
   changes require reapproval.
+  Asset binding saves now validate admitted catalog/format identity, capability
+  overlap, and table-format declarative options before persisting configuration.
   Legacy Iceberg discovery now rejects malformed, non-printable, or oversized
   namespace/table segments instead of coercing them into new logical identities.
   Additive migration `20260913_0014` persists qualified catalog/format identities
@@ -470,6 +473,18 @@ providers before Phase A's security/correctness prerequisites are accepted.
   Ty, and `git diff --check`.
 - Remaining gaps: provider-derived IDs from live format metadata and complete
   schema-evolution acceptance remain open. Pickle compatibility is unchanged.
+
+### X07/X14 asset binding validation — `3c3709b`
+
+- State: implementing.
+- Behavior: asset saves now reject non-admitted catalog/format identities,
+  capability-incompatible pairs, and table-format options outside the admitted
+  descriptor form. Validation occurs before persistence and is independent of
+  browser controls.
+- Green evidence: asset plugin-binding and policy authorization suites (9 passed),
+  Ruff, Ty, and `git diff --check`.
+- Remaining gaps: provider-specific typed options, live secret/IO enforcement,
+  and browser/provider acceptance remain open. Pickle compatibility is unchanged.
 
 ### X03 catalog binding replacement — `1771f26`
 
