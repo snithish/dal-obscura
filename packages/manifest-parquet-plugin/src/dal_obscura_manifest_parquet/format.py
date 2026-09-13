@@ -17,7 +17,7 @@ from dal_obscura_plugin_api import (
     TableHandle,
 )
 
-from dal_obscura_manifest_parquet.catalog import _check_context
+from dal_obscura_manifest_parquet.catalog import _check_context, _reject_symlink_components
 
 _MAX_BATCH_ROWS = 65_536
 
@@ -157,6 +157,7 @@ def _safe_member(root: Path, relative_path: str) -> Path:
     candidate = Path(relative_path)
     if candidate.is_absolute() or len(relative_path) > 1_024:
         raise ValueError("manifest member path is invalid")
+    _reject_symlink_components(root, root / candidate)
     try:
         (root / candidate).resolve(strict=False).relative_to(root)
     except ValueError as exc:

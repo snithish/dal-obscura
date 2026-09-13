@@ -255,6 +255,7 @@ def _required_path(value: object, label: str) -> Path:
 def _safe_child(root: Path, candidate: Path) -> Path:
     if not candidate.is_absolute():
         candidate = root / candidate
+    _reject_symlink_components(root, candidate)
     try:
         candidate.resolve(strict=False).relative_to(root)
     except ValueError as exc:
@@ -268,6 +269,20 @@ def _safe_child(root: Path, candidate: Path) -> Path:
     except ValueError as exc:
         raise ValueError("manifest path escapes the configured root") from exc
     return resolved
+
+
+def _reject_symlink_components(root: Path, candidate: Path) -> None:
+    """Reject link indirection before resolving a governed path."""
+
+    try:
+        relative = candidate.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("manifest path escapes the configured root") from exc
+    current = root
+    for part in relative.parts:
+        current /= part
+        if current.is_symlink():
+            raise ValueError("manifest path may not traverse a symlink")
 
 
 def _check_context(context: ExecutionContext) -> None:

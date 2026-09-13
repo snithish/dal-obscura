@@ -114,6 +114,28 @@ def test_manifest_rejects_member_escape_and_schema_drift(tmp_path):
         raise AssertionError("expected manifest member escape rejection")
 
 
+def test_manifest_rejects_symlinked_member(tmp_path):
+    root, manifest, _table = _write_fixture(tmp_path)
+    link = root / "linked.parquet"
+    try:
+        link.symlink_to(root / "part-0.parquet")
+    except OSError:
+        pytest.skip("symlinks are unavailable on this runner")
+    payload = json.loads(manifest.read_text())
+    payload["tables"]["default.users"]["files"] = ["linked.parquet"]
+    manifest.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="symlink"):
+        ManifestCatalog(
+            CatalogConfig(
+                plugin_id="manifest",
+                instance_id="fixture",
+                revision=1,
+                options={"root": str(root), "manifest_path": str(manifest)},
+            ),
+            _context(),
+        )
+
+
 def test_parquet_format_accepts_wildcard_projection(tmp_path):
     root, manifest, table = _write_fixture(tmp_path)
     context = _context()
