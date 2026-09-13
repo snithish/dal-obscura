@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `4942dfc` (public discovery lifecycle;
+Implementation follow-up through `a539c3f` (public discovery identity boundary;
+public discovery lifecycle;
 data-plane catalog lifecycle validation; public adapter cleanup;
 authenticated UI navigation;
 catalog lifecycle conformance;
@@ -85,6 +86,9 @@ Iceberg-only workflow.
 The public format bridge also rejects a descriptor that claims stable provider
 IDs when its Arrow schema has no provider ID metadata, keeping plugin claims
 aligned with the schema admission contract.
+Public discovery now accepts only SDK table identifiers and bounded printable
+continuation tokens, preventing forged provider-shaped objects from becoming
+governed catalog identities.
 Public plugin format calls now carry one request context through factory, schema, planning, and execution. Deadline/cancellation checks run after provider calls and before every lazy Arrow batch, preventing cancelled or expired plugins from continuing into DuckDB or Flight.
 Public plugin schemas now pass through the shared Arrow node, depth, and encoded
 size budgets before they can be planned or executed.
@@ -484,6 +488,16 @@ providers before Phase A's security/correctness prerequisites are accepted.
   `git diff --check`.
 - Remaining gaps: clean isolated wheels, external provider lifecycle, and live
   serving evidence remain open. Pickle compatibility is unchanged.
+
+### X13 public discovery identity boundary — `a539c3f`
+
+- State: implementing.
+- Behavior: control-plane discovery rejects forged table identifier objects and
+  oversized or control-character continuation tokens before inventory persistence.
+- Green evidence: `tests/control_plane/test_catalog_discovery.py` (12 passed),
+  Ruff, and `git diff --check`.
+- Remaining gaps: live provider termination, cross-worker capacity, external wheel,
+  and browser evidence remain open. Pickle compatibility is unchanged.
 
 ### X16 REST namespace lifecycle — `8c73c41`
 
