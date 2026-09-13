@@ -1,7 +1,8 @@
 # Plugin platform progress ledger
 
 Baseline reviewed: `5208eee9af35e38b5ab8294524a0485611c2b0a7`.
-Implementation follow-up through `ca88316` (plugin lock identity validation;
+Implementation follow-up through `b5dd0d4` (public discovery concurrency bound;
+plugin lock identity validation;
 publication rollback coverage;
 idempotency-key validation;
 publication idempotency coverage;
@@ -547,6 +548,19 @@ providers before Phase A's security/correctness prerequisites are accepted.
 - Remaining gaps: clean wheel provenance, duplicate installed distributions,
   external package admission, and production artifact evidence remain open.
   Pickle compatibility is unchanged.
+
+### X08 public discovery concurrency bound — `b5dd0d4`
+
+- State: implementing.
+- Behavior: admitted public catalog discovery now consumes the same bounded
+  process-wide semaphore as the legacy Iceberg path. Slots are released when
+  factory lookup, provider lifecycle, iteration, or cleanup fails, so external
+  plugins cannot bypass the aggregate admission limit or strand capacity.
+- Green evidence: catalog-discovery suite (14 passed), Ruff, and
+  `git diff --check`.
+- Remaining gaps: cross-worker aggregate limits, provider interruption, and
+  live timeout/termination evidence remain open. Pickle compatibility is
+  unchanged.
 
 ### X07/X14 asset binding validation — `3c3709b`
 
