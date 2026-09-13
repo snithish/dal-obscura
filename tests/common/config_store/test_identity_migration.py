@@ -87,10 +87,12 @@ def test_identity_migration_previews_and_applies_known_issuer_keys() -> None:
         assert applied.converted == 2
         session.commit()
 
-        assert session.get(
-            AssetOwnerRecord, session.query(AssetOwnerRecord).first().id
-        ).principal == ("https://issuer.example/realm/|alice%7Cone")
-        assert session.query(PolicyRuleRecord).first().principals_json == [
+        owner = session.query(AssetOwnerRecord).first()
+        policy_rule = session.query(PolicyRuleRecord).first()
+        assert owner is not None
+        assert policy_rule is not None
+        assert owner.principal == ("https://issuer.example/realm/|alice%7Cone")
+        assert policy_rule.principals_json == [
             "https://issuer.example/realm/|group:analysts%7Ceast"
         ]
 
@@ -133,7 +135,9 @@ def test_identity_migration_refuses_unknown_keys_without_mutation() -> None:
             pass
         else:
             raise AssertionError("unknown identity keys must block migration")
-        assert session.query(AssetOwnerRecord).first().principal == "unknown|legacy"
+        owner = session.query(AssetOwnerRecord).first()
+        assert owner is not None
+        assert owner.principal == "unknown|legacy"
 
 
 def test_identity_migration_leaves_local_identity_keys_unchanged() -> None:

@@ -1,19 +1,18 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import cast
+from typing import Any, cast
 from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
 from dal_obscura_plugin_api import PluginDescriptor
 
-from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.control_plane.application.asset_service import upsert_workspace_asset
 from dal_obscura.control_plane.application.errors import ValidationFailure
 
 
-def _registry(*, overlap: bool = True) -> PluginRegistry:
+def _registry(*, overlap: bool = True) -> Any:
     capabilities = frozenset({"nested_schema"}) if overlap else frozenset({"snapshot_reads"})
     catalog = PluginDescriptor(
         kind="catalog",
@@ -37,12 +36,12 @@ def _registry(*, overlap: bool = True) -> PluginRegistry:
         handle_versions=frozenset({1}),
         config_schema={"fields": [{"name": "format_option", "type": "string", "required": True}]},
     )
-    registry = Mock()
+    registry = cast(Any, Mock())
     registry.admitted.return_value = {
         ("catalog", "fixture.catalog"): catalog,
         ("table_format", "fixture.format"): format_descriptor,
     }
-    return cast(PluginRegistry, registry)
+    return registry
 
 
 def _store() -> Mock:

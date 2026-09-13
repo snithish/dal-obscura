@@ -364,7 +364,7 @@ def test_registry_rejects_self_consistent_unsupported_config_version() -> None:
 def test_malformed_plugin_lock_is_rejected() -> None:
     entry = _entry("iceberg.sql", "dal_obscura.catalogs.v1")
     registry = PluginRegistry(
-        allowlist={("catalog", "iceberg.sql"): ("plugin-wheel", "1.2.3", "1")},
+        allowlist=cast(Any, {("catalog", "iceberg.sql"): ("plugin-wheel", "1.2.3", "1")}),
         entry_points_fn=lambda: _EntryPoints([entry]),
     )
 

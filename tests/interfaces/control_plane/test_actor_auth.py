@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from fastapi.testclient import TestClient
+from httpx import Response
 
 from dal_obscura.common.access_control.models import Principal
 from dal_obscura.common.config_store.db import (
@@ -59,7 +60,7 @@ def _client() -> TestClient:
     )
 
 
-def _save_policy_draft(client: TestClient, asset_id: UUID, rules: list[dict], headers) -> object:
+def _save_policy_draft(client: TestClient, asset_id: UUID, rules: list[dict], headers) -> Response:
     current = client.get(f"/v1/assets/{asset_id}/draft", headers=headers)
     assert current.status_code == 200, current.text
     return client.put(
