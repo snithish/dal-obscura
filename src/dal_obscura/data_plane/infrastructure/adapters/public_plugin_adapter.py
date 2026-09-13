@@ -9,9 +9,10 @@ reference. Request contexts and live plugin instances are recreated at use time.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass, fields, is_dataclass
 from datetime import datetime, timedelta, timezone
+from math import isfinite
 from typing import Any, cast
 from uuid import uuid4
 
@@ -94,6 +95,7 @@ class PublicPluginTableFormat(TableFormat):
         output_schema = _projected_schema(descriptor.arrow_schema, request.columns)
         tasks: list[object] = []
         for task in planned:
+            _validate_task_payload(task)
             tasks.append(task)
             if len(tasks) > max_tickets:
                 raise ValueError("Plugin returned more tasks than requested")
@@ -281,3 +283,60 @@ def _projected_schema(schema: pa.Schema, columns: list[str]) -> pa.Schema:
         if top_level not in names:
             names.append(top_level)
     return pa.schema([schema.field(name) for name in names], metadata=schema.metadata)
+
+
+def _validate_task_payload(value: object) -> None:  # noqa: C901
+    """Allow only bounded inert values inside trusted ticket task payloads."""
+
+    nodes = 0
+    string_bytes = 0
+    seen: set[int] = set()
+
+    def visit(item: object, depth: int) -> None:  # noqa: C901
+        nonlocal nodes, string_bytes
+        nodes += 1
+        if nodes > 2_048 or depth > 12:
+            raise ValueError("Public plugin task payload is too large")
+        if item is None or isinstance(item, (bool, int)):
+            return
+        if isinstance(item, float):
+            if not isfinite(item):
+                raise ValueError("Public plugin task payload contains a non-finite number")
+            return
+        if isinstance(item, str):
+            string_bytes += len(item.encode("utf-8"))
+            if len(item) > 1_048_576 or string_bytes > MAX_PLUGIN_TASK_BYTES:
+                raise ValueError("Public plugin task payload contains oversized strings")
+            if any(ord(char) < 0x20 or ord(char) == 0x7F for char in item):
+                raise ValueError("Public plugin task payload contains control characters")
+            return
+        if isinstance(item, Mapping):
+            if len(item) > 128:
+                raise ValueError("Public plugin task payload has too many keys")
+            for key, child in item.items():
+                if not isinstance(key, str) or not key or len(key) > 256:
+                    raise ValueError("Public plugin task payload has invalid keys")
+                visit(key, depth + 1)
+                visit(child, depth + 1)
+            return
+        if isinstance(item, (list, tuple)):
+            if len(item) > 128:
+                raise ValueError("Public plugin task payload has too many items")
+            for child in item:
+                visit(child, depth + 1)
+            return
+        if is_dataclass(item) and not isinstance(item, type):
+            params = getattr(type(item), "__dataclass_params__", None)
+            if params is None or not params.frozen:
+                raise ValueError("Public plugin task dataclasses must be frozen")
+            marker = id(item)
+            if marker in seen:
+                raise ValueError("Public plugin task payload contains a cycle")
+            seen.add(marker)
+            for field in fields(item):
+                visit(getattr(item, field.name), depth + 1)
+            seen.remove(marker)
+            return
+        raise ValueError("Public plugin task payload must be inert JSON-like data")
+
+    visit(value, 0)

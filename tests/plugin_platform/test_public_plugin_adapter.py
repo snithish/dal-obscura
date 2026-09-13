@@ -125,3 +125,41 @@ def test_public_iceberg_compatibility_path_enforces_metadata_destination(tmp_pat
     )
     with pytest.raises(PermissionError, match="not allowed"):
         adapter.resolve_table("default.users")
+
+
+def test_public_format_rejects_opaque_task_payloads_before_ticket_serialization() -> None:
+    identifier = TableIdentifier(namespace=("default",), name="users")
+    handle = TableHandle(
+        catalog_plugin_id="manifest",
+        catalog_instance_id="fixture",
+        catalog_revision=1,
+        identifier=identifier,
+        format_plugin_id="parquet.dataset",
+        handle_version=1,
+    )
+    schema = pa.schema([pa.field("id", pa.int64())])
+
+    class OpaqueFormat:
+        def schema(self, value, context):
+            del value, context
+            from dal_obscura_plugin_api import SchemaDescriptor
+
+            return SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=schema)
+
+        def plan(self, value, descriptor, context, *, projection, row_filter, max_tasks):
+            del value, descriptor, context, projection, row_filter, max_tasks
+            return [object()]
+
+        def execute(self, task, context):
+            del task, context
+            return schema, []
+
+    table_format = PublicPluginTableFormat(
+        catalog_name="fixture",
+        table_name="default.users",
+        format="parquet.dataset",
+        format_factory=lambda value, context: OpaqueFormat(),
+        handle=handle,
+    )
+    with pytest.raises(ValueError, match="inert JSON-like"):
+        table_format.plan(PlanRequest(target="default.users", columns=["*"]), max_tickets=2)
