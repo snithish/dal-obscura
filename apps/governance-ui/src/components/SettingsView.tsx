@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { AuthProvider, RuntimeSettings, WorkspacePublication } from "../api";
 import { controlPlane } from "../api";
+import { recoveryMessage } from "../recovery";
 
 export type SettingsViewProps = {
   runtime?: RuntimeSettings | null;
@@ -39,8 +40,8 @@ export function SettingsView({
       await controlPlane.saveRuntimeSettings(form);
       setMessage("Runtime settings saved as draft configuration. Publish to make worker behavior change.");
       onReload();
-    } catch {
-      setMessage("Settings update was rejected; the previous values remain active.");
+    } catch (error) {
+      setMessage(recoveryMessage(error, "Settings update was rejected; the previous values remain active."));
     }
   }
 
@@ -57,8 +58,8 @@ export function SettingsView({
       );
       setMessage("Identity provider settings saved as draft configuration. Publish a snapshot to activate them.");
       onReload();
-    } catch {
-      setMessage("Identity provider update was rejected; the serving provider chain remains unchanged.");
+    } catch (error) {
+      setMessage(recoveryMessage(error, "Identity provider update was rejected; the serving provider chain remains unchanged."));
     }
   }
 
