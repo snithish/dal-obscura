@@ -55,21 +55,24 @@ def _fixture(tmp_path: Path) -> tuple[Path, pa.Table]:
 def test_catalog_registry_routes_public_manifest_plugin_through_legacy_port(tmp_path: Path) -> None:
     root, table = _fixture(tmp_path)
     registry = PluginRegistry(
-        builtins=cast(Any, {
-            ("catalog", "manifest"): (CATALOG_DESCRIPTOR, manifest_factory),
-            ("table_format", "parquet.dataset"): (FORMAT_DESCRIPTOR, parquet_factory),
-        }),
+        builtins=cast(
+            Any,
+            {
+                ("catalog", "manifest"): (CATALOG_DESCRIPTOR, manifest_factory),
+                ("table_format", "parquet.dataset"): (FORMAT_DESCRIPTOR, parquet_factory),
+            },
+        ),
     )
     registry.reload()
     catalogs = CatalogRegistry(
         ServiceConfig(
             catalogs={
                 "datasets": CatalogConfig(
-                name="datasets",
-                type=cast(Any, "iceberg"),
-                plugin_id="manifest",
-                revision=17,
-                options={"root": str(root), "manifest_path": "manifest.json"},
+                    name="datasets",
+                    type=cast(Any, "iceberg"),
+                    plugin_id="manifest",
+                    revision=17,
+                    options={"root": str(root), "manifest_path": "manifest.json"},
                 )
             }
         ),
@@ -297,6 +300,7 @@ def test_public_format_stops_lazy_batches_when_context_is_cancelled(monkeypatch)
 
         def execute(self, task, context):
             del task, context
+
             def batches():
                 cancelled[0] = True
                 yield pa.RecordBatch.from_pylist([{"id": 1}], schema=schema)
@@ -467,6 +471,40 @@ def test_public_catalog_adapter_rejects_malformed_continuation(malformed_token) 
         lambda plugin_id: object(),
     )
     with pytest.raises(ValueError, match="continuation token"):
+        adapter.list_tables()
+
+
+def test_public_catalog_adapter_rejects_oversized_page() -> None:
+    identifier = TableIdentifier(namespace=("default",), name="users")
+
+    class Catalog:
+        def validate_config(self, context):
+            del context
+
+        def list_namespaces(self, context, *, namespace=()):
+            del context, namespace
+            return ()
+
+        def list_tables(self, context, *, continuation=None, limit):
+            del context, continuation, limit
+            entries = tuple(identifier for _ in range(501))
+            return type("Page", (), {"entries": entries, "continuation": None})()
+
+        def resolve_table(self, value, context):
+            del value, context
+            raise AssertionError("resolve should not run")
+
+        def close(self):
+            return None
+
+    adapter = PublicPluginCatalogAdapter(
+        "fixture",
+        {},
+        "manifest",
+        lambda config, context: Catalog(),
+        lambda plugin_id: object(),
+    )
+    with pytest.raises(ValueError, match="too many page entries"):
         adapter.list_tables()
 
 

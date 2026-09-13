@@ -46,6 +46,7 @@ from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEn
 
 MAX_PLUGIN_TASK_BYTES = 16 * 1024 * 1024
 MAX_PLUGIN_DISCOVERY_PAGES = 128
+MAX_PLUGIN_DISCOVERY_PAGE_ENTRIES = 500
 MAX_PLUGIN_DISCOVERY_ENTRIES = 10_000
 PLUGIN_OPERATION_TIMEOUT_SECONDS = 10
 
@@ -279,9 +280,8 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
             context = _context()
             page = self._catalog.list_tables(context, continuation=continuation, limit=500)
             _ensure_context_active(context)
-            if not hasattr(page, "entries") or not hasattr(page, "continuation"):
-                raise ValueError("Public catalog returned an invalid discovery page")
-            for identifier in page.entries:
+            entries = _validated_page_entries(page)
+            for identifier in entries:
                 if not isinstance(identifier, TableIdentifier):
                     raise ValueError("Public catalog returned an invalid table identifier")
                 listings.append(
@@ -340,6 +340,17 @@ def _legacy_identifier(target: str) -> TableIdentifier:
 
 def _identifier_name(identifier: TableIdentifier) -> str:
     return ".".join((*identifier.namespace, identifier.name))
+
+
+def _validated_page_entries(page: object) -> tuple[object, ...] | list[object]:
+    if not hasattr(page, "entries") or not hasattr(page, "continuation"):
+        raise ValueError("Public catalog returned an invalid discovery page")
+    entries = page.entries
+    if not isinstance(entries, (tuple, list)):
+        raise ValueError("Public catalog returned an invalid discovery page")
+    if len(entries) > MAX_PLUGIN_DISCOVERY_PAGE_ENTRIES:
+        raise ValueError("Public catalog returned too many page entries")
+    return entries
 
 
 def _ensure_context_active(context: ExecutionContext) -> None:

@@ -220,6 +220,44 @@ def test_public_catalog_discovery_rejects_forged_table_identifiers() -> None:
         )
 
 
+def test_public_catalog_discovery_rejects_oversized_page() -> None:
+    class PublicCatalog:
+        def validate_config(self, context):
+            del context
+
+        def list_namespaces(self, context, *, namespace=()):
+            del context, namespace
+            return ()
+
+        def list_tables(self, context, *, continuation=None, limit):
+            del context, continuation, limit
+            entries = [
+                TableIdentifier(namespace=("default",), name=str(i))
+                for i in range(501)
+            ]
+            return type(
+                "Page",
+                (),
+                {"entries": entries, "continuation": None},
+            )()
+
+        def close(self):
+            return None
+
+    class Registry:
+        def load(self, kind, plugin_id):
+            del kind, plugin_id
+            return lambda config, context: PublicCatalog()
+
+    with pytest.raises(ValueError, match="too many page entries"):
+        discover_public_catalog_tables(
+            "analytics",
+            "fixture.catalog",
+            {},
+            plugin_registry=Registry(),
+        )
+
+
 def test_iceberg_discovery_rejects_namespace_explosion():
     with pytest.raises(ValueError, match="namespace limit"):
         discover_iceberg_tables(
@@ -359,9 +397,10 @@ def test_workspace_discovery_limits_each_authenticated_session(
     first.__enter__()
     second.__enter__()
     try:
-        with pytest.raises(
-            catalog_service.ValidationFailure, match="session capacity"
-        ), catalog_service._admit_session_discovery("issuer|operator"):
+        with (
+            pytest.raises(catalog_service.ValidationFailure, match="session capacity"),
+            catalog_service._admit_session_discovery("issuer|operator"),
+        ):
             pass
     finally:
         second.__exit__(None, None, None)

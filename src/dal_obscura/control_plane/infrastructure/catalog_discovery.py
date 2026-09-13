@@ -18,6 +18,7 @@ LoadCatalogFn = Any
 Namespace = tuple[str, ...]
 DEFAULT_MAX_NAMESPACES = 1_000
 DEFAULT_MAX_TABLES = 10_000
+DEFAULT_MAX_PAGE_ENTRIES = 500
 DEFAULT_DEADLINE_SECONDS = 30.0
 DEFAULT_MAX_ACTIVE_DISCOVERIES = 8
 _DISCOVERY_SLOTS = BoundedSemaphore(DEFAULT_MAX_ACTIVE_DISCOVERIES)
@@ -93,9 +94,8 @@ def discover_public_catalog_tables(
         for _ in range(DEFAULT_MAX_NAMESPACES):
             _check_budget(deadline_at, context.cancel_check)
             page = plugin.list_tables(context, continuation=continuation, limit=500)
-            if not hasattr(page, "entries") or not hasattr(page, "continuation"):
-                raise ValueError("Catalog plugin returned an invalid discovery page")
-            for identifier in page.entries:
+            entries = _public_page_entries(page)
+            for identifier in entries:
                 if not isinstance(identifier, TableIdentifier):
                     raise ValueError("Catalog plugin returned an invalid table identifier")
                 name = ".".join((*identifier.namespace, identifier.name))
@@ -146,6 +146,17 @@ def _validate_public_catalog_lifecycle(
             for segment in namespace
         ):
             raise ValueError("Catalog plugin returned an invalid namespace")
+
+
+def _public_page_entries(page: object) -> tuple[object, ...] | list[object]:
+    if not hasattr(page, "entries") or not hasattr(page, "continuation"):
+        raise ValueError("Catalog plugin returned an invalid discovery page")
+    entries = page.entries
+    if not isinstance(entries, (tuple, list)):
+        raise ValueError("Catalog plugin returned an invalid discovery page")
+    if len(entries) > DEFAULT_MAX_PAGE_ENTRIES:
+        raise ValueError("Catalog plugin returned too many page entries")
+    return entries
 
 
 def _catalog_type(module: str) -> CatalogType:
