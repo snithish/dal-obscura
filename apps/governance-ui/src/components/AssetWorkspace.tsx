@@ -159,6 +159,8 @@ function VirtualSchemaTree({ nodes, selectedField, effectiveFields, onField, for
       else if (event.key === "ArrowLeft" && hasChildren && isExpanded && !forceExpanded) { event.preventDefault(); toggle(node.human_path); }
       else if (event.key === "ArrowDown" && index < flattened.length - 1) { event.preventDefault(); focusIndex(index + 1); }
       else if (event.key === "ArrowUp" && index > 0) { event.preventDefault(); focusIndex(index - 1); }
+      else if (event.key === "Home") { event.preventDefault(); focusIndex(0); }
+      else if (event.key === "End") { event.preventDefault(); focusIndex(flattened.length - 1); }
       else if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onField(node.human_path); }
     }}><div className="field-row-wrap">{hasChildren ? <button className="tree-toggle" type="button" aria-label={`${isExpanded ? "Collapse" : "Expand"} ${node.human_path}`} aria-expanded={isExpanded} onClick={() => toggle(node.human_path)}>{isExpanded ? "▾" : "▸"}</button> : <span className="tree-toggle spacer" aria-hidden="true" /> }<button className={selectedField === node.human_path ? "field-row selected" : "field-row"} style={{ paddingLeft: `${8 + depth * 16}px` }} onClick={() => onField(node.human_path)} aria-label={`Select ${node.human_path}`}><span className="field-name">{node.name}</span><span className="field-type">{node.type}{node.nullable ? " · nullable" : ""}</span>{effectiveFields.has(node.human_path) && <span className="grant">Granted</span>}</button></div></div>;
   })}</div></div>;
