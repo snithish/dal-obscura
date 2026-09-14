@@ -94,6 +94,7 @@ function App() {
   const sessionCacheKey = sessionQueryScope(session);
   const previousSessionCacheKey = useRef(sessionCacheKey);
   const [logoutPending, setLogoutPending] = useState(false);
+  const logoutInFlight = useRef(false);
   useEffect(() => {
     void loadInitialWorkspace();
   }, []);
@@ -468,6 +469,8 @@ function App() {
   }
 
   async function logout() {
+    if (logoutInFlight.current) return;
+    logoutInFlight.current = true;
     loadEpoch.current += 1;
     inventoryEpoch.current += 1;
     managementEpoch.current += 1;
@@ -492,6 +495,7 @@ function App() {
       setNotice("Sign out could not be confirmed. Private data is hidden; retry sign out before closing this browser.");
     } finally {
       finishMutation(controller);
+      logoutInFlight.current = false;
     }
   }
 
