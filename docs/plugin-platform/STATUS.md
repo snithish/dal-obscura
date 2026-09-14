@@ -1040,6 +1040,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Verification: control-plane actor and request-limit suites (43 passed), Ruff, and non-heavy pre-commit hooks passed. Live hostile transport and full release evidence remain VERIFY; release remains HOLD.
 - Atomic implementation commit: `f5ea5bc`.
 
+## 2026-09-14 — N03/B05 framework validation envelope
+
+- Scope: close the remaining unstructured FastAPI query/path validation boundary.
+- Observable behavior delivered: framework-generated 422 responses now expose the stable validation code, correlation header, safe message, and normalized field errors without echoing submitted values.
+- Verification: audit, request-limit, and actor-auth suites (44 passed), Ruff, and non-heavy pre-commit hooks passed. Live hostile transport and release qualification remain VERIFY; release remains HOLD.
+- Atomic implementation commit: `9c8cd9d`.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
