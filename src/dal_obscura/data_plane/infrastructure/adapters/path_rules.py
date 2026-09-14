@@ -70,7 +70,9 @@ def _path_rule(raw: Mapping[str, object]) -> PathRule:
 
 
 def _normalize_path(value: object) -> str:
-    text = str(value or "").strip()
+    if not isinstance(value, str):
+        raise ValueError("Path roots and paths must be strings")
+    text = value.strip()
     if text == "/":
         return text
     if not text:

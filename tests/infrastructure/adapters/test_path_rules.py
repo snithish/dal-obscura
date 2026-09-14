@@ -72,6 +72,11 @@ def test_path_rule_enforcer_rejects_remote_file_authorities():
         PathRuleEnforcer([{"root": "file://remote-host/warehouse"}])
 
 
+def test_path_rule_enforcer_rejects_non_string_roots():
+    with pytest.raises(ValueError, match="must be strings"):
+        PathRuleEnforcer([{"root": 42}])
+
+
 def test_path_rule_enforcer_allows_all_paths_within_uri_authority_root():
     enforcer = PathRuleEnforcer([{"root": "s3://analytics-demo/"}])
 
