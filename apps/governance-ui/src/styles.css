@@ -161,6 +161,8 @@ td small { display: block; color: #61736e; margin-top: 4px; }
 :root[data-theme="dark"] .capability-card.allowed, :root:not([data-theme="light"]) .capability-card.allowed { background: #14352a; border-color: #4ade80; }
 :root[data-theme="dark"] .capability-card.allowed span, :root:not([data-theme="light"]) .capability-card.allowed span { color: #86efac; }
 :root[data-theme="dark"] .capability-card small, :root:not([data-theme="light"]) .capability-card small { color: #cbd5e1; }
+.validation-summary { margin: 10px 0 20px; padding: 12px 16px; border: 1px solid #d97706; border-left-width: 4px; border-radius: 6px; background: #fff7ed; color: #7c2d12; }
+.validation-summary ul { margin: 8px 0 0; padding-left: 20px; }
 .topbar-title { display: flex; align-items: flex-start; gap: 12px; }
 .mobile-menu-toggle { display: none; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); min-width: 40px; min-height: 40px; padding: 8px; }
 .mobile-nav-backdrop { display: none; }
