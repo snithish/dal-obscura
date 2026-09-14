@@ -660,6 +660,7 @@ function App() {
       if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
       setReviewToken(null);
       setNotice("Published the saved draft.");
+      void refreshAssetInventory(assetSearch);
     } catch {
       if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
       try {
@@ -667,6 +668,7 @@ function App() {
         if (operation.status === "committed") {
           setReviewToken(null);
           setNotice(`Publish committed as policy version ${operation.result.policy_version}.`);
+          void refreshAssetInventory(assetSearch);
         } else {
           setNotice("Publish outcome is still pending. Refresh Activity before retrying.");
         }
