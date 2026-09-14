@@ -57,6 +57,7 @@ export type AssetSchema = {
   schema_version: number;
   schema_fingerprint: string;
   stable_field_ids?: boolean;
+  supported_masks: Array<Mask["type"]>;
   fields: SchemaNode[];
 };
 

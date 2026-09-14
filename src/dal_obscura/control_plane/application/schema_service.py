@@ -13,6 +13,7 @@ from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
 from pyiceberg.types import ListType, MapType, NestedField, StructType
 
+from dal_obscura.common.access_control.mask_types import SUPPORTED_MASK_TYPES
 from dal_obscura.common.query_planning.field_paths import (
     FieldPath,
     FieldPathSegment,
@@ -75,6 +76,7 @@ def get_asset_schema(
         "schema_version": 1,
         "schema_fingerprint": schema_fingerprint(arrow_schema),
         "stable_field_ids": schema_has_stable_ids(arrow_schema),
+        "supported_masks": list(SUPPORTED_MASK_TYPES),
         "fields": (
             [
                 _field_node(field, (FieldSegment(field.name, field.field_id),))

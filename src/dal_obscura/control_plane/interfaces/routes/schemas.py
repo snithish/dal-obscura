@@ -271,6 +271,7 @@ class AssetSchemaResponse(BaseModel):
     schema_version: int
     schema_fingerprint: str
     stable_field_ids: bool | None = None
+    supported_masks: list[Literal["null", "redact", "hash", "email", "keep_last", "default"]]
     fields: list[dict[str, Any]]
 
 

@@ -129,6 +129,7 @@ def test_get_asset_schema_returns_typed_nested_paths() -> None:
     assert calls == [("analytics", {"type": "sql", "uri": "sqlite:///catalog.db"})]
     assert catalog.loaded_identifier == "default.events"
     assert result["schema_version"] == 1
+    assert result["supported_masks"] == ["null", "redact", "hash", "email", "keep_last", "default"]
     assert isinstance(result["schema_fingerprint"], str)
     assert len(result["schema_fingerprint"]) == 64
     fields = cast(list[dict[str, object]], result["fields"])

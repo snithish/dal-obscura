@@ -12,6 +12,7 @@ from dal_obscura.common.access_control.compiled_policy import (
     CompiledPolicyRule,
 )
 from dal_obscura.common.access_control.filters import deserialize_row_filter
+from dal_obscura.common.access_control.mask_types import SUPPORTED_MASK_TYPES
 from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.common.query_planning.field_paths import (
     FieldPath,
@@ -38,7 +39,7 @@ from dal_obscura.control_plane.domain.models import (
 )
 
 SUPPORTED_BACKENDS = frozenset({"iceberg"})
-_MASK_TYPES = frozenset({"null", "redact", "hash", "email", "keep_last", "default"})
+_MASK_TYPES = frozenset(SUPPORTED_MASK_TYPES)
 _ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )

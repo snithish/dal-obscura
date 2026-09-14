@@ -1071,6 +1071,8 @@ export interface components {
             schema_version: number;
             /** Stable Field Ids */
             stable_field_ids?: boolean | null;
+            /** Supported Masks */
+            supported_masks: ("null" | "redact" | "hash" | "email" | "keep_last" | "default")[];
             /** Target */
             target: string;
         };
