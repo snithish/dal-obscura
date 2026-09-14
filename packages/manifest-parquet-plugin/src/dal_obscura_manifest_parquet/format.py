@@ -137,12 +137,22 @@ class ParquetDatasetFormat:
         if task.relative_path not in self._files or task.row_group < 0:
             raise ValueError("Parquet task is not a member of the admitted manifest")
         path = _safe_member(self._root, task.relative_path)
+        parquet_file = None
         try:
             parquet_file = pq.ParquetFile(path)
             _validate_file_schema(parquet_file.schema_arrow, self._schema)
             table = parquet_file.read_row_group(task.row_group, columns=list(task.columns))
+            # Do not return data after the request has been cancelled or has
+            # exceeded its deadline while the row group was being decoded.
+            _check_context(context)
+        except (RuntimeError, TimeoutError):
+            raise
         except Exception as exc:
             raise ValueError("Parquet task execution failed") from exc
+        finally:
+            close = getattr(parquet_file, "close", None)
+            if callable(close):
+                close()
         expected_schema = _select_schema(self._schema, task.columns)
         if table.schema != expected_schema:
             try:

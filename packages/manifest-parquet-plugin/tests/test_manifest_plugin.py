@@ -92,6 +92,57 @@ def test_manifest_catalog_and_parquet_format_split_nested_rows(tmp_path):
     assert identities["profile.email"].startswith("synthetic:")
 
 
+def test_parquet_execute_propagates_cancellation_and_closes_reader(tmp_path, monkeypatch):
+    root, manifest, _table = _write_fixture(tmp_path)
+    initial = _context()
+    catalog = ManifestCatalog(
+        CatalogConfig(
+            plugin_id="manifest",
+            instance_id="fixture",
+            revision=1,
+            options={"root": str(root), "manifest_path": str(manifest)},
+        ),
+        initial,
+    )
+    handle = catalog.resolve_table(TableIdentifier(namespace=("default",), name="users"), initial)
+    format_plugin = ParquetDatasetFormat(handle, initial)
+    schema = format_plugin.schema(handle, initial)
+    task = format_plugin.plan(
+        handle, schema, initial, projection=("profile.email",), row_filter=None, max_tasks=4
+    )[0]
+
+    cancelled = False
+    closed = False
+    real_parquet_file = pq.ParquetFile
+
+    class TrackingParquetFile:
+        def __init__(self, path):
+            self._inner = real_parquet_file(path)
+            self.schema_arrow = self._inner.schema_arrow
+
+        def read_row_group(self, *args, **kwargs):
+            nonlocal cancelled
+            table = self._inner.read_row_group(*args, **kwargs)
+            cancelled = True
+            return table
+
+        def close(self):
+            nonlocal closed
+            closed = True
+            self._inner.close()
+
+    monkeypatch.setattr("dal_obscura_manifest_parquet.format.pq.ParquetFile", TrackingParquetFile)
+    context = ExecutionContext(
+        deadline=datetime.now(timezone.utc) + timedelta(minutes=1),
+        correlation_id="manifest-cancel",
+        cancel_check=lambda: cancelled,
+    )
+
+    with pytest.raises(RuntimeError, match="cancelled"):
+        format_plugin.execute(task, context)
+    assert closed
+
+
 def test_manifest_schema_identities_preserve_nested_provider_ids() -> None:
     schema = pa.schema(
         [
