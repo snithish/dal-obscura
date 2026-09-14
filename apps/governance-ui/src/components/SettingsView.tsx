@@ -126,9 +126,13 @@ export function SettingsView({
       current.map((provider, row) => {
         if (row !== index) return provider;
         const args = { ...provider.args };
-        args[key] = key === "group_claims" || key === "attribute_claims"
-          ? value.split(",").map((item) => item.trim()).filter(Boolean)
-          : value;
+        if ((key === "audience" || key === "jwks_url") && !value.trim()) {
+          delete args[key];
+        } else {
+          args[key] = key === "group_claims" || key === "attribute_claims"
+            ? value.split(",").map((item) => item.trim()).filter(Boolean)
+            : value;
+        }
         return { ...provider, args };
       }),
     );
@@ -158,7 +162,12 @@ export function SettingsView({
     }
     setProviderRows((current) => current.map((item, row) => row === index ? {
       ...item,
-      args: { ...item.args, ...(parsed === undefined ? {} : { [key]: parsed }) },
+      args: (() => {
+        const args = { ...item.args };
+        if (parsed === undefined) delete args[key];
+        else args[key] = parsed;
+        return args;
+      })(),
     } : item));
   }
 
