@@ -2630,3 +2630,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live browser authorization against a real OIDC provider, upstream disabled-account/admin-role freshness across two API processes, PostgreSQL race/recovery, hostile DNS/private-address counters, clean TLS/OIDC consumer matrix, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N05/N12–N16. Release remains HOLD; continue process-boundary qualification.
 - Atomic implementation commits: verification only; no implementation commit.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N01 production UI advisory audit
+
+- Scope: run the production dependency advisory check required by the selected Node/pnpm policy.
+- Observable behavior delivered; FR/NFR and B/G subcases: no source behavior changed. The frozen production UI dependency graph reports no known vulnerabilities at the configured high severity threshold. Package metadata remains pinned to Node 24 and pnpm 12.3.4; local host runtime differences are not treated as support evidence. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: verification only; no source, serializer, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no code or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: CI package audit and UI build workflow remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `pnpm --dir apps/governance-ui audit --prod --audit-level high` (exit 0, no known vulnerabilities), 2026-09-14, local pnpm 12.4.1/Node 26.8.2 host; support policy remains Node 24/pnpm 12.3.4.
+- Artifact and fixture hashes; evidence locations: advisory output is command evidence only; no external artifact published.
+- Remaining subcases; blocker and next concrete action: clean Node 24/pnpm 12.3.4 install, immutable UI image build, and release advisory artifact retention remain VERIFY; all other N01–N16 live gates remain open. Release remains HOLD; run the exact Node 24/image lane in CI or an equivalent clean environment.
+- Atomic implementation commits: verification only; no implementation commit.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
