@@ -174,6 +174,30 @@ class AssetInventoryPageResponse(BaseModel):
     next_cursor: str | None = None
 
 
+class CatalogInventoryResponse(BaseModel):
+    """Workspace catalog summary safe for management clients."""
+
+    id: UUID
+    name: str
+    module: str
+    options: dict[str, Any]
+    status: str
+    revision: int
+    discovered_table_count: int = 0
+    governed_asset_count: int = 0
+
+
+class CatalogDiagnosticResponse(BaseModel):
+    """Bounded catalog connectivity diagnostic."""
+
+    catalog: str
+    status: Literal["ready", "unavailable"]
+    message: str
+    checked_at: str
+    table_count: int | None = None
+    sample_tables: list[str] | None = None
+
+
 class AuthProviderResponse(BaseModel):
     """Redacted authentication-provider record returned to management clients."""
 

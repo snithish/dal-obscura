@@ -13,7 +13,12 @@ from pydantic import ValidationError
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
-from dal_obscura.control_plane.interfaces.routes.schemas import CatalogRequest, request_payload
+from dal_obscura.control_plane.interfaces.routes.schemas import (
+    CatalogDiagnosticResponse,
+    CatalogInventoryResponse,
+    CatalogRequest,
+    request_payload,
+)
 
 
 def router(deps: ControlPlaneDeps) -> APIRouter:
@@ -27,8 +32,12 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
 
     api = APIRouter()
 
-    @api.get("/v1/catalogs", dependencies=[Depends(deps.require_admin)])
-    def list_workspace_catalogs() -> object:
+    @api.get(
+        "/v1/catalogs",
+        dependencies=[Depends(deps.require_admin)],
+        response_model=list[CatalogInventoryResponse],
+    )
+    def list_workspace_catalogs() -> list[CatalogInventoryResponse]:
         return deps.with_service(lambda service: service.list_workspace_catalogs())
 
     @api.get("/v1/catalogs/{name}/tables", dependencies=[Depends(deps.require_admin)])
@@ -40,11 +49,15 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
             lambda service: service.discover_workspace_catalog_tables(name, actor=actor)
         )
 
-    @api.get("/v1/catalogs/{name}/diagnostics", dependencies=[Depends(deps.require_admin)])
+    @api.get(
+        "/v1/catalogs/{name}/diagnostics",
+        dependencies=[Depends(deps.require_admin)],
+        response_model=CatalogDiagnosticResponse,
+    )
     def diagnose_workspace_catalog(
         name: str,
         actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
-    ) -> object:
+    ) -> CatalogDiagnosticResponse:
         return deps.with_service(
             lambda service: service.diagnose_workspace_catalog(name, actor=actor)
         )
