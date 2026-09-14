@@ -178,7 +178,7 @@ function App() {
       window.removeEventListener("hashchange", syncBrowserLocation);
       window.removeEventListener("popstate", syncBrowserLocation);
     };
-  }, [asset?.id, assets, page, saveState, session]);
+  }, [asset?.id, assets, managementDirty, page, saveState, session]);
 
   useEffect(() => {
     const handleAuthExpired = () => {
@@ -195,14 +195,14 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (saveState !== "unsaved") return;
+    if (saveState !== "unsaved" && !managementDirty) return;
     const warn = (event: BeforeUnloadEvent) => {
       event.preventDefault();
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [saveState]);
+  }, [managementDirty, saveState]);
 
   useEffect(() => {
     if (page === "assets" || !session) return;
