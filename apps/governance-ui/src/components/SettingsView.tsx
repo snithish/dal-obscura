@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { QueryClient } from "@tanstack/react-query";
 import type { AuthProvider, RuntimeSettings, WorkspacePublication } from "../api";
 import { controlPlane } from "../api";
 import { recoveryMessage } from "../recovery";
@@ -9,6 +10,8 @@ export type SettingsViewProps = {
   providerRevision?: number;
   publications: WorkspacePublication[];
   onReload: () => void;
+  queryClient: QueryClient;
+  sessionScope: string;
 };
 
 const emptyRuntime: RuntimeSettings = {
@@ -23,6 +26,8 @@ export function SettingsView({
   providerRevision,
   publications,
   onReload,
+  queryClient,
+  sessionScope,
 }: SettingsViewProps) {
   const [form, setForm] = useState<RuntimeSettings>(runtime ?? emptyRuntime);
   const [providerRows, setProviderRows] = useState<AuthProvider[]>(providers);
@@ -38,6 +43,7 @@ export function SettingsView({
     }
     try {
       await controlPlane.saveRuntimeSettings(form);
+      void queryClient.invalidateQueries({ queryKey: ["management", sessionScope, "settings"] });
       setMessage("Runtime settings saved as draft configuration. Publish to make worker behavior change.");
       onReload();
     } catch (error) {
@@ -56,6 +62,7 @@ export function SettingsView({
         })),
         providerRows[0]?.revision ?? providerRevision,
       );
+      void queryClient.invalidateQueries({ queryKey: ["management", sessionScope, "settings"] });
       setMessage("Identity provider settings saved as draft configuration. Publish a snapshot to activate them.");
       onReload();
     } catch (error) {

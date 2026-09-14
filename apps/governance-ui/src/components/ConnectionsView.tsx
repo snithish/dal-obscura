@@ -122,7 +122,7 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
       else options[field.name] = value;
     }
     const existing = editingCatalog ?? catalogs.find((catalog) => catalog.name === name.trim());
-    try { await controlPlane.saveCatalog(name.trim(), pluginId, options, existing?.revision); setMessage("Connection saved. Discovery remains bounded to this configured catalog."); setName(""); setConfig({}); setEditingCatalog(null); onReload(); } catch (error) { setMessage(recoveryMessage(error, "Connection was rejected by the control plane.")); }
+    try { await controlPlane.saveCatalog(name.trim(), pluginId, options, existing?.revision); void queryClient.invalidateQueries({ queryKey: ["management", sessionScope, "connections"] }); setMessage("Connection saved. Discovery remains bounded to this configured catalog."); setName(""); setConfig({}); setEditingCatalog(null); onReload(); } catch (error) { setMessage(recoveryMessage(error, "Connection was rejected by the control plane.")); }
   }
 
   function editCatalog(catalog: Catalog) {
@@ -192,18 +192,18 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
     if (!formatId) return setMessage("Select the table format explicitly before governing a discovered table.");
     const formatPlugin = plugins.find((plugin) => plugin.kind === "table_format" && plugin.plugin_id === formatId);
     if (!formatPlugin) return setMessage("No admitted table-format adapter is available for this catalog.");
-    try { await controlPlane.saveAsset(catalog, target, formatPlugin.plugin_id, identifier); setMessage(`Governed asset ${target} registered. Assign owners and author a policy in Assets.`); await discover(catalog); } catch (error) { setMessage(recoveryMessage(error, "Asset registration was rejected; the source table was not changed.")); }
+    try { await controlPlane.saveAsset(catalog, target, formatPlugin.plugin_id, identifier); void queryClient.invalidateQueries({ queryKey: ["management", sessionScope] }); void queryClient.invalidateQueries({ queryKey: ["asset-inventory", sessionScope] }); setMessage(`Governed asset ${target} registered. Assign owners and author a policy in Assets.`); await discover(catalog); } catch (error) { setMessage(recoveryMessage(error, "Asset registration was rejected; the source table was not changed.")); }
   }
   async function createPublication() {
     if (!canActivate || publishing) return;
     setPublishing(true);
-    try { await controlPlane.createWorkspacePublication(); setMessage("Configuration snapshot created. Activate it when ready."); onReload(); } catch (error) { setMessage(recoveryMessage(error, "Snapshot could not be created; resolve readiness errors before retrying.")); } finally { setPublishing(false); }
+    try { await controlPlane.createWorkspacePublication(); void queryClient.invalidateQueries({ queryKey: ["management", sessionScope] }); setMessage("Configuration snapshot created. Activate it when ready."); onReload(); } catch (error) { setMessage(recoveryMessage(error, "Snapshot could not be created; resolve readiness errors before retrying.")); } finally { setPublishing(false); }
   }
   async function activatePublication(id: string) {
     if (!canActivate || publishing) return;
     setPublishing(true);
     const current = publications.find((publication) => publication.active)?.id;
-    try { await controlPlane.activateWorkspacePublication(id, current); setMessage("Configuration snapshot activated for new data-plane requests."); onReload(); } catch (error) { setMessage(recoveryMessage(error, "Activation was rejected; the current generation remains active. Refresh before retrying.")); } finally { setPublishing(false); }
+    try { await controlPlane.activateWorkspacePublication(id, current); void queryClient.invalidateQueries({ queryKey: ["management", sessionScope] }); setMessage("Configuration snapshot activated for new data-plane requests."); onReload(); } catch (error) { setMessage(recoveryMessage(error, "Activation was rejected; the current generation remains active. Refresh before retrying.")); } finally { setPublishing(false); }
   }
   const pluginCards = plugins.length > 0 && <div className="form-card"><h3>Admitted adapters</h3><div className="plugin-list">{plugins.map((plugin) => <article className="plugin-card" key={`${plugin.kind}:${plugin.plugin_id}`}><div><strong>{plugin.display_name}</strong><small>{plugin.kind === "catalog" ? "Catalog" : "Table format"} · {plugin.plugin_id} · v{plugin.version}</small></div><div className="capability-list">{plugin.capabilities.map((capability) => <span className="pill" key={capability}>{capability.replaceAll("_", " ")}</span>)}</div></article>)}</div></div>;
   const discoveredChoices = pluginPairs.filter((pair) => pair.catalog_plugin_id === (catalogs.find((item) => item.name === discoveredCatalog)?.module === "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog" ? "iceberg.sql" : catalogs.find((item) => item.name === discoveredCatalog)?.module) && pair.status === "admitted");

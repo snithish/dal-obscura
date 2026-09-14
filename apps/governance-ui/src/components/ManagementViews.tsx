@@ -14,7 +14,7 @@ export function ManagementView({ page, data, loading, error, onReload, onLoadMor
   if (page === "changes") return <ChangesView history={data.history ?? []} nextCursor={data.historyNextCursor} onReload={onReload} onLoadMore={onLoadMore} loading={historyLoading ?? false} />;
   if (page === "activity") return <ActivityView history={data.history ?? []} events={data.events ?? []} nextCursor={data.eventsNextCursor} onLoadMore={onLoadMore} loading={auditLoading ?? false} filters={filters} onFiltersChange={onFiltersChange} summary={data.summary} observations={data.observations} />;
   if (page === "connections") return <ConnectionsView catalogs={data.catalogs ?? []} publications={data.publications ?? []} plugins={data.plugins ?? []} pluginStates={data.pluginStates ?? []} pluginPairs={data.pluginPairs ?? []} canActivate={Boolean(session?.platform_admin)} onReload={onReload} queryClient={queryClient} sessionScope={sessionScope} />;
-  return <SettingsView runtime={data.runtime} providers={data.providers ?? []} providerRevision={data.providerRevision} publications={data.publications ?? []} onReload={onReload} />;
+  return <SettingsView runtime={data.runtime} providers={data.providers ?? []} providerRevision={data.providerRevision} publications={data.publications ?? []} onReload={onReload} queryClient={queryClient} sessionScope={sessionScope} />;
 }
 
 function ChangesView({ history, nextCursor, onReload, onLoadMore, loading }: { history: PolicyVersion[]; nextCursor?: string | null; onReload: () => void; onLoadMore?: () => void; loading: boolean }) {

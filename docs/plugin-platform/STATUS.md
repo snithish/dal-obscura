@@ -939,6 +939,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: Connections discovery and connection checks now use stable catalog query keys, pass cancellation signals to the transport, deduplicate repeated requests, and treat Query cancellation as non-error UI state. The old per-component discovery and diagnostic AbortControllers were removed; catalog save, govern, and publication mutations remain on the next migration step.
 - Verification: UI TypeScript compilation, Vite production build (93.90 kB gzip JavaScript), 11 UI tests, and `git diff --check` passed. Rendered discovery cancellation and remaining mutation coverage stay VERIFY; release remains HOLD.
 
+## 2026-09-14 — N07 management mutation cache invalidation
+
+- Scope: keep cached management and inventory reads coherent after authenticated settings, catalog, asset-registration, and publication mutations.
+- Observable behavior delivered: successful writes invalidate only the current session's affected Query families before the existing reload flow runs. Refetch failures cannot rewrite a successful mutation into an error state because invalidation is deliberately background work; server revision and authorization responses remain authoritative.
+- Verification: UI TypeScript compilation, Vite production build (93.99 kB gzip JavaScript), 11 UI tests, and `git diff --check` passed. Main policy and asset-access mutation wiring plus rendered deferred-response coverage remain VERIFY; release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
