@@ -1940,3 +1940,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: complete rendered keyboard/axe/screen-reader journeys, CSP browser inspection, live OIDC, PostgreSQL races/recovery, clean wheel/TLS/OIDC consumers, capacity, deployment integrity, and independent review. Release remains HOLD.
 - Atomic implementation commits: `b21cb2d`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N04 manifest cancellation and cleanup boundary
+
+- Scope: close the remaining local-file adapter gap where a Parquet row-group read could finish after cancellation and leave the reader to garbage collection.
+- Observable behavior delivered; FR/NFR and B/G subcases: `ParquetDatasetFormat.execute` now checks the execution context after decoding, propagates cancellation/deadline errors without converting them into generic task failures, and closes the `ParquetFile` in a `finally` block. A regression test uses an actual fixture Parquet file and a tracking reader to prove cancellation is surfaced and cleanup runs. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `packages/manifest-parquet-plugin/src/dal_obscura_manifest_parquet/format.py`, `packages/manifest-parquet-plugin/tests/test_manifest_plugin.py`; no serializers, serialized classes/import paths, payloads, migrations, dependencies, or tests deleted.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +10 production lines and +51 test lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `packages/manifest-parquet-plugin/tests/test_manifest_plugin.py::test_parquet_execute_propagates_cancellation_and_closes_reader` owns the post-read cancellation/cleanup invariant; existing plugin conformance cancellation checks remain the cross-plugin owner; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest packages/manifest-parquet-plugin/tests/test_manifest_plugin.py -q` (exit 0; 16 passed), targeted Ruff check and format (exit 0), and commit hooks Ruff/pytest non-heavy (exit 0; repository `ty` hook skipped because the documented baseline still reports 72 unrelated diagnostics), 2026-09-14, Python 3.12/uv.
+- Artifact and fixture hashes; evidence locations: implementation commit `93004cd`; disposable fixture Parquet file created and removed by pytest; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: REST DNS/private-address swaps, live OIDC, browser axe/screen-reader and responsive coverage, PostgreSQL process races/recovery, clean TLS/OIDC consumer cells, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Next action is continue candidate-bound qualification while retaining release HOLD.
+- Atomic implementation commits: `93004cd`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
