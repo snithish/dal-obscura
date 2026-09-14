@@ -21,7 +21,11 @@ from dal_obscura.control_plane.interfaces.routes.schemas import (
     PolicyDraftRequest,
     PolicyEvaluationRequest,
     PolicyRestoreRequest,
+    PolicyVersionCreateResponse,
+    PolicyVersionDetailResponse,
+    PolicyVersionPageResponse,
     PolicyVersionPublishRequest,
+    PolicyVersionResponse,
 )
 
 
@@ -106,13 +110,13 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             )
         )
 
-    @api.post("/v1/assets/{asset_id}/policy-versions")
+    @api.post("/v1/assets/{asset_id}/policy-versions", response_model=PolicyVersionCreateResponse)
     def create_asset_policy_version(
         asset_id: UUID,
         request: PolicyVersionPublishRequest | None = None,
         idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
+    ) -> PolicyVersionCreateResponse:
         if idempotency_key is not None and len(idempotency_key.strip()) > 128:
             raise HTTPException(status_code=422, detail="Idempotency-Key is too long")
         return deps.with_service(
@@ -131,11 +135,11 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             )
         )
 
-    @api.get("/v1/assets/{asset_id}/policy-versions")
+    @api.get("/v1/assets/{asset_id}/policy-versions", response_model=list[PolicyVersionResponse])
     def list_asset_policy_version_history(
         asset_id: UUID,
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
+    ) -> list[PolicyVersionResponse]:
         return deps.with_service(
             lambda service: service.list_asset_policy_version_history(asset_id, actor=actor)
         )
@@ -160,12 +164,15 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             )
         )
 
-    @api.get("/v1/assets/{asset_id}/policy-versions/{policy_version}")
+    @api.get(
+        "/v1/assets/{asset_id}/policy-versions/{policy_version}",
+        response_model=PolicyVersionDetailResponse,
+    )
     def get_asset_policy_version(
         asset_id: UUID,
         policy_version: int,
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
+    ) -> PolicyVersionDetailResponse:
         return deps.with_service(
             lambda service: service.get_asset_policy_version(
                 asset_id,
@@ -190,18 +197,18 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             )
         )
 
-    @api.get("/v1/policy-versions")
+    @api.get("/v1/policy-versions", response_model=list[PolicyVersionResponse])
     def list_policy_version_history(
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
+    ) -> list[PolicyVersionResponse]:
         return deps.with_service(lambda service: service.list_policy_version_history(actor=actor))
 
-    @api.get("/v1/policy-versions/page")
+    @api.get("/v1/policy-versions/page", response_model=PolicyVersionPageResponse)
     def list_policy_version_history_page(
         limit: int = Query(default=50, ge=1, le=200),
         cursor: str | None = Query(default=None, max_length=512),
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
+    ) -> PolicyVersionPageResponse:
         return deps.with_service(
             lambda service: service.list_policy_version_history_page(
                 actor=actor,

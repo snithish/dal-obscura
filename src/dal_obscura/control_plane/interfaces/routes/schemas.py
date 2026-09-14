@@ -330,6 +330,40 @@ class AuditEventPageResponse(BaseModel):
     next_cursor: str | None = None
 
 
+class PolicyVersionResponse(BaseModel):
+    """Immutable published policy history row."""
+
+    asset_id: str
+    asset_name: str
+    catalog: str
+    target: str
+    policy_version: int
+    active: bool
+    created_at: str
+
+
+class PolicyVersionPageResponse(BaseModel):
+    """Keyset-paginated immutable policy history."""
+
+    items: list[PolicyVersionResponse]
+    next_cursor: str | None = None
+
+
+class PolicyVersionDetailResponse(BaseModel):
+    """Published policy body without compiled catalog configuration."""
+
+    asset_id: str
+    policy_version: int
+    rules: list[dict[str, Any]]
+
+
+class PolicyVersionCreateResponse(BaseModel):
+    """Result of publishing one asset policy version."""
+
+    asset_id: str
+    policy_version: int
+
+
 class AuthProviderResponse(BaseModel):
     """Redacted authentication-provider record returned to management clients."""
 
