@@ -86,7 +86,26 @@ def test_control_plane_rejects_oversized_requests_before_authentication():
     response = client.post("/v1/logout", content=b"x" * 65)
 
     assert response.status_code == 413
-    assert response.json() == {"detail": "Request body too large"}
+    payload = response.json()
+    assert payload["detail"] == "Request body too large"
+    assert payload["error"]["code"] == "request_too_large"
+    assert payload["error"]["request_id"] == response.headers["x-request-id"]
+
+
+def test_control_plane_rejects_invalid_content_length_with_structured_error():
+    client = _client()
+
+    response = client.post(
+        "/v1/logout",
+        content=b"{}",
+        headers={"content-length": "invalid"},
+    )
+
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["detail"] == "Invalid content length"
+    assert payload["error"]["code"] == "validation_error"
+    assert payload["error"]["request_id"] == response.headers["x-request-id"]
 
 
 def test_control_plane_rejects_oversized_chunked_body_without_content_length():

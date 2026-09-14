@@ -86,6 +86,25 @@ def _http_error_code(status_code: int) -> str:
     }.get(status_code, "request_rejected")
 
 
+def _structured_error_response(status_code: int, detail: str) -> JSONResponse:
+    """Build a correlated error response for middleware-level rejections."""
+
+    request_id = current_request_id() or uuid4().hex
+    response = JSONResponse(
+        status_code=status_code,
+        content={
+            "detail": detail,
+            "error": {
+                "code": _http_error_code(status_code),
+                "message": detail,
+                "request_id": request_id,
+            },
+        },
+    )
+    response.headers["x-request-id"] = request_id
+    return response
+
+
 def create_oidc_actor_resolver(
     *,
     issuer: str,
@@ -255,9 +274,9 @@ def create_app(  # noqa: C901
             try:
                 content_length = int(raw_length)
             except ValueError:
-                return JSONResponse(status_code=400, content={"detail": "Invalid content length"})
+                return _structured_error_response(400, "Invalid content length")
             if content_length > max_request_bytes:
-                return JSONResponse(status_code=413, content={"detail": "Request body too large"})
+                return _structured_error_response(413, "Request body too large")
         received = 0
         original_receive = request.receive
 
@@ -277,7 +296,7 @@ def create_app(  # noqa: C901
         try:
             return await call_next(request)
         except _RequestBodyTooLarge:
-            return JSONResponse(status_code=413, content={"detail": "Request body too large"})
+            return _structured_error_response(413, "Request body too large")
 
     if cors_origins:
         app.add_middleware(
