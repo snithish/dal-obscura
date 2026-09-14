@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { AuthProvider, RuntimeSettings, WorkspacePublication } from "../api";
 import { controlPlane } from "../api";
@@ -21,6 +21,10 @@ const emptyRuntime: RuntimeSettings = {
   path_rules: [],
 };
 
+function isAbortError(error: unknown): boolean {
+  return (error instanceof DOMException && error.name === "AbortError") || (error instanceof Error && error.name === "CancelledError");
+}
+
 export function SettingsView({
   runtime,
   providers,
@@ -34,6 +38,22 @@ export function SettingsView({
   const [providerRows, setProviderRows] = useState<AuthProvider[]>(providers);
   const [message, setMessage] = useState("");
   const [pathRulesText, setPathRulesText] = useState("[]");
+  const mutationControllers = useRef<Set<AbortController>>(new Set());
+
+  useEffect(() => () => {
+    for (const controller of mutationControllers.current) controller.abort();
+    mutationControllers.current.clear();
+  }, [sessionScope]);
+
+  const beginMutation = (): AbortController => {
+    const controller = new AbortController();
+    mutationControllers.current.add(controller);
+    return controller;
+  };
+
+  const finishMutation = (controller: AbortController): void => {
+    mutationControllers.current.delete(controller);
+  };
 
   useEffect(() => { const next = runtime ?? emptyRuntime; setForm(next); setPathRulesText(JSON.stringify(next.path_rules, null, 2)); }, [runtime]);
   useEffect(() => setProviderRows(providers), [providers]);
@@ -43,6 +63,7 @@ export function SettingsView({
       setMessage("Enter positive values for all runtime limits before saving.");
       return;
     }
+    const controller = beginMutation();
     try {
       let pathRules: Array<Record<string, string>>;
       try {
@@ -53,16 +74,18 @@ export function SettingsView({
         setMessage("Path rules must be a JSON array of objects with non-empty root values.");
         return;
       }
-      await controlPlane.saveRuntimeSettings({ ...form, path_rules: pathRules });
+      await controlPlane.saveRuntimeSettings({ ...form, path_rules: pathRules }, controller.signal);
+      if (controller.signal.aborted) return;
       void queryClient.invalidateQueries({ queryKey: ["management", sessionScope, "settings"] });
       setMessage("Runtime settings saved as draft configuration. Publish to make worker behavior change.");
       onReload();
     } catch (error) {
-      setMessage(recoveryMessage(error, "Settings update was rejected; the previous values remain active."));
-    }
+      if (!isAbortError(error)) setMessage(recoveryMessage(error, "Settings update was rejected; the previous values remain active."));
+    } finally { finishMutation(controller); }
   }
 
   async function saveProviders() {
+    const controller = beginMutation();
     try {
       await controlPlane.saveAuthProviders(
         providerRows.map((provider, index) => ({
@@ -72,13 +95,15 @@ export function SettingsView({
           enabled: provider.enabled,
         })),
         providerRows[0]?.revision ?? providerRevision,
+        controller.signal,
       );
+      if (controller.signal.aborted) return;
       void queryClient.invalidateQueries({ queryKey: ["management", sessionScope, "settings"] });
       setMessage("Identity provider settings saved as draft configuration. Publish a snapshot to activate them.");
       onReload();
     } catch (error) {
-      setMessage(recoveryMessage(error, "Identity provider update was rejected; the serving provider chain remains unchanged."));
-    }
+      if (!isAbortError(error)) setMessage(recoveryMessage(error, "Identity provider update was rejected; the serving provider chain remains unchanged."));
+    } finally { finishMutation(controller); }
   }
 
   function updateProvider(index: number, key: string, value: string) {

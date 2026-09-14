@@ -451,9 +451,10 @@ export const controlPlane = {
   getRuntimeSettings: (signal?: AbortSignal) => request<ApiSchemas["RuntimeSettingsResponse"] | null>("/v1/settings/runtime", { signal }),
   getAuthProviders: (signal?: AbortSignal) => request<ApiSchemas["AuthProviderResponse"][]>("/v1/settings/auth-providers", { signal }),
   getAuthProviderRevision: (signal?: AbortSignal) => request<ApiSchemas["AuthProviderRevisionResponse"]>("/v1/settings/auth-providers/revision", { signal }),
-  saveAuthProviders: (providers: Array<{ ordinal: number; module: string; args: Record<string, unknown>; enabled: boolean }>, expectedRevision?: number) => request<ApiSchemas["AuthProviderResponse"][]>("/v1/settings/auth-providers", {
+  saveAuthProviders: (providers: Array<{ ordinal: number; module: string; args: Record<string, unknown>; enabled: boolean }>, expectedRevision?: number, signal?: AbortSignal) => request<ApiSchemas["AuthProviderResponse"][]>("/v1/settings/auth-providers", {
     method: "PUT",
     body: JSON.stringify({ providers, ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }) }),
+    signal,
   }),
   listPlugins: async (signal?: AbortSignal) => {
     const plugins = await request<ApiSchemas["PluginListResponse"]>("/v1/plugins", { signal });
@@ -486,9 +487,10 @@ export const controlPlane = {
     body: JSON.stringify({ backend, table_identifier: tableIdentifier, options: {} }),
     signal,
   }),
-  saveRuntimeSettings: (settings: RuntimeSettings) => request<ApiSchemas["RuntimeSettingsResponse"]>("/v1/settings/runtime", {
+  saveRuntimeSettings: (settings: RuntimeSettings, signal?: AbortSignal) => request<ApiSchemas["RuntimeSettingsResponse"]>("/v1/settings/runtime", {
     method: "PUT",
     body: JSON.stringify({ ticket_ttl_seconds: settings.ticket_ttl_seconds, max_tickets: settings.max_tickets, max_ticket_exchanges: settings.max_ticket_exchanges, path_rules: settings.path_rules, ...(settings.revision === undefined ? {} : { expected_revision: settings.revision }) }),
+    signal,
   }),
   publishAsset: (assetId: string, expectedDraftRevision?: number, reviewToken?: string, idempotencyKey?: string, draftId?: string, signal?: AbortSignal) => request<ApiSchemas["PolicyVersionCreateResponse"]>(`/v1/assets/${assetId}/policy-versions`, {
     method: "POST",
