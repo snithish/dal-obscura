@@ -861,6 +861,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: asset/global policy history, keyset pages, published version details, and policy-version creation results now validate through shared response models. Actor scope, review checks, and publication semantics remain unchanged.
 - Verification: policy-version and publish-flow suites passed (13 tests); changed-path Ruff and format checks passed. Restore response typing, generated DTOs, and live publish/reconciliation evidence remain VERIFY.
 
+## 2026-09-14 — N10 catalog inventory impact
+
+- Scope: make catalog lifecycle impact visible before operator activation.
+- Observable behavior delivered: Connections now displays server-reported catalog status and governed-asset count beside each admitted catalog, while preserving escaped untrusted labels and plugin admission controls.
+- Verification: UI TypeScript compilation, Vite production build, eight UI tests, and `git diff --check` passed. Browser visual/keyboard lifecycle evidence remains VERIFY.
+
 ## 2026-09-14 — N09/N11 post-publication inventory refresh
 
 - Scope: keep governed asset status aligned after a successful publish response.
