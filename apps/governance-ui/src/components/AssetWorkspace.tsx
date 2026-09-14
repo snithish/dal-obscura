@@ -273,8 +273,9 @@ function AccessView({ asset, access, grants, session, onReload, onDirtyChange, q
   const [rows, setRows] = useState<AssetGrant[]>(grants);
   const [message, setMessage] = useState("");
   const [dirty, setDirty] = useState(false);
+  const editEpoch = useRef(0);
   const mutationControllers = useRef<Set<AbortController>>(new Set());
-  useEffect(() => { setOwners(asset.owners.join(", ")); setRows(grants); setDirty(false); }, [asset, grants]);
+  useEffect(() => { setOwners(asset.owners.join(", ")); setRows(grants); setDirty(false); editEpoch.current += 1; }, [asset, grants]);
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
   useEffect(() => () => {
     for (const controller of mutationControllers.current) controller.abort();
@@ -288,14 +289,19 @@ function AccessView({ asset, access, grants, session, onReload, onDirtyChange, q
   const finishMutation = (controller: AbortController): void => {
     mutationControllers.current.delete(controller);
   };
+  const markDirty = (): void => {
+    editEpoch.current += 1;
+    setDirty(true);
+  };
   const canManageOwners = Boolean(session?.platform_admin);
   const canManageGrants = Boolean(session?.platform_admin || access?.capabilities.some((item) => item.capability === "grant" && item.allowed));
   async function saveOwners() {
     if (!canManageOwners) return setMessage("Only a platform administrator can change owners.");
+    const operationEpoch = editEpoch.current;
     const controller = beginMutation();
     try {
       await controlPlane.saveOwners(asset.id, owners.split(",").map((value) => value.trim()).filter(Boolean), asset.revision, controller.signal);
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || operationEpoch !== editEpoch.current) return;
       setDirty(false); void queryClient.invalidateQueries({ queryKey: ["asset", sessionScope, asset.id] }); void queryClient.invalidateQueries({ queryKey: ["asset-inventory", sessionScope] }); setMessage("Owners updated. Existing drafts and publications are unchanged."); onReload();
     } catch (error) {
       if (!isAbortError(error)) setMessage(recoveryMessage(error, "Owner update was rejected; refresh before retrying."));
@@ -304,10 +310,11 @@ function AccessView({ asset, access, grants, session, onReload, onDirtyChange, q
   async function saveGrants() {
     if (!canManageGrants) return setMessage("Only an actor with grant-management capability can change delegated access.");
     const normalized = rows.filter((grant) => grant.principal.trim()).map((grant) => ({ ...grant, principal: grant.principal.trim() }));
+    const operationEpoch = editEpoch.current;
     const controller = beginMutation();
     try {
       await controlPlane.saveGrants(asset.id, normalized, asset.revision, controller.signal);
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || operationEpoch !== editEpoch.current) return;
       setDirty(false); void queryClient.invalidateQueries({ queryKey: ["asset", sessionScope, asset.id] }); setRows(normalized); setMessage("Delegated capabilities updated. Changes take effect on the next authorized request."); onReload();
     } catch (error) {
       if (!isAbortError(error)) setMessage(recoveryMessage(error, "Capability update was rejected; refresh before retrying."));
@@ -315,9 +322,10 @@ function AccessView({ asset, access, grants, session, onReload, onDirtyChange, q
   }
   function reload() {
     if (dirty && !window.confirm("You have unsaved access changes. Reload and discard them?")) return;
+    editEpoch.current += 1;
     setDirty(false);
     onReload();
   }
   const identityHint = session?.issuer ? `Federated identities use the exact issuer ${session.issuer}|subject and ${session.issuer}|group:name.` : "Federated identities should use the exact issuer|subject form so identical subjects from different providers stay isolated.";
-  return <section className="management-view access-view"><div className="management-head"><div><span className="eyebrow">ACCESS</span><h2>Owners and delegated capabilities</h2><p className="muted">Owners receive read and edit scope. Publication and grant management are explicit capabilities enforced by the control plane.</p></div><button className="secondary" onClick={reload}>Refresh</button></div>{access && <div className="form-card"><h3>Your effective capabilities</h3><p className="help">Calculated by the control plane for <strong>{access.principal}</strong>. A denied capability remains unavailable even when a control is visible.</p><div className="capability-grid">{access.capabilities.map((item) => <div className={item.allowed ? "capability-card allowed" : "capability-card denied"} key={item.capability}><strong>{item.capability}</strong><span>{item.allowed ? "Allowed" : "Not granted"}</span><small>{item.reasons.length ? item.reasons.join(" · ") : "No matching owner or delegated grant"}</small></div>)}</div></div>}<div className="form-card"><h3>Owners</h3><label className="form-label">Owner principals<input value={owners} onChange={(event) => { setDirty(true); setOwners(event.target.value); }} placeholder="user:owner@example.com, group:data-stewards" disabled={!canManageOwners} /></label><p className="help">Comma-separated user or group principals. Removing the last owner is blocked while the asset is not safely reassigned. {identityHint}</p><button className="primary" onClick={() => void saveOwners()} disabled={!canManageOwners}>Save owners</button></div><div className="form-card"><h3>Delegated capabilities</h3>{rows.length ? <div className="grant-editor">{rows.map((grant, index) => <div className="grant-row" key={`${grant.principal}-${grant.capability}-${index}`}><input aria-label={`Grant principal ${index + 1}`} value={grant.principal} disabled={!canManageGrants} onChange={(event) => { setDirty(true); setRows((current) => current.map((item, row) => row === index ? { ...item, principal: event.target.value } : item)); }} placeholder="user:analyst@example.com" /><select aria-label={`Grant capability ${index + 1}`} value={grant.capability} disabled={!canManageGrants} onChange={(event) => { setDirty(true); setRows((current) => current.map((item, row) => row === index ? { ...item, capability: event.target.value as AssetGrant["capability"] } : item)); }}><option value="read">Read</option><option value="edit">Edit</option><option value="publish">Publish</option><option value="grant">Grant management</option></select><button className="danger" disabled={!canManageGrants} onClick={() => { setDirty(true); setRows((current) => current.filter((_, row) => row !== index)); }}>Remove</button></div>)}</div> : <p className="muted">No explicit delegated capabilities. Owners need explicit publish or grant-management assignments for those actions.</p>}<div className="editor-actions"><button className="secondary" disabled={!canManageGrants} onClick={() => { setDirty(true); setRows((current) => [...current, { principal: "", capability: "read" }]); }}>Add capability</button><button className="primary" disabled={!canManageGrants} onClick={() => void saveGrants()}>Save capabilities</button></div>{message && <p className="notice" role="status">{message}</p>}</div></section>;
+  return <section className="management-view access-view"><div className="management-head"><div><span className="eyebrow">ACCESS</span><h2>Owners and delegated capabilities</h2><p className="muted">Owners receive read and edit scope. Publication and grant management are explicit capabilities enforced by the control plane.</p></div><button className="secondary" onClick={reload}>Refresh</button></div>{access && <div className="form-card"><h3>Your effective capabilities</h3><p className="help">Calculated by the control plane for <strong>{access.principal}</strong>. A denied capability remains unavailable even when a control is visible.</p><div className="capability-grid">{access.capabilities.map((item) => <div className={item.allowed ? "capability-card allowed" : "capability-card denied"} key={item.capability}><strong>{item.capability}</strong><span>{item.allowed ? "Allowed" : "Not granted"}</span><small>{item.reasons.length ? item.reasons.join(" · ") : "No matching owner or delegated grant"}</small></div>)}</div></div>}<div className="form-card"><h3>Owners</h3><label className="form-label">Owner principals<input value={owners} onChange={(event) => { markDirty(); setOwners(event.target.value); }} placeholder="user:owner@example.com, group:data-stewards" disabled={!canManageOwners} /></label><p className="help">Comma-separated user or group principals. Removing the last owner is blocked while the asset is not safely reassigned. {identityHint}</p><button className="primary" onClick={() => void saveOwners()} disabled={!canManageOwners}>Save owners</button></div><div className="form-card"><h3>Delegated capabilities</h3>{rows.length ? <div className="grant-editor">{rows.map((grant, index) => <div className="grant-row" key={`${grant.principal}-${grant.capability}-${index}`}><input aria-label={`Grant principal ${index + 1}`} value={grant.principal} disabled={!canManageGrants} onChange={(event) => { markDirty(); setRows((current) => current.map((item, row) => row === index ? { ...item, principal: event.target.value } : item)); }} placeholder="user:analyst@example.com" /><select aria-label={`Grant capability ${index + 1}`} value={grant.capability} disabled={!canManageGrants} onChange={(event) => { markDirty(); setRows((current) => current.map((item, row) => row === index ? { ...item, capability: event.target.value as AssetGrant["capability"] } : item)); }}><option value="read">Read</option><option value="edit">Edit</option><option value="publish">Publish</option><option value="grant">Grant management</option></select><button className="danger" disabled={!canManageGrants} onClick={() => { markDirty(); setRows((current) => current.filter((_, row) => row !== index)); }}>Remove</button></div>)}</div> : <p className="muted">No explicit delegated capabilities. Owners need explicit publish or grant-management assignments for those actions.</p>}<div className="editor-actions"><button className="secondary" disabled={!canManageGrants} onClick={() => { markDirty(); setRows((current) => [...current, { principal: "", capability: "read" }]); }}>Add capability</button><button className="primary" disabled={!canManageGrants} onClick={() => void saveGrants()}>Save capabilities</button></div>{message && <p className="notice" role="status">{message}</p>}</div></section>;
 }
