@@ -1302,3 +1302,29 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live DNS/private/redirect counters, cancellation cleanup, provider network policy, and independent security/release evidence remain VERIFY under B06/N04/N16; next action is continue bounded security fixes and retain release HOLD.
 - Atomic implementation commits: `93dbe0a`.
 - Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N01 authoritative elevated full-suite refresh
+
+- Scope: refresh the repository baseline after the completed security and UI lifecycle slices using a host that permits the loopback and subprocess checks required by the suite.
+- Observable behavior delivered; FR/NFR and B/G subcases: no product behavior changed; this entry records qualification evidence only. Pickle serializers, serialized classes/import paths, and payload semantics remain untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: documentation only (`docs/plugin-platform/BASELINE_20260914.md` and this ledger entry); no source, migration, dependency, or fixture changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no source or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: the existing full suite and its explicit opt-in skip markers; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest --durations=20 --junitxml=/tmp/dal-obscura-current-elevated.xml -q -rs` (exit 0; 853 collected, 839 passed, 14 skipped, 0 failed, 0 errors, 131.115s), 2026-09-14, Python 3.12/uv local workspace with loopback permissions. UI checks remain TypeScript build (exit 0), 13 Node tests (exit 0), and Vite build (exit 0; 324.75 kB JS / 97.94 kB gzip).
+- Artifact and fixture hashes; evidence locations: JUnit report `/tmp/dal-obscura-current-elevated.xml`; baseline delta in `docs/plugin-platform/BASELINE_20260914.md`; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: the 14 skips are explicit benchmark, loopback-consumer, PostgreSQL race/recovery opt-ins; Node 24 clean-install/image/advisory, live OIDC, hostile transport counters, rendered browser/accessibility, real consumer pairs, recovery, and independent review remain VERIFY under N01/N04–N16. Next action is continue the next bounded acceptance slice while retaining release HOLD.
+- Atomic implementation commits: `acb1487e` (UI code); this documentation evidence is recorded separately.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N07 cancellable connection mutations
+
+- Scope: apply lifecycle cancellation to authenticated catalog, asset-registration, configuration-publication, and plugin-lifecycle writes in the governance UI.
+- Observable behavior delivered; FR/NFR and B/G subcases: each connection mutation carries an `AbortSignal`; active writes abort when the view unmounts or session scope changes; aborted or stale responses cannot overwrite messages, publication state, or lifecycle controls. Server-held secret references and authorization boundaries remain unchanged.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/api.ts` and `apps/governance-ui/src/components/ConnectionsView.tsx`; no backend, plugin, serializer, serialized class, payload, import path, migration, or dependency changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +64 UI logical lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing lifecycle/query tests plus TypeScript compile and production build; no tests deleted. Rendered deferred-response and unmount evidence remains a browser acceptance owner for N07/N16.
+- Exact commands, exit codes, UTC date, runtime versions, environment: UI TypeScript build (exit 0), `node --experimental-strip-types --test tests/*.test.mjs` (13 passed), Vite production build (exit 0; 324.75 kB JS / 97.94 kB gzip), 2026-09-14, Node 24 local workspace. Commit hooks passed with repository baseline `ty` diagnostics skipped (`SKIP=ty`).
+- Artifact and fixture hashes; evidence locations: atomic commit `acb1487e`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: browser-rendered deferred mutation races, live 401/logout journey, cross-process lifecycle propagation, and independent accessibility/security/release review remain VERIFY under N07/N10/N16; next action is continue live acceptance and consumer qualification without claiming browser evidence from static checks.
+- Atomic implementation commits: `acb1487e`.
+- Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
