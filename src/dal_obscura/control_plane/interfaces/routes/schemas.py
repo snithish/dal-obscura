@@ -580,18 +580,6 @@ class AssetRequest(StrictModel):
     expected_revision: int | None = Field(default=None, ge=0)
 
 
-class PolicyRulesRequest(StrictModel):
-    """Ordered policy-rule replacement request.
-
-    Example:
-        ```python
-        PolicyRulesRequest(rules=[{"effect": "allow", "columns": ["id"]}])
-        ```
-    """
-
-    rules: list[dict[str, Any]] = Field(max_length=100)
-
-
 class PolicyDraftRequest(StrictModel):
     """Revision-preconditioned policy draft replacement."""
 
@@ -620,14 +608,8 @@ class PublicationActivationRequest(StrictModel):
     expected_publication_id: UUID | None = None
 
 
-class PolicyPreviewRequest(StrictModel):
-    """Policy-preview request for a candidate principal.
-
-    Example:
-        ```python
-        PolicyPreviewRequest(principal="alice", groups=["analytics"], claims={})
-        ```
-    """
+class PolicyEvaluationRequest(StrictModel):
+    """Bounded synthetic rows for server-side DuckDB policy evaluation."""
 
     draft_id: UUID | None = None
     draft_revision: int | None = Field(default=None, ge=0)
@@ -635,10 +617,6 @@ class PolicyPreviewRequest(StrictModel):
     groups: list[str] = Field(default_factory=list, max_length=64)
     claims: dict[str, object] = Field(default_factory=dict)
     columns: list[str] = Field(default_factory=list, max_length=512)
-
-
-class PolicyEvaluationRequest(PolicyPreviewRequest):
-    """Bounded synthetic rows for server-side DuckDB policy evaluation."""
 
     # ``None`` means use the documented synthetic fixture.  An explicit empty
     # list is a real zero-row evaluation and must preserve the output schema.

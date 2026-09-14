@@ -999,6 +999,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: every `HTTPException` now retains its existing status and `detail` while adding a stable non-sensitive error code, human message, and request ID. Revision, validation, authentication, authorization, not-found, rate-limit, oversized-request, and readiness classes map to explicit codes; affected tests assert the new contract without depending on generated IDs.
 - Verification: focused catalogs, schema/evaluation, OIDC, actor-auth, and publication suites passed; changed-path Ruff and `git diff --check` passed. Request-validation handler coverage, live hostile transport, and full production acceptance remain VERIFY; release remains HOLD.
 
+## 2026-09-14 — N02 retired policy request models
+
+- Scope: remove residual request-model definitions for the retired public policy routes.
+- Observable behavior delivered: unused `PolicyRulesRequest` and `PolicyPreviewRequest` classes are deleted; `/draft` and `/policy-evaluate` now own the only public request contracts, with the evaluation request carrying its bounded synthetic input fields directly. No protected evaluator or pickle path changed.
+- Verification: schema API and route-inventory tests passed, obsolete names have zero production callers, Ruff and formatting checks passed. Full N02 migration/deletion proof and installed-wheel qualification remain VERIFY; release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
