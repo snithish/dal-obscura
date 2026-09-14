@@ -205,6 +205,16 @@ export function SettingsView({
     setProviderTexts((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${provider.id}:`))));
   }
 
+  function moveProvider(index: number, direction: -1 | 1) {
+    setProviderRows((current) => {
+      const target = index + direction;
+      if (target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next.map((provider, ordinal) => ({ ...provider, ordinal: ordinal + 1 }));
+    });
+  }
+
   function updatePathRule(index: number, value: string) {
     setPathRuleRoots((current) => current.map((root, row) => row === index ? value : root));
   }
@@ -267,7 +277,7 @@ export function SettingsView({
             </label>;
           };
           return <fieldset className="provider-editor" key={provider.id}>
-            <legend><span>{provider.module.split(".").at(-1) ?? provider.module}</span><small>Order {provider.ordinal}</small><button className="danger" type="button" onClick={() => removeProvider(index)}>Remove</button></legend>
+            <legend><span>{provider.module.split(".").at(-1) ?? provider.module}</span><small>Order {provider.ordinal}</small><span className="provider-order-actions"><button className="secondary" type="button" disabled={index === 0} onClick={() => moveProvider(index, -1)}>Move up</button><button className="secondary" type="button" disabled={index === providerRows.length - 1} onClick={() => moveProvider(index, 1)}>Move down</button><button className="danger" type="button" onClick={() => removeProvider(index)}>Remove</button></span></legend>
             <label className="provider-enabled"><input type="checkbox" checked={provider.enabled} onChange={(event) => updateProviderEnabled(index, event.target.checked)} /> Enabled</label>
             <div className="form-grid">
               {providerField("issuer", "Issuer URL", { placeholder: "https://id.example.com/" })}
