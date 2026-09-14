@@ -145,6 +145,7 @@ def test_workspace_catalog_rejects_non_iceberg_module():
     )
 
     assert response.status_code == 422
+    assert response.json()["error"]["field_errors"][0]["field"] == "module"
 
 
 def test_workspace_catalog_rejects_credentials_embedded_in_uri():

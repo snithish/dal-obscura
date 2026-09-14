@@ -116,6 +116,25 @@ def _revision_from_detail(detail: object) -> int | None:
     return int(match.group(1)) if match else None
 
 
+def _field_errors_from_detail(detail: object) -> list[dict[str, str]]:
+    """Normalize Pydantic locations without returning submitted values."""
+
+    if not isinstance(detail, list):
+        return []
+    field_errors: list[dict[str, str]] = []
+    for item in detail:
+        if not isinstance(item, Mapping):
+            continue
+        location = item.get("loc", ())
+        if not isinstance(location, (list, tuple)):
+            location = ()
+        field = ".".join(str(part) for part in location if part != "body")
+        message = item.get("msg", "Invalid value")
+        error_type = item.get("type", "value_error")
+        field_errors.append({"field": field, "message": str(message), "type": str(error_type)})
+    return field_errors
+
+
 def create_oidc_actor_resolver(
     *,
     issuer: str,
@@ -234,6 +253,8 @@ def create_app(  # noqa: C901
         }
         if (current_revision := _revision_from_detail(detail)) is not None:
             error["current_revision"] = current_revision
+        if field_errors := _field_errors_from_detail(detail):
+            error["field_errors"] = field_errors
         return JSONResponse(
             status_code=exc.status_code,
             headers=exc.headers,
