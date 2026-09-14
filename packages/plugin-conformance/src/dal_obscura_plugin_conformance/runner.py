@@ -21,6 +21,7 @@ from dal_obscura_plugin_api import (
 DEFAULT_MAX_OUTPUT_BATCHES = 1_024
 DEFAULT_MAX_OUTPUT_ROWS = 1_000_000
 DEFAULT_MAX_DISCOVERY_PAGES = 64
+DEFAULT_MAX_DISCOVERY_NAMESPACES = 10_000
 DEFAULT_MAX_DISCOVERY_TABLES = 10_000
 DEFAULT_MAX_SCHEMA_BYTES = 1_048_576
 DEFAULT_MAX_SCHEMA_FIELDS = 4_096
@@ -232,6 +233,7 @@ def run_catalog_checks(  # noqa: C901
     *,
     page_size: int = 128,
     max_pages: int = DEFAULT_MAX_DISCOVERY_PAGES,
+    max_namespaces: int = DEFAULT_MAX_DISCOVERY_NAMESPACES,
     max_tables: int = DEFAULT_MAX_DISCOVERY_TABLES,
     expected_table_ids: Iterable[str] | None = None,
     artifact_identity: str | None = None,
@@ -252,6 +254,8 @@ def run_catalog_checks(  # noqa: C901
         list_namespaces = getattr(plugin, "list_namespaces", None)
         if not callable(validate_config) or not callable(list_namespaces):
             raise ValueError("catalog plugin must expose validate_config() and list_namespaces()")
+        if page_size <= 0 or max_pages <= 0 or max_namespaces <= 0 or max_tables <= 0:
+            raise ValueError("catalog discovery budgets must be positive")
         _check_context(context, "validating catalog configuration")
         validate_config(context)
         _check_context(context, "listing catalog namespaces")
@@ -264,9 +268,9 @@ def run_catalog_checks(  # noqa: C901
             for namespace in namespaces
         ):
             raise ValueError("catalog plugin returned invalid namespaces")
+        if len(namespaces) > max_namespaces:
+            raise ValueError(f"catalog returned more than {max_namespaces} namespaces")
         result.record_pass("catalog_lifecycle")
-        if page_size <= 0 or max_pages <= 0 or max_tables <= 0:
-            raise ValueError("catalog discovery budgets must be positive")
         continuation: str | None = None
         seen_continuations: set[str] = set()
         identifiers: list[TableIdentifier] = []

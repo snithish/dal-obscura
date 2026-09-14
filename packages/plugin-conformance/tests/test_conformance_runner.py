@@ -498,6 +498,68 @@ def test_catalog_runner_requires_lifecycle_operations() -> None:
     assert any("validate_config" in failure for failure in result.failures)
 
 
+def test_catalog_runner_rejects_oversized_namespace_discovery() -> None:
+    class _WideCatalog:
+        descriptor = _catalog_descriptor()
+
+        def validate_config(self, context):
+            del context
+
+        def list_namespaces(self, context):
+            del context
+            return (("ns-a",), ("ns-b",))
+
+        def list_tables(self, context, *, continuation, limit):
+            del context, continuation, limit
+            return DiscoveryPage(())
+
+        def close(self):
+            return None
+
+    result = run_catalog_checks(
+        cast(CatalogPlugin, _WideCatalog()),
+        _catalog_context(),
+        max_namespaces=1,
+    )
+
+    assert result.to_dict()["status"] == "failed"
+    assert any("more than 1 namespaces" in failure for failure in result.failures)
+
+
+def test_catalog_runner_validates_budgets_before_provider_calls() -> None:
+    calls = []
+
+    class _Catalog:
+        descriptor = _catalog_descriptor()
+
+        def validate_config(self, context):
+            del context
+            calls.append("validate")
+
+        def list_namespaces(self, context):
+            del context
+            calls.append("namespaces")
+            return (("default",),)
+
+        def list_tables(self, context, *, continuation, limit):
+            del context, continuation, limit
+            calls.append("tables")
+            return DiscoveryPage(())
+
+        def close(self):
+            calls.append("close")
+
+    result = run_catalog_checks(
+        cast(CatalogPlugin, _Catalog()),
+        _catalog_context(),
+        max_namespaces=0,
+    )
+
+    assert result.to_dict()["status"] == "failed"
+    assert any("budgets must be positive" in failure for failure in result.failures)
+    assert calls == ["close"]
+
+
 def test_catalog_runner_honors_expired_context_before_lifecycle() -> None:
     called = []
 
