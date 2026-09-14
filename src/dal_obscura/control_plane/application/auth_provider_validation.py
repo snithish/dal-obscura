@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from math import isfinite
 from typing import Any, cast
 from urllib.parse import urlsplit
 
@@ -27,6 +28,8 @@ _SUPPORTED_ARGUMENTS = frozenset(
     }
 )
 _SAFE_ALGORITHMS = frozenset({"RS256", "RS384", "RS512", "ES256", "ES384", "ES512"})
+_MAX_CLAIM_PATH_LENGTH = 256
+_MAX_CLAIM_ENTRIES = 32
 _REDACTED_ARGUMENTS = frozenset(
     {
         "access_token",
@@ -86,7 +89,7 @@ def redact_auth_provider(provider: Mapping[str, object]) -> dict[str, object]:
     return result
 
 
-def _validate_oidc_args(args: Mapping[str, object], *, index: int) -> None:
+def _validate_oidc_args(args: Mapping[str, object], *, index: int) -> None:  # noqa: C901
     if "jwks" in args or "jwks_file" in args:
         raise ValidationFailure(
             f"Authentication provider {index} cannot persist static JWKS material"
@@ -118,6 +121,78 @@ def _validate_oidc_args(args: Mapping[str, object], *, index: int) -> None:
             raise ValidationFailure(
                 f"Authentication provider {index} algorithms contain an unsupported value"
             )
+    audience = args.get("audience")
+    if audience is not None and (
+        not isinstance(audience, str | list | tuple)
+        or (isinstance(audience, str) and not audience.strip())
+        or (
+            isinstance(audience, (list, tuple))
+            and (
+                not audience
+                or any(not isinstance(item, str) or not item.strip() for item in audience)
+            )
+        )
+    ):
+        raise ValidationFailure(
+            f"Authentication provider {index} audience must be text or a non-empty list"
+        )
+    subject_claim = args.get("subject_claim", "sub")
+    _validate_claim_path(subject_claim, label=f"Authentication provider {index} subject_claim")
+    group_claims = args.get("group_claims")
+    if group_claims is not None:
+        if (
+            not isinstance(group_claims, (list, tuple))
+            or len(group_claims) > _MAX_CLAIM_ENTRIES
+            or any(not isinstance(item, str) for item in group_claims)
+        ):
+            raise ValidationFailure(
+                f"Authentication provider {index} group_claims must be a bounded list"
+            )
+        for item in group_claims:
+            _validate_claim_path(item, label=f"Authentication provider {index} group_claim")
+    attribute_claims = args.get("attribute_claims")
+    if attribute_claims is not None:
+        if (
+            not isinstance(attribute_claims, Mapping)
+            or len(attribute_claims) > _MAX_CLAIM_ENTRIES
+            or any(
+                not isinstance(key, str) or not isinstance(value, str)
+                for key, value in attribute_claims.items()
+            )
+        ):
+            raise ValidationFailure(
+                f"Authentication provider {index} attribute_claims must be a bounded mapping"
+            )
+        for key, value in attribute_claims.items():
+            _validate_claim_path(key, label=f"Authentication provider {index} attribute name")
+            _validate_claim_path(value, label=f"Authentication provider {index} attribute claim")
+    leeway = args.get("leeway_seconds", 0)
+    if isinstance(leeway, bool) or not isinstance(leeway, int) or not 0 <= leeway <= 300:
+        raise ValidationFailure(f"Authentication provider {index} leeway_seconds must be 0-300")
+    refresh = args.get("jwks_refresh_interval_seconds", 30)
+    if (
+        isinstance(refresh, bool)
+        or not isinstance(refresh, (int, float))
+        or not isfinite(refresh)
+        or not 0 < refresh <= 86_400
+    ):
+        raise ValidationFailure(
+            f"Authentication provider {index} jwks_refresh_interval_seconds is invalid"
+        )
+    max_keys = args.get("max_jwks_keys", 256)
+    if isinstance(max_keys, bool) or not isinstance(max_keys, int) or not 1 <= max_keys <= 4_096:
+        raise ValidationFailure(f"Authentication provider {index} max_jwks_keys must be 1-4096")
+
+
+def _validate_claim_path(value: object, *, label: str) -> None:
+    if (
+        not isinstance(value, str)
+        or not value.strip()
+        or len(value) > _MAX_CLAIM_PATH_LENGTH
+        or any(ord(char) < 0x20 or ord(char) == 0x7F for char in value)
+        or any(not part.strip() for part in value.split("."))
+    ):
+        raise ValidationFailure(f"{label} must be a bounded dotted claim path")
 
 
 def _validate_endpoint(value: str, *, label: str) -> None:
