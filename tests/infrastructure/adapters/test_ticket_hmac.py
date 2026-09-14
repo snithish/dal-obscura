@@ -12,9 +12,8 @@ def _scan_payload():
     return {"read_payload": "payload", "full_row_filter": None, "masks": {}}
 
 
-def test_ticket_sign_and_verify():
-    codec = HmacTicketCodecAdapter("secret")
-    payload = TicketPayload(
+def _ticket_payload() -> TicketPayload:
+    return TicketPayload(
         ticket_id="00000000-0000-0000-0000-000000000001",
         catalog="catalog1",
         target="catalog.db.table",
@@ -25,6 +24,11 @@ def test_ticket_sign_and_verify():
         expires_at=2**31,
         nonce="abc123",
     )
+
+
+def test_ticket_sign_and_verify():
+    codec = HmacTicketCodecAdapter("secret")
+    payload = _ticket_payload()
     ticket = codec.sign_payload(payload)
     verified = codec.verify(ticket)
     assert verified.ticket_id == payload.ticket_id
@@ -32,6 +36,16 @@ def test_ticket_sign_and_verify():
     assert verified.nonce == payload.nonce
     assert verified.target == ""
     assert verified.columns == []
+
+
+def test_ticket_verify_rejects_noncanonical_base64_even_with_valid_signature():
+    codec = HmacTicketCodecAdapter("secret")
+    payload = _ticket_payload()
+    ticket = codec.sign_payload(payload)
+    encoded, signature = ticket.split(".", 1)
+
+    with pytest.raises(PermissionError, match="Invalid ticket payload"):
+        codec.verify(f"{encoded[:4]}!{encoded[4:]}.{signature}")
 
 
 def test_ticket_key_rotation_accepts_previous_keys_but_signs_with_current_key():

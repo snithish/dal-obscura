@@ -40,7 +40,11 @@ class HmacTicketCodecAdapter:
         except ValueError as exc:
             raise PermissionError("Invalid ticket format") from exc
         try:
-            raw = base64.urlsafe_b64decode(encoded_payload.encode("utf-8"))
+            raw = base64.b64decode(
+                encoded_payload.encode("ascii"),
+                altchars=b"-_",
+                validate=True,
+            )
             if not any(
                 hmac.compare_digest(
                     hmac.new(secret, raw, sha256).hexdigest(),
@@ -78,7 +82,7 @@ class HmacTicketCodecAdapter:
             raise
         except (
             BinasciiError,
-            UnicodeDecodeError,
+            UnicodeError,
             json.JSONDecodeError,
             TypeError,
             ValueError,

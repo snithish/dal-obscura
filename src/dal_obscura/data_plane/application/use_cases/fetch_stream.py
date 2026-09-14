@@ -345,7 +345,7 @@ def _decode_scan(
         raise ValueError("Invalid authorization columns in ticket")
 
     return DecodedScan(
-        read_payload=base64.b64decode(str(read_payload).encode("utf-8")),
+        read_payload=base64.b64decode(str(read_payload).encode("ascii"), validate=True),
         full_row_filter=_optional_row_filter(scan_info.get("full_row_filter")),
         masks=parsed_masks,
         authorization_columns=cast(list[str], authorization_columns),
