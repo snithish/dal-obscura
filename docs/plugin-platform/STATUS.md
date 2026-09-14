@@ -2565,3 +2565,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: N03 still needs resolved-handle pair fencing, full mutation precondition/race evidence, and generated DTO/browser proof; N02 conversion qualification, N04–N16 live gates, and independent review remain VERIFY. Release remains HOLD; continue with authoritative pair and mutation contracts.
 - Atomic implementation commits: `d659dbfa`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N04 live loopback hostile transport qualification
+
+- Scope: execute the real local transport fixture for catalog egress and redirect enforcement.
+- Observable behavior delivered; FR/NFR and B/G subcases: no source behavior changed in this verification slice. Local hostile HTTP endpoints exercised credential/query rejection, URI/path-root enforcement, insecure authenticated REST rejection, auxiliary warehouse checks, malformed ports, and redirect-to-denied-destination handling; the denied redirect endpoint received zero requests. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: verification only; no source, serializer, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no code or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: `tests/integration/test_io_boundary.py` remains the real transport-counter owner; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: elevated `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/integration/test_io_boundary.py -q` (exit 0, 10 passed), 2026-09-14, Python 3.12 with loopback socket permission.
+- Artifact and fixture hashes; evidence locations: verification only; no external artifact published.
+- Remaining subcases; blocker and next concrete action: DNS/private-address rebinding counters, provider manifest/data/delete interception, cancellation cleanup under stalled real IO, deployment network controls, live OIDC, PostgreSQL races/recovery, clean consumer matrix, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue the next runnable qualification lane.
+- Atomic implementation commits: verification only; no implementation commit.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
