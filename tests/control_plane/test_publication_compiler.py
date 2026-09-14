@@ -426,6 +426,18 @@ def test_compiler_rejects_invalid_mask_instead_of_dropping_it(mask: dict[str, ob
         PublicationCompiler().compile(draft)
 
 
+def test_compiler_accepts_null_default_mask_value():
+    draft = _draft()
+    draft.assets[0].rules[0] = replace(
+        draft.assets[0].rules[0],
+        masks={"email": {"type": "default", "value": None}},
+    )
+
+    compiled = PublicationCompiler().compile(draft)
+
+    assert compiled.assets[0].policy_version is not None
+
+
 def test_compiled_policy_round_trips_to_evaluator_policy():
     compiled = CompiledPolicy(
         version=7,

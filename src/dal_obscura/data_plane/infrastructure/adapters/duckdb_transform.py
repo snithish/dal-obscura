@@ -538,7 +538,7 @@ def _mask_expression(expr: str, mask: MaskRule) -> str:
         )
     if mask_type == "default":
         if mask.value is None:
-            raise ValueError("default mask requires a value")
+            return f"cast_to_type(NULL, {expr})"
         return _sql_literal(mask.value)
     raise ValueError(f"Unsupported mask type: {mask.type}")
 
@@ -743,7 +743,7 @@ def _masked_leaf_field(field: pa.Field, mask: MaskRule) -> pa.Field:
         return pa.field(field.name, pa.string(), nullable=True)
     if mask_type == "default":
         if mask.value is None:
-            raise ValueError("default mask requires a value")
+            return field
         return pa.field(field.name, _default_mask_type(mask.value), nullable=field.nullable)
     return field
 

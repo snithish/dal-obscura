@@ -262,6 +262,24 @@ def test_default_mask_renders_literal():
     assert "'unknown'" in selection.select_list[0]
 
 
+def test_default_null_mask_renders_null_and_null_schema():
+    schema = pa.schema([pa.field("status", pa.string())])
+    adapter = DefaultMaskingAdapter()
+    selection = adapter.apply(
+        schema,
+        ["status"],
+        {"status": MaskRule(type="default", value=None)},
+    )
+    masked_schema = adapter.masked_schema(
+        schema,
+        ["status"],
+        {"status": MaskRule(type="default", value=None)},
+    )
+
+    assert selection.select_list[0] == 'cast_to_type(NULL, "status") AS "status"'
+    assert masked_schema.field("status").type == pa.string()
+
+
 def test_email_mask_renders_masking_expression():
     schema = pa.schema([pa.field("email", pa.string())])
     selection = DefaultMaskingAdapter().apply(

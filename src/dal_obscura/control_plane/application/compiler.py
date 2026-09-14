@@ -442,7 +442,7 @@ def _compile_mask_rule(column: str, raw_mask: object) -> CompiledMaskRule:
     ):
         raise ValidationFailure(f"Invalid mask for column {column!r}")
     if normalized_type == "default":
-        if value is None or isinstance(value, (dict, list, tuple, set)):
+        if isinstance(value, (dict, list, tuple, set)):
             raise ValidationFailure(f"Invalid mask for column {column!r}")
         if isinstance(value, float) and (value != value or value in {float("inf"), float("-inf")}):
             raise ValidationFailure(f"Invalid mask for column {column!r}")
