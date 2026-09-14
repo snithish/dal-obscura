@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from time import sleep
@@ -204,6 +205,33 @@ def test_rest_catalog_does_not_copy_provider_io_credentials_into_handle():
         _context(),
     )
     assert handle.metadata == {"metadata_location": "https://storage.example/metadata/v1.json"}
+
+
+def test_rest_catalog_rechecks_cancellation_after_table_load() -> None:
+    plugin = RestCatalog(_config(), _context())
+
+    class FakeTable:
+        metadata_location = "https://storage.example/metadata/v1.json"
+
+    class FakeCatalog:
+        def load_table(self, identifier):
+            assert identifier == ("default", "users")
+            return FakeTable()
+
+    plugin._catalog = FakeCatalog()
+    checks = 0
+
+    def cancelled() -> bool:
+        nonlocal checks
+        checks += 1
+        return checks >= 3
+
+    context = replace(_context(), cancel_check=cancelled)
+    with pytest.raises(ValueError, match="cancelled"):
+        plugin.resolve_table(
+            TableIdentifier(namespace=("default",), name="users"),
+            context,
+        )
 
 
 def test_snapshot_id_supports_pyiceberg_method_shape() -> None:

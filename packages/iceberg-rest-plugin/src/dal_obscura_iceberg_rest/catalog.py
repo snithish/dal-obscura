@@ -190,6 +190,7 @@ class RestCatalog(CatalogPlugin):
     def resolve_table(self, identifier: TableIdentifier, context: ExecutionContext) -> TableHandle:
         with self._request_budget(context):
             table = self._load_catalog(context).load_table((*identifier.namespace, identifier.name))
+            self._validate_context(context)
             metadata_location = getattr(table, "metadata_location", None)
             if not isinstance(metadata_location, str) or not metadata_location:
                 raise ValueError("REST catalog table has no metadata location")
