@@ -1641,3 +1641,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live OIDC/browser login, session freshness/revocation, cross-process races, clean wheels/real consumers, hostile transport, recovery/mixed-load capacity, deployment integrity, and independent review remain VERIFY under N04–N16. Next action is continue release qualification while retaining release HOLD.
 - Atomic implementation commits: `b883e02`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N14 deterministic capacity summary artifact
+
+- Scope: make the existing benchmark harness produce reviewable aggregate evidence without adding a second runner.
+- Observable behavior delivered; FR/NFR and B/G subcases: `scripts/run_capacity_benchmarks.sh` now invokes `scripts/summarize_capacity_benchmarks.py` after all suites. The summarizer requires metadata, every expected suite/run file, and valid benchmark timing records, then writes stable `summary.json` with run counts and mean/median/min/max milliseconds. Incomplete evidence fails closed; raw per-run pytest JSON remains available. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `scripts/run_capacity_benchmarks.sh`, new `scripts/summarize_capacity_benchmarks.py`; no production modules, serializers, serialized classes/import paths, payloads, migrations, dependencies, or tests deleted.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +123 benchmark-tooling lines; standard library only, no dependency changes.
+- Primary invariant test owners; tests consolidated/deleted: existing pytest benchmark suites remain execution owners; the summarizer is aggregation/validation only and does not execute tests.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync python scripts/summarize_capacity_benchmarks.py /tmp/dal-obscura-capacity-c84219f-local-20260914` (exit 0), metadata/run-count/25M-stream assertions (pass), `python3 -m py_compile scripts/summarize_capacity_benchmarks.py` (exit 0), `sh -n scripts/run_capacity_benchmarks.sh` (exit 0), and `git diff --check` (exit 0), 2026-09-14, Python 3.12/uv local workspace.
+- Artifact and fixture hashes; evidence locations: aggregate `/tmp/dal-obscura-capacity-c84219f-local-20260914/summary.json`; implementation commit `be44ceb`; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: B19 fixed-runner/discovery/audit/mixed-load resource thresholds, live hostile transport, OIDC/browser/freshness, PostgreSQL process races, clean wheels/real consumers, deployment/recovery/integrity, and independent review remain VERIFY under N04–N16. Next action is continue cross-process and deployment qualification while retaining release HOLD.
+- Atomic implementation commits: `be44ceb`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
