@@ -1758,3 +1758,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live transport counters/cancellation, browser axe/screen-reader coverage, OIDC freshness/revocation, PostgreSQL races, clean wheels/consumers, recovery/mixed-load capacity, deployment integrity, and independent review remain VERIFY under N04–N16. Next action is continue live qualification while retaining release HOLD.
 - Atomic implementation commits: `07719f4`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N05 provider validation message refinement
+
+- Scope: keep inline provider validation concise and unambiguous.
+- Observable behavior delivered; FR/NFR and B/G subcases: when an attribute mapping is malformed, the field now shows the validation error once instead of repeating the instructional help text. The Save action remains disabled until correction; no security or payload behavior changed, and pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/SettingsView.tsx`; no backend, serializer, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: -1 UI line; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing UI TypeScript, Vite, Node, and browser validation checks; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node_modules/.bin/vite build` (exit 0; 328.17 kB JavaScript / 99.16 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (14 passed), and `git diff --check` (exit 0), 2026-09-14, Node 24.
+- Artifact and fixture hashes; evidence locations: implementation commit `1d45f16`; manual CUA validation exercised malformed attribute mapping and disabled Save state.
+- Remaining subcases; blocker and next concrete action: live OIDC/transport/revocation, browser axe and screen-reader coverage, PostgreSQL races, consumers, recovery/capacity, deployment integrity, and independent review remain VERIFY under N04–N16. Next action is continue candidate-bound qualification while retaining release HOLD.
+- Atomic implementation commits: `1d45f16`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
