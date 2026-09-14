@@ -111,6 +111,22 @@ def test_cors_allows_browser_csrf_header_for_configured_ui_origin() -> None:
     assert "x-csrf-token" in response.headers["access-control-allow-headers"].lower()
 
 
+def test_cors_allows_plugin_lifecycle_patch_for_configured_ui_origin() -> None:
+    client = _client(cors_origins=("http://127.0.0.1:8821",))
+
+    response = client.options(
+        "/v1/plugins/catalog/iceberg.rest/lifecycle",
+        headers={
+            "Access-Control-Request-Method": "PATCH",
+            "Access-Control-Request-Headers": "content-type,x-csrf-token",
+            "Origin": "http://127.0.0.1:8821",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "PATCH" in response.headers["access-control-allow-methods"]
+
+
 def test_browser_session_lifetimes_are_bounded() -> None:
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
     migrate_config_store(engine)

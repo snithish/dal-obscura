@@ -366,7 +366,7 @@ def create_app(  # noqa: C901
             CORSMiddleware,  # ty: ignore[invalid-argument-type]
             allow_origins=list(cors_origins),
             allow_credentials=True,
-            allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+            allow_methods=["GET", "POST", "PUT", "PATCH", "OPTIONS"],
             allow_headers=["authorization", "content-type", "accept", "x-csrf-token"],
         )
     install_health_routes(app, session_maker)
