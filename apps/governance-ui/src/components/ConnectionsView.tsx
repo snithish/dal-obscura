@@ -115,6 +115,7 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
   const mutationControllers = useRef<Set<AbortController>>(new Set());
   const savingRef = useRef(false);
   const governBusyRef = useRef<Set<string>>(new Set());
+  const publishingRef = useRef(false);
   useEffect(() => () => {
     discoveryEpoch.current += 1;
     for (const controller of mutationControllers.current) controller.abort();
@@ -291,7 +292,8 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
     }
   }
   async function createPublication() {
-    if (!canActivate || publishing) return;
+    if (!canActivate || publishing || publishingRef.current) return;
+    publishingRef.current = true;
     setPublishing(true);
     const controller = beginMutation();
     try {
@@ -300,10 +302,11 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
       void queryClient.invalidateQueries({ queryKey: ["management", sessionScope] }); setMessage("Configuration snapshot created. Activate it when ready."); onReload();
     } catch (error) {
       if (!isAbortError(error)) setMessage(recoveryMessage(error, "Snapshot could not be created; resolve readiness errors before retrying."));
-    } finally { finishMutation(controller); if (!controller.signal.aborted) setPublishing(false); }
+    } finally { finishMutation(controller); publishingRef.current = false; if (!controller.signal.aborted) setPublishing(false); }
   }
   async function activatePublication(id: string) {
-    if (!canActivate || publishing) return;
+    if (!canActivate || publishing || publishingRef.current) return;
+    publishingRef.current = true;
     setPublishing(true);
     const current = publications.find((publication) => publication.active)?.id;
     const controller = beginMutation();
@@ -313,7 +316,7 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
       void queryClient.invalidateQueries({ queryKey: ["management", sessionScope] }); setMessage("Configuration snapshot activated for new data-plane requests."); onReload();
     } catch (error) {
       if (!isAbortError(error)) setMessage(recoveryMessage(error, "Activation was rejected; the current generation remains active. Refresh before retrying."));
-    } finally { finishMutation(controller); if (!controller.signal.aborted) setPublishing(false); }
+    } finally { finishMutation(controller); publishingRef.current = false; if (!controller.signal.aborted) setPublishing(false); }
   }
   async function updatePluginLifecycle(plugin: PluginDescriptor) {
     const key = `${plugin.kind}:${plugin.plugin_id}`;
