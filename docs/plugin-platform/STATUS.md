@@ -963,6 +963,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: every awaited policy workflow captures draft ID and revision alongside existing session/resource/edit fences, refuses to apply stale success or failure state, and invalidates the current asset, inventory, and management query families after successful draft/publication/restore outcomes. Publication reconciliation keeps its original idempotency key.
 - Verification: UI TypeScript compilation, Vite production build (94.18 kB gzip JavaScript), 11 UI tests, and `git diff --check` passed. Rendered deferred mutation scenarios and live uncertain-outcome evidence remain VERIFY; release remains HOLD.
 
+## 2026-09-14 — N06 Lucide icon foundation
+
+- Scope: align the shared UI icon primitive with the specified Lucide icon system.
+- Observable behavior delivered: the existing semantic `IconName` contract now maps to `lucide-react` components for navigation, status, search, and account actions. Callers and accessible labels remain unchanged, while icon geometry and stroke behavior come from one maintained dependency instead of handwritten path data.
+- Verification: UI TypeScript compilation, Vite production build (96.01 kB gzip JavaScript), 11 UI tests, and `git diff --check` passed. Full shell visual, responsive, axe, and screen-reader evidence remains VERIFY under N06; release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
