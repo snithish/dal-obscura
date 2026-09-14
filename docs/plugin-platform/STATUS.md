@@ -2123,3 +2123,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: rendered deferred-response proof, live OIDC/PKCE/revocation, hostile transport, PostgreSQL races/recovery, clean TLS/OIDC consumer cells, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable qualification packet without changing pickle behavior.
 - Atomic implementation commits: `b8406bdb`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N05 OIDC-first browser login surface
+
+- Scope: prevent a configured OIDC deployment from presenting the local bootstrap-token form as a normal login choice.
+- Observable behavior delivered; FR/NFR and B/G subcases: when browser OIDC authority metadata is present, the login panel exposes the SSO action and suppresses local token entry. The bootstrap form remains available only when bootstrap is explicitly enabled and no authority is configured, matching the secure-local emergency profile boundary. No session, token, or secret bytes are stored in URLs or browser storage. Pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/LoginPanel.tsx`; no backend, serializer, serialized class/import path, payload, migration, dependency, or test deletion.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +1 UI condition; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing session/login API tests remain authentication owners; no tests deleted. Real OIDC/PKCE browser and secure-local parity evidence remain required B08 owners.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node_modules/.bin/vite build` (exit 0; 330.62 kB JavaScript / 99.78 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0; 14 passed), and `git diff --check` (exit 0), 2026-09-14, Node 26.8.2 local runtime (package policy remains Node 24). Commit hook used `SKIP=ty`; the documented repository `ty` baseline still reports 72 unrelated diagnostics.
+- Artifact and fixture hashes; evidence locations: implementation commit `1ebcfe50`; local disposable UI/control-plane profile on `127.0.0.1:5173`/`127.0.0.1:8821`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: live OIDC code/PKCE, freshness/revocation, hostile transport, rendered browser/axe evidence, PostgreSQL races/recovery, clean TLS/OIDC consumers, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable qualification packet without changing pickle behavior.
+- Atomic implementation commits: `1ebcfe50`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
