@@ -1784,3 +1784,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: populated-chain browser keyboard/axe/screen-reader evidence, live OIDC freshness/revocation, hostile transport, PostgreSQL races, clean wheels/consumers, recovery/capacity, deployment integrity, and independent review remain VERIFY under N04–N16. Next action is continue rendered and live qualification while retaining release HOLD.
 - Atomic implementation commits: `2789236`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N13 opt-in governed consumer qualification
+
+- Scope: execute the repository's opt-in governed consumer lane with the current candidate.
+- Observable behavior delivered; FR/NFR and B/G subcases: the consumer qualification test completed successfully against the governed Arrow/Flight path, exercising the checked-in Python/Arrow consumer fixture and its DuckDB-facing integration. No source behavior changed and pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: documentation-only ledger entry; no source, serializer, serialized class/import path, payload, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no source or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: `tests/consumers/test_governed_reads.py` remains the consumer-lane owner; no tests deleted. Real clean-wheel, TLS/OIDC, Spark/JVM, and three external catalog/format pair evidence remain open.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `DAL_OBSCURA_RUN_CONSUMER_TESTS=1 UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/consumers/test_governed_reads.py -q -rs --junitxml=/tmp/dal-obscura-consumer-qualification.xml` (exit 0; 1 passed, 0 skipped, 0 failures/errors, 0.405 seconds), 2026-09-14, Python 3.12/uv with loopback permissions.
+- Artifact and fixture hashes; evidence locations: JUnit report `/tmp/dal-obscura-consumer-qualification.xml`; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: clean installed wheels and real DuckDB/Spark/JVM cells across SQL-Iceberg, REST-Iceberg, and manifest/Parquet, live OIDC/transport/revocation, PostgreSQL races/recovery, capacity mixed-load, deployment integrity, browser accessibility, and independent review remain VERIFY under N04–N16. Next action is continue the next runnable qualification lane while retaining release HOLD.
+- Atomic implementation commits: verification only; no source commit.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
