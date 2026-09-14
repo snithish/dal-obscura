@@ -151,10 +151,10 @@ function VirtualSchemaTree({ nodes, selectedField, effectiveFields, onField, for
     }
     window.requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-schema-index="${index}"]`)?.focus());
   };
-  return <div ref={viewportRef} className="field-tree-viewport" role="tree" aria-label="Schema fields" aria-setsize={flattened.length} style={{ maxHeight: TREE_VIEWPORT_HEIGHT }} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}><div className="field-tree-window" style={{ height: flattened.length * TREE_ROW_HEIGHT }}>{windowed.map(({ node, depth, index }) => {
+  return <div ref={viewportRef} className="field-tree-viewport" role="tree" aria-label="Schema fields" aria-setsize={flattened.length} style={{ maxHeight: TREE_VIEWPORT_HEIGHT }} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}><div className="field-tree-window" style={{ height: flattened.length * TREE_ROW_HEIGHT }}>{windowed.map(({ node, depth, index, posinset, setsize }) => {
     const hasChildren = Boolean(node.children?.length);
     const isExpanded = hasChildren && (forceExpanded || expanded.has(node.human_path));
-    return <div className="field-tree-item" key={node.human_path} data-schema-index={index} role="treeitem" aria-level={depth + 1} aria-posinset={index + 1} aria-setsize={flattened.length} aria-expanded={hasChildren ? isExpanded : undefined} style={{ top: index * TREE_ROW_HEIGHT }} tabIndex={selectedField === node.human_path ? 0 : -1} onKeyDown={(event) => {
+    return <div className="field-tree-item" key={node.field_id} data-schema-index={index} role="treeitem" aria-level={depth + 1} aria-posinset={posinset} aria-setsize={setsize} aria-expanded={hasChildren ? isExpanded : undefined} style={{ top: index * TREE_ROW_HEIGHT }} tabIndex={selectedField === node.human_path ? 0 : -1} onKeyDown={(event) => {
       if (event.key === "ArrowRight" && hasChildren && !isExpanded) { event.preventDefault(); toggle(node.human_path); }
       else if (event.key === "ArrowLeft" && hasChildren && isExpanded && !forceExpanded) { event.preventDefault(); toggle(node.human_path); }
       else if (event.key === "ArrowDown" && index < flattened.length - 1) { event.preventDefault(); focusIndex(index + 1); }

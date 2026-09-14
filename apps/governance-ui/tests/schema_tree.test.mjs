@@ -16,7 +16,7 @@ const node = (human_path, children = []) => ({
 test("flattenSchemaTree only includes expanded descendants", () => {
   const tree = [node("profile", [node("profile.email"), node("profile.address", [node("profile.address.city")])])];
   assert.deepEqual(flattenSchemaTree(tree, new Set()), [
-    { node: tree[0], depth: 0, index: 0 },
+    { node: tree[0], depth: 0, index: 0, posinset: 1, setsize: 1 },
   ]);
   const expanded = flattenSchemaTree(tree, new Set(["profile", "profile.address"]));
   assert.deepEqual(expanded.map(({ node: value, depth, index }) => [value.human_path, depth, index]), [
