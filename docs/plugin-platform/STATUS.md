@@ -951,6 +951,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: asset reads now use keys containing session scope, asset identity, and draft identity; every query receives the transport AbortSignal and prior asset families are cancelled before navigation. Cached API objects are treated as immutable and hydrated into a separate editor value, preventing schema decoration from mutating shared query state.
 - Verification: UI TypeScript compilation, Vite production build (94.05 kB gzip JavaScript), 11 UI tests, and `git diff --check` passed. Policy/asset mutations and rendered deferred-response coverage remain VERIFY; release remains HOLD.
 
+## 2026-09-14 — N07 asset history and access query wiring
+
+- Scope: finish query ownership for immutable version inspection and access-management cache coherence.
+- Observable behavior delivered: policy-version detail lookups now use session/asset/version query keys with Query cancellation, while owner and delegated-capability writes invalidate the asset and inventory families after successful server responses. The existing version epoch and concealed-error behavior remain intact.
+- Verification: UI TypeScript compilation, Vite production build (94.09 kB gzip JavaScript), 11 UI tests, and `git diff --check` passed. Draft/evaluate/review/publish/restore mutation wiring and rendered deferred-response coverage remain VERIFY; release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
