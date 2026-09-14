@@ -313,7 +313,11 @@ def _check_returned_locations(
         return
     path_enforcer.check(metadata_location)
     for value in _nested_strings(storage_options):
-        if "://" in value:
+        # PyIceberg accepts both URI and local filesystem IO properties.  A
+        # local absolute path must receive the same allowlist check as an S3
+        # or file URI; otherwise a provider could redirect reads through an
+        # unapproved local warehouse while the metadata location is valid.
+        if "://" in value or value.startswith(("/", "file:")):
             path_enforcer.check(value)
 
 

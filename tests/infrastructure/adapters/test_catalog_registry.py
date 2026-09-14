@@ -370,3 +370,27 @@ def test_catalog_registry_rejects_provider_returned_metadata_outside_storage_roo
                 [{"root": "s3://analytics-demo/warehouse"}]
             ),
         )
+
+
+def test_catalog_registry_rejects_provider_returned_local_storage_path_outside_roots():
+    class SafeMetadataTable:
+        metadata_location = "s3://analytics-demo/warehouse/metadata.json"
+
+        class io:
+            properties: ClassVar[dict[str, str]] = {"warehouse": "/outside/warehouse"}
+
+    class Catalog:
+        def load_table(self, identifier: str) -> SafeMetadataTable:
+            del identifier
+            return SafeMetadataTable()
+
+    with pytest.raises(PermissionError, match="Path is not allowed"):
+        _resolve_iceberg_descriptor(
+            Catalog(),
+            "analytics",
+            "default.users",
+            "default.users",
+            path_enforcer=registry_module.PathRuleEnforcer(
+                [{"root": "s3://analytics-demo/warehouse"}]
+            ),
+        )
