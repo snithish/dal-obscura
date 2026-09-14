@@ -843,6 +843,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: authenticated plugin listing now validates admitted descriptors, catalog/format pair results, and allowlisted lifecycle states with shared response models. Registry allowlist filtering and dynamic plugin config schemas remain unchanged.
 - Verification: plugin API tests passed; changed-path Ruff and format checks passed. Generated TypeScript DTO coverage and live plugin lifecycle acceptance remain VERIFY.
 
+## 2026-09-14 — N03 typed workspace lifecycle responses
+
+- Scope: type authenticated workspace status and publication management responses.
+- Observable behavior delivered: summary counts, control-plane/data-plane observations, publication listings, creation results, and activation results now validate through shared response models. Existing generation preconditions and authorization behavior remain unchanged.
+- Verification: workspace API suite passed (18 tests); changed-path Ruff and format checks passed. Generated DTO coverage and live browser publication acceptance remain VERIFY.
+
 ## 2026-09-14 — N09/N11 post-publication inventory refresh
 
 - Scope: keep governed asset status aligned after a successful publish response.
