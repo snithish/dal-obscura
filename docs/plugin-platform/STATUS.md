@@ -1927,3 +1927,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: clean Node 24/image/advisory evidence, live OIDC/browser/accessibility, DNS/private-address and cancellation transport, PostgreSQL process races/recovery, clean provider wheels and TLS/OIDC consumer cells, capacity, deployment integrity, and independent review remain VERIFY under N01 and N04–N16. Release remains HOLD.
 - Atomic implementation commits: verification only; no source commit.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N06 shell accessibility semantics
+
+- Scope: close a small semantic shell gap in the authenticated governance UI.
+- Observable behavior delivered; FR/NFR and B/G subcases: the active primary destination now exposes `aria-current="page"`, and the sidebar workspace connectivity state is a polite live status region. Keyboard and screen-reader users can identify the selected route and hear readiness changes without relying on color. Pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/main.tsx`; no backend, session, serializer, payload, migration, dependency, or test deletion.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +2 UI lines net; no dependency changes.
+- Primary invariant test owners; tests consolidated/deleted: existing UI lifecycle/query/navigation tests remain owners; no tests deleted. Full B09 browser/axe/screen-reader and responsive evidence remains open.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0; 14 passed), `node_modules/.bin/vite build` (exit 0; 328.70 kB JavaScript / 99.33 kB gzip), and `git diff --check` (exit 0), 2026-09-14, Node 26.8.2 local runtime (package policy remains Node 24).
+- Artifact and fixture hashes; evidence locations: implementation commit `b21cb2d`; current build output in `apps/governance-ui/dist` is ignored/generated and not published.
+- Remaining subcases; blocker and next concrete action: complete rendered keyboard/axe/screen-reader journeys, CSP browser inspection, live OIDC, PostgreSQL races/recovery, clean wheel/TLS/OIDC consumers, capacity, deployment integrity, and independent review. Release remains HOLD.
+- Atomic implementation commits: `b21cb2d`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
