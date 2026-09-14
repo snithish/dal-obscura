@@ -1189,6 +1189,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `e8210e5`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N05 bootstrap login duplicate-submit guard
+
+- Scope: prevent same-tick duplicate local bootstrap-login submissions before the disabled state renders.
+- Observable behavior delivered; FR/NFR and B/G subcases: bootstrap login now takes a synchronous in-flight guard after validating a non-empty token. Repeated submissions are ignored until the request settles; a failed attempt still leaves the token form available with the existing safe error message, and successful login continues through the normal session reload. Pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/main.tsx`; no backend, serializer, serialized class/import path, payload, migration, dependency, or test deletion.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +4 UI production lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing bootstrap/session authentication tests remain owners; no tests deleted. Rendered login double-submit and live OIDC/PKCE evidence remain required B08 proof.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node_modules/.bin/vite build` (exit 0; 331.78 kB JavaScript / 100.14 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0; 14 passed), and `git diff --check` (exit 0), 2026-09-14, Node 26.8.2 local runtime (package policy remains Node 24). Commit hook used `SKIP=ty`; repository `ty` baseline remains documented separately.
+- Artifact and fixture hashes; evidence locations: implementation commit `523ac4a2`; local source/test workspace only; no external artifact published.
+- Remaining subcases; blocker and next concrete action: rendered login double-submit, live OIDC/PKCE/freshness/revocation, clean plugin wheels and TLS/OIDC consumers, hostile transport, PostgreSQL process races/recovery, five-run mixed-load capacity, deployment integrity/SBOM, full accessibility/deferred-response evidence, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable qualification packet without changing pickle behavior.
+- Atomic implementation commits: `523ac4a2`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-14 — N05 concurrent logout request guard
 
 - Scope: prevent repeated sign-out clicks from issuing overlapping session-revocation requests.
