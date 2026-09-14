@@ -4,6 +4,9 @@ from dataclasses import dataclass
 
 from dal_obscura.common.identity import encode_federated_group, encode_federated_identity
 
+_MAX_IDENTITY_TEXT_LENGTH = 1_024
+_MAX_GROUPS = 256
+
 
 @dataclass(frozen=True)
 class ControlPlaneActor:
@@ -20,6 +23,16 @@ class ControlPlaneActor:
     groups: tuple[str, ...]
     platform_admin: bool = False
     issuer: str = ""
+
+    def __post_init__(self) -> None:
+        if not _valid_identity_text(self.principal, allow_empty=False):
+            raise ValueError("Actor principal must be a bounded printable string")
+        if not isinstance(self.groups, tuple) or len(self.groups) > _MAX_GROUPS:
+            raise ValueError("Actor groups must be a bounded tuple")
+        if any(not _valid_identity_text(group, allow_empty=False) for group in self.groups):
+            raise ValueError("Actor groups must be bounded printable strings")
+        if not _valid_identity_text(self.issuer, allow_empty=True):
+            raise ValueError("Actor issuer must be a bounded printable string")
 
     @classmethod
     def for_platform_admin(cls, principal: str) -> ControlPlaneActor:
@@ -47,3 +60,12 @@ class ControlPlaneActor:
         if not self.issuer:
             return self.principal
         return encode_federated_identity(self.issuer, self.principal)
+
+
+def _valid_identity_text(value: object, *, allow_empty: bool) -> bool:
+    return (
+        isinstance(value, str)
+        and (allow_empty or bool(value))
+        and len(value) <= _MAX_IDENTITY_TEXT_LENGTH
+        and all(ord(char) >= 0x20 and ord(char) != 0x7F for char in value)
+    )

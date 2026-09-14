@@ -1,3 +1,5 @@
+import pytest
+
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 
 
@@ -31,3 +33,22 @@ def test_local_identity_keeps_existing_unscoped_representation() -> None:
 
     assert actor.identity_key() == "local|operator"
     assert actor.owner_principals() == {"local|operator", "group:local|group"}
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"principal": "", "groups": ()},
+        {"principal": "user\nname", "groups": ()},
+        {"principal": "user", "groups": ("group\tname",)},
+        {"principal": "user", "groups": (), "issuer": "https://issuer.example\n"},
+    ],
+)
+def test_actor_rejects_unbounded_or_non_printable_identity_components(kwargs) -> None:
+    with pytest.raises(ValueError, match="bounded printable"):
+        ControlPlaneActor(**kwargs)
+
+
+def test_actor_rejects_excessive_group_membership() -> None:
+    with pytest.raises(ValueError, match="bounded tuple"):
+        ControlPlaneActor(principal="user", groups=tuple(f"group-{index}" for index in range(257)))
