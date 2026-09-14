@@ -236,11 +236,11 @@ def test_compiler_rejects_unknown_backend():
         PublicationCompiler().compile(draft)
 
 
-def test_compiler_requires_physical_iceberg_identifier():
+def test_compiler_requires_table_identifier():
     draft = _draft()
     draft.assets[0].table_identifier = None
 
-    with pytest.raises(ValidationFailure, match="physical Iceberg identifier"):
+    with pytest.raises(ValidationFailure, match="table identifier"):
         PublicationCompiler().compile(draft)
 
 
@@ -295,6 +295,12 @@ def test_compiler_accepts_only_admitted_external_catalog_and_format():
     assert compiled.assets[0].compiled_config["plugins"] == {
         "catalog": "manifest",
         "table_format": "parquet.dataset",
+    }
+    assert compiled.assets[0].compiled_config["catalog"] == {
+        "type": "plugin",
+        "plugin_id": "manifest",
+        "options": {"type": "sql", "uri": "sqlite:///warehouse.db"},
+        "revision": 0,
     }
     assert compiled.catalogs[0].config == {
         "type": "plugin",

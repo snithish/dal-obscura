@@ -165,7 +165,7 @@ class PublicationCompiler:
         if asset.backend not in SUPPORTED_BACKENDS and self._plugin_registry is None:
             raise ValidationFailure(f"Unsupported backend {asset.backend!r}")
         if not asset.table_identifier or not asset.table_identifier.strip():
-            raise ValidationFailure("Asset requires a physical Iceberg identifier")
+            raise ValidationFailure("Asset requires a table identifier")
         rules = [
             self._compile_rule(_expand_schema_bound_rule(rule, asset.schema_fields))
             for rule in sorted(asset.rules, key=lambda item: item.ordinal)
@@ -183,16 +183,23 @@ class PublicationCompiler:
             "table": asset.table_identifier,
             "options": target_options,
         }
+        catalog_type = "iceberg" if catalog.module == _ICEBERG_CATALOG_MODULE else "plugin"
+        catalog_plugin_id = (
+            "iceberg.sql" if catalog.module == _ICEBERG_CATALOG_MODULE else catalog.module
+        )
         compiled_config: dict[str, object] = {
-            "catalog": {"type": "iceberg", "options": dict(catalog.options)},
+            "catalog": {
+                "type": catalog_type,
+                "plugin_id": catalog_plugin_id,
+                "options": dict(catalog.options),
+                "revision": catalog.revision,
+            },
             "target": target_config,
             "policy": policy_json,
             # Keep the selected adapter identities explicit in the immutable
             # manifest so future plugin routing never infers them from options.
             "plugins": {
-                "catalog": (
-                    "iceberg.sql" if catalog.module == _ICEBERG_CATALOG_MODULE else catalog.module
-                ),
+                "catalog": (catalog_plugin_id),
                 "table_format": asset.backend,
             },
         }
