@@ -1189,6 +1189,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `e8210e5`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N11 remove unpaginated audit API
+
+- Scope: make bounded, database-scoped keyset pagination the only audit event management contract.
+- Observable behavior delivered; FR/NFR and B/G subcases: removed legacy `GET /v1/audit/events`, duplicate application/repository list methods, and generated contract residue. All callers and tests use `/v1/audit/events/page`, which applies actor/action/resource/outcome/time filters and visibility scope before pagination. Pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/{application/audit_service.py,application/provisioning.py,infrastructure/repositories.py,interfaces/routes/policies.py}`, audit/settings/catalog/plugin/workspace/policy tests, route inventory, `docs/ui-v2/P00_CONTRACT_REVIEW.md`, and regenerated UI OpenAPI artifacts. No serializer, serialized class/import path, payload, migration, dependency, or test deletion.
+- Production/test logical SLOC delta; dependencies added/removed and reason: 15 insertions and 164 deletions; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `tests/interfaces/control_plane/test_audit_api.py` owns bounded filters/cursor/scope; route inventory owns exact surface; no audit security tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane tests/architecture/test_control_plane_route_inventory.py -q` (exit 0; 100% pass), focused Ruff (exit 0), `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node_modules/.bin/vite build` (exit 0; 332.06 kB JavaScript / 100.21 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0; 14 passed), and `git diff --check` (exit 0), 2026-09-14.
+- Artifact and fixture hashes; evidence locations: implementation commit `5c2e9734`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: live OIDC/PKCE/revocation, hostile transport, rendered browser/axe evidence, PostgreSQL races/recovery, clean TLS/OIDC consumer matrix, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with next qualification packet without changing pickle behavior.
+- Atomic implementation commits: `5c2e9734`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-14 — N05 legacy demo configuration regression guard
 
 - Scope: prevent removed demo-login environment settings from regressing into browser auth configuration.
