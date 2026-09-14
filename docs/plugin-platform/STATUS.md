@@ -1276,3 +1276,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live edit/discovery against a real secret provider, lifecycle propagation across workers, and independent security/release evidence remain VERIFY under N10/N13/N16; next action is continue generic lifecycle and consumer qualification without exposing credentials.
 - Atomic implementation commits: `6503f2f`.
 - Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N05 conflicting browser-cookie rejection
+
+- Scope: make browser authentication fail closed when legacy and `__Host-` cookie names are sent together with different values.
+- Observable behavior delivered; FR/NFR and B/G subcases: actor, admin, mutation, and logout dependencies now accept duplicate cookie values only when they match; conflicting session or CSRF cookies return a safe 400 before identity or revocation decisions.
+- Changed and deleted paths; old callers removed; protected pickle check: control-plane route dependencies/session route and actor-auth tests changed. No serializers, serialized classes, payloads, import paths, migrations, or dependencies changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +31 production / +16 test logical lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `tests/interfaces/control_plane/test_actor_auth.py` adds conflicting host/legacy session coverage; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: actor-auth suite (34 passed), changed-path Ruff and format checks (exit 0), 2026-09-14, Python 3.12/uv local workspace. Commit hooks passed with repository baseline `ty` diagnostics skipped (`SKIP=ty`).
+- Artifact and fixture hashes; evidence locations: atomic commit `0da0c6b`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: live OIDC code/PKCE, account-role freshness/revocation, two-process session evidence, and independent security/release review remain VERIFY under B07/B08/N05/N16; next action is continue the normal-auth and permission qualification work without reintroducing browser-token shortcuts.
+- Atomic implementation commits: `0da0c6b`.
+- Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
