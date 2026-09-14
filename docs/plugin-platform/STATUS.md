@@ -1380,3 +1380,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live hostile DNS/private/redirect destination counters, secret-provider grant coverage for every deployed catalog, cancellation cleanup, real OIDC, browser/accessibility, consumer, PostgreSQL race, recovery, and independent review evidence remain VERIFY under N04–N16. Next action is continue transport/resource qualification without weakening explicit grants or private/local path support.
 - Atomic implementation commits: `96e79f3`.
 - Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N01 full-suite verification after secret gates
+
+- Scope: execute the authoritative backend suite after cross-plane secret-provider and production startup changes.
+- Observable behavior delivered; FR/NFR and B/G subcases: no additional product behavior changed; this entry records qualification evidence only. Pickle serializers, serialized classes/import paths, and payload semantics remain untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: documentation only (`docs/plugin-platform/BASELINE_20260914.md` and this ledger entry); no source, migration, dependency, or fixture changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no source or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: existing full suite and explicit opt-in skip markers; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest --durations=20 --junitxml=/tmp/dal-obscura-after-secret-gates.xml -q -rs` (exit 0; 860 collected, 846 passed, 14 skipped, 0 failed, 0 errors, 131.144s), 2026-09-14, Python 3.12/uv local workspace with loopback/subprocess permissions.
+- Artifact and fixture hashes; evidence locations: JUnit report `/tmp/dal-obscura-after-secret-gates.xml`; baseline delta in `docs/plugin-platform/BASELINE_20260914.md`; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: the 14 skips are explicit benchmark, loopback-consumer, PostgreSQL race/recovery opt-ins; Node 24 clean-install/image/advisory, live OIDC, hostile transport counters, rendered browser/accessibility, real consumer pairs, recovery, and independent review remain VERIFY under N01/N04–N16. Next action is continue live transport and production qualification while retaining release HOLD.
+- Atomic implementation commits: `96e79f3` (implementation); this verification is recorded separately.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
