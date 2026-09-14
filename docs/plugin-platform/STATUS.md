@@ -1562,3 +1562,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: the 14 skips are explicit benchmark, loopback-consumer, PostgreSQL race/recovery opt-ins; clean Node install/image/advisory, hostile live transport counters, real OIDC/browser/accessibility, consumer wheels, recovery, capacity, and independent security/UX/release review remain VERIFY under N01/N04–N16. Next action is continue live qualification while retaining release HOLD.
 - Atomic implementation commits: `ad87f37`, `2b8f0d3`; verification is documentation only.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N05 complete OIDC settings form
+
+- Scope: expose every validated OIDC provider setting in the authenticated Settings view.
+- Observable behavior delivered; FR/NFR and B/G subcases: administrators can edit subject claims, group claims, attribute mappings, algorithms, clock leeway, JWKS refresh interval, and key limits alongside issuer, audience, and JWKS URL. Attribute mappings use explicit `name=claim.path` entries; server validation remains authoritative and secrets stay redacted.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/SettingsView.tsx`; no backend, serializer, serialized class, payload, import path, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +48 UI logical lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing UI TypeScript, Node, and Vite checks plus backend auth-provider validation; no tests deleted. Browser keyboard/error/accessibility and live OIDC evidence remain N05/N16 owners.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node --experimental-strip-types --test tests/*.test.mjs` (13 passed), and `node_modules/.bin/vite build` (exit 0; 327.49 kB JS / 98.65 kB gzip), 2026-09-14, Node 24 local workspace. Commit hooks passed with repository baseline `ty` diagnostics skipped (`SKIP=ty`).
+- Artifact and fixture hashes; evidence locations: atomic implementation commit `5dfa3ae`; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: live OIDC code/PKCE login, session expiry and role freshness, multi-process revocation, hostile transport counters, consumer/recovery/capacity evidence, and independent security/UX/release review remain VERIFY under N04–N16. Next action is continue live qualification while retaining release HOLD.
+- Atomic implementation commits: `5dfa3ae`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
