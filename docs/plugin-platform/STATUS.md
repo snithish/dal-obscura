@@ -1176,6 +1176,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `3a86a7a`.
 - Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N07 centralized UI cancellation detection
+
+- Scope: make all authenticated UI surfaces classify cancellation consistently during deferred reads and writes.
+- Observable behavior delivered; FR/NFR and B/G subcases: a shared `isAbortError` helper recognizes both browser `AbortError` and query/provider `CancelledError`; main workspace, connections, asset access, and settings flows now use the same recovery rule and suppress expected cancellation noise.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/async.ts`, `main.tsx`, `ConnectionsView.tsx`, `AssetWorkspace.tsx`, and `SettingsView.tsx`; no backend, serializer, payload, migration, dependency, or API changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: -6 duplicated UI lines, +10 shared helper/import lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing lifecycle/query suite, TypeScript compilation, and production build; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `tsc -p apps/governance-ui/tsconfig.json --noEmit` (exit 0), `node --experimental-strip-types --test tests/*.test.mjs` (13 passed), Vite production build (exit 0; 325.43 kB JS / 98.06 kB gzip), 2026-09-14, Node 24 local workspace. Commit hooks passed with repository baseline `ty` diagnostics skipped (`SKIP=ty`).
+- Artifact and fixture hashes; evidence locations: atomic implementation commit `e8210e5`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: rendered deferred-response matrix, live logout/401/revocation, browser accessibility, and independent security/release evidence remain VERIFY under N05–N07/N16; next action is continue live transport and consumer qualification while retaining release HOLD.
+- Atomic implementation commits: `e8210e5`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-14 — N04 Iceberg metadata and delete-file path enforcement
 
 - Scope: close the remaining in-process Iceberg path-policy gap for locations returned by table metadata and scan tasks.
