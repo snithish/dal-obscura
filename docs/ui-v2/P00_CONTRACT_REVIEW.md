@@ -28,7 +28,6 @@ dependency.
 | GET | `/healthz` | public | process liveness | retain public |
 | GET | `/readyz` | public | database readiness | retain public; do not expose internals |
 | GET | `/v1/ui-auth-config` | public when configured | browser OIDC configuration | retain public safe metadata only |
-| POST | `/v1/demo-login` | public when configured | password-grant demo shortcut | remove from default supported path in P02 |
 | POST | `/v1/logout` | Actor + CSRF for cookie client | expires current browser cookies | replace with revocable-session logout in P02 |
 | GET | `/v1/session` | Actor | actor metadata | replace with safe session/capability response |
 | GET | `/v1/session/options` | public | browser-safe OIDC/bootstrap capability metadata | bootstrap is local-profile only and never returns a credential |

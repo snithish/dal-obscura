@@ -523,10 +523,10 @@ do not call the release complete without those observations.
   management views to them; remove demo login from the supported production
   profile.
 
-The governance UI client no longer contains a demo workspace, demo persona
-shortcut, or demo-login request path (`2e23b25`). The server-side demo-login
-route and Keycloak smoke fixture remain explicitly development-only compatibility
-surfaces; production profile validation rejects all demo-login configuration.
+The governance UI client and control plane no longer contain a demo workspace,
+demo persona shortcut, or demo-login request path. The Keycloak smoke fixture
+now exercises the explicit local bootstrap bridge, while production continues
+to require OIDC and reject obsolete demo-login configuration.
 
 - Packet/slice: P03.1 scoped inventory and policy reads.
 - State: implemented-unverified.
