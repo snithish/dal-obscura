@@ -1615,3 +1615,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: B19 fixed-runner/discovery/audit/mixed-load capacity, live hostile transport counters, real OIDC/browser/accessibility, PostgreSQL two-process races, clean wheels and Spark/consumer cells, deployment/recovery/artifact checks, and independent security/UX/release review remain VERIFY under N04–N16. Next action is continue the highest-value live and cross-process qualification while retaining release HOLD.
 - Atomic implementation commits: `c84219f`; this entry records evidence for that harness repair.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N11 activity pagination rendering correction
+
+- Scope: make the Activity page honor the bounded audit API page it has loaded.
+- Observable behavior delivered; FR/NFR and B/G subcases: every audit event returned across keyset pages is now rendered, so Load more activity reveals the fetched records. Empty filtered results now say that no activity matches the filters instead of showing unrelated policy history. Server-side scope, redaction, limits, and cursor semantics are unchanged; pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/ManagementViews.tsx`; no backend, serializer, serialized class/import path, payload, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: net -3 UI lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing UI Node suite and TypeScript/Vite build; no tests deleted. Rendered Activity accessibility and live permission journeys remain N11/N16 evidence owners.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node --experimental-strip-types --test tests/*.test.mjs` (13 passed), `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node_modules/.bin/vite build` (exit 0; 327.13 kB JavaScript / 98.64 kB gzip), and `git diff --check` (exit 0), 2026-09-14, Node 24 local workspace.
+- Artifact and fixture hashes; evidence locations: implementation commit `36a8e75`; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: rendered browser/axe evidence, forbidden-user and last-admin journeys, live OIDC freshness/revocation, cross-process races, clean wheels/real consumers, recovery and mixed-load capacity, and independent review remain VERIFY under N05–N16. Next action is continue the highest-value release qualification while retaining release HOLD.
+- Atomic implementation commits: `36a8e75`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
