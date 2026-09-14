@@ -1888,3 +1888,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: all nine required consumer/provider/version cells are not yet complete because Spark/JVM and clean-artifact REST cells remain; live OIDC/transport/revocation, PostgreSQL process races/recovery, mixed-load capacity, deployment integrity/SBOM, browser accessibility, and independent review remain VERIFY under N04–N16. Next action is execute the next runnable candidate-bound consumer or security qualification while retaining release HOLD.
 - Atomic implementation commits: `aa6217f`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N04 real REST redirect transport qualification
+
+- Scope: add an actual transport-boundary check for REST catalog redirects and denied destination counters.
+- Observable behavior delivered; FR/NFR and B/G subcases: a real PyIceberg REST session is pointed at a local endpoint that returns a redirect to a separate local destination. The source request fails closed with redirects disabled, the redirected destination receives zero requests, and all existing path/URI boundary checks remain green. Pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `tests/integration/test_io_boundary.py`; no production serializers, serialized classes/import paths, payloads, migrations, dependencies, or tests deleted.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +57 test lines; no production or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: `tests/integration/test_io_boundary.py` remains the owner for REST transport/path boundary checks; no tests deleted. DNS/private-address swaps, metadata/data/delete destination counters, cancellation cleanup, credential redaction, deployment network policy, and live TLS/OIDC remain open.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/integration/test_io_boundary.py -q -rs --junitxml=/tmp/dal-obscura-io-boundary-rest-redirect.xml` (exit 0; 10 passed, 0 skipped, 0 failures/errors, 1.335 seconds), `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync ruff check tests/integration/test_io_boundary.py` (exit 0), and `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync ruff format --check tests/integration/test_io_boundary.py` (exit 0), 2026-09-14, Python 3.12/uv with loopback permissions.
+- Artifact and fixture hashes; evidence locations: implementation commit `93d109a`; JUnit report `/tmp/dal-obscura-io-boundary-rest-redirect.xml`; both HTTP servers are disposable in-test fixtures.
+- Remaining subcases; blocker and next concrete action: complete N04 hostile DNS/private-address and cancellation/resource probes, then N05 live OIDC/browser evidence; N12 PostgreSQL process races, N13 Spark/JVM and TLS/OIDC consumer cells, N14 capacity, N15 deployment integrity/recovery, and N16 independent review remain VERIFY. Release remains HOLD.
+- Atomic implementation commits: `93d109a`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
