@@ -72,16 +72,10 @@ ALLOWED_COLUMNS = [
     "status",
     "notes",
     "nickname",
-    "tags",
-    "attributes",
-    "user",
     "user.email",
     "user.address.zip",
     "user.preferences.theme",
-    "account",
     "account.manager.region",
-    "devices",
-    "support_ticket",
     "support_ticket.ticket_id",
     "support_ticket.channel",
 ]
@@ -525,6 +519,7 @@ def _expected_metadata() -> dict[str, object]:
 def _provision_control_plane(
     output_dir: Path,
     table_id: str,
+    jwks_port: int,
 ) -> tuple[str, str, str]:
     database_url = f"sqlite+pysqlite:///{output_dir / 'control-plane.db'}"
     engine = create_engine_from_url(database_url)
@@ -587,9 +582,9 @@ def _provision_control_plane(
                         "region",
                         "market",
                         "vip",
-                        "support_ticket",
-                        "account",
-                        "devices",
+                        "support_ticket.channel",
+                        "account.manager.region",
+                        "devices.$element.device_id",
                     ],
                     "effect": "allow",
                     "when": {},
@@ -615,7 +610,7 @@ def _provision_control_plane(
                     ),
                     "args": {
                         "issuer": "https://issuer.example",
-                        "jwks_url": "https://issuer.example/.well-known/jwks.json",
+                        "jwks_url": f"http://127.0.0.1:{jwks_port}/jwks.json",
                         "algorithms": ["RS256"],
                         "attribute_claims": {"tenant_id": "tenant_id"},
                     },
@@ -646,6 +641,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--port", required=True, type=int)
+    parser.add_argument("--jwks-port", default=0, type=int)
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -664,6 +660,7 @@ def main() -> None:
     database_url, cell_id, tenant_id = _provision_control_plane(
         output_dir,
         table_id,
+        args.jwks_port,
     )
 
     user_token = jwt.encode(
@@ -682,6 +679,7 @@ def main() -> None:
         json.dumps(
             {
                 "uri": f"grpc+tcp://localhost:{args.port}",
+                "jwks_port": args.jwks_port,
                 "catalog": CATALOG_NAME,
                 "target": table_id,
                 "database_url": database_url,

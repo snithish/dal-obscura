@@ -4,6 +4,7 @@ import java.util.List;
 
 public final class FixtureBundle {
     private final String uri;
+    private final int jwksPort;
     private final String catalog;
     private final String target;
     private final String userToken;
@@ -27,6 +28,7 @@ public final class FixtureBundle {
             String ticketSecret) {
         this(
                 uri,
+                -1,
                 catalog,
                 target,
                 userToken,
@@ -42,6 +44,7 @@ public final class FixtureBundle {
 
     public FixtureBundle(
             String uri,
+            int jwksPort,
             String catalog,
             String target,
             String userToken,
@@ -54,6 +57,7 @@ public final class FixtureBundle {
             List<Long> sampleUsEvenIds,
             int maskedZipHashLength) {
         this.uri = uri;
+        this.jwksPort = jwksPort;
         this.catalog = catalog;
         this.target = target;
         this.userToken = userToken;
@@ -69,6 +73,10 @@ public final class FixtureBundle {
 
     public String uri() {
         return uri;
+    }
+
+    public int jwksPort() {
+        return jwksPort;
     }
 
     public String catalog() {

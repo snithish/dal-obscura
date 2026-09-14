@@ -13,6 +13,7 @@ class FixtureBuilderRunnerTest {
         String payload =
                 "{"
                         + "\"uri\":\"grpc+tcp://localhost:31337\","
+                        + "\"jwks_port\":31338,"
                         + "\"catalog\":\"spark_catalog\","
                         + "\"target\":\"default.complex_users\","
                         + "\"user_token\":\"token\","
@@ -39,6 +40,7 @@ class FixtureBuilderRunnerTest {
         FixtureBundle bundle = FixtureBuilderRunner.build();
 
         assertTrue(bundle.databaseUrl().startsWith("sqlite+pysqlite:///"));
+        assertTrue(bundle.jwksPort() > 0);
         assertTrue(bundle.cellId().matches("[0-9a-f-]{36}"));
         assertEquals(125_000L, bundle.expectedRowCount());
         assertTrue(bundle.supportsMultipleTickets());

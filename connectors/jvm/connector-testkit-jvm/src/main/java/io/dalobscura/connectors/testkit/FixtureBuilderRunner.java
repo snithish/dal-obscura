@@ -18,6 +18,7 @@ public final class FixtureBuilderRunner {
     public static FixtureBundle build() throws Exception {
         Path outputDir = Files.createTempDirectory("spark-connector-fixture");
         int port = reservePort();
+        int jwksPort = reservePort();
 
         ProcessBuilder builder =
                 new ProcessBuilder(
@@ -27,7 +28,9 @@ public final class FixtureBuilderRunner {
                         "--output-dir",
                         outputDir.toString(),
                         "--port",
-                        Integer.toString(port));
+                        Integer.toString(port),
+                        "--jwks-port",
+                        Integer.toString(jwksPort));
         builder.directory(workspaceRoot().toFile());
         builder.redirectErrorStream(true);
 
@@ -46,6 +49,7 @@ public final class FixtureBuilderRunner {
         JsonNode expected = requireObject(node, "expected");
         return new FixtureBundle(
                 requireText(node, "uri"),
+                requireInt(node, "jwks_port"),
                 requireText(node, "catalog"),
                 requireText(node, "target"),
                 requireText(node, "user_token"),
