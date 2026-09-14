@@ -1189,6 +1189,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `e8210e5`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — Full regression after migration and registry cleanup
+
+- Scope: qualify the complete Python suite after the maintenance-mode migration gate, discovery capacity recovery, and registry alias removal.
+- Observable behavior delivered; FR/NFR and B/G subcases: the full suite completed with no failures or errors. Explicit benchmark, external consumer, PostgreSQL race, and recovery cases remain visibly environment-gated; no skip was converted into a pass claim. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: verification only; no source, serializer, migration, dependency, or test deletions in this verification slice.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no additional code or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: existing full-suite owners remain authoritative; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: elevated `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q -rs` (exit 0, no failures/errors; 21 explicit skips reported), 2026-09-14, Python 3.12.10 with loopback/subprocess permission.
+- Artifact and fixture hashes; evidence locations: terminal output only; no external artifact published.
+- Remaining subcases; blocker and next concrete action: PostgreSQL races/recovery, live OIDC/browser/accessibility, hostile transport/DNS counters, clean Node/image and TLS consumer lanes, capacity mixed-load, deployment integrity/SBOM, and independent review remain VERIFY. Release remains HOLD; qualify those external lanes against the committed candidate before release.
+- Atomic implementation commits: verification only; no implementation commit.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-14 — N02 remove obsolete dynamic registry alias
 
 - Scope: remove the unused `DynamicCatalogRegistry` compatibility name and migrate all active benchmark, consumer, and Flight integration callers to `CatalogRegistry`.
