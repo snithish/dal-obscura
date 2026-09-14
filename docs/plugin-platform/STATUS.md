@@ -1150,6 +1150,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `a9f9362`.
 - Human acceptance, if required: independent security and release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N04 published storage path enforcement
+
+- Scope: close the existing database-to-runtime gap for storage path rules.
+- Observable behavior delivered; FR/NFR and B/G subcases: runtime drafts retain configured `path_rules`, publication compilation includes them in the immutable runtime manifest, the published-config store reads them, and the data-plane composition root installs a `PathRuleEnforcer` for every catalog registry generation. Metadata and file tasks therefore receive the same published root boundary instead of silently running with no enforcer.
+- Changed and deleted paths; old callers removed; protected pickle check: runtime domain/compiler, publication repository, published runtime/catalog registry adapter, data-plane composition root, and focused regression tests changed. No migration, backend, serializer, serialized class, payload, or pickle import path changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +52 production/test logical lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: compiler runtime-manifest, published-config, path-rule, and data-plane identity suites; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: focused publication/published-config/schema-migration suite (75 passed), data-plane/path-rule/catalog suite (21 passed), changed-path Ruff/format and diff checks (exit 0), 2026-09-14, Python 3.12/uv local workspace.
+- Artifact and fixture hashes; evidence locations: atomic implementation commit `24e8890`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: runtime authoring still exposes no path-rule editor and live hostile destination/DNS/redirect/cancellation counters remain VERIFY under B06/N04; next action is continue transport qualification and document deployment network controls.
+- Atomic implementation commits: `24e8890`.
+- Human acceptance, if required: independent security/release review and real destination evidence remain VERIFY; release remains HOLD.
+
 Replace the corresponding queue entry and keep one current record per packet.
 Link detailed logs/artifacts instead of appending repeated full narratives.
 
