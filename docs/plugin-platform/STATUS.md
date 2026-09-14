@@ -1033,6 +1033,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Verification: catalog API suite (11 passed), Ruff, and pre-commit non-heavy hooks passed. Full production and independent acceptance evidence remain VERIFY; release remains HOLD.
 - Atomic implementation commit: `41fdfed`.
 
+## 2026-09-14 — N03/B05 middleware rejection envelope
+
+- Scope: make request-size and malformed `Content-Length` rejections obey the same correlated API error contract as route-level failures.
+- Observable behavior delivered: 400/413 middleware responses include stable error codes, safe messages, request IDs, and matching `x-request-id` headers before authentication or body parsing.
+- Verification: control-plane actor and request-limit suites (43 passed), Ruff, and non-heavy pre-commit hooks passed. Live hostile transport and full release evidence remain VERIFY; release remains HOLD.
+- Atomic implementation commit: `f5ea5bc`.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
