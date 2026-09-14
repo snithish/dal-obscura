@@ -1979,3 +1979,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: production OIDC/PKCE, upstream revocation freshness, hostile DNS/private-address transport, browser automated/manual accessibility coverage, PostgreSQL process races/recovery, clean TLS/OIDC consumers, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD.
 - Atomic implementation commits: verification-only ledger entry; prior UI commits `b21cb2d` and `0f25cbe` remain the source of truth.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — Secure local service readiness probe
+
+- Scope: verify the manually inspectable local deployment remains reachable after the UI/session and adapter changes.
+- Observable behavior delivered; FR/NFR and B/G subcases: the control plane `/readyz` returned HTTP 200 with `{"status":"ready","checks":{"database":"ok"}}` and security headers including CSP, `X-Frame-Options: DENY`, `nosniff`, same-origin opener policy, and a restrictive permissions policy. The Vite UI returned HTTP 200 with a no-cache HTML shell. This is disposable local evidence, not production deployment or OIDC evidence. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: verification-only ledger entry; no source, serializer, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no source or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: service readiness and header integration tests remain authoritative; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `curl -sS -i http://127.0.0.1:8821/readyz` and `curl -sS -I http://127.0.0.1:5173/` (exit 0), local Python control plane on port 8821 and Vite UI on port 5173, 2026-09-14.
+- Artifact and fixture hashes; evidence locations: disposable SQLite profile `/private/tmp/dal-obscura-ui-dev-8821.db`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: production OIDC/PKCE, hostile DNS/private-address transport, browser axe/screen-reader/responsive proof, PostgreSQL races/recovery, clean TLS/OIDC consumers, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD.
+- Atomic implementation commits: verification-only ledger entry; no source commit.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
