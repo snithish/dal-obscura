@@ -816,6 +816,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 
 - Local smoke: the existing control plane on `127.0.0.1:8821` returned HTTP 200 for an authenticated catalog listing, and the Vite UI on `127.0.0.1:5173` returned HTTP 200. These checks confirm serving processes only; they do not substitute for the required browser/IdP acceptance.
 
+## 2026-09-14 — N10/B09 governed asset inventory state
+
+- Scope: expose serving and policy state at the asset onboarding surface.
+- Observable behavior delivered: workspace asset rows now resolve active immutable publication metadata in bounded batch queries and return `active_policy_version` plus `last_published_at`. The authenticated UI renders policy status, draft status, active version, and publication recency beside the asset selector, with explicit missing-policy and never-published states. Mutable drafts are not used to claim serving state.
+- Verification: asset API suite passed (20 tests), UI TypeScript compilation and eight UI tests passed, and `git diff --check` passed. Pickle serializers and task payloads are unchanged.
+- Remaining gate: browser visual/keyboard evidence, strict response models, and live multi-actor publication checks remain VERIFY under N03/N10/B09/B15. Release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
