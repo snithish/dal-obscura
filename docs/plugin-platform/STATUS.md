@@ -261,6 +261,11 @@ test count is now 8.
 - Evidence: direct UI TypeScript build, Vite production build (276.86 kB JavaScript / 83.62 kB gzip), all 8 UI lifecycle/schema/recovery tests, and `git diff --check` passed.
 - Remaining N07/N10/N11 work: session-scoped query/mutation cache, rendered deferred-response race coverage, live status recovery journeys, permission matrix/browser evidence, and production qualification. Release remains HOLD.
 
+Qualification follow-up (2026-09-14): the elevated full Python suite completed with
+837 collected, 823 passed, 14 explicit environment/benchmark skips, and zero
+failures or errors. The unprivileged attempt was discarded because the sandbox
+blocks local socket binds required by Flight and HTTP fixture tests.
+
 ## Evidence inherited, with limits
 
 The historical ledger reports Python/socket-enabled suite and PostgreSQL checks
