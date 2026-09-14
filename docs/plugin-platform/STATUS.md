@@ -1693,3 +1693,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: full Compose/TLS/OIDC/recovery execution, artifact digests/SBOM, PostgreSQL races, clean consumer wheels, hostile transport, mixed-load capacity, and independent security/UX review remain VERIFY under N04/N05/N12–N16. Next action is execute the deployment drill with pinned images and retain release HOLD until all evidence is candidate-bound.
 - Atomic implementation commits: `0243c17`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N05 identity-provider draft validation
+
+- Scope: prevent the Settings form from submitting stale provider values when visible input is malformed.
+- Observable behavior delivered; FR/NFR and B/G subcases: malformed `name=claim.path` mappings and non-finite numeric overrides now produce visible field errors and disable Save identity providers. Corrected input clears the error and updates the staged payload; server-side validation remains authoritative. Secrets and pickle logic remain untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/SettingsView.tsx`; no backend, serializer, serialized class/import path, payload, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +20 UI lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: backend auth-provider validation plus UI TypeScript/Node/Vite checks; no tests deleted. Browser accessibility and live OIDC/error journeys remain N05/N16 owners.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node_modules/.bin/vite build` (exit 0; 324.17 kB JavaScript / 97.89 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (13 passed), and `git diff --check` (exit 0), 2026-09-14, Node 24 local workspace.
+- Artifact and fixture hashes; evidence locations: implementation commit `2ea4dd7`; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: rendered browser/axe coverage of error states, live OIDC PKCE/freshness/revocation, PostgreSQL races, hostile transport, clean wheels/real consumers, recovery/mixed-load capacity, deployment integrity, and independent review remain VERIFY under N04–N16. Next action is continue live release qualification while retaining HOLD.
+- Atomic implementation commits: `2ea4dd7`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
