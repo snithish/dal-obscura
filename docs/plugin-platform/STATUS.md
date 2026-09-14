@@ -1367,3 +1367,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: browser-rendered deferred access mutations, live logout/401 and two-process revocation, and independent accessibility/security/release review remain VERIFY under N05/N07/N16; next action is continue live acceptance and plugin/consumer qualification while retaining release HOLD.
 - Atomic implementation commits: `4198e0f`.
 - Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N04 startup-selected secret provider and scope grants
+
+- Scope: close the control-plane secret-provider bypass and require operator-owned scope grants in production startup profiles.
+- Observable behavior delivered; FR/NFR and B/G subcases: the control-plane CLI loads the same admitted environment provider configuration as the data plane and threads it through catalog discovery, schema loading, and synthetic policy evaluation. Configured `scope_grants` are checked before environment lookup; forged names fail closed. Production control-plane and data-plane startup reject missing or empty grant maps. Secret values remain out of persisted records, tickets, UI, and audit output.
+- Changed and deleted paths; old callers removed; protected pickle check: secret provider/runtime configuration, control-plane dependency/composition/service plumbing, production Compose/env reference, operator/security docs, and focused tests changed. No pickle serializers, serialized classes/import paths, payloads, migrations, or external dependencies changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +54 production/test/deployment lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: secret-provider, runtime-config, control-plane CLI, schema/evaluation, and production-deployment contract suites; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: focused secret/runtime/deployment/CLI suite (45 passed), focused schema/evaluation/CLI/provider suite (46 passed), changed-path Ruff and format checks (exit 0), 2026-09-14, Python 3.12/uv local workspace. Commit hooks passed with repository baseline `ty` diagnostics skipped (`SKIP=ty`).
+- Artifact and fixture hashes; evidence locations: atomic commit `96e79f3`; production examples in `deployment/production/.env.example` and `deployment/production/compose.yaml`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: live hostile DNS/private/redirect destination counters, secret-provider grant coverage for every deployed catalog, cancellation cleanup, real OIDC, browser/accessibility, consumer, PostgreSQL race, recovery, and independent review evidence remain VERIFY under N04–N16. Next action is continue transport/resource qualification without weakening explicit grants or private/local path support.
+- Atomic implementation commits: `96e79f3`.
+- Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
