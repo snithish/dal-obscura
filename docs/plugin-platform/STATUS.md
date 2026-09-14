@@ -1237,3 +1237,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live hostile DNS/private/redirect counters, cancellation cleanup, provider network policy, and independent security/release evidence remain VERIFY under B06/N04/N16; next action is continue the next bounded acceptance slice without loosening explicit local/private allowlists.
 - Atomic implementation commits: `e48f497`.
 - Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N07 cancellable UI mutations
+
+- Scope: make authenticated browser mutations obey the same cancellation and session fencing as reads.
+- Observable behavior delivered; FR/NFR and B/G subcases: the shared UI transport accepts `AbortSignal` for bootstrap, logout, draft save, policy evaluation/review, publication, reconciliation, and restore. App-owned controllers are aborted on logout, session expiry, unmount, and cleanup; aborted work is silent and cannot apply stale private state.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/api.ts` and `apps/governance-ui/src/main.tsx`; no backend, plugin, serializer, serialized class, payload, import path, migration, or dependency changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +73 UI logical lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing UI lifecycle/query tests and build checks; no tests deleted. Mutation cancellation remains a browser-rendered scenario for N07/N16.
+- Exact commands, exit codes, UTC date, runtime versions, environment: TypeScript build (exit 0), UI test runner (12 passed), Vite production build (exit 0; 323.68 kB JS / 97.63 kB gzip), 2026-09-14, Node 24 local workspace. Commit hooks passed with repository baseline `ty` diagnostics skipped (`SKIP=ty`).
+- Artifact and fixture hashes; evidence locations: atomic commit `0da0b6e`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: rendered deferred-response race matrix, full logout/401 browser journey, and independent accessibility/UX evidence remain VERIFY under N07/N16; next action is continue the next bounded acceptance slice without claiming browser evidence from build success.
+- Atomic implementation commits: `0da0b6e`.
+- Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
