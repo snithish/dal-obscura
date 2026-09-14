@@ -76,7 +76,21 @@ def test_plugin_binding_migration_dry_run_and_apply_are_explicit(tmp_path, capsy
     assert dry_run["unsupported"] == 1
     assert dry_run["applied"] == 0
 
-    assert run(["plugin-bindings", "--database-url", database_url, "--apply"]) == 0
+    assert run(["plugin-bindings", "--database-url", database_url, "--apply"]) == 2
+    assert "--maintenance-mode" in capsys.readouterr().err
+
+    assert (
+        run(
+            [
+                "plugin-bindings",
+                "--database-url",
+                database_url,
+                "--apply",
+                "--maintenance-mode",
+            ]
+        )
+        == 0
+    )
     applied = json.loads(capsys.readouterr().out)
     assert applied["applied"] == 2
 

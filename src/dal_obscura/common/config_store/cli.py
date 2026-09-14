@@ -65,6 +65,9 @@ def run(argv: Sequence[str] | None = None) -> int:
         )
         return 2
 
+    if not _maintenance_mode_acknowledged(args):
+        return 2
+
     engine = create_engine_from_url(database_url)
     if args.command == "upgrade":
         migrate_config_store(engine, revision=args.revision)
@@ -114,6 +117,23 @@ def run(argv: Sequence[str] | None = None) -> int:
     return 2
 
 
+def _maintenance_mode_acknowledged(args: argparse.Namespace) -> bool:
+    """Require an explicit cutover acknowledgement for offline rewrites."""
+
+    if (
+        args.command in {"plugin-bindings", "identity-keys"}
+        and args.apply
+        and not args.maintenance_mode
+    ):
+        print(
+            f"{args.command} --apply requires --maintenance-mode after writers are "
+            "stopped or drained",
+            file=sys.stderr,
+        )
+        return False
+    return True
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="dal-obscura-migrate")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -138,6 +158,11 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="apply only exact built-in mappings from the dry-run report",
     )
+    bindings.add_argument(
+        "--maintenance-mode",
+        action="store_true",
+        help="acknowledge that admissions are stopped and writers are drained",
+    )
 
     identity = subparsers.add_parser(
         "identity-keys",
@@ -148,6 +173,11 @@ def _parser() -> argparse.ArgumentParser:
         "--apply",
         action="store_true",
         help="apply the conversion transaction after a clean preview",
+    )
+    identity.add_argument(
+        "--maintenance-mode",
+        action="store_true",
+        help="acknowledge that admissions are stopped and writers are drained",
     )
 
     return parser

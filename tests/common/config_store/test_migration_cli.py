@@ -50,3 +50,11 @@ def test_migration_cli_reads_database_url_from_env(tmp_path: Path, monkeypatch) 
 
     engine = create_engine_from_url(database_url)
     assert "alembic_version" in inspect(engine).get_table_names()
+
+
+def test_migration_cli_requires_maintenance_ack_for_identity_apply(tmp_path: Path, capsys) -> None:
+    database_url = _database_url(tmp_path / "config.db")
+    assert run(["upgrade", "--database-url", database_url]) == 0
+
+    assert run(["identity-keys", "--database-url", database_url, "--apply"]) == 2
+    assert "--maintenance-mode" in capsys.readouterr().err
