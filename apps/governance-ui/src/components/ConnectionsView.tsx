@@ -105,6 +105,7 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
   const [diagnosing, setDiagnosing] = useState("");
   const [publishing, setPublishing] = useState(false);
   const discoveryEpoch = useRef(0);
+  const diagnosticEpoch = useRef(0);
   const mutationControllers = useRef<Set<AbortController>>(new Set());
   useEffect(() => () => {
     discoveryEpoch.current += 1;
@@ -198,23 +199,26 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
       setTables(discovered.tables);
       setMessage(`Loaded table inventory for ${catalog}.`);
     } catch (error) {
-      if ((error instanceof DOMException && error.name === "AbortError") || (error instanceof Error && error.name === "CancelledError")) return;
+      if (isAbortError(error)) return;
       if (epoch !== discoveryEpoch.current) return;
       setTables([]); setMessage(recoveryMessage(error, "Discovery failed; source credentials and endpoint policy were not changed."));
     }
   }
   async function diagnose(catalog: string) {
+    const epoch = ++diagnosticEpoch.current;
     setDiagnosing(catalog);
     try {
       const result = await queryClient.fetchQuery({
         queryKey: ["management", sessionScope, "connections", "diagnose", catalog],
         queryFn: ({ signal }) => controlPlane.diagnoseCatalog(catalog, signal),
       });
+      if (epoch !== diagnosticEpoch.current) return;
       setDiagnostics((current) => ({ ...current, [catalog]: result }));
     } catch (error) {
-      if ((error instanceof DOMException && error.name === "AbortError") || (error instanceof Error && error.name === "CancelledError")) return;
+      if (isAbortError(error) || epoch !== diagnosticEpoch.current) return;
       setDiagnostics((current) => ({ ...current, [catalog]: { catalog, status: "unavailable", message: recoveryMessage(error, "Diagnostic request failed"), checked_at: new Date().toISOString() } }));
     } finally {
+      if (epoch !== diagnosticEpoch.current) return;
       setDiagnosing("");
     }
   }
