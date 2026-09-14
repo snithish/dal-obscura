@@ -222,6 +222,12 @@ services:
     cap_drop: ["ALL"]
     security_opt:
       - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--output-document=/dev/null", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
     deploy:
       resources:
         limits:

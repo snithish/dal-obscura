@@ -16,7 +16,7 @@ services:
     image: ${DAL_OBSCURA_EDGE_IMAGE:?set DAL_OBSCURA_EDGE_IMAGE}
     depends_on:
       ui:
-        condition: service_started
+        condition: service_healthy
     ports:
       - "127.0.0.1:8443:8443"
     networks:

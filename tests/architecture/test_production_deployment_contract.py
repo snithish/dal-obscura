@@ -32,6 +32,9 @@ def test_production_reference_contains_immutable_and_private_topology() -> None:
     assert "condition: service_healthy" in compose
     assert "127.0.0.1:8820/readyz" in compose
     assert "127.0.0.1:8816/readyz" in compose
+    ui_block = compose.split("\n  ui:\n", 1)[1].split("\nnetworks:", 1)[0]
+    assert "healthcheck:" in ui_block
+    assert "127.0.0.1:8080/" in ui_block
     postgres_block = compose.split("  migrate:", 1)[0]
     assert "env_file: .env" not in postgres_block
     assert "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN" not in postgres_block

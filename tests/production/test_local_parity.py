@@ -25,6 +25,7 @@ def test_secure_local_profile_layers_the_production_security_boundary() -> None:
     assert "127.0.0.1:8815:8815" in local
     assert "127.0.0.1:8816:8816" in local
     assert "127.0.0.1:8443:8443" in local
+    assert "condition: service_healthy" in local
     assert "networks:" in local and "internal: true" in local
     assert "read_only: true" in local
     assert 'cap_drop: ["ALL"]' in local
