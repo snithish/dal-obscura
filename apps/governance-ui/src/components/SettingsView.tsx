@@ -54,8 +54,10 @@ export function SettingsView({
   const [message, setMessage] = useState("");
   const [pathRuleRoots, setPathRuleRoots] = useState<string[]>([]);
   const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
   const editEpoch = useRef(0);
   const mutationControllers = useRef<Set<AbortController>>(new Set());
+  const savingRef = useRef(false);
 
   useEffect(() => () => {
     for (const controller of mutationControllers.current) controller.abort();
@@ -106,6 +108,9 @@ export function SettingsView({
   }
 
   async function save() {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
     if (form.ticket_ttl_seconds < 1 || form.max_tickets < 1 || form.max_ticket_exchanges < 1) {
       setMessage("Enter positive values for all runtime limits before saving.");
       return;
@@ -126,10 +131,13 @@ export function SettingsView({
       onReload();
     } catch (error) {
       if (!isAbortError(error)) setMessage(recoveryMessage(error, "Settings update was rejected; the previous values remain active."));
-    } finally { finishMutation(controller); }
+    } finally { finishMutation(controller); savingRef.current = false; setSaving(false); }
   }
 
   async function saveProviders() {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
     if (Object.keys(providerErrors).length) {
       setMessage("Fix the highlighted identity provider fields before saving.");
       return;
@@ -154,7 +162,7 @@ export function SettingsView({
       onReload();
     } catch (error) {
       if (!isAbortError(error)) setMessage(recoveryMessage(error, "Identity provider update was rejected; the serving provider chain remains unchanged."));
-    } finally { finishMutation(controller); }
+    } finally { finishMutation(controller); savingRef.current = false; setSaving(false); }
   }
 
   function updateProviderText(index: number, key: string, value: string) {
@@ -281,7 +289,7 @@ export function SettingsView({
           </div>)}</div>
           <button className="secondary" type="button" onClick={() => { markDirty(); setPathRuleRoots((current) => [...current, ""]); }}>Add storage root</button>
         </fieldset>
-        <button className="primary" onClick={() => void save()}>Save runtime settings</button>
+        <button className="primary" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save runtime settings"}</button>
         {message && <p className="notice" role="status">{message}</p>}
       </div>
       <div className="form-card">
@@ -326,7 +334,7 @@ export function SettingsView({
             </div>
           </fieldset>;
         })}</div> : <p className="empty-result"><strong>No identity providers configured.</strong><br />Add the first OIDC provider through the control-plane bootstrap or API before publishing.</p>}
-        <button className="primary" disabled={Object.keys(providerErrors).length > 0} onClick={() => void saveProviders()}>Save identity providers</button>
+        <button className="primary" disabled={saving || Object.keys(providerErrors).length > 0} onClick={() => void saveProviders()}>{saving ? "Saving…" : "Save identity providers"}</button>
       </div>
     </section>
   );
