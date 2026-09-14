@@ -1061,6 +1061,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Verification: UI TypeScript compilation, 12 UI tests, Vite production build, and non-heavy pre-commit hooks passed. Full rendered mutation and accessibility evidence remain VERIFY; release remains HOLD.
 - Atomic implementation commit: `abaa6cd`.
 
+## 2026-09-14 — N03/B05 conflict revision detail
+
+- Scope: make stale revision responses directly actionable for API and UI clients.
+- Observable behavior delivered: numeric current revisions are safely included in conflict envelopes when present in trusted repository errors, while arbitrary conflict text remains unchanged and non-sensitive.
+- Verification: catalog and request-boundary suites (21 passed), Ruff, and non-heavy pre-commit hooks passed. Full multi-process race and browser evidence remain VERIFY; release remains HOLD.
+- Atomic implementation commit: `573d80a`.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
