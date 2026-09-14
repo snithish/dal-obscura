@@ -66,6 +66,7 @@ function App() {
   const [bootstrapToken, setBootstrapToken] = useState("");
   const [authError, setAuthError] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
+  const loginInFlight = useRef(false);
   const [managementData, setManagementData] = useState<ManagementData>({});
   const [managementLoading, setManagementLoading] = useState(false);
   const [managementError, setManagementError] = useState("");
@@ -441,11 +442,13 @@ function App() {
   }
 
   async function bootstrapLogin() {
+    if (loginInFlight.current) return;
     const token = bootstrapToken.trim();
     if (!token) {
       setAuthError("Enter the local control-plane token to continue.");
       return;
     }
+    loginInFlight.current = true;
     setLoggingIn(true);
     setAuthError("");
     const controller = beginMutation();
@@ -464,6 +467,7 @@ function App() {
       setNotice("Sign-in failed. No policy data was loaded.");
     } finally {
       finishMutation(controller);
+      loginInFlight.current = false;
       setLoggingIn(false);
     }
   }
