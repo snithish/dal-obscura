@@ -41,6 +41,8 @@ def test_control_plane_readyz_returns_503_when_database_check_fails():
     assert response.status_code == 503
     assert response.json()["status"] == "not_ready"
     assert "database" in response.json()["checks"]
+    assert response.json()["error"]["code"] == "not_ready"
+    assert response.json()["error"]["request_id"] == response.headers["x-request-id"]
 
 
 def _broken_session_factory() -> _BrokenSession:
