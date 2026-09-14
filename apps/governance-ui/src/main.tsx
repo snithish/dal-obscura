@@ -79,6 +79,7 @@ function App() {
   const publishPendingRef = useRef(false);
   const previewPendingRef = useRef(false);
   const reviewPendingRef = useRef(false);
+  const restorePendingRef = useRef(false);
   const loadEpoch = useRef(0);
   const draftEditEpoch = useRef(0);
   const inventoryEpoch = useRef(0);
@@ -863,7 +864,9 @@ function App() {
 
   async function restorePolicyVersion(policyVersion: number) {
     if (!asset) return;
+    if (restorePendingRef.current) return;
     if (saveState === "unsaved" && !window.confirm("You have unsaved policy changes. Restore this published version over them?")) return;
+    restorePendingRef.current = true;
     const loadScope = loadEpoch.current;
     const editScope = draftEditEpoch.current;
     const draftIdentity = { id: draftId, revision: draftRevision };
@@ -884,6 +887,7 @@ function App() {
       setNotice(recoveryMessage(error, "Restore failed. The draft may have changed; reload the asset before trying again."));
     } finally {
       finishMutation(controller);
+      restorePendingRef.current = false;
     }
   }
 
