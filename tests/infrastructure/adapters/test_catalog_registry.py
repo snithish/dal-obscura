@@ -44,6 +44,38 @@ def test_catalog_registry_rejects_removed_file_catalog_type(tmp_path):
         raise AssertionError("expected removed catalog type rejection")
 
 
+def test_catalog_registry_close_attempts_all_catalogs_when_one_fails(monkeypatch) -> None:
+    closed: list[str] = []
+
+    class FakeCatalog:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        def close(self) -> None:
+            closed.append(self.name)
+            if self.name == "first":
+                raise RuntimeError("first close failed")
+
+    monkeypatch.setattr(
+        registry_module,
+        "_build_catalog",
+        lambda config, *, plugin_registry=None: FakeCatalog(config.name),
+    )
+    registry = CatalogRegistry(
+        ServiceConfig(
+            catalogs={
+                "first": CatalogConfig(name="first", type="iceberg", options={}),
+                "second": CatalogConfig(name="second", type="iceberg", options={}),
+            }
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="first close failed"):
+        registry.close()
+
+    assert closed == ["first", "second"]
+
+
 def test_catalog_config_requires_logical_name():
     try:
         CatalogConfig(

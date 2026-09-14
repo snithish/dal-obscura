@@ -227,10 +227,17 @@ class IcebergCatalog(CatalogPlugin):
 
 
 def _close_catalogs(catalogs: Iterable[object]) -> None:
+    first_error: Exception | None = None
     for catalog in catalogs:
         close = getattr(catalog, "close", None)
         if callable(close):
-            close()
+            try:
+                close()
+            except Exception as exc:
+                if first_error is None:
+                    first_error = exc
+    if first_error is not None:
+        raise first_error
 
 
 def _build_catalog(
