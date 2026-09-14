@@ -907,6 +907,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: catalog upsert now validates and documents its stable catalog identity response while preserving plugin admission, option validation, and revision preconditions.
 - Verification: catalog API and OpenAPI route suites passed (15 tests); Ruff and format checks passed. Generated DTO coverage and live catalog lifecycle qualification remain VERIFY.
 
+## 2026-09-14 — N03 referenced-draft revision preconditions
+
+- Scope: close the compare-and-swap gap for editor-to-publisher draft handoff.
+- Observable behavior delivered: evaluation, review, and publication now require an expected revision whenever a saved draft is selected by immutable ID. Existing foreign or missing draft IDs retain concealed 404 behavior; stale revisions remain 409; missing revisions return 428 before the mutation can commit.
+- Verification: complete schema API suite passed (7 tests), referenced-draft/version regression passed, and changed-path Ruff/format checks passed. Two-process race evidence and generated DTO/browser proof remain VERIFY under B05/B13/B16.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.

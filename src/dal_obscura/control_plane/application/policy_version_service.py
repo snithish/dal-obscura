@@ -17,7 +17,11 @@ from uuid import UUID, uuid4
 from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.compiler import PublicationCompiler
-from dal_obscura.control_plane.application.errors import PublicationConflictError, ValidationFailure
+from dal_obscura.control_plane.application.errors import (
+    PublicationConflictError,
+    RevisionPreconditionRequired,
+    ValidationFailure,
+)
 from dal_obscura.control_plane.application.policy_service import ensure_asset_capability
 from dal_obscura.control_plane.application.review_service import verify_review_token
 from dal_obscura.control_plane.domain.models import CompiledCatalog, CompiledPublication
@@ -254,6 +258,10 @@ def create_asset_policy_version(  # noqa: C901
     )
     if draft_id is not None and personal_draft is None:
         raise LookupError("Policy draft not found")
+    if draft_id is not None and expected_draft_revision is None:
+        raise RevisionPreconditionRequired(
+            "Referenced policy draft revision is required; reread the draft before publishing."
+        )
     if expected_draft_revision is not None:
         current_revision = (
             0 if personal_draft is None else int(cast(int | str, personal_draft["revision"]))

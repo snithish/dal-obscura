@@ -617,6 +617,29 @@ def test_publisher_can_review_and_publish_editor_draft_by_explicit_id(monkeypatc
         schema_service, "load_catalog", lambda *args, **kwargs: _EvaluationCatalog()
     )
 
+    missing_eval_revision = client.post(
+        f"/v1/assets/{asset['id']}/policy-evaluate",
+        json={
+            "principal": "user1",
+            "groups": [],
+            "claims": {"tenant": "default"},
+            "draft_id": selected["id"],
+        },
+        headers=_bearer("publisher-token"),
+    )
+    assert missing_eval_revision.status_code == 428
+    missing_review_revision = client.post(
+        f"/v1/assets/{asset['id']}/policy-review",
+        json={
+            "principal": "user1",
+            "groups": [],
+            "claims": {"tenant": "default"},
+            "draft_id": selected["id"],
+        },
+        headers=_bearer("publisher-token"),
+    )
+    assert missing_review_revision.status_code == 428
+
     reviewed = client.post(
         f"/v1/assets/{asset['id']}/policy-review",
         json={
@@ -630,6 +653,15 @@ def test_publisher_can_review_and_publish_editor_draft_by_explicit_id(monkeypatc
     )
     assert reviewed.status_code == 200, reviewed.json()
     token = reviewed.json()["review_token"]
+    missing_publish_revision = client.post(
+        f"/v1/assets/{asset['id']}/policy-versions",
+        json={
+            "draft_id": selected["id"],
+            "review_token": token,
+        },
+        headers=_bearer("publisher-token"),
+    )
+    assert missing_publish_revision.status_code == 428
     published = client.post(
         f"/v1/assets/{asset['id']}/policy-versions",
         json={
