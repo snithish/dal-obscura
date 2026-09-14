@@ -1654,3 +1654,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: B19 fixed-runner/discovery/audit/mixed-load resource thresholds, live hostile transport, OIDC/browser/freshness, PostgreSQL process races, clean wheels/real consumers, deployment/recovery/integrity, and independent review remain VERIFY under N04–N16. Next action is continue cross-process and deployment qualification while retaining release HOLD.
 - Atomic implementation commits: `be44ceb`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N05 local browser origin parity
+
+- Scope: keep local authenticated browser mutations usable while retaining CSRF and origin checks.
+- Observable behavior delivered; FR/NFR and B/G subcases: when the local profile has no explicit CORS setting, the control-plane CLI now allows only the supported Vite origins `http://127.0.0.1:5173` and `http://localhost:5173`. Bootstrap sessions can therefore sign out and perform protected mutations from the local UI. Production behavior is unchanged and still requires explicit HTTPS CORS origins; pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/interfaces/control_plane_cli.py`, `tests/interfaces/control_plane/test_control_plane_cli.py`; no serializers, serialized classes/import paths, payloads, migrations, dependencies, or tests deleted.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +7 production/test lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: control-plane CLI origin propagation and browser bootstrap/session suites; no tests deleted. Live HTTPS OIDC, cookie, expiry, freshness, and cross-process revocation remain N05/N16 owners.
+- Exact commands, exit codes, UTC date, runtime versions, environment: focused CLI/bootstrap pytest selection (2 passed), full control-plane CLI plus actor-auth selection (all passed), changed-path Ruff (exit 0), 2026-09-14, Python 3.12/uv local workspace. Commit hooks retained Ruff/format/pytest and skipped only the documented repository ty baseline diagnostics.
+- Artifact and fixture hashes; evidence locations: implementation commit `646fb53`; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: restart of the already-running local process is required to observe this code change in the browser; live OIDC/browser/accessibility, freshness/revocation, PostgreSQL races, clean wheels/consumers, hostile transport, recovery/mixed-load capacity, deployment integrity, and independent review remain VERIFY under N04–N16. Next action is apply the change in the next controlled service restart and continue release qualification while retaining HOLD.
+- Atomic implementation commits: `646fb53`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
