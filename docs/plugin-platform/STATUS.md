@@ -2097,3 +2097,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: rendered browser confirmation and deferred-response matrix, live OIDC/PKCE/revocation, hostile transport, PostgreSQL races/recovery, clean TLS/OIDC consumer cells, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable qualification packet without changing pickle behavior.
 - Atomic implementation commits: `0f22baa6`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N07 form mutation response fencing
+
+- Scope: prevent late connection and access save responses from overwriting newer user edits.
+- Observable behavior delivered; FR/NFR and B/G subcases: connection and owner/grant saves capture an edit generation before issuing the request. Any subsequent edit, context change, explicit discard, reload, or session transition invalidates that generation; a late success is ignored and cannot clear newer input or trigger an obsolete reload. Pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/ConnectionsView.tsx` and `apps/governance-ui/src/components/AssetWorkspace.tsx`; no backend, serializer, serialized class/import path, payload, migration, dependency, or test deletion.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +26 UI production lines and -8 obsolete lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing UI lifecycle/query tests remain owners; no tests deleted. Deferred rendered mutation races remain required B10 evidence.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node_modules/.bin/vite build` (exit 0; 330.47 kB JavaScript / 99.75 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0; 14 passed), and `git diff --check` (exit 0), 2026-09-14, Node 26.8.2 local runtime (package policy remains Node 24). Commit hook used `SKIP=ty`; the documented repository `ty` baseline still reports 72 unrelated diagnostics.
+- Artifact and fixture hashes; evidence locations: implementation commit `a86bc1fa`; local disposable UI/control-plane profile on `127.0.0.1:5173`/`127.0.0.1:8821`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: rendered deferred-response proof, live OIDC/PKCE/revocation, hostile transport, PostgreSQL races/recovery, clean TLS/OIDC consumer cells, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable qualification packet without changing pickle behavior.
+- Atomic implementation commits: `a86bc1fa`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
