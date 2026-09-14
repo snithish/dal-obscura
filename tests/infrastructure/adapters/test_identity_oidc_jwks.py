@@ -152,9 +152,10 @@ def test_jwks_transport_does_not_follow_redirects(monkeypatch):
     assert seen["request"].full_url == "http://127.0.0.1:9999/jwks"
     assert seen["timeout"] == 5
     assert isinstance(seen["handler"], jwks_module._NoRedirectHandler)
-    assert seen["handler"].redirect_request(
-        None, None, 302, "Found", {}, "https://attacker.example"
-    ) is None
+    assert (
+        seen["handler"].redirect_request(None, None, 302, "Found", {}, "https://attacker.example")
+        is None
+    )
 
 
 def test_ignores_non_signing_jwks_entries():

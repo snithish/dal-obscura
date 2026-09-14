@@ -7,7 +7,7 @@ This repo implements a governed Iceberg data access layer exposed through Arrow 
 - Keep the service stateless; do not add persistent state without explicit approval.
 - Masks and row filters must be expressed as DuckDB SQL expressions.
 - Avoid unnecessary data copies; prefer Arrow + DuckDB zero-copy paths where possible.
-- Follow TDD: add tests and expectations first, get review from user only then start code implementation.
+- Follow TDD for new behavior: add or extend the owning behavioral test, implement the smallest change, then run focused and broad checks.
 - TableFormat task planning must create parallelizable scan tasks whenever the backend exposes splittable work, such as files, fragments, partitions, or row groups. If a backend cannot be parallelized, document the reason and performance drawback in the format implementation and user-facing docs.
 
 ## How to Run
@@ -15,6 +15,8 @@ This repo implements a governed Iceberg data access layer exposed through Arrow 
 uv sync --dev --extra server --extra sqlite
 uv run dal-obscura --help
 uv run dal-obscura-control-plane --help
+pnpm --dir apps/governance-ui install --frozen-lockfile
+pnpm --dir apps/governance-ui dev
 ```
 
 The data plane reads `DAL_OBSCURA_*` environment variables from an already
@@ -98,9 +100,14 @@ mvn -f connectors/jvm/pom.xml verify
 - `src/dal_obscura/data_plane/infrastructure/adapters/`: published config, catalogs, masking and tickets
 - `tests/`: unit tests
 
+The public plugin SDK and conformance runner live under `packages/plugin-api/` and
+`packages/plugin-conformance/`. Built catalog/format plugins live under
+`packages/*-plugin/` and are admitted by the lockfile-backed registry; callers must
+not import service internals or select plugins by module path.
+
 ## Common Tasks
-- Add a new catalog type: implement `CatalogPlugin.resolve_table()` (see `common/catalog/ports.py`) and return an executable `TableFormat`.
-- Add a new table format: implement `TableFormat` and construct it from the owning catalog type.
+- Add a new catalog plugin: implement the public SDK `CatalogPlugin`, declare output formats/capabilities in its static descriptor, add conformance coverage, and admit the exact wheel through the plugin lock.
+- Add a new table format plugin: implement the public SDK `TableFormatPlugin`, validate nested Arrow schemas and bounded tasks, and pair it through declared handle versions/capabilities.
 - Extend policy: update policy parsing/resolution and add tests.
 - Add a new mask type: update `_mask_expression` and any schema adjustments, plus tests.
 - Change ticket payloads: update `TicketPayload`, `HmacTicketCodecAdapter`, both use cases, and tests.

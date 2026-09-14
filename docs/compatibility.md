@@ -14,8 +14,8 @@ and ticket contract.
 | Java client | Java 17 runtime; Java 11 bytecode target | `mvn -f connectors/jvm/pom.xml verify` | supported for tested Flight reads |
 | Spark DataSource V2 | Spark 3.5.6, Scala 2.12, Java 17 | local `SparkReadIT` in the Maven reactor | supported only for the tested local read path |
 
-The project metadata allows Python 3.10 and later, but only Python 3.12 has a
-CI compatibility claim. The Maven `spark-4.0` profile is a build profile, not
+The project and published plugin metadata support Python 3.12 only (`>=3.12,<3.13`),
+matching CI and the production image. The Maven `spark-4.0` profile is a build profile, not
 a support claim: it needs its own complete integration run before release.
 
 ## Consumer semantics

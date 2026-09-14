@@ -3,7 +3,7 @@ name = "dal-obscura"
 version = "0.1.0"
 description = "Data access layer with masking, row filters, and Arrow Flight"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12,<3.13"
 license = "Apache-2.0"
 authors = [{ name = "dal-obscura" }]
 

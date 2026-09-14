@@ -14,10 +14,9 @@ a general plugin marketplace or a custom browser RPC protocol. Preserve trusted
 pickle functions/classes/import paths and semantics.
 
 N01 records exact Python/database/Arrow/DuckDB/Iceberg/JDK/Spark versions actually
-resolved and exercised. Current metadata >=3.10 is not proof of support for every
-new Python release. Select one production Python minor with maintained security
+resolved and exercised. Select one production Python minor with maintained security
 support and compatible binary wheels, test the documented minimum separately if
-it differs, and bound package metadata honestly. Start from existing tested 3.12;
+it differs, and bound package metadata honestly. The selected support line is Python 3.12;
 evaluate a newer supported minor using clean installs and the protected fixtures,
 then choose the newest passing supported minor. Do not claim or advertise an
 untested interpreter. Apply the same rule to PostgreSQL and consumer versions.

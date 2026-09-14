@@ -2,7 +2,7 @@
 name = "dal-obscura-plugin-api"
 version = "0.1.0"
 description = "Versioned contracts for Dal Obscura catalog and table-format plugins"
-requires-python = ">=3.10"
+requires-python = ">=3.12,<3.13"
 dependencies = ["pyarrow>=15.0.0"]
 
 [build-system]

@@ -2,7 +2,7 @@
 name = "dal-obscura-manifest-parquet"
 version = "0.1.0"
 description = "Manifest-governed Parquet catalog and table-format plugin"
-requires-python = ">=3.10"
+requires-python = ">=3.12,<3.13"
 dependencies = [
   "dal-obscura-plugin-api==0.1.0",
   "pyarrow>=15.0.0",

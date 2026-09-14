@@ -2,7 +2,7 @@
 name = "dal-obscura-iceberg-rest"
 version = "0.1.0"
 description = "Admitted PyIceberg REST catalog plugin for dal-obscura"
-requires-python = ">=3.10"
+requires-python = ">=3.12,<3.13"
 dependencies = [
   "dal-obscura-plugin-api==0.1.0",
   "pyiceberg>=0.6.0",

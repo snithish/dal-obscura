@@ -92,9 +92,7 @@ def test_identity_migration_previews_and_applies_known_issuer_keys() -> None:
         assert owner is not None
         assert policy_rule is not None
         assert owner.principal == ("https://issuer.example/realm/|u|alice%7Cone")
-        assert policy_rule.principals_json == [
-            "https://issuer.example/realm/|g|analysts%7Ceast"
-        ]
+        assert policy_rule.principals_json == ["https://issuer.example/realm/|g|analysts%7Ceast"]
 
 
 def test_identity_migration_refuses_unknown_keys_without_mutation() -> None:
