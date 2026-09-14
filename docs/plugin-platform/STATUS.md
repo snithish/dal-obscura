@@ -2539,3 +2539,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: clean Node 24/pnpm 12 install and image proof, dependency advisory review, minimum-version and consumer matrix, live OIDC freshness/revocation, cross-process PostgreSQL races/recovery, hostile transport/DNS/private-address counters, populated browser accessibility, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N01–N16. Release remains HOLD; continue with N02 contract/path consolidation.
 - Atomic implementation commits: `97d8e0c2`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N02 strict duplicate-key security settings
+
+- Scope: close last-key-wins JSON ambiguity in operator plugin locks and secret-provider configuration.
+- Observable behavior delivered; FR/NFR and B/G subcases: plugin lock documents and environment-backed secret-provider JSON now reject duplicate object keys before version, plugin identity, prefix, or scope-grant admission. Existing bounded five-part lock validation and explicit secret scopes remain unchanged. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/common/plugin_api/lockfile.py`, `src/dal_obscura/data_plane/infrastructure/adapters/secret_providers.py`, and their focused tests; no serializer, migration, or import-path changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +25 production lines and +24 test lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: plugin lock and secret-provider suites own duplicate-key rejection plus existing malformed-shape and scope-grant cases; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: focused pytest (exit 0, 21 passed), focused Ruff check/format (exit 0), 2026-09-14, Python 3.12. Repository pre-commit format/lint/pytest hooks passed; the known repository-wide ty baseline diagnostics were skipped for the commit hook.
+- Artifact and fixture hashes; evidence locations: implementation commit `15b5c662`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: N02 maintenance-mode populated-record conversion and remaining legacy reader inventory remain VERIFY; clean Node/image/advisory, live OIDC, hostile transport, PostgreSQL races/recovery, real consumer matrix, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N01–N16. Release remains HOLD; continue N02 strict old-input and conversion qualification.
+- Atomic implementation commits: `15b5c662`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
