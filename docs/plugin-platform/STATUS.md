@@ -2422,3 +2422,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: deadline/cancellation enforcement for actual provider IO, hostile DNS/private-address counters, live OIDC freshness/revocation, populated browser accessibility, PostgreSQL races/recovery, clean TLS/OIDC consumer matrix, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable governed backend slice.
 - Atomic implementation commits: `01cf2577`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N04 conformance namespace discovery bound
+
+- Scope: close the remaining unbounded namespace validation path in the external plugin conformance runner.
+- Observable behavior delivered; FR/NFR and B/G subcases: `run_catalog_checks()` now validates all discovery budgets before invoking provider lifecycle methods, enforces a configurable 10,000-namespace default, and fails closed when a catalog returns an oversized namespace tuple. Table page/table-count bounds remain enforced. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `packages/plugin-conformance/src/dal_obscura_plugin_conformance/runner.py` and `packages/plugin-conformance/tests/test_conformance_runner.py`; no serializers, migrations, dependencies, or unrelated paths changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +8 production lines, +60 test lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: conformance runner suite owns oversized namespace rejection and pre-provider budget validation; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest packages/plugin-conformance/tests/test_conformance_runner.py -q` (exit 0, 27 passed), focused Ruff (exit 0), 2026-09-14, Python 3.12.
+- Artifact and fixture hashes; evidence locations: implementation commit `2b0e3019`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: actual hostile transport/DNS/private-address counters, live OIDC freshness/revocation, populated browser accessibility, PostgreSQL races/recovery, clean TLS/OIDC consumer matrix, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable governed backend slice.
+- Atomic implementation commits: `2b0e3019`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
