@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { QueryClient } from "@tanstack/react-query";
 import type { ApiFailure, Asset, Mask, PolicyRule, Preview, Session, SessionOptions, UiAuthConfig } from "./api";
 import { controlPlane } from "./api";
 import { isCurrentEpoch } from "./lifecycle";
 import { locationFromUrl, pageFromHash, type UiPage } from "./navigation";
+import { assetInventoryQueryKey, sessionQueryScope } from "./query_scope";
 import { recoveryMessage } from "./recovery";
 import { LoginPanel } from "./components/LoginPanel";
 import { SettingsView } from "./components/SettingsView";
@@ -76,13 +78,29 @@ function App() {
   const assetAbortController = useRef<AbortController | null>(null);
   const managementAbortController = useRef<AbortController | null>(null);
   const workspaceAbortController = useRef<AbortController | null>(null);
-  const inventoryAbortController = useRef<AbortController | null>(null);
   const historyAbortController = useRef<AbortController | null>(null);
   const auditAbortController = useRef<AbortController | null>(null);
+  const [queryClient] = useState(
+    () => new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, staleTime: 0 },
+        mutations: { retry: false },
+      },
+    }),
+  );
+  const sessionCacheKey = sessionQueryScope(session);
+  const previousSessionCacheKey = useRef(sessionCacheKey);
   const [logoutPending, setLogoutPending] = useState(false);
   useEffect(() => {
     void loadInitialWorkspace();
   }, []);
+
+  useEffect(() => {
+    if (previousSessionCacheKey.current === sessionCacheKey) return;
+    void queryClient.cancelQueries();
+    queryClient.clear();
+    previousSessionCacheKey.current = sessionCacheKey;
+  }, [queryClient, sessionCacheKey]);
 
   useEffect(() => {
     rulesRef.current = rules;
@@ -130,11 +148,12 @@ function App() {
     managementEpoch.current += 1;
     if (searchTimer.current !== undefined) window.clearTimeout(searchTimer.current);
     assetAbortController.current?.abort();
-    inventoryAbortController.current?.abort();
     managementAbortController.current?.abort();
     workspaceAbortController.current?.abort();
     historyAbortController.current?.abort();
     auditAbortController.current?.abort();
+    void queryClient.cancelQueries();
+    queryClient.clear();
   }, []);
 
   useEffect(() => {
@@ -168,7 +187,6 @@ function App() {
       inventoryEpoch.current += 1;
       managementEpoch.current += 1;
       assetAbortController.current?.abort();
-      inventoryAbortController.current?.abort();
       managementAbortController.current?.abort();
       workspaceAbortController.current?.abort();
       historyAbortController.current?.abort();
@@ -282,7 +300,10 @@ function App() {
       const loadedSession = await controlPlane.getSession(controller.signal);
       if (epoch !== loadEpoch.current) return;
       setSession(loadedSession);
-      const loadedPage = await controlPlane.listAssetPage({ limit: 50, signal: controller.signal });
+      const loadedPage = await queryClient.fetchQuery({
+        queryKey: assetInventoryQueryKey(sessionQueryScope(loadedSession), "", null),
+        queryFn: ({ signal }) => controlPlane.listAssetPage({ limit: 50, signal }),
+      });
       const loaded = loadedPage.items;
       if (epoch !== loadEpoch.current) return;
       setAssets(loaded);
@@ -317,16 +338,22 @@ function App() {
 
   async function refreshAssetInventory(search: string, append = false) {
     const epoch = ++inventoryEpoch.current;
-    inventoryAbortController.current?.abort();
-    const controller = new AbortController();
-    inventoryAbortController.current = controller;
+    const searchTerm = search.trim();
+    await queryClient.cancelQueries({ queryKey: ["asset-inventory", sessionCacheKey] });
     setAssetInventoryLoading(true);
     try {
-      const pageResult = await controlPlane.listAssetPage({
-        limit: 50,
-        cursor: append ? assetCursor ?? undefined : undefined,
-        search: search.trim() || undefined,
-        signal: controller.signal,
+      const pageResult = await queryClient.fetchQuery({
+        queryKey: assetInventoryQueryKey(
+          sessionCacheKey,
+          searchTerm,
+          append ? assetCursor : null,
+        ),
+        queryFn: ({ signal }) => controlPlane.listAssetPage({
+          limit: 50,
+          cursor: append ? assetCursor ?? undefined : undefined,
+          search: searchTerm || undefined,
+          signal,
+        }),
       });
       if (epoch !== inventoryEpoch.current) return;
       setAssets((current) => append ? [...current, ...pageResult.items] : pageResult.items);
@@ -334,12 +361,11 @@ function App() {
       setAssetHasMore(Boolean(pageResult.next_cursor));
       if (!append && !pageResult.items.length) setNotice("No governed assets match this search.");
     } catch (error) {
-      if (controller.signal.aborted) return;
+      if (error instanceof DOMException && error.name === "AbortError") return;
       if (epoch !== inventoryEpoch.current) return;
       setNotice(recoveryMessage(error, "Asset inventory could not be loaded. Your current editor state remains unchanged."));
     } finally {
       if (epoch === inventoryEpoch.current) setAssetInventoryLoading(false);
-      if (controller === inventoryAbortController.current) inventoryAbortController.current = null;
     }
   }
 
@@ -379,7 +405,6 @@ function App() {
     inventoryEpoch.current += 1;
     managementEpoch.current += 1;
     assetAbortController.current?.abort();
-    inventoryAbortController.current?.abort();
     managementAbortController.current?.abort();
     workspaceAbortController.current?.abort();
     historyAbortController.current?.abort();
@@ -403,6 +428,9 @@ function App() {
   }
 
   function clearPrivateState() {
+    void queryClient.cancelQueries();
+    queryClient.clear();
+    previousSessionCacheKey.current = "anonymous";
     draftEditEpoch.current += 1;
     setSession(null); setAsset(null); setAssets([]); resetRuleHistory([]); setPreview(null);
     setManagementData({}); setAssetCursor(null); setAssetHasMore(false); setAssetSearch("");

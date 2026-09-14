@@ -915,6 +915,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 
 - Follow-up regression: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q` exited 0 across the full repository after the precondition change. Release remains HOLD for live-only gates.
 
+## 2026-09-14 — N07 session-scoped inventory query cache
+
+- Scope: begin the required replacement of manual UI inventory cancellation/cache state.
+- Observable behavior delivered: the UI now pins `@tanstack/react-query` 5.102.8, scopes inventory keys by exact issuer/principal/search/cursor, passes the Query cancellation signal to the shared API transport, deduplicates identical page reads, and clears/cancels private queries on session changes, expiry, logout, and teardown. Local policy drafts remain component state.
+- Verification: UI TypeScript compilation, Vite production build (93.69 kB gzip JavaScript), and 11 UI tests passed; `git diff --check` passed. Remaining N07 work is migration of management/mutation workflows and rendered deferred-response coverage; release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
