@@ -796,6 +796,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q` passed with 837 collected, 823 passed, 14 explicit opt-in skips, and zero failures/errors using loopback/subprocess permissions. UI TypeScript/Vite and eight UI tests remain green.
 - The skips are the documented benchmark, consumer qualification, PostgreSQL race/recovery, and other opt-in release lanes; they are not treated as completion evidence. N01–N16 remain open/VERIFY where live browser, OIDC, hostile transport, consumer, capacity, recovery, and independent acceptance evidence is still required. Release remains HOLD.
 
+## 2026-09-14 — N08/B11 nullable mask schema
+
+- Scope: align masked Arrow schemas with null-producing `null` and `default: null` expressions.
+- Observable behavior delivered: direct null-producing masks now mark output fields nullable while preserving the original Arrow type and metadata. This keeps schema declarations truthful for non-nullable source fields and nested projections.
+- Verification: all DuckDB transform tests passed (38 nodes), changed-path Ruff passed, and `git diff --check` passed. Pickle serializers and task payloads are unchanged.
+- Remaining gate: rendered nested component round-trip and consumer matrix still need to verify nullability across Python/Arrow, DuckDB, and Spark. Release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
