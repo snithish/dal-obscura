@@ -2058,3 +2058,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live OIDC/PKCE, hostile DNS/private-address transport, browser axe/screen-reader/200% zoom, full deferred-response isolation, PostgreSQL process races/recovery, clean TLS/OIDC consumer cells, five-run mixed-load capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable qualification packet without changing pickle behavior.
 - Atomic implementation commits: `434ced24`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N07 browser lifecycle guard completion
+
+- Scope: extend Settings dirty-state protection to browser-originated navigation and tab unload.
+- Observable behavior delivered; FR/NFR and B/G subcases: the hashchange/popstate guard now captures management edits, and `beforeunload` prompts for runtime/provider/path changes as well as policy drafts. The effect dependencies include the live management-dirty marker, preventing stale closures after an edit. Pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/main.tsx`; no backend, serializer, serialized class/import path, payload, migration, dependency, or test deletion.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +3 UI production lines net; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing UI navigation/lifecycle tests remain owners; no tests deleted. A rendered browser back/forward and unload journey remains required for complete B10 evidence.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node_modules/.bin/vite build` (exit 0; 329.14 kB JavaScript / 99.50 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0; 14 passed), and `git diff --check` (exit 0), 2026-09-14, Node 26.8.2 local runtime (package policy remains Node 24). Commit hook used `SKIP=ty`; the documented repository `ty` baseline still reports 72 unrelated diagnostics.
+- Artifact and fixture hashes; evidence locations: implementation commit `eec4d9b0`; local disposable UI/control-plane profile on `127.0.0.1:5173`/`127.0.0.1:8821`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: rendered browser back/forward/unload and full deferred-response matrix, live OIDC/PKCE and revocation, hostile transport, PostgreSQL races/recovery, clean TLS/OIDC consumer cells, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable qualification packet without changing pickle behavior.
+- Atomic implementation commits: `eec4d9b0`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
