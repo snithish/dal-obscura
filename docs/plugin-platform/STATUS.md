@@ -1068,6 +1068,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Verification: catalog and request-boundary suites (21 passed), Ruff, and non-heavy pre-commit hooks passed. Full multi-process race and browser evidence remain VERIFY; release remains HOLD.
 - Atomic implementation commit: `573d80a`.
 
+## 2026-09-14 — N03/B05 body validation fields
+
+- Scope: retain safe field-level diagnostics when strict request models reject a body.
+- Observable behavior delivered: 422 envelopes now normalize Pydantic locations into `field_errors` while retaining the original detail and never echoing submitted values; the UI can render the same typed shape for query and body failures.
+- Verification: catalog, audit, and request-boundary suites (25 passed), Ruff, and non-heavy pre-commit hooks passed. Full rendered field-summary and browser acceptance remain VERIFY; release remains HOLD.
+- Atomic implementation commit: `1ad8fbe`.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
