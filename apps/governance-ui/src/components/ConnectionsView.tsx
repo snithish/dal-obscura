@@ -85,6 +85,8 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
   const effectiveFields = fields;
   const [config, setConfig] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
+  const [lifecycleTargets, setLifecycleTargets] = useState<Record<string, PluginState["lifecycle"]>>({});
+  const [lifecycleBusy, setLifecycleBusy] = useState<string | null>(null);
   const [tables, setTables] = useState<Array<Record<string, unknown>>>([]);
   const [discoveredCatalog, setDiscoveredCatalog] = useState("");
   const [selectedFormatId, setSelectedFormatId] = useState("");
@@ -203,7 +205,30 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
     const current = publications.find((publication) => publication.active)?.id;
     try { await controlPlane.activateWorkspacePublication(id, current); void queryClient.invalidateQueries({ queryKey: ["management", sessionScope] }); setMessage("Configuration snapshot activated for new data-plane requests."); onReload(); } catch (error) { setMessage(recoveryMessage(error, "Activation was rejected; the current generation remains active. Refresh before retrying.")); } finally { setPublishing(false); }
   }
-  const pluginCards = plugins.length > 0 && <div className="form-card"><h3>Admitted adapters</h3><div className="plugin-list">{plugins.map((plugin) => <article className="plugin-card" key={`${plugin.kind}:${plugin.plugin_id}`}><div><strong>{plugin.display_name}</strong><small>{plugin.kind === "catalog" ? "Catalog" : "Table format"} · {plugin.plugin_id} · v{plugin.version}</small></div><div className="capability-list">{plugin.capabilities.map((capability) => <span className="pill" key={capability}>{capability.replaceAll("_", " ")}</span>)}</div></article>)}</div></div>;
+  async function updatePluginLifecycle(plugin: PluginDescriptor) {
+    const key = `${plugin.kind}:${plugin.plugin_id}`;
+    const target = lifecycleTargets[key];
+    if (!target) return;
+    if (target === "removed" && !window.confirm(`Remove ${plugin.display_name} from this process?`)) return;
+    setLifecycleBusy(key);
+    try {
+      await controlPlane.setPluginLifecycle(plugin.kind, plugin.plugin_id, target);
+      setMessage(`${plugin.display_name} lifecycle is now ${target}.`);
+      await queryClient.invalidateQueries({ queryKey: ["management", sessionScope, "connections"] });
+      onReload();
+    } catch (error) {
+      setMessage(recoveryMessage(error, "Plugin lifecycle change was rejected; the previous state remains active."));
+    } finally {
+      setLifecycleBusy(null);
+    }
+  }
+  const pluginCards = plugins.length > 0 && <div className="form-card"><h3>Admitted adapters</h3><div className="plugin-list">{plugins.map((plugin) => {
+    const key = `${plugin.kind}:${plugin.plugin_id}`;
+    const state = pluginStates.find((item) => item.kind === plugin.kind && item.plugin_id === plugin.plugin_id);
+    const lifecycle = state?.lifecycle ?? "enabled";
+    const target = lifecycleTargets[key] ?? lifecycle;
+    return <article className="plugin-card" key={key}><div><strong>{plugin.display_name}</strong><small>{plugin.kind === "catalog" ? "Catalog" : "Table format"} · {plugin.plugin_id} · v{plugin.version} · {lifecycle}</small></div><div className="capability-list">{plugin.capabilities.map((capability) => <span className="pill" key={capability}>{capability.replaceAll("_", " ")}</span>)}</div><div className="card-actions"><label className="sr-only" htmlFor={`lifecycle-${key}`}>Lifecycle for {plugin.display_name}</label><select id={`lifecycle-${key}`} value={target} onChange={(event) => setLifecycleTargets((current) => ({ ...current, [key]: event.target.value as PluginState["lifecycle"] }))}><option value="enabled">Enabled</option><option value="draining">Draining</option><option value="disabled">Disabled</option><option value="revoked">Revoked</option><option value="removed">Removed</option></select><button className="secondary compact" disabled={lifecycleBusy === key || target === lifecycle} onClick={() => void updatePluginLifecycle(plugin)}>{lifecycleBusy === key ? "Applying…" : "Apply"}</button></div></article>;
+  })}</div></div>;
   const discoveredChoices = pluginPairs.filter((pair) => pair.catalog_plugin_id === catalogs.find((item) => item.name === discoveredCatalog)?.plugin_id && pair.status === "admitted");
   const renderField = (field: PluginConfigField) => {
     const value = config[field.name] ?? "";

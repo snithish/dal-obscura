@@ -520,6 +520,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/plugins/{kind}/{plugin_id}/lifecycle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Set Plugin Lifecycle */
+        patch: operations["set_plugin_lifecycle_v1_plugins__kind___plugin_id__lifecycle_patch"];
+        trace?: never;
+    };
     "/v1/policy-versions": {
         parameters: {
             query?: never;
@@ -1298,6 +1315,35 @@ export interface components {
             status: "admitted" | "incompatible";
             /** Version */
             version: string;
+        };
+        /**
+         * PluginLifecycleRequest
+         * @description Requested process-local admission lifecycle transition.
+         */
+        PluginLifecycleRequest: {
+            /**
+             * Target
+             * @enum {string}
+             */
+            target: "enabled" | "draining" | "disabled" | "revoked" | "removed";
+        };
+        /**
+         * PluginLifecycleResponse
+         * @description Result of one explicit plugin lifecycle transition.
+         */
+        PluginLifecycleResponse: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "catalog" | "table_format";
+            /**
+             * Lifecycle
+             * @enum {string}
+             */
+            lifecycle: "enabled" | "draining" | "disabled" | "revoked" | "removed";
+            /** Plugin Id */
+            plugin_id: string;
         };
         /**
          * PluginListResponse
@@ -3014,6 +3060,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_plugin_lifecycle_v1_plugins__kind___plugin_id__lifecycle_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string;
+            };
+            path: {
+                kind: "catalog" | "table_format";
+                plugin_id: string;
+            };
+            cookie?: {
+                "__Host-dal_obscura_csrf"?: string | null;
+                "__Host-dal_obscura_session"?: string | null;
+                dal_obscura_csrf?: string | null;
+                dal_obscura_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PluginLifecycleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginLifecycleResponse"];
                 };
             };
             /** @description Validation Error */

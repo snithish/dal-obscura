@@ -35,3 +35,31 @@ def test_plugin_descriptors_expose_only_admitted_bounded_capabilities() -> None:
     assert catalog["output_formats"] == ["iceberg"]
     assert all("$ref" not in str(value) for value in catalog["config_schema"].values())
     assert "password" in {field["name"] for field in catalog["config_schema"]["fields"]}
+
+
+def test_platform_admin_can_transition_plugin_lifecycle_and_audit_change() -> None:
+    client = _client()
+
+    disabled = client.patch(
+        "/v1/plugins/catalog/iceberg.sql/lifecycle",
+        headers=ADMIN_HEADERS,
+        json={"target": "disabled"},
+    )
+    assert disabled.status_code == 200
+    assert disabled.json() == {
+        "kind": "catalog",
+        "plugin_id": "iceberg.sql",
+        "lifecycle": "disabled",
+    }
+    states = client.get("/v1/plugins", headers=ADMIN_HEADERS).json()["states"]
+    lifecycle_by_plugin = {item["plugin_id"]: item.get("lifecycle") for item in states}
+    assert lifecycle_by_plugin["iceberg.sql"] == "disabled"
+
+    enabled = client.patch(
+        "/v1/plugins/catalog/iceberg.sql/lifecycle",
+        headers=ADMIN_HEADERS,
+        json={"target": "enabled"},
+    )
+    assert enabled.status_code == 200
+    events = client.get("/v1/audit/events", headers=ADMIN_HEADERS).json()
+    assert any(event["action"] == "plugin.lifecycle.update" for event in events)

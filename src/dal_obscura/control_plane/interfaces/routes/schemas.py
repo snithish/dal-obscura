@@ -350,6 +350,20 @@ class PluginStateResponse(BaseModel):
     lifecycle: Literal["enabled", "draining", "disabled", "revoked", "removed"] | None = None
 
 
+class PluginLifecycleRequest(StrictModel):
+    """Requested process-local admission lifecycle transition."""
+
+    target: Literal["enabled", "draining", "disabled", "revoked", "removed"]
+
+
+class PluginLifecycleResponse(BaseModel):
+    """Result of one explicit plugin lifecycle transition."""
+
+    kind: Literal["catalog", "table_format"]
+    plugin_id: str
+    lifecycle: Literal["enabled", "draining", "disabled", "revoked", "removed"]
+
+
 class PluginListResponse(BaseModel):
     """Bounded admitted plugin registry response."""
 

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
+from dal_obscura_plugin_api import PluginKind
 from sqlalchemy.orm import Session
 
-from dal_obscura.common.plugin_api import PluginRegistry
+from dal_obscura.common.plugin_api import PluginLifecycleState, PluginRegistry
 from dal_obscura.control_plane.application import (
     asset_service,
     audit_service,
@@ -20,7 +21,7 @@ from dal_obscura.control_plane.application import (
     workspace_service,
 )
 from dal_obscura.control_plane.application.access import ControlPlaneActor
-from dal_obscura.control_plane.application.errors import AuthorizationFailure
+from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control_plane.infrastructure.catalog_discovery import discover_catalog_tables
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 
@@ -72,6 +73,40 @@ class ProvisioningService:
 
     def list_cells_for_tenant(self, tenant_id: UUID) -> list[dict[str, str]]:
         return self._store.list_cells_for_tenant(tenant_id)
+
+    def set_plugin_lifecycle(
+        self,
+        *,
+        kind: str,
+        plugin_id: str,
+        target: PluginLifecycleState,
+        actor: ControlPlaneActor,
+    ) -> dict[str, str]:
+        """Apply and audit one explicit process-local plugin lifecycle change."""
+
+        if not actor.platform_admin:
+            raise AuthorizationFailure("Platform admin required")
+        if kind not in {"catalog", "table_format"}:
+            raise ValidationFailure("Unsupported plugin kind")
+        if self._plugin_registry is None:
+            raise ValidationFailure("Plugin registry was not admitted during application startup")
+        try:
+            lifecycle = self._plugin_registry.set_lifecycle(
+                cast(PluginKind, kind), plugin_id, target
+            )
+        except ValueError as exc:
+            raise ValidationFailure(str(exc)) from exc
+        context = self._store.ensure_default_workspace_context()
+        self._store.record_workspace_audit_event(
+            cell_id=context.cell_id,
+            tenant_id=context.tenant_id,
+            actor_principal=actor.identity_key(),
+            action="plugin.lifecycle.update",
+            resource_type="plugin",
+            resource_id=f"{kind}:{plugin_id}",
+            details={"target": lifecycle.value},
+        )
+        return {"kind": kind, "plugin_id": plugin_id, "lifecycle": lifecycle.value}
 
     def list_cell_tenant_assignments(self) -> list[dict[str, str]]:
         return self._store.list_cell_tenant_assignments()

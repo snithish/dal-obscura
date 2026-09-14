@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
-from dal_obscura_plugin_api import PluginDescriptor
+from dal_obscura_plugin_api import PluginDescriptor, PluginKind
 from fastapi import APIRouter, Depends
 
+from dal_obscura.common.plugin_api import PluginLifecycleState
+from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
-from dal_obscura.control_plane.interfaces.routes.schemas import PluginListResponse
+from dal_obscura.control_plane.interfaces.routes.schemas import (
+    PluginLifecycleRequest,
+    PluginLifecycleResponse,
+    PluginListResponse,
+)
 
 
 def router(deps: ControlPlaneDeps) -> APIRouter:
@@ -30,6 +36,27 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
             "pairs": _pair_payload(descriptors),
             "states": states,
         }
+
+    @api.patch(
+        "/v1/plugins/{kind}/{plugin_id}/lifecycle",
+        response_model=PluginLifecycleResponse,
+        dependencies=[Depends(deps.require_admin)],
+    )
+    def set_plugin_lifecycle(
+        kind: PluginKind,
+        plugin_id: str,
+        request: PluginLifecycleRequest,
+        actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
+    ) -> PluginLifecycleResponse:
+        target = PluginLifecycleState(request.target)
+        return deps.with_service(
+            lambda service: service.set_plugin_lifecycle(
+                kind=kind,
+                plugin_id=plugin_id,
+                target=target,
+                actor=actor,
+            )
+        )
 
     return api
 

@@ -457,6 +457,14 @@ export const controlPlane = {
       states: plugins.states.map((state) => ({ ...state, lifecycle: state.lifecycle ?? undefined, reason: state.reason ?? undefined })),
     } satisfies { plugins: PluginDescriptor[]; states: PluginState[]; pairs: PluginPair[] };
   },
+  setPluginLifecycle: (
+    kind: "catalog" | "table_format",
+    pluginId: string,
+    target: "enabled" | "draining" | "disabled" | "revoked" | "removed",
+  ) => request<ApiSchemas["PluginLifecycleResponse"]>(
+    `/v1/plugins/${encodeURIComponent(kind)}/${encodeURIComponent(pluginId)}/lifecycle`,
+    { method: "PATCH", body: JSON.stringify({ target }) },
+  ),
   getSummary: (signal?: AbortSignal) => request<ApiSchemas["WorkspaceSummaryResponse"]>("/v1/workspace/summary", { signal }),
   getObservations: async (signal?: AbortSignal) => {
     const observations = await request<ApiSchemas["WorkspaceObservationsResponse"]>("/v1/workspace/observations", { signal });
