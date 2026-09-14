@@ -52,4 +52,6 @@ run_suite tests/benchmarks/test_masking_row_filter_benchmarks.py
 run_suite tests/benchmarks/test_iceberg_multifile_benchmark.py
 run_suite tests/benchmarks/test_ticket_to_response_benchmark.py
 
+uv run python scripts/summarize_capacity_benchmarks.py "$output"
+
 echo "capacity evidence written: $output"
