@@ -1992,3 +1992,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: production OIDC/PKCE, hostile DNS/private-address transport, browser axe/screen-reader/responsive proof, PostgreSQL races/recovery, clean TLS/OIDC consumers, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD.
 - Atomic implementation commits: verification-only ledger entry; no source commit.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N14 benchmark lane after manifest cancellation fix
+
+- Scope: execute the repository-owned benchmark suite against the current candidate.
+- Observable behavior delivered; FR/NFR and B/G subcases: all six runnable benchmarks completed. The 10M-style multifile scan baseline measured 1.9115 ms mean (443 rounds); row-filter/mask means ranged from 4.1698 ms to 12.1853 ms; the complex ticket-to-response case measured 32.3026 ms mean; the 25-million-row masked stream completed in 40.622 seconds. No benchmark assertion failed and no source or pickle behavior changed.
+- Changed and deleted paths; old callers removed; protected pickle check: verification-only ledger entry; no source, serializer, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no source or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: existing `tests/benchmarks` remain the benchmark owners; no tests deleted. This run is only a single local machine series and does not close the five-run mixed-load B19 requirement.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/benchmarks --benchmark-only --benchmark-json /tmp/dal-obscura-benchmarks-post-manifest.json -q` (exit 0; 7 benchmark tests passed, 2 explicit benchmark skips), 2026-09-14, Python 3.12/uv, loopback permissions enabled for Flight fixtures.
+- Artifact and fixture hashes; evidence locations: benchmark JSON `/tmp/dal-obscura-benchmarks-post-manifest.json`; disposable benchmark fixtures under pytest temporary directories.
+- Remaining subcases; blocker and next concrete action: five-run throughput comparison, 16-consumer/metadata mixed-load RSS and cancellation cleanup, 10M schema/discovery deadlines, audit-load p95, and browser interaction measurements remain VERIFY under B19. Production OIDC/transport, PostgreSQL races/recovery, clean TLS/OIDC consumers, deployment integrity/SBOM, and independent review remain open. Release remains HOLD.
+- Atomic implementation commits: verification-only ledger entry; manifest implementation commit `93004cd` remains the source of truth.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
