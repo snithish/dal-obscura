@@ -44,7 +44,10 @@ def test_policy_version_publish_rejects_unowned_assets():
     )
 
     assert response.status_code == 400
-    assert response.json() == {"detail": "Cannot publish until 1 asset has an assigned owner."}
+    payload = response.json()
+    assert payload["detail"] == "Cannot publish until 1 asset has an assigned owner."
+    assert payload["error"]["code"] == "validation_error"
+    assert payload["error"]["request_id"]
 
 
 def test_policy_version_publish_rejects_assets_without_policy_rules():
@@ -97,7 +100,10 @@ def test_policy_version_publish_rejects_assets_without_policy_rules():
     )
 
     assert response.status_code == 400
-    assert response.json() == {"detail": "Cannot publish a policy version without policy rules."}
+    payload = response.json()
+    assert payload["detail"] == "Cannot publish a policy version without policy rules."
+    assert payload["error"]["code"] == "validation_error"
+    assert payload["error"]["request_id"]
 
 
 def test_policy_version_publish_rejects_missing_auth_provider():
@@ -120,9 +126,10 @@ def test_policy_version_publish_rejects_missing_auth_provider():
     )
 
     assert response.status_code == 400
-    assert response.json() == {
-        "detail": "Cannot publish until at least one auth provider is enabled."
-    }
+    payload = response.json()
+    assert payload["detail"] == "Cannot publish until at least one auth provider is enabled."
+    assert payload["error"]["code"] == "validation_error"
+    assert payload["error"]["request_id"]
 
 
 def test_policy_version_publish_bootstraps_default_runtime_context():

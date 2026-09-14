@@ -398,7 +398,10 @@ def test_local_bootstrap_login_rejects_invalid_bearer():
     response = client.post("/v1/session/bootstrap", headers={"authorization": "Bearer wrong"})
 
     assert response.status_code == 401
-    assert response.json() == {"detail": "Invalid bootstrap credential"}
+    payload = response.json()
+    assert payload["detail"] == "Invalid bootstrap credential"
+    assert payload["error"]["code"] == "authentication_required"
+    assert payload["error"]["request_id"]
 
 
 def test_local_bootstrap_login_is_unavailable_when_disabled():
@@ -415,7 +418,10 @@ def test_local_bootstrap_login_is_unavailable_when_disabled():
     response = client.post("/v1/session/bootstrap", headers=ADMIN_HEADERS)
 
     assert response.status_code == 404
-    assert response.json() == {"detail": "Local bootstrap login is disabled"}
+    payload = response.json()
+    assert payload["detail"] == "Local bootstrap login is disabled"
+    assert payload["error"]["code"] == "not_found"
+    assert payload["error"]["request_id"]
 
 
 def test_session_options_disclose_only_enabled_login_methods():

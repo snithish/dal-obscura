@@ -993,6 +993,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable result: the repository-wide pytest run reached the suite but sandbox policy denied ephemeral loopback binds used by Arrow Flight and OIDC fixtures (`Operation not permitted`); the resulting failures are environment-bound startup failures, not assertion regressions. The non-heavy hook suite and all changed-path tests remain green.
 - Verification: full run exit 1 with bind-denial diagnostics; focused route/API tests, UI TypeScript, UI tests, generated DTO freshness, Ruff, and service health checks passed. A full Flight/e2e run requires a host with ephemeral loopback bind permission and remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N03 structured API error envelope
+
+- Scope: make control-plane HTTP failures uniformly correlated and machine-readable.
+- Observable behavior delivered: every `HTTPException` now retains its existing status and `detail` while adding a stable non-sensitive error code, human message, and request ID. Revision, validation, authentication, authorization, not-found, rate-limit, oversized-request, and readiness classes map to explicit codes; affected tests assert the new contract without depending on generated IDs.
+- Verification: focused catalogs, schema/evaluation, OIDC, actor-auth, and publication suites passed; changed-path Ruff and `git diff --check` passed. Request-validation handler coverage, live hostile transport, and full production acceptance remain VERIFY; release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.

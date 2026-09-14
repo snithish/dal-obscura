@@ -13,7 +13,6 @@ from collections.abc import Mapping
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session, sessionmaker
@@ -68,6 +67,23 @@ class _RequestBodyTooLarge(Exception):
 
 
 _REQUEST_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+
+def _http_error_code(status_code: int) -> str:
+    """Maps transport status to a stable, non-sensitive client code."""
+
+    return {
+        400: "validation_error",
+        401: "authentication_required",
+        403: "forbidden",
+        404: "not_found",
+        409: "revision_conflict",
+        413: "request_too_large",
+        422: "validation_error",
+        428: "revision_precondition_required",
+        429: "rate_limited",
+        503: "not_ready",
+    }.get(status_code, "request_rejected")
 
 
 def create_oidc_actor_resolver(
@@ -175,20 +191,20 @@ def create_app(  # noqa: C901
 
     @app.exception_handler(HTTPException)
     async def structured_http_error(request: Request, exc: HTTPException):
-        """Add a safe, correlated envelope to concurrency failures."""
+        """Return one safe, correlated error shape for every API failure."""
 
-        if exc.status_code not in {409, 428}:
-            return await http_exception_handler(request, exc)
-        detail = exc.detail if isinstance(exc.detail, str) else "Request rejected"
-        code = "revision_precondition_required" if exc.status_code == 428 else "revision_conflict"
+        del request
+        detail = exc.detail if isinstance(exc.detail, (str, list, dict)) else "Request rejected"
+        message = detail if isinstance(detail, str) else "Request rejected"
+        code = _http_error_code(exc.status_code)
         return JSONResponse(
             status_code=exc.status_code,
             headers=exc.headers,
             content={
-                "detail": exc.detail,
+                "detail": detail,
                 "error": {
                     "code": code,
-                    "message": detail,
+                    "message": message,
                     "request_id": current_request_id(),
                 },
             },

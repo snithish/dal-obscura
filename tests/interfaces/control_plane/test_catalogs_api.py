@@ -363,7 +363,10 @@ def test_workspace_catalog_discovery_does_not_echo_provider_errors(monkeypatch):
     response = client.get("/v1/catalogs/analytics/tables", headers=ADMIN_HEADERS)
 
     assert response.status_code == 400
-    assert response.json() == {"detail": "Catalog discovery failed"}
+    payload = response.json()
+    assert payload["detail"] == "Catalog discovery failed"
+    assert payload["error"]["code"] == "validation_error"
+    assert payload["error"]["request_id"]
     assert "catalog-password" not in response.text
     assert "cell" not in _keys_recursive(response.json())
 

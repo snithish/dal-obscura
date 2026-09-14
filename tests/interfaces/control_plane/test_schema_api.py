@@ -234,7 +234,10 @@ def test_policy_evaluation_returns_duckdb_transformed_synthetic_rows(monkeypatch
         headers=ADMIN_HEADERS,
     )
     assert invalid.status_code == 400
-    assert invalid.json() == {"detail": "Synthetic evaluation rows are invalid"}
+    invalid_payload = invalid.json()
+    assert invalid_payload["detail"] == "Synthetic evaluation rows are invalid"
+    assert invalid_payload["error"]["code"] == "validation_error"
+    assert invalid_payload["error"]["request_id"]
 
 
 def test_production_publication_requires_current_server_review(monkeypatch) -> None:
@@ -413,9 +416,10 @@ def test_production_publication_rejects_schema_drift_after_review(monkeypatch) -
         headers=ADMIN_HEADERS,
     )
     assert stale_catalog_review.status_code == 400
-    assert stale_catalog_review.json() == {
-        "detail": "Catalog configuration changed after review; review again."
-    }
+    stale_payload = stale_catalog_review.json()
+    assert stale_payload["detail"] == "Catalog configuration changed after review; review again."
+    assert stale_payload["error"]["code"] == "validation_error"
+    assert stale_payload["error"]["request_id"]
     reviewed = client.post(
         f"/v1/assets/{asset['id']}/policy-review",
         json={"principal": "user1", "groups": [], "claims": {"tenant": "default"}},
@@ -440,9 +444,12 @@ def test_production_publication_rejects_schema_drift_after_review(monkeypatch) -
     )
 
     assert published.status_code == 400
-    assert published.json() == {
-        "detail": "Admitted schema fields changed after review; review again."
-    }
+    published_payload = published.json()
+    assert (
+        published_payload["detail"] == "Admitted schema fields changed after review; review again."
+    )
+    assert published_payload["error"]["code"] == "validation_error"
+    assert published_payload["error"]["request_id"]
 
     reset_admitted = client.put(
         f"/v1/assets/{asset['id']}/schema-fields",
@@ -470,9 +477,10 @@ def test_production_publication_rejects_schema_drift_after_review(monkeypatch) -
         headers=ADMIN_HEADERS,
     )
     assert live_schema_drift.status_code == 400
-    assert live_schema_drift.json() == {
-        "detail": "Iceberg schema changed after review; review again."
-    }
+    live_schema_payload = live_schema_drift.json()
+    assert live_schema_payload["detail"] == "Iceberg schema changed after review; review again."
+    assert live_schema_payload["error"]["code"] == "validation_error"
+    assert live_schema_payload["error"]["request_id"]
 
 
 def test_production_publication_rejects_asset_metadata_change_after_review(monkeypatch) -> None:
@@ -512,7 +520,10 @@ def test_production_publication_rejects_asset_metadata_change_after_review(monke
     assert reviewed.status_code == 200, reviewed.json()
     assert changed.status_code == 200, changed.json()
     assert published.status_code == 400
-    assert published.json() == {"detail": "Asset configuration changed after review; review again."}
+    published_payload = published.json()
+    assert published_payload["detail"] == "Asset configuration changed after review; review again."
+    assert published_payload["error"]["code"] == "validation_error"
+    assert published_payload["error"]["request_id"]
 
 
 def test_explicit_empty_draft_is_reviewable_and_publishable_as_deny_all(monkeypatch) -> None:
