@@ -372,7 +372,6 @@ export const controlPlane = {
     signal,
   }),
   logout: (signal?: AbortSignal) => request<ApiSchemas["AuthenticationMutationResponse"]>("/v1/logout", { method: "POST", signal }),
-  listAssets: async () => (await request<ApiSchemas["AssetInventoryResponse"][]>("/v1/assets")).map(normalizeInventoryAsset),
   listAssetPage: async (params: { limit?: number; cursor?: string; search?: string; signal?: AbortSignal } = {}) => {
     const query = new URLSearchParams();
     if (params.limit !== undefined) query.set("limit", String(params.limit));
@@ -408,7 +407,6 @@ export const controlPlane = {
     const page = await request<ApiSchemas["PolicyVersionPageResponse"]>(`/v1/policy-versions/page${suffix}`, { signal: params.signal });
     return { items: page.items, next_cursor: page.next_cursor ?? null } satisfies PolicyVersionPage;
   },
-  listAuditEvents: (assetId?: string) => request<AuditEvent[]>("/v1/audit/events" + (assetId ? "?asset_id=" + encodeURIComponent(assetId) : "")),
   listAuditEventsPage: async (params: { limit?: number; cursor?: string; assetId?: string; actor?: string; action?: string; resourceType?: string; outcome?: string; correlationId?: string; createdAfter?: string; createdBefore?: string; signal?: AbortSignal } = {}) => {
     const query = new URLSearchParams();
     if (params.limit !== undefined) query.set("limit", String(params.limit));
