@@ -1189,6 +1189,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `e8210e5`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N10 generic publication binding metadata
+
+- Scope: keep admitted external catalog/table-format pairs self-describing in each immutable asset binding.
+- Observable behavior delivered; FR/NFR and B/G subcases: the publication compiler now emits the selected catalog type (`iceberg` for the built-in adapter, `plugin` for admitted external catalogs), plugin ID, options, and catalog revision in the asset's compiled catalog block. Missing identifiers use the backend-neutral `table identifier` validation message. External plugin pairs retain their explicit catalog/table-format identities for downstream routing and review. Pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/application/compiler.py`, `tests/control_plane/test_publication_compiler.py`; no backend, serializer, serialized class/import path, payload, migration, dependency, or test deletion.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +15 compiler production lines, +5 regression-test lines, and -7 stale lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `tests/control_plane/test_publication_compiler.py` covers built-in and admitted external manifest identity; no tests deleted. Built plugin/consumer matrix remains the B17 acceptance owner.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `uv run pytest tests/control_plane/test_publication_compiler.py -q` (exit 0; 39 passed), `uv run ruff check src/dal_obscura/control_plane/application/compiler.py tests/control_plane/test_publication_compiler.py` (exit 0), `uv run pytest tests/infrastructure/adapters/test_published_config.py tests/control_plane/test_operator_manifest.py tests/interfaces/control_plane/test_api_publish_flow.py -q` (exit 0), and `git diff --check` (exit 0), 2026-09-14. Commit hook used `SKIP=ty`; repository `ty` baseline remains documented separately.
+- Artifact and fixture hashes; evidence locations: implementation commit `54e2ab03`; local source/test workspace only; no external artifact published.
+- Remaining subcases; blocker and next concrete action: clean exact plugin wheels and real TLS/OIDC consumers, live OIDC/PKCE and revocation, hostile transport, PostgreSQL process races/recovery, five-run mixed-load capacity, deployment integrity/SBOM, rendered browser accessibility and deferred-response evidence, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable qualification packet without changing pickle behavior.
+- Atomic implementation commits: `54e2ab03`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-14 — N13 JVM/Spark authenticated consumer qualification
 
 - Scope: make the JVM consumer fixture exercise the real OIDC/JWKS path deterministically and qualify the Spark connector against the current candidate.
