@@ -69,7 +69,11 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
             ),
         )
 
-    @api.put("/v1/settings/runtime", dependencies=[Depends(deps.require_admin)])
+    @api.put(
+        "/v1/settings/runtime",
+        response_model=RuntimeSettingsResponse,
+        dependencies=[Depends(deps.require_admin)],
+    )
     def upsert_workspace_runtime_settings(
         request: RuntimeSettingsRequest,
         actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
@@ -94,7 +98,11 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
             },
         )
 
-    @api.put("/v1/settings/auth-providers", dependencies=[Depends(deps.require_admin)])
+    @api.put(
+        "/v1/settings/auth-providers",
+        response_model=list[AuthProviderResponse],
+        dependencies=[Depends(deps.require_admin)],
+    )
     def replace_workspace_auth_providers(
         request: AuthProvidersRequest,
         actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008

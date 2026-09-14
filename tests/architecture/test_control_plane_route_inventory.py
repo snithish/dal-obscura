@@ -107,3 +107,14 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
         ]["content"]["application/json"]["schema"]["$ref"]
         == "#/components/schemas/PolicyOperationResponse"
     )
+    assert (
+        paths["/v1/settings/runtime"]["put"]["responses"]["200"]["content"]["application/json"][
+            "schema"
+        ]["$ref"]
+        == "#/components/schemas/RuntimeSettingsResponse"
+    )
+    assert (
+        paths["/v1/settings/auth-providers"]["put"]["responses"]["200"]["content"][
+            "application/json"
+        ]["schema"]["type"] == "array"
+    )

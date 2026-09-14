@@ -887,6 +887,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: draft revisions, bounded DuckDB evaluation evidence, optional server review authority, restored drafts, and caller-scoped publication operations now validate through shared Pydantic response models. The public `schema` JSON field remains compatible through an explicit model alias; pickle serializers and ticket payloads are unchanged.
 - Verification: policy draft/schema/publish-flow suites and OpenAPI route inventory passed (24 tests); changed-path Ruff/format checks and `git diff --check` passed. Generated TypeScript DTO coverage and rendered review/publish evidence remain VERIFY under N03/N09.
 
+## 2026-09-14 — N03 typed settings mutations
+
+- Scope: complete response validation for runtime and authentication-provider settings writes.
+- Observable behavior delivered: authenticated settings mutations now publish the same explicit response models already used by settings reads, so generated clients receive stable runtime revisions and redacted provider arrays after writes.
+- Verification: settings/actor-auth suites and OpenAPI route inventory passed (38 tests); changed-path Ruff/format checks passed. Generated DTO wiring and live multi-actor settings qualification remain VERIFY.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
