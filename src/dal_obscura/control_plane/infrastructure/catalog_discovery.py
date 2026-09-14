@@ -115,9 +115,11 @@ def discover_public_catalog_tables(
         raise ValueError("Catalog discovery exceeded the page limit")
     finally:
         close = getattr(plugin, "close", None)
-        if callable(close):
-            close()
-        _DISCOVERY_SLOTS.release()
+        try:
+            if callable(close):
+                close()
+        finally:
+            _DISCOVERY_SLOTS.release()
 
 
 def _validate_public_catalog_lifecycle(

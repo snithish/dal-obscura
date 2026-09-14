@@ -176,6 +176,61 @@ def test_public_catalog_discovery_uses_admitted_plugin_and_closes_it():
     assert closed == [True]
 
 
+def test_public_catalog_discovery_releases_capacity_when_close_fails() -> None:
+    class FailingCloseCatalog:
+        def validate_config(self, context):
+            del context
+
+        def list_namespaces(self, context, *, namespace=()):
+            del context, namespace
+            return ()
+
+        def list_tables(self, context, *, continuation=None, limit):
+            del context, continuation, limit
+            return DiscoveryPage(entries=(), continuation=None)
+
+        def close(self):
+            raise RuntimeError("close failed")
+
+    class HealthyCatalog(FailingCloseCatalog):
+        def close(self):
+            return None
+
+    class Registry:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def load(self, kind, plugin_id):
+            assert (kind, plugin_id) == ("catalog", "fixture.catalog")
+
+            def factory(config, context):
+                del config, context
+                self.calls += 1
+                return FailingCloseCatalog() if self.calls <= 8 else HealthyCatalog()
+
+            return factory
+
+    registry = Registry()
+    for _ in range(8):
+        with pytest.raises(RuntimeError, match="close failed"):
+            discover_public_catalog_tables(
+                "analytics",
+                "fixture.catalog",
+                {},
+                plugin_registry=registry,
+            )
+
+    assert (
+        discover_public_catalog_tables(
+            "analytics",
+            "fixture.catalog",
+            {},
+            plugin_registry=registry,
+        )
+        == []
+    )
+
+
 def test_public_catalog_discovery_rejects_missing_lifecycle_methods() -> None:
     class IncompleteCatalog:
         def list_tables(self, context, *, continuation=None, limit):
