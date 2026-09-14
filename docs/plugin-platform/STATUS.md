@@ -981,6 +981,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: `openapi/control-plane.json` is the reviewed contract snapshot; `scripts/generate-api-types.mjs` regenerates `src/generated/control_plane.d.ts` and supports a deterministic `--check` freshness gate. Transport response boundaries now use generated schemas with explicit adapters for nullable and legacy UI shapes. Asset detail and nested schema routes now publish typed response models, eliminating `unknown` success payloads in OpenAPI.
 - Verification: `node scripts/generate-api-types.mjs --check`, UI TypeScript compilation, Vite production build (96.26 kB gzip JavaScript), 11 UI tests, focused control-plane OpenAPI tests, and `git diff --check` passed. Node 24 frozen install/image/advisory proof, generated DTO CI wiring, and full browser acceptance remain VERIFY; release remains HOLD.
 
+## 2026-09-14 — N03 discovery and browser-auth response typing
+
+- Scope: close remaining `unknown` JSON success responses on catalog discovery and browser login/logout mutations.
+- Observable behavior delivered: catalog table discovery, local bootstrap login, demo login, and logout now have explicit response models in the public OpenAPI contract. The UI transport consumes generated DTOs for those calls; cookie/session behavior is unchanged.
+- Verification: UI TypeScript compilation, 11 UI tests, focused route-inventory OpenAPI tests, Ruff, non-heavy pytest hooks, and `git diff --check` passed. Live OIDC/browser freshness, Node 24 frozen install/image/advisory proof, and full acceptance remain VERIFY; release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
