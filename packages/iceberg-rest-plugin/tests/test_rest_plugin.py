@@ -114,7 +114,7 @@ def test_rest_catalog_requests_receive_deadline_bounded_timeout() -> None:
     session = SimpleNamespace()
 
     def original_request(method, url, **kwargs):
-        calls.append((kwargs["timeout"], kwargs.get("headers")))
+        calls.append((kwargs["timeout"], kwargs.get("headers"), kwargs["allow_redirects"]))
         return "ok"
 
     session.request = original_request
@@ -132,6 +132,7 @@ def test_rest_catalog_requests_receive_deadline_bounded_timeout() -> None:
     connect, read = calls[0][0]
     assert 0 < connect <= 2
     assert 0 < read <= 2
+    assert calls[0][2] is False
 
 
 def test_rest_catalog_paginates_bounded_sorted_identifiers():

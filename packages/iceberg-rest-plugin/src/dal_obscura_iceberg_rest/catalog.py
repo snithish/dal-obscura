@@ -389,6 +389,9 @@ def _install_request_timeout(session: Any, connect_timeout: float, read_timeout:
         # Provider methods must not be able to opt out of the gateway budget
         # by supplying an unbounded or larger requests timeout.
         kwargs["timeout"] = timeout
+        # Redirects are a new destination and must be revalidated by the
+        # governed connection boundary before any follow-up request.
+        kwargs["allow_redirects"] = False
         return original_request(method, url, **kwargs)
 
     session.request = request
