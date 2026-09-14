@@ -2617,3 +2617,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: clean candidate wheel/consumer matrix across all nine pair cells, TLS/OIDC consumer authentication, PostgreSQL races/recovery, capacity mixed-load, deployment integrity/SBOM, and independent review remain VERIFY under N12–N16. Release remains HOLD; continue candidate-bound artifact and process qualification.
 - Atomic implementation commits: verification only; no implementation commit.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N05 local OIDC/session contract qualification
+
+- Scope: qualify the normal authentication boundary used by the production UI and local parity profile.
+- Observable behavior delivered; FR/NFR and B/G subcases: no source behavior changed. OIDC login/callback state and PKCE handling, browser-session issuance/expiry/revocation, CSRF and origin checks, exact actor identity authorization, and route-level capability enforcement all passed their focused contract suites. The normal UI exposes local token login only when configured; no demo-password path is exercised. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: verification only; no source, serializer, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no code or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: `tests/interfaces/control_plane/test_oidc_login.py`, `tests/control_plane/test_browser_sessions.py`, and `tests/interfaces/control_plane/test_actor_auth.py`; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane/test_oidc_login.py tests/control_plane/test_browser_sessions.py tests/interfaces/control_plane/test_actor_auth.py -q` (exit 0, 45 passed), 2026-09-14, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: verification only; no external artifact published.
+- Remaining subcases; blocker and next concrete action: live browser authorization against a real OIDC provider, upstream disabled-account/admin-role freshness across two API processes, PostgreSQL race/recovery, hostile DNS/private-address counters, clean TLS/OIDC consumer matrix, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N05/N12–N16. Release remains HOLD; continue process-boundary qualification.
+- Atomic implementation commits: verification only; no implementation commit.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
