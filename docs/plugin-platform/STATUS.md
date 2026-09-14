@@ -825,6 +825,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 
 - Follow-up regression: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q` passed with 837 collected, 823 passed, 14 documented skips, and zero failures/errors. UI TypeScript compilation, Vite build, and eight UI tests remain green.
 
+## 2026-09-14 — N03 typed asset inventory responses
+
+- Scope: remove untyped response boundaries from asset inventory routes.
+- Observable behavior delivered: full and cursor-paginated asset inventory endpoints now validate responses through Pydantic models, including nullable active policy and publication timestamp fields. Route authorization and concealed-resource behavior remain unchanged.
+- Verification: asset API and inventory-read suites passed (28 tests); changed-path Ruff and format checks passed. Remaining strict DTO coverage for other routes and generated TypeScript checks stays VERIFY under N03.
+
 ## 2026-09-14 — N09/N11 post-publication inventory refresh
 
 - Scope: keep governed asset status aligned after a successful publish response.
