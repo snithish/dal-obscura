@@ -1189,6 +1189,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `e8210e5`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N04 registry shutdown cleanup recovery
+
+- Scope: make data-plane catalog shutdown and generation replacement attempt cleanup for every catalog even when one provider close operation fails.
+- Observable behavior delivered; FR/NFR and B/G subcases: `_close_catalogs` records the first close exception, continues closing remaining adapters, then re-raises that first error. A failed provider can no longer leave later catalogs open during shutdown or reload. Catalog resolution, plugin admission, and pickle logic are unchanged.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/data_plane/infrastructure/adapters/catalog_registry.py` and its focused unit test; no serializers, APIs, dependencies, or durable records changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +9 production lines and +30 test lines for cleanup recovery; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `tests/infrastructure/adapters/test_catalog_registry.py::test_catalog_registry_close_attempts_all_catalogs_when_one_fails`; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/infrastructure/adapters/test_catalog_registry.py -q` (exit 0, 23 passed) plus focused Ruff check/format (exit 0), 2026-09-14, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `d251e1c3`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: real provider close/cancellation behavior and mixed-worker capacity remain VERIFY under N04/N14; release remains HOLD. Continue qualifying cleanup under stalled and failing provider IO.
+- Atomic implementation commits: `d251e1c3`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-14 — Full regression after migration and registry cleanup
 
 - Scope: qualify the complete Python suite after the maintenance-mode migration gate, discovery capacity recovery, and registry alias removal.
