@@ -1077,6 +1077,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 
 ## Per-packet record template
 
+## 2026-09-14 — N02/N13 external catalog publication identity
+
+- Scope: close the manifest round-trip gap for admitted non-Iceberg catalog and table-format plugins.
+- Observable behavior delivered; FR/NFR and B/G subcases: publication compilation now records an explicit catalog `plugin_id` and generic `plugin` runtime discriminator for external catalogs; the data-plane catalog config parser accepts that discriminator while retaining fail-closed rejection of removed legacy catalog types. Asset plugin bindings remain explicit and unchanged.
+- Changed and deleted paths; old callers removed; protected pickle check: compiler, catalog registry, published-config adapter, repository identity extraction, and compiler/published-config regression tests changed. No paths deleted; no pickle serializer, serialized class, payload, or import path changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +29 production / +6 test logical lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `tests/control_plane/test_publication_compiler.py` and `tests/infrastructure/adapters/test_published_config.py`; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane/test_publication_compiler.py tests/infrastructure/adapters/test_published_config.py tests/infrastructure/adapters/test_catalog_registry.py tests/common/config_store/test_plugin_bindings.py -q` (exit 0); changed-path Ruff and format checks (exit 0); 2026-09-14, local Python 3.12/uv environment.
+- Artifact and fixture hashes; evidence locations: atomic commit `7054afd`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: real external catalog publication/activation and three consumer qualification pairs remain VERIFY under N12/N13; next action is complete lifecycle and live plugin evidence without loosening admission.
+- Atomic implementation commits: `7054afd`.
+- Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
+
 Replace the corresponding queue entry and keep one current record per packet.
 Link detailed logs/artifacts instead of appending repeated full narratives.
 
