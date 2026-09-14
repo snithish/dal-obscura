@@ -1484,3 +1484,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live provider network interception and hostile DNS/redirect/private counters, cancellation cleanup, deployment network controls, browser/consumer qualification, recovery, and independent review remain VERIFY under B06/N04/N13–N16; next action is continue live transport-counter and clean-wheel consumer qualification.
 - Atomic implementation commits: `8c11ebe`.
 - Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N04 double-encoded URI traversal hardening
+
+- Scope: prevent provider-side second decoding from bypassing storage-root checks.
+- Observable behavior delivered; FR/NFR and B/G subcases: URI path normalization now collapses a bounded second encoding layer for slash, backslash, and dot-segment markers before ancestry checks, and canonicalizes decoded backslashes. Double-encoded traversal fails closed while ordinary roots and descendants remain accepted.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/data_plane/infrastructure/adapters/path_rules.py` and `tests/infrastructure/adapters/test_path_rules.py`; no serializers, serialized classes, payloads, import paths, migrations, dependencies, or tests deleted.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +11 production/test logical lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: path-rule traversal and URI-authority suite (9 passed); no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: path-rule suite (9 passed), changed-path Ruff check (exit 0), 2026-09-14, Python 3.12/uv local workspace. Commit hooks passed with repository baseline `ty` diagnostics skipped (`SKIP=ty`).
+- Artifact and fixture hashes; evidence locations: atomic implementation commit `b423d96`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: live DNS/redirect/private counters, provider request interception, cancellation cleanup, deployment network controls, browser/consumer qualification, recovery, and independent review remain VERIFY under B06/N04/N13–N16; next action is continue live hostile transport and clean-artifact consumer lanes.
+- Atomic implementation commits: `b423d96`.
+- Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
