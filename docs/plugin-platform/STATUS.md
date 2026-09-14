@@ -301,6 +301,14 @@ test count is now 8.
 - Evidence: direct UI TypeScript build, Vite production build (282.46 kB JavaScript / 85.37 kB gzip; 19.73 kB CSS / 4.71 kB gzip), all 8 UI lifecycle/schema/recovery tests, and `git diff --check` passed.
 - Remaining N08 work: rendered lossless roundtrip coverage, all mask-value cases, local undo/redo browser coverage, responsive/large-tree stress, and complete B11/B12 qualification. Release remains HOLD.
 
+## Implementation update — 4ee5257 (2026-09-14)
+
+- Packet / status / candidate commit / owner: N06/B09 and N08/B11 command palette partial / VERIFY / `4ee5257` / governance UI.
+- Observable behavior delivered: Cmd/Ctrl+K now filters destinations to the current session's available management scope and searches the authorized asset inventory already loaded in the workspace. Selecting an asset reuses the existing discard guard and epoch-fenced loader; inaccessible management actions are not presented as commands.
+- Changed paths: `apps/governance-ui/src/main.tsx` and `apps/governance-ui/src/styles.css`. No backend, session, pickle serializer, serialized class, payload, or import path changed.
+- Evidence: direct UI TypeScript build, Vite production build (283.04 kB JavaScript / 85.56 kB gzip; 19.83 kB CSS / 4.72 kB gzip), all 8 UI lifecycle/schema/recovery tests, and `git diff --check` passed.
+- Remaining N06/N08 work: keyboard cycling and browser accessibility evidence, server-backed asset search beyond loaded pages, complete mobile/desktop verification, and full B09/B11/B12 qualification. Release remains HOLD.
+
 Qualification follow-up (2026-09-14): the elevated full Python suite completed with
 837 collected, 823 passed, 14 explicit environment/benchmark skips, and zero
 failures or errors. The unprivileged attempt was discarded because the sandbox
