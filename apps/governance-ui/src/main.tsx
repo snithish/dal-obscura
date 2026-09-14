@@ -76,7 +76,6 @@ function App() {
   const searchTimer = useRef<number | undefined>(undefined);
   const managementEpoch = useRef(0);
   const assetAbortController = useRef<AbortController | null>(null);
-  const managementAbortController = useRef<AbortController | null>(null);
   const workspaceAbortController = useRef<AbortController | null>(null);
   const historyAbortController = useRef<AbortController | null>(null);
   const auditAbortController = useRef<AbortController | null>(null);
@@ -148,7 +147,6 @@ function App() {
     managementEpoch.current += 1;
     if (searchTimer.current !== undefined) window.clearTimeout(searchTimer.current);
     assetAbortController.current?.abort();
-    managementAbortController.current?.abort();
     workspaceAbortController.current?.abort();
     historyAbortController.current?.abort();
     auditAbortController.current?.abort();
@@ -187,7 +185,6 @@ function App() {
       inventoryEpoch.current += 1;
       managementEpoch.current += 1;
       assetAbortController.current?.abort();
-      managementAbortController.current?.abort();
       workspaceAbortController.current?.abort();
       historyAbortController.current?.abort();
       auditAbortController.current?.abort();
@@ -215,22 +212,87 @@ function App() {
 
   async function loadManagement(destination: Page) {
     const epoch = ++managementEpoch.current;
-    managementAbortController.current?.abort();
-    const controller = new AbortController();
-    managementAbortController.current = controller;
+    await queryClient.cancelQueries({ queryKey: ["management", sessionCacheKey] });
     setManagementLoading(true);
     setManagementError("");
     try {
       let next: ManagementData = {};
-      if (destination === "changes") { const pageResult = await controlPlane.listHistoryPage({ limit: 50, signal: controller.signal }); next = { history: pageResult.items, historyNextCursor: pageResult.next_cursor }; }
-      if (destination === "activity") { const audit = await controlPlane.listAuditEventsPage({ limit: 50, ...auditFilters, signal: controller.signal }); next = { history: await controlPlane.listHistory(controller.signal), events: audit.items, eventsNextCursor: audit.next_cursor, summary: await controlPlane.getSummary(controller.signal), observations: await controlPlane.getObservations(controller.signal) }; }
-      if (destination === "connections") { const pluginData = await controlPlane.listPlugins(controller.signal); next = { catalogs: await controlPlane.listCatalogs(controller.signal), publications: session?.platform_admin ? await controlPlane.listWorkspacePublications(controller.signal) : [], plugins: pluginData.plugins, pluginStates: pluginData.states, pluginPairs: pluginData.pairs }; }
-      if (destination === "settings") { const [runtime, providers, revision] = await Promise.all([controlPlane.getRuntimeSettings(controller.signal), controlPlane.getAuthProviders(controller.signal), controlPlane.getAuthProviderRevision(controller.signal)]); next = { runtime, providers, providerRevision: revision.revision, publications: session?.platform_admin ? await controlPlane.listWorkspacePublications(controller.signal) : [] }; }
+      if (destination === "changes") {
+        const pageResult = await queryClient.fetchQuery({
+          queryKey: ["management", sessionCacheKey, "changes", "history", 50],
+          queryFn: ({ signal }) => controlPlane.listHistoryPage({ limit: 50, signal }),
+        });
+        next = { history: pageResult.items, historyNextCursor: pageResult.next_cursor };
+      }
+      if (destination === "activity") {
+        const filtersKey = JSON.stringify(auditFilters);
+        const [audit, history, summary, observations] = await Promise.all([
+          queryClient.fetchQuery({
+            queryKey: ["management", sessionCacheKey, "activity", "audit", filtersKey, 50],
+            queryFn: ({ signal }) => controlPlane.listAuditEventsPage({ limit: 50, ...auditFilters, signal }),
+          }),
+          queryClient.fetchQuery({
+            queryKey: ["management", sessionCacheKey, "activity", "history"],
+            queryFn: ({ signal }) => controlPlane.listHistory(signal),
+          }),
+          queryClient.fetchQuery({
+            queryKey: ["management", sessionCacheKey, "activity", "summary"],
+            queryFn: ({ signal }) => controlPlane.getSummary(signal),
+          }),
+          queryClient.fetchQuery({
+            queryKey: ["management", sessionCacheKey, "activity", "observations"],
+            queryFn: ({ signal }) => controlPlane.getObservations(signal),
+          }),
+        ]);
+        next = { history, events: audit.items, eventsNextCursor: audit.next_cursor, summary, observations };
+      }
+      if (destination === "connections") {
+        const [pluginData, catalogs, publications] = await Promise.all([
+          queryClient.fetchQuery({
+            queryKey: ["management", sessionCacheKey, "connections", "plugins"],
+            queryFn: ({ signal }) => controlPlane.listPlugins(signal),
+          }),
+          queryClient.fetchQuery({
+            queryKey: ["management", sessionCacheKey, "connections", "catalogs"],
+            queryFn: ({ signal }) => controlPlane.listCatalogs(signal),
+          }),
+          session?.platform_admin
+            ? queryClient.fetchQuery({
+                queryKey: ["management", sessionCacheKey, "connections", "publications"],
+                queryFn: ({ signal }) => controlPlane.listWorkspacePublications(signal),
+              })
+            : Promise.resolve([]),
+        ]);
+        next = { catalogs, publications, plugins: pluginData.plugins, pluginStates: pluginData.states, pluginPairs: pluginData.pairs };
+      }
+      if (destination === "settings") {
+        const [runtime, providers, revision, publications] = await Promise.all([
+          queryClient.fetchQuery({
+            queryKey: ["management", sessionCacheKey, "settings", "runtime"],
+            queryFn: ({ signal }) => controlPlane.getRuntimeSettings(signal),
+          }),
+          queryClient.fetchQuery({
+            queryKey: ["management", sessionCacheKey, "settings", "providers"],
+            queryFn: ({ signal }) => controlPlane.getAuthProviders(signal),
+          }),
+          queryClient.fetchQuery({
+            queryKey: ["management", sessionCacheKey, "settings", "provider-revision"],
+            queryFn: ({ signal }) => controlPlane.getAuthProviderRevision(signal),
+          }),
+          session?.platform_admin
+            ? queryClient.fetchQuery({
+                queryKey: ["management", sessionCacheKey, "settings", "publications"],
+                queryFn: ({ signal }) => controlPlane.listWorkspacePublications(signal),
+              })
+            : Promise.resolve([]),
+        ]);
+        next = { runtime, providers, providerRevision: revision.revision, publications };
+      }
       if (!isCurrentEpoch(epoch, managementEpoch.current)) return;
       setManagementData(next);
     } catch (error) {
       if (!isCurrentEpoch(epoch, managementEpoch.current)) return;
-      if (error instanceof DOMException && error.name === "AbortError") return;
+      if ((error instanceof DOMException && error.name === "AbortError") || (error instanceof Error && error.name === "CancelledError")) return;
       const failure = error as ApiFailure;
       setManagementError(recoveryMessage(failure, "This management view could not be loaded. The server may be unavailable or the session may have expired."));
     } finally {
@@ -405,7 +467,6 @@ function App() {
     inventoryEpoch.current += 1;
     managementEpoch.current += 1;
     assetAbortController.current?.abort();
-    managementAbortController.current?.abort();
     workspaceAbortController.current?.abort();
     historyAbortController.current?.abort();
     auditAbortController.current?.abort();

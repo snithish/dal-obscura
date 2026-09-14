@@ -921,6 +921,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: the UI now pins `@tanstack/react-query` 5.102.8, scopes inventory keys by exact issuer/principal/search/cursor, passes the Query cancellation signal to the shared API transport, deduplicates identical page reads, and clears/cancels private queries on session changes, expiry, logout, and teardown. Local policy drafts remain component state.
 - Verification: UI TypeScript compilation, Vite production build (93.69 kB gzip JavaScript), and 11 UI tests passed; `git diff --check` passed. Remaining N07 work is migration of management/mutation workflows and rendered deferred-response coverage; release remains HOLD.
 
+## 2026-09-14 — N07 session-scoped management query reads
+
+- Scope: extend the session-bound query cache from asset inventory into management read workflows.
+- Observable behavior delivered: Changes, Activity, Connections, and Settings reads now use stable TanStack Query keys containing the exact authenticated session scope, pass cancellation signals through the shared transport, deduplicate concurrent reads, and clear on session transitions. Existing epoch fences remain while cursor and mutation workflows are migrated.
+- Verification: UI TypeScript compilation, Vite production build (93.88 kB gzip JavaScript), 11 UI tests, and `git diff --check` passed. Remaining N07 work is cursor/mutation migration and rendered deferred-response coverage; release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
