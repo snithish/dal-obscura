@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import pickle
 from dataclasses import dataclass
+from typing import ClassVar
 
 import pyarrow as pa
+import pytest
 from pyiceberg.expressions import AlwaysTrue, EqualTo
 
 from dal_obscura.common.access_control.filters import (
@@ -12,9 +14,12 @@ from dal_obscura.common.access_control.filters import (
     row_filter_to_sql,
 )
 from dal_obscura.common.query_planning.models import PlanRequest
+from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 from dal_obscura.data_plane.infrastructure.table_formats.iceberg import (
     IcebergInputPartition,
     IcebergTableFormat,
+    _check_file_tasks,
+    _check_table_locations,
 )
 
 
@@ -83,6 +88,43 @@ def test_iceberg_plan_tracks_requested_projection_for_baseline_behavior(monkeypa
     assert partition.columns == ["id"]
     assert table.planned_selected_fields == ("id",)
     assert isinstance(table.planned_row_filter, AlwaysTrue)
+
+
+def test_iceberg_path_policy_checks_delete_file_locations() -> None:
+    class _DataFile:
+        file_path = "s3://warehouse/data/part-0.parquet"
+
+    class _DeleteFile:
+        file_path = "s3://outside-bucket/deletes/part-0.parquet"
+
+    class _Task:
+        file = _DataFile()
+        delete_files: ClassVar[set[object]] = {_DeleteFile()}
+
+    enforcer = PathRuleEnforcer([{"root": "s3://warehouse/"}])
+    with pytest.raises(PermissionError, match="Path is not allowed"):
+        _check_file_tasks([_Task()], enforcer)
+
+
+def test_iceberg_path_policy_checks_manifest_and_historical_metadata_locations() -> None:
+    class _Snapshot:
+        manifest_list = "s3://outside-bucket/manifests/snapshot.avro"
+
+    class _MetadataLogEntry:
+        metadata_file = "s3://outside-bucket/metadata-v1.json"
+
+    class _Metadata:
+        location = "s3://warehouse/table"
+        snapshots: ClassVar[list[object]] = [_Snapshot()]
+        metadata_log: ClassVar[list[object]] = [_MetadataLogEntry()]
+
+    class _Table:
+        metadata_location = "s3://warehouse/table/metadata.json"
+        metadata = _Metadata()
+
+    enforcer = PathRuleEnforcer([{"root": "s3://warehouse/"}])
+    with pytest.raises(PermissionError, match="Path is not allowed"):
+        _check_table_locations(_Table(), enforcer)
 
 
 def test_iceberg_plan_pushes_down_simple_row_filter_as_sql_string(monkeypatch):

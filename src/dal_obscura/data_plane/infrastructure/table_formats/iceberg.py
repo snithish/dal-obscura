@@ -159,6 +159,7 @@ class IcebergTableFormat(TableFormat):
 
         _check_path(self.metadata_location, self.path_enforcer)
         table = StaticTable.from_metadata(self.metadata_location, properties=self.io_options)
+        _check_table_locations(table, self.path_enforcer)
         _require_supported_format_version(int(getattr(table.metadata, "format_version", 1)))
         return table
 
@@ -203,10 +204,11 @@ def _check_file_tasks(tasks: Iterable[object], enforcer: PathRuleEnforcer | None
     if enforcer is None or not enforcer.enabled:
         return
     for task in tasks:
-        path = _file_task_path(task)
-        if path is None:
+        paths = _file_task_paths(task)
+        if not paths:
             raise PermissionError("Path is not allowed")
-        enforcer.check(path)
+        for path in paths:
+            enforcer.check(path)
 
 
 def _check_path(path: str, enforcer: PathRuleEnforcer | None) -> None:
@@ -215,7 +217,14 @@ def _check_path(path: str, enforcer: PathRuleEnforcer | None) -> None:
     enforcer.check(path)
 
 
-def _file_task_path(task: object) -> str | None:
+def _file_task_paths(task: object) -> list[str]:
+    """Return all data and delete-file locations carried by a scan task.
+
+    PyIceberg's ``FileScanTask`` contains one data file plus zero or more
+    delete files.  Checking only the data file would allow a provider to make
+    the executor fetch a delete file from an unapproved bucket.
+    """
+    paths: list[str] = []
     for attribute_path in (
         ("file", "file_path"),
         ("data_file", "file_path"),
@@ -228,8 +237,46 @@ def _file_task_path(task: object) -> str | None:
             if value is None:
                 break
         if value is not None:
-            return str(value)
-    return None
+            paths.append(str(value))
+            break
+
+    delete_files = getattr(task, "delete_files", ())
+    if isinstance(delete_files, (set, frozenset, list, tuple)):
+        for delete_file in delete_files:
+            path = getattr(delete_file, "file_path", None)
+            if path is not None:
+                paths.append(str(path))
+    return paths
+
+
+def _check_table_locations(table: object, enforcer: PathRuleEnforcer | None) -> None:
+    """Check metadata, manifest-list, and historical metadata locations.
+
+    These locations are fetched by PyIceberg before/while it plans files and
+    are not represented by ``FileScanTask``.  Enforcing them at table-load
+    time closes that gap while keeping the path policy in one adapter.
+    """
+    if enforcer is None or not enforcer.enabled:
+        return
+    metadata = getattr(table, "metadata", None)
+    candidates: list[object] = [getattr(table, "metadata_location", None)]
+    if metadata is not None:
+        candidates.extend(
+            [
+                getattr(metadata, "location", None),
+                *(
+                    getattr(snapshot, "manifest_list", None)
+                    for snapshot in (getattr(metadata, "snapshots", None) or ())
+                ),
+                *(
+                    getattr(entry, "metadata_file", None)
+                    for entry in (getattr(metadata, "metadata_log", None) or ())
+                ),
+            ]
+        )
+    for candidate in candidates:
+        if isinstance(candidate, str) and candidate.strip():
+            enforcer.check(candidate)
 
 
 def _split_row_filter(row_filter: RowFilter | None) -> tuple[RowFilter | None, RowFilter | None]:
