@@ -177,6 +177,42 @@ class AssetAccessResponse(BaseModel):
     capabilities: list[AssetCapabilityResponse]
 
 
+class AssetMutationResponse(BaseModel):
+    """Stable identity returned after creating or updating an asset."""
+
+    id: str
+    catalog: str
+    target: str
+
+
+class AssetOwnersResponse(BaseModel):
+    """Authoritative owner set after an asset owner replacement."""
+
+    asset_id: str
+    owners: list[str]
+
+
+class AssetGrantResponse(BaseModel):
+    """One explicit delegated asset capability."""
+
+    principal: str
+    capability: Literal["read", "edit", "publish", "grant"]
+
+
+class AssetGrantsResponse(BaseModel):
+    """Authoritative delegated capabilities for one asset."""
+
+    asset_id: str
+    grants: list[AssetGrantResponse]
+
+
+class AssetSchemaFieldsResponse(BaseModel):
+    """Admitted schema metadata after a replacement."""
+
+    asset_id: str
+    fields: list[dict[str, Any]]
+
+
 class AssetInventoryResponse(BaseModel):
     """Bounded workspace inventory row with authoritative serving state."""
 

@@ -893,6 +893,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: authenticated settings mutations now publish the same explicit response models already used by settings reads, so generated clients receive stable runtime revisions and redacted provider arrays after writes.
 - Verification: settings/actor-auth suites and OpenAPI route inventory passed (38 tests); changed-path Ruff/format checks passed. Generated DTO wiring and live multi-actor settings qualification remain VERIFY.
 
+## 2026-09-14 — N03 typed asset mutations
+
+- Scope: stabilize owner, grant, schema-metadata, and asset-binding mutation responses.
+- Observable behavior delivered: asset mutation routes now publish explicit owner, delegated-capability, schema-field, and asset identity contracts; list grants also expose a typed capability item shape. Existing authorization, self-escalation, plugin-pair, and revision checks remain unchanged.
+- Verification: actor-auth, draft/version, and OpenAPI route suites passed (49 tests); changed-path Ruff/format checks and `git diff --check` passed. Generated DTO coverage and rendered permission-matrix evidence remain VERIFY under N03/N11.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.

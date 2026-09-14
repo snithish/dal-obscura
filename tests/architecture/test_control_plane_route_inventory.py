@@ -116,5 +116,30 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
     assert (
         paths["/v1/settings/auth-providers"]["put"]["responses"]["200"]["content"][
             "application/json"
-        ]["schema"]["type"] == "array"
+        ]["schema"]["type"]
+        == "array"
+    )
+    assert (
+        paths["/v1/assets/{asset_id}/owners"]["put"]["responses"]["200"]["content"][
+            "application/json"
+        ]["schema"]["$ref"]
+        == "#/components/schemas/AssetOwnersResponse"
+    )
+    assert (
+        paths["/v1/assets/{asset_id}/grants"]["put"]["responses"]["200"]["content"][
+            "application/json"
+        ]["schema"]["$ref"]
+        == "#/components/schemas/AssetGrantsResponse"
+    )
+    assert (
+        paths["/v1/assets/{asset_id}/schema-fields"]["put"]["responses"]["200"]["content"][
+            "application/json"
+        ]["schema"]["$ref"]
+        == "#/components/schemas/AssetSchemaFieldsResponse"
+    )
+    assert (
+        paths["/v1/assets/{catalog}/{target}"]["put"]["responses"]["200"]["content"][
+            "application/json"
+        ]["schema"]["$ref"]
+        == "#/components/schemas/AssetMutationResponse"
     )

@@ -17,12 +17,17 @@ from dal_obscura.control_plane.application.errors import AuthorizationFailure
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 from dal_obscura.control_plane.interfaces.routes.schemas import (
     AssetAccessResponse,
+    AssetGrantResponse,
     AssetGrantsRequest,
+    AssetGrantsResponse,
     AssetInventoryPageResponse,
     AssetInventoryResponse,
+    AssetMutationResponse,
     AssetOwnersRequest,
+    AssetOwnersResponse,
     AssetRequest,
     AssetSchemaFieldsRequest,
+    AssetSchemaFieldsResponse,
 )
 
 
@@ -85,12 +90,12 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
     ) -> object:
         return deps.with_service(lambda service: service.get_asset_schema(asset_id, actor))
 
-    @api.put("/v1/assets/{asset_id}/owners")
+    @api.put("/v1/assets/{asset_id}/owners", response_model=AssetOwnersResponse)
     def replace_asset_owners(
         asset_id: UUID,
         request: AssetOwnersRequest,
         actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
-    ) -> object:
+    ) -> AssetOwnersResponse:
         owners = deps.with_service(
             lambda service: service.replace_asset_owners(
                 asset_id=asset_id,
@@ -101,19 +106,19 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         )
         return {"asset_id": str(asset_id), "owners": owners}
 
-    @api.get("/v1/assets/{asset_id}/grants")
+    @api.get("/v1/assets/{asset_id}/grants", response_model=list[AssetGrantResponse])
     def list_asset_grants(
         asset_id: UUID,
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
+    ) -> list[AssetGrantResponse]:
         return deps.with_service(lambda service: _authorized_asset_grants(service, asset_id, actor))
 
-    @api.put("/v1/assets/{asset_id}/grants")
+    @api.put("/v1/assets/{asset_id}/grants", response_model=AssetGrantsResponse)
     def replace_asset_grants(
         asset_id: UUID,
         request: AssetGrantsRequest,
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
+    ) -> AssetGrantsResponse:
         return deps.with_service(
             lambda service: _replace_authorized_asset_grants(
                 service,
@@ -123,11 +128,15 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
             )
         )
 
-    @api.put("/v1/assets/{asset_id}/schema-fields", dependencies=[Depends(deps.require_admin)])
+    @api.put(
+        "/v1/assets/{asset_id}/schema-fields",
+        response_model=AssetSchemaFieldsResponse,
+        dependencies=[Depends(deps.require_admin)],
+    )
     def replace_asset_schema_fields(
         asset_id: UUID,
         request: AssetSchemaFieldsRequest,
-    ) -> object:
+    ) -> AssetSchemaFieldsResponse:
         fields = deps.with_service(
             lambda service: service.replace_asset_schema_fields(
                 asset_id=asset_id,
@@ -137,8 +146,14 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         )
         return {"asset_id": str(asset_id), "fields": fields}
 
-    @api.put("/v1/assets/{catalog}/{target}", dependencies=[Depends(deps.require_admin)])
-    def upsert_workspace_asset(catalog: str, target: str, request: AssetRequest) -> object:
+    @api.put(
+        "/v1/assets/{catalog}/{target}",
+        response_model=AssetMutationResponse,
+        dependencies=[Depends(deps.require_admin)],
+    )
+    def upsert_workspace_asset(
+        catalog: str, target: str, request: AssetRequest
+    ) -> AssetMutationResponse:
         return deps.with_service(
             lambda service: service.upsert_workspace_asset(
                 catalog=catalog,
