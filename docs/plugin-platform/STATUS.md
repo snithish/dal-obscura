@@ -913,6 +913,8 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: evaluation, review, and publication now require an expected revision whenever a saved draft is selected by immutable ID. Existing foreign or missing draft IDs retain concealed 404 behavior; stale revisions remain 409; missing revisions return 428 before the mutation can commit.
 - Verification: complete schema API suite passed (7 tests), referenced-draft/version regression passed, and changed-path Ruff/format checks passed. Two-process race evidence and generated DTO/browser proof remain VERIFY under B05/B13/B16.
 
+- Follow-up regression: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q` exited 0 across the full repository after the precondition change. Release remains HOLD for live-only gates.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
