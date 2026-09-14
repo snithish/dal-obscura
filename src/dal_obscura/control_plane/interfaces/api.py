@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session, sessionmaker
@@ -227,6 +228,34 @@ def create_app(  # noqa: C901
                     "request_id": current_request_id(),
                 },
             },
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def structured_request_validation_error(request: Request, exc: RequestValidationError):
+        """Keep framework-level query/path validation on the public error contract."""
+
+        del request
+        request_id = current_request_id() or uuid4().hex
+        field_errors = [
+            {
+                "field": ".".join(str(part) for part in error.get("loc", ()) if part != "body"),
+                "message": str(error.get("msg", "Invalid value")),
+                "type": str(error.get("type", "value_error")),
+            }
+            for error in exc.errors()
+        ]
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": "Request validation failed",
+                "error": {
+                    "code": "validation_error",
+                    "message": "Request validation failed",
+                    "request_id": request_id,
+                    "field_errors": field_errors,
+                },
+            },
+            headers={"x-request-id": request_id},
         )
 
     @app.middleware("http")

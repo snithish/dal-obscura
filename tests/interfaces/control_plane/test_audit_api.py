@@ -62,6 +62,10 @@ def test_audit_limit_is_bounded() -> None:
     client = _client()
     response = client.get("/v1/audit/events?limit=201", headers=ADMIN_HEADERS)
     assert response.status_code == 422
+    payload = response.json()
+    assert payload["error"]["code"] == "validation_error"
+    assert payload["error"]["request_id"] == response.headers["x-request-id"]
+    assert payload["error"]["field_errors"]
 
 
 def test_audit_page_uses_keyset_cursor_and_preserves_scope() -> None:
