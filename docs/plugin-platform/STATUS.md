@@ -269,6 +269,14 @@ test count is now 8.
 - Evidence: direct UI TypeScript build, Vite production build (276.86 kB JavaScript / 83.62 kB gzip; 20.10 kB CSS / 4.82 kB gzip), all 8 UI lifecycle/schema/recovery tests, and `git diff --check` passed.
 - Remaining N06 work: apply tokens consistently across component styles, adopt Lucide/accessibility primitives, and complete required 390/768/1440/200% browser, axe, keyboard, and screen-reader evidence. Release remains HOLD.
 
+## Implementation update — 0b6af3a (2026-09-14)
+
+- Packet / status / candidate commit / owner: N06/B09 visual foundation partial / VERIFY / `0b6af3a` / governance UI.
+- Observable behavior delivered: primary navigation now uses one typed, dependency-free SVG icon primitive with semantic names for assets, history, activity, connections, and settings. Icons are decorative beside visible labels and inherit the same focus/color behavior as their controls; no remote assets or package install is required.
+- Changed paths: `apps/governance-ui/src/components/Icon.tsx`, `apps/governance-ui/src/main.tsx`, and `apps/governance-ui/src/styles.css`. No backend, session, pickle serializer, serialized class, payload, or import path changed.
+- Evidence: direct UI TypeScript build, Vite production build (278.51 kB JavaScript / 84.36 kB gzip; 19.27 kB CSS / 4.63 kB gzip), all 8 UI lifecycle/schema/recovery tests, and `git diff --check` passed.
+- Remaining N06 work: complete the selected Lucide/accessibility primitive contract, apply semantic tokens consistently across all components, and run required visual, axe, keyboard, and screen-reader evidence. Release remains HOLD.
+
 Qualification follow-up (2026-09-14): the elevated full Python suite completed with
 837 collected, 823 passed, 14 explicit environment/benchmark skips, and zero
 failures or errors. The unprivileged attempt was discarded because the sandbox
