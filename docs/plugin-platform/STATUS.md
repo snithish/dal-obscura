@@ -1026,6 +1026,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Verification: UI TypeScript compilation, 11 UI tests, Vite production build, and pre-commit non-heavy hooks passed. Full visual/accessibility and independent acceptance evidence remain VERIFY; release remains HOLD.
 - Atomic implementation commit: `715047b`.
 
+## 2026-09-14 — N10 descriptor-default regression
+
+- Scope: pin the compatibility path where a plugin descriptor supplies defaults instead of a UI-specific backend field.
+- Observable behavior delivered: an admitted catalog can be created with only its required URI while descriptor defaults remain server-validated and preserved by the authoring flow.
+- Verification: catalog API suite (11 passed), Ruff, and pre-commit non-heavy hooks passed. Full production and independent acceptance evidence remain VERIFY; release remains HOLD.
+- Atomic implementation commit: `41fdfed`.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
