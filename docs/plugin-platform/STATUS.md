@@ -1189,6 +1189,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `e8210e5`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N02 remove unreachable discovery helper
+
+- Scope: delete a dead catalog-type helper from the control-plane discovery adapter.
+- Observable behavior delivered; FR/NFR and B/G subcases: unsupported catalog modules still fail closed with the same stable `ValueError`; the removed helper had no behavior beyond recomputing the built-in check immediately before raising. Built-in Iceberg discovery and admitted public-plugin discovery are unchanged. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/infrastructure/catalog_discovery.py`; one unused import and one unreachable helper deleted; no runtime serializer, migration, dependency, or API path changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: -9 production lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing catalog discovery and catalog API suites remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `uv run --no-sync pytest tests/control_plane/test_catalog_discovery.py tests/interfaces/control_plane/test_catalogs_api.py -q` (exit 0, 34 passed) plus focused Ruff check/format (exit 0), 2026-09-14, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `a6f11859`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: N02 legacy module-field inventory and populated PostgreSQL maintenance conversion remain VERIFY; all N03–N16 live gates and independent review remain open. Release remains HOLD; continue removing only proven-dead legacy paths with owning behavioral coverage.
+- Atomic implementation commits: `a6f11859`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-14 — N02 maintenance-mode migration acknowledgement
 
 - Scope: enforce an explicit cutover acknowledgement before offline plugin-binding or federated identity rewrites can mutate durable records.
