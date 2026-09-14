@@ -987,6 +987,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: catalog table discovery, local bootstrap login, demo login, and logout now have explicit response models in the public OpenAPI contract. The UI transport consumes generated DTOs for those calls; cookie/session behavior is unchanged.
 - Verification: UI TypeScript compilation, 11 UI tests, focused route-inventory OpenAPI tests, Ruff, non-heavy pytest hooks, and `git diff --check` passed. Live OIDC/browser freshness, Node 24 frozen install/image/advisory proof, and full acceptance remain VERIFY; release remains HOLD.
 
+## 2026-09-14 — Regression environment boundary
+
+- Scope: record the full-suite verification attempt after the response-contract changes.
+- Observable result: the repository-wide pytest run reached the suite but sandbox policy denied ephemeral loopback binds used by Arrow Flight and OIDC fixtures (`Operation not permitted`); the resulting failures are environment-bound startup failures, not assertion regressions. The non-heavy hook suite and all changed-path tests remain green.
+- Verification: full run exit 1 with bind-denial diagnostics; focused route/API tests, UI TypeScript, UI tests, generated DTO freshness, Ruff, and service health checks passed. A full Flight/e2e run requires a host with ephemeral loopback bind permission and remains VERIFY; release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
