@@ -2110,3 +2110,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: rendered deferred-response proof, live OIDC/PKCE/revocation, hostile transport, PostgreSQL races/recovery, clean TLS/OIDC consumer cells, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable qualification packet without changing pickle behavior.
 - Atomic implementation commits: `a86bc1fa`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N07 Settings mutation response fencing
+
+- Scope: prevent slow runtime or identity-provider saves from overwriting newer Settings edits.
+- Observable behavior delivered; FR/NFR and B/G subcases: Settings captures an edit generation before each save. A newer control edit, server reload, explicit discard, or session transition invalidates the generation; late success is ignored and cannot clear current dirty state or trigger an obsolete reload. Successful saves still clear the marker only when no newer edit exists. Pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/SettingsView.tsx`; no backend, serializer, serialized class/import path, payload, migration, dependency, or test deletion.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +24 UI production lines and -13 obsolete lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing UI lifecycle/query tests remain owners; no tests deleted. Rendered deferred Settings response races remain required B10 evidence.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node_modules/.bin/vite build` (exit 0; 330.61 kB JavaScript / 99.78 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0; 14 passed), and `git diff --check` (exit 0), 2026-09-14, Node 26.8.2 local runtime (package policy remains Node 24). Commit hook used `SKIP=ty`; the documented repository `ty` baseline still reports 72 unrelated diagnostics.
+- Artifact and fixture hashes; evidence locations: implementation commit `b8406bdb`; local disposable UI/control-plane profile on `127.0.0.1:5173`/`127.0.0.1:8821`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: rendered deferred-response proof, live OIDC/PKCE/revocation, hostile transport, PostgreSQL races/recovery, clean TLS/OIDC consumer cells, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable qualification packet without changing pickle behavior.
+- Atomic implementation commits: `b8406bdb`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
