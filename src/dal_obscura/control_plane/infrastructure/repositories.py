@@ -1589,45 +1589,6 @@ class PublicationStore:
         )
         self._session.flush()
 
-    def list_audit_events(
-        self,
-        context: WorkspaceContext,
-        *,
-        asset_ids: set[str] | None = None,
-        limit: int = 100,
-    ) -> list[dict[str, object]]:
-        """Returns bounded, tenant-scoped audit events with safe details."""
-
-        bounded_limit = max(1, min(limit, 200))
-        query = select(AuditEventRecord).where(
-            AuditEventRecord.cell_id == context.cell_id,
-            AuditEventRecord.tenant_id == context.tenant_id,
-        )
-        if asset_ids is not None:
-            if not asset_ids:
-                return []
-            query = query.where(
-                AuditEventRecord.resource_type == "asset",
-                AuditEventRecord.resource_id.in_(asset_ids),
-            )
-        records = self._session.scalars(
-            query.order_by(AuditEventRecord.created_at.desc()).limit(bounded_limit)
-        )
-        return [
-            {
-                "id": str(record.id),
-                "actor": record.actor_principal,
-                "action": record.action,
-                "resource_type": record.resource_type,
-                "resource_id": record.resource_id,
-                "outcome": record.outcome,
-                "details": dict(record.details_json),
-                "correlation_id": record.correlation_id,
-                "created_at": _isoformat(record.created_at),
-            }
-            for record in records
-        ]
-
     def list_audit_events_page(  # noqa: C901
         self,
         context: WorkspaceContext,

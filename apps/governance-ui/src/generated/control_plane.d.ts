@@ -364,23 +364,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/audit/events": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Audit Events */
-        get: operations["list_audit_events_v1_audit_events_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/audit/events/page": {
         parameters: {
             query?: never;
@@ -2687,45 +2670,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssetInventoryPageResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_audit_events_v1_audit_events_get: {
-        parameters: {
-            query?: {
-                asset_id?: string | null;
-                limit?: number;
-            };
-            header?: {
-                authorization?: string;
-            };
-            path?: never;
-            cookie?: {
-                "__Host-dal_obscura_csrf"?: string | null;
-                "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditEventResponse"][];
                 };
             };
             /** @description Validation Error */

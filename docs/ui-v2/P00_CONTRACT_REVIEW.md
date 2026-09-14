@@ -58,7 +58,6 @@ dependency.
 | GET | `/v1/assets/{asset_id}/policy-versions` | Actor | asset-scoped version history | scope to asset capability |
 | GET | `/v1/assets/{asset_id}/policy-versions/{policy_version}` | Actor | immutable policy version detail | scope to asset capability; omit compiled runtime secrets |
 | POST | `/v1/assets/{asset_id}/policy-versions/{policy_version}/restore` | Actor, service checks editor | copy immutable version into a revisioned draft | compare-and-swap draft revision and audit restore |
-| GET | `/v1/audit/events` | Actor | bounded redacted mutation activity | scope by visible assets; omit source rows and secrets |
 | GET | `/v1/audit/events/page` | Actor | keyset-paginated, filtered redacted activity | apply actor/action/resource/outcome/request/time filters before pagination; scope by visible assets; omit source rows and secrets |
 | GET | `/v1/settings/runtime` | Actor | runtime settings | dedicated workspace settings-read capability |
 | PUT | `/v1/settings/runtime` | Admin | runtime settings mutation | dedicated workspace settings-write capability |

@@ -61,5 +61,5 @@ def test_platform_admin_can_transition_plugin_lifecycle_and_audit_change() -> No
         json={"target": "enabled"},
     )
     assert enabled.status_code == 200
-    events = client.get("/v1/audit/events", headers=ADMIN_HEADERS).json()
+    events = client.get("/v1/audit/events/page", headers=ADMIN_HEADERS).json()["items"]
     assert any(event["action"] == "plugin.lifecycle.update" for event in events)

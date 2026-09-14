@@ -167,7 +167,7 @@ def test_policy_version_publish_bootstraps_default_runtime_context():
     assert "active_publication" not in summary
     assert summary["runtime_configured"] is True
     assert summary["enabled_auth_provider_count"] == 1
-    events = client.get("/v1/audit/events", headers=ADMIN_HEADERS).json()
+    events = client.get("/v1/audit/events/page", headers=ADMIN_HEADERS).json()["items"]
     assert "workspace.publication.activate" not in {event["action"] for event in events}
 
 

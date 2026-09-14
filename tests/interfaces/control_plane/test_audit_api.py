@@ -37,9 +37,9 @@ def test_audit_events_are_transactional_redacted_and_scoped() -> None:
         headers=ADMIN_HEADERS,
     )
 
-    events = client.get("/v1/audit/events", headers=ADMIN_HEADERS)
+    events = client.get("/v1/audit/events/page", headers=ADMIN_HEADERS)
     assert events.status_code == 200
-    payload = events.json()
+    payload = events.json()["items"]
     assert [event["action"] for event in payload[:2]] == [
         "policy.publication.activate",
         "policy.draft.save",
@@ -48,19 +48,19 @@ def test_audit_events_are_transactional_redacted_and_scoped() -> None:
     assert all("rules" not in event["details"] for event in payload[:2])
     assert payload[1]["correlation_id"] == saved_response.headers["x-request-id"]
 
-    owner_events = client.get("/v1/audit/events", headers=_bearer("owner-token"))
-    outsider_events = client.get("/v1/audit/events", headers=_bearer("outsider-token"))
+    owner_events = client.get("/v1/audit/events/page", headers=_bearer("owner-token"))
+    outsider_events = client.get("/v1/audit/events/page", headers=_bearer("outsider-token"))
     assert owner_events.status_code == 200
-    owner_actions = [event["action"] for event in owner_events.json()]
+    owner_actions = [event["action"] for event in owner_events.json()["items"]]
     assert len(owner_actions) == 4
     assert "asset.owners.replace" in owner_actions
     assert outsider_events.status_code == 200
-    assert outsider_events.json() == []
+    assert outsider_events.json()["items"] == []
 
 
 def test_audit_limit_is_bounded() -> None:
     client = _client()
-    response = client.get("/v1/audit/events?limit=201", headers=ADMIN_HEADERS)
+    response = client.get("/v1/audit/events/page?limit=201", headers=ADMIN_HEADERS)
     assert response.status_code == 422
     payload = response.json()
     assert payload["error"]["code"] == "validation_error"

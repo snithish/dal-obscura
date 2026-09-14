@@ -49,7 +49,7 @@ def test_workspace_catalog_upsert_bootstraps_default_workspace():
     assert summary["asset_count"] == 0
     assert summary["runtime_configured"] is False
     assert summary["enabled_auth_provider_count"] == 0
-    events = client.get("/v1/audit/events", headers=ADMIN_HEADERS).json()
+    events = client.get("/v1/audit/events/page", headers=ADMIN_HEADERS).json()["items"]
     catalog_events = [event for event in events if event["action"] == "workspace.catalog.update"]
     assert catalog_events[0]["actor"] == "platform:admin"
     assert catalog_events[0]["details"] == {

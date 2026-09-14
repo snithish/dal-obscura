@@ -58,7 +58,7 @@ def test_workspace_runtime_settings_can_be_configured_without_tenant_or_cell_ids
     assert stale.status_code == 409
     assert stale.json()["error"]["code"] == "revision_conflict"
     assert stale.json()["error"]["request_id"]
-    events = client.get("/v1/audit/events", headers=ADMIN_HEADERS).json()
+    events = client.get("/v1/audit/events/page", headers=ADMIN_HEADERS).json()["items"]
     runtime_events = [event for event in events if event["action"] == "workspace.runtime.update"]
     assert runtime_events[0]["actor"] == "platform:admin"
     assert runtime_events[0]["details"] == {
@@ -85,7 +85,7 @@ def test_workspace_runtime_settings_accepts_path_rules_and_audits_roots():
 
     assert response.status_code == 200
     assert response.json()["path_rules"] == [{"root": "s3://warehouse"}]
-    events = client.get("/v1/audit/events", headers=ADMIN_HEADERS).json()
+    events = client.get("/v1/audit/events/page", headers=ADMIN_HEADERS).json()["items"]
     runtime_events = [event for event in events if event["action"] == "workspace.runtime.update"]
     assert runtime_events[0]["details"]["path_rules"] == [{"root": "s3://warehouse"}]
 
@@ -160,7 +160,7 @@ def test_workspace_auth_providers_can_be_configured_without_cell_ids():
         }
     ]
     assert "cell" not in _keys_recursive(after_setup.json())
-    events = client.get("/v1/audit/events", headers=ADMIN_HEADERS).json()
+    events = client.get("/v1/audit/events/page", headers=ADMIN_HEADERS).json()["items"]
     provider_events = [
         event for event in events if event["action"] == "workspace.auth_providers.update"
     ]

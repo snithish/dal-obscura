@@ -185,20 +185,6 @@ class ProvisioningService:
             cursor=cursor,
         )
 
-    def list_audit_events(
-        self,
-        *,
-        actor: ControlPlaneActor,
-        asset_id: UUID | None = None,
-        limit: int = 100,
-    ) -> list[dict[str, object]]:
-        return audit_service.list_audit_events(
-            self._store,
-            actor=actor,
-            asset_id=asset_id,
-            limit=limit,
-        )
-
     def list_audit_events_page(
         self,
         *,

@@ -42,7 +42,6 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
         "/v1/assets/{asset_id}/policy-operations/{idempotency_key}",
         "/v1/assets/{asset_id}/schema-fields",
         "/v1/assets/{catalog}/{target}",
-        "/v1/audit/events",
         "/v1/audit/events/page",
         "/v1/catalogs",
         "/v1/catalogs/{name}",

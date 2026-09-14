@@ -17,7 +17,6 @@ from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 from dal_obscura.control_plane.interfaces.routes.schemas import (
     AuditEventPageResponse,
-    AuditEventResponse,
     PolicyDraftRequest,
     PolicyDraftResponse,
     PolicyEvaluationRequest,
@@ -230,20 +229,6 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
                 actor=actor,
                 limit=limit,
                 cursor=cursor,
-            )
-        )
-
-    @api.get("/v1/audit/events", response_model=list[AuditEventResponse])
-    def list_audit_events(
-        asset_id: UUID | None = None,
-        limit: int = Query(default=100, ge=1, le=200),
-        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> list[AuditEventResponse]:
-        return deps.with_service(
-            lambda service: service.list_audit_events(
-                actor=actor,
-                asset_id=asset_id,
-                limit=limit,
             )
         )
 
