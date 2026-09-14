@@ -1137,6 +1137,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `63a4f41`.
 - Human acceptance, if required: independent UX/accessibility review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N04 REST URI boundary correction
+
+- Scope: close a local-target correctness gap in the REST catalog adapter.
+- Observable behavior delivered; FR/NFR and B/G subcases: explicitly local `file:///...` warehouse URIs are accepted for the supported local/private deployment path; remote auxiliary URIs still require an authority, non-local file authorities are rejected, and malformed catalog or auxiliary ports fail before provider construction. Credential-bearing and query-bearing URI rejection is unchanged.
+- Changed and deleted paths; old callers removed; protected pickle check: `packages/iceberg-rest-plugin/src/dal_obscura_iceberg_rest/catalog.py` and `tests/integration/test_io_boundary.py`; no core, data-plane, serializer, or pickle paths changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +31 production/test logical lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: integration IO-boundary tests now cover local file acceptance and malformed-port rejection; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/integration/test_io_boundary.py packages/iceberg-rest-plugin/tests/test_rest_plugin.py -q` (26 passed); changed-path Ruff and format checks (exit 0); 2026-09-14, Python 3.12/uv local workspace.
+- Artifact and fixture hashes; evidence locations: atomic implementation commit `a9f9362`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: live DNS/redirect/private-destination counters, credential redaction, cancellation cleanup, and deployment network enforcement remain VERIFY under B06/N04; next action is continue those transport-boundary checks without weakening explicit local/private allowlists.
+- Atomic implementation commits: `a9f9362`.
+- Human acceptance, if required: independent security and release review remains VERIFY; release remains HOLD.
+
 Replace the corresponding queue entry and keep one current record per packet.
 Link detailed logs/artifacts instead of appending repeated full narratives.
 
