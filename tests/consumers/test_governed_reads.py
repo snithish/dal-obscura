@@ -23,7 +23,7 @@ from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.connectors.python_sdk import DalObscuraClient, DuckDBDalObscuraReader
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     CatalogConfig,
-    DynamicCatalogRegistry,
+    CatalogRegistry,
     ServiceConfig,
 )
 from tests.support.arrow import metadata_schema
@@ -141,7 +141,7 @@ def test_python_and_duckdb_consumers_read_real_sql_iceberg_nested_data(tmp_path)
         arrow_schema=schema,
         append_tables=[table],
     )
-    registry = DynamicCatalogRegistry(
+    registry = CatalogRegistry(
         ServiceConfig(
             catalogs={
                 "analytics": CatalogConfig(
@@ -237,7 +237,7 @@ def test_python_and_duckdb_consumers_read_real_manifest_parquet_nested_data(tmp_
         }
     )
     plugin_registry.reload()
-    registry = DynamicCatalogRegistry(
+    registry = CatalogRegistry(
         ServiceConfig(
             catalogs={
                 "datasets": CatalogConfig(
@@ -347,7 +347,7 @@ def test_python_and_duckdb_consumers_read_real_rest_iceberg_nested_data(tmp_path
         builtins={("catalog", "iceberg.rest"): (REST_CATALOG_DESCRIPTOR, rest_catalog_factory)},
     )
     plugin_registry.reload()
-    registry = DynamicCatalogRegistry(
+    registry = CatalogRegistry(
         ServiceConfig(
             catalogs={
                 "rest": CatalogConfig(

@@ -1,7 +1,6 @@
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     CatalogConfig,
     CatalogRegistry,
-    DynamicCatalogRegistry,
     ServiceConfig,
 )
 from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
@@ -42,7 +41,6 @@ __all__ = [
     "DataPlaneRuntimeConfig",
     "DefaultMaskingAdapter",
     "DuckDBRowTransformAdapter",
-    "DynamicCatalogRegistry",
     "EnvSecretProvider",
     "HmacTicketCodecAdapter",
     "IcebergTableFormat",

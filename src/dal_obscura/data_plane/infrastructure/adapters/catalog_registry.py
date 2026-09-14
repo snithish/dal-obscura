@@ -143,9 +143,6 @@ class CatalogRegistry:
             raise ValueError("Catalog registry is closed")
 
 
-DynamicCatalogRegistry = CatalogRegistry
-
-
 class IcebergCatalog(CatalogPlugin):
     """Catalog resolver for SQL-style Iceberg catalogs."""
 

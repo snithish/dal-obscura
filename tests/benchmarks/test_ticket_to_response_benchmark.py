@@ -29,7 +29,7 @@ from pyiceberg.types import (
 
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     CatalogConfig,
-    DynamicCatalogRegistry,
+    CatalogRegistry,
     ServiceConfig,
 )
 from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
@@ -382,7 +382,7 @@ def _run_iceberg_stream_scenario(
         warehouse=str(warehouse),
     )
     planned_file_count = len(list(loaded_catalog.load_table(identifier).scan().plan_files()))
-    catalog_registry = DynamicCatalogRegistry(
+    catalog_registry = CatalogRegistry(
         ServiceConfig(
             catalogs={
                 catalog_name: CatalogConfig(

@@ -6,7 +6,7 @@ import pytest
 
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     CatalogConfig,
-    DynamicCatalogRegistry,
+    CatalogRegistry,
     ServiceConfig,
 )
 from tests.support.flight import (
@@ -25,12 +25,12 @@ pytestmark = pytest.mark.heavy
 
 def _build_registry(
     catalogs: dict[str, CatalogConfig],
-) -> DynamicCatalogRegistry:
-    return DynamicCatalogRegistry(ServiceConfig(catalogs=catalogs))
+) -> CatalogRegistry:
+    return CatalogRegistry(ServiceConfig(catalogs=catalogs))
 
 
-def _build_registry_from_config(service_config: ServiceConfig) -> DynamicCatalogRegistry:
-    return DynamicCatalogRegistry(service_config)
+def _build_registry_from_config(service_config: ServiceConfig) -> CatalogRegistry:
+    return CatalogRegistry(service_config)
 
 
 def build_service_config(
