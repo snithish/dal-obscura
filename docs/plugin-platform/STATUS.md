@@ -1090,6 +1090,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `7054afd`.
 - Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N10 plugin lifecycle controls
+
+- Scope: make admitted plugin lifecycle state operator-actionable in the authenticated management UI.
+- Observable behavior delivered; FR/NFR and B/G subcases: platform admins can transition admitted catalog or table-format plugins through the strict lifecycle state machine (`enabled`, `draining`, `disabled`, `revoked`, `removed`) via an authenticated PATCH route; each transition is audited, the OpenAPI contract is generated, and Connections renders state selectors with confirmation for removal.
+- Changed and deleted paths; old callers removed; protected pickle check: plugin schemas/routes, `ProvisioningService`, generated OpenAPI/TypeScript client, `ConnectionsView`, route inventory, and plugin API tests changed. No old route deleted; no pickle serializer, serialized class, payload, or import path changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +179 production/UI / +55 test/contract logical lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `tests/interfaces/control_plane/test_plugins_api.py` and `tests/architecture/test_control_plane_route_inventory.py`; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: plugin API and route inventory suites (exit 0); governance UI TypeScript build, Vite build, UI tests, generated DTO freshness, changed-path Ruff/format and diff checks (exit 0); 2026-09-14, local Python 3.12/Node 24 toolchain.
+- Artifact and fixture hashes; evidence locations: atomic commit `4d0e29d`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: lifecycle state is process-local by design; live multi-process revocation timing, browser/axe/screen-reader evidence, and independent release qualification remain VERIFY under N05/N10/N12/N16. Next action is qualify the running local UI/API and then continue the remaining acceptance gates.
+- Atomic implementation commits: `4d0e29d`.
+- Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
+
 Replace the corresponding queue entry and keep one current record per packet.
 Link detailed logs/artifacts instead of appending repeated full narratives.
 
