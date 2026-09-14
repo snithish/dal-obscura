@@ -849,6 +849,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: summary counts, control-plane/data-plane observations, publication listings, creation results, and activation results now validate through shared response models. Existing generation preconditions and authorization behavior remain unchanged.
 - Verification: workspace API suite passed (18 tests); changed-path Ruff and format checks passed. Generated DTO coverage and live browser publication acceptance remain VERIFY.
 
+## 2026-09-14 — N11 typed audit responses
+
+- Scope: stabilize redacted activity data consumed by the authenticated Activity view.
+- Observable behavior delivered: list and keyset-paginated audit routes now validate event fields and cursor envelopes through shared Pydantic response models, while preserving database scope, filter bounds, redacted details, and request correlation.
+- Verification: audit API suite passed (4 tests); changed-path Ruff and format checks passed. Broader strict DTO generation and independent permission review remain VERIFY.
+
 ## 2026-09-14 — N09/N11 post-publication inventory refresh
 
 - Scope: keep governed asset status aligned after a successful publish response.
