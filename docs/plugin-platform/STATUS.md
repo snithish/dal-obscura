@@ -1189,6 +1189,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `e8210e5`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N09/N11 remove unpaginated policy history API
+
+- Scope: make bounded keyset pagination the sole workspace policy-history contract.
+- Observable behavior delivered; FR/NFR and B/G subcases: removed `GET /v1/policy-versions`, its duplicate application path, and the UI `listHistory` helper. Activity, Changes, demo provisioning, tests, route inventory, and generated OpenAPI types now use `/v1/policy-versions/page`; asset-scoped history remains separately authorized. Pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/{application/provisioning.py,interfaces/routes/policies.py}`, `apps/governance-ui/src/{api.ts,main.tsx}`, demo provisioning, history/inventory tests, and reviewed contract artifacts. No serializer, serialized class/import path, payload, migration, dependency, or unrelated test deletion.
+- Production/test logical SLOC delta; dependencies added/removed and reason: 30 insertions and 94 deletions; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: policy-history page tests own cursor/order/scope; route inventory owns exact public surface; no history security tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane tests/examples/test_demo_initialization.py tests/architecture/test_control_plane_route_inventory.py -q` (exit 0; 100% pass), focused Ruff (exit 0), `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), and `git diff --check` (exit 0), 2026-09-14.
+- Artifact and fixture hashes; evidence locations: implementation commit `79a0f10f`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: live OIDC/PKCE/revocation, hostile transport, rendered browser/axe evidence, PostgreSQL races/recovery, clean TLS/OIDC consumer matrix, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with next qualification packet without changing pickle behavior.
+- Atomic implementation commits: `79a0f10f`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-14 — N11 remove unpaginated audit API
 
 - Scope: make bounded, database-scoped keyset pagination the only audit event management contract.
