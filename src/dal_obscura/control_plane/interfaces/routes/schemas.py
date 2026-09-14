@@ -151,6 +151,29 @@ class AssetAccessResponse(BaseModel):
     capabilities: list[AssetCapabilityResponse]
 
 
+class AssetInventoryResponse(BaseModel):
+    """Bounded workspace inventory row with authoritative serving state."""
+
+    id: UUID
+    name: str
+    catalog: str
+    backend: str
+    table_identifier: str
+    owner_count: int
+    owners: list[str]
+    policy_status: str
+    draft_status: str
+    active_policy_version: int | None = None
+    last_published_at: str | None = None
+
+
+class AssetInventoryPageResponse(BaseModel):
+    """Cursor page for workspace asset inventory."""
+
+    items: list[AssetInventoryResponse]
+    next_cursor: str | None = None
+
+
 class AuthProviderResponse(BaseModel):
     """Redacted authentication-provider record returned to management clients."""
 

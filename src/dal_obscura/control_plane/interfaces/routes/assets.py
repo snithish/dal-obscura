@@ -18,6 +18,8 @@ from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 from dal_obscura.control_plane.interfaces.routes.schemas import (
     AssetAccessResponse,
     AssetGrantsRequest,
+    AssetInventoryPageResponse,
+    AssetInventoryResponse,
     AssetOwnersRequest,
     AssetRequest,
     AssetSchemaFieldsRequest,
@@ -35,19 +37,19 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
 
     api = APIRouter()
 
-    @api.get("/v1/assets")
+    @api.get("/v1/assets", response_model=list[AssetInventoryResponse])
     def list_workspace_assets(
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
+    ) -> list[AssetInventoryResponse]:
         return deps.with_service(lambda service: service.list_workspace_assets(actor))
 
-    @api.get("/v1/assets/page")
+    @api.get("/v1/assets/page", response_model=AssetInventoryPageResponse)
     def list_workspace_assets_page(
         limit: int = Query(default=50, ge=1, le=200),
         cursor: str | None = Query(default=None, max_length=512),
         search: str | None = Query(default=None, max_length=200),
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
+    ) -> AssetInventoryPageResponse:
         return deps.with_service(
             lambda service: service.list_workspace_assets_page(
                 actor,
