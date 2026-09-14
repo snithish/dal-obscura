@@ -1914,3 +1914,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: N13 still requires clean exact wheels, real SQL/REST/manifest datasets through TLS/OIDC Flight, and every advertised Python/Arrow, DuckDB, and Spark/JVM cell; N04 hostile transport/cancellation, N05 live OIDC, N12 process races, N14 capacity, N15 recovery/integrity, and N16 independent review remain VERIFY. Release remains HOLD.
 - Atomic implementation commits: verification only; no source commit.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N01 full-suite verification after REST and JVM qualification
+
+- Scope: run the complete Python repository suite after the callable REST snapshot, real REST consumer, hostile redirect, and JVM/Spark qualification work.
+- Observable behavior delivered; FR/NFR and B/G subcases: all collected Python tests passed; the new REST transport test executes with loopback access, while the documented benchmark, opt-in consumer, PostgreSQL race, and recovery lanes remain explicit skips when their required environments are not enabled. Pickle fixtures and serializer tests remain covered and unchanged.
+- Changed and deleted paths; old callers removed; protected pickle check: verification only; no source, serializer, migration, dependency, or test deletion.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no source or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: existing full suite remains authoritative; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q -rs --junitxml=/tmp/dal-obscura-post-rest-full.xml` (exit 0; 882 tests, 865 passed, 17 explicit skips, 0 failures/errors, 131.676 seconds), 2026-09-14, Python 3.12/uv with loopback permissions.
+- Artifact and fixture hashes; evidence locations: JUnit report `/tmp/dal-obscura-post-rest-full.xml`; candidate implementation commits `aa6217f` and `93d109a`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: clean Node 24/image/advisory evidence, live OIDC/browser/accessibility, DNS/private-address and cancellation transport, PostgreSQL process races/recovery, clean provider wheels and TLS/OIDC consumer cells, capacity, deployment integrity, and independent review remain VERIFY under N01 and N04–N16. Release remains HOLD.
+- Atomic implementation commits: verification only; no source commit.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
