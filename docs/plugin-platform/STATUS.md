@@ -1189,6 +1189,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `e8210e5`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N04 discovery close-failure capacity recovery
+
+- Scope: close a resource-accounting hole in admitted public catalog discovery.
+- Observable behavior delivered; FR/NFR and B/G subcases: a plugin `close()` failure still surfaces as the provider error, while the bounded global discovery slot is released in a nested `finally`. Eight consecutive close failures no longer poison the ninth request; a healthy request remains admissible. Plugin/provider cleanup and pickle logic are untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/infrastructure/catalog_discovery.py` and its focused regression test; no APIs, serializers, dependencies, or legacy paths deleted.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +7 production lines and +50 test lines for the capacity recovery invariant; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `tests/control_plane/test_catalog_discovery.py::test_public_catalog_discovery_releases_capacity_when_close_fails`; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `uv run --no-sync pytest tests/control_plane/test_catalog_discovery.py -q` (exit 0, 20 passed) plus focused Ruff check/format (exit 0), 2026-09-14, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `348b27e5`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: real provider cancellation/close behavior, hostile transport counters, and multi-worker capacity measurement remain VERIFY under N04/N14; release remains HOLD. Continue reviewing provider cleanup paths for bounded resource recovery without masking primary errors.
+- Atomic implementation commits: `348b27e5`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-14 — N02 remove unreachable discovery helper
 
 - Scope: delete a dead catalog-type helper from the control-plane discovery adapter.
