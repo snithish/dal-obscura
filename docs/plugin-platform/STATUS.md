@@ -837,6 +837,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: catalog summaries and connectivity diagnostics now use shared Pydantic response models with bounded, explicit fields. Discovery remains dynamic until plugin-specific table contracts are formalized.
 - Verification: catalog and workspace API suites passed (24 tests); changed-path Ruff and format checks passed. Broader response-model and generated DTO coverage remains VERIFY.
 
+## 2026-09-14 — N03 typed plugin registry responses
+
+- Scope: make plugin admission data consumable through a stable management contract.
+- Observable behavior delivered: authenticated plugin listing now validates admitted descriptors, catalog/format pair results, and allowlisted lifecycle states with shared response models. Registry allowlist filtering and dynamic plugin config schemas remain unchanged.
+- Verification: plugin API tests passed; changed-path Ruff and format checks passed. Generated TypeScript DTO coverage and live plugin lifecycle acceptance remain VERIFY.
+
 ## 2026-09-14 — N09/N11 post-publication inventory refresh
 
 - Scope: keep governed asset status aligned after a successful publish response.
