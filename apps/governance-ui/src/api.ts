@@ -357,7 +357,7 @@ export const controlPlane = {
     headers: { authorization: `Bearer ${token}` },
   }),
   logout: () => request<{ authenticated: false }>("/v1/logout", { method: "POST" }),
-  listAssets: async () => (await request<Asset[]>("/v1/assets")).map(normalizeAsset),
+  listAssets: async () => (await request<ApiSchemas["AssetInventoryResponse"][]>("/v1/assets")).map(normalizeInventoryAsset),
   listAssetPage: async (params: { limit?: number; cursor?: string; search?: string; signal?: AbortSignal } = {}) => {
     const query = new URLSearchParams();
     if (params.limit !== undefined) query.set("limit", String(params.limit));
@@ -382,7 +382,7 @@ export const controlPlane = {
     body: JSON.stringify({ grants, ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }) }),
   }),
   getSchema: (assetId: string, signal?: AbortSignal) => request<ApiSchemas["AssetSchemaResponse"]>(`/v1/assets/${assetId}/schema`, { signal }) as Promise<AssetSchema>,
-  listHistory: (signal?: AbortSignal) => request<PolicyVersion[]>("/v1/policy-versions", { signal }),
+  listHistory: async (signal?: AbortSignal) => (await request<ApiSchemas["PolicyVersionResponse"][]>("/v1/policy-versions", { signal })),
   listHistoryPage: async (params: { limit?: number; cursor?: string; signal?: AbortSignal } = {}) => {
     const query = new URLSearchParams();
     if (params.limit !== undefined) query.set("limit", String(params.limit));
@@ -408,8 +408,8 @@ export const controlPlane = {
     const page = await request<ApiSchemas["AuditEventPageResponse"]>(`/v1/audit/events/page${suffix}`, { signal: params.signal });
     return { items: page.items.map((event) => ({ ...event, correlation_id: event.correlation_id ?? null })), next_cursor: page.next_cursor ?? null } satisfies AuditEventPage;
   },
-  listAssetHistory: (assetId: string, signal?: AbortSignal) => request<PolicyVersion[]>(`/v1/assets/${assetId}/policy-versions`, { signal }),
-  getPublicationOperation: (assetId: string, idempotencyKey: string) => request<{ id: string; status: string; result: { asset_id: string; policy_version: number } }>(`/v1/assets/${assetId}/policy-operations/${encodeURIComponent(idempotencyKey)}`),
+  listAssetHistory: (assetId: string, signal?: AbortSignal) => request<ApiSchemas["PolicyVersionResponse"][]>(`/v1/assets/${assetId}/policy-versions`, { signal }),
+  getPublicationOperation: (assetId: string, idempotencyKey: string) => request<ApiSchemas["PolicyOperationResponse"]>(`/v1/assets/${assetId}/policy-operations/${encodeURIComponent(idempotencyKey)}`),
   getPolicyVersion: async (assetId: string, policyVersion: number, signal?: AbortSignal) => {
     const detail = await request<ApiSchemas["PolicyVersionDetailResponse"]>(`/v1/assets/${assetId}/policy-versions/${policyVersion}`, { signal });
     return { ...detail, rules: detail.rules as PolicyRule[] } satisfies PolicyVersionDetail;
