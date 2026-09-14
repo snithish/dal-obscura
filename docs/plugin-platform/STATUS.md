@@ -1005,6 +1005,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: unused `PolicyRulesRequest` and `PolicyPreviewRequest` classes are deleted; `/draft` and `/policy-evaluate` now own the only public request contracts, with the evaluation request carrying its bounded synthetic input fields directly. No protected evaluator or pickle path changed.
 - Verification: schema API and route-inventory tests passed, obsolete names have zero production callers, Ruff and formatting checks passed. Full N02 migration/deletion proof and installed-wheel qualification remain VERIFY; release remains HOLD.
 
+## 2026-09-14 — N10 generic catalog plugin identity
+
+- Scope: remove Iceberg-specific branching from the generic catalog connection UI.
+- Observable behavior delivered: inventory responses expose the server-resolved `plugin_id`, legacy built-in module rows are normalized at the control-plane boundary, and the UI derives fields, defaults, discovery pairings, and labels only from admitted plugin descriptors. Descriptor defaults preserve compatibility options without embedding backend IDs in the UI.
+- Verification: focused catalog/inventory/asset API tests (38 passed), UI TypeScript compilation, Vite production build, 11 UI tests, generated DTO freshness, Ruff, and non-heavy pre-commit hooks passed. Full browser visual/accessibility, lifecycle, and production acceptance evidence remain VERIFY; release remains HOLD.
+- Atomic implementation commit: `7e69148`.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
