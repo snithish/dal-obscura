@@ -119,7 +119,9 @@ mvn -f connectors/jvm/pom.xml -Pspark-4.0 verify
 ## Extension Notes
 
 Catalog implementations resolve governed targets into executable table readers.
-The current workspace API catalog module is the fixed Iceberg catalog adapter.
+The workspace API admits the built-in Iceberg adapter and operator-allowlisted
+catalog plugins. Plugin and table-format identities are selected from published
+descriptor metadata; callers cannot submit arbitrary implementation paths.
 Other backend/module values are rejected during publication.
 
 Add a catalog by implementing `CatalogPlugin.resolve_table()` and returning a

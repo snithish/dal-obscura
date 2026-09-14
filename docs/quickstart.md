@@ -150,7 +150,7 @@ Configure at least:
 3. Governed asset and policy.
 4. Runtime ticket settings.
 
-Use the operator CLI manifest. It defines the fixed Iceberg/OIDC runtime,
+Use the operator CLI manifest. It defines the qualified catalog/table-format and OIDC runtime,
 catalogs, assets, policies, and settings.
 
 ### Start A Data Plane

@@ -126,9 +126,10 @@ stays close to the execution engine and can be tested with the same SQL shape.
 
 ## Catalog Resolution
 
-Catalogs resolve operator-registered Iceberg targets into executable table
-readers. Publication accepts only the fixed Iceberg catalog adapter; dynamic
-catalog modules and other backend types are rejected.
+Catalogs resolve operator-admitted targets into executable table readers. The
+built-in SQL Iceberg adapter and qualified catalog/table-format plugins use the
+same admission, publication, and path-rule boundaries; arbitrary dynamic module
+imports and unqualified backend values are rejected.
 
 The Iceberg table format owns schema extraction, scan-task planning, and
 execution. It creates parallel scan tasks from Iceberg file work where possible.
