@@ -28,6 +28,7 @@ from dal_obscura.control_plane.infrastructure.catalog_discovery import (
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
     EnvSecretProvider,
+    SecretProvider,
     resolve_secret_refs,
 )
 
@@ -112,6 +113,7 @@ def discover_workspace_catalog_tables(
     egress_allowlist: tuple[str, ...] = (),
     session_key: str | None = None,
     plugin_registry: PluginRegistry | None = None,
+    secret_provider: SecretProvider | None = None,
 ) -> dict[str, object]:
     """Discovers tables for a configured workspace catalog.
 
@@ -126,7 +128,11 @@ def discover_workspace_catalog_tables(
     catalog_options = cast(dict[str, Any], catalog["options"])
     validate_admitted_catalog_options(str(catalog["module"]), catalog_options, plugin_registry)
     validate_catalog_options(catalog_options, egress_allowlist=egress_allowlist)
-    catalog_options = _resolve_catalog_secrets(catalog_options, scope=f"catalog:{name}")
+    catalog_options = _resolve_catalog_secrets(
+        catalog_options,
+        scope=f"catalog:{name}",
+        provider=secret_provider,
+    )
     try:
         with _admit_session_discovery(session_key):
             if plugin_registry is not None and str(catalog["module"]) != ICEBERG_CATALOG_MODULE:
@@ -178,6 +184,7 @@ def diagnose_workspace_catalog(
     egress_allowlist: tuple[str, ...] = (),
     session_key: str | None = None,
     plugin_registry: PluginRegistry | None = None,
+    secret_provider: SecretProvider | None = None,
 ) -> dict[str, object]:
     """Runs bounded catalog discovery and returns a redacted readiness result."""
 
@@ -186,7 +193,11 @@ def diagnose_workspace_catalog(
     catalog_options = cast(dict[str, Any], catalog["options"])
     validate_admitted_catalog_options(str(catalog["module"]), catalog_options, plugin_registry)
     validate_catalog_options(catalog_options, egress_allowlist=egress_allowlist)
-    catalog_options = _resolve_catalog_secrets(catalog_options, scope=f"catalog:{name}")
+    catalog_options = _resolve_catalog_secrets(
+        catalog_options,
+        scope=f"catalog:{name}",
+        provider=secret_provider,
+    )
     checked_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     try:
         with _admit_session_discovery(session_key):
@@ -325,11 +336,12 @@ def _resolve_catalog_secrets(
     options: dict[str, Any],
     *,
     scope: str | None = None,
+    provider: SecretProvider | None = None,
 ) -> dict[str, Any]:
     try:
         resolved = resolve_secret_refs(
             options,
-            provider=EnvSecretProvider(),
+            provider=provider or EnvSecretProvider(),
             expected_scope=scope,
         )
     except ValueError as exc:

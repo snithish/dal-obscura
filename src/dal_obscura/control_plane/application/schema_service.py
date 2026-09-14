@@ -39,6 +39,7 @@ from dal_obscura.control_plane.application.policy_service import ensure_asset_ca
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
     EnvSecretProvider,
+    SecretProvider,
     resolve_secret_refs,
 )
 
@@ -56,6 +57,7 @@ def get_asset_schema(
     load_catalog_fn: CatalogLoader | None = None,
     egress_allowlist: tuple[str, ...] = (),
     plugin_registry: Any | None = None,
+    secret_provider: SecretProvider | None = None,
 ) -> dict[str, object]:
     ensure_asset_capability(store, asset_id, actor, "read")
     schema = load_asset_iceberg_schema(
@@ -65,6 +67,7 @@ def get_asset_schema(
         load_catalog_fn=load_catalog_fn,
         egress_allowlist=egress_allowlist,
         plugin_registry=plugin_registry,
+        secret_provider=secret_provider,
     )
     arrow_schema = schema.as_arrow() if isinstance(schema, Schema) else schema
     _validate_arrow_schema_bounds(arrow_schema)
@@ -99,6 +102,7 @@ def load_asset_iceberg_schema(
     load_catalog_fn: CatalogLoader | None = None,
     egress_allowlist: tuple[str, ...] = (),
     plugin_registry: Any | None = None,
+    secret_provider: SecretProvider | None = None,
 ) -> Schema | pa.Schema:
     """Loads the authoritative Iceberg schema without reading table rows."""
 
@@ -122,7 +126,7 @@ def load_asset_iceberg_schema(
         dict[str, Any],
         resolve_secret_refs(
             options,
-            provider=EnvSecretProvider(),
+            provider=secret_provider or EnvSecretProvider(),
             expected_scope=f"catalog:{catalog['name']}",
         ),
     )

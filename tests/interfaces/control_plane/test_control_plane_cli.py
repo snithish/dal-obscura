@@ -63,6 +63,29 @@ def test_control_plane_cli_passes_login_rate_limits(monkeypatch, tmp_path) -> No
     assert ("table_format", "iceberg") in registry.admitted()
 
 
+def test_control_plane_cli_passes_configured_secret_provider(monkeypatch, tmp_path) -> None:
+    database_url = f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
+    migrate_config_store(create_engine_from_url(database_url))
+    captured: dict[str, object] = {}
+    monkeypatch.setenv("LOCAL_catalog-password", "value")
+    environment = {
+        "DAL_OBSCURA_DATABASE_URL": database_url,
+        "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "test-admin",
+        "DAL_OBSCURA_SECRET_PROVIDER_CONFIG": '{"prefix":"LOCAL_"}',
+    }
+
+    monkeypatch.setattr(
+        control_plane_cli,
+        "create_app",
+        lambda *args, **kwargs: captured.update(kwargs) or FastAPI(),
+    )
+    monkeypatch.setattr(control_plane_cli.uvicorn, "run", lambda app, **kwargs: None)
+
+    assert control_plane_cli.run(environment) == 0
+    provider = captured["secret_provider"]
+    assert provider.get_secret("catalog-password") == "value"
+
+
 def test_control_plane_cli_passes_dedicated_review_secret(monkeypatch, tmp_path) -> None:
     database_url = f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
     migrate_config_store(create_engine_from_url(database_url))

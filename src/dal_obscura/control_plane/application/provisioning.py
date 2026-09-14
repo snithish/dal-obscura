@@ -24,6 +24,7 @@ from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control_plane.infrastructure.catalog_discovery import discover_catalog_tables
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
+from dal_obscura.data_plane.infrastructure.adapters.secret_providers import SecretProvider
 
 
 class ProvisioningService:
@@ -37,12 +38,14 @@ class ProvisioningService:
         require_review: bool = False,
         catalog_egress_allowlist: tuple[str, ...] = (),
         plugin_registry: PluginRegistry | None = None,
+        secret_provider: SecretProvider | None = None,
     ) -> None:
         self._store = PublicationStore(session)
         self._review_secret = review_secret
         self._require_review = require_review
         self._catalog_egress_allowlist = catalog_egress_allowlist
         self._plugin_registry = plugin_registry
+        self._secret_provider = secret_provider
 
     def create_tenant(self, slug: str, display_name: str) -> dict[str, str]:
         tenant_id = uuid4()
@@ -287,6 +290,7 @@ class ProvisioningService:
             egress_allowlist=self._catalog_egress_allowlist,
             session_key=actor.identity_key() if actor is not None else None,
             plugin_registry=self._plugin_registry,
+            secret_provider=self._secret_provider,
         )
 
     def diagnose_workspace_catalog(
@@ -302,6 +306,7 @@ class ProvisioningService:
             egress_allowlist=self._catalog_egress_allowlist,
             session_key=actor.identity_key() if actor is not None else None,
             plugin_registry=self._plugin_registry,
+            secret_provider=self._secret_provider,
         )
 
     def list_workspace_assets(
@@ -351,6 +356,7 @@ class ProvisioningService:
             actor,
             egress_allowlist=self._catalog_egress_allowlist,
             plugin_registry=self._plugin_registry,
+            secret_provider=self._secret_provider,
         )
 
     def get_workspace_draft(self) -> dict[str, object]:
@@ -687,6 +693,7 @@ class ProvisioningService:
             rows=rows,
             egress_allowlist=self._catalog_egress_allowlist,
             plugin_registry=self._plugin_registry,
+            secret_provider=self._secret_provider,
             draft_id=draft_id,
             draft_revision=draft_revision,
         )
@@ -713,6 +720,7 @@ class ProvisioningService:
             rows=rows,
             egress_allowlist=self._catalog_egress_allowlist,
             plugin_registry=self._plugin_registry,
+            secret_provider=self._secret_provider,
             draft_id=draft_id,
             draft_revision=draft_revision,
         )

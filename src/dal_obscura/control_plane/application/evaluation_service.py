@@ -33,6 +33,7 @@ from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
 )
+from dal_obscura.data_plane.infrastructure.adapters.secret_providers import SecretProvider
 
 MAX_SYNTHETIC_ROWS = 100
 MAX_SYNTHETIC_BYTES = 2 * 1024 * 1024
@@ -50,6 +51,7 @@ def evaluate_asset_policy(
     rows: list[dict[str, object]] | None,
     egress_allowlist: tuple[str, ...] = (),
     plugin_registry: Any | None = None,
+    secret_provider: SecretProvider | None = None,
     draft_id: UUID | None = None,
     draft_revision: int | None = None,
 ) -> dict[str, object]:
@@ -63,6 +65,7 @@ def evaluate_asset_policy(
         actor,
         egress_allowlist=egress_allowlist,
         plugin_registry=plugin_registry,
+        secret_provider=secret_provider,
     )
     arrow_schema = loaded_schema.as_arrow() if isinstance(loaded_schema, Schema) else loaded_schema
     requested_columns = _leaf_paths(arrow_schema)

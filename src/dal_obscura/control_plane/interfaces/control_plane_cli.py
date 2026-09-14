@@ -34,6 +34,9 @@ from dal_obscura.control_plane.interfaces.api import (
 from dal_obscura.data_plane.infrastructure.adapters.builtin_plugins import (
     create_builtin_plugin_registry,
 )
+from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
+    load_secret_provider_from_environment,
+)
 
 
 def main() -> None:
@@ -66,6 +69,7 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
         plugin_registry = create_builtin_plugin_registry(
             allowlist=load_plugin_lock_file(plugin_lock_file) if plugin_lock_file else None
         )
+        secret_provider = load_secret_provider_from_environment(values)
         app = create_app(
             session_factory(engine),
             admin_token=admin_token,
@@ -106,6 +110,7 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
                 "DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_BLOCK_SECONDS",
             ),
             plugin_registry=plugin_registry,
+            secret_provider=secret_provider,
         )
     except (ConfigStoreSchemaError, ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)

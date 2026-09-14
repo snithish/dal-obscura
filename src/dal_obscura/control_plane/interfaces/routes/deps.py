@@ -45,6 +45,7 @@ from dal_obscura.control_plane.interfaces.session_api import (
     OidcNonceActorResolver,
     oidc_actor_from_header,
 )
+from dal_obscura.data_plane.infrastructure.adapters.secret_providers import SecretProvider
 
 DemoTokenExchange = Callable[[Mapping[str, object], str], str]
 AuthorizationCodeExchange = Callable[[Mapping[str, object], str, str], Mapping[str, object]]
@@ -81,6 +82,7 @@ class ControlPlaneDeps:
     login_rate_limit_window_seconds: int = 60
     login_rate_limit_block_seconds: int = 300
     plugin_registry: PluginRegistry | None = None
+    secret_provider: SecretProvider | None = None
 
     def __post_init__(self) -> None:
         if not 1 <= self.session_ttl_seconds <= MAX_BROWSER_SESSION_TTL_SECONDS:
@@ -321,6 +323,7 @@ class ControlPlaneDeps:
                 require_review=self.require_review,
                 catalog_egress_allowlist=self.catalog_egress_allowlist,
                 plugin_registry=self.plugin_registry,
+                secret_provider=self.secret_provider,
             )
             try:
                 result = callback(service)

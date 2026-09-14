@@ -27,6 +27,7 @@ from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
     SecretProviderConfig,
     SecretProviderContext,
     load_secret_provider,
+    load_secret_provider_from_environment,
     resolve_secret_refs,
 )
 from dal_obscura.data_plane.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
@@ -57,5 +58,6 @@ __all__ = [
     "SqlAlchemyTicketStore",
     "load_data_plane_runtime_config",
     "load_secret_provider",
+    "load_secret_provider_from_environment",
     "resolve_secret_refs",
 ]

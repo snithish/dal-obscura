@@ -61,6 +61,7 @@ from dal_obscura.data_plane.infrastructure.adapters.builtin_plugins import (
 from dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks import (
     OidcJwksIdentityProvider,
 )
+from dal_obscura.data_plane.infrastructure.adapters.secret_providers import SecretProvider
 
 
 class _RequestBodyTooLarge(Exception):
@@ -204,6 +205,7 @@ def create_app(  # noqa: C901
     login_rate_limit_window_seconds: int = 60,
     login_rate_limit_block_seconds: int = 300,
     plugin_registry: PluginRegistry | None = None,
+    secret_provider: SecretProvider | None = None,
 ) -> FastAPI:
     """Creates the control-plane FastAPI app with all workspace routes installed.
 
@@ -400,6 +402,7 @@ def create_app(  # noqa: C901
             verifier,
         ),
         plugin_registry=plugin_registry,
+        secret_provider=secret_provider,
     )
 
     for route in (

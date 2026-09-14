@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
@@ -71,6 +72,33 @@ def load_secret_provider(
     return EnvSecretProvider(config=provider_config.config)
 
 
+def load_secret_provider_from_environment(
+    environment: Mapping[str, str] | None = None,
+) -> SecretProvider:
+    """Load the admitted environment-backed provider for control-plane callers.
+
+    The control plane must use the same startup-selected provider configuration
+    as the data plane when it resolves catalog references. This helper keeps
+    environment parsing in one place while retaining the explicit provider
+    module allowlist enforced by :func:`load_secret_provider`.
+    """
+
+    source = os.environ if environment is None else environment
+    module = source.get("DAL_OBSCURA_SECRET_PROVIDER_MODULE", ENV_SECRET_PROVIDER_MODULE).strip()
+    config = _json_object_value(
+        source.get("DAL_OBSCURA_SECRET_PROVIDER_CONFIG"),
+        "DAL_OBSCURA_SECRET_PROVIDER_CONFIG",
+    )
+    secrets = _json_object_value(
+        source.get("DAL_OBSCURA_SECRET_PROVIDER_SECRETS"),
+        "DAL_OBSCURA_SECRET_PROVIDER_SECRETS",
+    )
+    return load_secret_provider(
+        SecretProviderConfig(module=module, config=config, secrets=secrets),
+        context=SecretProviderContext(database_url="control-plane", cell_id=UUID(int=0)),
+    )
+
+
 def resolve_secret_refs(
     value: object,
     *,
@@ -139,3 +167,16 @@ def _resolve_bootstrap_secret(name: str, value: object) -> str:
     raise ValueError(
         f"Bootstrap secret {name!r} must be a string, {{'env': 'NAME'}}, or {{'file': 'PATH'}}"
     )
+
+
+def _json_object_env(name: str) -> dict[str, object]:
+    return _json_object_value(os.getenv(name), name)
+
+
+def _json_object_value(raw: str | None, name: str) -> dict[str, object]:
+    if raw is None or not raw.strip():
+        return {}
+    value = json.loads(raw)
+    if not isinstance(value, dict):
+        raise ValueError(f"{name} must be a JSON object")
+    return {str(key): item for key, item in value.items()}
