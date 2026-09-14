@@ -125,6 +125,7 @@ td small { display: block; color: #61736e; margin-top: 4px; }
 .command-palette [role="listbox"] { display: grid; gap: 4px; margin-top: 10px; }
 .command-palette [role="option"] { border: 0; border-radius: 6px; background: transparent; color: #0f172a; text-align: left; padding: 11px; font-size: 15px; }
 .command-palette [role="option"]:hover, .command-palette [role="option"]:focus-visible { background: #eef2ff; color: #3730a3; }
+.command-palette [role="option"] small { display: block; margin-top: 3px; color: #61736e; font-size: 12px; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .command-palette { background: #111827; border-color: #64748b; } :root:not([data-theme="light"]) .command-palette [role="option"] { color: #f8fafc; } }
 :root[data-theme="dark"] .command-palette { background: #111827; border-color: #64748b; }
 :root[data-theme="dark"] .command-palette [role="option"] { color: #f8fafc; }
