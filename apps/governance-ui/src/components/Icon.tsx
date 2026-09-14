@@ -1,6 +1,6 @@
 import type { SVGProps } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Activity, CircleAlert, CircleCheck, Database, History, LogOut, Plug, Search, Settings, ShieldCheck } from "lucide-react";
+import { Activity, CircleAlert, CircleCheck, Database, History, LogOut, Menu, Plug, Search, Settings, ShieldCheck } from "lucide-react";
 
 export type IconName =
   | "activity"
@@ -12,7 +12,8 @@ export type IconName =
   | "shield-check"
   | "log-out"
   | "circle-alert"
-  | "circle-check";
+  | "circle-check"
+  | "menu";
 
 const icons: Record<IconName, LucideIcon> = {
   activity: Activity,
@@ -25,6 +26,7 @@ const icons: Record<IconName, LucideIcon> = {
   "log-out": LogOut,
   "circle-alert": CircleAlert,
   "circle-check": CircleCheck,
+  menu: Menu,
 };
 
 export function Icon({ name, size = 18, ...props }: { name: IconName; size?: number } & Omit<SVGProps<SVGSVGElement>, "name">) {
