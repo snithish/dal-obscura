@@ -2604,3 +2604,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: Spark/JVM consumer matrix, clean TLS/OIDC paths, nine-cell independent package candidate artifacts, cancellation/error propagation, capacity mixed load, deployment integrity/SBOM, PostgreSQL races/recovery, and independent review remain VERIFY under N12–N16. Release remains HOLD; continue JVM/Spark and candidate-bound qualification.
 - Atomic implementation commits: verification only; no implementation commit.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N13 JVM/Spark consumer qualification
+
+- Scope: run the governed Java client and Spark 3.5 connector reactor with the real local Spark read integration suite.
+- Observable behavior delivered; FR/NFR and B/G subcases: no source behavior changed. Java client unit tests (7), Spark datasource contract/translator/reader tests (29), fixture testkit tests (2), and Spark read integration tests (6) all passed on Java 17.0.20.1 and Spark 3.5.6; nested Arrow output, projection/filter pushdown, residual filtering, and partition reads executed successfully. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: verification only; Maven generated local `target/` artifacts only; no source, serializer, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no code or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: connector Java/Spark unit and integration suites remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `mvn -f connectors/jvm/pom.xml verify` (exit 0; 7 + 29 + 2 + 6 tests passed), 2026-09-14, Java 17.0.20.1, Spark 3.5.6, Maven 3.9.16 on local aarch64.
+- Artifact and fixture hashes; evidence locations: Maven reactor outputs under ignored `connectors/jvm/*/target`; no release artifact published.
+- Remaining subcases; blocker and next concrete action: clean candidate wheel/consumer matrix across all nine pair cells, TLS/OIDC consumer authentication, PostgreSQL races/recovery, capacity mixed-load, deployment integrity/SBOM, and independent review remain VERIFY under N12–N16. Release remains HOLD; continue candidate-bound artifact and process qualification.
+- Atomic implementation commits: verification only; no implementation commit.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
