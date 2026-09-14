@@ -262,7 +262,7 @@ export function SettingsView({
                 aria-describedby={error ? `${fieldKey}-error` : undefined}
                 onChange={(event) => updateProviderText(index, key, event.target.value)}
               />
-              {options.help && <small>{options.help}</small>}
+              {options.help && !error && <small>{options.help}</small>}
               {error && <span className="auth-error" id={`${fieldKey}-error`} role="alert">{error}</span>}
             </label>;
           };
