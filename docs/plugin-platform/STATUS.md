@@ -1471,3 +1471,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live provider manifest/data/delete interception, DNS/redirect/private destination counters, cancellation cleanup, deployment network controls, browser/consumer qualification, and independent review remain VERIFY under B06/N04/N16; next action is continue live transport-counter and cancellation-resource qualification.
 - Atomic implementation commits: `b87727a`.
 - Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N04 pre-load Iceberg IO-option enforcement
+
+- Scope: close the ticket execution path that could open provider IO options before applying storage-root policy.
+- Observable behavior delivered; FR/NFR and B/G subcases: `IcebergTableFormat` checks URI, file-URI, and absolute local paths nested in its stored `io_options` before calling `StaticTable.from_metadata`; unsafe options fail closed without provider access. Existing trusted pickle task transport and metadata checks remain unchanged.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/data_plane/infrastructure/table_formats/iceberg.py` and `tests/infrastructure/adapters/test_iceberg_phase0_regressions.py`; no serializers, serialized classes, payloads, import paths, migrations, dependencies, or tests deleted.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +29 production/test logical lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: Iceberg path-policy regressions cover unsafe IO options, delete files, manifests, historical metadata, and partition statistics; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: Iceberg phase-regression suite (12 passed), changed-path Ruff check (exit 0), 2026-09-14, Python 3.12/uv local workspace. Commit hooks passed with repository baseline `ty` diagnostics skipped (`SKIP=ty`).
+- Artifact and fixture hashes; evidence locations: atomic implementation commit `8c11ebe`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: live provider network interception and hostile DNS/redirect/private counters, cancellation cleanup, deployment network controls, browser/consumer qualification, recovery, and independent review remain VERIFY under B06/N04/N13–N16; next action is continue live transport-counter and clean-wheel consumer qualification.
+- Atomic implementation commits: `8c11ebe`.
+- Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
