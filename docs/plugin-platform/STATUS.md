@@ -2591,3 +2591,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: N14 warm/cold CI duration, capacity mixed-load/resource metrics, and UI/browser performance comparison remain VERIFY; live N04/N05/N12/N13/N15 and independent review gates remain VERIFY. Release remains HOLD; retain this snapshot as the comparison baseline.
 - Atomic implementation commits: verification only; no implementation commit.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N13 Python/DuckDB nested consumer qualification
+
+- Scope: execute the opt-in consumer matrix across the governed Arrow Flight path and independently packaged catalog/format plugins.
+- Observable behavior delivered; FR/NFR and B/G subcases: no source behavior changed. Python SDK and DuckDB consumed identical nested governed data through the in-memory path, real SQL Iceberg metadata/data, manifest Parquet files, and REST Iceberg fixture; masking remained visible in Arrow output and DuckDB relation results. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: verification only; no source, serializer, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no code or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: `tests/consumers/test_governed_reads.py` remains the Python/DuckDB consumer owner; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `DAL_OBSCURA_RUN_CONSUMER_TESTS=1 UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/consumers/test_governed_reads.py -q` (exit 0, 4 passed), 2026-09-14, Python 3.12 with elevated loopback/subprocess permission.
+- Artifact and fixture hashes; evidence locations: verification only; temporary consumer fixtures are pytest-managed; no external artifact published.
+- Remaining subcases; blocker and next concrete action: Spark/JVM consumer matrix, clean TLS/OIDC paths, nine-cell independent package candidate artifacts, cancellation/error propagation, capacity mixed load, deployment integrity/SBOM, PostgreSQL races/recovery, and independent review remain VERIFY under N12–N16. Release remains HOLD; continue JVM/Spark and candidate-bound qualification.
+- Atomic implementation commits: verification only; no implementation commit.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
