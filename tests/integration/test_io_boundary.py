@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from threading import Thread
+from urllib.parse import urlsplit
 
 import pytest
 from dal_obscura_iceberg_rest.catalog import RestCatalog
@@ -78,3 +81,57 @@ def test_rest_plugin_rejects_file_uri_authority() -> None:
 def test_rest_plugin_rejects_malformed_catalog_port() -> None:
     with pytest.raises(ValueError, match="invalid port"):
         RestCatalog(_rest_config(uri="https://catalog.example:not-a-port/v1"), _context())
+
+
+def test_rest_plugin_does_not_follow_redirect_to_new_destination() -> None:
+    denied_hits = 0
+
+    class DeniedHandler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            nonlocal denied_hits
+            denied_hits += 1
+            self.send_response(200)
+            self.end_headers()
+
+        def log_message(self, format: str, *args: object) -> None:
+            del format, args
+
+    denied_server = ThreadingHTTPServer(("127.0.0.1", 0), DeniedHandler)
+    denied_thread = Thread(target=denied_server.serve_forever, daemon=True)
+    denied_thread.start()
+    source_paths: list[str] = []
+
+    class SourceHandler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            source_paths.append(urlsplit(self.path).path)
+            self.send_response(307)
+            self.send_header(
+                "Location",
+                f"http://127.0.0.1:{denied_server.server_port}/v1/secret",
+            )
+            self.end_headers()
+
+        def log_message(self, format: str, *args: object) -> None:
+            del format, args
+
+    source_server = ThreadingHTTPServer(("127.0.0.1", 0), SourceHandler)
+    source_thread = Thread(target=source_server.serve_forever, daemon=True)
+    source_thread.start()
+    catalog = RestCatalog(
+        _rest_config(uri=f"http://127.0.0.1:{source_server.server_port}"),
+        _context(),
+    )
+    try:
+        with pytest.raises(ValueError):
+            catalog.list_namespaces(_context())
+    finally:
+        catalog.close()
+        source_server.shutdown()
+        source_server.server_close()
+        source_thread.join(timeout=2)
+        denied_server.shutdown()
+        denied_server.server_close()
+        denied_thread.join(timeout=2)
+
+    assert source_paths == ["/v1/config"]
+    assert denied_hits == 0
