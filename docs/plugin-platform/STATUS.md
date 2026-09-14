@@ -1189,6 +1189,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `e8210e5`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N14 remove unused unbounded UI reads
+
+- Scope: remove dead client transport helpers that bypass the bounded inventory and audit contracts.
+- Observable behavior delivered; FR/NFR and B/G subcases: the governance UI transport now exposes only `listAssetPage` and `listAuditEventsPage` for these resources. No caller used the legacy unbounded `listAssets` or `listAuditEvents` methods; all rendered views continue to use cursor pagination with bounded filters. Pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/api.ts`; no backend route, serializer, serialized class/import path, payload, migration, dependency, or test deletion.
+- Production/test logical SLOC delta; dependencies added/removed and reason: -2 dead UI transport lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing UI TypeScript/build and pagination tests remain owners; no tests deleted. B18 exact collection mapping remains open for broader cleanup.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node_modules/.bin/vite build` (exit 0; 331.56 kB JavaScript / 100.05 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0; 14 passed), and `git diff --check` (exit 0), 2026-09-14, Node 26.8.2 local runtime (package policy remains Node 24). Commit hook used `SKIP=ty`; repository `ty` baseline remains documented separately.
+- Artifact and fixture hashes; evidence locations: implementation commit `9d0a60ed`; local source/test workspace only; no external artifact published.
+- Remaining subcases; blocker and next concrete action: full B18 redundant-test map, clean plugin wheels and real TLS/OIDC consumers, live OIDC/PKCE and revocation, hostile transport, PostgreSQL process races/recovery, five-run mixed-load capacity, deployment integrity/SBOM, rendered browser accessibility/deferred-response evidence, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable qualification packet without changing pickle behavior.
+- Atomic implementation commits: `9d0a60ed`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-14 — N10 generic publication binding metadata
 
 - Scope: keep admitted external catalog/table-format pairs self-describing in each immutable asset binding.
