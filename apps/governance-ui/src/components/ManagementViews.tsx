@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { QueryClient } from "@tanstack/react-query";
 import type { AssetAccess, AssetGrant, AuditEvent, AuthProvider, Catalog, PluginDescriptor, PluginPair, PluginState, PolicyVersion, RuntimeSettings, Session, WorkspaceObservations, WorkspacePublication, WorkspaceSummary } from "../api";
 import type { UiPage } from "../navigation";
 import { ConnectionsView } from "./ConnectionsView";
@@ -7,12 +8,12 @@ import { SettingsView } from "./SettingsView";
 export type AuditFilters = { actor?: string; action?: string; resourceType?: string; outcome?: string; correlationId?: string; createdAfter?: string; createdBefore?: string };
 export type ManagementData = { history?: PolicyVersion[]; historyNextCursor?: string | null; events?: AuditEvent[]; eventsNextCursor?: string | null; catalogs?: Catalog[]; tables?: Array<Record<string, unknown>>; runtime?: RuntimeSettings | null; providers?: AuthProvider[]; providerRevision?: number; publications?: WorkspacePublication[]; summary?: WorkspaceSummary; observations?: WorkspaceObservations; grants?: AssetGrant[]; access?: AssetAccess; plugins?: PluginDescriptor[]; pluginStates?: PluginState[]; pluginPairs?: PluginPair[] };
 
-export function ManagementView({ page, data, loading, error, onReload, onLoadMore, historyLoading, auditLoading, filters, onFiltersChange, session }: { page: Exclude<UiPage, "assets">; data: ManagementData; loading: boolean; error: string; onReload: () => void; onLoadMore?: () => void; historyLoading?: boolean; auditLoading?: boolean; filters: AuditFilters; onFiltersChange: (filters: AuditFilters) => void; session: Session | null }) {
+export function ManagementView({ page, data, loading, error, onReload, onLoadMore, historyLoading, auditLoading, filters, onFiltersChange, session, queryClient, sessionScope }: { page: Exclude<UiPage, "assets">; data: ManagementData; loading: boolean; error: string; onReload: () => void; onLoadMore?: () => void; historyLoading?: boolean; auditLoading?: boolean; filters: AuditFilters; onFiltersChange: (filters: AuditFilters) => void; session: Session | null; queryClient: QueryClient; sessionScope: string }) {
   if (loading) return <section className="coming-soon"><span className="eyebrow">{page.toUpperCase()}</span><h2>Loading {page}</h2><p>Checking the current workspace state and your capabilities.</p></section>;
   if (error) return <section className="coming-soon" role="alert"><span className="eyebrow">{page.toUpperCase()}</span><h2>Management view unavailable</h2><p>{error}</p><button className="secondary" onClick={onReload}>Retry</button></section>;
   if (page === "changes") return <ChangesView history={data.history ?? []} nextCursor={data.historyNextCursor} onReload={onReload} onLoadMore={onLoadMore} loading={historyLoading ?? false} />;
   if (page === "activity") return <ActivityView history={data.history ?? []} events={data.events ?? []} nextCursor={data.eventsNextCursor} onLoadMore={onLoadMore} loading={auditLoading ?? false} filters={filters} onFiltersChange={onFiltersChange} summary={data.summary} observations={data.observations} />;
-  if (page === "connections") return <ConnectionsView catalogs={data.catalogs ?? []} publications={data.publications ?? []} plugins={data.plugins ?? []} pluginStates={data.pluginStates ?? []} pluginPairs={data.pluginPairs ?? []} canActivate={Boolean(session?.platform_admin)} onReload={onReload} />;
+  if (page === "connections") return <ConnectionsView catalogs={data.catalogs ?? []} publications={data.publications ?? []} plugins={data.plugins ?? []} pluginStates={data.pluginStates ?? []} pluginPairs={data.pluginPairs ?? []} canActivate={Boolean(session?.platform_admin)} onReload={onReload} queryClient={queryClient} sessionScope={sessionScope} />;
   return <SettingsView runtime={data.runtime} providers={data.providers ?? []} providerRevision={data.providerRevision} publications={data.publications ?? []} onReload={onReload} />;
 }
 

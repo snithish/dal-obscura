@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { QueryClient } from "@tanstack/react-query";
 import type { Catalog, CatalogDiagnostic, PluginDescriptor, PluginPair, PluginState, WorkspacePublication } from "../api";
 import { controlPlane } from "../api";
 import { recoveryMessage } from "../recovery";
@@ -73,9 +74,11 @@ export type ConnectionsViewProps = {
   pluginPairs: PluginPair[];
   canActivate: boolean;
   onReload: () => void;
+  queryClient: QueryClient;
+  sessionScope: string;
 };
 
-export function ConnectionsView({ catalogs, publications, plugins, pluginStates, pluginPairs, canActivate, onReload }: ConnectionsViewProps) {
+export function ConnectionsView({ catalogs, publications, plugins, pluginStates, pluginPairs, canActivate, onReload, queryClient, sessionScope }: ConnectionsViewProps) {
   const [name, setName] = useState("");
   const [editingCatalog, setEditingCatalog] = useState<Catalog | null>(null);
   const catalogPlugins = plugins.filter((plugin) => plugin.kind === "catalog");
@@ -92,12 +95,6 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
   const [diagnosing, setDiagnosing] = useState("");
   const [publishing, setPublishing] = useState(false);
   const discoveryEpoch = useRef(0);
-  const discoveryAbortController = useRef<AbortController | null>(null);
-  const diagnosticAbortController = useRef<AbortController | null>(null);
-  useEffect(() => () => {
-    discoveryAbortController.current?.abort();
-    diagnosticAbortController.current?.abort();
-  }, []);
   useEffect(() => {
     setPluginId((current) => catalogPlugins.some((plugin) => plugin.plugin_id === current) ? current : (catalogPlugins[0]?.plugin_id ?? "iceberg.sql"));
   }, [plugins]);
@@ -150,38 +147,38 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
   }
   async function discover(catalog: string) {
     const epoch = ++discoveryEpoch.current;
-    discoveryAbortController.current?.abort();
-    const controller = new AbortController();
-    discoveryAbortController.current = controller;
     try {
       const catalogRow = catalogs.find((item) => item.name === catalog);
       const catalogPluginId = catalogRow?.module === "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog" ? "iceberg.sql" : catalogRow?.module;
       const choices = pluginPairs.filter((pair) => pair.catalog_plugin_id === catalogPluginId && pair.status === "admitted");
-      const discovered = await controlPlane.discoverCatalogTables(catalog, controller.signal);
+      const discovered = await queryClient.fetchQuery({
+        queryKey: ["management", sessionScope, "connections", "discover", catalog],
+        queryFn: ({ signal }) => controlPlane.discoverCatalogTables(catalog, signal),
+      });
       if (epoch !== discoveryEpoch.current) return;
       setDiscoveredCatalog(catalog);
       setSelectedFormatId(choices.length === 1 ? choices[0].format_plugin_id : "");
       setTables(discovered.tables);
       setMessage(`Loaded table inventory for ${catalog}.`);
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
+      if ((error instanceof DOMException && error.name === "AbortError") || (error instanceof Error && error.name === "CancelledError")) return;
       if (epoch !== discoveryEpoch.current) return;
       setTables([]); setMessage(recoveryMessage(error, "Discovery failed; source credentials and endpoint policy were not changed."));
     }
   }
   async function diagnose(catalog: string) {
-    diagnosticAbortController.current?.abort();
-    const controller = new AbortController();
-    diagnosticAbortController.current = controller;
     setDiagnosing(catalog);
     try {
-      const result = await controlPlane.diagnoseCatalog(catalog, controller.signal);
+      const result = await queryClient.fetchQuery({
+        queryKey: ["management", sessionScope, "connections", "diagnose", catalog],
+        queryFn: ({ signal }) => controlPlane.diagnoseCatalog(catalog, signal),
+      });
       setDiagnostics((current) => ({ ...current, [catalog]: result }));
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
+      if ((error instanceof DOMException && error.name === "AbortError") || (error instanceof Error && error.name === "CancelledError")) return;
       setDiagnostics((current) => ({ ...current, [catalog]: { catalog, status: "unavailable", message: recoveryMessage(error, "Diagnostic request failed"), checked_at: new Date().toISOString() } }));
     } finally {
-      if (controller === diagnosticAbortController.current) setDiagnosing("");
+      setDiagnosing("");
     }
   }
   async function govern(catalog: string, table: Record<string, unknown>) {

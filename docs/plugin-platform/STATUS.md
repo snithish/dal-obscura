@@ -933,6 +933,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: history and audit cursor pages now use session-scoped Query keys containing cursor and filter state, receive Query cancellation signals, and ignore cancellation as a recoverable UI outcome. Filter changes cancel the management query family before clearing visible results; epoch fences still protect component state during the remaining migration.
 - Verification: UI TypeScript compilation, Vite production build (93.82 kB gzip JavaScript), 11 UI tests, and `git diff --check` passed. Remaining N07 work is mutation migration and rendered deferred-response coverage; release remains HOLD.
 
+## 2026-09-14 — N07 connection discovery query reads
+
+- Scope: route catalog discovery and diagnostics through the shared session-scoped query client.
+- Observable behavior delivered: Connections discovery and connection checks now use stable catalog query keys, pass cancellation signals to the transport, deduplicate repeated requests, and treat Query cancellation as non-error UI state. The old per-component discovery and diagnostic AbortControllers were removed; catalog save, govern, and publication mutations remain on the next migration step.
+- Verification: UI TypeScript compilation, Vite production build (93.90 kB gzip JavaScript), 11 UI tests, and `git diff --check` passed. Rendered discovery cancellation and remaining mutation coverage stay VERIFY; release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
