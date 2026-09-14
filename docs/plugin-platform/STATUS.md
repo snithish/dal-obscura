@@ -2031,3 +2031,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: actual Compose/TLS/OIDC startup, artifact signatures/SBOM, encrypted recovery, PostgreSQL races, hostile transport, clean consumer wheels, mixed-load capacity, browser accessibility, and independent review remain VERIFY under N04–N16. Release remains HOLD.
 - Atomic implementation commits: verification-only ledger entry; no source commit.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N06 responsive shell browser qualification
+
+- Scope: inspect the authenticated shell at the required narrow and desktop viewport widths.
+- Observable behavior delivered; FR/NFR and B/G subcases: at 390×844 the menu drawer exposes an accessible named close control, updates `aria-expanded`, and keeps the account/sign-out controls visible. At both 390px and 1440px, DOM measurements report `scrollWidth === clientWidth`, so there is no page-level horizontal overflow. The desktop shell exposes the persistent navigation rail. This is partial B09 evidence; axe, 200% zoom, populated editor, and manual screen-reader review remain open. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: verification-only ledger entry; no source, serializer, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no source or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: CUA accessibility and DOM viewport inspection cover responsive shell semantics; full B09 browser journey remains the primary acceptance owner; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: authenticated CUA inspection of `http://127.0.0.1:5173/#assets` at 390×844 and 1440×900, including drawer open/close; DOM overflow checks returned equal widths; 2026-09-14, Vite UI and local control plane.
+- Artifact and fixture hashes; evidence locations: running built/dev UI on port 5173; no external artifact published.
+- Remaining subcases; blocker and next concrete action: populated policy/editor/review states, axe and screen-reader checks, 200% zoom, live OIDC/PKCE, hostile DNS/private-address transport, PostgreSQL races/recovery, clean TLS/OIDC consumers, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD.
+- Atomic implementation commits: verification-only ledger entry; no source commit.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
