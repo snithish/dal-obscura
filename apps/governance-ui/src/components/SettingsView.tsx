@@ -22,6 +22,17 @@ const emptyRuntime: RuntimeSettings = {
   path_rules: [],
 };
 
+function providerText(provider: AuthProvider, key: string): string {
+  const value = provider.args[key];
+  if (Array.isArray(value)) return value.map(String).join(", ");
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([name, path]) => `${name}=${String(path)}`)
+      .join(", ");
+  }
+  return value === undefined || value === null ? "" : String(value);
+}
+
 export function SettingsView({
   runtime,
   providers,
@@ -33,6 +44,7 @@ export function SettingsView({
 }: SettingsViewProps) {
   const [form, setForm] = useState<RuntimeSettings>(runtime ?? emptyRuntime);
   const [providerRows, setProviderRows] = useState<AuthProvider[]>(providers);
+  const [providerTexts, setProviderTexts] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
   const [pathRulesText, setPathRulesText] = useState("[]");
   const mutationControllers = useRef<Set<AbortController>>(new Set());
@@ -53,7 +65,13 @@ export function SettingsView({
   };
 
   useEffect(() => { const next = runtime ?? emptyRuntime; setForm(next); setPathRulesText(JSON.stringify(next.path_rules, null, 2)); }, [runtime]);
-  useEffect(() => setProviderRows(providers), [providers]);
+  useEffect(() => {
+    setProviderRows(providers);
+    setProviderTexts(Object.fromEntries(providers.flatMap((provider) => [
+      "subject_claim", "group_claims", "attribute_claims", "algorithms",
+      "leeway_seconds", "jwks_refresh_interval_seconds", "max_jwks_keys",
+    ].map((key) => [`${provider.id}:${key}`, providerText(provider, key)]))));
+  }, [providers]);
 
   async function save() {
     if (form.ticket_ttl_seconds < 1 || form.max_tickets < 1 || form.max_ticket_exchanges < 1) {
@@ -116,6 +134,34 @@ export function SettingsView({
     );
   }
 
+  function updateProviderText(index: number, key: string, value: string) {
+    const provider = providerRows[index];
+    if (!provider) return;
+    setProviderTexts((current) => ({ ...current, [`${provider.id}:${key}`]: value }));
+    let parsed: unknown = value;
+    if (key === "group_claims" || key === "algorithms") {
+      parsed = value.split(",").map((item) => item.trim()).filter(Boolean);
+    } else if (key === "attribute_claims") {
+      const entries = value.split(",").map((item) => item.trim()).filter(Boolean);
+      const mapping: Record<string, string> = {};
+      for (const entry of entries) {
+        const separator = entry.indexOf("=");
+        if (separator <= 0 || separator === entry.length - 1) {
+          setMessage("Attribute claims use name=claim.path entries separated by commas.");
+          return;
+        }
+        mapping[entry.slice(0, separator).trim()] = entry.slice(separator + 1).trim();
+      }
+      parsed = mapping;
+    } else if (["leeway_seconds", "jwks_refresh_interval_seconds", "max_jwks_keys"].includes(key)) {
+      parsed = value.trim() === "" ? undefined : Number(value);
+    }
+    setProviderRows((current) => current.map((item, row) => row === index ? {
+      ...item,
+      args: { ...item.args, ...(parsed === undefined ? {} : { [key]: parsed }) },
+    } : item));
+  }
+
   const active = publications.find((publication) => publication.active);
   const stagedCount = publications.filter((publication) => !publication.active).length;
   return (
@@ -148,7 +194,7 @@ export function SettingsView({
       </div>
       <div className="form-card">
         <h3>Authentication providers</h3>
-        {providerRows.length ? providerRows.map((provider, index) => <div className="provider-editor" key={provider.id}><div className="management-head"><div><strong>OIDC provider {index + 1}</strong><small>{provider.module}</small></div><label className="checkbox-label"><input type="checkbox" checked={provider.enabled} onChange={(event) => setProviderRows((current) => current.map((item, row) => row === index ? { ...item, enabled: event.target.checked } : item))} /> Enabled</label></div><div className="form-grid"><label>Issuer<input value={String(provider.args.issuer ?? "")} onChange={(event) => updateProvider(index, "issuer", event.target.value)} /></label><label>Audience<input value={String(provider.args.audience ?? "")} onChange={(event) => updateProvider(index, "audience", event.target.value)} /></label><label>JWKS URL<input value={String(provider.args.jwks_url ?? "")} onChange={(event) => updateProvider(index, "jwks_url", event.target.value)} /></label><label>Group claims<input value={Array.isArray(provider.args.group_claims) ? provider.args.group_claims.join(", ") : String(provider.args.group_claims ?? "groups")} onChange={(event) => updateProvider(index, "group_claims", event.target.value)} /></label></div><p className="help">Secret references remain redacted and are preserved by the server. Provider changes stay staged until an administrator activates a reviewed snapshot.</p></div>) : <div className="empty-result"><strong>No provider configured</strong><p>Production startup must fail closed until an approved identity provider is enabled.</p></div>}
+        {providerRows.length ? providerRows.map((provider, index) => <div className="provider-editor" key={provider.id}><div className="management-head"><div><strong>OIDC provider {index + 1}</strong><small>{provider.module}</small></div><label className="checkbox-label"><input type="checkbox" checked={provider.enabled} onChange={(event) => setProviderRows((current) => current.map((item, row) => row === index ? { ...item, enabled: event.target.checked } : item))} /> Enabled</label></div><div className="form-grid"><label>Issuer<input value={String(provider.args.issuer ?? "")} onChange={(event) => updateProvider(index, "issuer", event.target.value)} /></label><label>Audience<input value={String(provider.args.audience ?? "")} onChange={(event) => updateProvider(index, "audience", event.target.value)} /></label><label>JWKS URL<input value={String(provider.args.jwks_url ?? "")} onChange={(event) => updateProvider(index, "jwks_url", event.target.value)} /></label><label>Group claims<input value={providerTexts[`${provider.id}:group_claims`] ?? ""} onChange={(event) => updateProviderText(index, "group_claims", event.target.value)} /></label><label>Subject claim<input value={providerTexts[`${provider.id}:subject_claim`] ?? "sub"} onChange={(event) => updateProviderText(index, "subject_claim", event.target.value)} /></label><label>Attribute claims<input value={providerTexts[`${provider.id}:attribute_claims`] ?? ""} onChange={(event) => updateProviderText(index, "attribute_claims", event.target.value)} placeholder="tenant=tenant.id" /></label><label>Algorithms<input value={providerTexts[`${provider.id}:algorithms`] ?? ""} onChange={(event) => updateProviderText(index, "algorithms", event.target.value)} placeholder="RS256, RS384" /></label><label>Clock leeway (seconds)<input type="number" min="0" max="300" value={providerTexts[`${provider.id}:leeway_seconds`] ?? ""} onChange={(event) => updateProviderText(index, "leeway_seconds", event.target.value)} /></label><label>JWKS refresh (seconds)<input type="number" min="1" max="86400" value={providerTexts[`${provider.id}:jwks_refresh_interval_seconds`] ?? ""} onChange={(event) => updateProviderText(index, "jwks_refresh_interval_seconds", event.target.value)} /></label><label>Max JWKS keys<input type="number" min="1" max="4096" value={providerTexts[`${provider.id}:max_jwks_keys`] ?? ""} onChange={(event) => updateProviderText(index, "max_jwks_keys", event.target.value)} /></label></div><p className="help">Secret references remain redacted and are preserved by the server. Provider changes stay staged until an administrator activates a reviewed snapshot.</p></div>) : <div className="empty-result"><strong>No provider configured</strong><p>Production startup must fail closed until an approved identity provider is enabled.</p></div>}
         <button className="primary" onClick={() => void saveProviders()}>Save identity providers</button>
       </div>
     </section>
