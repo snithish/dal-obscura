@@ -49,7 +49,7 @@ export function SettingsView({
   const [providerTexts, setProviderTexts] = useState<Record<string, string>>({});
   const [providerErrors, setProviderErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
-  const [pathRulesText, setPathRulesText] = useState("[]");
+  const [pathRuleRoots, setPathRuleRoots] = useState<string[]>([]);
   const mutationControllers = useRef<Set<AbortController>>(new Set());
 
   useEffect(() => () => {
@@ -67,7 +67,11 @@ export function SettingsView({
     mutationControllers.current.delete(controller);
   };
 
-  useEffect(() => { const next = runtime ?? emptyRuntime; setForm(next); setPathRulesText(JSON.stringify(next.path_rules, null, 2)); }, [runtime]);
+  useEffect(() => {
+    const next = runtime ?? emptyRuntime;
+    setForm(next);
+    setPathRuleRoots(next.path_rules.map((rule) => typeof rule.root === "string" ? rule.root : ""));
+  }, [runtime]);
   useEffect(() => {
     setProviderRows(providers);
     setProviderErrors({});
@@ -84,15 +88,11 @@ export function SettingsView({
     }
     const controller = beginMutation();
     try {
-      let pathRules: Array<Record<string, string>>;
-      try {
-        const parsed: unknown = JSON.parse(pathRulesText);
-        if (!Array.isArray(parsed) || parsed.some((item) => !item || typeof item !== "object" || Object.keys(item).length !== 1 || typeof (item as { root?: unknown }).root !== "string" || !(item as { root: string }).root.trim())) throw new Error("invalid");
-        pathRules = parsed as Array<Record<string, string>>;
-      } catch {
-        setMessage("Path rules must be a JSON array of objects with non-empty root values.");
+      if (pathRuleRoots.some((root) => !root.trim())) {
+        setMessage("Every storage path root must be non-empty before saving.");
         return;
       }
+      const pathRules = pathRuleRoots.map((root) => ({ root: root.trim() }));
       await controlPlane.saveRuntimeSettings({ ...form, path_rules: pathRules }, controller.signal);
       if (controller.signal.aborted) return;
       void queryClient.invalidateQueries({ queryKey: ["management", sessionScope, "settings"] });
@@ -204,6 +204,10 @@ export function SettingsView({
     setProviderTexts((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${provider.id}:`))));
   }
 
+  function updatePathRule(index: number, value: string) {
+    setPathRuleRoots((current) => current.map((root, row) => row === index ? value : root));
+  }
+
   const active = publications.find((publication) => publication.active);
   const stagedCount = publications.filter((publication) => !publication.active).length;
   return (
@@ -224,8 +228,15 @@ export function SettingsView({
           <label>Max tickets<input type="number" min="1" value={form.max_tickets || ""} placeholder="64" onChange={(event) => setForm({ ...form, max_tickets: Number(event.target.value) })} /></label>
           <label>Ticket exchanges<input type="number" min="1" value={form.max_ticket_exchanges || ""} placeholder="2" onChange={(event) => setForm({ ...form, max_ticket_exchanges: Number(event.target.value) })} /></label>
         </div>
-        <label className="runtime-path-rules">Storage path roots (JSON)<textarea value={pathRulesText} onChange={(event) => setPathRulesText(event.target.value)} aria-label="Storage path roots JSON" spellCheck={false} placeholder={'[{"root":"s3://warehouse/curated"}]'} /></label>
-        <p className="help">Every metadata and data location must stay under one of these roots. Leave the list empty only for an explicitly local development profile.</p>
+        <fieldset className="runtime-path-rules">
+          <legend>Storage path roots</legend>
+          <p className="help">Every metadata and data location must stay under one of these roots. Leave the list empty only for an explicitly local development profile.</p>
+          <div className="path-rule-list">{pathRuleRoots.map((root, index) => <div className="path-rule-row" key={`${index}-${root}`}>
+            <label><span className="sr-only">Storage path root {index + 1}</span><input type="text" value={root} onChange={(event) => updatePathRule(index, event.target.value)} placeholder="s3://warehouse/curated" /></label>
+            <button className="danger" type="button" onClick={() => setPathRuleRoots((current) => current.filter((_, row) => row !== index))}>Remove</button>
+          </div>)}</div>
+          <button className="secondary" type="button" onClick={() => setPathRuleRoots((current) => [...current, ""])}>Add storage root</button>
+        </fieldset>
         <button className="primary" onClick={() => void save()}>Save runtime settings</button>
         {message && <p className="notice" role="status">{message}</p>}
       </div>
