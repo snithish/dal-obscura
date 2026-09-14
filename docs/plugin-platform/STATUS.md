@@ -1189,6 +1189,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `e8210e5`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N05 remove obsolete demo password login
+
+- Scope: close the unsupported password-grant browser shortcut and keep authentication on governed OIDC or explicit local bootstrap flows.
+- Observable behavior delivered; FR/NFR and B/G subcases: `/v1/demo-login`, `DemoLoginRequest`, demo token exchange, login shortcuts, and secret-bearing demo configuration are removed from runtime wiring and the OpenAPI contract. OIDC callback tests now exercise state, PKCE transaction, code exchange, nonce actor resolution, browser cookies, CSRF, and origin checks. Demo UI smoke now uses `/v1/session/bootstrap` with the local admin secret read only from the disposable runtime env file; no secret is printed or sent through browser-visible config. Pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/interfaces/{api.py,control_plane_cli.py,session_api.py,routes/deps.py,routes/schemas.py,routes/session.py}`, `examples/demo/keycloak/scripts/{prepare_demo.py,ui_smoke.py}`, `tests/interfaces/control_plane/test_actor_auth.py`, `tests/examples/test_ui_smoke.py`, `tests/architecture/test_control_plane_route_inventory.py`, and regenerated `apps/governance-ui/openapi/control-plane.json` plus `src/generated/control_plane.d.ts`. No serializer, serialized class/import path, payload, migration, or dependency deletion.
+- Production/test logical SLOC delta; dependencies added/removed and reason: 75 insertions and 485 deletions across auth/demo transport and tests; one optional `authorization_code_exchange` injection makes callback tests deterministic; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: OIDC callback/session security tests and route inventory own the browser boundary; demo password behavior is replaced by an explicit 404 absence assertion; no pickle tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `uv run pytest tests/interfaces/control_plane tests/architecture/test_control_plane_route_inventory.py tests/examples/test_ui_smoke.py -q` (exit 0; 100% pass), `uv run ruff check ...` focused control-plane/auth/demo paths (exit 0), `node scripts/generate-api-types.mjs` (exit 0), `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node_modules/.bin/vite build` (exit 0; 332.06 kB JavaScript / 100.21 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0; 14 passed), and `git diff --check` (exit 0), 2026-09-14, Node 26.8.2 and project `uv` runtime. Commit hook used `SKIP=ty`; repository `ty` baseline remains 72 unrelated diagnostics.
+- Artifact and fixture hashes; evidence locations: implementation commit `de3cec08`; local disposable UI/control-plane profile on `127.0.0.1:5173`/`127.0.0.1:8821`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: live OIDC/PKCE/revocation, hostile transport, rendered browser/axe evidence, PostgreSQL races/recovery, clean TLS/OIDC consumer matrix, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with next qualification packet without changing pickle behavior.
+- Atomic implementation commits: `de3cec08`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-14 — N07 pagination duplicate-load guard
 
 - Scope: prevent duplicate cursor-page reads from rapid Load more history/activity events.
