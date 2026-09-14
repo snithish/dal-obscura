@@ -1523,3 +1523,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: N02 canonical SDK/lock cleanup and N14 coverage/capacity mapping remain open; clean Node install/image/advisory, hostile live transport counters, real OIDC/browser/accessibility, real consumer wheels, PostgreSQL race/recovery, and independent security/UX/release review remain VERIFY under N01/N04–N16. Next action is continue the remaining live qualification lanes while retaining release HOLD.
 - Atomic implementation commits: `8c23724`; documentation commit records this ledger and baseline delta separately.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N07 diagnostic response fencing
+
+- Scope: prevent concurrent catalog diagnostics from corrupting the visible busy state or replacing a newer result with an older response.
+- Observable behavior delivered; FR/NFR and B/G subcases: each diagnostic request owns an epoch; only the current request may update diagnostics or clear the busy indicator. Aborted requests use the shared cancellation classifier and remain silent. Discovery keeps its existing epoch fence.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/ConnectionsView.tsx`; no backend, serializer, serialized class, payload, import path, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +4 UI logical lines and one shared helper call; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing UI lifecycle/query tests and TypeScript/Vite checks remain owners; no tests deleted. A rendered browser interleaving remains required for N07/N16.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `apps/governance-ui/node_modules/.bin/tsc -p apps/governance-ui/tsconfig.json --noEmit` (exit 0), `node --experimental-strip-types --test tests/*.test.mjs` (13 passed), and `node_modules/.bin/vite build` (exit 0; 325.34 kB JS / 98.00 kB gzip), 2026-09-14, Node 24 local workspace. Commit hooks passed with repository baseline `ty` diagnostics skipped (`SKIP=ty`).
+- Artifact and fixture hashes; evidence locations: atomic implementation commit `2b8f0d3`; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: rendered deferred-response races, live logout/401 and cross-process revocation, real OIDC/browser/accessibility, hostile transport counters, consumer/recovery/capacity evidence, and independent security/UX/release review remain VERIFY under N04–N16. Next action is continue live qualification while retaining release HOLD.
+- Atomic implementation commits: `2b8f0d3`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
