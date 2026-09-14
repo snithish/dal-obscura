@@ -203,10 +203,21 @@ def _json_object_env(name: str) -> dict[str, object]:
 def _json_object_value(raw: str | None, name: str) -> dict[str, object]:
     if raw is None or not raw.strip():
         return {}
-    value = json.loads(raw)
+    value = json.loads(raw, object_pairs_hook=_unique_json_object)
     if not isinstance(value, dict):
         raise ValueError(f"{name} must be a JSON object")
     return {str(key): item for key, item in value.items()}
+
+
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    """Reject duplicate keys so secret scope policy cannot be overwritten."""
+
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
 
 
 def _parse_scope_grants(raw: object) -> dict[str, frozenset[str]] | None:
@@ -222,5 +233,5 @@ def _parse_scope_grants(raw: object) -> dict[str, frozenset[str]] | None:
             not isinstance(key, str) or not key.strip() for key in raw_keys
         ):
             raise ValueError(f"Secret provider scope grant {raw_scope!r} must list secret names")
-        grants[raw_scope] = frozenset(raw_keys)
+        grants[raw_scope] = frozenset(cast(list[str], raw_keys))
     return grants

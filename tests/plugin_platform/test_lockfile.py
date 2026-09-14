@@ -61,6 +61,18 @@ def test_load_plugin_lock_file_rejects_symlink(tmp_path) -> None:
         load_plugin_lock_file(link)
 
 
+def test_load_plugin_lock_file_rejects_duplicate_document_keys(tmp_path) -> None:
+    path = tmp_path / "plugins.json"
+    path.write_text(
+        '{"version":1,"version":1,"plugins":[{"kind":"catalog",'
+        '"plugin_id":"fixture.catalog","lock":["fixture","1.0.0","1",'
+        '"' + "a" * 64 + '","' + "b" * 64 + '"]}]}'
+    )
+
+    with pytest.raises(PluginAdmissionError, match="valid JSON"):
+        load_plugin_lock_file(path)
+
+
 @pytest.mark.parametrize(
     ("plugin_id", "lock", "message"),
     [

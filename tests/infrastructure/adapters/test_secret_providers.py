@@ -75,6 +75,17 @@ def test_load_secret_provider_from_environment_requires_production_grants():
         )
 
 
+def test_load_secret_provider_rejects_duplicate_json_settings() -> None:
+    with pytest.raises(ValueError, match="duplicate JSON key"):
+        load_secret_provider_from_environment(
+            {
+                "DAL_OBSCURA_SECRET_PROVIDER_CONFIG": (
+                    '{"prefix":"LOCAL_","scope_grants":{},"scope_grants":{}}'
+                )
+            }
+        )
+
+
 def test_load_secret_provider_rejects_dynamic_module_path():
     with pytest.raises(ValueError, match="only environment secrets"):
         load_secret_provider(

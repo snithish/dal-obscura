@@ -38,8 +38,8 @@ def load_plugin_lock_file(path: str | Path) -> dict[tuple[PluginKind, str], Plug
     if len(raw) > MAX_PLUGIN_LOCK_BYTES:
         raise PluginAdmissionError("Plugin lock is too large")
     try:
-        document = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        document = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_json_object)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
         raise PluginAdmissionError("Plugin lock is not valid JSON") from exc
     if not isinstance(document, dict) or document.get("version") != 1:
         raise PluginAdmissionError("Plugin lock version is unsupported")
@@ -79,4 +79,15 @@ def load_plugin_lock_file(path: str | Path) -> dict[tuple[PluginKind, str], Plug
         if key in result:
             raise PluginAdmissionError("Plugin lock contains duplicate identities")
         result[key] = cast(PluginLock, tuple(lock))
+    return result
+
+
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    """Reject duplicate keys instead of allowing last-key-wins ambiguity."""
+
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
     return result
