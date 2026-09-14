@@ -2487,3 +2487,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live OIDC freshness/revocation, cross-process PostgreSQL races, actual hostile transport/DNS/private-address counters, clean TLS/OIDC consumer matrix, populated browser accessibility, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable governed backend slice.
 - Atomic implementation commits: `54b1b4b9`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N04 strict runtime JSON settings
+
+- Scope: remove silent duplicate-key override behavior from environment-backed runtime and secret-provider configuration.
+- Observable behavior delivered; FR/NFR and B/G subcases: JSON object parsing for data-plane runtime settings now rejects duplicate keys before provider construction, so an operator cannot accidentally or ambiguously replace a secret scope, prefix, or transport setting. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/data_plane/infrastructure/adapters/runtime_config.py` and `tests/infrastructure/adapters/test_runtime_config.py`; no serializers, migrations, dependencies, or unrelated paths changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +11 production lines, +14 test lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: runtime-config suite owns duplicate-key rejection and existing production profile/secret-provider validation; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/infrastructure/adapters/test_runtime_config.py -q` (exit 0, 13 passed), focused Ruff (exit 0), 2026-09-14, Python 3.12.
+- Artifact and fixture hashes; evidence locations: implementation commit `e6599a7c`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: live OIDC freshness/revocation, cross-process PostgreSQL races, actual hostile transport/DNS/private-address counters, clean TLS/OIDC consumer matrix, populated browser accessibility, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable governed backend slice.
+- Atomic implementation commits: `e6599a7c`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
