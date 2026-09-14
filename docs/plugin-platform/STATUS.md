@@ -2136,3 +2136,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live OIDC code/PKCE, freshness/revocation, hostile transport, rendered browser/axe evidence, PostgreSQL races/recovery, clean TLS/OIDC consumers, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable qualification packet without changing pickle behavior.
 - Atomic implementation commits: `1ebcfe50`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N07 duplicate configuration mutation guard
+
+- Scope: ensure configuration saves create one logical mutation even when users double-click or submit while a request is pending.
+- Observable behavior delivered; FR/NFR and B/G subcases: connection, runtime, identity-provider, owner, and delegated-grant save controls now use request-level busy refs plus disabled UI states. A second click is ignored until the first request settles; labels expose `Saving…`. Edit-generation fencing still prevents late responses from clearing newer input. Pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/ConnectionsView.tsx`, `apps/governance-ui/src/components/SettingsView.tsx`, and `apps/governance-ui/src/components/AssetWorkspace.tsx`; no backend, serializer, serialized class/import path, payload, migration, dependency, or test deletion.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +30 UI production lines and -9 obsolete lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing UI lifecycle/query tests remain owners; no tests deleted. Rendered double-click and ambiguous-outcome journeys remain required B10 evidence.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node_modules/.bin/vite build` (exit 0; 331.21 kB JavaScript / 99.93 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0; 14 passed), and `git diff --check` (exit 0), 2026-09-14, Node 26.8.2 local runtime (package policy remains Node 24). Commit hook used `SKIP=ty`; the documented repository `ty` baseline still reports 72 unrelated diagnostics.
+- Artifact and fixture hashes; evidence locations: implementation commit `09e6dd4e`; local disposable UI/control-plane profile on `127.0.0.1:5173`/`127.0.0.1:8821`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: rendered deferred/double-click response proof, live OIDC/PKCE/revocation, hostile transport, PostgreSQL races/recovery, clean TLS/OIDC consumers, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable qualification packet without changing pickle behavior.
+- Atomic implementation commits: `09e6dd4e`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
