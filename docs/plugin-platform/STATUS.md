@@ -855,6 +855,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: list and keyset-paginated audit routes now validate event fields and cursor envelopes through shared Pydantic response models, while preserving database scope, filter bounds, redacted details, and request correlation.
 - Verification: audit API suite passed (4 tests); changed-path Ruff and format checks passed. Broader strict DTO generation and independent permission review remain VERIFY.
 
+## 2026-09-14 — N03/N09 typed policy history responses
+
+- Scope: stabilize immutable policy history and publish results used by Changes and History views.
+- Observable behavior delivered: asset/global policy history, keyset pages, published version details, and policy-version creation results now validate through shared response models. Actor scope, review checks, and publication semantics remain unchanged.
+- Verification: policy-version and publish-flow suites passed (13 tests); changed-path Ruff and format checks passed. Restore response typing, generated DTOs, and live publish/reconciliation evidence remain VERIFY.
+
 ## 2026-09-14 — N09/N11 post-publication inventory refresh
 
 - Scope: keep governed asset status aligned after a successful publish response.
