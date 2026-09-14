@@ -2162,3 +2162,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: rendered deferred/double-click and lost-response browser proof, live OIDC/PKCE/revocation, hostile transport, PostgreSQL races/recovery, clean TLS/OIDC consumers, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable qualification packet without changing pickle behavior.
 - Atomic implementation commits: `569ba0fb`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N07 catalog discovery mutation fencing
+
+- Scope: prevent govern-table responses from applying after discovery scope or catalog selection changes, and prevent duplicate govern submissions.
+- Observable behavior delivered; FR/NFR and B/G subcases: govern-table requests capture the active discovery generation and catalog identity. A newer discovery, changed catalog, or cancellation causes the response to be ignored; it cannot reload the wrong inventory or claim success for another catalog. Requests for the same catalog/target are synchronously deduplicated and expose a `Governing…` disabled state. Pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/ConnectionsView.tsx`; no backend, serializer, serialized class/import path, payload, migration, dependency, or test deletion.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +16 UI production lines and -3 obsolete lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing UI lifecycle/query tests remain owners; no tests deleted. Rendered deferred catalog discovery/govern journeys remain required B10/B14 evidence.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node_modules/.bin/vite build` (exit 0; 331.60 kB JavaScript / 100.07 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0; 14 passed), direct esbuild parse of `ConnectionsView.tsx` (exit 0), and `git diff --check` (exit 0), 2026-09-14, Node 26.8.2 local runtime (package policy remains Node 24). Commit hook used `SKIP=ty`; the documented repository `ty` baseline still reports 72 unrelated diagnostics.
+- Artifact and fixture hashes; evidence locations: implementation commit `c0f65476`; local disposable UI/control-plane profile on `127.0.0.1:5173`/`127.0.0.1:8821`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: rendered deferred/double-click browser proof, live OIDC/PKCE/revocation, hostile transport, PostgreSQL races/recovery, clean TLS/OIDC consumers, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable qualification packet without changing pickle behavior.
+- Atomic implementation commits: `c0f65476`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
