@@ -814,6 +814,8 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 
 - The virtual tree now handles Home/End in addition to Arrow and Enter/Space navigation, with focus scrolled into view before transfer. Browser stress and screen-reader evidence remain VERIFY.
 
+- Local smoke: the existing control plane on `127.0.0.1:8821` returned HTTP 200 for an authenticated catalog listing, and the Vite UI on `127.0.0.1:5173` returned HTTP 200. These checks confirm serving processes only; they do not substitute for the required browser/IdP acceptance.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
