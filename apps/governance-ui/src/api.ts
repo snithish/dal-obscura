@@ -437,10 +437,11 @@ export const controlPlane = {
     }) as Promise<PolicyDraft>,
   listCatalogs: (signal?: AbortSignal) => request<ApiSchemas["CatalogInventoryResponse"][]>("/v1/catalogs", { signal }),
   listWorkspacePublications: (signal?: AbortSignal) => request<ApiSchemas["WorkspacePublicationResponse"][]>("/v1/workspace/publications", { signal }),
-  createWorkspacePublication: () => request<ApiSchemas["WorkspacePublicationCreateResponse"]>("/v1/workspace/publications", { method: "POST" }),
-  activateWorkspacePublication: (publicationId: string, expectedPublicationId?: string) => request<ApiSchemas["PublicationActivationResponse"]>(`/v1/workspace/publications/${encodeURIComponent(publicationId)}/activate`, {
+  createWorkspacePublication: (signal?: AbortSignal) => request<ApiSchemas["WorkspacePublicationCreateResponse"]>("/v1/workspace/publications", { method: "POST", signal }),
+  activateWorkspacePublication: (publicationId: string, expectedPublicationId?: string, signal?: AbortSignal) => request<ApiSchemas["PublicationActivationResponse"]>(`/v1/workspace/publications/${encodeURIComponent(publicationId)}/activate`, {
     method: "POST",
     body: JSON.stringify({ expected_publication_id: expectedPublicationId ?? null }),
+    signal,
   }),
   discoverCatalogTables: (name: string, signal?: AbortSignal) => request<ApiSchemas["CatalogTablesResponse"]>(`/v1/catalogs/${encodeURIComponent(name)}/tables`, { signal }),
   diagnoseCatalog: async (name: string, signal?: AbortSignal) => {
@@ -465,22 +466,25 @@ export const controlPlane = {
     kind: "catalog" | "table_format",
     pluginId: string,
     target: "enabled" | "draining" | "disabled" | "revoked" | "removed",
+    signal?: AbortSignal,
   ) => request<ApiSchemas["PluginLifecycleResponse"]>(
     `/v1/plugins/${encodeURIComponent(kind)}/${encodeURIComponent(pluginId)}/lifecycle`,
-    { method: "PATCH", body: JSON.stringify({ target }) },
+    { method: "PATCH", body: JSON.stringify({ target }), signal },
   ),
   getSummary: (signal?: AbortSignal) => request<ApiSchemas["WorkspaceSummaryResponse"]>("/v1/workspace/summary", { signal }),
   getObservations: async (signal?: AbortSignal) => {
     const observations = await request<ApiSchemas["WorkspaceObservationsResponse"]>("/v1/workspace/observations", { signal });
     return { ...observations, generation: observations.generation ?? null } satisfies WorkspaceObservations;
   },
-  saveCatalog: (name: string, module: string, options: Record<string, unknown>, expectedRevision?: number) => request<ApiSchemas["CatalogMutationResponse"]>(`/v1/catalogs/${encodeURIComponent(name)}`, {
+  saveCatalog: (name: string, module: string, options: Record<string, unknown>, expectedRevision?: number, signal?: AbortSignal) => request<ApiSchemas["CatalogMutationResponse"]>(`/v1/catalogs/${encodeURIComponent(name)}`, {
     method: "PUT",
     body: JSON.stringify({ module, options, ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }) }),
+    signal,
   }),
-  saveAsset: (catalog: string, target: string, backend: string, tableIdentifier: string) => request<ApiSchemas["AssetMutationResponse"]>(`/v1/assets/${encodeURIComponent(catalog)}/${encodeURIComponent(target)}`, {
+  saveAsset: (catalog: string, target: string, backend: string, tableIdentifier: string, signal?: AbortSignal) => request<ApiSchemas["AssetMutationResponse"]>(`/v1/assets/${encodeURIComponent(catalog)}/${encodeURIComponent(target)}`, {
     method: "PUT",
     body: JSON.stringify({ backend, table_identifier: tableIdentifier, options: {} }),
+    signal,
   }),
   saveRuntimeSettings: (settings: RuntimeSettings) => request<ApiSchemas["RuntimeSettingsResponse"]>("/v1/settings/runtime", {
     method: "PUT",

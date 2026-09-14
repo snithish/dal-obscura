@@ -73,6 +73,10 @@ function formConfigForCatalog(catalog: Catalog, plugin: PluginDescriptor | undef
   return { ...pluginDefaults(plugin), ...Object.fromEntries(fields.map((field) => [field.name, safeFormValue(options[field.name], field)])) };
 }
 
+function isAbortError(error: unknown): boolean {
+  return (error instanceof DOMException && error.name === "AbortError") || (error instanceof Error && error.name === "CancelledError");
+}
+
 export type ConnectionsViewProps = {
   catalogs: Catalog[];
   publications: WorkspacePublication[];
@@ -104,6 +108,24 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
   const [diagnosing, setDiagnosing] = useState("");
   const [publishing, setPublishing] = useState(false);
   const discoveryEpoch = useRef(0);
+  const mutationControllers = useRef<Set<AbortController>>(new Set());
+  useEffect(() => () => {
+    discoveryEpoch.current += 1;
+    for (const controller of mutationControllers.current) controller.abort();
+    mutationControllers.current.clear();
+  }, [sessionScope]);
+  useEffect(() => {
+    setPublishing(false);
+    setLifecycleBusy(null);
+  }, [sessionScope]);
+  const beginMutation = (): AbortController => {
+    const controller = new AbortController();
+    mutationControllers.current.add(controller);
+    return controller;
+  };
+  const finishMutation = (controller: AbortController): void => {
+    mutationControllers.current.delete(controller);
+  };
   useEffect(() => {
     setPluginId((current) => catalogPlugins.some((plugin) => plugin.plugin_id === current) ? current : (catalogPlugins[0]?.plugin_id ?? ""));
   }, [plugins]);
@@ -133,7 +155,14 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
       else options[field.name] = value;
     }
     const existing = editingCatalog ?? catalogs.find((catalog) => catalog.name === name.trim());
-    try { await controlPlane.saveCatalog(name.trim(), pluginId, options, existing?.revision); void queryClient.invalidateQueries({ queryKey: ["management", sessionScope, "connections"] }); setMessage("Connection saved. Discovery remains bounded to this configured catalog."); setName(""); setConfig({}); setEditingCatalog(null); onReload(); } catch (error) { setMessage(recoveryMessage(error, "Connection was rejected by the control plane.")); }
+    const controller = beginMutation();
+    try {
+      await controlPlane.saveCatalog(name.trim(), pluginId, options, existing?.revision, controller.signal);
+      if (controller.signal.aborted) return;
+      void queryClient.invalidateQueries({ queryKey: ["management", sessionScope, "connections"] }); setMessage("Connection saved. Discovery remains bounded to this configured catalog."); setName(""); setConfig({}); setEditingCatalog(null); onReload();
+    } catch (error) {
+      if (!isAbortError(error)) setMessage(recoveryMessage(error, "Connection was rejected by the control plane."));
+    } finally { finishMutation(controller); }
   }
 
   function editCatalog(catalog: Catalog) {
@@ -203,18 +232,39 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
     if (!formatId) return setMessage("Select the table format explicitly before governing a discovered table.");
     const formatPlugin = plugins.find((plugin) => plugin.kind === "table_format" && plugin.plugin_id === formatId);
     if (!formatPlugin) return setMessage("No admitted table-format adapter is available for this catalog.");
-    try { await controlPlane.saveAsset(catalog, target, formatPlugin.plugin_id, identifier); void queryClient.invalidateQueries({ queryKey: ["management", sessionScope] }); void queryClient.invalidateQueries({ queryKey: ["asset-inventory", sessionScope] }); setMessage(`Governed asset ${target} registered. Assign owners and author a policy in Assets.`); await discover(catalog); } catch (error) { setMessage(recoveryMessage(error, "Asset registration was rejected; the source table was not changed.")); }
+    const controller = beginMutation();
+    try {
+      await controlPlane.saveAsset(catalog, target, formatPlugin.plugin_id, identifier, controller.signal);
+      if (controller.signal.aborted) return;
+      void queryClient.invalidateQueries({ queryKey: ["management", sessionScope] }); void queryClient.invalidateQueries({ queryKey: ["asset-inventory", sessionScope] }); setMessage(`Governed asset ${target} registered. Assign owners and author a policy in Assets.`); await discover(catalog);
+    } catch (error) {
+      if (!isAbortError(error)) setMessage(recoveryMessage(error, "Asset registration was rejected; the source table was not changed."));
+    } finally { finishMutation(controller); }
   }
   async function createPublication() {
     if (!canActivate || publishing) return;
     setPublishing(true);
-    try { await controlPlane.createWorkspacePublication(); void queryClient.invalidateQueries({ queryKey: ["management", sessionScope] }); setMessage("Configuration snapshot created. Activate it when ready."); onReload(); } catch (error) { setMessage(recoveryMessage(error, "Snapshot could not be created; resolve readiness errors before retrying.")); } finally { setPublishing(false); }
+    const controller = beginMutation();
+    try {
+      await controlPlane.createWorkspacePublication(controller.signal);
+      if (controller.signal.aborted) return;
+      void queryClient.invalidateQueries({ queryKey: ["management", sessionScope] }); setMessage("Configuration snapshot created. Activate it when ready."); onReload();
+    } catch (error) {
+      if (!isAbortError(error)) setMessage(recoveryMessage(error, "Snapshot could not be created; resolve readiness errors before retrying."));
+    } finally { finishMutation(controller); if (!controller.signal.aborted) setPublishing(false); }
   }
   async function activatePublication(id: string) {
     if (!canActivate || publishing) return;
     setPublishing(true);
     const current = publications.find((publication) => publication.active)?.id;
-    try { await controlPlane.activateWorkspacePublication(id, current); void queryClient.invalidateQueries({ queryKey: ["management", sessionScope] }); setMessage("Configuration snapshot activated for new data-plane requests."); onReload(); } catch (error) { setMessage(recoveryMessage(error, "Activation was rejected; the current generation remains active. Refresh before retrying.")); } finally { setPublishing(false); }
+    const controller = beginMutation();
+    try {
+      await controlPlane.activateWorkspacePublication(id, current, controller.signal);
+      if (controller.signal.aborted) return;
+      void queryClient.invalidateQueries({ queryKey: ["management", sessionScope] }); setMessage("Configuration snapshot activated for new data-plane requests."); onReload();
+    } catch (error) {
+      if (!isAbortError(error)) setMessage(recoveryMessage(error, "Activation was rejected; the current generation remains active. Refresh before retrying."));
+    } finally { finishMutation(controller); if (!controller.signal.aborted) setPublishing(false); }
   }
   async function updatePluginLifecycle(plugin: PluginDescriptor) {
     const key = `${plugin.kind}:${plugin.plugin_id}`;
@@ -222,15 +272,18 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
     if (!target) return;
     if (target === "removed" && !window.confirm(`Remove ${plugin.display_name} from this process?`)) return;
     setLifecycleBusy(key);
+    const controller = beginMutation();
     try {
-      await controlPlane.setPluginLifecycle(plugin.kind, plugin.plugin_id, target);
+      await controlPlane.setPluginLifecycle(plugin.kind, plugin.plugin_id, target, controller.signal);
+      if (controller.signal.aborted) return;
       setMessage(`${plugin.display_name} lifecycle is now ${target}.`);
       await queryClient.invalidateQueries({ queryKey: ["management", sessionScope, "connections"] });
       onReload();
     } catch (error) {
-      setMessage(recoveryMessage(error, "Plugin lifecycle change was rejected; the previous state remains active."));
+      if (!isAbortError(error)) setMessage(recoveryMessage(error, "Plugin lifecycle change was rejected; the previous state remains active."));
     } finally {
-      setLifecycleBusy(null);
+      finishMutation(controller);
+      if (!controller.signal.aborted) setLifecycleBusy(null);
     }
   }
   const pluginCards = plugins.length > 0 && <div className="form-card"><h3>Admitted adapters</h3><div className="plugin-list">{plugins.map((plugin) => {
