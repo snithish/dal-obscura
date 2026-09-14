@@ -1536,3 +1536,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: rendered deferred-response races, live logout/401 and cross-process revocation, real OIDC/browser/accessibility, hostile transport counters, consumer/recovery/capacity evidence, and independent security/UX/release review remain VERIFY under N04–N16. Next action is continue live qualification while retaining release HOLD.
 - Atomic implementation commits: `2b8f0d3`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N05 strict OIDC provider option validation
+
+- Scope: make the full supported OIDC provider configuration safe for UI and direct API callers.
+- Observable behavior delivered; FR/NFR and B/G subcases: audience, subject/group/attribute claim paths, algorithms, clock leeway, JWKS refresh interval, and key-count limits now reject malformed types, empty values, control characters, invalid ranges, and oversized mappings before persistence or provider construction. Valid multi-audience and nested claim configurations remain accepted.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/application/auth_provider_validation.py` and `tests/control_plane/test_auth_provider_validation.py`; no serializers, serialized classes/import paths, ticket payloads, migrations, dependencies, or tests deleted.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +118 production/test logical lines; no dependencies changed. The added validation closes a provider-construction failure path and makes settings editing deterministic.
+- Primary invariant test owners; tests consolidated/deleted: auth-provider validation and existing OIDC adapter suites; no tests deleted. Live OIDC code/PKCE and role-freshness journeys remain release owners.
+- Exact commands, exit codes, UTC date, runtime versions, environment: focused validation suite (10 passed) and changed-path Ruff (exit 0), 2026-09-14, Python 3.12/uv local workspace. Commit hooks passed with Ruff/format/pytest hooks and repository baseline `ty` diagnostics skipped (`SKIP=ty`).
+- Artifact and fixture hashes; evidence locations: atomic implementation commit `ad87f37`; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: UI controls for every optional provider field, live OIDC/browser login/logout, account-role freshness and cross-process revocation, hostile transport counters, consumer/recovery/capacity evidence, and independent security/UX/release review remain VERIFY under N04–N16. Next action is continue live qualification while retaining release HOLD.
+- Atomic implementation commits: `ad87f37`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
