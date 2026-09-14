@@ -61,6 +61,12 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
     try:
         _validate_profile(values, admin_token, database_url)
         profile = values.get("DAL_OBSCURA_CONTROL_PLANE_PROFILE", "local").strip().lower()
+        cors_origins = _csv(values.get("DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS", ""))
+        if profile == "local" and not cors_origins:
+            # The supported local UI is served by the Vite dev server. Keep
+            # browser CSRF/origin checks enabled without requiring a second
+            # environment variable for the disposable local profile.
+            cors_origins = ("http://127.0.0.1:5173", "http://localhost:5173")
         port = _port(values.get("DAL_OBSCURA_CONTROL_PLANE_PORT", "8820"))
         engine = create_engine_from_url(database_url)
         check_config_store_schema(engine)
@@ -78,7 +84,7 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
             admin_token=admin_token,
             oidc_actor_resolver=oidc_resolver,
             oidc_admin_group=_optional(values, "DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP"),
-            cors_origins=_csv(values.get("DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS", "")),
+            cors_origins=cors_origins,
             ui_auth_config=_ui_auth_config(values),
             session_ttl_seconds=_positive_int(
                 values.get("DAL_OBSCURA_CONTROL_PLANE_SESSION_TTL_SECONDS", "28800"),
