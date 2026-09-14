@@ -77,6 +77,8 @@ function App() {
   const [publishPending, setPublishPending] = useState(false);
   const saveDraftPending = useRef(false);
   const publishPendingRef = useRef(false);
+  const previewPendingRef = useRef(false);
+  const reviewPendingRef = useRef(false);
   const loadEpoch = useRef(0);
   const draftEditEpoch = useRef(0);
   const inventoryEpoch = useRef(0);
@@ -768,6 +770,8 @@ function App() {
       setNotice("Save the draft before running a server-side policy test.");
       return;
     }
+    if (previewPendingRef.current) return;
+    previewPendingRef.current = true;
     const loadScope = loadEpoch.current;
     const editScope = draftEditEpoch.current;
     const draftIdentity = { id: draftId, revision: draftRevision };
@@ -788,11 +792,13 @@ function App() {
       setPreview(null); setReviewToken(null); setNotice(recoveryMessage(error, "Policy test could not run. This draft is not validated."));
     } finally {
       finishMutation(controller);
+      previewPendingRef.current = false;
     }
   }
 
   async function requestReview() {
-    if (!asset || saveState !== "saved" || publishPending) return;
+    if (!asset || saveState !== "saved" || publishPending || reviewPendingRef.current) return;
+    reviewPendingRef.current = true;
     const loadScope = loadEpoch.current;
     const editScope = draftEditEpoch.current;
     const draftIdentity = { id: draftId, revision: draftRevision };
@@ -809,6 +815,7 @@ function App() {
       setReviewToken(null); setNotice(recoveryMessage(error, "Review was rejected. Run a successful test against the saved draft and resolve any policy or schema errors."));
     } finally {
       finishMutation(controller);
+      reviewPendingRef.current = false;
     }
   }
 
