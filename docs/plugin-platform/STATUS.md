@@ -825,6 +825,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 
 - Follow-up regression: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q` passed with 837 collected, 823 passed, 14 documented skips, and zero failures/errors. UI TypeScript compilation, Vite build, and eight UI tests remain green.
 
+## 2026-09-14 — N09/N11 post-publication inventory refresh
+
+- Scope: keep governed asset status aligned after a successful publish response.
+- Observable behavior delivered: direct and reconciled committed publication outcomes now trigger an authoritative asset inventory refresh, so active policy metadata updates in-place without a full page reload. Existing load/edit identity fences remain in force.
+- Verification: UI TypeScript compilation, eight UI tests, and `git diff --check` passed. Release remains HOLD pending rendered publish/reconciliation and multi-actor evidence.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
