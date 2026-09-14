@@ -2204,10 +2204,53 @@ class PublicationStore:
         ):
             if isinstance(rules_json, list) and rules_json:
                 assets_with_rules.add(asset_id)
+        # Resolve serving metadata in bounded batch queries. Inventory must show
+        # the active immutable publication, never infer state from mutable drafts.
+        active_by_key: dict[tuple[UUID, str, str], UUID] = {}
+        cell_ids = {record.cell_id for record in records}
+        tenant_ids = {record.tenant_id for record in records}
+        if cell_ids and tenant_ids:
+            for active in self._session.scalars(
+                select(ActivePublishedAssetRecord).where(
+                    ActivePublishedAssetRecord.cell_id.in_(cell_ids),
+                    ActivePublishedAssetRecord.tenant_id.in_(tenant_ids),
+                )
+            ):
+                active_by_key[(active.tenant_id, active.catalog, active.target)] = (
+                    active.publication_id
+                )
+        publication_ids = set(active_by_key.values())
+        publication_by_id = (
+            {
+                record.id: record
+                for record in self._session.scalars(
+                    select(ConfigPublicationRecord).where(
+                        ConfigPublicationRecord.id.in_(publication_ids)
+                    )
+                )
+            }
+            if publication_ids
+            else {}
+        )
+        published_by_key: dict[tuple[UUID, str, str], PublishedAssetRecord] = {}
+        if publication_ids:
+            for published in self._session.scalars(
+                select(PublishedAssetRecord).where(
+                    PublishedAssetRecord.publication_id.in_(publication_ids),
+                    PublishedAssetRecord.tenant_id.in_(tenant_ids),
+                )
+            ):
+                key = (published.tenant_id, published.catalog, published.target)
+                if active_by_key.get(key) == published.publication_id:
+                    published_by_key[key] = published
         rows = []
         for record in records:
             catalog = catalog_by_id[record.catalog_id]
             owners = owners_by_asset.get(record.id, [])
+            key = (record.tenant_id, catalog.name, record.target)
+            active_publication_id = active_by_key.get(key)
+            published = published_by_key.get(key)
+            publication = publication_by_id.get(active_publication_id)
             rows.append(
                 {
                     "id": str(record.id),
@@ -2219,6 +2262,10 @@ class PublicationStore:
                     "owners": owners,
                     "policy_status": "configured" if record.id in assets_with_rules else "missing",
                     "draft_status": "draft",
+                    "active_policy_version": published.policy_version if published else None,
+                    "last_published_at": (
+                        _isoformat(publication.created_at) if publication is not None else None
+                    ),
                 }
             )
         return rows

@@ -61,12 +61,41 @@ def test_workspace_asset_upsert_uses_default_workspace_context():
             "owners": [],
             "policy_status": "missing",
             "draft_status": "draft",
+            "active_policy_version": None,
+            "last_published_at": None,
         }
     ]
     assert detail["options"] == {"snapshot": 7}
     assert detail["policy_rules"] == []
     assert "tenant" not in _keys_recursive({"assets": assets, "detail": detail})
     assert "cell" not in _keys_recursive({"assets": assets, "detail": detail})
+
+
+def test_workspace_asset_inventory_reports_active_publication_metadata():
+    client = _client()
+    asset = _provision_draft(client)
+    assert (
+        client.put(
+            f"/v1/assets/{asset['id']}/owners",
+            json={"owners": ["platform:admin"], "expected_revision": 0},
+            headers=ADMIN_HEADERS,
+        ).status_code
+        == 200
+    )
+
+    publication = client.post("/v1/workspace/publications", headers=ADMIN_HEADERS)
+    assert publication.status_code == 200, publication.json()
+    activated = client.post(
+        f"/v1/workspace/publications/{publication.json()['publication_id']}/activate",
+        json={"expected_publication_id": None},
+        headers=ADMIN_HEADERS,
+    )
+    assert activated.status_code == 200, activated.json()
+
+    item = client.get("/v1/assets", headers=ADMIN_HEADERS).json()[0]
+    assert item["policy_status"] == "configured"
+    assert item["active_policy_version"] > 0
+    assert item["last_published_at"]
 
 
 def test_workspace_asset_requires_physical_iceberg_identifier():
@@ -422,6 +451,8 @@ def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
             "owners": [],
             "policy_status": "configured",
             "draft_status": "draft",
+            "active_policy_version": None,
+            "last_published_at": None,
         }
     ]
     assert asset_detail == {

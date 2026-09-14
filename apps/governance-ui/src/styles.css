@@ -8,6 +8,10 @@
 .asset-picker select { min-width: 260px; }
 .asset-page-actions { display: flex; align-items: center; gap: 8px; padding-bottom: 1px; }
 .asset-page-actions small { color: #61736e; }
+.asset-governance-status { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: 4px; padding-bottom: 1px; }
+.asset-governance-status small { color: #61736e; font-size: 12px; }
+.pill.warning { color: #8b4a12; background: #fbe9c7; }
+.pill-muted { color: #52635e; background: #edf1ed; }
 .save-status { white-space: nowrap; }
 .consumer-view { padding: 34px 0; }
 .consumer-view > .management-head { max-width: 800px; }

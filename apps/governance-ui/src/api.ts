@@ -8,6 +8,11 @@ export type Asset = {
   owners: string[];
   schema_fields: SchemaField[];
   schema?: AssetSchema;
+  /** Inventory state supplied by the workspace asset list. */
+  policy_status?: "configured" | "missing" | string;
+  draft_status?: "draft" | "published" | "none" | string;
+  active_policy_version?: number | null;
+  last_published_at?: string | null;
 };
 
 export type AssetPage = {
