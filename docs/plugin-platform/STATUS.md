@@ -1354,3 +1354,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live separate-origin browser authentication/CSRF, rendered accessibility, and independent security/release evidence remain VERIFY under N05–N07/N16; next action is continue live browser and consumer qualification while retaining release HOLD.
 - Atomic implementation commits: `ac8aab2`.
 - Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N07 cancellable asset access mutations
+
+- Scope: apply lifecycle cancellation to owner and delegated-capability writes in the asset Access view.
+- Observable behavior delivered; FR/NFR and B/G subcases: access PUT requests carry an `AbortSignal`; active writes abort when the asset view unmounts or session scope changes; aborted or stale responses cannot overwrite capability state, messages, or cached private data.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/api.ts` and `apps/governance-ui/src/components/AssetWorkspace.tsx`; no backend, plugin, serializer, serialized class, payload, import path, migration, or dependency changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +37 UI logical lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing lifecycle/query tests plus TypeScript compile and production build; no tests deleted. Rendered deferred access races and live session-expiry evidence remain browser acceptance owners for N07/N16.
+- Exact commands, exit codes, UTC date, runtime versions, environment: UI TypeScript build (exit 0), `node --experimental-strip-types --test tests/*.test.mjs` (13 passed), Vite production build (exit 0; 325.73 kB JS / 98.10 kB gzip), 2026-09-14, Node 24 local workspace. Commit hooks passed with repository baseline `ty` diagnostics skipped (`SKIP=ty`).
+- Artifact and fixture hashes; evidence locations: atomic commit `4198e0f`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: browser-rendered deferred access mutations, live logout/401 and two-process revocation, and independent accessibility/security/release review remain VERIFY under N05/N07/N16; next action is continue live acceptance and plugin/consumer qualification while retaining release HOLD.
+- Atomic implementation commits: `4198e0f`.
+- Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
