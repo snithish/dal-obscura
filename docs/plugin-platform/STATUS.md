@@ -1189,6 +1189,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `e8210e5`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N07 pagination duplicate-load guard
+
+- Scope: prevent duplicate cursor-page reads from rapid Load more history/activity events.
+- Observable behavior delivered; FR/NFR and B/G subcases: history and audit pagination now use synchronous loading refs in addition to React loading state. Repeated events cannot issue the same cursor request twice or append duplicate rows; refs clear in `finally` even when the request is aborted, rejected, or superseded, preserving retry behavior. Existing session/filter/epoch fencing remains authoritative. Pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/main.tsx`; no backend, serializer, serialized class/import path, payload, migration, dependency, or test deletion.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +8 UI production lines and -2 stale guard lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing keyset pagination and UI query tests remain owners; no tests deleted. Rendered double-click pagination and deferred-response evidence remain required B10/B15 proof.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node_modules/.bin/vite build` (exit 0; 332.06 kB JavaScript / 100.21 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0; 14 passed), and `git diff --check` (exit 0), 2026-09-14, Node 26.8.2 local runtime (package policy remains Node 24). Commit hook used `SKIP=ty`; repository `ty` baseline remains documented separately.
+- Artifact and fixture hashes; evidence locations: implementation commit `140b6054`; local source/test workspace only; no external artifact published.
+- Remaining subcases; blocker and next concrete action: rendered pagination double-click/deferred-response proof, live OIDC/PKCE/revocation, hostile transport, PostgreSQL process races/recovery, clean plugin wheels and TLS/OIDC consumers, five-run mixed-load capacity, deployment integrity/SBOM, full accessibility evidence, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable qualification packet without changing pickle behavior.
+- Atomic implementation commits: `140b6054`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-14 — N09 history restore duplicate-request guard
 
 - Scope: serialize restore-to-draft submissions from the policy history view.
