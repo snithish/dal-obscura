@@ -2500,3 +2500,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live OIDC freshness/revocation, cross-process PostgreSQL races, actual hostile transport/DNS/private-address counters, clean TLS/OIDC consumer matrix, populated browser accessibility, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable governed backend slice.
 - Atomic implementation commits: `e6599a7c`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N04 REST post-I/O cancellation fence
+
+- Scope: close the provider completion window in REST table resolution.
+- Observable behavior delivered; FR/NFR and B/G subcases: `RestCatalog.resolve_table()` now samples the execution context immediately after provider `load_table()` returns and rejects cancelled or expired work before constructing a governed `TableHandle`. Existing request timeout, redirect, and cleanup behavior remains unchanged. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `packages/iceberg-rest-plugin/src/dal_obscura_iceberg_rest/catalog.py` and `packages/iceberg-rest-plugin/tests/test_rest_plugin.py`; no serializers, migrations, dependencies, or unrelated paths changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +1 production line, +26 test lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: REST plugin suite owns post-load cancellation fencing; existing integration transport suite remains the live hostile endpoint owner (loopback requires elevated execution permission).
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest packages/iceberg-rest-plugin/tests/test_rest_plugin.py -q` (exit 0, 20 passed), focused Ruff (exit 0), 2026-09-14, Python 3.12. The combined loopback integration command was attempted but sandbox socket policy blocked binding; no code failure observed.
+- Artifact and fixture hashes; evidence locations: implementation commit `e7703d27`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: live hostile transport/DNS/private-address counters, live OIDC freshness/revocation, cross-process PostgreSQL races, clean TLS/OIDC consumer matrix, populated browser accessibility, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable governed backend slice.
+- Atomic implementation commits: `e7703d27`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
