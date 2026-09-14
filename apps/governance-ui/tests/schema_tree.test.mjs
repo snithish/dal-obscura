@@ -25,6 +25,12 @@ test("flattenSchemaTree only includes expanded descendants", () => {
     ["profile.address", 1, 2],
     ["profile.address.city", 2, 3],
   ]);
+  assert.deepEqual(expanded.map(({ node: value, posinset, setsize }) => [value.human_path, posinset, setsize]), [
+    ["profile", 1, 1],
+    ["profile.email", 1, 2],
+    ["profile.address", 2, 2],
+    ["profile.address.city", 1, 1],
+  ]);
 });
 
 test("forceExpanded exposes all descendants for search", () => {
