@@ -2018,3 +2018,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live OIDC/PKCE, hostile DNS/private-address transport, browser axe/screen-reader/responsive evidence, PostgreSQL races/recovery, clean TLS/OIDC consumers, five-run mixed-load capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD.
 - Atomic implementation commits: verification-only ledger entry; no source commit.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N02/N15 deployment topology and boundary checks
+
+- Scope: run the production/local-secure topology and package-boundary tests against the current candidate.
+- Observable behavior delivered; FR/NFR and B/G subcases: all seven targeted checks passed. The secure-local profile still layers production services, loopback exposure, read-only containers, dropped capabilities, internal backend networking, placeholder/digest validation, and fail-closed startup ordering. Package-boundary tests continue to reject removed legacy root packages. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: verification-only ledger entry; no source, serializer, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no source or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: `tests/production/test_local_parity.py` and architecture boundary suites remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/production tests/architecture/test_package_boundaries.py tests/architecture/test_secure_local_profile.py -q` (exit 0; 7 passed), 2026-09-14, Python 3.12/uv.
+- Artifact and fixture hashes; evidence locations: checked-in `deployment/production/compose.yaml`, `deployment/local-secure/compose.yaml`, and local-secure runbook; no external artifact published.
+- Remaining subcases; blocker and next concrete action: actual Compose/TLS/OIDC startup, artifact signatures/SBOM, encrypted recovery, PostgreSQL races, hostile transport, clean consumer wheels, mixed-load capacity, browser accessibility, and independent review remain VERIFY under N04–N16. Release remains HOLD.
+- Atomic implementation commits: verification-only ledger entry; no source commit.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
