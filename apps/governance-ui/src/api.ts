@@ -171,7 +171,10 @@ export type Catalog = {
   name: string;
   module: string;
   options: Record<string, unknown>;
+  status?: string;
   revision?: number;
+  discovered_table_count?: number;
+  governed_asset_count?: number;
 };
 
 export type CatalogDiagnostic = {
