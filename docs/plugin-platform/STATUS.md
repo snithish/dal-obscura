@@ -1901,3 +1901,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: complete N04 hostile DNS/private-address and cancellation/resource probes, then N05 live OIDC/browser evidence; N12 PostgreSQL process races, N13 Spark/JVM and TLS/OIDC consumer cells, N14 capacity, N15 deployment integrity/recovery, and N16 independent review remain VERIFY. Release remains HOLD.
 - Atomic implementation commits: `93d109a`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N13 JVM/Spark connector qualification
+
+- Scope: run the complete JVM connector reactor with loopback-enabled fixture execution.
+- Observable behavior delivered; FR/NFR and B/G subcases: Java client, Spark 3 datasource, connector testkit, and Spark integration modules all compile and pass. The integration cells exercise nested projection, pushed and residual filters, top-level and nested masks, broad versus selective multi-ticket planning, explicit authorization headers, and a missing-token authorization failure. This is governed local Flight fixture evidence; pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: verification only; no source, serializer, serialized class/import path, payload, migration, dependency, or test deletion.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no source or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: `connectors/jvm` unit and integration suites remain owners; no tests deleted. Clean installed-wheel provider pairs, TLS/OIDC transport, and independent external artifact identity remain open.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `mvn -f connectors/jvm/pom.xml verify` (exit 0; 44 tests: 7 Java client, 29 Spark datasource, 2 testkit, 6 Spark integration; 0 failures/errors/skips), 2026-09-14, Java 17.0.20.1, Spark 3.5.6, macOS aarch64, loopback/subprocess permissions enabled.
+- Artifact and fixture hashes; evidence locations: reactor outputs under `connectors/jvm/*/target`; the fixture runner creates disposable nested data and local service state. No release artifact was published.
+- Remaining subcases; blocker and next concrete action: N13 still requires clean exact wheels, real SQL/REST/manifest datasets through TLS/OIDC Flight, and every advertised Python/Arrow, DuckDB, and Spark/JVM cell; N04 hostile transport/cancellation, N05 live OIDC, N12 process races, N14 capacity, N15 recovery/integrity, and N16 independent review remain VERIFY. Release remains HOLD.
+- Atomic implementation commits: verification only; no source commit.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
