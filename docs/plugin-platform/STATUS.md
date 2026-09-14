@@ -831,6 +831,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: full and cursor-paginated asset inventory endpoints now validate responses through Pydantic models, including nullable active policy and publication timestamp fields. Route authorization and concealed-resource behavior remain unchanged.
 - Verification: asset API and inventory-read suites passed (28 tests); changed-path Ruff and format checks passed. Remaining strict DTO coverage for other routes and generated TypeScript checks stays VERIFY under N03.
 
+## 2026-09-14 — N03 typed catalog management responses
+
+- Scope: strengthen management API contracts used by authenticated Connections UI.
+- Observable behavior delivered: catalog summaries and connectivity diagnostics now use shared Pydantic response models with bounded, explicit fields. Discovery remains dynamic until plugin-specific table contracts are formalized.
+- Verification: catalog and workspace API suites passed (24 tests); changed-path Ruff and format checks passed. Broader response-model and generated DTO coverage remains VERIFY.
+
 ## 2026-09-14 — N09/N11 post-publication inventory refresh
 
 - Scope: keep governed asset status aligned after a successful publish response.
