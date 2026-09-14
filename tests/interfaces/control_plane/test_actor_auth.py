@@ -218,6 +218,26 @@ def test_cookie_session_rejects_a_forged_csrf_cookie(monkeypatch):
     assert response.json()["detail"] == "CSRF validation failed"
 
 
+def test_cookie_session_rejects_conflicting_host_and_legacy_cookies(monkeypatch):
+    client = _client_with_ui_auth_config()
+    monkeypatch.setattr(
+        api_module,
+        "_exchange_demo_password_token",
+        lambda config, username: "owner-token",
+    )
+    login = client.post("/v1/demo-login", json={"login_hint": "asset-owner"})
+    cookie_header = (
+        f"dal_obscura_session={login.cookies['dal_obscura_session']}; "
+        f"__Host-dal_obscura_session=forged; "
+        f"dal_obscura_csrf={login.cookies['dal_obscura_csrf']}"
+    )
+
+    response = client.get("/v1/session", headers={"cookie": cookie_header})
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Conflicting browser credentials"
+
+
 def test_cookie_session_logout_requires_csrf_and_expires_browser_cookies(monkeypatch):
     client = _client_with_ui_auth_config()
     monkeypatch.setattr(

@@ -15,6 +15,7 @@ Example:
 
 from __future__ import annotations
 
+import secrets
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import cast
@@ -103,8 +104,8 @@ class ControlPlaneDeps:
         # dependency boundary defensive because direct dependency invocation
         # and older Starlette/Pydantic combinations can leave the marker
         # object in place when the cookie is absent.
-        session_token = _cookie_text(host_session_token) or _cookie_text(session_token)
-        csrf_cookie = _cookie_text(host_csrf_cookie) or _cookie_text(csrf_cookie)
+        session_token = _coalesce_cookie(host_session_token, session_token)
+        csrf_cookie = _coalesce_cookie(host_csrf_cookie, csrf_cookie)
         expected = f"Bearer {self.admin_token}"
         if self.bootstrap_enabled and authorization == expected:
             return ControlPlaneActor.for_platform_admin("platform:admin")
@@ -305,8 +306,8 @@ class ControlPlaneDeps:
         actor = self.require_actor(
             request=request,
             authorization=authorization,
-            session_token=host_session_token or session_token,
-            csrf_cookie=host_csrf_cookie or csrf_cookie,
+            session_token=_coalesce_cookie(host_session_token, session_token),
+            csrf_cookie=_coalesce_cookie(host_csrf_cookie, csrf_cookie),
         )
         if not actor.platform_admin:
             raise HTTPException(status_code=403, detail="Platform admin required")
@@ -358,6 +359,16 @@ def _cookie_text(value: object) -> str | None:
     if isinstance(value, str):
         return value or None
     return None
+
+
+def _coalesce_cookie(primary: object, fallback: object) -> str | None:
+    """Accept identical duplicate cookie names but reject conflicting values."""
+
+    first = _cookie_text(primary)
+    second = _cookie_text(fallback)
+    if first and second and not secrets.compare_digest(first, second):
+        raise HTTPException(status_code=400, detail="Conflicting browser credentials")
+    return first or second
 
 
 def _canonical_origin(value: str) -> str | None:

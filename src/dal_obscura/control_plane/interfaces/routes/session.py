@@ -302,8 +302,8 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         host_csrf_cookie: str | None = Cookie(default=None, alias="__Host-dal_obscura_csrf"),
     ) -> AuthenticationMutationResponse:
         """Expires browser credentials even when the server session is stale."""
-        session_token = _cookie_text(host_session_token) or _cookie_text(session_token)
-        csrf_cookie = _cookie_text(host_csrf_cookie) or _cookie_text(csrf_cookie)
+        session_token = _coalesce_cookie(host_session_token, session_token)
+        csrf_cookie = _coalesce_cookie(host_csrf_cookie, csrf_cookie)
         if session_token:
             deps.validate_browser_mutation(request, csrf_cookie)
             deps.revoke_browser_session(session_token)
@@ -328,6 +328,16 @@ def _cookie_text(value: object) -> str | None:
     if isinstance(value, str):
         return value or None
     return None
+
+
+def _coalesce_cookie(primary: object, fallback: object) -> str | None:
+    """Accept identical duplicate cookie names but reject conflicting values."""
+
+    first = _cookie_text(primary)
+    second = _cookie_text(fallback)
+    if first and second and not secrets.compare_digest(first, second):
+        raise HTTPException(status_code=400, detail="Conflicting browser credentials")
+    return first or second
 
 
 def _required_config_value(config: dict[str, object], key: str) -> str:
