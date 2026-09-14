@@ -131,3 +131,27 @@ def test_resolve_secret_refs_requires_matching_scope(monkeypatch: pytest.MonkeyP
             {"password": {"secret": "catalog-password", "scope": "catalog:analytics"}},
             provider=provider,
         )
+
+
+def test_env_provider_enforces_operator_scope_grants(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("LOCAL_catalog-password", "value")
+    provider = EnvSecretProvider(
+        config={"prefix": "LOCAL_", "scope_grants": {"catalog:analytics": ["catalog-password"]}}
+    )
+
+    assert resolve_secret_refs(
+        {"password": {"secret": "catalog-password", "scope": "catalog:analytics"}},
+        provider=provider,
+        expected_scope="catalog:analytics",
+    ) == {"password": "value"}
+    with pytest.raises(ValueError, match="not granted"):
+        resolve_secret_refs(
+            {"password": {"secret": "other-secret", "scope": "catalog:analytics"}},
+            provider=provider,
+            expected_scope="catalog:analytics",
+        )
+
+
+def test_env_provider_rejects_malformed_scope_grants():
+    with pytest.raises(ValueError, match="scope grant"):
+        EnvSecretProvider(config={"scope_grants": {"catalog:analytics": "catalog-password"}})

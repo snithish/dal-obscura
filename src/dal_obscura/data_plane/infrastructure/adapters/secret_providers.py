@@ -21,6 +21,17 @@ class SecretProvider(ABC):
     def get_secret(self, key: str) -> str | None:
         """Returns the secret value for `key`, or `None` when it is unavailable."""
 
+    def is_allowed(self, key: str, scope: str) -> bool:
+        """Returns whether the operator granted ``key`` to ``scope``.
+
+        Providers that do not expose a grant registry retain their own policy;
+        the default keeps the interface compatible while the environment
+        provider can enforce explicit startup grants.
+        """
+
+        del key, scope
+        return True
+
 
 class EnvSecretProvider(SecretProvider):
     """Secret provider that reads secrets from environment variables."""
@@ -36,9 +47,15 @@ class EnvSecretProvider(SecretProvider):
         del secrets
         raw_prefix = config.get("prefix") if config is not None else None
         self._prefix = str(raw_prefix if raw_prefix is not None else prefix)
+        self._scope_grants = _parse_scope_grants(config.get("scope_grants") if config else None)
 
     def get_secret(self, key: str) -> str | None:
         return os.getenv(f"{self._prefix}{key}")
+
+    def is_allowed(self, key: str, scope: str) -> bool:
+        if self._scope_grants is None:
+            return True
+        return key in self._scope_grants.get(scope, frozenset())
 
 
 @dataclass(frozen=True)
@@ -125,6 +142,9 @@ def resolve_secret_refs(
                 or reference_scope != expected_scope
             ):
                 raise ValueError("Secret reference scope does not match the requesting scope")
+            is_allowed = getattr(provider, "is_allowed", None)
+            if callable(is_allowed) and not is_allowed(secret_key, reference_scope):
+                raise ValueError("Secret reference is not granted to the requesting scope")
             resolved = provider.get_secret(secret_key)
             if resolved is None or not resolved:
                 raise ValueError(f"Secret {secret_key!r} could not be resolved")
@@ -180,3 +200,20 @@ def _json_object_value(raw: str | None, name: str) -> dict[str, object]:
     if not isinstance(value, dict):
         raise ValueError(f"{name} must be a JSON object")
     return {str(key): item for key, item in value.items()}
+
+
+def _parse_scope_grants(raw: object) -> dict[str, frozenset[str]] | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping):
+        raise ValueError("Secret provider scope_grants must be a JSON object")
+    grants: dict[str, frozenset[str]] = {}
+    for raw_scope, raw_keys in raw.items():
+        if not isinstance(raw_scope, str) or not raw_scope.strip():
+            raise ValueError("Secret provider scope grant names must be non-empty strings")
+        if not isinstance(raw_keys, list) or any(
+            not isinstance(key, str) or not key.strip() for key in raw_keys
+        ):
+            raise ValueError(f"Secret provider scope grant {raw_scope!r} must list secret names")
+        grants[raw_scope] = frozenset(raw_keys)
+    return grants
