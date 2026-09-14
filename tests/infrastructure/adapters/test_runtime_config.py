@@ -159,6 +159,10 @@ def test_runtime_config_accepts_secure_production_data_plane(monkeypatch: pytest
     monkeypatch.setenv("DAL_OBSCURA_LOCATION", "grpc+tls://flight:8815")
     monkeypatch.setenv("DAL_OBSCURA_TLS_CERT", "server-cert")
     monkeypatch.setenv("DAL_OBSCURA_TLS_KEY", "server-key")
+    monkeypatch.setenv(
+        "DAL_OBSCURA_SECRET_PROVIDER_CONFIG",
+        '{"scope_grants":{"identity":["JWT_SECRET"]}}',
+    )
 
     config = load_data_plane_runtime_config()
 

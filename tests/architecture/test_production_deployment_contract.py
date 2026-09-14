@@ -51,6 +51,9 @@ def test_production_reference_contains_immutable_and_private_topology() -> None:
     assert "DAL_OBSCURA_PLUGIN_LOCK_FILE" in env_example
     assert "DAL_OBSCURA_PLUGIN_LOCK_FILE" in control_block
     assert "DAL_OBSCURA_PLUGIN_LOCK_FILE" in data_block
+    assert "DAL_OBSCURA_SECRET_PROVIDER_CONFIG" in env_example
+    assert "DAL_OBSCURA_SECRET_PROVIDER_CONFIG" in control_block
+    assert "DAL_OBSCURA_SECRET_PROVIDER_CONFIG" in data_block
     assert "Provision separate PostgreSQL roles" in readme
     assert "./postgres-init:/docker-entrypoint-initdb.d:ro" in compose
     assert "DAL_OBSCURA_MIGRATION_DB_PASSWORD" in compose

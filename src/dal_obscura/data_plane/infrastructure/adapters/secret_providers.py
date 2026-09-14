@@ -91,6 +91,8 @@ def load_secret_provider(
 
 def load_secret_provider_from_environment(
     environment: Mapping[str, str] | None = None,
+    *,
+    require_scope_grants: bool = False,
 ) -> SecretProvider:
     """Load the admitted environment-backed provider for control-plane callers.
 
@@ -110,6 +112,11 @@ def load_secret_provider_from_environment(
         source.get("DAL_OBSCURA_SECRET_PROVIDER_SECRETS"),
         "DAL_OBSCURA_SECRET_PROVIDER_SECRETS",
     )
+    scope_grants = config.get("scope_grants")
+    if require_scope_grants and (not isinstance(scope_grants, Mapping) or not scope_grants):
+        raise ValueError(
+            "Production requires non-empty DAL_OBSCURA_SECRET_PROVIDER_CONFIG scope_grants"
+        )
     return load_secret_provider(
         SecretProviderConfig(module=module, config=config, secrets=secrets),
         context=SecretProviderContext(database_url="control-plane", cell_id=UUID(int=0)),

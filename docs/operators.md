@@ -79,6 +79,8 @@ it can load the correct internal runtime partition.
 | `DAL_OBSCURA_LOCATION` | Data plane | Advertised Flight endpoint location. |
 | `DAL_OBSCURA_TICKET_SECRET` | Data plane | HMAC secret for opaque tickets. |
 | `DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST` | Control plane | Comma-separated exact catalog/object-store hostnames allowed in production. |
+| `DAL_OBSCURA_SECRET_PROVIDER_CONFIG` | Control plane and data plane | JSON provider configuration. Production requires `scope_grants`, mapping exact `catalog:<name>`/`identity` scopes to operator-approved secret keys. |
+| `DAL_OBSCURA_SECRET_PROVIDER_MODULE` | Control plane and data plane | Admitted secret provider module; production currently supports the environment provider only. |
 | `DAL_OBSCURA_PLUGIN_LOCK_FILE` | Control plane and data plane | Optional operator-mounted JSON lock containing pinned five-part plugin identities; loaded before any plugin factory import. |
 
 The plugin lock is read-only startup input. Keep it owned by the service account and

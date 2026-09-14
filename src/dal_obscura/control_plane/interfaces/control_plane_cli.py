@@ -69,7 +69,10 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
         plugin_registry = create_builtin_plugin_registry(
             allowlist=load_plugin_lock_file(plugin_lock_file) if plugin_lock_file else None
         )
-        secret_provider = load_secret_provider_from_environment(values)
+        secret_provider = load_secret_provider_from_environment(
+            values,
+            require_scope_grants=profile == "production",
+        )
         app = create_app(
             session_factory(engine),
             admin_token=admin_token,

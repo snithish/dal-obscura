@@ -139,6 +139,11 @@ def _validate_profile(config: DataPlaneRuntimeConfig) -> None:
         raise ValueError(
             "DAL_OBSCURA_TLS_CLIENT_CA is required when client verification is enabled"
         )
+    scope_grants = config.secret_provider.config.get("scope_grants")
+    if not isinstance(scope_grants, dict) or not scope_grants:
+        raise ValueError(
+            "Production requires non-empty DAL_OBSCURA_SECRET_PROVIDER_CONFIG scope_grants"
+        )
 
 
 def _required_env(name: str) -> str:

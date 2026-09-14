@@ -99,6 +99,12 @@ flowchart LR
 Store references in configuration. Keep secret values in environment variables,
 container secret stores, or another runtime secret provider.
 
+The supported environment provider accepts a `scope_grants` object in
+`DAL_OBSCURA_SECRET_PROVIDER_CONFIG`. Each exact caller scope (for example,
+`catalog:analytics` or `identity`) must name the secret keys it may resolve.
+Production startup requires this grant map in both planes; a matching reference
+scope alone cannot authorize an environment lookup.
+
 ## Operator publication
 
 Run the operator CLI on an administrative host to validate, preview, publish,

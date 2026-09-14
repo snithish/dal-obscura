@@ -61,6 +61,20 @@ def test_load_secret_provider_from_environment_rejects_dynamic_module():
         )
 
 
+def test_load_secret_provider_from_environment_requires_production_grants():
+    module_name = (
+        "dal_obscura.data_plane.infrastructure.adapters.secret_providers.EnvSecretProvider"
+    )
+    with pytest.raises(ValueError, match=r"non-empty.*scope_grants"):
+        load_secret_provider_from_environment(
+            {
+                "DAL_OBSCURA_SECRET_PROVIDER_MODULE": module_name,
+                "DAL_OBSCURA_SECRET_PROVIDER_CONFIG": "{}",
+            },
+            require_scope_grants=True,
+        )
+
+
 def test_load_secret_provider_rejects_dynamic_module_path():
     with pytest.raises(ValueError, match="only environment secrets"):
         load_secret_provider(
