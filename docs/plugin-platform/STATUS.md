@@ -1189,6 +1189,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `e8210e5`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N05 concurrent logout request guard
+
+- Scope: prevent repeated sign-out clicks from issuing overlapping session-revocation requests.
+- Observable behavior delivered; FR/NFR and B/G subcases: logout now takes a synchronous in-flight guard before clearing private state and calling the revocation endpoint. Repeated events are ignored until the request settles; a failed request still exposes the existing retry action and can be attempted again. Private policy/cache state is cleared before every attempt. Pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/main.tsx`; no backend, serializer, serialized class/import path, payload, migration, dependency, or test deletion.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +4 UI production lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing authentication/session tests remain owners; no tests deleted. Rendered logout/retry and real revocation evidence remain required B08/B10 proof.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node_modules/.bin/vite build` (exit 0; 331.71 kB JavaScript / 100.13 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0; 14 passed), and `git diff --check` (exit 0), 2026-09-14, Node 26.8.2 local runtime (package policy remains Node 24). Commit hook used `SKIP=ty`; repository `ty` baseline remains documented separately.
+- Artifact and fixture hashes; evidence locations: implementation commit `5c0a7838`; local source/test workspace only; no external artifact published.
+- Remaining subcases; blocker and next concrete action: rendered logout/retry and live OIDC/revocation proof, clean plugin wheels and TLS/OIDC consumers, hostile transport, PostgreSQL process races/recovery, five-run mixed-load capacity, deployment integrity/SBOM, full accessibility/deferred-response evidence, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable qualification packet without changing pickle behavior.
+- Atomic implementation commits: `5c0a7838`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-14 — N07 plugin lifecycle duplicate-click guard
 
 - Scope: prevent duplicate plugin lifecycle PATCH requests from same-tick Apply events.
