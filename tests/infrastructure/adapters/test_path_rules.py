@@ -58,6 +58,20 @@ def test_path_rule_enforcer_rejects_credential_and_query_roots():
         PathRuleEnforcer([{"root": "s3://analytics-demo/delta?token=secret"}])
 
 
+def test_path_rule_enforcer_accepts_explicit_local_file_uris():
+    enforcer = PathRuleEnforcer([{"root": "file:///warehouse/curated"}])
+
+    enforcer.check("file:///warehouse/curated/orders/data.parquet")
+    enforcer.check("/warehouse/curated/orders/data.parquet")
+    with pytest.raises(PermissionError, match="Path is not allowed"):
+        enforcer.check("file:///warehouse/private/data.parquet")
+
+
+def test_path_rule_enforcer_rejects_remote_file_authorities():
+    with pytest.raises(ValueError, match="must be local"):
+        PathRuleEnforcer([{"root": "file://remote-host/warehouse"}])
+
+
 def test_path_rule_enforcer_allows_all_paths_within_uri_authority_root():
     enforcer = PathRuleEnforcer([{"root": "s3://analytics-demo/"}])
 

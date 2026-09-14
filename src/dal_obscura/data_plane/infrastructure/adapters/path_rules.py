@@ -77,6 +77,18 @@ def _normalize_path(value: object) -> str:
         return ""
     parsed = urlsplit(text)
     if parsed.scheme:
+        if parsed.scheme.lower() == "file":
+            # Explicit local file URIs are equivalent to their filesystem
+            # paths.  A non-empty authority would select a remote host and
+            # must never cross the local path boundary.
+            if parsed.netloc or parsed.username or parsed.password:
+                raise ValueError("File path roots must be local and credential-free")
+            if parsed.query or parsed.fragment:
+                raise ValueError("Path roots must not contain query or fragment components")
+            decoded_path = unquote(parsed.path or "")
+            if not decoded_path:
+                raise ValueError("Path roots must have a local path")
+            return str(Path(decoded_path).resolve(strict=False))
         if not parsed.netloc or parsed.username or parsed.password:
             raise ValueError("Path roots must not contain credentials or missing authority")
         if parsed.query or parsed.fragment:
