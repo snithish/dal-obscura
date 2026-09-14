@@ -1393,3 +1393,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: the 14 skips are explicit benchmark, loopback-consumer, PostgreSQL race/recovery opt-ins; Node 24 clean-install/image/advisory, live OIDC, hostile transport counters, rendered browser/accessibility, real consumer pairs, recovery, and independent review remain VERIFY under N01/N04–N16. Next action is continue live transport and production qualification while retaining release HOLD.
 - Atomic implementation commits: `96e79f3` (implementation); this verification is recorded separately.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N04 literal destination safety
+
+- Scope: reject unsafe literal catalog destinations before a provider can open a socket.
+- Observable behavior delivered; FR/NFR and B/G subcases: link-local metadata-service, unspecified, and multicast literals are always rejected; private and loopback literals are rejected unless their exact host is explicitly allowlisted. Existing hostname egress checks and local/private allowlisted deployments remain available.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/application/catalog_service.py` and `tests/control_plane/test_catalog_option_validation.py`; no serializers, serialized classes, payloads, import paths, migrations, or dependencies changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +49 production/test logical lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: catalog-option validation, catalog API, and schema service suites; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: catalog-option/catalog-API/schema suite (41 passed), changed-path Ruff and format checks (exit 0), 2026-09-14, Python 3.12/uv local workspace. Commit hooks passed with repository baseline `ty` diagnostics skipped (`SKIP=ty`).
+- Artifact and fixture hashes; evidence locations: atomic commit `bcb1bfd`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: DNS rebinding/pinning, redirect and returned metadata/data/delete destination counters, cancellation cleanup, and deployment network enforcement remain VERIFY under B06/N04; explicitly permitted local/private paths must continue to work. Next action is continue live transport qualification without weakening special-address denial.
+- Atomic implementation commits: `bcb1bfd`.
+- Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
