@@ -1047,6 +1047,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Verification: audit, request-limit, and actor-auth suites (44 passed), Ruff, and non-heavy pre-commit hooks passed. Live hostile transport and release qualification remain VERIFY; release remains HOLD.
 - Atomic implementation commit: `9c8cd9d`.
 
+## 2026-09-14 — N03/B05 readiness error correlation
+
+- Scope: align the public readiness failure response with the control-plane error contract.
+- Observable behavior delivered: database readiness failures retain their health details and now include `not_ready`, a safe message, and a request ID mirrored in the response header.
+- Verification: health and request-boundary suites (7 passed), Ruff, and non-heavy pre-commit hooks passed. Production outage and recovery evidence remain VERIFY; release remains HOLD.
+- Atomic implementation commit: `b027153`.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
