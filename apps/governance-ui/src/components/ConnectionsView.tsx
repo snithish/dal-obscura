@@ -5,6 +5,15 @@ import { controlPlane } from "../api";
 import { recoveryMessage } from "../recovery";
 
 type PluginConfigField = { name: string; type: string; required: boolean; secret: boolean; options?: string[] };
+type PluginLifecycle = NonNullable<PluginState["lifecycle"]>;
+
+const lifecycleTransitions: Record<PluginLifecycle, PluginLifecycle[]> = {
+  enabled: ["enabled", "draining", "disabled", "revoked"],
+  draining: ["draining", "disabled", "revoked"],
+  disabled: ["disabled", "enabled"],
+  revoked: ["revoked", "removed"],
+  removed: ["removed"],
+};
 
 function configFields(plugin?: PluginDescriptor): PluginConfigField[] {
   const raw = plugin?.config_schema?.fields;
@@ -227,7 +236,7 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
     const state = pluginStates.find((item) => item.kind === plugin.kind && item.plugin_id === plugin.plugin_id);
     const lifecycle = state?.lifecycle ?? "enabled";
     const target = lifecycleTargets[key] ?? lifecycle;
-    return <article className="plugin-card" key={key}><div><strong>{plugin.display_name}</strong><small>{plugin.kind === "catalog" ? "Catalog" : "Table format"} · {plugin.plugin_id} · v{plugin.version} · {lifecycle}</small></div><div className="capability-list">{plugin.capabilities.map((capability) => <span className="pill" key={capability}>{capability.replaceAll("_", " ")}</span>)}</div><div className="card-actions"><label className="sr-only" htmlFor={`lifecycle-${key}`}>Lifecycle for {plugin.display_name}</label><select id={`lifecycle-${key}`} value={target} onChange={(event) => setLifecycleTargets((current) => ({ ...current, [key]: event.target.value as PluginState["lifecycle"] }))}><option value="enabled">Enabled</option><option value="draining">Draining</option><option value="disabled">Disabled</option><option value="revoked">Revoked</option><option value="removed">Removed</option></select><button className="secondary compact" disabled={lifecycleBusy === key || target === lifecycle} onClick={() => void updatePluginLifecycle(plugin)}>{lifecycleBusy === key ? "Applying…" : "Apply"}</button></div></article>;
+    return <article className="plugin-card" key={key}><div><strong>{plugin.display_name}</strong><small>{plugin.kind === "catalog" ? "Catalog" : "Table format"} · {plugin.plugin_id} · v{plugin.version} · {lifecycle}</small></div><div className="capability-list">{plugin.capabilities.map((capability) => <span className="pill" key={capability}>{capability.replaceAll("_", " ")}</span>)}</div><div className="card-actions"><label className="sr-only" htmlFor={`lifecycle-${key}`}>Lifecycle for {plugin.display_name}</label><select id={`lifecycle-${key}`} value={target} onChange={(event) => setLifecycleTargets((current) => ({ ...current, [key]: event.target.value as PluginState["lifecycle"] }))}>{lifecycleTransitions[lifecycle].map((option) => <option key={option} value={option}>{option[0].toUpperCase() + option.slice(1)}</option>)}</select><button className="secondary compact" disabled={lifecycleBusy === key || target === lifecycle} onClick={() => void updatePluginLifecycle(plugin)}>{lifecycleBusy === key ? "Applying…" : "Apply"}</button></div></article>;
   })}</div></div>;
   const discoveredChoices = pluginPairs.filter((pair) => pair.catalog_plugin_id === catalogs.find((item) => item.name === discoveredCatalog)?.plugin_id && pair.status === "admitted");
   const renderField = (field: PluginConfigField) => {
