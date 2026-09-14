@@ -292,6 +292,8 @@ def _continuation_offset(value: str | None) -> int:
 
 def _snapshot_id(table: object) -> str | None:
     snapshot = getattr(table, "current_snapshot", None)
+    if callable(snapshot):
+        snapshot = snapshot()
     value = getattr(snapshot, "snapshot_id", snapshot)
     return str(value) if value is not None else None
 

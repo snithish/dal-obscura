@@ -8,7 +8,7 @@ from time import sleep
 from types import SimpleNamespace
 
 import pytest
-from dal_obscura_iceberg_rest.catalog import RestCatalog
+from dal_obscura_iceberg_rest.catalog import RestCatalog, _snapshot_id
 from dal_obscura_plugin_api import CatalogConfig, ExecutionContext, TableIdentifier
 
 
@@ -204,6 +204,17 @@ def test_rest_catalog_does_not_copy_provider_io_credentials_into_handle():
         _context(),
     )
     assert handle.metadata == {"metadata_location": "https://storage.example/metadata/v1.json"}
+
+
+def test_snapshot_id_supports_pyiceberg_method_shape() -> None:
+    class FakeSnapshot:
+        snapshot_id = 42
+
+    class FakeTable:
+        def current_snapshot(self):
+            return FakeSnapshot()
+
+    assert _snapshot_id(FakeTable()) == "42"
 
 
 def test_rest_catalog_bounds_namespace_listing():

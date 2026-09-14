@@ -5,13 +5,19 @@ from __future__ import annotations
 import base64
 import json
 import os
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from threading import Thread
+from urllib.parse import urlsplit
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from dal_obscura_iceberg_rest.catalog import DESCRIPTOR as REST_CATALOG_DESCRIPTOR
+from dal_obscura_iceberg_rest.catalog import rest_catalog_factory
 from dal_obscura_manifest_parquet.catalog import CATALOG_DESCRIPTOR, manifest_factory
 from dal_obscura_manifest_parquet.format import FORMAT_DESCRIPTOR, parquet_factory
+from pyiceberg.catalog import load_catalog
 
 from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.connectors.python_sdk import DalObscuraClient, DuckDBDalObscuraReader
@@ -288,3 +294,103 @@ def test_python_and_duckdb_consumers_read_real_manifest_parquet_nested_data(tmp_
         {"id": 2, "profile": {"email": "[hidden]"}},
     ]
     assert duckdb_rows == [(1, {"email": "[hidden]"}), (2, {"email": "[hidden]"})]
+
+
+def test_python_and_duckdb_consumers_read_real_rest_iceberg_nested_data(tmp_path: Path) -> None:
+    """Exercise REST catalog resolution with a real Iceberg table response."""
+
+    target = create_iceberg_table(
+        tmp_path,
+        "rest_catalog",
+        "warehouse",
+        identifier="default.users",
+        values=[1, 2],
+    )
+    sql_catalog = load_catalog(
+        "rest_catalog",
+        type="sql",
+        uri=f"sqlite:///{tmp_path / 'rest_catalog.db'}",
+        warehouse=str(tmp_path / "warehouse"),
+    )
+    metadata_location = str(sql_catalog.load_table(target).metadata_location)
+    metadata_path = Path(metadata_location.removeprefix("file://"))
+    table_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    requests: list[str] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            requests.append(self.path)
+            path = urlsplit(self.path).path
+            if path == "/v1/config":
+                payload = {"defaults": {}, "overrides": {}, "endpoints": []}
+            elif path == "/v1/namespaces":
+                payload = {"namespaces": [["default"]]}
+            elif path == "/v1/namespaces/default/tables/users":
+                payload = {"metadata-location": metadata_location, "metadata": table_metadata}
+            else:
+                self.send_error(404)
+                return
+            body = json.dumps(payload).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, format: str, *args: object) -> None:
+            del format, args
+
+    http_server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    http_thread = Thread(target=http_server.serve_forever, daemon=True)
+    http_thread.start()
+    plugin_registry = PluginRegistry(
+        builtins={("catalog", "iceberg.rest"): (REST_CATALOG_DESCRIPTOR, rest_catalog_factory)},
+    )
+    plugin_registry.reload()
+    registry = DynamicCatalogRegistry(
+        ServiceConfig(
+            catalogs={
+                "rest": CatalogConfig(
+                    name="rest",
+                    type="plugin",
+                    plugin_id="iceberg.rest",
+                    revision=1,
+                    options={"uri": f"http://127.0.0.1:{http_server.server_port}"},
+                )
+            }
+        ),
+        plugin_registry=plugin_registry,
+    )
+    resolved = registry.resolve("rest", target)
+    assert resolved.get_schema().names == ["id", "email", "region"]
+    policy = [allow_rule(["id", "email"], masks={"email": {"type": "email"}})]
+    server = build_flight_service(
+        catalog_registry=registry,
+        authorizer=InMemoryPolicyAuthorizer(catalog="rest", target=target, rules=policy),
+        max_tickets=2,
+    )
+
+    try:
+        with running_flight_client(server) as flight_client:
+            sdk = DalObscuraClient.from_flight_client(
+                flight_client,
+                auth_token=make_jwt("user1"),
+            )
+            arrow_table = sdk.read_table(catalog="rest", target=target, columns=["id", "email"])
+            with DuckDBDalObscuraReader(sdk) as reader:
+                duckdb_rows = (
+                    reader.relation(catalog="rest", target=target, columns=["id", "email"])
+                    .order("id")
+                    .fetchall()
+                )
+    finally:
+        registry.close()
+        http_server.shutdown()
+        http_server.server_close()
+        http_thread.join(timeout=2)
+
+    assert arrow_table.num_rows == 2
+    assert arrow_table.column("email").to_pylist() == ["u***@example.com", "u***@example.com"]
+    assert duckdb_rows == [(1, "u***@example.com"), (2, "u***@example.com")]
+    assert "/v1/config" in requests
+    assert "/v1/namespaces/default/tables/users" in requests
