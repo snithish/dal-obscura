@@ -1,3 +1,7 @@
+import type { components } from "./generated/control_plane";
+
+type ApiSchemas = components["schemas"];
+
 export type Asset = {
   id: string;
   revision?: number;
@@ -103,13 +107,13 @@ export type Session = {
   groups: string[];
   platform_admin: boolean;
   capabilities: string[];
-  issuer?: string;
+  issuer?: string | null;
 };
 
 export type UiAuthConfig = {
-  authority?: string;
-  client_id?: string;
-  redirect_uri?: string;
+  authority?: string | null;
+  client_id?: string | null;
+  redirect_uri?: string | null;
 };
 
 export type SessionOptions = {
@@ -335,7 +339,7 @@ export const controlPlane = {
     window.location.assign("/auth/login");
   },
   getSession: async (signal?: AbortSignal) => {
-    const session = await request<Session>("/v1/session", { signal });
+    const session = await request<ApiSchemas["SessionResponse"]>("/v1/session", { signal });
     return {
       ...session,
       // Older control-plane instances may omit the additive field during a
@@ -343,8 +347,11 @@ export const controlPlane = {
       capabilities: Array.isArray(session.capabilities) ? session.capabilities : [],
     };
   },
-  getUiAuthConfig: (signal?: AbortSignal) => request<UiAuthConfig>("/v1/ui-auth-config", { signal }),
-  getSessionOptions: (signal?: AbortSignal) => request<SessionOptions>("/v1/session/options", { signal }),
+  getUiAuthConfig: (signal?: AbortSignal) => request<ApiSchemas["UiAuthConfigResponse"]>("/v1/ui-auth-config", { signal }),
+  getSessionOptions: async (signal?: AbortSignal) => {
+    const options = await request<ApiSchemas["SessionOptionsResponse"]>("/v1/session/options", { signal });
+    return { ...options, oidc: options.oidc ?? null } satisfies SessionOptions;
+  },
   bootstrapLogin: (token: string) => request<{ authenticated: true }>("/v1/session/bootstrap", {
     method: "POST",
     headers: { authorization: `Bearer ${token}` },
@@ -357,28 +364,32 @@ export const controlPlane = {
     if (params.cursor) query.set("cursor", params.cursor);
     if (params.search) query.set("search", params.search);
     const suffix = query.toString() ? `?${query.toString()}` : "";
-    const page = await request<AssetPage>(`/v1/assets/page${suffix}`, { signal: params.signal });
-    return { ...page, items: page.items.map(normalizeAsset) };
+    const page = await request<ApiSchemas["AssetInventoryPageResponse"]>(`/v1/assets/page${suffix}`, { signal: params.signal });
+    return { items: page.items.map(normalizeInventoryAsset), next_cursor: page.next_cursor ?? null } satisfies AssetPage;
   },
-  getAsset: async (assetId: string, signal?: AbortSignal) => normalizeAsset(await request<Asset>(`/v1/assets/${assetId}`, { signal })),
-  getAssetAccess: (assetId: string, signal?: AbortSignal) => request<AssetAccess>(`/v1/assets/${assetId}/access`, { signal }),
-  listGrants: (assetId: string, signal?: AbortSignal) => request<AssetGrant[]>(`/v1/assets/${assetId}/grants`, { signal }),
-  saveOwners: (assetId: string, owners: string[], expectedRevision?: number) => request<{ asset_id: string; owners: string[] }>(`/v1/assets/${assetId}/owners`, {
+  getAsset: async (assetId: string, signal?: AbortSignal) => normalizeDetailAsset(await request<ApiSchemas["AssetDetailResponse"]>(`/v1/assets/${assetId}`, { signal })),
+  getAssetAccess: async (assetId: string, signal?: AbortSignal) => {
+    const access = await request<ApiSchemas["AssetAccessResponse"]>(`/v1/assets/${assetId}/access`, { signal });
+    return { ...access, issuer: access.issuer ?? null } satisfies AssetAccess;
+  },
+  listGrants: (assetId: string, signal?: AbortSignal) => request<ApiSchemas["AssetGrantResponse"][]>(`/v1/assets/${assetId}/grants`, { signal }),
+  saveOwners: (assetId: string, owners: string[], expectedRevision?: number) => request<ApiSchemas["AssetOwnersResponse"]>(`/v1/assets/${assetId}/owners`, {
     method: "PUT",
     body: JSON.stringify({ owners, ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }) }),
   }),
-  saveGrants: (assetId: string, grants: AssetGrant[], expectedRevision?: number) => request<{ asset_id: string; grants: AssetGrant[] }>(`/v1/assets/${assetId}/grants`, {
+  saveGrants: (assetId: string, grants: AssetGrant[], expectedRevision?: number) => request<ApiSchemas["AssetGrantsResponse"]>(`/v1/assets/${assetId}/grants`, {
     method: "PUT",
     body: JSON.stringify({ grants, ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }) }),
   }),
-  getSchema: (assetId: string, signal?: AbortSignal) => request<AssetSchema>(`/v1/assets/${assetId}/schema`, { signal }),
+  getSchema: (assetId: string, signal?: AbortSignal) => request<ApiSchemas["AssetSchemaResponse"]>(`/v1/assets/${assetId}/schema`, { signal }) as Promise<AssetSchema>,
   listHistory: (signal?: AbortSignal) => request<PolicyVersion[]>("/v1/policy-versions", { signal }),
   listHistoryPage: async (params: { limit?: number; cursor?: string; signal?: AbortSignal } = {}) => {
     const query = new URLSearchParams();
     if (params.limit !== undefined) query.set("limit", String(params.limit));
     if (params.cursor) query.set("cursor", params.cursor);
     const suffix = query.toString() ? `?${query.toString()}` : "";
-    return request<PolicyVersionPage>(`/v1/policy-versions/page${suffix}`, { signal: params.signal });
+    const page = await request<ApiSchemas["PolicyVersionPageResponse"]>(`/v1/policy-versions/page${suffix}`, { signal: params.signal });
+    return { items: page.items, next_cursor: page.next_cursor ?? null } satisfies PolicyVersionPage;
   },
   listAuditEvents: (assetId?: string) => request<AuditEvent[]>("/v1/audit/events" + (assetId ? "?asset_id=" + encodeURIComponent(assetId) : "")),
   listAuditEventsPage: async (params: { limit?: number; cursor?: string; assetId?: string; actor?: string; action?: string; resourceType?: string; outcome?: string; correlationId?: string; createdAfter?: string; createdBefore?: string; signal?: AbortSignal } = {}) => {
@@ -394,68 +405,84 @@ export const controlPlane = {
     if (params.createdAfter) query.set("created_after", params.createdAfter);
     if (params.createdBefore) query.set("created_before", params.createdBefore);
     const suffix = query.toString() ? `?${query.toString()}` : "";
-    return request<AuditEventPage>(`/v1/audit/events/page${suffix}`, { signal: params.signal });
+    const page = await request<ApiSchemas["AuditEventPageResponse"]>(`/v1/audit/events/page${suffix}`, { signal: params.signal });
+    return { items: page.items.map((event) => ({ ...event, correlation_id: event.correlation_id ?? null })), next_cursor: page.next_cursor ?? null } satisfies AuditEventPage;
   },
   listAssetHistory: (assetId: string, signal?: AbortSignal) => request<PolicyVersion[]>(`/v1/assets/${assetId}/policy-versions`, { signal }),
   getPublicationOperation: (assetId: string, idempotencyKey: string) => request<{ id: string; status: string; result: { asset_id: string; policy_version: number } }>(`/v1/assets/${assetId}/policy-operations/${encodeURIComponent(idempotencyKey)}`),
-  getPolicyVersion: (assetId: string, policyVersion: number, signal?: AbortSignal) => request<PolicyVersionDetail>(`/v1/assets/${assetId}/policy-versions/${policyVersion}`, { signal }),
+  getPolicyVersion: async (assetId: string, policyVersion: number, signal?: AbortSignal) => {
+    const detail = await request<ApiSchemas["PolicyVersionDetailResponse"]>(`/v1/assets/${assetId}/policy-versions/${policyVersion}`, { signal });
+    return { ...detail, rules: detail.rules as PolicyRule[] } satisfies PolicyVersionDetail;
+  },
   restorePolicyVersion: (assetId: string, policyVersion: number, expectedRevision: number) =>
-    request<PolicyDraft>(`/v1/assets/${assetId}/policy-versions/${policyVersion}/restore`, {
+    request<ApiSchemas["PolicyDraftResponse"]>(`/v1/assets/${assetId}/policy-versions/${policyVersion}/restore`, {
       method: "POST",
       body: JSON.stringify({ expected_revision: expectedRevision }),
-    }),
-  listCatalogs: (signal?: AbortSignal) => request<Catalog[]>("/v1/catalogs", { signal }),
-  listWorkspacePublications: (signal?: AbortSignal) => request<WorkspacePublication[]>("/v1/workspace/publications", { signal }),
-  createWorkspacePublication: () => request<{ publication_id: string; asset_count: number; catalog_count: number; manifest_hash: string }>("/v1/workspace/publications", { method: "POST" }),
-  activateWorkspacePublication: (publicationId: string, expectedPublicationId?: string) => request<{ publication_id: string }>(`/v1/workspace/publications/${encodeURIComponent(publicationId)}/activate`, {
+    }) as Promise<PolicyDraft>,
+  listCatalogs: (signal?: AbortSignal) => request<ApiSchemas["CatalogInventoryResponse"][]>("/v1/catalogs", { signal }),
+  listWorkspacePublications: (signal?: AbortSignal) => request<ApiSchemas["WorkspacePublicationResponse"][]>("/v1/workspace/publications", { signal }),
+  createWorkspacePublication: () => request<ApiSchemas["WorkspacePublicationCreateResponse"]>("/v1/workspace/publications", { method: "POST" }),
+  activateWorkspacePublication: (publicationId: string, expectedPublicationId?: string) => request<ApiSchemas["PublicationActivationResponse"]>(`/v1/workspace/publications/${encodeURIComponent(publicationId)}/activate`, {
     method: "POST",
     body: JSON.stringify({ expected_publication_id: expectedPublicationId ?? null }),
   }),
   discoverCatalogTables: (name: string, signal?: AbortSignal) => request<{ catalog: string; tables: Array<Record<string, unknown>> }>(`/v1/catalogs/${encodeURIComponent(name)}/tables`, { signal }),
-  diagnoseCatalog: (name: string, signal?: AbortSignal) => request<CatalogDiagnostic>(`/v1/catalogs/${encodeURIComponent(name)}/diagnostics`, { signal }),
-  getRuntimeSettings: (signal?: AbortSignal) => request<RuntimeSettings | null>("/v1/settings/runtime", { signal }),
-  getAuthProviders: (signal?: AbortSignal) => request<AuthProvider[]>("/v1/settings/auth-providers", { signal }),
-  getAuthProviderRevision: (signal?: AbortSignal) => request<{ revision: number }>("/v1/settings/auth-providers/revision", { signal }),
-  saveAuthProviders: (providers: Array<{ ordinal: number; module: string; args: Record<string, unknown>; enabled: boolean }>, expectedRevision?: number) => request<AuthProvider[]>("/v1/settings/auth-providers", {
+  diagnoseCatalog: async (name: string, signal?: AbortSignal) => {
+    const diagnostic = await request<ApiSchemas["CatalogDiagnosticResponse"]>(`/v1/catalogs/${encodeURIComponent(name)}/diagnostics`, { signal });
+    return { ...diagnostic, sample_tables: diagnostic.sample_tables ?? undefined, table_count: diagnostic.table_count ?? undefined } satisfies CatalogDiagnostic;
+  },
+  getRuntimeSettings: (signal?: AbortSignal) => request<ApiSchemas["RuntimeSettingsResponse"] | null>("/v1/settings/runtime", { signal }),
+  getAuthProviders: (signal?: AbortSignal) => request<ApiSchemas["AuthProviderResponse"][]>("/v1/settings/auth-providers", { signal }),
+  getAuthProviderRevision: (signal?: AbortSignal) => request<ApiSchemas["AuthProviderRevisionResponse"]>("/v1/settings/auth-providers/revision", { signal }),
+  saveAuthProviders: (providers: Array<{ ordinal: number; module: string; args: Record<string, unknown>; enabled: boolean }>, expectedRevision?: number) => request<ApiSchemas["AuthProviderResponse"][]>("/v1/settings/auth-providers", {
     method: "PUT",
     body: JSON.stringify({ providers, ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }) }),
   }),
-  listPlugins: (signal?: AbortSignal) => request<{ plugins: PluginDescriptor[]; states: PluginState[]; pairs: PluginPair[] }>("/v1/plugins", { signal }),
-  getSummary: (signal?: AbortSignal) => request<WorkspaceSummary>("/v1/workspace/summary", { signal }),
-  getObservations: (signal?: AbortSignal) => request<WorkspaceObservations>("/v1/workspace/observations", { signal }),
-  saveCatalog: (name: string, module: string, options: Record<string, unknown>, expectedRevision?: number) => request<{ id: string; name: string }>(`/v1/catalogs/${encodeURIComponent(name)}`, {
+  listPlugins: async (signal?: AbortSignal) => {
+    const plugins = await request<ApiSchemas["PluginListResponse"]>("/v1/plugins", { signal });
+    return {
+      ...plugins,
+      states: plugins.states.map((state) => ({ ...state, lifecycle: state.lifecycle ?? undefined, reason: state.reason ?? undefined })),
+    } satisfies { plugins: PluginDescriptor[]; states: PluginState[]; pairs: PluginPair[] };
+  },
+  getSummary: (signal?: AbortSignal) => request<ApiSchemas["WorkspaceSummaryResponse"]>("/v1/workspace/summary", { signal }),
+  getObservations: async (signal?: AbortSignal) => {
+    const observations = await request<ApiSchemas["WorkspaceObservationsResponse"]>("/v1/workspace/observations", { signal });
+    return { ...observations, generation: observations.generation ?? null } satisfies WorkspaceObservations;
+  },
+  saveCatalog: (name: string, module: string, options: Record<string, unknown>, expectedRevision?: number) => request<ApiSchemas["CatalogMutationResponse"]>(`/v1/catalogs/${encodeURIComponent(name)}`, {
     method: "PUT",
     body: JSON.stringify({ module, options, ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }) }),
   }),
-  saveAsset: (catalog: string, target: string, backend: string, tableIdentifier: string) => request<{ id: string; catalog: string; target: string }>(`/v1/assets/${encodeURIComponent(catalog)}/${encodeURIComponent(target)}`, {
+  saveAsset: (catalog: string, target: string, backend: string, tableIdentifier: string) => request<ApiSchemas["AssetMutationResponse"]>(`/v1/assets/${encodeURIComponent(catalog)}/${encodeURIComponent(target)}`, {
     method: "PUT",
     body: JSON.stringify({ backend, table_identifier: tableIdentifier, options: {} }),
   }),
-  saveRuntimeSettings: (settings: RuntimeSettings) => request<RuntimeSettings>("/v1/settings/runtime", {
+  saveRuntimeSettings: (settings: RuntimeSettings) => request<ApiSchemas["RuntimeSettingsResponse"]>("/v1/settings/runtime", {
     method: "PUT",
     body: JSON.stringify({ ticket_ttl_seconds: settings.ticket_ttl_seconds, max_tickets: settings.max_tickets, max_ticket_exchanges: settings.max_ticket_exchanges, ...(settings.revision === undefined ? {} : { expected_revision: settings.revision }) }),
   }),
-  publishAsset: (assetId: string, expectedDraftRevision?: number, reviewToken?: string, idempotencyKey?: string, draftId?: string) => request<{ asset_id: string; policy_version: number }>(`/v1/assets/${assetId}/policy-versions`, {
+  publishAsset: (assetId: string, expectedDraftRevision?: number, reviewToken?: string, idempotencyKey?: string, draftId?: string) => request<ApiSchemas["PolicyVersionCreateResponse"]>(`/v1/assets/${assetId}/policy-versions`, {
     method: "POST",
     headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
     body: JSON.stringify({ ...(draftId ? { draft_id: draftId } : {}), ...(expectedDraftRevision === undefined ? {} : { expected_draft_revision: expectedDraftRevision }), ...(reviewToken ? { review_token: reviewToken } : {}) }),
   }),
-  getDraft: (assetId: string, draftId?: string, signal?: AbortSignal) => request<PolicyDraft>(draftId ? `/v1/assets/${assetId}/draft/${encodeURIComponent(draftId)}` : `/v1/assets/${assetId}/draft`, { signal }),
+  getDraft: (assetId: string, draftId?: string, signal?: AbortSignal) => request<ApiSchemas["PolicyDraftResponse"]>(draftId ? `/v1/assets/${assetId}/draft/${encodeURIComponent(draftId)}` : `/v1/assets/${assetId}/draft`, { signal }) as Promise<PolicyDraft>,
   saveDraft: (assetId: string, expectedRevision: number, rules: PolicyRule[]) =>
-    request<PolicyDraft>(`/v1/assets/${assetId}/draft`, {
+    request<ApiSchemas["PolicyDraftResponse"]>(`/v1/assets/${assetId}/draft`, {
       method: "PUT",
       body: JSON.stringify({ expected_revision: expectedRevision, rules }),
-    }),
+    }) as Promise<PolicyDraft>,
   evaluate: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, unknown>; draft_id?: string; draft_revision?: number }) => {
-    const raw = await request<{ decision: "allow" | "deny"; allowed_columns: string[]; masks: Array<{ column: string; type: Mask["type"] }>; row_filter: string | null; output_rows: number; rows: Array<Record<string, unknown>>; evidence: Record<string, unknown> }>(`/v1/assets/${assetId}/policy-evaluate`, {
+    const raw = await request<ApiSchemas["PolicyEvaluationResponse"]>(`/v1/assets/${assetId}/policy-evaluate`, {
       method: "POST",
       body: JSON.stringify(persona),
     });
     return {
       decision: raw.decision,
       allowed_columns: raw.allowed_columns,
-      masks: Object.fromEntries(raw.masks.map((mask) => [mask.column, { type: mask.type }])),
-      row_filter: raw.row_filter,
+      masks: Object.fromEntries((raw.masks as Array<{ column: string; type: Mask["type"] }>).map((mask) => [mask.column, { type: mask.type }])),
+      row_filter: raw.row_filter ?? null,
       policy_version: 0,
       status: "completed",
       rows: raw.rows,
@@ -464,25 +491,25 @@ export const controlPlane = {
     } satisfies Preview;
   },
   review: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, unknown>; draft_id?: string; draft_revision?: number }) => {
-    const raw = await request<{ decision: "allow" | "deny"; allowed_columns: string[]; masks: Array<{ column: string; type: Mask["type"] }>; row_filter: string | null; output_rows: number; rows: Array<Record<string, unknown>>; evidence: Record<string, unknown>; review_token: string; review_expires_at: number; review_draft_id: string | null; review_draft_author: string | null; reviewer: string }>("/v1/assets/" + assetId + "/policy-review", {
+    const raw = await request<ApiSchemas["PolicyReviewResponse"]>("/v1/assets/" + assetId + "/policy-review", {
       method: "POST",
       body: JSON.stringify(persona),
     });
     return {
       decision: raw.decision,
       allowed_columns: raw.allowed_columns,
-      masks: Object.fromEntries(raw.masks.map((mask) => [mask.column, { type: mask.type }])),
-      row_filter: raw.row_filter,
+      masks: Object.fromEntries((raw.masks as Array<{ column: string; type: Mask["type"] }>).map((mask) => [mask.column, { type: mask.type }])),
+      row_filter: raw.row_filter ?? null,
       policy_version: 0,
       status: "completed",
       rows: raw.rows,
       output_rows: raw.output_rows,
       evidence: raw.evidence,
-      review_token: raw.review_token,
-      review_expires_at: raw.review_expires_at,
-      review_draft_id: raw.review_draft_id,
-      review_draft_author: raw.review_draft_author,
-      reviewer: raw.reviewer,
+      review_token: raw.review_token ?? undefined,
+      review_expires_at: raw.review_expires_at ?? undefined,
+      review_draft_id: raw.review_draft_id ?? undefined,
+      review_draft_author: raw.review_draft_author ?? undefined,
+      reviewer: raw.reviewer ?? undefined,
     } satisfies Preview;
   },
 };
@@ -500,4 +527,37 @@ function normalizeAsset(asset: Asset): Asset {
     owners: asset.owners ?? [],
     schema_fields: asset.schema_fields ?? [],
   };
+}
+
+function normalizeInventoryAsset(asset: ApiSchemas["AssetInventoryResponse"]): Asset {
+  return normalizeAsset({
+    id: asset.id,
+    catalog: asset.catalog,
+    name: asset.name,
+    backend: asset.backend,
+    table_identifier: asset.table_identifier,
+    owners: asset.owners,
+    schema_fields: [],
+    policy_status: asset.policy_status,
+    draft_status: asset.draft_status,
+    active_policy_version: asset.active_policy_version,
+    last_published_at: asset.last_published_at,
+  });
+}
+
+function normalizeDetailAsset(asset: ApiSchemas["AssetDetailResponse"]): Asset {
+  return normalizeAsset({
+    id: asset.id,
+    revision: asset.revision,
+    catalog: asset.catalog,
+    name: asset.name,
+    backend: asset.backend,
+    table_identifier: asset.table_identifier,
+    owners: asset.owners,
+    schema_fields: asset.schema_fields.map((field) => ({
+      name: typeof field.name === "string" ? field.name : "",
+      type: typeof field.type === "string" ? field.type : "string",
+      nullable: field.nullable !== false,
+    })),
+  });
 }

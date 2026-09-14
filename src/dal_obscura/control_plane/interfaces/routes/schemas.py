@@ -236,6 +236,38 @@ class AssetInventoryPageResponse(BaseModel):
     next_cursor: str | None = None
 
 
+class AssetDetailResponse(BaseModel):
+    """Full governed asset record used by the policy editor."""
+
+    id: str
+    name: str
+    catalog: str
+    backend: str
+    table_identifier: str
+    owners: list[str]
+    policy_status: str
+    draft_status: str
+    owner_count: int
+    active_policy_version: int | None = None
+    last_published_at: str | None = None
+    revision: int
+    options: dict[str, Any]
+    schema_fields: list[dict[str, Any]]
+    policy_rules: list[dict[str, Any]]
+
+
+class AssetSchemaResponse(BaseModel):
+    """Authoritative nested schema metadata for one governed asset."""
+
+    asset_id: str
+    catalog: str
+    target: str
+    schema_version: int
+    schema_fingerprint: str
+    stable_field_ids: bool | None = None
+    fields: list[dict[str, Any]]
+
+
 class CatalogInventoryResponse(BaseModel):
     """Workspace catalog summary safe for management clients."""
 

@@ -975,6 +975,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: the bootstrap flow records the loaded session's exact query scope before setting React session state, so the session-transition cleanup effect does not discard the private page it just fetched. Logout, expiry, and explicit session changes still cancel and clear the client before the signed-out view renders.
 - Verification: UI TypeScript compilation, Vite production build (96.03 kB gzip JavaScript), 11 UI tests, and `git diff --check` passed. Rendered deferred-response and live authentication evidence remain VERIFY; release remains HOLD.
 
+## 2026-09-14 — N03 generated control-plane DTO contract
+
+- Scope: make the browser client consume a checked-in OpenAPI snapshot and generated TypeScript DTOs for authenticated control-plane responses.
+- Observable behavior delivered: `openapi/control-plane.json` is the reviewed contract snapshot; `scripts/generate-api-types.mjs` regenerates `src/generated/control_plane.d.ts` and supports a deterministic `--check` freshness gate. Transport response boundaries now use generated schemas with explicit adapters for nullable and legacy UI shapes. Asset detail and nested schema routes now publish typed response models, eliminating `unknown` success payloads in OpenAPI.
+- Verification: `node scripts/generate-api-types.mjs --check`, UI TypeScript compilation, Vite production build (96.26 kB gzip JavaScript), 11 UI tests, focused control-plane OpenAPI tests, and `git diff --check` passed. Node 24 frozen install/image/advisory proof, generated DTO CI wiring, and full browser acceptance remain VERIFY; release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.

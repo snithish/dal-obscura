@@ -84,6 +84,18 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
         == "#/components/schemas/AssetAccessResponse"
     )
     assert (
+        paths["/v1/assets/{asset_id}"]["get"]["responses"]["200"]["content"]["application/json"][
+            "schema"
+        ]["$ref"]
+        == "#/components/schemas/AssetDetailResponse"
+    )
+    assert (
+        paths["/v1/assets/{asset_id}/schema"]["get"]["responses"]["200"]["content"][
+            "application/json"
+        ]["schema"]["$ref"]
+        == "#/components/schemas/AssetSchemaResponse"
+    )
+    assert (
         paths["/v1/assets/{asset_id}/draft"]["get"]["responses"]["200"]["content"][
             "application/json"
         ]["schema"]["$ref"]

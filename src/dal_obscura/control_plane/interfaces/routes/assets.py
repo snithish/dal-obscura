@@ -17,6 +17,7 @@ from dal_obscura.control_plane.application.errors import AuthorizationFailure
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 from dal_obscura.control_plane.interfaces.routes.schemas import (
     AssetAccessResponse,
+    AssetDetailResponse,
     AssetGrantResponse,
     AssetGrantsRequest,
     AssetGrantsResponse,
@@ -28,6 +29,7 @@ from dal_obscura.control_plane.interfaces.routes.schemas import (
     AssetRequest,
     AssetSchemaFieldsRequest,
     AssetSchemaFieldsResponse,
+    AssetSchemaResponse,
 )
 
 
@@ -64,11 +66,11 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
             )
         )
 
-    @api.get("/v1/assets/{asset_id}")
+    @api.get("/v1/assets/{asset_id}", response_model=AssetDetailResponse)
     def get_workspace_asset(
         asset_id: UUID,
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
+    ) -> AssetDetailResponse:
         return deps.with_service(lambda service: service.get_workspace_asset(asset_id, actor))
 
     @api.get(
@@ -83,11 +85,11 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         payload = deps.with_service(lambda service: service.get_asset_access(asset_id, actor))
         return AssetAccessResponse.model_validate(payload)
 
-    @api.get("/v1/assets/{asset_id}/schema")
+    @api.get("/v1/assets/{asset_id}/schema", response_model=AssetSchemaResponse)
     def get_asset_schema(
         asset_id: UUID,
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
+    ) -> AssetSchemaResponse:
         return deps.with_service(lambda service: service.get_asset_schema(asset_id, actor))
 
     @api.put("/v1/assets/{asset_id}/owners", response_model=AssetOwnersResponse)

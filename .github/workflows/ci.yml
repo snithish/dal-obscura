@@ -460,6 +460,7 @@ jobs:
       - name: Type-check and build UI
         run: |
           pnpm --dir apps/governance-ui test
+          pnpm --dir apps/governance-ui check:api-types
           pnpm --dir apps/governance-ui build
 
   ui-image:
