@@ -1250,3 +1250,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: rendered deferred-response race matrix, full logout/401 browser journey, and independent accessibility/UX evidence remain VERIFY under N07/N16; next action is continue the next bounded acceptance slice without claiming browser evidence from build success.
 - Atomic implementation commits: `0da0b6e`.
 - Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N04 strict path value typing
+
+- Scope: close the direct adapter boundary for malformed storage-root values.
+- Observable behavior delivered; FR/NFR and B/G subcases: `PathRuleEnforcer` rejects non-string roots and paths instead of coercing arbitrary objects into filesystem text; the published root allowlist remains fail-closed while local `file:///` support and traversal checks remain intact.
+- Changed and deleted paths; old callers removed; protected pickle check: path-rule adapter and focused tests changed. No serializers, serialized classes, payloads, import paths, migrations, or dependencies changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +5 production / +3 test logical lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `tests/infrastructure/adapters/test_path_rules.py`; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: path-rule and IO-boundary suite (21 passed), changed-path Ruff and format checks (exit 0), 2026-09-14, Python 3.12/uv local workspace. Commit hooks passed with repository baseline `ty` diagnostics skipped (`SKIP=ty`).
+- Artifact and fixture hashes; evidence locations: atomic commit `2de4b01`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: live hostile destination counters, DNS/private-address enforcement, cancellation cleanup, and independent security/release evidence remain VERIFY under B06/N04/N16; next action is continue bounded backend/UI acceptance work.
+- Atomic implementation commits: `2de4b01`.
+- Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
