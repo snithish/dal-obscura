@@ -116,6 +116,7 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
   const savingRef = useRef(false);
   const governBusyRef = useRef<Set<string>>(new Set());
   const publishingRef = useRef(false);
+  const lifecycleBusyRef = useRef<Set<string>>(new Set());
   useEffect(() => () => {
     discoveryEpoch.current += 1;
     for (const controller of mutationControllers.current) controller.abort();
@@ -322,7 +323,9 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
     const key = `${plugin.kind}:${plugin.plugin_id}`;
     const target = lifecycleTargets[key];
     if (!target) return;
+    if (lifecycleBusyRef.current.has(key)) return;
     if (target === "removed" && !window.confirm(`Remove ${plugin.display_name} from this process?`)) return;
+    lifecycleBusyRef.current.add(key);
     setLifecycleBusy(key);
     const controller = beginMutation();
     try {
@@ -335,6 +338,7 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
       if (!isAbortError(error)) setMessage(recoveryMessage(error, "Plugin lifecycle change was rejected; the previous state remains active."));
     } finally {
       finishMutation(controller);
+      lifecycleBusyRef.current.delete(key);
       if (!controller.signal.aborted) setLifecycleBusy(null);
     }
   }
