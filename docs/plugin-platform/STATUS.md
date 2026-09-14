@@ -2669,3 +2669,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: PostgreSQL race/recovery, live OIDC freshness, hostile DNS/private-address counters, clean Node 24/image and TLS consumer lanes, capacity mixed-load, deployment integrity/SBOM, and independent review remain VERIFY. Release remains HOLD; do not treat explicit skips as acceptance.
 - Atomic implementation commits: verification only; no implementation commit.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N02 strict manifest JSON parsing
+
+- Scope: remove last-key-wins ambiguity from the independently packaged manifest catalog.
+- Observable behavior delivered; FR/NFR and B/G subcases: operator manifest documents now reject duplicate JSON object keys before revision, table membership, file lists, or schema metadata are admitted. Strict Base64 schema decoding and existing bounded path/file checks remain in force. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `packages/manifest-parquet-plugin/src/dal_obscura_manifest_parquet/catalog.py` and its focused test; no serializers, migrations, dependencies, or retired paths changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +13 production lines and +13 test lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: manifest plugin suite owns duplicate document-key rejection and valid nested manifest loading; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `uv run --no-sync pytest packages/manifest-parquet-plugin/tests/test_manifest_plugin.py -q` (exit 0, 19 passed), focused Ruff check/format (exit 0), 2026-09-14, Python 3.12. Pre-commit format/lint/pytest hooks passed; repository-wide ty baseline diagnostics remain skipped for commit hooks.
+- Artifact and fixture hashes; evidence locations: implementation commit `549eb201`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: N02 populated-record maintenance conversion and full old-input matrix remain VERIFY; live N04/N05/N12/N13–N16 gates and independent review remain VERIFY. Release remains HOLD; continue canonical serving-reader and migration qualification.
+- Atomic implementation commits: `549eb201`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
