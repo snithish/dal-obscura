@@ -1124,6 +1124,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commit: `86b0772`.
 - Remaining subcases: browser accessibility and live multi-process lifecycle qualification remain VERIFY; release remains HOLD.
 
+## 2026-09-14 — N06 responsive navigation drawer
+
+- Scope: implement the required small-screen navigation behavior for the authenticated governance shell.
+- Observable behavior delivered; FR/NFR and B/G subcases: below 768px the desktop rail becomes a fixed, keyboard-dismissible drawer with an accessible menu button, labelled backdrop, valid navigation focus restoration, and the same authorization-gated destinations. Selecting a destination or pressing Escape closes the drawer; desktop layouts retain the persistent rail.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/main.tsx`, `apps/governance-ui/src/components/Icon.tsx`, and `apps/governance-ui/src/styles.css`; no backend, plugin, serializer, or pickle paths changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +27 UI production lines; no dependencies added or removed (`Menu` is from the existing Lucide dependency).
+- Primary invariant test owners; tests consolidated/deleted: existing governance UI tests plus TypeScript/build checks; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node node_modules/typescript/bin/tsc -b tsconfig.json` (exit 0), `node node_modules/vite/bin/vite.js build` (exit 0; 321.70 kB JS / 96.99 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (12 passed), 2026-09-14, Node 24/local workspace. The commit hook's repository-wide `ty` job remains a known baseline failure in unrelated routes/examples and was skipped for the atomic commit.
+- Artifact and fixture hashes; evidence locations: atomic implementation commit `63a4f41`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: rendered keyboard, screen-reader, contrast, 200% zoom, and responsive browser evidence remain VERIFY under N06/N16; release remains HOLD. Next action is continue the next ready acceptance slice and retain the live visual evidence requirement.
+- Atomic implementation commits: `63a4f41`.
+- Human acceptance, if required: independent UX/accessibility review remains VERIFY; release remains HOLD.
+
 Replace the corresponding queue entry and keep one current record per packet.
 Link detailed logs/artifacts instead of appending repeated full narratives.
 
