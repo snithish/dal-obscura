@@ -1116,6 +1116,14 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `f495b6b`.
 - Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N10 lifecycle transition UX guard
+
+- Scope: align lifecycle controls with the server state machine.
+- Observable behavior delivered: Connections only offers valid transitions for the current plugin lifecycle, preventing impossible requests while retaining confirmation for irreversible removal.
+- Verification: governance UI TypeScript build and 12 UI tests passed; no backend or pickle paths changed.
+- Atomic implementation commit: `86b0772`.
+- Remaining subcases: browser accessibility and live multi-process lifecycle qualification remain VERIFY; release remains HOLD.
+
 Replace the corresponding queue entry and keep one current record per packet.
 Link detailed logs/artifacts instead of appending repeated full narratives.
 
