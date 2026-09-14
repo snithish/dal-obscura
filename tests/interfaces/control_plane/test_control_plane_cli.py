@@ -64,6 +64,26 @@ def test_control_plane_cli_passes_login_rate_limits(monkeypatch, tmp_path) -> No
     assert ("table_format", "iceberg") in registry.admitted()
 
 
+def test_ui_auth_config_excludes_removed_demo_login_settings() -> None:
+    config = control_plane_cli._ui_auth_config(
+        {
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": "https://issuer.example",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "governance-ui",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_LOGIN_SHORTCUTS": "Owner=owner",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_TOKEN_URL": "https://issuer.example/token",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_CLIENT_ID": "legacy-client",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_CLIENT_SECRET": "legacy-secret",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_PASSWORDS": "owner=legacy-password",
+        }
+    )
+
+    assert config == {
+        "authority": "https://issuer.example",
+        "client_id": "governance-ui",
+        "scope": "openid profile",
+    }
+
+
 def test_control_plane_cli_passes_configured_secret_provider(monkeypatch, tmp_path) -> None:
     database_url = f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
     migrate_config_store(create_engine_from_url(database_url))
