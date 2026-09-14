@@ -1575,3 +1575,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live OIDC code/PKCE login, session expiry and role freshness, multi-process revocation, hostile transport counters, consumer/recovery/capacity evidence, and independent security/UX/release review remain VERIFY under N04–N16. Next action is continue live qualification while retaining release HOLD.
 - Atomic implementation commits: `5dfa3ae`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N14 path-aware pre-commit fast lane
+
+- Scope: stop broad type and non-heavy test hooks from running on documentation-only commits.
+- Observable behavior delivered; FR/NFR and B/G subcases: Ty now runs only for Python source/package changes and the non-heavy pytest hook only for source, package, or test Python changes. Ruff already remains Python-file scoped. Documentation commits complete with no test or type-check process, while code changes retain the existing hooks.
+- Changed and deleted paths; old callers removed; protected pickle check: `.pre-commit-config.yaml`; no production modules, serializers, serialized classes/import paths, payloads, migrations, dependencies, or tests changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +2 configuration lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing CI full/release lanes and package-specific checks remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pre-commit validate-config` (exit 0) and `uv run --no-sync pre-commit run --files docs/plugin-platform/STATUS.md` (exit 0; all hooks skipped as intended), 2026-09-14, Python 3.12/uv local workspace. Commit hooks passed with baseline `ty` diagnostics skipped (`SKIP=ty`).
+- Artifact and fixture hashes; evidence locations: atomic implementation commit `50c642f`; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: N14 warm/cold timing and capacity/resource measurements, path-aware CI matrix, live transport/consumer/recovery/OIDC/browser evidence, and independent security/UX/release review remain VERIFY. Next action is continue measured qualification while retaining release HOLD.
+- Atomic implementation commits: `50c642f`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
