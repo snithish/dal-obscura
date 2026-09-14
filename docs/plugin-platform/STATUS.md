@@ -1176,6 +1176,14 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `3a86a7a`.
 - Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N04 strict path-rule request validation
+
+- Scope: close the direct API type boundary for runtime storage roots.
+- Observable behavior delivered: runtime path-rule writes now reject non-list payloads, non-object entries, extra keys, non-string roots, and empty roots before persistence or enforcer construction; accepted entries remain exactly one non-empty `root` string.
+- Verification: control-plane settings suite (6 passed), changed-path Ruff and diff checks passed. No serializer, pickle, migration, or external dependency changes.
+- Atomic implementation commit: `a6652a0`.
+- Remaining subcases: live redirect/DNS/private-destination counters, cancellation cleanup, and independent release evidence remain VERIFY under N04/N16; release remains HOLD.
+
 ## 2026-09-14 — N01/N02 plugin architecture documentation alignment
 
 - Scope: remove stale fixed-backend claims from the operator, developer, and quickstart entry points.
