@@ -139,6 +139,11 @@ td small { display: block; color: #61736e; margin-top: 4px; }
 .capability-card.allowed span { color: #166534; }
 .capability-card.denied { border-color: #cbd5e1; }
 .capability-card.denied span { color: #64748b; }
+.condition-builder { display: grid; gap: 9px; }
+.condition-row { display: grid; grid-template-columns: minmax(120px, 1fr) 130px minmax(120px, 1fr) auto; gap: 7px; align-items: center; }
+.condition-row input, .condition-row select { width: 100%; border: 1px solid #bbc8c0; border-radius: 4px; padding: 8px 9px; background: #fff; color: inherit; }
+.advanced-json { margin-top: 12px; border-top: 1px solid #d7dcd5; padding-top: 10px; }
+.advanced-json summary { cursor: pointer; color: #1c6d61; font-size: 13px; font-weight: 700; }
 @media (max-width: 760px) { .capability-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .link-button { border: 0; padding: 0; color: #1c6d61; background: transparent; text-decoration: underline; }
 .selected-row { background: #eef8f2; }
