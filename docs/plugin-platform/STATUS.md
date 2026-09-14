@@ -945,6 +945,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: successful writes invalidate only the current session's affected Query families before the existing reload flow runs. Refetch failures cannot rewrite a successful mutation into an error state because invalidation is deliberately background work; server revision and authorization responses remain authoritative.
 - Verification: UI TypeScript compilation, Vite production build (93.99 kB gzip JavaScript), 11 UI tests, and `git diff --check` passed. Main policy and asset-access mutation wiring plus rendered deferred-response coverage remain VERIFY; release remains HOLD.
 
+## 2026-09-14 — N07 session-scoped asset detail reads
+
+- Scope: route asset detail, nested schema, immutable history, grants, access, and selected draft lookup through the shared query client.
+- Observable behavior delivered: asset reads now use keys containing session scope, asset identity, and draft identity; every query receives the transport AbortSignal and prior asset families are cancelled before navigation. Cached API objects are treated as immutable and hydrated into a separate editor value, preventing schema decoration from mutating shared query state.
+- Verification: UI TypeScript compilation, Vite production build (94.05 kB gzip JavaScript), 11 UI tests, and `git diff --check` passed. Policy/asset mutations and rendered deferred-response coverage remain VERIFY; release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.

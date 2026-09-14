@@ -75,7 +75,6 @@ function App() {
   const inventoryEpoch = useRef(0);
   const searchTimer = useRef<number | undefined>(undefined);
   const managementEpoch = useRef(0);
-  const assetAbortController = useRef<AbortController | null>(null);
   const workspaceAbortController = useRef<AbortController | null>(null);
   const [queryClient] = useState(
     () => new QueryClient({
@@ -144,7 +143,6 @@ function App() {
     inventoryEpoch.current += 1;
     managementEpoch.current += 1;
     if (searchTimer.current !== undefined) window.clearTimeout(searchTimer.current);
-    assetAbortController.current?.abort();
     workspaceAbortController.current?.abort();
     void queryClient.cancelQueries();
     queryClient.clear();
@@ -180,7 +178,6 @@ function App() {
       loadEpoch.current += 1;
       inventoryEpoch.current += 1;
       managementEpoch.current += 1;
-      assetAbortController.current?.abort();
       workspaceAbortController.current?.abort();
       clearPrivateState();
       setNotice("Your session expired or was revoked. Sign in again to continue.");
@@ -372,7 +369,7 @@ function App() {
       const requestedDraftId = location.draftId;
       const selected = loaded.find((item) => item.id === requestedAssetId) ?? loaded[0];
       setReviewOnly(Boolean(requestedDraftId));
-      await loadAsset(selected.id, loaded, epoch, requestedDraftId ?? undefined);
+      await loadAsset(selected.id, loaded, epoch, requestedDraftId ?? undefined, sessionQueryScope(loadedSession));
       if (epoch !== loadEpoch.current) return;
       setWorkspace("ready");
       restorePostLoginHash();
@@ -457,7 +454,6 @@ function App() {
     loadEpoch.current += 1;
     inventoryEpoch.current += 1;
     managementEpoch.current += 1;
-    assetAbortController.current?.abort();
     workspaceAbortController.current?.abort();
     if (searchTimer.current !== undefined) {
       window.clearTimeout(searchTimer.current);
@@ -546,25 +542,34 @@ function App() {
     knownAssets = assets,
     inheritedEpoch?: number,
     selectedDraftId?: string,
+    inheritedSessionScope = sessionCacheKey,
   ) {
     const epoch = inheritedEpoch ?? ++loadEpoch.current;
-    assetAbortController.current?.abort();
-    const controller = new AbortController();
-    assetAbortController.current = controller;
+    await queryClient.cancelQueries({ queryKey: ["asset", inheritedSessionScope] });
     try {
-      const [fullAsset, schema, history, grants, access] = await Promise.all([controlPlane.getAsset(assetId, controller.signal), controlPlane.getSchema(assetId, controller.signal), controlPlane.listAssetHistory(assetId, controller.signal), controlPlane.listGrants(assetId, controller.signal), controlPlane.getAssetAccess(assetId, controller.signal)]);
+      const assetKey = ["asset", inheritedSessionScope, assetId] as const;
+      const [fullAsset, schema, history, grants, access] = await Promise.all([
+        queryClient.fetchQuery({ queryKey: [...assetKey, "detail"], queryFn: ({ signal }) => controlPlane.getAsset(assetId, signal) }),
+        queryClient.fetchQuery({ queryKey: [...assetKey, "schema"], queryFn: ({ signal }) => controlPlane.getSchema(assetId, signal) }),
+        queryClient.fetchQuery({ queryKey: [...assetKey, "history"], queryFn: ({ signal }) => controlPlane.listAssetHistory(assetId, signal) }),
+        queryClient.fetchQuery({ queryKey: [...assetKey, "grants"], queryFn: ({ signal }) => controlPlane.listGrants(assetId, signal) }),
+        queryClient.fetchQuery({ queryKey: [...assetKey, "access"], queryFn: ({ signal }) => controlPlane.getAssetAccess(assetId, signal) }),
+      ]);
       if (epoch !== loadEpoch.current) return;
-      fullAsset.schema = schema;
-      const draft = await controlPlane.getDraft(assetId, selectedDraftId, controller.signal);
+      const draft = await queryClient.fetchQuery({
+        queryKey: [...assetKey, "draft", selectedDraftId ?? "current"],
+        queryFn: ({ signal }) => controlPlane.getDraft(assetId, selectedDraftId, signal),
+      });
       if (epoch !== loadEpoch.current) return;
       const effectiveRules = draft?.rules ?? [];
       setManagementData((current) => ({ ...current, history, grants, access }));
-      setAssets(knownAssets); setAsset(fullAsset); resetRuleHistory(effectiveRules); setDraftRevision(draft?.revision ?? 0); setDraftId(draft?.id ?? null); setSelectedRule(0); setReviewToken(null);
+      const hydratedAsset: Asset = { ...fullAsset, schema };
+      setAssets(knownAssets); setAsset(hydratedAsset); resetRuleHistory(effectiveRules); setDraftRevision(draft?.revision ?? 0); setDraftId(draft?.id ?? null); setSelectedRule(0); setReviewToken(null);
       draftEditEpoch.current += 1;
-      setSelectedField(schema.fields[0]?.human_path ?? fullAsset.schema_fields[0]?.name ?? ""); setPreview(null); setSaveState("saved");
+      setSelectedField(schema.fields[0]?.human_path ?? hydratedAsset.schema_fields[0]?.name ?? ""); setPreview(null); setSaveState("saved");
       setNotice(selectedDraftId ? `Loaded saved draft ${draft?.revision ?? 0} for read-only review.` : effectiveRules.length ? "Loaded your policy draft." : "No policy draft exists yet. Add a rule to begin authoring.");
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
+      if ((error instanceof DOMException && error.name === "AbortError") || (error instanceof Error && error.name === "CancelledError")) return;
       if (inheritedEpoch !== undefined && epoch !== loadEpoch.current) return;
       setNotice(recoveryMessage(error, "Could not load this asset and its access metadata. Your previous editor state remains unchanged."));
     }
