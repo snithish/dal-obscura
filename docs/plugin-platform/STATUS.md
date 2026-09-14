@@ -2552,3 +2552,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: N02 maintenance-mode populated-record conversion and remaining legacy reader inventory remain VERIFY; clean Node/image/advisory, live OIDC, hostile transport, PostgreSQL races/recovery, real consumer matrix, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N01–N16. Release remains HOLD; continue N02 strict old-input and conversion qualification.
 - Atomic implementation commits: `15b5c662`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N03 explicit nested-schema pair admission
+
+- Scope: prevent catalog/table-format pairing from being admitted solely because unrelated capabilities overlap.
+- Observable behavior delivered; FR/NFR and B/G subcases: publication pair admission now requires the selected catalog and format descriptors to both advertise the pilot-required `nested_schema` capability, in addition to explicit catalog `output_formats` and intersecting handle versions. A pair sharing only `snapshot_reads` or another generic capability fails closed before publication. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/application/compiler.py` and `tests/control_plane/test_publication_compiler.py`; no serializers, migrations, dependencies, or retired routes changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +3 production lines and +36 test lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: publication compiler pair-admission suite owns explicit output-format, handle-version, and nested-schema requirements; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `uv run --no-sync pytest tests/control_plane/test_publication_compiler.py -q` (exit 0, 40 passed), focused Ruff check/format and `git diff --check` (exit 0), 2026-09-14, Python 3.12. Pre-commit format/lint/pytest hooks passed; known repository-wide ty baseline diagnostics remain skipped for commit hooks.
+- Artifact and fixture hashes; evidence locations: implementation commit `d659dbfa`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: N03 still needs resolved-handle pair fencing, full mutation precondition/race evidence, and generated DTO/browser proof; N02 conversion qualification, N04–N16 live gates, and independent review remain VERIFY. Release remains HOLD; continue with authoritative pair and mutation contracts.
+- Atomic implementation commits: `d659dbfa`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
