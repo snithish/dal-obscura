@@ -1497,3 +1497,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live DNS/redirect/private counters, provider request interception, cancellation cleanup, deployment network controls, browser/consumer qualification, recovery, and independent review remain VERIFY under B06/N04/N13–N16; next action is continue live hostile transport and clean-artifact consumer lanes.
 - Atomic implementation commits: `b423d96`.
 - Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N01 final suite verification after URI hardening
+
+- Scope: qualify the complete current tree after the Iceberg pre-load IO and double-encoded URI traversal guards.
+- Observable behavior delivered; FR/NFR and B/G subcases: no additional runtime behavior changed by this entry; the elevated authoritative suite is green across the backend, Flight, plugin, session, and policy matrices. The protected pickle path remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: documentation only (`docs/plugin-platform/BASELINE_20260914.md` and this ledger entry); no source, serializer, migration, dependency, or fixture changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no source or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: full Python suite, focused URI/catalog/Iceberg tests, and Node UI tests; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: elevated `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest --durations=20 --junitxml=/tmp/dal-obscura-final-elevated.xml -q -rs` (exit 0; 871 collected, 857 passed, 14 skipped, 0 failed, 0 errors, 133.263s), 2026-09-14, Python 3.12/uv local workspace with loopback/subprocess permissions.
+- Artifact and fixture hashes; evidence locations: JUnit report `/tmp/dal-obscura-final-elevated.xml`; baseline continuation in `docs/plugin-platform/BASELINE_20260914.md`; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: the 14 skips are explicit benchmark, loopback-consumer, PostgreSQL race/recovery opt-ins; clean Node install/image/advisory, hostile live transport counters, real OIDC/browser/accessibility, wheel/consumer, recovery, and independent review evidence remain VERIFY under N01/N04–N16. Next action is run those live qualification lanes; release remains HOLD.
+- Atomic implementation commits: `8c11ebe`, `b423d96`; verification is documentation only.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
