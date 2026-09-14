@@ -969,6 +969,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: the existing semantic `IconName` contract now maps to `lucide-react` components for navigation, status, search, and account actions. Callers and accessible labels remain unchanged, while icon geometry and stroke behavior come from one maintained dependency instead of handwritten path data.
 - Verification: UI TypeScript compilation, Vite production build (96.01 kB gzip JavaScript), 11 UI tests, and `git diff --check` passed. Full shell visual, responsive, axe, and screen-reader evidence remains VERIFY under N06; release remains HOLD.
 
+## 2026-09-14 — N07 initial session cache handoff
+
+- Scope: preserve the first authenticated inventory result across the asynchronous session state commit.
+- Observable behavior delivered: the bootstrap flow records the loaded session's exact query scope before setting React session state, so the session-transition cleanup effect does not discard the private page it just fetched. Logout, expiry, and explicit session changes still cancel and clear the client before the signed-out view renders.
+- Verification: UI TypeScript compilation, Vite production build (96.03 kB gzip JavaScript), 11 UI tests, and `git diff --check` passed. Rendered deferred-response and live authentication evidence remain VERIFY; release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.

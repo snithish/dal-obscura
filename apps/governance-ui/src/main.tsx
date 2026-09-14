@@ -349,6 +349,10 @@ function App() {
     try {
       const loadedSession = await controlPlane.getSession(controller.signal);
       if (epoch !== loadEpoch.current) return;
+      // The first authenticated page is fetched before React commits the
+      // session state. Mark the cache scope now so the session transition
+      // effect does not immediately discard that private result.
+      previousSessionCacheKey.current = sessionQueryScope(loadedSession);
       setSession(loadedSession);
       const loadedPage = await queryClient.fetchQuery({
         queryKey: assetInventoryQueryKey(sessionQueryScope(loadedSession), "", null),
