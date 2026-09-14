@@ -873,6 +873,8 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: session login options and public OIDC configuration now validate through shared response models. Null OIDC availability, safe login shortcuts, and secret omission remain explicit; bootstrap/OIDC authentication behavior is unchanged.
 - Verification: OIDC and actor-auth suites passed (41 tests); changed-path Ruff and format checks passed; UI TypeScript compilation passed. Live IdP/browser freshness and logout evidence remain VERIFY.
 
+- Follow-up regression with loopback/subprocess permissions: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q` passed with 837 collected, 823 passed, 14 documented skips, and zero failures/errors after all typed response slices. Release remains HOLD for live-only gates.
+
 ## 2026-09-14 — N09/N11 post-publication inventory refresh
 
 - Scope: keep governed asset status aligned after a successful publish response.
