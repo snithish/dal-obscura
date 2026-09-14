@@ -293,6 +293,14 @@ test count is now 8.
 - Evidence: direct UI TypeScript build, Vite production build (280.44 kB JavaScript / 84.83 kB gzip; 19.27 kB CSS / 4.63 kB gzip), all 8 UI lifecycle/schema/recovery tests, and `git diff --check` passed.
 - Remaining N08 work: rendered lossless editor roundtrip coverage, typed condition builder, all mask-value cases, responsive/large-tree browser stress, and complete B11/B12 qualification. Release remains HOLD.
 
+## Implementation update — 87c9b24 (2026-09-14)
+
+- Packet / status / candidate commit / owner: N08/B11 authoring partial / VERIFY / `87c9b24` / governance UI.
+- Observable behavior delivered: policy conditions now have a structured editor for claim names, equality or membership operators, and text operands with explicit AND semantics. The advanced JSON editor remains available as a lossless fallback; invalid rows are surfaced before mutation and never silently discarded.
+- Changed paths: `apps/governance-ui/src/components/AssetWorkspace.tsx` and `apps/governance-ui/src/styles.css`. No backend, session, pickle serializer, serialized class, payload, or import path changed.
+- Evidence: direct UI TypeScript build, Vite production build (282.46 kB JavaScript / 85.37 kB gzip; 19.73 kB CSS / 4.71 kB gzip), all 8 UI lifecycle/schema/recovery tests, and `git diff --check` passed.
+- Remaining N08 work: rendered lossless roundtrip coverage, all mask-value cases, local undo/redo browser coverage, responsive/large-tree stress, and complete B11/B12 qualification. Release remains HOLD.
+
 Qualification follow-up (2026-09-14): the elevated full Python suite completed with
 837 collected, 823 passed, 14 explicit environment/benchmark skips, and zero
 failures or errors. The unprivileged attempt was discarded because the sandbox
