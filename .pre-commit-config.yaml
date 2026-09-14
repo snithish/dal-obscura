@@ -18,9 +18,11 @@ repos:
       entry: uv run ty check
       language: system
       pass_filenames: false
+      files: ^(src|packages)/.*\.py$
     - id: pytest
       name: Pytest non-heavy
       entry: uv run pytest
       language: system
       pass_filenames: false
+      files: ^(src|packages|tests)/.*\.py$
       args: ["-m", "not heavy", "--maxfail=1", "--disable-warnings"]
