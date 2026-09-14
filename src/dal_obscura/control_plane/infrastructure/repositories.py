@@ -1950,6 +1950,7 @@ class PublicationStore:
                 ticket_ttl_seconds=runtime_record.ticket_ttl_seconds,
                 max_tickets=runtime_record.max_tickets,
                 max_ticket_exchanges=runtime_record.max_ticket_exchanges,
+                path_rules=[dict(rule) for rule in runtime_record.path_rules_json],
             ),
             auth_providers=auth_providers,
             catalogs=catalogs,
@@ -2097,6 +2098,7 @@ class PublicationStore:
             runtime=CompiledRuntime(
                 auth_chain=dict(runtime.auth_chain_json),
                 ticket=dict(runtime.ticket_json),
+                path_rules=[dict(rule) for rule in runtime.path_rules_json],
             ),
             catalogs=catalogs,
             assets=assets,
@@ -2119,7 +2121,7 @@ class PublicationStore:
                 publication_id=publication_id,
                 auth_chain_json=compiled.runtime.auth_chain,
                 ticket_json=compiled.runtime.ticket,
-                path_rules_json=[],
+                path_rules_json=[dict(rule) for rule in compiled.runtime.path_rules],
             )
         )
         for catalog in compiled.catalogs:

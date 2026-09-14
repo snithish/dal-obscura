@@ -31,6 +31,7 @@ from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
 from dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks import (
     OidcJwksIdentityProvider,
 )
+from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 from dal_obscura.data_plane.infrastructure.adapters.published_config import (
     PublishedConfigAuthorizer,
     PublishedConfigCatalogRegistry,
@@ -101,6 +102,7 @@ def main() -> None:
         config_store,
         secret_provider=secret_provider,
         plugin_registry=plugin_registry,
+        path_enforcer=PathRuleEnforcer(published_runtime.path_rules),
     )
     masking = DefaultMaskingAdapter()
     row_transform = DuckDBRowTransformAdapter(

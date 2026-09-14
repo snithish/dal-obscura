@@ -41,6 +41,7 @@ def _draft(row_filter: str = "region = 'us'") -> PublishDraft:
             ticket_ttl_seconds=900,
             max_tickets=64,
             max_ticket_exchanges=2,
+            path_rules=[{"root": "s3://warehouse/curated"}],
         ),
         auth_providers=[
             AuthProviderDraft(
@@ -96,6 +97,7 @@ def test_compiler_publishes_asset_policy_version_and_runtime():
     assert compiled.runtime.ticket["ttl_seconds"] == 900
     assert compiled.runtime.ticket["max_tickets"] == 64
     assert compiled.runtime.ticket["max_exchanges"] == 2
+    assert compiled.runtime.path_rules == [{"root": "s3://warehouse/curated"}]
     assert compiled.runtime.auth_chain["providers"][0]["ordinal"] == 1
     assert len(compiled.assets) == 1
     asset = compiled.assets[0]

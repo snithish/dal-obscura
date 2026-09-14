@@ -4,6 +4,7 @@ import json
 from collections.abc import Iterable, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from hashlib import sha256
 from threading import RLock
 from typing import Any, Protocol, cast
@@ -41,6 +42,7 @@ from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
     CatalogType,
     ServiceConfig,
 )
+from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
     SecretProvider,
     resolve_secret_refs,
@@ -61,6 +63,7 @@ class PublishedRuntime:
     publication_id: UUID
     auth_chain: dict[str, Any]
     ticket: dict[str, Any]
+    path_rules: list[dict[str, Any]] = dataclass_field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -310,6 +313,7 @@ class PublishedConfigStore:
                     publication_id=record.publication_id,
                     auth_chain=dict(record.auth_chain_json),
                     ticket=dict(record.ticket_json),
+                    path_rules=[dict(rule) for rule in record.path_rules_json],
                 )
             self._runtime_cache[publication_id] = runtime
             return runtime
@@ -401,10 +405,12 @@ class PublishedConfigCatalogRegistry:
         *,
         secret_provider: SecretProvider | None = None,
         plugin_registry: PluginRegistry | AdmittedPluginSnapshot | None = None,
+        path_enforcer: PathRuleEnforcer | None = None,
     ) -> None:
         self._store = store
         self._secret_provider = secret_provider
         self._plugin_registry = plugin_registry
+        self._path_enforcer = path_enforcer
         self._registry_cache: dict[tuple[UUID, UUID, str, str], CatalogRegistry] = {}
 
     def close(self) -> None:
@@ -437,6 +443,7 @@ class PublishedConfigCatalogRegistry:
             published_catalog,
             asset,
             plugin_registry=self._plugin_registry,
+            path_enforcer=self._path_enforcer,
         )
         if self._secret_provider is not None:
             catalog_config = CatalogConfig(
@@ -489,6 +496,7 @@ def _catalog_config_from_published_catalog(
     catalog: PublishedCatalog,
     *,
     plugin_id: str = "iceberg.sql",
+    path_enforcer: PathRuleEnforcer | None = None,
 ) -> CatalogConfig:
     config = _mapping(catalog.config)
     if "module" in config:
@@ -509,6 +517,7 @@ def _catalog_config_from_published_catalog(
         name=catalog.catalog,
         type=_catalog_type(config),
         options=options,
+        path_enforcer=path_enforcer,
         plugin_id=plugin_id,
         revision=revision,
     )
@@ -519,6 +528,7 @@ def _catalog_config_for_asset(
     asset: PublishedAsset,
     *,
     plugin_registry: PluginRegistry | AdmittedPluginSnapshot | None = None,
+    path_enforcer: PathRuleEnforcer | None = None,
 ) -> CatalogConfig:
     """Build the runtime catalog config with the published asset as its source of truth."""
     _validate_plugin_binding(asset, plugin_registry=plugin_registry)
@@ -526,7 +536,11 @@ def _catalog_config_for_asset(
     catalog_plugin_id = catalog.plugin_id or ""
     if isinstance(raw_plugins, dict) and isinstance(raw_plugins.get("catalog"), str):
         catalog_plugin_id = str(raw_plugins["catalog"])
-    config = _catalog_config_from_published_catalog(catalog, plugin_id=catalog_plugin_id)
+    config = _catalog_config_from_published_catalog(
+        catalog,
+        plugin_id=catalog_plugin_id,
+        path_enforcer=path_enforcer,
+    )
     target = _mapping(asset.compiled_config.get("target"))
     backend = str(target.get("backend") or asset.backend).lower()
     if config.plugin_id == "iceberg.sql":

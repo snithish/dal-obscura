@@ -102,6 +102,7 @@ class CellRuntimeDraft:
     ticket_ttl_seconds: int
     max_tickets: int
     max_ticket_exchanges: int
+    path_rules: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -141,6 +142,7 @@ class CompiledRuntime:
 
     auth_chain: dict[str, Any]
     ticket: dict[str, int]
+    path_rules: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

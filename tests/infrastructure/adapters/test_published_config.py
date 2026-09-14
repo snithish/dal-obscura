@@ -21,6 +21,7 @@ from dal_obscura.common.config_store.orm import (
     PublishedCellRuntimeRecord,
 )
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
+from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 from dal_obscura.data_plane.infrastructure.adapters.published_config import (
     PublishedAsset,
     PublishedCatalog,
@@ -143,6 +144,32 @@ def test_published_config_rejects_legacy_catalog_module_shape():
 
     with pytest.raises(ValueError, match="retired module identity"):
         _catalog_config_for_asset(catalog, asset)
+
+
+def test_published_config_passes_runtime_path_enforcer_to_catalog():
+    asset = PublishedAsset(
+        publication_id=uuid4(),
+        tenant_id=uuid4(),
+        catalog="analytics",
+        target="default.users",
+        backend="iceberg",
+        compiled_config={
+            "plugins": {"catalog": "iceberg.sql", "table_format": "iceberg"},
+            "target": {"backend": "iceberg", "table": "default.users"},
+        },
+        policy_version=1,
+    )
+    catalog = PublishedCatalog(
+        publication_id=asset.publication_id,
+        tenant_id=asset.tenant_id,
+        catalog="analytics",
+        config={"type": "iceberg", "options": {}},
+    )
+    enforcer = PathRuleEnforcer([{"root": "s3://warehouse"}])
+
+    resolved = _catalog_config_for_asset(catalog, asset, path_enforcer=enforcer)
+
+    assert resolved.path_enforcer is enforcer
 
 
 class _AdmittedPluginSnapshot:
