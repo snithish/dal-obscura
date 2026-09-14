@@ -335,8 +335,8 @@ def load_static_plugin_descriptor(entry: metadata.EntryPoint) -> PluginDescripto
     if len(raw.encode("utf-8")) > MAX_STATIC_DESCRIPTOR_BYTES:
         raise PluginAdmissionError("Plugin static descriptor is too large")
     try:
-        payload = json.loads(raw)
-    except (TypeError, json.JSONDecodeError) as exc:
+        payload = json.loads(raw, object_pairs_hook=_unique_json_object)
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
         raise PluginAdmissionError("Plugin static descriptor is invalid JSON") from exc
     if not isinstance(payload, dict):
         raise PluginAdmissionError("Plugin static descriptor must be an object")
@@ -423,6 +423,17 @@ def load_static_plugin_descriptor(entry: metadata.EntryPoint) -> PluginDescripto
         config_schema=config_schema,
         display_name=display_name,
     )
+
+
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    """Reject duplicate descriptor keys instead of silently choosing one."""
+
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
 
 
 def _status_incompatibility(
