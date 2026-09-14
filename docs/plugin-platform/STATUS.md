@@ -2643,3 +2643,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: clean Node 24/pnpm 12.3.4 install, immutable UI image build, and release advisory artifact retention remain VERIFY; all other N01–N16 live gates remain open. Release remains HOLD; run the exact Node 24/image lane in CI or an equivalent clean environment.
 - Atomic implementation commits: verification only; no implementation commit.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N06 UI contract/build verification
+
+- Scope: verify the current governance UI against the checked-in OpenAPI DTO contract and production build.
+- Observable behavior delivered; FR/NFR and B/G subcases: generated API types are fresh; all 14 UI lifecycle/navigation/recovery/query/schema tests pass; TypeScript compilation and Vite production build pass. The current bundle is 332.04 kB JavaScript (100.21 kB gzip) and 22.93 kB CSS (5.28 kB gzip). No browser accessibility or responsive claim is inferred from this build. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: verification only; generated `apps/governance-ui/dist` remains ignored; no source, serializer, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no code or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: generated API type check and UI Node tests remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `pnpm --dir apps/governance-ui check:api-types` (exit 0), `pnpm --dir apps/governance-ui test` (exit 0, 14 passed), `pnpm --dir apps/governance-ui build` (exit 0), 2026-09-14, local Node 26.8.2/pnpm 12.4.1 host; support policy remains Node 24/pnpm 12.3.4.
+- Artifact and fixture hashes; evidence locations: generated build output is ignored and disposable; no external artifact published.
+- Remaining subcases; blocker and next concrete action: rendered browser visual/axe/keyboard/screen-reader evidence, clean Node 24/image lane, live OIDC, process races, consumer TLS, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N06–N16. Release remains HOLD; continue browser and deployment qualification.
+- Atomic implementation commits: verification only; no implementation commit.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
