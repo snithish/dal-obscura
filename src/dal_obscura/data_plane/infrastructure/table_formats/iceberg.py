@@ -272,6 +272,10 @@ def _check_table_locations(table: object, enforcer: PathRuleEnforcer | None) -> 
                     getattr(entry, "metadata_file", None)
                     for entry in (getattr(metadata, "metadata_log", None) or ())
                 ),
+                *(
+                    getattr(entry, "statistics_path", None)
+                    for entry in (getattr(metadata, "partition_statistics", None) or ())
+                ),
             ]
         )
     for candidate in candidates:
