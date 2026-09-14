@@ -2656,3 +2656,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: rendered browser visual/axe/keyboard/screen-reader evidence, clean Node 24/image lane, live OIDC, process races, consumer TLS, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N06–N16. Release remains HOLD; continue browser and deployment qualification.
 - Atomic implementation commits: verification only; no implementation commit.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — Full elevated regression after qualification guards
+
+- Scope: qualify the candidate after strict JSON settings, nested-schema pair admission, and all prior boundary changes.
+- Observable behavior delivered; FR/NFR and B/G subcases: no further source behavior changed in this verification slice. The full Python suite completed with no failures or errors; benchmark-only cases, opt-in consumer cases, PostgreSQL race/recovery cases, and other explicit environment-gated checks remained visibly skipped. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: verification only; no source, serializer, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no code or dependency delta.
+- Primary invariant test owners; existing full-suite owners and explicit skip reasons remain intact; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: elevated `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest --durations=20 -q -rs` (exit 0, no failures/errors; 14 explicit skips reported), 2026-09-14, Python 3.12.10 with loopback/subprocess permission. Slowest work is the bounded subprocess ticket-stream benchmarks (58.51 s and 41.95 s).
+- Artifact and fixture hashes; evidence locations: terminal output only; no external artifact published.
+- Remaining subcases; blocker and next concrete action: PostgreSQL race/recovery, live OIDC freshness, hostile DNS/private-address counters, clean Node 24/image and TLS consumer lanes, capacity mixed-load, deployment integrity/SBOM, and independent review remain VERIFY. Release remains HOLD; do not treat explicit skips as acceptance.
+- Atomic implementation commits: verification only; no implementation commit.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
