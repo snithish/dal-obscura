@@ -234,7 +234,10 @@ class ProvisioningService:
         )
 
     def list_workspace_catalogs(self) -> list[dict[str, object]]:
-        return catalog_service.list_workspace_catalogs(self._store)
+        return catalog_service.list_workspace_catalogs(
+            self._store,
+            plugin_registry=self._plugin_registry,
+        )
 
     def discover_workspace_catalog_tables(
         self,

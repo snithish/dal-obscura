@@ -433,6 +433,7 @@ def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
             "id": catalogs[0]["id"],
             "name": "analytics",
             "module": ICEBERG_CATALOG_MODULE,
+            "plugin_id": "iceberg.sql",
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
             "status": "configured",
             "revision": 0,

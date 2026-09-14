@@ -174,6 +174,7 @@ export type Catalog = {
   id: string;
   name: string;
   module: string;
+  plugin_id?: string | null;
   options: Record<string, unknown>;
   status?: string;
   revision?: number;

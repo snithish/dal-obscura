@@ -280,6 +280,7 @@ class CatalogInventoryResponse(BaseModel):
     id: UUID
     name: str
     module: str
+    plugin_id: str | None = None
     options: dict[str, Any]
     status: str
     revision: int

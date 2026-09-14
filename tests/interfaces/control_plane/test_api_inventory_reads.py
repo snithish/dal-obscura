@@ -226,6 +226,7 @@ def test_reads_workspace_draft_resources_after_writes():
     }
     assert catalogs[0]["name"] == "analytics"
     assert catalogs[0]["module"] == ICEBERG_CATALOG_MODULE
+    assert catalogs[0]["plugin_id"] == "iceberg.sql"
     assert catalogs[0]["options"] == {"type": "sql", "uri": "sqlite:///catalog.db"}
     assert assets[0]["id"] == asset["id"]
     assert assets[0]["catalog"] == "analytics"

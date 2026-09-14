@@ -38,6 +38,7 @@ def create_builtin_plugin_registry(
         output_formats=frozenset({_ICEBERG_FORMAT_ID}),
         handle_versions=frozenset({1}),
         config_schema={
+            "defaults": {"type": "sql"},
             "fields": [
                 {"name": "uri", "type": "string", "required": True, "secret": False},
                 {"name": "warehouse", "type": "string", "required": False, "secret": False},
@@ -48,7 +49,7 @@ def create_builtin_plugin_registry(
                     "required": False,
                     "secret": True,
                 },
-            ]
+            ],
         },
     )
     format_descriptor = PluginDescriptor(

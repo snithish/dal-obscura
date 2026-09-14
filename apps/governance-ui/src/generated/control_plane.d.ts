@@ -1192,6 +1192,8 @@ export interface components {
             options: {
                 [key: string]: unknown;
             };
+            /** Plugin Id */
+            plugin_id?: string | null;
             /** Revision */
             revision: number;
             /** Status */

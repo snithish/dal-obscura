@@ -37,6 +37,7 @@ def test_workspace_catalog_upsert_bootstraps_default_workspace():
             "id": response.json()["id"],
             "name": "analytics",
             "module": ICEBERG_CATALOG_MODULE,
+            "plugin_id": "iceberg.sql",
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
             "status": "configured",
             "revision": 0,

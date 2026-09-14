@@ -73,7 +73,11 @@ def _admit_session_discovery(session_key: str | None):
                 _SESSION_DISCOVERY_SLOTS.pop(session_key, None)
 
 
-def list_workspace_catalogs(store: PublicationStore) -> list[dict[str, object]]:
+def list_workspace_catalogs(
+    store: PublicationStore,
+    *,
+    plugin_registry: PluginRegistry | None = None,
+) -> list[dict[str, object]]:
     """Lists catalogs configured in the default workspace.
 
     Example:
@@ -85,7 +89,19 @@ def list_workspace_catalogs(store: PublicationStore) -> list[dict[str, object]]:
     context = store.get_default_workspace_context()
     if context is None:
         return []
-    return store.list_workspace_catalogs(context)
+    catalogs = store.list_workspace_catalogs(context)
+    if plugin_registry is None:
+        return catalogs
+    admitted = plugin_registry.admitted() or plugin_registry.reload()
+    for catalog in catalogs:
+        module = str(catalog.get("module", ""))
+        if module == ICEBERG_CATALOG_MODULE:
+            catalog["plugin_id"] = "iceberg.sql"
+        elif ("catalog", module) in admitted:
+            catalog["plugin_id"] = module
+        else:
+            catalog["plugin_id"] = None
+    return catalogs
 
 
 def discover_workspace_catalog_tables(
@@ -374,6 +390,9 @@ def validate_descriptor_options(
         return
     field_specs = [cast(dict[str, object], item) for item in raw_fields if isinstance(item, dict)]
     fields = {item.get("name") for item in field_specs if isinstance(item.get("name"), str)}
+    raw_defaults = descriptor.config_schema.get("defaults")
+    if isinstance(raw_defaults, dict):
+        fields.update(key for key in raw_defaults if isinstance(key, str))
     if unknown := sorted(set(options) - fields):
         raise ValidationFailure(f"{kind} options contain unsupported fields: " + ", ".join(unknown))
     required: set[str] = set()
