@@ -59,6 +59,22 @@ def test_workspace_catalog_upsert_bootstraps_default_workspace():
     }
 
 
+def test_workspace_catalog_upsert_accepts_plugin_defaults_without_backend_fields():
+    client = _client()
+
+    response = client.put(
+        "/v1/catalogs/analytics",
+        json={"module": "iceberg.sql", "options": {"uri": "sqlite:///catalog.db"}},
+        headers=ADMIN_HEADERS,
+    )
+
+    assert response.status_code == 200
+    catalog = client.get("/v1/catalogs", headers=ADMIN_HEADERS).json()[0]
+    assert catalog["module"] == "iceberg.sql"
+    assert catalog["plugin_id"] == "iceberg.sql"
+    assert catalog["options"] == {"uri": "sqlite:///catalog.db"}
+
+
 def test_workspace_catalog_upsert_rejects_a_stale_revision():
     client = _client()
     first = client.put(
