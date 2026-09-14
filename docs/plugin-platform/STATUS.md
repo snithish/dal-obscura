@@ -1054,6 +1054,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Verification: health and request-boundary suites (7 passed), Ruff, and non-heavy pre-commit hooks passed. Production outage and recovery evidence remain VERIFY; release remains HOLD.
 - Atomic implementation commit: `b027153`.
 
+## 2026-09-14 — N07 validation recovery details
+
+- Scope: preserve structured field errors from the control plane through the browser transport and recovery UI.
+- Observable behavior delivered: redacted validation fields are parsed as typed client data and named in recovery messages without exposing submitted values; malformed envelopes are ignored safely.
+- Verification: UI TypeScript compilation, 12 UI tests, Vite production build, and non-heavy pre-commit hooks passed. Full rendered mutation and accessibility evidence remain VERIFY; release remains HOLD.
+- Atomic implementation commit: `abaa6cd`.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
