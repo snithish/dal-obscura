@@ -1189,6 +1189,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `e8210e5`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N13 JVM/Spark authenticated consumer qualification
+
+- Scope: make the JVM consumer fixture exercise the real OIDC/JWKS path deterministically and qualify the Spark connector against the current candidate.
+- Observable behavior delivered; FR/NFR and B/G subcases: each JVM fixture now reserves a loopback JWKS port, publishes a bounded local JWKS URL, and starts a disposable loopback HTTP server serving only `GET /jwks.json`. The fixture keeps backward-compatible construction for callers without a JWKS port, and its policy selectors use explicit nested leaves so publication admission remains fail-closed. Pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `tests/support/build_connector_fixture.py`, `connectors/jvm/connector-testkit-jvm/src/main/java/io/dalobscura/connectors/testkit/FixtureBuilderRunner.java`, `FixtureBundle.java`, `LocalDalObscuraServer.java`, and `FixtureBuilderRunnerTest.java`; no production serializers, serialized classes/import paths, payloads, migrations, dependencies, or tests deleted.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +174 JVM/test/fixture lines; no dependencies changed. The JWKS server binds only to `127.0.0.1`, returns bounded status responses, and is stopped with the fixture process.
+- Primary invariant test owners; tests consolidated/deleted: JVM client, Spark datasource, fixture parser, and Spark integration tests remain owners; no tests deleted. External clean-wheel, TLS/OIDC, PostgreSQL race/recovery, hostile transport, capacity, and three external consumer-pair evidence remain open.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `mvn -f connectors/jvm/pom.xml -pl integration-tests-jvm -am -Dtest=SparkReadIT -Dsurefire.failIfNoSpecifiedTests=false test` (exit 0; 6 passed), `mvn -f connectors/jvm/pom.xml verify` (exit 0; client 7 passed, Spark unit 29 passed, fixture 2 passed, integration 6 passed), `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/test_support_build_connector_fixture.py -q` (exit 0; 3 passed), and pre-commit non-heavy pytest (850 passed, 7 skipped, 15 deselected), 2026-09-14, Java 17/Spark 3.5.6/Python 3.12/uv.
+- Artifact and fixture hashes; evidence locations: implementation commit `249e11c`; Maven reports under `connectors/jvm/*/target/surefire-reports`; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: clean installed wheels and real DuckDB/Spark/JVM cells across SQL-Iceberg, REST-Iceberg, and manifest/Parquet, live OIDC PKCE/freshness/revocation, hostile transport counters, PostgreSQL races/recovery, mixed-load capacity, pinned deployment integrity/SBOM, browser accessibility, and independent review remain VERIFY under N04–N16. Next action is continue candidate-bound consumer and deployment qualification while retaining release HOLD.
+- Atomic implementation commits: `249e11c`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-14 — N04 local Iceberg storage-property enforcement
 
 - Scope: extend returned-location checks to local filesystem paths carried in Iceberg IO properties.
