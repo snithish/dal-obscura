@@ -226,7 +226,19 @@ def upsert_workspace_runtime_settings(
         ```
     """
 
-    normalized_path_rules = [dict(rule) for rule in (path_rules or [])]
+    if path_rules is not None and not isinstance(path_rules, list):
+        raise ValidationFailure("Runtime path rules must be a list")
+    raw_path_rules = path_rules or []
+    if any(not isinstance(rule, dict) for rule in raw_path_rules):
+        raise ValidationFailure("Runtime path rules must contain objects")
+    normalized_path_rules = [dict(rule) for rule in raw_path_rules]
+    if any(
+        set(rule) != {"root"}
+        or not isinstance(rule.get("root"), str)
+        or not str(rule["root"]).strip()
+        for rule in normalized_path_rules
+    ):
+        raise ValidationFailure("Runtime path rules require exactly one non-empty string root")
     try:
         PathRuleEnforcer(normalized_path_rules)
     except (TypeError, ValueError) as exc:

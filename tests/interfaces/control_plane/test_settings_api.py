@@ -108,6 +108,24 @@ def test_workspace_runtime_settings_rejects_unsafe_path_rules():
     assert response.json()["error"]["code"] == "validation_error"
 
 
+def test_workspace_runtime_settings_rejects_non_string_path_root():
+    client = _client()
+
+    response = client.put(
+        "/v1/settings/runtime",
+        json={
+            "ticket_ttl_seconds": 1200,
+            "max_tickets": 32,
+            "max_ticket_exchanges": 3,
+            "path_rules": [{"root": 123}],
+        },
+        headers=ADMIN_HEADERS,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "validation_error"
+
+
 def test_workspace_auth_providers_can_be_configured_without_cell_ids():
     client = _client()
 
