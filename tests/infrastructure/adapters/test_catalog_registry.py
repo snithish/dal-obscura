@@ -129,6 +129,43 @@ def test_iceberg_registry_does_not_hide_root_table_provider_errors(monkeypatch):
         catalog.list_tables()
 
 
+@pytest.mark.parametrize("bad_namespace", [("prod", 7), "prod..staging", ""])
+def test_iceberg_registry_rejects_malformed_provider_namespaces(monkeypatch, bad_namespace):
+    class MalformedCatalog:
+        def list_namespaces(self):
+            return [bad_namespace]
+
+    monkeypatch.setattr(
+        registry_module,
+        "_load_iceberg_catalog",
+        lambda catalog_name, options: MalformedCatalog(),
+    )
+    catalog = IcebergCatalog(name="analytics", options={})
+
+    with pytest.raises(ValueError, match="invalid namespace"):
+        catalog.list_tables()
+
+
+@pytest.mark.parametrize("bad_identifier", [("prod", 7), "prod..orders", "orders\n"])
+def test_iceberg_registry_rejects_malformed_provider_table_identifiers(monkeypatch, bad_identifier):
+    class MalformedCatalog:
+        def list_namespaces(self):
+            return [()]
+
+        def list_tables(self):
+            return [bad_identifier]
+
+    monkeypatch.setattr(
+        registry_module,
+        "_load_iceberg_catalog",
+        lambda catalog_name, options: MalformedCatalog(),
+    )
+    catalog = IcebergCatalog(name="analytics", options={})
+
+    with pytest.raises(ValueError, match="invalid table identifier"):
+        catalog.list_tables()
+
+
 def test_dynamic_catalog_registry_rejects_legacy_direct_paths_config():
     legacy_config: dict[str, Any] = {
         "catalogs": {},
