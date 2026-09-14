@@ -2409,3 +2409,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: hostile transport/DNS/private-address counters, live OIDC freshness/revocation, populated browser accessibility, PostgreSQL races/recovery, clean TLS/OIDC consumer matrix, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable governed backend slice.
 - Atomic implementation commits: `2ffa0d08`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N04 bounded executable catalog traversal
+
+- Scope: bound data-plane Iceberg namespace and table enumeration before materialization.
+- Observable behavior delivered; FR/NFR and B/G subcases: `CatalogRegistry.list_tables()` now enforces 1,000 namespaces and 10,000 tables while consuming provider iterables incrementally. Endless provider generators fail with a controlled limit error instead of exhausting memory or hanging. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/data_plane/infrastructure/adapters/catalog_registry.py` and `tests/infrastructure/adapters/test_catalog_registry.py`; no serializer, migration, dependency, or unrelated path changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +78 test lines, +52 production lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: catalog-registry adapter suite owns namespace/table traversal bounds; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/infrastructure/adapters/test_catalog_registry.py -q` (exit 0, 22 passed), focused Ruff (exit 0), 2026-09-14, Python 3.12.
+- Artifact and fixture hashes; evidence locations: implementation commit `01cf2577`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: deadline/cancellation enforcement for actual provider IO, hostile DNS/private-address counters, live OIDC freshness/revocation, populated browser accessibility, PostgreSQL races/recovery, clean TLS/OIDC consumer matrix, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable governed backend slice.
+- Atomic implementation commits: `01cf2577`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
