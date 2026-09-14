@@ -1549,3 +1549,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: UI controls for every optional provider field, live OIDC/browser login/logout, account-role freshness and cross-process revocation, hostile transport counters, consumer/recovery/capacity evidence, and independent security/UX/release review remain VERIFY under N04–N16. Next action is continue live qualification while retaining release HOLD.
 - Atomic implementation commits: `ad87f37`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N01 full-suite verification after OIDC validation
+
+- Scope: qualify the complete tree after strict OIDC provider option validation and the prior UI diagnostic race fix.
+- Observable behavior delivered; FR/NFR and B/G subcases: no additional runtime behavior changed by this verification; all backend, Flight, policy, session, plugin, and cleanup tests remain green. Pickle serializers, serialized classes/import paths, and payload semantics remain untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: documentation only (`docs/plugin-platform/BASELINE_20260914.md` and this ledger entry); no source, serializer, migration, dependency, or fixture changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no source or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: authoritative full suite and explicit opt-in skip markers; no tests deleted in this verification.
+- Exact commands, exit codes, UTC date, runtime versions, environment: elevated `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest --durations=20 --junitxml=/tmp/dal-obscura-after-oidc-validation.xml -q -rs` (exit 0; 868 collected, 854 passed, 14 skipped, 0 failed, 0 errors, approximately 132.8s), 2026-09-14, Python 3.12/uv local workspace with loopback/subprocess permissions.
+- Artifact and fixture hashes; evidence locations: JUnit report `/tmp/dal-obscura-after-oidc-validation.xml`; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: the 14 skips are explicit benchmark, loopback-consumer, PostgreSQL race/recovery opt-ins; clean Node install/image/advisory, hostile live transport counters, real OIDC/browser/accessibility, consumer wheels, recovery, capacity, and independent security/UX/release review remain VERIFY under N01/N04–N16. Next action is continue live qualification while retaining release HOLD.
+- Atomic implementation commits: `ad87f37`, `2b8f0d3`; verification is documentation only.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
