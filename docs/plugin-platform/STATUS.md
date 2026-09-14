@@ -899,6 +899,8 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: asset mutation routes now publish explicit owner, delegated-capability, schema-field, and asset identity contracts; list grants also expose a typed capability item shape. Existing authorization, self-escalation, plugin-pair, and revision checks remain unchanged.
 - Verification: actor-auth, draft/version, and OpenAPI route suites passed (49 tests); changed-path Ruff/format checks and `git diff --check` passed. Generated DTO coverage and rendered permission-matrix evidence remain VERIFY under N03/N11.
 
+- Follow-up regression: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q` exited 0 across the full repository after the response-model slices. Live OIDC, process-boundary, real-consumer, capacity, deployment, and independent UX/security gates remain VERIFY; release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
