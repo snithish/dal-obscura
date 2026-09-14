@@ -1163,6 +1163,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `24e8890`.
 - Human acceptance, if required: independent security/release review and real destination evidence remain VERIFY; release remains HOLD.
 
+## 2026-09-14 — N04 authenticated path-rule management
+
+- Scope: make the existing published storage boundary configurable through the normal authenticated settings workflow.
+- Observable behavior delivered; FR/NFR and B/G subcases: runtime settings now accept and return a bounded path-root list, validate roots through the same `PathRuleEnforcer` used by the data plane before persistence, include only redacted roots in the audit event, and render a JSON editor in Settings with client-side structural feedback. Existing expected-revision behavior remains in force; empty roots remain an explicit local-development choice.
+- Changed and deleted paths; old callers removed; protected pickle check: runtime schemas/routes/services/repository, path-rule adapter, generated OpenAPI/TypeScript DTOs, Settings UI, and API inventory/settings tests changed. No migration, serializer, serialized class, payload, or pickle import path changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +80 production/UI/test logical lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: control-plane settings, inventory-read, compiler, published-config, and path-rule suites; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: settings/inventory/compiler/published-config/path-rule suite (all passed), UI TypeScript compilation, Vite build (322.55 kB JS / 97.39 kB gzip), 12 UI tests, generated DTO freshness, changed-path Ruff/format and diff checks (exit 0), 2026-09-14, Python 3.12/Node 24 local workspace.
+- Artifact and fixture hashes; evidence locations: atomic implementation commit `3a86a7a`; regenerated `apps/governance-ui/openapi/control-plane.json` and `src/generated/control_plane.d.ts`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: live DNS/redirect/private-destination controls, cancellation cleanup, production network enforcement, and independent browser/accessibility evidence remain VERIFY under B06/N04/N06/N16; next action is continue the live transport and consumer qualification gates.
+- Atomic implementation commits: `3a86a7a`.
+- Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
+
 Replace the corresponding queue entry and keep one current record per packet.
 Link detailed logs/artifacts instead of appending repeated full narratives.
 
