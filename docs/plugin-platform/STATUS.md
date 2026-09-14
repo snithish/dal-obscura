@@ -1745,3 +1745,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live hostile transport counters and provider request interception, DNS/redirect/private-address qualification, browser axe/screen-reader evidence, OIDC freshness/revocation, PostgreSQL races, clean wheels/consumers, recovery/mixed-load capacity, deployment integrity, and independent review remain VERIFY under N04–N16. Next action is continue candidate-bound transport and browser qualification while retaining release HOLD.
 - Atomic implementation commits: `c444be7`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N04 runtime settings serialization contract
+
+- Scope: give the structured path-root editor a pure, directly tested payload boundary.
+- Observable behavior delivered; FR/NFR and B/G subcases: `serializePathRules` trims every root, preserves an empty allowlist for explicitly local profiles, and returns no payload when any row is blank. Settings save uses this helper before calling the control plane, while server URI/private-address validation remains authoritative. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/runtime_settings.ts`, `apps/governance-ui/src/components/SettingsView.tsx`, `apps/governance-ui/tests/lifecycle.test.mjs`; no production backend, serializer, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +19 UI/test lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: UI Node test now covers trimming, empty local profiles, and blank-row rejection; runtime settings API and path-rule adapter tests remain server security owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node_modules/.bin/vite build` (exit 0; 328.17 kB JavaScript / 99.14 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (14 passed), and `git diff --check` (exit 0), 2026-09-14, Node 24.
+- Artifact and fixture hashes; evidence locations: implementation commit `07719f4`; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: live transport counters/cancellation, browser axe/screen-reader coverage, OIDC freshness/revocation, PostgreSQL races, clean wheels/consumers, recovery/mixed-load capacity, deployment integrity, and independent review remain VERIFY under N04–N16. Next action is continue live qualification while retaining release HOLD.
+- Atomic implementation commits: `07719f4`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
