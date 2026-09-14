@@ -285,6 +285,14 @@ test count is now 8.
 - Evidence: direct UI TypeScript build, Vite production build (279.80 kB JavaScript / 84.66 kB gzip; 19.27 kB CSS / 4.63 kB gzip), all 8 UI lifecycle/schema/recovery tests, and `git diff --check` passed.
 - Remaining N08 work: rendered lossless editor roundtrip coverage, duplicate-rule workflow, typed condition builder, all mask-value cases, responsive/large-tree browser stress, and complete B11/B12 qualification. Release remains HOLD.
 
+## Implementation update — d8f08af (2026-09-14)
+
+- Packet / status / candidate commit / owner: N08/B11 authoring partial / VERIFY / `d8f08af` / governance UI.
+- Observable behavior delivered: each editable policy rule can be duplicated from the rule list. The copy preserves principals, exact nested field paths, masks and typed values, row predicates, and conditions, receives a new precedence ordinal, becomes selected, and invalidates any saved/reviewed status until explicitly saved and reviewed.
+- Changed paths: `apps/governance-ui/src/main.tsx` and `apps/governance-ui/src/components/AssetWorkspace.tsx`. No backend, session, pickle serializer, serialized class, payload, or import path changed.
+- Evidence: direct UI TypeScript build, Vite production build (280.44 kB JavaScript / 84.83 kB gzip; 19.27 kB CSS / 4.63 kB gzip), all 8 UI lifecycle/schema/recovery tests, and `git diff --check` passed.
+- Remaining N08 work: rendered lossless editor roundtrip coverage, typed condition builder, all mask-value cases, responsive/large-tree browser stress, and complete B11/B12 qualification. Release remains HOLD.
+
 Qualification follow-up (2026-09-14): the elevated full Python suite completed with
 837 collected, 823 passed, 14 explicit environment/benchmark skips, and zero
 failures or errors. The unprivileged attempt was discarded because the sandbox
