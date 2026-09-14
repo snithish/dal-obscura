@@ -2461,3 +2461,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: actual hostile transport/DNS/private-address counters, live OIDC freshness/revocation, populated browser accessibility, PostgreSQL races/recovery, clean TLS/OIDC consumer matrix, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable governed backend slice.
 - Atomic implementation commits: `0e6bae98`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N05 canonical actor identity bounds
+
+- Scope: enforce one domain-level invariant for principal, group, and issuer values entering ownership, grants, sessions, audit, and API authorization.
+- Observable behavior delivered; FR/NFR and B/G subcases: `ControlPlaneActor` now rejects empty, oversized, or control-character identity components and caps group cardinality. Exact issuer and subject values remain unchanged and delimiter-safe; malformed external resolver/session values fail closed before persistence or authorization. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/application/access.py` and `tests/control_plane/test_access_identity.py`; no serializers, migrations, dependencies, or unrelated paths changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +22 production lines, +27 test lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: access-identity suite owns printable/bounded component rejection and group cardinality; browser-session and policy authorization suites retain compatibility coverage; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane/test_access_identity.py tests/control_plane/test_browser_sessions.py tests/control_plane/test_policy_authorization.py -q` (exit 0, 19 passed), focused Ruff (exit 0), 2026-09-14, Python 3.12.
+- Artifact and fixture hashes; evidence locations: implementation commit `48bfb8e4`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: live OIDC freshness/revocation, cross-process PostgreSQL races, actual hostile transport/DNS/private-address counters, clean TLS/OIDC consumer matrix, populated browser accessibility, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable governed backend slice.
+- Atomic implementation commits: `48bfb8e4`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
