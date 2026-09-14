@@ -957,6 +957,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: policy-version detail lookups now use session/asset/version query keys with Query cancellation, while owner and delegated-capability writes invalidate the asset and inventory families after successful server responses. The existing version epoch and concealed-error behavior remain intact.
 - Verification: UI TypeScript compilation, Vite production build (94.09 kB gzip JavaScript), 11 UI tests, and `git diff --check` passed. Draft/evaluate/review/publish/restore mutation wiring and rendered deferred-response coverage remain VERIFY; release remains HOLD.
 
+## 2026-09-14 — N07 policy mutation identity fences
+
+- Scope: make policy draft, evaluation, review, publication, and restore continuations explicit about selected draft identity.
+- Observable behavior delivered: every awaited policy workflow captures draft ID and revision alongside existing session/resource/edit fences, refuses to apply stale success or failure state, and invalidates the current asset, inventory, and management query families after successful draft/publication/restore outcomes. Publication reconciliation keeps its original idempotency key.
+- Verification: UI TypeScript compilation, Vite production build (94.18 kB gzip JavaScript), 11 UI tests, and `git diff --check` passed. Rendered deferred mutation scenarios and live uncertain-outcome evidence remain VERIFY; release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.

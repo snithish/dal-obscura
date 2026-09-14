@@ -537,6 +537,12 @@ function App() {
     return saveState !== "unsaved" || window.confirm("You have unsaved policy changes. Leave this editor?");
   }
 
+  function invalidateAssetQueries(assetId: string) {
+    void queryClient.invalidateQueries({ queryKey: ["asset", sessionCacheKey, assetId] });
+    void queryClient.invalidateQueries({ queryKey: ["asset-inventory", sessionCacheKey] });
+    void queryClient.invalidateQueries({ queryKey: ["management", sessionCacheKey] });
+  }
+
   async function loadAsset(
     assetId: string,
     knownAssets = assets,
@@ -672,23 +678,25 @@ function App() {
     const assetId = asset.id;
     const editEpoch = draftEditEpoch.current;
     const revision = draftRevision;
+    const draftIdentity = draftId;
     const loadScope = loadEpoch.current;
     setSaveState("saving");
     try {
       const saved = await controlPlane.saveDraft(assetId, revision, rules);
-      if (loadScope !== loadEpoch.current || editEpoch !== draftEditEpoch.current) {
+      if (loadScope !== loadEpoch.current || editEpoch !== draftEditEpoch.current || draftIdentity !== draftId) {
         if (loadScope === loadEpoch.current) setSaveState("unsaved");
         return;
       }
       setDraftRevision(saved.revision);
       setDraftId(saved.id);
-      if (loadScope !== loadEpoch.current || editEpoch !== draftEditEpoch.current) {
+      if (loadScope !== loadEpoch.current || editEpoch !== draftEditEpoch.current || draftIdentity !== draftId) {
         if (loadScope === loadEpoch.current) setSaveState("unsaved");
         return;
       }
       setSaveState("saved"); setReviewToken(null); setNotice("Policy draft saved to the control plane.");
+      invalidateAssetQueries(assetId);
     } catch (error) {
-      if (loadScope !== loadEpoch.current || editEpoch !== draftEditEpoch.current) return;
+      if (loadScope !== loadEpoch.current || editEpoch !== draftEditEpoch.current || draftIdentity !== draftId) return;
       setSaveState("failed"); setNotice(recoveryMessage(error, "Save failed. The unsaved draft remains in this browser."));
     }
   }
@@ -700,6 +708,7 @@ function App() {
     }
     const loadScope = loadEpoch.current;
     const editScope = draftEditEpoch.current;
+    const draftIdentity = { id: draftId, revision: draftRevision };
     try {
       let claims: Record<string, unknown> = {};
       if (previewClaims.trim()) {
@@ -708,10 +717,10 @@ function App() {
         claims = parsed as Record<string, unknown>;
       }
       const result: Preview = await controlPlane.evaluate(asset.id, { principal: previewPrincipal.trim(), groups: previewGroups.split(",").map((value) => value.trim()).filter(Boolean), claims, draft_id: draftId ?? undefined, draft_revision: draftRevision });
-      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
+      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
       setPreview(result); setReviewToken(null); setNotice(`Server-side evaluation completed: ${result.decision === "allow" ? "allowed" : "denied"}.`);
     } catch (error) {
-      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
+      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
       setPreview(null); setReviewToken(null); setNotice(recoveryMessage(error, "Policy test could not run. This draft is not validated."));
     }
   }
@@ -720,14 +729,15 @@ function App() {
     if (!asset || saveState !== "saved" || publishPending) return;
     const loadScope = loadEpoch.current;
     const editScope = draftEditEpoch.current;
+    const draftIdentity = { id: draftId, revision: draftRevision };
     try {
       const claims = JSON.parse(previewClaims || "{}") as Record<string, object>;
       if (!claims || Array.isArray(claims) || typeof claims !== "object") throw new Error("Claims must be a JSON object");
       const result = await controlPlane.review(asset.id, { principal: previewPrincipal.trim(), groups: previewGroups.split(",").map((value) => value.trim()).filter(Boolean), claims, draft_id: draftId ?? undefined, draft_revision: draftRevision });
-      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
+      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
       setPreview(result); setReviewToken(result.review_token ?? null); setNotice("Server review is current for this saved draft revision. You can publish it now.");
     } catch (error) {
-      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
+      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
       setReviewToken(null); setNotice(recoveryMessage(error, "Review was rejected. Run a successful test against the saved draft and resolve any policy or schema errors."));
     }
   }
@@ -736,27 +746,30 @@ function App() {
     if (!asset || !reviewToken || publishPending) return;
     const loadScope = loadEpoch.current;
     const editScope = draftEditEpoch.current;
+    const draftIdentity = { id: draftId, revision: draftRevision };
     const idempotencyKey = crypto.randomUUID();
     setPublishPending(true);
     try {
       await controlPlane.publishAsset(asset.id, draftRevision, reviewToken, idempotencyKey, draftId ?? undefined);
-      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
+      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
       setReviewToken(null);
       setNotice("Published the saved draft.");
+      invalidateAssetQueries(asset.id);
       void refreshAssetInventory(assetSearch);
     } catch {
-      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
+      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
       try {
         const operation = await controlPlane.getPublicationOperation(asset.id, idempotencyKey);
         if (operation.status === "committed") {
           setReviewToken(null);
           setNotice(`Publish committed as policy version ${operation.result.policy_version}.`);
+          invalidateAssetQueries(asset.id);
           void refreshAssetInventory(assetSearch);
         } else {
           setNotice("Publish outcome is still pending. Refresh Activity before retrying.");
         }
       } catch (error) {
-        if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
+        if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
         setNotice(recoveryMessage(error, "Publish failed. Review the saved draft and active generation."));
       }
     } finally {
@@ -771,17 +784,19 @@ function App() {
     if (saveState === "unsaved" && !window.confirm("You have unsaved policy changes. Restore this published version over them?")) return;
     const loadScope = loadEpoch.current;
     const editScope = draftEditEpoch.current;
+    const draftIdentity = { id: draftId, revision: draftRevision };
     try {
       const restored = await controlPlane.restorePolicyVersion(asset.id, policyVersion, draftRevision);
-      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
+      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
       draftEditEpoch.current += 1;
       replaceRules(restored.rules);
       setDraftRevision(restored.revision);
       setSaveState("saved");
       setPreview(null); setReviewToken(null);
       setNotice(`Version ${policyVersion} restored as draft revision ${restored.revision}. Review and publish it when ready.`);
+      invalidateAssetQueries(asset.id);
     } catch (error) {
-      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
+      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
       setNotice(recoveryMessage(error, "Restore failed. The draft may have changed; reload the asset before trying again."));
     }
   }
