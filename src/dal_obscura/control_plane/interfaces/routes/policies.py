@@ -19,8 +19,12 @@ from dal_obscura.control_plane.interfaces.routes.schemas import (
     AuditEventPageResponse,
     AuditEventResponse,
     PolicyDraftRequest,
+    PolicyDraftResponse,
     PolicyEvaluationRequest,
+    PolicyEvaluationResponse,
+    PolicyOperationResponse,
     PolicyRestoreRequest,
+    PolicyReviewResponse,
     PolicyVersionCreateResponse,
     PolicyVersionDetailResponse,
     PolicyVersionPageResponse,
@@ -40,19 +44,19 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
 
     api = APIRouter()
 
-    @api.get("/v1/assets/{asset_id}/draft")
+    @api.get("/v1/assets/{asset_id}/draft", response_model=PolicyDraftResponse)
     def get_policy_draft(
         asset_id: UUID,
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
+    ) -> PolicyDraftResponse:
         return deps.with_service(lambda service: service.get_policy_draft(asset_id, actor))
 
-    @api.put("/v1/assets/{asset_id}/draft")
+    @api.put("/v1/assets/{asset_id}/draft", response_model=PolicyDraftResponse)
     def save_policy_draft(
         asset_id: UUID,
         request: PolicyDraftRequest,
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
+    ) -> PolicyDraftResponse:
         return deps.with_service(
             lambda service: service.save_policy_draft(
                 asset_id,
@@ -62,22 +66,25 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             )
         )
 
-    @api.get("/v1/assets/{asset_id}/draft/{draft_id}")
+    @api.get("/v1/assets/{asset_id}/draft/{draft_id}", response_model=PolicyDraftResponse)
     def get_policy_draft_by_id(
         asset_id: UUID,
         draft_id: UUID,
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
+    ) -> PolicyDraftResponse:
         return deps.with_service(
             lambda service: service.get_policy_draft_by_id(asset_id, draft_id, actor)
         )
 
-    @api.post("/v1/assets/{asset_id}/policy-evaluate")
+    @api.post(
+        "/v1/assets/{asset_id}/policy-evaluate",
+        response_model=PolicyEvaluationResponse,
+    )
     def evaluate_asset_policy(
         asset_id: UUID,
         request: PolicyEvaluationRequest,
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
+    ) -> PolicyEvaluationResponse:
         return deps.with_service(
             lambda service: service.evaluate_asset_policy(
                 asset_id,
@@ -91,12 +98,15 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             )
         )
 
-    @api.post("/v1/assets/{asset_id}/policy-review")
+    @api.post(
+        "/v1/assets/{asset_id}/policy-review",
+        response_model=PolicyReviewResponse,
+    )
     def review_asset_policy(
         asset_id: UUID,
         request: PolicyEvaluationRequest,
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
+    ) -> PolicyReviewResponse:
         return deps.with_service(
             lambda service: service.review_asset_policy(
                 asset_id,
@@ -144,12 +154,15 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             lambda service: service.list_asset_policy_version_history(asset_id, actor=actor)
         )
 
-    @api.get("/v1/assets/{asset_id}/policy-operations/{idempotency_key}")
+    @api.get(
+        "/v1/assets/{asset_id}/policy-operations/{idempotency_key}",
+        response_model=PolicyOperationResponse,
+    )
     def get_policy_operation(
         asset_id: UUID,
         idempotency_key: str,
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
+    ) -> PolicyOperationResponse:
         key = idempotency_key.strip()
         if not 1 <= len(key) <= 128:
             raise HTTPException(
@@ -181,13 +194,16 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             )
         )
 
-    @api.post("/v1/assets/{asset_id}/policy-versions/{policy_version}/restore")
+    @api.post(
+        "/v1/assets/{asset_id}/policy-versions/{policy_version}/restore",
+        response_model=PolicyDraftResponse,
+    )
     def restore_policy_version(
         asset_id: UUID,
         policy_version: int,
         request: PolicyRestoreRequest,
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
+    ) -> PolicyDraftResponse:
         return deps.with_service(
             lambda service: service.restore_policy_version(
                 asset_id,

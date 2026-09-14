@@ -83,3 +83,27 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
         ]["schema"]["$ref"]
         == "#/components/schemas/AssetAccessResponse"
     )
+    assert (
+        paths["/v1/assets/{asset_id}/draft"]["get"]["responses"]["200"]["content"][
+            "application/json"
+        ]["schema"]["$ref"]
+        == "#/components/schemas/PolicyDraftResponse"
+    )
+    assert (
+        paths["/v1/assets/{asset_id}/policy-evaluate"]["post"]["responses"]["200"]["content"][
+            "application/json"
+        ]["schema"]["$ref"]
+        == "#/components/schemas/PolicyEvaluationResponse"
+    )
+    assert (
+        paths["/v1/assets/{asset_id}/policy-review"]["post"]["responses"]["200"]["content"][
+            "application/json"
+        ]["schema"]["$ref"]
+        == "#/components/schemas/PolicyReviewResponse"
+    )
+    assert (
+        paths["/v1/assets/{asset_id}/policy-operations/{idempotency_key}"]["get"]["responses"][
+            "200"
+        ]["content"]["application/json"]["schema"]["$ref"]
+        == "#/components/schemas/PolicyOperationResponse"
+    )

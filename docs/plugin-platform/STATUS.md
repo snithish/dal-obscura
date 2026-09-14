@@ -881,6 +881,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: direct and reconciled committed publication outcomes now trigger an authoritative asset inventory refresh, so active policy metadata updates in-place without a full page reload. Existing load/edit identity fences remain in force.
 - Verification: UI TypeScript compilation, eight UI tests, and `git diff --check` passed. Release remains HOLD pending rendered publish/reconciliation and multi-actor evidence.
 
+## 2026-09-14 — N03 policy authoring response contracts
+
+- Scope: remove untyped response boundaries from policy draft, evaluation, review, restore, and idempotency-operation routes.
+- Observable behavior delivered: draft revisions, bounded DuckDB evaluation evidence, optional server review authority, restored drafts, and caller-scoped publication operations now validate through shared Pydantic response models. The public `schema` JSON field remains compatible through an explicit model alias; pickle serializers and ticket payloads are unchanged.
+- Verification: policy draft/schema/publish-flow suites and OpenAPI route inventory passed (24 tests); changed-path Ruff/format checks and `git diff --check` passed. Generated TypeScript DTO coverage and rendered review/publish evidence remain VERIFY under N03/N09.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.

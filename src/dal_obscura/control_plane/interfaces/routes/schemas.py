@@ -390,6 +390,55 @@ class PolicyVersionCreateResponse(BaseModel):
     policy_version: int
 
 
+class PolicyDraftResponse(BaseModel):
+    """Revisioned policy draft returned to editors and reviewers."""
+
+    id: str | None = None
+    asset_id: str
+    author_principal: str
+    revision: int
+    base_policy_version: int
+    rules: list[dict[str, Any]]
+    content_hash: str
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class PolicyEvaluationResponse(BaseModel):
+    """Bounded server-side policy evaluation evidence."""
+
+    status: Literal["completed"]
+    decision: Literal["allow", "deny"]
+    allowed_columns: list[str]
+    masks: list[dict[str, Any]]
+    row_filter: str | None = None
+    input_rows: int
+    output_rows: int
+    schema_text: str = Field(alias="schema")
+    rows: list[dict[str, Any]]
+    evidence: dict[str, Any]
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class PolicyReviewResponse(PolicyEvaluationResponse):
+    """Evaluation evidence plus optional server review authority."""
+
+    review_token: str | None = None
+    review_expires_at: int | None = None
+    review_draft_id: str | None = None
+    review_draft_author: str | None = None
+    reviewer: str | None = None
+
+
+class PolicyOperationResponse(BaseModel):
+    """Caller-scoped idempotent publication operation."""
+
+    id: str
+    status: str
+    result: PolicyVersionCreateResponse
+
+
 class AuthProviderResponse(BaseModel):
     """Redacted authentication-provider record returned to management clients."""
 
