@@ -1103,6 +1103,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `4d0e29d`.
 - Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N08 canonical mask vocabulary
+
+- Scope: remove the duplicate UI mask-option contract from nested policy authoring.
+- Observable behavior delivered; FR/NFR and B/G subcases: one access-control vocabulary now owns the six supported mask types; authoritative schema responses expose that bounded set; the policy editor derives choices from the server response while preserving value validation and nested field behavior.
+- Changed and deleted paths; old callers removed; protected pickle check: new `common/access_control/mask_types.py`, compiler/schema service/response model, generated OpenAPI client, `AssetWorkspace`, and schema tests changed. The UI-local mask option list was removed; no pickle serializer, serialized class, payload, or import path changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +27 production/UI / +1 test logical lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `tests/control_plane/test_schema_service.py`; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: schema service/API suites (exit 0); governance UI TypeScript, Vite, UI tests, generated DTO freshness, Ruff/format and diff checks (exit 0); 2026-09-14, local Python 3.12/Node 24 toolchain.
+- Artifact and fixture hashes; evidence locations: atomic commit `f495b6b`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: live all-mask rendered browser coverage, 10k-field capacity, and independent UX/accessibility review remain VERIFY under N08/N14/N16; next action is execute those qualification scenarios against the running UI.
+- Atomic implementation commits: `f495b6b`.
+- Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
+
 Replace the corresponding queue entry and keep one current record per packet.
 Link detailed logs/artifacts instead of appending repeated full narratives.
 
