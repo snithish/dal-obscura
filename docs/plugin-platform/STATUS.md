@@ -1966,3 +1966,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live OIDC and hostile DNS/private-address transport, browser axe/screen-reader and responsive evidence, PostgreSQL process races/recovery, clean TLS/OIDC consumer cells, mixed-load capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD.
 - Atomic implementation commits: verification only; implementation commit `93004cd` and ledger commit `7502a60` remain the source of truth.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N05/N06 authenticated local browser session boundary
+
+- Scope: manually inspect the running governance UI through its accessibility tree after the shell and session changes.
+- Observable behavior delivered; FR/NFR and B/G subcases: the local disposable profile accepted its configured control-plane token, rendered a connected workspace with `platform:admin` capabilities and an Assets route, then Sign out immediately cleared private state, disabled protected navigation, and rendered the login panel with a retry path. The browser URL retained only the same-origin route; no token or policy data appeared in the route. This is local bootstrap evidence only and does not claim live OIDC/PKCE qualification. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: verification-only ledger entry; no source, serializer, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no source or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: CUA accessibility-tree inspection covers the rendered login, authenticated shell, logout, and disabled-navigation states; browser B08 OIDC and full B09 axe/screen-reader/responsive evidence remain separate acceptance owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: authenticated and signed-out states inspected in the Codex in-app browser at `http://127.0.0.1:5173/#assets` against the local control plane on `127.0.0.1:8821`; source/UI services remained running; 2026-09-14, Vite UI and Python 3.12 control plane.
+- Artifact and fixture hashes; evidence locations: disposable local SQLite profile `/private/tmp/dal-obscura-ui-dev-8821.db`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: production OIDC/PKCE, upstream revocation freshness, hostile DNS/private-address transport, browser automated/manual accessibility coverage, PostgreSQL process races/recovery, clean TLS/OIDC consumers, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD.
+- Atomic implementation commits: verification-only ledger entry; prior UI commits `b21cb2d` and `0f25cbe` remain the source of truth.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
