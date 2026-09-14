@@ -16,6 +16,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 from dal_obscura.control_plane.interfaces.routes.schemas import (
+    AuditEventPageResponse,
+    AuditEventResponse,
     PolicyDraftRequest,
     PolicyEvaluationRequest,
     PolicyRestoreRequest,
@@ -208,12 +210,12 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             )
         )
 
-    @api.get("/v1/audit/events")
+    @api.get("/v1/audit/events", response_model=list[AuditEventResponse])
     def list_audit_events(
         asset_id: UUID | None = None,
         limit: int = Query(default=100, ge=1, le=200),
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
+    ) -> list[AuditEventResponse]:
         return deps.with_service(
             lambda service: service.list_audit_events(
                 actor=actor,
@@ -222,7 +224,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             )
         )
 
-    @api.get("/v1/audit/events/page")
+    @api.get("/v1/audit/events/page", response_model=AuditEventPageResponse)
     def list_audit_events_page(
         asset_id: UUID | None = None,
         actor_filter: str | None = Query(default=None, alias="actor", max_length=200),
@@ -235,7 +237,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         limit: int = Query(default=100, ge=1, le=200),
         cursor: str | None = Query(default=None, max_length=512),
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
+    ) -> AuditEventPageResponse:
         return deps.with_service(
             lambda service: service.list_audit_events_page(
                 actor=actor,
