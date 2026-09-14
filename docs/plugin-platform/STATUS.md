@@ -812,6 +812,8 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 
 - Follow-up test coverage now asserts root, sibling, and nested descendant position metadata explicitly; the full UI test set remains green.
 
+- The virtual tree now handles Home/End in addition to Arrow and Enter/Space navigation, with focus scrolled into view before transfer. Browser stress and screen-reader evidence remain VERIFY.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
