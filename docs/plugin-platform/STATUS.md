@@ -1328,3 +1328,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: browser-rendered deferred mutation races, live 401/logout journey, cross-process lifecycle propagation, and independent accessibility/security/release review remain VERIFY under N07/N10/N16; next action is continue live acceptance and consumer qualification without claiming browser evidence from static checks.
 - Atomic implementation commits: `acb1487e`.
 - Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N07 cancellable settings mutations
+
+- Scope: extend lifecycle cancellation to authenticated runtime-limit and identity-provider settings writes.
+- Observable behavior delivered; FR/NFR and B/G subcases: settings PUT requests carry an `AbortSignal`; active writes abort when the settings view unmounts or changes session scope; aborted or stale responses cannot overwrite draft status or error messaging. Server-side revision and publication controls remain authoritative.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/api.ts` and `apps/governance-ui/src/components/SettingsView.tsx`; no backend, plugin, serializer, serialized class, payload, import path, migration, or dependency changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +35 UI logical lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing lifecycle/query tests plus TypeScript compile and production build; no tests deleted. Rendered deferred settings responses and live session-expiry evidence remain browser acceptance owners for N07/N16.
+- Exact commands, exit codes, UTC date, runtime versions, environment: UI TypeScript build (exit 0), `node --experimental-strip-types --test tests/*.test.mjs` (13 passed), Vite production build (exit 0; 325.25 kB JS / 98.02 kB gzip), 2026-09-14, Node 24 local workspace. Commit hooks passed with repository baseline `ty` diagnostics skipped (`SKIP=ty`).
+- Artifact and fixture hashes; evidence locations: atomic commit `2240dd1`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: browser-rendered deferred settings races, live logout/401 and cross-process revocation, and independent accessibility/security/release review remain VERIFY under N05/N07/N16; next action is continue live acceptance and consumer qualification while retaining release HOLD.
+- Atomic implementation commits: `2240dd1`.
+- Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
