@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import pickle
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -158,6 +158,7 @@ class IcebergTableFormat(TableFormat):
         from pyiceberg.table import StaticTable
 
         _check_path(self.metadata_location, self.path_enforcer)
+        _check_io_options(self.io_options, self.path_enforcer)
         table = StaticTable.from_metadata(self.metadata_location, properties=self.io_options)
         _check_table_locations(table, self.path_enforcer)
         _require_supported_format_version(int(getattr(table.metadata, "format_version", 1)))
@@ -281,6 +282,26 @@ def _check_table_locations(table: object, enforcer: PathRuleEnforcer | None) -> 
     for candidate in candidates:
         if isinstance(candidate, str) and candidate.strip():
             enforcer.check(candidate)
+
+
+def _check_io_options(options: Mapping[str, object], enforcer: PathRuleEnforcer | None) -> None:
+    """Check path-bearing provider options before PyIceberg opens them."""
+    if enforcer is None or not enforcer.enabled:
+        return
+    for value in _nested_strings(options):
+        if "://" in value or value.startswith(("/", "file:")):
+            enforcer.check(value)
+
+
+def _nested_strings(value: object) -> Iterable[str]:
+    if isinstance(value, Mapping):
+        for item in value.values():
+            yield from _nested_strings(item)
+    elif isinstance(value, (list, tuple, set, frozenset)):
+        for item in value:
+            yield from _nested_strings(item)
+    elif isinstance(value, str):
+        yield value
 
 
 def _split_row_filter(row_filter: RowFilter | None) -> tuple[RowFilter | None, RowFilter | None]:

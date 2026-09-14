@@ -19,6 +19,7 @@ from dal_obscura.data_plane.infrastructure.table_formats.iceberg import (
     IcebergInputPartition,
     IcebergTableFormat,
     _check_file_tasks,
+    _check_io_options,
     _check_table_locations,
 )
 
@@ -125,6 +126,12 @@ def test_iceberg_path_policy_checks_manifest_and_historical_metadata_locations()
     enforcer = PathRuleEnforcer([{"root": "s3://warehouse/"}])
     with pytest.raises(PermissionError, match="Path is not allowed"):
         _check_table_locations(_Table(), enforcer)
+
+
+def test_iceberg_path_policy_checks_io_options_before_provider_load() -> None:
+    enforcer = PathRuleEnforcer([{"root": "s3://warehouse/"}])
+    with pytest.raises(PermissionError, match="Path is not allowed"):
+        _check_io_options({"warehouse": "/outside/warehouse"}, enforcer)
 
 
 def test_iceberg_plan_pushes_down_simple_row_filter_as_sql_string(monkeypatch):
