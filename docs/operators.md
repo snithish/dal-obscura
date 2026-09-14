@@ -134,14 +134,32 @@ any value in either list. Apply the reviewed conversion in one transaction:
 
 ```sh
 DAL_OBSCURA_DATABASE_URL='postgresql+psycopg://...' \
-  uv run dal-obscura-migrate identity-keys --apply
+  uv run dal-obscura-migrate identity-keys --apply --maintenance-mode
 ```
 
 Take a database backup first, stop or drain control-plane writers, and run the
 preview again after the write lock is in place. The command changes only text
 and JSON identity fields; it does not delete customer data and does not read or
 rewrite the protected pickle ticket payload boundary. A failed apply rolls back
-the transaction. Run `dal-obscura-migrate check` before restarting services.
+the transaction. `--maintenance-mode` is a required explicit acknowledgement;
+the migration command cannot infer whether another process is still admitting
+or writing requests. Run `dal-obscura-migrate check` before restarting services.
+
+The same cutover rule applies to the published plugin-binding migration. Preview
+known records, stop or drain writers, then apply the reviewed report with the
+required acknowledgement:
+
+```sh
+DAL_OBSCURA_DATABASE_URL='postgresql+psycopg://...' \
+  uv run dal-obscura-migrate plugin-bindings
+
+DAL_OBSCURA_DATABASE_URL='postgresql+psycopg://...' \
+  uv run dal-obscura-migrate plugin-bindings --apply --maintenance-mode
+```
+
+Unknown records remain unchanged and the apply is idempotent. The command only
+rewrites the known Iceberg binding shape; it never imports a module named by a
+record and never touches the protected pickle ticket payload.
 
 ## Startup Order
 

@@ -1189,6 +1189,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `e8210e5`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N02 maintenance-mode migration acknowledgement
+
+- Scope: enforce an explicit cutover acknowledgement before offline plugin-binding or federated identity rewrites can mutate durable records.
+- Observable behavior delivered; FR/NFR and B/G subcases: `dal-obscura-migrate plugin-bindings --apply` and `identity-keys --apply` now fail with exit code 2 unless `--maintenance-mode` is present. Preview commands remain read-only; canonical known-record conversion remains transactional and idempotent, while unknown records remain unsupported. The acknowledgement documents that admissions are stopped and writers are drained; the CLI cannot infer process state. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/common/config_store/cli.py`, migration CLI tests, and `docs/operators.md`; no serializers, runtime readers, dependencies, or legacy data were deleted.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +17 production lines, +15 test lines, and operator runbook updates; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `tests/common/config_store/test_plugin_bindings.py` and `tests/common/config_store/test_migration_cli.py` own the apply gate and prove no unauthorised apply path; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `uv run --no-sync pytest tests/common/config_store/test_plugin_bindings.py tests/common/config_store/test_migration_cli.py -q` (exit 0, 6 passed) and focused Ruff check/format (exit 0), 2026-09-14, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `db3c6c13`; operator guidance in `docs/operators.md`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: populated PostgreSQL backup/rollback and two-process maintenance cutover remain VERIFY; remaining N02 legacy reader/input inventory and all N04–N16 live gates remain open. Release remains HOLD; execute the migration against a disposable populated PostgreSQL fixture with writers stopped, then record rollback evidence.
+- Atomic implementation commits: `db3c6c13`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-14 — Repository regression sweep after contract cleanup
 
 - Scope: verify cross-package callers after removing demo-login, unpaginated audit, and unpaginated workspace history routes.
