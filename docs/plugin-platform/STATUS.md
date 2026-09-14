@@ -823,6 +823,8 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Verification: asset API suite passed (20 tests), UI TypeScript compilation and eight UI tests passed, and `git diff --check` passed. Pickle serializers and task payloads are unchanged.
 - Remaining gate: browser visual/keyboard evidence, strict response models, and live multi-actor publication checks remain VERIFY under N03/N10/B09/B15. Release remains HOLD.
 
+- Follow-up regression: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q` passed with 837 collected, 823 passed, 14 documented skips, and zero failures/errors. UI TypeScript compilation, Vite build, and eight UI tests remain green.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
