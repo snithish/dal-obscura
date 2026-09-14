@@ -10,6 +10,7 @@ import { SettingsView } from "./components/SettingsView";
 import { ConnectionsView } from "./components/ConnectionsView";
 import { AssetWorkspace } from "./components/AssetWorkspace";
 import { ManagementView, type AuditFilters, type ManagementData } from "./components/ManagementViews";
+import { Icon, type IconName } from "./components/Icon";
 import "./styles.css";
 
 type Page = UiPage;
@@ -635,7 +636,8 @@ function App() {
         const requiresWorkspaceAdmin = item === "connections" || item === "settings";
         const disabled = !session || (requiresWorkspaceAdmin && !canManageWorkspace);
         const reason = !session ? "Sign in to open this workspace view" : requiresWorkspaceAdmin && !canManageWorkspace ? "Platform administrator capability required" : undefined;
-        return <button key={item} className={page === item ? "nav-item active" : "nav-item"} onClick={() => navigateTo(item)} disabled={disabled} title={reason}>{item}</button>;
+        const icon: IconName = item === "assets" ? "database" : item === "changes" ? "history" : item === "activity" ? "activity" : item === "connections" ? "plug" : "settings";
+        return <button key={item} className={page === item ? "nav-item active" : "nav-item"} onClick={() => navigateTo(item)} disabled={disabled} title={reason}><Icon name={icon} /><span>{item}</span></button>;
       })}</nav>
       <div className="sidebar-foot"><span className={"status-dot " + workspace} /> Workspace: {workspace === "ready" ? "connected" : "unavailable"}<br /><small>{workspaceLabel(workspace)}{asset?.catalog ? ` · catalog ${asset.catalog}` : ""}</small></div>
     </aside>
