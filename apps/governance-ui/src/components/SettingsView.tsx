@@ -22,6 +22,8 @@ const emptyRuntime: RuntimeSettings = {
   path_rules: [],
 };
 
+const OIDC_IDENTITY_MODULE = "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider";
+
 function providerText(provider: AuthProvider, key: string): string {
   const value = provider.args[key];
   if (Array.isArray(value)) return value.map(String).join(", ");
@@ -127,23 +129,6 @@ export function SettingsView({
     } finally { finishMutation(controller); }
   }
 
-  function updateProvider(index: number, key: string, value: string) {
-    setProviderRows((current) =>
-      current.map((provider, row) => {
-        if (row !== index) return provider;
-        const args = { ...provider.args };
-        if ((key === "audience" || key === "jwks_url") && !value.trim()) {
-          delete args[key];
-        } else {
-          args[key] = key === "group_claims" || key === "attribute_claims"
-            ? value.split(",").map((item) => item.trim()).filter(Boolean)
-            : value;
-        }
-        return { ...provider, args };
-      }),
-    );
-  }
-
   function updateProviderText(index: number, key: string, value: string) {
     const provider = providerRows[index];
     if (!provider) return;
@@ -179,11 +164,44 @@ export function SettingsView({
       ...item,
       args: (() => {
         const args = { ...item.args };
-        if (parsed === undefined) delete args[key];
+        if (parsed === undefined || ((key === "audience" || key === "jwks_url") && !value.trim())) delete args[key];
         else args[key] = parsed;
         return args;
       })(),
     } : item));
+  }
+
+  function updateProviderEnabled(index: number, enabled: boolean) {
+    setProviderRows((current) => current.map((provider, row) => row === index ? { ...provider, enabled } : provider));
+  }
+
+  function addProvider() {
+    const ordinal = providerRows.reduce((highest, provider) => Math.max(highest, provider.ordinal), 0) + 1;
+    setProviderRows((current) => [...current, {
+      id: `draft-${Date.now()}-${ordinal}`,
+      ordinal,
+      module: OIDC_IDENTITY_MODULE,
+      args: {
+        issuer: "",
+        subject_claim: "sub",
+        group_claims: ["groups"],
+        algorithms: ["RS256"],
+        leeway_seconds: 0,
+        jwks_refresh_interval_seconds: 30,
+        max_jwks_keys: 256,
+      },
+      enabled: true,
+      revision: providerRevision ?? 0,
+    }]);
+    setMessage("New OIDC provider staged. Enter an issuer URL before saving.");
+  }
+
+  function removeProvider(index: number) {
+    setProviderRows((current) => current.filter((_, row) => row !== index));
+    const provider = providerRows[index];
+    if (!provider) return;
+    setProviderErrors((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${provider.id}:`))));
+    setProviderTexts((current) => Object.fromEntries(Object.entries(current).filter(([key]) => !key.startsWith(`${provider.id}:`))));
   }
 
   const active = publications.find((publication) => publication.active);
@@ -217,8 +235,42 @@ export function SettingsView({
         <p className="help">{stagedCount ? `${stagedCount} staged generation${stagedCount === 1 ? " is" : "s are"} waiting for explicit administrator activation.` : "Save settings creates draft configuration; create and activate a snapshot from Connections when ready."}</p>
       </div>
       <div className="form-card">
-        <h3>Authentication providers</h3>
-        {providerRows.length ? providerRows.map((provider) => providerErrors[`${provider.id}:attribute_claims`] || providerErrors[`${provider.id}:leeway_seconds`] || providerErrors[`${provider.id}:jwks_refresh_interval_seconds`] || providerErrors[`${provider.id}:max_jwks_keys`] ? <p className="auth-error" role="alert" key={`${provider.id}:errors`}>{Object.entries(providerErrors).filter(([key]) => key.startsWith(`${provider.id}:`)).map(([, error]) => error).join(" ")}</p> : null) : null}
+        <div className="form-card-head"><h3>Authentication providers</h3><button className="secondary" type="button" onClick={addProvider}>Add OIDC provider</button></div>
+        <p className="help">The ordered provider chain is evaluated top to bottom. Secrets and static JWKS material are never editable in this browser.</p>
+        {providerRows.length ? <div className="provider-editor-list">{providerRows.map((provider, index) => {
+          const providerField = (key: string, label: string, options: { type?: string; placeholder?: string; help?: string } = {}) => {
+            const fieldKey = `${provider.id}:${key}`;
+            const error = providerErrors[fieldKey];
+            return <label className="provider-field" key={key}>{label}
+              <input
+                type={options.type ?? "text"}
+                value={providerTexts[fieldKey] ?? providerText(provider, key)}
+                placeholder={options.placeholder}
+                aria-invalid={error ? "true" : undefined}
+                aria-describedby={error ? `${fieldKey}-error` : undefined}
+                onChange={(event) => updateProviderText(index, key, event.target.value)}
+              />
+              {options.help && <small>{options.help}</small>}
+              {error && <span className="auth-error" id={`${fieldKey}-error`} role="alert">{error}</span>}
+            </label>;
+          };
+          return <fieldset className="provider-editor" key={provider.id}>
+            <legend><span>{provider.module.split(".").at(-1) ?? provider.module}</span><small>Order {provider.ordinal}</small><button className="danger" type="button" onClick={() => removeProvider(index)}>Remove</button></legend>
+            <label className="provider-enabled"><input type="checkbox" checked={provider.enabled} onChange={(event) => updateProviderEnabled(index, event.target.checked)} /> Enabled</label>
+            <div className="form-grid">
+              {providerField("issuer", "Issuer URL", { placeholder: "https://id.example.com/" })}
+              {providerField("audience", "Audience", { placeholder: "optional or comma-separated" })}
+              {providerField("jwks_url", "JWKS URL", { placeholder: "optional; discovered from issuer" })}
+              {providerField("subject_claim", "Subject claim", { placeholder: "sub" })}
+              {providerField("group_claims", "Group claims", { placeholder: "groups, realm_access.roles" })}
+              {providerField("attribute_claims", "Attribute claims", { placeholder: "tenant=tenant.id", help: "Use name=claim.path entries separated by commas." })}
+              {providerField("algorithms", "Signing algorithms", { placeholder: "RS256" })}
+              {providerField("leeway_seconds", "Clock leeway (seconds)", { type: "number", placeholder: "0" })}
+              {providerField("jwks_refresh_interval_seconds", "JWKS refresh (seconds)", { type: "number", placeholder: "30" })}
+              {providerField("max_jwks_keys", "Maximum JWKS keys", { type: "number", placeholder: "256" })}
+            </div>
+          </fieldset>;
+        })}</div> : <p className="empty-result"><strong>No identity providers configured.</strong><br />Add the first OIDC provider through the control-plane bootstrap or API before publishing.</p>}
         <button className="primary" disabled={Object.keys(providerErrors).length > 0} onClick={() => void saveProviders()}>Save identity providers</button>
       </div>
     </section>
