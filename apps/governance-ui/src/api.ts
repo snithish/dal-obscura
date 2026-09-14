@@ -388,13 +388,15 @@ export const controlPlane = {
     return { ...access, issuer: access.issuer ?? null } satisfies AssetAccess;
   },
   listGrants: (assetId: string, signal?: AbortSignal) => request<ApiSchemas["AssetGrantResponse"][]>(`/v1/assets/${assetId}/grants`, { signal }),
-  saveOwners: (assetId: string, owners: string[], expectedRevision?: number) => request<ApiSchemas["AssetOwnersResponse"]>(`/v1/assets/${assetId}/owners`, {
+  saveOwners: (assetId: string, owners: string[], expectedRevision?: number, signal?: AbortSignal) => request<ApiSchemas["AssetOwnersResponse"]>(`/v1/assets/${assetId}/owners`, {
     method: "PUT",
     body: JSON.stringify({ owners, ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }) }),
+    signal,
   }),
-  saveGrants: (assetId: string, grants: AssetGrant[], expectedRevision?: number) => request<ApiSchemas["AssetGrantsResponse"]>(`/v1/assets/${assetId}/grants`, {
+  saveGrants: (assetId: string, grants: AssetGrant[], expectedRevision?: number, signal?: AbortSignal) => request<ApiSchemas["AssetGrantsResponse"]>(`/v1/assets/${assetId}/grants`, {
     method: "PUT",
     body: JSON.stringify({ grants, ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }) }),
+    signal,
   }),
   getSchema: (assetId: string, signal?: AbortSignal) => request<ApiSchemas["AssetSchemaResponse"]>(`/v1/assets/${assetId}/schema`, { signal }) as Promise<AssetSchema>,
   listHistory: async (signal?: AbortSignal) => (await request<ApiSchemas["PolicyVersionResponse"][]>("/v1/policy-versions", { signal })),
