@@ -1176,6 +1176,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `3a86a7a`.
 - Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N04 Iceberg metadata and delete-file path enforcement
+
+- Scope: close the remaining in-process Iceberg path-policy gap for locations returned by table metadata and scan tasks.
+- Observable behavior delivered; FR/NFR and B/G subcases: table loading checks the table location, manifest-list locations, and historical metadata-log locations against published storage roots. Planned and executed scan tasks check both the data file and every delete file before ArrowScan can open them. Out-of-root locations fail closed with `PermissionError`; the existing trusted pickle task transport is unchanged.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/data_plane/infrastructure/table_formats/iceberg.py` and `tests/infrastructure/adapters/test_iceberg_phase0_regressions.py`; no serializers, serialized classes, payloads, import paths, migrations, or dependencies changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +58 production/test logical lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: Iceberg phase-regression tests cover unsafe delete-file and manifest/historical metadata locations; existing catalog/path-rule tests remain; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: focused Iceberg/catalog suite (22 passed), changed-path Ruff checks (exit 0), 2026-09-14, Python 3.12/uv local workspace. Commit hooks passed with repository baseline `ty` diagnostics skipped (`SKIP=ty`).
+- Artifact and fixture hashes; evidence locations: atomic implementation commit `1f151d0e`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: live hostile redirect/DNS/private destination counters, provider-level manifest/data/delete interception, cancellation cleanup, deployment network controls, browser/consumer qualification, and independent security/release evidence remain VERIFY under B06/N04/N16; next action is build the live transport-counter harness and qualify DNS pinning/redirect behavior without weakening explicit local/private allowlists.
+- Atomic implementation commits: `1f151d0e`.
+- Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-14 — N07 policy validation summary
 
 - Scope: make server-side policy field errors directly actionable in the editor.
