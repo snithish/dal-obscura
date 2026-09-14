@@ -349,6 +349,41 @@ def test_compiler_rejects_admitted_but_incompatible_plugin_pair():
         PublicationCompiler(cast(Any, Registry())).compile(draft)
 
 
+def test_compiler_rejects_pair_with_only_generic_capability_overlap():
+    draft = _draft()
+    draft.catalogs[0] = replace(draft.catalogs[0], module="manifest")
+    draft.assets[0].backend = "parquet.dataset"
+
+    class Registry:
+        def admitted(self):
+            return {
+                ("catalog", "manifest"): PluginDescriptor(
+                    kind="catalog",
+                    plugin_id="manifest",
+                    api_version="1",
+                    config_version=1,
+                    distribution="fixture",
+                    version="1",
+                    capabilities=frozenset({"snapshot_reads"}),
+                    output_formats=frozenset({"parquet.dataset"}),
+                    handle_versions=frozenset({1}),
+                ),
+                ("table_format", "parquet.dataset"): PluginDescriptor(
+                    kind="table_format",
+                    plugin_id="parquet.dataset",
+                    api_version="1",
+                    config_version=1,
+                    distribution="fixture",
+                    version="1",
+                    capabilities=frozenset({"snapshot_reads"}),
+                    handle_versions=frozenset({1}),
+                ),
+            }
+
+    with pytest.raises(ValidationFailure, match="Unsupported plugin pair"):
+        PublicationCompiler(cast(Any, Registry())).compile(draft)
+
+
 def test_compiler_rejects_static_jwks_material_in_identity_provider():
     draft = _draft()
     draft.auth_providers[0].args["jwks"] = {"keys": [{"kty": "RSA"}]}

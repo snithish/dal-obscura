@@ -40,6 +40,7 @@ from dal_obscura.control_plane.domain.models import (
 
 SUPPORTED_BACKENDS = frozenset({"iceberg"})
 _MASK_TYPES = frozenset(SUPPORTED_MASK_TYPES)
+_REQUIRED_PAIR_CAPABILITIES = frozenset({"nested_schema"})
 _ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )
@@ -272,7 +273,8 @@ class PublicationCompiler:
             or not table_format
             or format_id not in output_formats
             or not catalog_versions.intersection(format_versions)
-            or not catalog_capabilities.intersection(format_capabilities)
+            or not catalog_capabilities.issuperset(_REQUIRED_PAIR_CAPABILITIES)
+            or not format_capabilities.issuperset(_REQUIRED_PAIR_CAPABILITIES)
         ):
             raise ValidationFailure(f"Unsupported plugin pair {catalog_module!r} + {format_id!r}")
 
