@@ -1263,3 +1263,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live hostile destination counters, DNS/private-address enforcement, cancellation cleanup, and independent security/release evidence remain VERIFY under B06/N04/N16; next action is continue bounded backend/UI acceptance work.
 - Atomic implementation commits: `2de4b01`.
 - Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N10 catalog secret-reference round trip
+
+- Scope: prevent the authenticated connection editor from corrupting an existing catalog credential reference during ordinary edits.
+- Observable behavior delivered; FR/NFR and B/G subcases: leaving a secret field blank now preserves only the existing `{secret, scope}` reference; the literal `[redacted]` marker, raw strings, extra fields, and empty values are rejected from the round-trip. Secret values remain server-side.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/connection_options.ts`, `ConnectionsView.tsx`, and its unit test changed. No backend, plugin, serializer, serialized class, payload, import path, migration, or dependency changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +25 UI / +8 test logical lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `apps/governance-ui/tests/connection_options.test.mjs`; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: TypeScript build (exit 0), UI test runner (13 passed), Vite production build (exit 0; 323.92 kB JS / 97.71 kB gzip), 2026-09-14, Node 24 local workspace. Commit hooks passed with repository baseline `ty` diagnostics skipped (`SKIP=ty`).
+- Artifact and fixture hashes; evidence locations: atomic commit `6503f2f`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: live edit/discovery against a real secret provider, lifecycle propagation across workers, and independent security/release evidence remain VERIFY under N10/N13/N16; next action is continue generic lifecycle and consumer qualification without exposing credentials.
+- Atomic implementation commits: `6503f2f`.
+- Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
