@@ -91,6 +91,44 @@ def test_iceberg_catalog_uses_provider_catalog_name_from_options(monkeypatch):
     assert descriptor.table_identifier == "default.users"
 
 
+def test_iceberg_registry_supports_root_only_table_listing(monkeypatch):
+    class RootOnlyCatalog:
+        def list_namespaces(self):
+            return [()]
+
+        def list_tables(self):
+            return [("users",)]
+
+    monkeypatch.setattr(
+        registry_module,
+        "_load_iceberg_catalog",
+        lambda catalog_name, options: RootOnlyCatalog(),
+    )
+    catalog = IcebergCatalog(name="analytics", options={})
+
+    assert [item.table_identifier for item in catalog.list_tables()] == ["users"]
+
+
+def test_iceberg_registry_does_not_hide_root_table_provider_errors(monkeypatch):
+    class FailingCatalog:
+        def list_namespaces(self):
+            return [()]
+
+        def list_tables(self, namespace):
+            del namespace
+            raise RuntimeError("catalog unavailable")
+
+    monkeypatch.setattr(
+        registry_module,
+        "_load_iceberg_catalog",
+        lambda catalog_name, options: FailingCatalog(),
+    )
+    catalog = IcebergCatalog(name="analytics", options={})
+
+    with pytest.raises(RuntimeError, match="catalog unavailable"):
+        catalog.list_tables()
+
+
 def test_dynamic_catalog_registry_rejects_legacy_direct_paths_config():
     legacy_config: dict[str, Any] = {
         "catalogs": {},

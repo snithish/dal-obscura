@@ -380,10 +380,13 @@ def _list_namespaces(catalog: Any, namespace: tuple[str, ...]) -> list[object]:
 def _list_tables(catalog: Any, namespace: tuple[str, ...]) -> list[object]:
     try:
         return list(catalog.list_tables(namespace))
-    except Exception:
+    except TypeError:
+        # Some providers expose a root-only ``list_tables()`` method.  Limit
+        # the compatibility fallback to that signature mismatch so a real
+        # provider outage cannot be mistaken for an empty catalog.
         if namespace:
             raise
-        return []
+        return list(catalog.list_tables())
 
 
 def _namespace_tuple(namespace: object) -> tuple[str, ...]:
