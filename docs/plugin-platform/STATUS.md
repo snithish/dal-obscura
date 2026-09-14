@@ -1588,3 +1588,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: N14 warm/cold timing and capacity/resource measurements, path-aware CI matrix, live transport/consumer/recovery/OIDC/browser evidence, and independent security/UX/release review remain VERIFY. Next action is continue measured qualification while retaining release HOLD.
 - Atomic implementation commits: `50c642f`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N14 acceptance coverage map
+
+- Scope: add an explicit behavioral-test owner map for G01–G04 and B01–B22.
+- Observable behavior delivered; FR/NFR and B/G subcases: `docs/plugin-platform/COVERAGE_MAP.md` now distinguishes executable local evidence from live browser, multi-process, clean-wheel, consumer, capacity, recovery, and independent-review proof. It records the three removed prose/source guards as non-invariant checks and keeps their behavioral owners.
+- Changed and deleted paths; old callers removed; protected pickle check: new documentation `docs/plugin-platform/COVERAGE_MAP.md` and this ledger entry; no source, serializer, serialized class, payload, import path, migration, dependency, or test changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: documentation only; no production/test SLOC or dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: map references the existing focused suites and executable benchmark/conformance runners; no tests deleted in this slice.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `git diff --check` (exit 0), path and owner references verified against the current repository, 2026-09-14, local workspace.
+- Artifact and fixture hashes; evidence locations: documentation commit records the map; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: every block with live or independent evidence remains VERIFY; next action is execute the highest-value N04/N05/N12/N13/N14 qualification lanes while retaining release HOLD.
+- Atomic implementation commits: documentation-only map; no runtime commit.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
