@@ -1680,3 +1680,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live OIDC/browser PKCE and session-expiry/revocation timing, PostgreSQL races, hostile transport counters, clean wheels/real consumers, recovery/mixed-load capacity, deployment integrity, and independent review remain VERIFY under N04–N16. Next action is continue cross-process and deployment qualification while retaining release HOLD.
 - Atomic implementation commits: `646fb53`; runtime evidence recorded separately.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N15 UI readiness gate
+
+- Scope: ensure deployment startup waits for a serving UI before exposing the secure browser edge.
+- Observable behavior delivered; FR/NFR and B/G subcases: the production UI container now has an unprivileged nginx healthcheck on `/`, and the secure-local edge waits for `service_healthy` instead of merely `service_started`. Existing read-only filesystem, dropped capabilities, private network, and TLS boundaries remain. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `deployment/production/compose.yaml`, `deployment/local-secure/compose.yaml`, deployment contract tests; no application modules, serializers, serialized classes/import paths, payloads, migrations, dependencies, or tests deleted.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +9 deployment/test lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `tests/architecture/test_production_deployment_contract.py` and `tests/production/test_local_parity.py`; no tests deleted. Docker/TLS/OIDC runtime and recovery drills remain N15 evidence owners.
+- Exact commands, exit codes, UTC date, runtime versions, environment: focused deployment/parity pytest selection (4 passed), changed-path Ruff and format (exit 0), `git diff --check` (exit 0), 2026-09-14, Python 3.12/uv local workspace.
+- Artifact and fixture hashes; evidence locations: implementation commit `0243c17`; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: full Compose/TLS/OIDC/recovery execution, artifact digests/SBOM, PostgreSQL races, clean consumer wheels, hostile transport, mixed-load capacity, and independent security/UX review remain VERIFY under N04/N05/N12–N16. Next action is execute the deployment drill with pinned images and retain release HOLD until all evidence is candidate-bound.
+- Atomic implementation commits: `0243c17`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
