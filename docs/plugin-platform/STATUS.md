@@ -1189,6 +1189,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `e8210e5`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N02 remove obsolete dynamic registry alias
+
+- Scope: remove the unused `DynamicCatalogRegistry` compatibility name and migrate all active benchmark, consumer, and Flight integration callers to `CatalogRegistry`.
+- Observable behavior delivered; FR/NFR and B/G subcases: one authoritative catalog registry class is exported and exercised. The removed alias had identical behavior and no production caller; imports of the retired name now fail instead of preserving an obsolete API surface. Built-in Iceberg resolution, public plugin admission, and pickle logic are unchanged.
+- Changed and deleted paths; old callers removed; protected pickle check: registry module/package export plus three test/benchmark caller files; no serializers, dependencies, runtime readers, or durable records changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: -5 production lines and -5 test lines after caller migration; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: catalog registry unit tests and Flight integration suite remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: elevated `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/infrastructure/adapters/test_catalog_registry.py tests/interfaces/flight/test_integration_flight_backends.py -q` (exit 0, 26 passed), focused Ruff check/format (exit 0), 2026-09-14, Python 3.12.10 with loopback permission.
+- Artifact and fixture hashes; evidence locations: implementation commit `35b0a92f`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: remaining `module` field migration inventory and populated PostgreSQL maintenance conversion remain VERIFY; N03–N16 live gates and independent review remain open. Release remains HOLD; continue deleting only proven-dead compatibility names after caller inventory.
+- Atomic implementation commits: `35b0a92f`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-14 — N04 discovery close-failure capacity recovery
 
 - Scope: close a resource-accounting hole in admitted public catalog discovery.
