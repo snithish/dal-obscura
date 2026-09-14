@@ -1706,3 +1706,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: rendered browser/axe coverage of error states, live OIDC PKCE/freshness/revocation, PostgreSQL races, hostile transport, clean wheels/real consumers, recovery/mixed-load capacity, deployment integrity, and independent review remain VERIFY under N04–N16. Next action is continue live release qualification while retaining HOLD.
 - Atomic implementation commits: `2ea4dd7`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — authoritative full-suite validation after local auth and deployment gates
+
+- Scope: validate the accumulated implementation after the local browser CSRF-origin and UI readiness changes.
+- Observable behavior delivered; FR/NFR and B/G subcases: the complete repository suite passed with no failures or errors; Arrow Flight bind, subprocess streaming, nested masking, Iceberg integration, control-plane auth, and deployment contract coverage all execute successfully when local socket binding is available. Pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: no source changes in this validation entry; no serializers, serialized classes/import paths, payloads, migrations, dependencies, or tests deleted.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no source or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: the full pytest suite remains the invariant owner; no tests deleted. Skips are explicit benchmark-only skips, consumer opt-in, PostgreSQL race/recovery opt-in, and the documented benchmark lane.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest --durations=20 --junitxml=/tmp/dal-obscura-after-local-auth-deploy-escalated.xml -q -rs` (exit 0; 875 collected, 861 passed, 14 skipped, 130.55 seconds), Python 3.12.10/uv local workspace with local socket binding enabled, 2026-09-14.
+- Artifact and fixture hashes; evidence locations: JUnit report `/tmp/dal-obscura-after-local-auth-deploy-escalated.xml`; implementation commits under validation `2ea4dd7`, `0243c17`, `646fb53`, `b883e02`, `be44ceb`, `36a8e756`.
+- Remaining subcases; blocker and next concrete action: live OIDC PKCE/freshness/revocation, hostile transport counters, PostgreSQL two-process races/recovery, clean wheels and real DuckDB/Spark consumers, mixed-load capacity/resource thresholds, pinned deployment artifact/SBOM/recovery evidence, and independent review remain VERIFY under N04–N16. Next action is continue candidate-bound live release qualification while retaining HOLD.
+- Atomic implementation commits: validation only; no source commit.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
