@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from importlib import metadata
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Protocol, cast
 
@@ -511,6 +512,38 @@ def test_static_descriptor_loader_reads_setuptools_package_data_without_importin
 
     assert descriptor.plugin_id == "rest.catalog"
     assert requested == ["dal_obscura-plugin.json", "rest_pkg/dal_obscura-plugin.json"]
+
+
+def test_static_descriptor_loader_reads_nested_path_distribution_wheels(tmp_path: Path) -> None:
+    descriptor_json = (
+        '{"kind":"catalog","plugin_id":"rest.catalog","api_version":"1",'
+        '"config_version":1,"capabilities":[],"config_schema":{"fields":[]},'
+        '"display_name":"REST Catalog"}'
+    )
+    descriptor_path = tmp_path / "rest_pkg" / "dal_obscura-plugin.json"
+    descriptor_path.parent.mkdir()
+    descriptor_path.write_text(descriptor_json, encoding="utf-8")
+
+    distribution = SimpleNamespace(
+        name="rest-wheel",
+        version="2.0.0",
+        files=["rest_pkg/dal_obscura-plugin.json"],
+        read_text=lambda _: None,
+        locate_file=lambda path: tmp_path / path,
+    )
+    entry = cast(
+        _Entry,
+        SimpleNamespace(
+            name="rest.catalog",
+            group="dal_obscura.catalogs.v1",
+            value="rest_pkg.catalog:factory",
+            dist=distribution,
+        ),
+    )
+
+    descriptor = load_static_plugin_descriptor(cast(metadata.EntryPoint, entry))
+
+    assert descriptor.plugin_id == "rest.catalog"
 
 
 def test_static_descriptor_loader_selects_matching_descriptor_from_multi_kind_wheel() -> None:

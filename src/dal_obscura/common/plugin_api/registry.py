@@ -306,7 +306,22 @@ def load_static_plugin_descriptor(entry: metadata.EntryPoint) -> PluginDescripto
             if not _MODULE_PATH.fullmatch(module_path):
                 raise PluginAdmissionError("Plugin entry-point module is invalid")
             package = module_path.split(".", 1)[0]
-            raw = distribution.read_text(f"{package}/{STATIC_DESCRIPTOR_FILENAME}")
+            package_path = f"{package}/{STATIC_DESCRIPTOR_FILENAME}"
+            raw = distribution.read_text(package_path)
+            if raw is None:
+                # ``PathDistribution.read_text`` may return ``None`` for
+                # package-data paths even when the file is present in the
+                # installed wheel.  Resolve only the exact path advertised
+                # by ``files``; never walk or import arbitrary distribution
+                # content.
+                files = distribution.files
+                locate_file = getattr(distribution, "locate_file", None)
+                if (
+                    files is not None
+                    and callable(locate_file)
+                    and any(str(path) == package_path for path in files)
+                ):
+                    raw = locate_file(package_path).read_text(encoding="utf-8")
     except (AttributeError, OSError, UnicodeError) as exc:
         raise PluginAdmissionError("Plugin static descriptor is unreadable") from exc
     if raw is None:
