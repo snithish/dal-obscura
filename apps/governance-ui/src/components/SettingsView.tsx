@@ -54,6 +54,7 @@ export function SettingsView({
   const [message, setMessage] = useState("");
   const [pathRuleRoots, setPathRuleRoots] = useState<string[]>([]);
   const [dirty, setDirty] = useState(false);
+  const editEpoch = useRef(0);
   const mutationControllers = useRef<Set<AbortController>>(new Set());
 
   useEffect(() => () => {
@@ -76,6 +77,7 @@ export function SettingsView({
     setForm(next);
     setPathRuleRoots(next.path_rules.map((rule) => typeof rule.root === "string" ? rule.root : ""));
     setDirty(false);
+    editEpoch.current += 1;
   }, [runtime]);
   useEffect(() => {
     setProviderRows(providers);
@@ -85,6 +87,7 @@ export function SettingsView({
       "leeway_seconds", "jwks_refresh_interval_seconds", "max_jwks_keys",
     ].map((key) => [`${provider.id}:${key}`, providerText(provider, key)]))));
     setDirty(false);
+    editEpoch.current += 1;
   }, [providers]);
   useEffect(() => {
     onDirtyChange?.(dirty);
@@ -92,8 +95,14 @@ export function SettingsView({
 
   function reload() {
     if (dirty && !window.confirm("You have unsaved settings changes. Reload and discard them?")) return;
+    editEpoch.current += 1;
     setDirty(false);
     onReload();
+  }
+
+  function markDirty(): void {
+    editEpoch.current += 1;
+    setDirty(true);
   }
 
   async function save() {
@@ -102,6 +111,7 @@ export function SettingsView({
       return;
     }
     const controller = beginMutation();
+    const operationEpoch = editEpoch.current;
     try {
       const pathRules = serializePathRules(pathRuleRoots);
       if (!pathRules) {
@@ -109,7 +119,7 @@ export function SettingsView({
         return;
       }
       await controlPlane.saveRuntimeSettings({ ...form, path_rules: pathRules }, controller.signal);
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || operationEpoch !== editEpoch.current) return;
       setDirty(false);
       void queryClient.invalidateQueries({ queryKey: ["management", sessionScope, "settings"] });
       setMessage("Runtime settings saved as draft configuration. Publish to make worker behavior change.");
@@ -125,6 +135,7 @@ export function SettingsView({
       return;
     }
     const controller = beginMutation();
+    const operationEpoch = editEpoch.current;
     try {
       await controlPlane.saveAuthProviders(
         providerRows.map((provider, index) => ({
@@ -136,7 +147,7 @@ export function SettingsView({
         providerRows[0]?.revision ?? providerRevision,
         controller.signal,
       );
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || operationEpoch !== editEpoch.current) return;
       setDirty(false);
       void queryClient.invalidateQueries({ queryKey: ["management", sessionScope, "settings"] });
       setMessage("Identity provider settings saved as draft configuration. Publish a snapshot to activate them.");
@@ -149,7 +160,7 @@ export function SettingsView({
   function updateProviderText(index: number, key: string, value: string) {
     const provider = providerRows[index];
     if (!provider) return;
-    setDirty(true);
+    markDirty();
     const fieldKey = `${provider.id}:${key}`;
     setProviderTexts((current) => ({ ...current, [fieldKey]: value }));
     let parsed: unknown = value;
@@ -190,12 +201,12 @@ export function SettingsView({
   }
 
   function updateProviderEnabled(index: number, enabled: boolean) {
-    setDirty(true);
+    markDirty();
     setProviderRows((current) => current.map((provider, row) => row === index ? { ...provider, enabled } : provider));
   }
 
   function addProvider() {
-    setDirty(true);
+    markDirty();
     const ordinal = providerRows.reduce((highest, provider) => Math.max(highest, provider.ordinal), 0) + 1;
     setProviderRows((current) => [...current, {
       id: `draft-${Date.now()}-${ordinal}`,
@@ -217,7 +228,7 @@ export function SettingsView({
   }
 
   function removeProvider(index: number) {
-    setDirty(true);
+    markDirty();
     setProviderRows((current) => current.filter((_, row) => row !== index));
     const provider = providerRows[index];
     if (!provider) return;
@@ -226,7 +237,7 @@ export function SettingsView({
   }
 
   function moveProvider(index: number, direction: -1 | 1) {
-    setDirty(true);
+    markDirty();
     setProviderRows((current) => {
       const target = index + direction;
       if (target < 0 || target >= current.length) return current;
@@ -237,7 +248,7 @@ export function SettingsView({
   }
 
   function updatePathRule(index: number, value: string) {
-    setDirty(true);
+    markDirty();
     setPathRuleRoots((current) => current.map((root, row) => row === index ? value : root));
   }
 
@@ -257,18 +268,18 @@ export function SettingsView({
         <h3>Runtime limits</h3>
         <p className="help">{runtime ? "Serving values are loaded from the control plane. Saving creates a staged configuration." : "No runtime settings are configured yet. Enter values to create the first staged configuration."}</p>
         <div className="form-grid three">
-          <label>Ticket TTL (seconds)<input type="number" min="1" value={form.ticket_ttl_seconds || ""} placeholder="900" onChange={(event) => { setDirty(true); setForm({ ...form, ticket_ttl_seconds: Number(event.target.value) }); }} /></label>
-          <label>Max tickets<input type="number" min="1" value={form.max_tickets || ""} placeholder="64" onChange={(event) => { setDirty(true); setForm({ ...form, max_tickets: Number(event.target.value) }); }} /></label>
-          <label>Ticket exchanges<input type="number" min="1" value={form.max_ticket_exchanges || ""} placeholder="2" onChange={(event) => { setDirty(true); setForm({ ...form, max_ticket_exchanges: Number(event.target.value) }); }} /></label>
+          <label>Ticket TTL (seconds)<input type="number" min="1" value={form.ticket_ttl_seconds || ""} placeholder="900" onChange={(event) => { markDirty(); setForm({ ...form, ticket_ttl_seconds: Number(event.target.value) }); }} /></label>
+          <label>Max tickets<input type="number" min="1" value={form.max_tickets || ""} placeholder="64" onChange={(event) => { markDirty(); setForm({ ...form, max_tickets: Number(event.target.value) }); }} /></label>
+          <label>Ticket exchanges<input type="number" min="1" value={form.max_ticket_exchanges || ""} placeholder="2" onChange={(event) => { markDirty(); setForm({ ...form, max_ticket_exchanges: Number(event.target.value) }); }} /></label>
         </div>
         <fieldset className="runtime-path-rules">
           <legend>Storage path roots</legend>
           <p className="help">Every metadata and data location must stay under one of these roots. Leave the list empty only for an explicitly local development profile.</p>
           <div className="path-rule-list">{pathRuleRoots.map((root, index) => <div className="path-rule-row" key={`${index}-${root}`}>
             <label><span className="sr-only">Storage path root {index + 1}</span><input type="text" value={root} onChange={(event) => updatePathRule(index, event.target.value)} placeholder="s3://warehouse/curated" /></label>
-            <button className="danger" type="button" onClick={() => { setDirty(true); setPathRuleRoots((current) => current.filter((_, row) => row !== index)); }}>Remove</button>
+            <button className="danger" type="button" onClick={() => { markDirty(); setPathRuleRoots((current) => current.filter((_, row) => row !== index)); }}>Remove</button>
           </div>)}</div>
-          <button className="secondary" type="button" onClick={() => { setDirty(true); setPathRuleRoots((current) => [...current, ""]); }}>Add storage root</button>
+          <button className="secondary" type="button" onClick={() => { markDirty(); setPathRuleRoots((current) => [...current, ""]); }}>Add storage root</button>
         </fieldset>
         <button className="primary" onClick={() => void save()}>Save runtime settings</button>
         {message && <p className="notice" role="status">{message}</p>}
