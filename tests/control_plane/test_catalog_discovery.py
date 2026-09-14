@@ -75,6 +75,38 @@ def test_iceberg_discovery_closes_provider_after_failure() -> None:
     assert closed == [True]
 
 
+def test_iceberg_discovery_preserves_root_only_list_tables_signature() -> None:
+    class RootOnlyCatalog:
+        def list_namespaces(self, namespace=()):
+            return [] if namespace else [()]
+
+        def list_tables(self):
+            return [("users",)]
+
+    assert discover_iceberg_tables(
+        "analytics",
+        {},
+        load_catalog_fn=lambda name, **options: RootOnlyCatalog(),
+    ) == [{"backend": "iceberg", "name": "users", "table_identifier": "users"}]
+
+
+def test_iceberg_discovery_does_not_hide_root_table_provider_errors() -> None:
+    class FailingCatalog:
+        def list_namespaces(self, namespace=()):
+            return [] if namespace else [()]
+
+        def list_tables(self, namespace):
+            del namespace
+            raise RuntimeError("catalog unavailable")
+
+    with pytest.raises(RuntimeError, match="catalog unavailable"):
+        discover_iceberg_tables(
+            "analytics",
+            {},
+            load_catalog_fn=lambda name, **options: FailingCatalog(),
+        )
+
+
 def test_public_catalog_discovery_uses_admitted_plugin_and_closes_it():
     closed = []
     received_revision = []
