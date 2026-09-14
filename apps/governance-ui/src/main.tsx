@@ -74,6 +74,8 @@ function App() {
   const [auditFilters, setAuditFilters] = useState<AuditFilters>({});
   const [managementDirty, setManagementDirty] = useState(false);
   const [publishPending, setPublishPending] = useState(false);
+  const saveDraftPending = useRef(false);
+  const publishPendingRef = useRef(false);
   const loadEpoch = useRef(0);
   const draftEditEpoch = useRef(0);
   const inventoryEpoch = useRef(0);
@@ -719,7 +721,8 @@ function App() {
     });
   }
   async function saveDraft() {
-    if (!asset) return;
+    if (!asset || saveDraftPending.current) return;
+    saveDraftPending.current = true;
     const assetId = asset.id;
     const editEpoch = draftEditEpoch.current;
     const revision = draftRevision;
@@ -748,6 +751,7 @@ function App() {
       setSaveState("failed"); setFieldErrors((error as { fieldErrors?: Array<{ field: string; message: string; type: string }> }).fieldErrors ?? []); setNotice(recoveryMessage(error, "Save failed. The unsaved draft remains in this browser."));
     } finally {
       finishMutation(controller);
+      saveDraftPending.current = false;
     }
   }
   async function runPreview() {
@@ -801,7 +805,8 @@ function App() {
   }
 
   async function publishAsset() {
-    if (!asset || !reviewToken || publishPending) return;
+    if (!asset || !reviewToken || publishPending || publishPendingRef.current) return;
+    publishPendingRef.current = true;
     const loadScope = loadEpoch.current;
     const editScope = draftEditEpoch.current;
     const draftIdentity = { id: draftId, revision: draftRevision };
@@ -834,6 +839,7 @@ function App() {
       }
     } finally {
       finishMutation(controller);
+      publishPendingRef.current = false;
       if (loadScope === loadEpoch.current) {
         setPublishPending(false);
       }
