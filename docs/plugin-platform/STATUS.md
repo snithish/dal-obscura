@@ -1628,3 +1628,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: rendered browser/axe evidence, forbidden-user and last-admin journeys, live OIDC freshness/revocation, cross-process races, clean wheels/real consumers, recovery and mixed-load capacity, and independent review remain VERIFY under N05–N16. Next action is continue the highest-value release qualification while retaining release HOLD.
 - Atomic implementation commits: `36a8e75`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N05 optional identity-setting clearing
+
+- Scope: make optional OIDC provider settings editable through their full lifecycle.
+- Observable behavior delivered; FR/NFR and B/G subcases: clearing audience or JWKS URL removes the optional staged field; clearing numeric overrides removes the override so validated defaults apply; clearing claim mappings persists an empty mapping. Required issuer edits remain visible and are rejected by authoritative server validation when empty. Secrets and pickle logic remain untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/SettingsView.tsx`; no backend, serializer, serialized class/import path, payload, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +9 UI lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: backend auth-provider validation remains the contract owner; UI TypeScript, Node, and Vite checks pass. Browser error/accessibility and live OIDC journeys remain N05/N16 owners.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node_modules/.bin/vite build` (exit 0; 327.23 kB JavaScript / 98.68 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (13 passed), and `git diff --check` (exit 0), 2026-09-14, Node 24 local workspace.
+- Artifact and fixture hashes; evidence locations: implementation commit `b883e02`; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: live OIDC/browser login, session freshness/revocation, cross-process races, clean wheels/real consumers, hostile transport, recovery/mixed-load capacity, deployment integrity, and independent review remain VERIFY under N04–N16. Next action is continue release qualification while retaining release HOLD.
+- Atomic implementation commits: `b883e02`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
