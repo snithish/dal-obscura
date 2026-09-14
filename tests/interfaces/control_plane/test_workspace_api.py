@@ -87,7 +87,7 @@ def test_workspace_routes_require_admin_token():
     assert client.get("/v1/assets").status_code == 401
     assert client.put("/v1/assets/analytics/default.users", json={}).status_code == 401
     assert client.get("/v1/publications/draft").status_code == 404
-    assert client.get("/v1/policy-versions").status_code == 401
+    assert client.get("/v1/policy-versions/page").status_code == 401
     assert client.get("/v1/settings/auth-providers").status_code == 401
 
 

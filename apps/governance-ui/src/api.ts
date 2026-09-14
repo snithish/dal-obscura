@@ -398,7 +398,6 @@ export const controlPlane = {
     signal,
   }),
   getSchema: (assetId: string, signal?: AbortSignal) => request<ApiSchemas["AssetSchemaResponse"]>(`/v1/assets/${assetId}/schema`, { signal }) as Promise<AssetSchema>,
-  listHistory: async (signal?: AbortSignal) => (await request<ApiSchemas["PolicyVersionResponse"][]>("/v1/policy-versions", { signal })),
   listHistoryPage: async (params: { limit?: number; cursor?: string; signal?: AbortSignal } = {}) => {
     const query = new URLSearchParams();
     if (params.limit !== undefined) query.set("limit", String(params.limit));

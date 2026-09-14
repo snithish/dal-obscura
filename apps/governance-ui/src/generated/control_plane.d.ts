@@ -503,23 +503,6 @@ export interface paths {
         patch: operations["set_plugin_lifecycle_v1_plugins__kind___plugin_id__lifecycle_patch"];
         trace?: never;
     };
-    "/v1/policy-versions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Policy Version History */
-        get: operations["list_policy_version_history_v1_policy_versions_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/policy-versions/page": {
         parameters: {
             query?: never;
@@ -2980,42 +2963,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginLifecycleResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_policy_version_history_v1_policy_versions_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string;
-            };
-            path?: never;
-            cookie?: {
-                "__Host-dal_obscura_csrf"?: string | null;
-                "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PolicyVersionResponse"][];
                 };
             };
             /** @description Validation Error */

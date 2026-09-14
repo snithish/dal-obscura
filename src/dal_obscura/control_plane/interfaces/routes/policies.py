@@ -212,12 +212,6 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             )
         )
 
-    @api.get("/v1/policy-versions", response_model=list[PolicyVersionResponse])
-    def list_policy_version_history(
-        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> list[PolicyVersionResponse]:
-        return deps.with_service(lambda service: service.list_policy_version_history(actor=actor))
-
     @api.get("/v1/policy-versions/page", response_model=PolicyVersionPageResponse)
     def list_policy_version_history_page(
         limit: int = Query(default=50, ge=1, le=200),

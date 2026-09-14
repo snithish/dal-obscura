@@ -141,14 +141,16 @@ def test_policy_version_publish_bootstraps_default_runtime_context():
         headers=ADMIN_HEADERS,
     )
 
-    versions_before = client.get("/v1/policy-versions", headers=ADMIN_HEADERS).json()
+    versions_before = client.get("/v1/policy-versions/page", headers=ADMIN_HEADERS).json()["items"]
     assets_before = client.get("/v1/assets", headers=ADMIN_HEADERS).json()
     catalogs_before = client.get("/v1/catalogs", headers=ADMIN_HEADERS).json()
     version = client.post(
         f"/v1/assets/{asset['id']}/policy-versions",
         headers=ADMIN_HEADERS,
     ).json()
-    versions_after_publish = client.get("/v1/policy-versions", headers=ADMIN_HEADERS).json()
+    versions_after_publish = client.get("/v1/policy-versions/page", headers=ADMIN_HEADERS).json()[
+        "items"
+    ]
     summary = client.get("/v1/workspace/summary", headers=ADMIN_HEADERS).json()
 
     assert len(catalogs_before) == 1
@@ -184,10 +186,11 @@ def test_policy_version_history_is_asset_focused():
         headers=ADMIN_HEADERS,
     ).json()
 
-    response = client.get("/v1/policy-versions", headers=ADMIN_HEADERS)
+    response = client.get("/v1/policy-versions/page", headers=ADMIN_HEADERS)
 
     assert response.status_code == 200
-    assert response.json() == [
+    payload = response.json()
+    assert payload["items"] == [
         {
             "asset_id": asset["id"],
             "asset_name": "default.users",
@@ -195,11 +198,11 @@ def test_policy_version_history_is_asset_focused():
             "target": "default.users",
             "policy_version": created["policy_version"],
             "active": True,
-            "created_at": response.json()[0]["created_at"],
+            "created_at": payload["items"][0]["created_at"],
         }
     ]
-    assert response.json()[0]["created_at"]
-    assert "cell_id" not in response.json()[0]
+    assert payload["items"][0]["created_at"]
+    assert "cell_id" not in payload["items"][0]
 
 
 def test_policy_version_history_page_is_cursor_paginated():

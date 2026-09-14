@@ -240,8 +240,8 @@ function App() {
             queryFn: ({ signal }) => controlPlane.listAuditEventsPage({ limit: 50, ...auditFilters, signal }),
           }),
           queryClient.fetchQuery({
-            queryKey: ["management", sessionCacheKey, "activity", "history"],
-            queryFn: ({ signal }) => controlPlane.listHistory(signal),
+            queryKey: ["management", sessionCacheKey, "activity", "history", 50],
+            queryFn: ({ signal }) => controlPlane.listHistoryPage({ limit: 50, signal }).then((page) => page.items),
           }),
           queryClient.fetchQuery({
             queryKey: ["management", sessionCacheKey, "activity", "summary"],

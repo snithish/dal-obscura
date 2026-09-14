@@ -96,7 +96,7 @@ def test_provision_reuses_complete_workspace_without_writes(monkeypatch) -> None
         "/v1/assets": [
             {"id": "asset-1", "catalog": "retail_demo", "target": "retail.customer_revenue"}
         ],
-        "/v1/policy-versions": [{"asset_id": "asset-1"}],
+        "/v1/policy-versions/page?limit=200": {"items": [{"asset_id": "asset-1"}]},
     }
 
     def request(method: str, path: str, body=None):
@@ -110,7 +110,7 @@ def test_provision_reuses_complete_workspace_without_writes(monkeypatch) -> None
     assert calls == [
         ("GET", "/v1/workspace/summary"),
         ("GET", "/v1/assets"),
-        ("GET", "/v1/policy-versions"),
+        ("GET", "/v1/policy-versions/page?limit=200"),
     ]
 
 

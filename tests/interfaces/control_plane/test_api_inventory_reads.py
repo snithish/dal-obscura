@@ -40,7 +40,7 @@ def test_inventory_reads_require_admin_token():
     assert client.get("/v1/assets").status_code == 401
     assert client.get("/v1/settings/runtime").status_code == 401
     assert client.get("/v1/settings/auth-providers").status_code == 401
-    assert client.get("/v1/policy-versions").status_code == 401
+    assert client.get("/v1/policy-versions/page").status_code == 401
 
 
 def test_control_plane_healthz_is_public():
@@ -299,11 +299,11 @@ def test_reads_policy_versions_without_public_publication_fields():
         headers=ADMIN_HEADERS,
     ).json()
     versions = client.get(
-        "/v1/policy-versions",
+        "/v1/policy-versions/page",
         headers=ADMIN_HEADERS,
     ).json()
 
-    assert versions == [
+    assert versions["items"] == [
         {
             "asset_id": asset["id"],
             "asset_name": "default.users",
@@ -311,7 +311,7 @@ def test_reads_policy_versions_without_public_publication_fields():
             "target": "default.users",
             "policy_version": created["policy_version"],
             "active": True,
-            "created_at": versions[0]["created_at"],
+            "created_at": versions["items"][0]["created_at"],
         }
     ]
 
@@ -320,4 +320,4 @@ def test_reads_policy_versions_without_public_publication_fields():
     assert "active_publication" not in summary
     assert "publication_id" not in created
     assert "manifest_hash" not in created
-    assert versions[0]["active"] is True
+    assert versions["items"][0]["active"] is True

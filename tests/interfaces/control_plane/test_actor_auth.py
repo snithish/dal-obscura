@@ -611,13 +611,13 @@ def test_policy_history_is_scoped_to_owned_assets():
     _save_policy_draft(client, asset, [_allow_rule(row_filter=None)], ADMIN_HEADERS)
     client.post(f"/v1/assets/{asset}/policy-versions", headers=ADMIN_HEADERS)
 
-    outsider = client.get("/v1/policy-versions", headers=_bearer("outsider-token"))
-    owner = client.get("/v1/policy-versions", headers=_bearer("owner-token"))
+    outsider = client.get("/v1/policy-versions/page", headers=_bearer("outsider-token"))
+    owner = client.get("/v1/policy-versions/page", headers=_bearer("owner-token"))
 
     assert outsider.status_code == 200
-    assert outsider.json() == []
+    assert outsider.json()["items"] == []
     assert owner.status_code == 200
-    assert owner.json()[0]["asset_id"] == str(asset)
+    assert owner.json()["items"][0]["asset_id"] == str(asset)
 
 
 def test_non_admin_cannot_read_catalog_or_auth_settings():

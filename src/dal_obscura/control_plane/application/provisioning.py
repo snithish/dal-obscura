@@ -164,13 +164,6 @@ class ProvisioningService:
     def list_workspace_publications(self) -> list[dict[str, object]]:
         return policy_version_service.list_workspace_publications(self._store)
 
-    def list_policy_version_history(
-        self,
-        *,
-        actor: ControlPlaneActor | None = None,
-    ) -> list[dict[str, object]]:
-        return policy_version_service.list_policy_version_history(self._store, actor=actor)
-
     def list_policy_version_history_page(
         self,
         *,

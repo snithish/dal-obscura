@@ -155,9 +155,11 @@ def _workspace_state(fixture: dict[str, Any]) -> str:
         )
 
     assets_response = _request("GET", "/v1/assets")
-    history_response = _request("GET", "/v1/policy-versions")
+    history_response = _request("GET", "/v1/policy-versions/page?limit=200")
     assets = _as_list(assets_response, "assets")
-    history = _as_list(history_response, "policy version history")
+    if not isinstance(history_response, dict):
+        raise RuntimeError("policy version history returned an unexpected response")
+    history = _as_list(history_response.get("items"), "policy version history")
     asset_by_target = {
         (str(asset.get("catalog")), str(asset.get("target"))): asset for asset in assets
     }
@@ -272,7 +274,7 @@ def _promote_table(fixture: dict[str, Any], table_fixture: dict[str, Any]) -> st
                     "nullable": not bool(field.get("required", False)),
                 }
                 for field in table_fixture["schema"]
-            ]
+            ],
         },
     )
     revision = _asset_revision(asset_id)
