@@ -118,6 +118,19 @@ def test_manifest_rejects_noncanonical_base64_schema_payload(tmp_path):
         )
 
 
+def test_manifest_rejects_duplicate_document_keys(tmp_path):
+    root = tmp_path / "dataset"
+    root.mkdir()
+    manifest = root / "manifest.json"
+    manifest.write_text(
+        '{"revision":"one","revision":"two","tables":{"default.users":'
+        '{"files":["part-0.parquet"],"schema_ipc":"invalid","field_ids":[]}}}'
+    )
+
+    with pytest.raises(ValueError, match="manifest is invalid JSON"):
+        ManifestCatalog(_config_for_manifest(root, manifest), _context())
+
+
 def test_parquet_format_rejects_noncanonical_base64_schema_payload(tmp_path):
     root, manifest, _table = _write_fixture(tmp_path)
     initial = _context()

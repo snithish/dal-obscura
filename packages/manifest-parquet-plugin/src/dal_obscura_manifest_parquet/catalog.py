@@ -172,8 +172,8 @@ def _load_manifest(  # noqa: C901
         raise ValueError("manifest exceeds the byte limit")
     digest = hashlib.sha256(raw).hexdigest()
     try:
-        payload = json.loads(raw)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        payload = json.loads(raw, object_pairs_hook=_unique_json_object)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
         raise ValueError("manifest is invalid JSON") from exc
     if not isinstance(payload, dict):
         raise ValueError("manifest must be an object")
@@ -231,6 +231,17 @@ def _parse_identifier(raw: str) -> TableIdentifier:
     if len(parts) < 1 or any(not part for part in parts):
         raise ValueError("manifest table identifier is invalid")
     return TableIdentifier(namespace=parts[:-1], name=parts[-1])
+
+
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    """Reject duplicate keys so table membership cannot be overwritten."""
+
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
 
 
 def _parse_identifier_entry(raw_identifier: str, raw_table: dict[str, object]) -> TableIdentifier:
