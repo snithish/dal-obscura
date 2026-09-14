@@ -16,6 +16,7 @@ from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 from dal_obscura.control_plane.interfaces.routes.schemas import (
     CatalogDiagnosticResponse,
     CatalogInventoryResponse,
+    CatalogMutationResponse,
     CatalogRequest,
     request_payload,
 )
@@ -62,12 +63,16 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
             lambda service: service.diagnose_workspace_catalog(name, actor=actor)
         )
 
-    @api.put("/v1/catalogs/{name}", dependencies=[Depends(deps.require_admin)])
+    @api.put(
+        "/v1/catalogs/{name}",
+        response_model=CatalogMutationResponse,
+        dependencies=[Depends(deps.require_admin)],
+    )
     async def upsert_workspace_catalog(
         name: str,
         request: Request,
         actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
-    ) -> object:
+    ) -> CatalogMutationResponse:
         try:
             payload = CatalogRequest.model_validate(await request_payload(request))
         except ValidationError as exc:

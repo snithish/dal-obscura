@@ -249,6 +249,13 @@ class CatalogInventoryResponse(BaseModel):
     governed_asset_count: int = 0
 
 
+class CatalogMutationResponse(BaseModel):
+    """Stable identity returned after creating or updating a catalog."""
+
+    id: str
+    name: str
+
+
 class CatalogDiagnosticResponse(BaseModel):
     """Bounded catalog connectivity diagnostic."""
 

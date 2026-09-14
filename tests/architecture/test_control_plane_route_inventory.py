@@ -143,3 +143,9 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
         ]["schema"]["$ref"]
         == "#/components/schemas/AssetMutationResponse"
     )
+    assert (
+        paths["/v1/catalogs/{name}"]["put"]["responses"]["200"]["content"]["application/json"][
+            "schema"
+        ]["$ref"]
+        == "#/components/schemas/CatalogMutationResponse"
+    )

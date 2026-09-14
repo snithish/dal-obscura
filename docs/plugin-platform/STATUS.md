@@ -901,6 +901,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 
 - Follow-up regression: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q` exited 0 across the full repository after the response-model slices. Live OIDC, process-boundary, real-consumer, capacity, deployment, and independent UX/security gates remain VERIFY; release remains HOLD.
 
+## 2026-09-14 — N03 typed catalog mutation response
+
+- Scope: close the catalog create/update response contract used by Connections.
+- Observable behavior delivered: catalog upsert now validates and documents its stable catalog identity response while preserving plugin admission, option validation, and revision preconditions.
+- Verification: catalog API and OpenAPI route suites passed (15 tests); Ruff and format checks passed. Generated DTO coverage and live catalog lifecycle qualification remain VERIFY.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
