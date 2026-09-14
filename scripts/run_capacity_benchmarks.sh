@@ -40,8 +40,9 @@ metadata="$output/metadata.txt"
 
 run_suite() {
   suite=$1
+  suite_name=$(basename "$suite" .py)
   for run in $(seq 1 "$runs"); do
-    result="$output/${suite}-${run}.json"
+    result="$output/${suite_name}-${run}.json"
     echo "running $suite (run $run/$runs)"
     uv run pytest "$suite" --benchmark-only --benchmark-json="$result"
   done
