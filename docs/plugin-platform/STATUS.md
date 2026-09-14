@@ -2578,3 +2578,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: DNS/private-address rebinding counters, provider manifest/data/delete interception, cancellation cleanup under stalled real IO, deployment network controls, live OIDC, PostgreSQL races/recovery, clean consumer matrix, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue the next runnable qualification lane.
 - Atomic implementation commits: verification only; no implementation commit.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N14 benchmark qualification snapshot
+
+- Scope: establish a current performance evidence artifact for masking, nested row-filtering, multifile Iceberg scanning, and ticket-to-response streaming.
+- Observable behavior delivered; FR/NFR and B/G subcases: no runtime behavior changed. Seven benchmark cases completed; two intentionally marked skip cases remained outside the benchmark-only run. The measured cases include nested mask/filter execution and a 25-million-row masked stream, providing a reproducible candidate snapshot for later N14 capacity comparison.
+- Changed and deleted paths; old callers removed; protected pickle check: verification only; no source, serializer, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no code or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: existing `tests/benchmarks` cases remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: elevated `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/benchmarks --benchmark-only --benchmark-json /tmp/dal-obscura-benchmarks-20260914.json -q` (exit 0, 7 measured cases, 2 marked skips), 2026-09-14, Python 3.12.10. Means: Iceberg multifile 1.899 ms; row-filter 3.992 ms; nested mask/filter 6.729 ms; top-level mask/filter 7.832 ms; mask-only 11.922 ms; complex ticket response 33.619 ms; 25M-row masked stream 41.693 s.
+- Artifact and fixture hashes; evidence locations: benchmark JSON `/tmp/dal-obscura-benchmarks-20260914.json` (temporary, not committed); no external artifact published.
+- Remaining subcases; blocker and next concrete action: N14 warm/cold CI duration, capacity mixed-load/resource metrics, and UI/browser performance comparison remain VERIFY; live N04/N05/N12/N13/N15 and independent review gates remain VERIFY. Release remains HOLD; retain this snapshot as the comparison baseline.
+- Atomic implementation commits: verification only; no implementation commit.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
