@@ -40,6 +40,9 @@ function App() {
   const [assetHasMore, setAssetHasMore] = useState(false);
   const [assetInventoryLoading, setAssetInventoryLoading] = useState(false);
   const [rules, setRules] = useState<PolicyRule[]>([]);
+  const rulesRef = useRef<PolicyRule[]>([]);
+  const rulesUndoStack = useRef<PolicyRule[][]>([]);
+  const rulesRedoStack = useRef<PolicyRule[][]>([]);
   const [draftRevision, setDraftRevision] = useState(0);
   const [draftId, setDraftId] = useState<string | null>(null);
   const [reviewOnly, setReviewOnly] = useState(false);
@@ -79,6 +82,21 @@ function App() {
   const [logoutPending, setLogoutPending] = useState(false);
   useEffect(() => {
     void loadInitialWorkspace();
+  }, []);
+
+  useEffect(() => {
+    rulesRef.current = rules;
+  }, [rules]);
+
+  useEffect(() => {
+    const onRuleShortcut = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "z") return;
+      event.preventDefault();
+      if (event.shiftKey) redoRules();
+      else undoRules();
+    };
+    window.addEventListener("keydown", onRuleShortcut);
+    return () => window.removeEventListener("keydown", onRuleShortcut);
   }, []);
 
   useEffect(() => {
@@ -386,7 +404,7 @@ function App() {
 
   function clearPrivateState() {
     draftEditEpoch.current += 1;
-    setSession(null); setAsset(null); setAssets([]); setRules([]); setPreview(null);
+    setSession(null); setAsset(null); setAssets([]); resetRuleHistory([]); setPreview(null);
     setManagementData({}); setAssetCursor(null); setAssetHasMore(false); setAssetSearch("");
       setDraftRevision(0); setDraftId(null); setReviewToken(null); setSaveState("saved");
     setPublishPending(false);
@@ -453,7 +471,7 @@ function App() {
       if (epoch !== loadEpoch.current) return;
       const effectiveRules = draft?.rules ?? [];
       setManagementData((current) => ({ ...current, history, grants, access }));
-      setAssets(knownAssets); setAsset(fullAsset); setRules(effectiveRules); setDraftRevision(draft?.revision ?? 0); setDraftId(draft?.id ?? null); setSelectedRule(0); setReviewToken(null);
+      setAssets(knownAssets); setAsset(fullAsset); resetRuleHistory(effectiveRules); setDraftRevision(draft?.revision ?? 0); setDraftId(draft?.id ?? null); setSelectedRule(0); setReviewToken(null);
       draftEditEpoch.current += 1;
       setSelectedField(schema.fields[0]?.human_path ?? fullAsset.schema_fields[0]?.name ?? ""); setPreview(null); setSaveState("saved");
       setNotice(selectedDraftId ? `Loaded saved draft ${draft?.revision ?? 0} for read-only review.` : effectiveRules.length ? "Loaded your policy draft." : "No policy draft exists yet. Add a rule to begin authoring.");
@@ -467,22 +485,54 @@ function App() {
   const activeRule = rules[selectedRule];
   const selectedMask = activeRule?.masks[selectedField];
   const effectiveFields = useMemo(() => new Set(rules.flatMap((rule) => rule.columns)), [rules]);
+  function replaceRules(next: PolicyRule[], record = true) {
+    if (record) {
+      rulesUndoStack.current = [...rulesUndoStack.current, rulesRef.current].slice(-100);
+      rulesRedoStack.current = [];
+    }
+    rulesRef.current = next;
+    setRules(next);
+  }
+  function resetRuleHistory(next: PolicyRule[]) {
+    rulesUndoStack.current = [];
+    rulesRedoStack.current = [];
+    rulesRef.current = next;
+    setRules(next);
+  }
+  function undoRules() {
+    const previous = rulesUndoStack.current.pop();
+    if (!previous) return;
+    rulesRedoStack.current.push(rulesRef.current);
+    replaceRules(previous, false);
+    draftEditEpoch.current += 1;
+    setSaveState("unsaved"); setPreview(null); setReviewToken(null);
+    setNotice("Undid the last local policy edit. Save the draft to persist this version.");
+  }
+  function redoRules() {
+    const next = rulesRedoStack.current.pop();
+    if (!next) return;
+    rulesUndoStack.current.push(rulesRef.current);
+    replaceRules(next, false);
+    draftEditEpoch.current += 1;
+    setSaveState("unsaved"); setPreview(null); setReviewToken(null);
+    setNotice("Reapplied the local policy edit. Save the draft to persist this version.");
+  }
   function updateRule(change: (rule: PolicyRule) => PolicyRule) {
     if (!activeRule) return;
-    setRules((current) => current.map((rule, index) => index === selectedRule ? change(rule) : rule));
+    replaceRules(rulesRef.current.map((rule, index) => index === selectedRule ? change(rule) : rule));
     draftEditEpoch.current += 1;
     setSaveState("unsaved"); setPreview(null); setReviewToken(null); setNotice("Draft changed. Run a policy test before review.");
   }
   function addRule() {
     const ordinal = Math.max(0, ...rules.map((rule) => rule.ordinal)) + 10;
-    setRules((current) => [...current, newRule(selectedField, ordinal)]);
+    replaceRules([...rulesRef.current, newRule(selectedField, ordinal)]);
     draftEditEpoch.current += 1;
     setSelectedRule(rules.length); setSaveState("unsaved"); setPreview(null);
     setNotice("New rule added locally. Add at least one principal before saving.");
   }
   function removeRule() {
     if (!activeRule) return;
-    setRules((current) => current.filter((_, index) => index !== selectedRule));
+    replaceRules(rulesRef.current.filter((_, index) => index !== selectedRule));
     draftEditEpoch.current += 1;
     setSelectedRule(Math.max(0, selectedRule - 1)); setSaveState("unsaved"); setPreview(null);
     setNotice("Rule removed locally. Save the draft to persist the change.");
@@ -490,11 +540,9 @@ function App() {
   function moveRule(index: number, direction: -1 | 1) {
     const nextIndex = index + direction;
     if (!rules[index] || nextIndex < 0 || nextIndex >= rules.length) return;
-    setRules((current) => {
-      const next = [...current];
-      [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
-      return next.map((rule, index) => ({ ...rule, ordinal: (index + 1) * 10 }));
-    });
+    const next = [...rulesRef.current];
+    [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+    replaceRules(next.map((rule, index) => ({ ...rule, ordinal: (index + 1) * 10 })));
     draftEditEpoch.current += 1;
     setSelectedRule(nextIndex); setSaveState("unsaved"); setPreview(null); setReviewToken(null);
     setNotice("Rule order changed locally. Save the draft to persist precedence.");
@@ -615,7 +663,7 @@ function App() {
       const restored = await controlPlane.restorePolicyVersion(asset.id, policyVersion, draftRevision);
       if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current) return;
       draftEditEpoch.current += 1;
-      setRules(restored.rules);
+      replaceRules(restored.rules);
       setDraftRevision(restored.revision);
       setSaveState("saved");
       setPreview(null); setReviewToken(null);
@@ -643,7 +691,7 @@ function App() {
     </aside>
     <main>
       <header className="topbar"><div><span className="eyebrow">{page === "assets" ? "ASSET WORKSPACE" : page.toUpperCase()}</span><h1>{page === "assets" ? asset?.name ?? "Assets" : titleFor(page)}</h1></div><div className="actor"><span className="avatar">{session?.principal.slice(0, 1).toUpperCase() ?? "?"}</span><div><strong>{session?.principal ?? "Not signed in"}</strong><small>{session?.platform_admin ? "Platform admin" : "Authenticated user"}{session?.issuer ? ` · ${session.issuer}` : ""}</small></div><label className="theme-control"><span className="sr-only">Color theme</span><select aria-label="Color theme" value={theme} onChange={(event) => setTheme(event.target.value as Theme)}><option value="system">System theme</option><option value="light">Light theme</option><option value="dark">Dark theme</option></select></label>{session && <button className="text-button" onClick={() => void logout()}>Sign out</button>}{logoutPending && <button className="text-button" onClick={() => void logout()}>Retry sign out</button>}</div></header>
-      {signedOut ? accessView : page !== "assets" ? <ManagementView page={page} data={managementData} loading={managementLoading} error={managementError} onReload={() => void loadManagement(page)} onLoadMore={page === "changes" ? () => void loadMoreHistory() : page === "activity" ? () => void loadMoreAudit() : undefined} historyLoading={historyLoading} auditLoading={auditLoading} filters={auditFilters} onFiltersChange={updateAuditFilters} session={session} /> : workspace === "loading" ? accessView : !asset ? <LoginPanel title="No governed assets" message={notice} /> : <AssetWorkspace initialTab={locationFromUrl(window.location.hash, window.location.search).tab} initialVersion={locationFromUrl(window.location.hash, window.location.search).version} assets={assets} asset={asset} access={managementData.access} history={managementData.history ?? []} grants={managementData.grants ?? []} onAsset={(id) => { if (confirmDiscardUnsaved()) { setReviewOnly(false); void loadAsset(id); } }} assetSearch={assetSearch} assetHasMore={assetHasMore} assetInventoryLoading={assetInventoryLoading} onSearch={searchAssets} onLoadMore={() => void refreshAssetInventory(assetSearch, true)} rules={rules} activeRule={activeRule} activeRevision={draftRevision} selectedRule={selectedRule} onRule={setSelectedRule} onMoveRule={moveRule} selectedField={selectedField} onField={setSelectedField} selectedMask={selectedMask} effectiveFields={effectiveFields} saveState={saveState} notice={notice} onToggleField={toggleField} onMask={setMask} onUpdateRule={updateRule} onAddRule={addRule} onRemoveRule={removeRule} onSave={() => void saveDraft()} onPreview={() => void runPreview()} onReview={() => void requestReview()} previewPrincipal={previewPrincipal} previewGroups={previewGroups} previewClaims={previewClaims} onPreviewPrincipal={setPreviewPrincipal} onPreviewGroups={setPreviewGroups} onPreviewClaims={setPreviewClaims} onPublish={() => void publishAsset()} publishing={publishPending} onRestore={(version) => void restorePolicyVersion(version)} reviewToken={reviewToken ?? undefined} preview={preview} session={session} onReloadAccess={() => void loadAsset(asset.id, assets, undefined, reviewOnly ? draftId ?? undefined : undefined)} reviewOnly={reviewOnly} draftId={draftId} />}
+      {signedOut ? accessView : page !== "assets" ? <ManagementView page={page} data={managementData} loading={managementLoading} error={managementError} onReload={() => void loadManagement(page)} onLoadMore={page === "changes" ? () => void loadMoreHistory() : page === "activity" ? () => void loadMoreAudit() : undefined} historyLoading={historyLoading} auditLoading={auditLoading} filters={auditFilters} onFiltersChange={updateAuditFilters} session={session} /> : workspace === "loading" ? accessView : !asset ? <LoginPanel title="No governed assets" message={notice} /> : <AssetWorkspace initialTab={locationFromUrl(window.location.hash, window.location.search).tab} initialVersion={locationFromUrl(window.location.hash, window.location.search).version} assets={assets} asset={asset} access={managementData.access} history={managementData.history ?? []} grants={managementData.grants ?? []} onAsset={(id) => { if (confirmDiscardUnsaved()) { setReviewOnly(false); void loadAsset(id); } }} assetSearch={assetSearch} assetHasMore={assetHasMore} assetInventoryLoading={assetInventoryLoading} onSearch={searchAssets} onLoadMore={() => void refreshAssetInventory(assetSearch, true)} rules={rules} activeRule={activeRule} activeRevision={draftRevision} selectedRule={selectedRule} onRule={setSelectedRule} onMoveRule={moveRule} selectedField={selectedField} onField={setSelectedField} selectedMask={selectedMask} effectiveFields={effectiveFields} saveState={saveState} notice={notice} onToggleField={toggleField} onMask={setMask} onUpdateRule={updateRule} onAddRule={addRule} onRemoveRule={removeRule} onUndo={undoRules} onRedo={redoRules} canUndo={rulesUndoStack.current.length > 0} canRedo={rulesRedoStack.current.length > 0} onSave={() => void saveDraft()} onPreview={() => void runPreview()} onReview={() => void requestReview()} previewPrincipal={previewPrincipal} previewGroups={previewGroups} previewClaims={previewClaims} onPreviewPrincipal={setPreviewPrincipal} onPreviewGroups={setPreviewGroups} onPreviewClaims={setPreviewClaims} onPublish={() => void publishAsset()} publishing={publishPending} onRestore={(version) => void restorePolicyVersion(version)} reviewToken={reviewToken ?? undefined} preview={preview} session={session} onReloadAccess={() => void loadAsset(asset.id, assets, undefined, reviewOnly ? draftId ?? undefined : undefined)} reviewOnly={reviewOnly} draftId={draftId} />}
       {paletteOpen && <div className="palette-backdrop" role="presentation" onMouseDown={closePalette}><section className="command-palette" role="dialog" aria-modal="true" aria-label="Command palette" onMouseDown={(event) => event.stopPropagation()}><input autoFocus value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder="Jump to a destination or search help" aria-label="Command search" /><div role="listbox">{(["assets", "connections", "activity", "settings", "changes", "help"] as const).filter((command) => command.includes(paletteQuery.toLowerCase())).map((command) => <button key={command} role="option" onClick={() => runPaletteCommand(command)}>{command === "help" ? "Keyboard and workflow help" : `Open ${titleFor(command)}`}</button>)}</div><p className="help">Press Escape to close. Publishing, deletion, and revocation are never palette commands.</p></section></div>}
     </main>
   </div>;
