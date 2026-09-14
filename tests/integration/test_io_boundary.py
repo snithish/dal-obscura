@@ -70,6 +70,11 @@ def test_rest_plugin_accepts_local_file_warehouse_uri() -> None:
     catalog.close()
 
 
+def test_rest_plugin_rejects_file_uri_authority() -> None:
+    with pytest.raises(ValueError, match="file URI must be local"):
+        RestCatalog(_rest_config(warehouse="file://localhost/tmp/warehouse"), _context())
+
+
 def test_rest_plugin_rejects_malformed_catalog_port() -> None:
     with pytest.raises(ValueError, match="invalid port"):
         RestCatalog(_rest_config(uri="https://catalog.example:not-a-port/v1"), _context())

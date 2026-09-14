@@ -303,7 +303,7 @@ def _validate_optional_uri(value: object, label: str, *, http_only: bool = False
     allowed = {"http", "https", "s3", "gs", "abfs", "file"}
     if parsed.scheme not in allowed or (parsed.scheme != "file" and not parsed.netloc):
         raise ValueError(f"REST catalog {label} must be an absolute URI with a supported scheme")
-    if parsed.scheme == "file" and parsed.netloc not in {"", "localhost"}:
+    if parsed.scheme == "file" and parsed.netloc:
         raise ValueError(f"REST catalog {label} file URI must be local")
     try:
         port = parsed.port
