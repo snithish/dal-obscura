@@ -1732,3 +1732,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: rendered keyboard/axe/screen-reader journeys on populated providers, path-rule editor, live OIDC PKCE/freshness/revocation, PostgreSQL races, hostile transport, clean wheels/real consumers, recovery/mixed-load capacity, deployment integrity, and independent review remain VERIFY under N04–N16. Next action is continue the highest-value rendered and live qualification while retaining release HOLD.
 - Atomic implementation commits: `9c0027a`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N04 structured storage-root editor
+
+- Scope: remove raw JSON authoring from the runtime path-boundary settings flow.
+- Observable behavior delivered; FR/NFR and B/G subcases: administrators now add, edit, and remove individual storage roots through constrained text rows. Save trims each root and emits only the server contract `{root: string}`; blank rows fail closed with a visible message. The server remains authoritative for URI and private-destination policy, and pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/SettingsView.tsx`, `apps/governance-ui/src/styles.css`; no backend, serializer, serialized class/import path, payload, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +17 UI lines and +13 CSS lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: runtime settings API and path-rule adapter tests remain security owners; UI TypeScript/Vite/Node checks and manual CUA accessibility inspection cover this authoring surface; no tests deleted. Live hostile transport and cancellation evidence remain N04/N16 owners.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node_modules/.bin/vite build` (exit 0; 328.12 kB JavaScript / 99.12 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (13 passed), and `git diff --check` (exit 0), 2026-09-14, Node 24. Manual CUA inspection verified the existing root rendered as an accessible field; Add storage root rendered a second labeled field; Remove restored the original state without persistence.
+- Artifact and fixture hashes; evidence locations: implementation commit `c444be7`; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: live hostile transport counters and provider request interception, DNS/redirect/private-address qualification, browser axe/screen-reader evidence, OIDC freshness/revocation, PostgreSQL races, clean wheels/consumers, recovery/mixed-load capacity, deployment integrity, and independent review remain VERIFY under N04–N16. Next action is continue candidate-bound transport and browser qualification while retaining release HOLD.
+- Atomic implementation commits: `c444be7`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
