@@ -2513,3 +2513,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live hostile transport/DNS/private-address counters, live OIDC freshness/revocation, cross-process PostgreSQL races, clean TLS/OIDC consumer matrix, populated browser accessibility, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable governed backend slice.
 - Atomic implementation commits: `e7703d27`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — Cross-package regression and local service readiness
+
+- Scope: verify the completed boundary slices together and confirm the local authenticated UI/control-plane processes remain available.
+- Observable behavior delivered; FR/NFR and B/G subcases: focused control-plane, data-plane, plugin registry, conformance, manifest, and REST suites all pass together; governance UI TypeScript, Vite production build, and Node tests pass. The local UI serves HTTP 200 on `127.0.0.1:5173`, and the control plane serves `/readyz` HTTP 200 on `127.0.0.1:8821` with restrictive security headers. This is disposable local evidence, not production OIDC, TLS, or consumer qualification. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: verification only; no source paths changed in this slice.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no code or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: existing focused suites and UI build/test owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: combined `uv run --no-sync pytest` focused suite (exit 0), governance UI `tsc`, `vite build`, and Node tests (exit 0; 14 passed), read-only `lsof`/`curl` local readiness checks (HTTP 200), 2026-09-14, Python 3.12/Node 26.8.2 local runtime (package policy remains Node 24).
+- Artifact and fixture hashes; evidence locations: verification only; implementation commits `2b0e3019`, `2cf6c05e`, `0e6bae98`, `48bfb8e4`, `54b1b4b9`, `e6599a7c`, and `e7703d27` remain atomic.
+- Remaining subcases; blocker and next concrete action: live OIDC freshness/revocation, cross-process PostgreSQL races/recovery, hostile transport/DNS/private-address counters, clean TLS/OIDC consumer matrix, populated browser accessibility, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue candidate-bound live qualification.
+- Atomic implementation commits: verification only; no implementation commit.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
