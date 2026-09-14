@@ -135,6 +135,9 @@ def test_iceberg_registry_rejects_malformed_provider_namespaces(monkeypatch, bad
         def list_namespaces(self):
             return [bad_namespace]
 
+        def list_tables(self):
+            return []
+
     monkeypatch.setattr(
         registry_module,
         "_load_iceberg_catalog",
@@ -163,6 +166,44 @@ def test_iceberg_registry_rejects_malformed_provider_table_identifiers(monkeypat
     catalog = IcebergCatalog(name="analytics", options={})
 
     with pytest.raises(ValueError, match="invalid table identifier"):
+        catalog.list_tables()
+
+
+def test_iceberg_registry_bounds_unbounded_namespace_providers(monkeypatch):
+    class EndlessCatalog:
+        def list_namespaces(self):
+            return (("namespace", str(index)) for index in range(100_000))
+
+        def list_tables(self):
+            return []
+
+    monkeypatch.setattr(
+        registry_module,
+        "_load_iceberg_catalog",
+        lambda catalog_name, options: EndlessCatalog(),
+    )
+    catalog = IcebergCatalog(name="analytics", options={})
+
+    with pytest.raises(ValueError, match="namespace limit"):
+        catalog.list_tables()
+
+
+def test_iceberg_registry_bounds_unbounded_table_providers(monkeypatch):
+    class EndlessCatalog:
+        def list_namespaces(self):
+            return [()]
+
+        def list_tables(self):
+            return (("users", str(index)) for index in range(100_000))
+
+    monkeypatch.setattr(
+        registry_module,
+        "_load_iceberg_catalog",
+        lambda catalog_name, options: EndlessCatalog(),
+    )
+    catalog = IcebergCatalog(name="analytics", options={})
+
+    with pytest.raises(ValueError, match="table limit"):
         catalog.list_tables()
 
 

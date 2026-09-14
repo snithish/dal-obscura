@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from threading import RLock
 from typing import Any, cast
@@ -19,6 +19,8 @@ from dal_obscura.data_plane.infrastructure.table_formats.iceberg import IcebergT
 # plugins are selected by ``plugin_id`` and use the generic ``plugin`` value,
 # so adding a plugin does not require changing this core type alias.
 CatalogType = str
+DEFAULT_MAX_DISCOVERY_NAMESPACES = 1_000
+DEFAULT_MAX_DISCOVERY_TABLES = 10_000
 
 
 @dataclass(frozen=True)
@@ -198,13 +200,18 @@ class IcebergCatalog(CatalogPlugin):
                 _provider_catalog_name(self.name, self.options),
                 _catalog_options(self.options),
             )
-        table_names = sorted(
-            {
-                _identifier_to_name(identifier)
-                for namespace in _walk_namespaces(self._catalog)
-                for identifier in _list_tables(self._catalog, namespace)
-            }
-        )
+        table_names: set[str] = set()
+        for namespace in _walk_namespaces(
+            self._catalog,
+            max_namespaces=DEFAULT_MAX_DISCOVERY_NAMESPACES,
+        ):
+            remaining = DEFAULT_MAX_DISCOVERY_TABLES - len(table_names)
+            for identifier in _bounded_provider_items(
+                _list_tables(self._catalog, namespace),
+                limit=remaining,
+                kind="table",
+            ):
+                table_names.add(_identifier_to_name(identifier))
         return [
             CatalogTableListing(
                 name=table_name,
@@ -353,40 +360,64 @@ def _catalog_options(options: dict[str, Any]) -> dict[str, Any]:
     return cleaned
 
 
-def _walk_namespaces(catalog: Any) -> list[tuple[str, ...]]:
-    namespaces: list[tuple[str, ...]] = []
+def _walk_namespaces(
+    catalog: Any,
+    *,
+    max_namespaces: int,
+) -> Iterator[tuple[str, ...]]:
+    if max_namespaces <= 0:
+        raise ValueError("Catalog discovery namespace limit must be positive")
     pending: list[tuple[str, ...]] = [()]
     seen: set[tuple[str, ...]] = set()
     while pending:
         namespace = pending.pop(0)
         if namespace in seen:
             continue
+        if len(seen) >= max_namespaces:
+            raise ValueError("Catalog discovery exceeded the namespace limit")
         seen.add(namespace)
-        namespaces.append(namespace)
-        for child in _list_namespaces(catalog, namespace):
+        yield namespace
+        for child in _bounded_provider_items(
+            _list_namespaces(catalog, namespace),
+            limit=max_namespaces - len(seen),
+            kind="namespace",
+        ):
             pending.append(_namespace_tuple(child))
-    return namespaces
 
 
-def _list_namespaces(catalog: Any, namespace: tuple[str, ...]) -> list[object]:
+def _list_namespaces(catalog: Any, namespace: tuple[str, ...]) -> Iterable[object]:
     try:
         if namespace:
-            return list(catalog.list_namespaces(namespace))
-        return list(catalog.list_namespaces())
+            return catalog.list_namespaces(namespace)
+        return catalog.list_namespaces()
     except TypeError:
-        return list(catalog.list_namespaces(namespace))
+        return catalog.list_namespaces(namespace)
 
 
-def _list_tables(catalog: Any, namespace: tuple[str, ...]) -> list[object]:
+def _list_tables(catalog: Any, namespace: tuple[str, ...]) -> Iterable[object]:
     try:
-        return list(catalog.list_tables(namespace))
+        return catalog.list_tables(namespace)
     except TypeError:
         # Some providers expose a root-only ``list_tables()`` method.  Limit
         # the compatibility fallback to that signature mismatch so a real
         # provider outage cannot be mistaken for an empty catalog.
         if namespace:
             raise
-        return list(catalog.list_tables())
+        return catalog.list_tables()
+
+
+def _bounded_provider_items(
+    values: Iterable[object],
+    *,
+    limit: int,
+    kind: str,
+) -> Iterator[object]:
+    if limit < 0:
+        raise ValueError(f"Catalog discovery exceeded the {kind} limit")
+    for index, value in enumerate(values):
+        if index >= limit:
+            raise ValueError(f"Catalog discovery exceeded the {kind} limit")
+        yield value
 
 
 def _namespace_tuple(namespace: object) -> tuple[str, ...]:
