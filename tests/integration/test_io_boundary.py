@@ -63,3 +63,13 @@ def test_rest_plugin_rejects_credential_bearing_auxiliary_uri() -> None:
             _rest_config(warehouse="s3://user:password@warehouse.example/root"),
             _context(),
         )
+
+
+def test_rest_plugin_accepts_local_file_warehouse_uri() -> None:
+    catalog = RestCatalog(_rest_config(warehouse="file:///tmp/warehouse"), _context())
+    catalog.close()
+
+
+def test_rest_plugin_rejects_malformed_catalog_port() -> None:
+    with pytest.raises(ValueError, match="invalid port"):
+        RestCatalog(_rest_config(uri="https://catalog.example:not-a-port/v1"), _context())

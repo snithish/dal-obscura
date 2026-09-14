@@ -86,6 +86,11 @@ class RestCatalog(CatalogPlugin):
         parsed = urlsplit(uri)
         if parsed.scheme not in {"https", "http"} or not parsed.netloc:
             raise ValueError("REST catalog URI must be an absolute HTTP(S) URL")
+        try:
+            port = parsed.port
+        except ValueError as exc:
+            raise ValueError("REST catalog URI has an invalid port") from exc
+        _validate_port(port, "REST catalog URI")
         if parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise ValueError("REST catalog URI cannot contain credentials or query data")
         if parsed.scheme == "http" and any(key in options for key in ("token", "credential")):
@@ -296,8 +301,15 @@ def _validate_optional_uri(value: object, label: str, *, http_only: bool = False
         raise ValueError(f"REST catalog {label} must be a URI")
     parsed = urlsplit(value)
     allowed = {"http", "https", "s3", "gs", "abfs", "file"}
-    if not parsed.netloc or parsed.scheme not in allowed:
-        raise ValueError(f"REST catalog {label} must be an absolute HTTP(S) URI")
+    if parsed.scheme not in allowed or (parsed.scheme != "file" and not parsed.netloc):
+        raise ValueError(f"REST catalog {label} must be an absolute URI with a supported scheme")
+    if parsed.scheme == "file" and parsed.netloc not in {"", "localhost"}:
+        raise ValueError(f"REST catalog {label} file URI must be local")
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError(f"REST catalog {label} has an invalid port") from exc
+    _validate_port(port, f"REST catalog {label}")
     if http_only and parsed.scheme != "https":
         raise ValueError(f"REST catalog {label} must use HTTPS")
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
@@ -320,6 +332,13 @@ def _timeout_seconds(
     if not MIN_TIMEOUT_SECONDS <= seconds <= maximum:
         raise ValueError(f"REST catalog {label} is out of bounds")
     return seconds
+
+
+def _validate_port(port: int | None, label: str) -> None:
+    """Validate an authority port while keeping malformed values out of providers."""
+
+    if port is not None and not 1 <= port <= 65_535:
+        raise ValueError(f"{label} has an invalid port")
 
 
 def _create_catalog(
