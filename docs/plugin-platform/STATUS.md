@@ -2448,3 +2448,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: actual hostile transport/DNS/private-address counters, live OIDC freshness/revocation, populated browser accessibility, PostgreSQL races/recovery, clean TLS/OIDC consumer matrix, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable governed backend slice.
 - Atomic implementation commits: `2cf6c05e`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N04 strict ticket transport decoding
+
+- Scope: make signed ticket and internal scan payload Base64 decoding fail closed.
+- Observable behavior delivered; FR/NFR and B/G subcases: HMAC ticket verification now uses strict URL-safe Base64 validation, and scan payload decoding rejects non-ASCII or noncanonical encodings before the existing trusted pickle load. Existing pickle classes, serializer functions, and payload semantics are unchanged.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/data_plane/infrastructure/adapters/ticket_hmac.py`, `src/dal_obscura/data_plane/application/use_cases/fetch_stream.py`, and `tests/infrastructure/adapters/test_ticket_hmac.py`; no serializer or pickle paths changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +8 production lines, +16 test lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: ticket codec and access-flow suites own malformed transport rejection and valid ticket compatibility; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/infrastructure/adapters/test_ticket_hmac.py tests/application/access_flow/test_fetch.py -q` (exit 0, 23 passed), focused Ruff (exit 0), 2026-09-14, Python 3.12.
+- Artifact and fixture hashes; evidence locations: implementation commit `0e6bae98`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: actual hostile transport/DNS/private-address counters, live OIDC freshness/revocation, populated browser accessibility, PostgreSQL races/recovery, clean TLS/OIDC consumer matrix, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable governed backend slice.
+- Atomic implementation commits: `0e6bae98`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
