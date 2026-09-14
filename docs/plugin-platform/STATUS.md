@@ -784,6 +784,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Verification: publication compiler and DuckDB transform suites passed (all nodes); changed-path Ruff and format checks passed; `git diff --check` passed. Pickle serializers and task payloads are unchanged.
 - Remaining gate: rendered browser round-trip coverage for every mask type and nested large-tree stress remain VERIFY under B11/B12. Release remains HOLD.
 
+## 2026-09-14 — N08/B11 mask editor defaults
+
+- Scope: prevent invalid intermediate mask drafts in the policy editor.
+- Observable behavior delivered: selecting redact initializes `[REDACTED]`, keep-last initializes `4`, and default initializes an editable empty string. Null/default values remain editable through the JSON scalar control, while null and no-mask selections preserve their explicit semantics.
+- Verification: UI TypeScript compilation, Vite production build, eight UI tests, and `git diff --check` pass. No backend or pickle paths changed.
+- Remaining gate: rendered component round-trip must exercise every mask type and verify numeric/boolean/string/null defaults under B11. Release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
