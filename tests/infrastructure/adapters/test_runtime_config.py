@@ -53,6 +53,21 @@ def test_runtime_config_rejects_duplicate_previous_ticket_secrets(
         load_data_plane_runtime_config()
 
 
+def test_runtime_config_rejects_duplicate_secret_provider_config_keys(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
+    monkeypatch.setenv("DAL_OBSCURA_CELL_ID", "00000000-0000-0000-0000-000000000001")
+    monkeypatch.setenv("DAL_OBSCURA_TICKET_SECRET", "ticket-secret")
+    monkeypatch.setenv(
+        "DAL_OBSCURA_SECRET_PROVIDER_CONFIG",
+        '{"prefix":"one","prefix":"two"}',
+    )
+
+    with pytest.raises(ValueError, match="duplicate JSON key"):
+        load_data_plane_runtime_config()
+
+
 def test_runtime_config_reads_stream_resource_limits(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
     monkeypatch.setenv("DAL_OBSCURA_CELL_ID", "00000000-0000-0000-0000-000000000001")

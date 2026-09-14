@@ -218,7 +218,18 @@ def _json_object_env(name: str) -> dict[str, object]:
     raw = os.getenv(name)
     if raw is None or not raw.strip():
         return {}
-    value = json.loads(raw)
+    value = json.loads(raw, object_pairs_hook=_unique_json_object)
     if not isinstance(value, dict):
         raise ValueError(f"{name} must be a JSON object")
     return {str(key): item for key, item in value.items()}
+
+
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    """Reject duplicate environment configuration keys instead of overriding."""
+
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"{key} contains duplicate JSON key {key!r}")
+        result[key] = value
+    return result
