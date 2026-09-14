@@ -777,6 +777,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Verification: UI TypeScript compilation, Vite production build, eight UI tests, and `git diff --check` pass. No pickle serializer or task payload paths changed.
 - Remaining gate: browser proof must verify non-secret prefill, redacted secret behavior, keyboard focus, and multi-actor permissions under N10/B09/B15. Release remains HOLD.
 
+## 2026-09-14 — N08/B11 null default mask
+
+- Scope: complete mask value semantics for policy authoring and execution.
+- Observable behavior delivered: a `default` mask now accepts JSON `null` through publication validation, emits a typed DuckDB `cast_to_type(NULL, ...)` expression, and preserves the source Arrow field type while returning null values. Numeric, boolean, and string defaults retain their existing scalar behavior; container values remain rejected.
+- Verification: publication compiler and DuckDB transform suites passed (all nodes); changed-path Ruff and format checks passed; `git diff --check` passed. Pickle serializers and task payloads are unchanged.
+- Remaining gate: rendered browser round-trip coverage for every mask type and nested large-tree stress remain VERIFY under B11/B12. Release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
