@@ -16,6 +16,30 @@ def test_catalog_options_reject_non_finite_numbers() -> None:
         validate_catalog_options({"properties": {"timeout": float("nan")}})
 
 
+@pytest.mark.parametrize("host", ["127.0.0.1", "10.0.0.8", "::1"])
+def test_catalog_options_reject_unallowlisted_private_literal(host: str) -> None:
+    with pytest.raises(ValidationFailure, match="private address"):
+        validate_catalog_options(
+            {"uri": f"https://[{host}]/v1" if ":" in host else f"https://{host}/v1"}
+        )
+
+
+def test_catalog_options_allow_explicit_private_literal() -> None:
+    validate_catalog_options(
+        {"uri": "https://127.0.0.1/v1"},
+        egress_allowlist=("127.0.0.1",),
+    )
+
+
+@pytest.mark.parametrize("host", ["169.254.169.254", "0.0.0.0", "224.0.0.1"])
+def test_catalog_options_reject_special_literal_even_when_allowlisted(host: str) -> None:
+    with pytest.raises(ValidationFailure, match="special address"):
+        validate_catalog_options(
+            {"uri": f"https://{host}/v1"},
+            egress_allowlist=(host,),
+        )
+
+
 def test_admitted_descriptor_rejects_unknown_and_missing_form_fields() -> None:
     descriptor = PluginDescriptor(
         kind="catalog",

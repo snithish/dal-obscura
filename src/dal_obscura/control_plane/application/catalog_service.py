@@ -8,6 +8,7 @@ Example:
 
 from __future__ import annotations
 
+import ipaddress
 import math
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -379,6 +380,8 @@ def validate_catalog_options(
         ):
             raise ValidationFailure(f"Catalog option {key!r} must not put secrets in a URI query")
         hostname = parsed.hostname
+        if hostname:
+            _validate_ip_literal(hostname, key=key, allowlist=normalized_allowlist)
         if (
             hostname
             and normalized_allowlist
@@ -387,6 +390,28 @@ def validate_catalog_options(
             raise ValidationFailure(
                 f"Catalog endpoint host {hostname!r} is outside the configured egress allowlist"
             )
+
+
+def _validate_ip_literal(hostname: str, *, key: str, allowlist: set[str]) -> None:
+    """Reject unsafe literal destinations before a provider can open a socket.
+
+    Explicitly allowlisted private and loopback addresses remain available for
+    internal catalogs and local development. Link-local, unspecified, and
+    multicast addresses are always denied because they include metadata-service
+    and wildcard destinations that are not valid catalog endpoints.
+    """
+
+    try:
+        address = ipaddress.ip_address(hostname)
+    except ValueError:
+        return
+    normalized = hostname.lower().rstrip(".")
+    if address.is_link_local or address.is_unspecified or address.is_multicast:
+        raise ValidationFailure(f"Catalog option {key!r} targets a disallowed special address")
+    if (
+        address.is_private or address.is_loopback or address.is_reserved
+    ) and normalized not in allowlist:
+        raise ValidationFailure(f"Catalog endpoint host {hostname!r} is a private address")
 
 
 def validate_descriptor_options(
