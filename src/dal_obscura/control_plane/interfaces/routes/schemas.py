@@ -243,6 +243,72 @@ class PluginListResponse(BaseModel):
     states: list[PluginStateResponse]
 
 
+class WorkspaceSummaryResponse(BaseModel):
+    """Permission-scoped workspace counts."""
+
+    catalog_count: int
+    asset_count: int
+    unowned_asset_count: int
+    missing_policy_count: int
+    draft_change_count: int
+    runtime_configured: bool
+    enabled_auth_provider_count: int
+
+
+class WorkspaceGenerationResponse(BaseModel):
+    """Active immutable generation summary."""
+
+    cell_id: str
+    publication_id: str
+    manifest_hash: str
+    status: str
+
+
+class DataPlaneObservationResponse(BaseModel):
+    """Explicit data-plane health observation state."""
+
+    status: str
+    reason: str
+
+
+class WorkspaceObservationsResponse(BaseModel):
+    """Control-plane observations kept separate from Flight health."""
+
+    available: bool
+    observed_at: str
+    source: str
+    generation: WorkspaceGenerationResponse | None = None
+    data_plane: DataPlaneObservationResponse
+
+
+class WorkspacePublicationResponse(BaseModel):
+    """Immutable workspace publication listing row."""
+
+    id: str
+    schema_version: int
+    status: str
+    manifest_hash: str
+    active: bool
+    asset_count: int
+    catalog_count: int
+    created_at: str
+
+
+class WorkspacePublicationCreateResponse(BaseModel):
+    """Created staged publication summary."""
+
+    publication_id: str
+    asset_count: int
+    catalog_count: int
+    manifest_hash: str
+
+
+class PublicationActivationResponse(BaseModel):
+    """Activation result bound to one immutable generation."""
+
+    publication_id: str
+
+
 class AuthProviderResponse(BaseModel):
     """Redacted authentication-provider record returned to management clients."""
 

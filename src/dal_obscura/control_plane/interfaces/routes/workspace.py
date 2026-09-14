@@ -14,7 +14,14 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
-from dal_obscura.control_plane.interfaces.routes.schemas import PublicationActivationRequest
+from dal_obscura.control_plane.interfaces.routes.schemas import (
+    PublicationActivationRequest,
+    PublicationActivationResponse,
+    WorkspaceObservationsResponse,
+    WorkspacePublicationCreateResponse,
+    WorkspacePublicationResponse,
+    WorkspaceSummaryResponse,
+)
 
 
 def router(deps: ControlPlaneDeps) -> APIRouter:
@@ -28,37 +35,43 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
 
     api = APIRouter()
 
-    @api.get("/v1/workspace/summary")
+    @api.get("/v1/workspace/summary", response_model=WorkspaceSummaryResponse)
     def get_workspace_summary(
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
+    ) -> WorkspaceSummaryResponse:
         return deps.with_service(lambda service: service.get_workspace_summary(actor))
 
-    @api.get("/v1/workspace/observations")
+    @api.get("/v1/workspace/observations", response_model=WorkspaceObservationsResponse)
     def get_workspace_observations(
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
-    ) -> object:
+    ) -> WorkspaceObservationsResponse:
         return deps.with_service(lambda service: service.get_workspace_observations(actor))
 
-    @api.get("/v1/workspace/publications")
+    @api.get(
+        "/v1/workspace/publications",
+        response_model=list[WorkspacePublicationResponse],
+    )
     def list_workspace_publications(
         actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
-    ) -> object:
+    ) -> list[WorkspacePublicationResponse]:
         del actor
         return deps.with_service(lambda service: service.list_workspace_publications())
 
-    @api.post("/v1/workspace/publications")
+    @api.post("/v1/workspace/publications", response_model=WorkspacePublicationCreateResponse)
     def create_workspace_publication(
         actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
-    ) -> object:
+    ) -> WorkspacePublicationCreateResponse:
         return deps.with_service(lambda service: service.create_workspace_publication(actor))
 
-    @api.post("/v1/workspace/publications/{publication_id}/activate")
+    @api.post(
+        "/v1/workspace/publications/{publication_id}/activate",
+        response_model=PublicationActivationResponse,
+    )
     def activate_workspace_publication(
         publication_id: UUID,
         request: PublicationActivationRequest | None = None,
         actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
-    ) -> object:
+    ) -> PublicationActivationResponse:
         if request is None or "expected_publication_id" not in request.model_fields_set:
             raise HTTPException(
                 status_code=428,
