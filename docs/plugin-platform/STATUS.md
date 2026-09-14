@@ -1012,6 +1012,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Verification: focused catalog/inventory/asset API tests (38 passed), UI TypeScript compilation, Vite production build, 11 UI tests, generated DTO freshness, Ruff, and non-heavy pre-commit hooks passed. Full browser visual/accessibility, lifecycle, and production acceptance evidence remain VERIFY; release remains HOLD.
 - Atomic implementation commit: `7e69148`.
 
+## 2026-09-14 — N10 backend-neutral schema copy
+
+- Scope: remove the remaining backend-specific label from the nested schema workspace.
+- Observable behavior delivered: empty schema search states now describe the control-plane schema generically, keeping the consumer UI aligned with plugin-selected formats.
+- Verification: UI TypeScript compilation, 11 UI tests, Vite production build, generated DTO freshness, and pre-commit non-heavy hooks passed. Full visual/accessibility and independent acceptance evidence remain VERIFY; release remains HOLD.
+- Atomic implementation commit: `52c06c6`.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
