@@ -791,6 +791,11 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Verification: UI TypeScript compilation, Vite production build, eight UI tests, and `git diff --check` pass. No backend or pickle paths changed.
 - Remaining gate: rendered component round-trip must exercise every mask type and verify numeric/boolean/string/null defaults under B11. Release remains HOLD.
 
+## 2026-09-14 — broad regression after UI and mask slices
+
+- `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q` passed with 837 collected, 823 passed, 14 explicit opt-in skips, and zero failures/errors using loopback/subprocess permissions. UI TypeScript/Vite and eight UI tests remain green.
+- The skips are the documented benchmark, consumer qualification, PostgreSQL race/recovery, and other opt-in release lanes; they are not treated as completion evidence. N01–N16 remain open/VERIFY where live browser, OIDC, hostile transport, consumer, capacity, recovery, and independent acceptance evidence is still required. Release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
