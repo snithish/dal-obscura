@@ -1719,3 +1719,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live OIDC PKCE/freshness/revocation, hostile transport counters, PostgreSQL two-process races/recovery, clean wheels and real DuckDB/Spark consumers, mixed-load capacity/resource thresholds, pinned deployment artifact/SBOM/recovery evidence, and independent review remain VERIFY under N04–N16. Next action is continue candidate-bound live release qualification while retaining HOLD.
 - Atomic implementation commits: validation only; no source commit.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N05 rendered identity-provider management
+
+- Scope: make the authenticated Settings view a complete OIDC provider management surface.
+- Observable behavior delivered; FR/NFR and B/G subcases: administrators can now add a new OIDC provider, remove a staged provider, enable or disable providers, and edit every validated issuer, audience, JWKS, claim, algorithm, and numeric freshness/key-limit setting. Inputs expose inline validation semantics and accessible error relationships; provider order remains visible. Static secrets and JWKS material are never rendered. Pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/SettingsView.tsx`, `apps/governance-ui/src/styles.css`; no backend, serializer, serialized class/import path, payload, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +65 UI lines and +20 CSS lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: server-side auth-provider validation remains authoritative; UI TypeScript, Vite build, Node lifecycle/query/schema tests, and manual browser accessibility inspection cover this slice; no tests deleted. Browser OIDC/PKCE, freshness/revocation, keyboard and screen-reader evidence remain N05/N16 owners.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node_modules/.bin/vite build` (exit 0; 327.78 kB JavaScript / 99.11 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (13 passed), and `git diff --check` (exit 0), 2026-09-14, Node 24. Manual CUA state verified Settings initially showed no providers; Add OIDC provider rendered all ten editable fields and an enabled toggle; Remove restored the empty state without persistence.
+- Artifact and fixture hashes; evidence locations: implementation commit `9c0027a`; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: rendered keyboard/axe/screen-reader journeys on populated providers, path-rule editor, live OIDC PKCE/freshness/revocation, PostgreSQL races, hostile transport, clean wheels/real consumers, recovery/mixed-load capacity, deployment integrity, and independent review remain VERIFY under N04–N16. Next action is continue the highest-value rendered and live qualification while retaining release HOLD.
+- Atomic implementation commits: `9c0027a`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
