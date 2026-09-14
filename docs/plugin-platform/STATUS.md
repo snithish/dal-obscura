@@ -803,6 +803,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Verification: all DuckDB transform tests passed (38 nodes), changed-path Ruff passed, and `git diff --check` passed. Pickle serializers and task payloads are unchanged.
 - Remaining gate: rendered nested component round-trip and consumer matrix still need to verify nullability across Python/Arrow, DuckDB, and Spark. Release remains HOLD.
 
+## 2026-09-14 — N08/B12 nested tree semantics
+
+- Scope: accessible virtual schema-tree navigation for nested fields.
+- Observable behavior delivered: flattened tree rows now carry sibling `aria-posinset` and `aria-setsize` values at each depth, while the rendered row identity uses the server-stable field ID. Global virtualization indices remain separate for keyboard scrolling and bounded mounting.
+- Verification: UI TypeScript compilation, Vite production build, all eight UI tests, and `git diff --check` pass.
+- Remaining gate: the required 10,000-node Playwright stress journey, 200-row mount cap, 200% zoom, and screen-reader review remain VERIFY. Release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
