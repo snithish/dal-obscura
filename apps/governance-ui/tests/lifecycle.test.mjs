@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { isCurrentEpoch, nextEpoch } from "../src/lifecycle.ts";
 import { locationFromUrl, pageFromHash } from "../src/navigation.ts";
 import { recoveryMessage } from "../src/recovery.ts";
+import { serializePathRules } from "../src/runtime_settings.ts";
 
 test("stale async work cannot apply after an epoch advances", () => {
   const initial = 0;
@@ -54,4 +55,13 @@ test("recovery mapper names safe validation fields", () => {
     recoveryMessage({ status: 422, fieldErrors: [{ field: "options.uri", message: "invalid", type: "value_error" }] }, "fallback"),
     "The server rejected the submitted values. Correct the highlighted policy or configuration fields. Fields: options.uri.",
   );
+});
+
+test("runtime path rules trim roots and reject blank rows", () => {
+  assert.deepEqual(serializePathRules([" s3://warehouse/curated ", "file:///tmp/data"]), [
+    { root: "s3://warehouse/curated" },
+    { root: "file:///tmp/data" },
+  ]);
+  assert.deepEqual(serializePathRules([]), []);
+  assert.equal(serializePathRules(["  "]), undefined);
 });

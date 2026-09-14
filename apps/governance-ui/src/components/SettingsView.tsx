@@ -4,6 +4,7 @@ import type { AuthProvider, RuntimeSettings, WorkspacePublication } from "../api
 import { controlPlane } from "../api";
 import { recoveryMessage } from "../recovery";
 import { isAbortError } from "../async";
+import { serializePathRules } from "../runtime_settings";
 
 export type SettingsViewProps = {
   runtime?: RuntimeSettings | null;
@@ -88,11 +89,11 @@ export function SettingsView({
     }
     const controller = beginMutation();
     try {
-      if (pathRuleRoots.some((root) => !root.trim())) {
+      const pathRules = serializePathRules(pathRuleRoots);
+      if (!pathRules) {
         setMessage("Every storage path root must be non-empty before saving.");
         return;
       }
-      const pathRules = pathRuleRoots.map((root) => ({ root: root.trim() }));
       await controlPlane.saveRuntimeSettings({ ...form, path_rules: pathRules }, controller.signal);
       if (controller.signal.aborted) return;
       void queryClient.invalidateQueries({ queryKey: ["management", sessionScope, "settings"] });
