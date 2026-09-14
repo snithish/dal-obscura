@@ -1667,3 +1667,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: restart of the already-running local process is required to observe this code change in the browser; live OIDC/browser/accessibility, freshness/revocation, PostgreSQL races, clean wheels/consumers, hostile transport, recovery/mixed-load capacity, deployment integrity, and independent review remain VERIFY under N04–N16. Next action is apply the change in the next controlled service restart and continue release qualification while retaining HOLD.
 - Atomic implementation commits: `646fb53`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N05 local browser authentication verification
+
+- Scope: verify the local UI against the restarted control-plane process carrying the CSRF-origin fix.
+- Observable behavior delivered; FR/NFR and B/G subcases: the browser authenticated with the local bootstrap token, rendered the connected workspace state, successfully signed out after the controlled restart, hid private workspace content, and authenticated again. No demo data or demo-login UI was used.
+- Changed and deleted paths; old callers removed; protected pickle check: no additional source changes; this entry records the runtime evidence for `646fb53`.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no source or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: local browser sign-in/sign-out journey plus existing CLI/bootstrap actor tests; no tests deleted. Real OIDC code/PKCE, expiry/freshness, revocation, and production cookie evidence remain open.
+- Exact commands, exit codes, UTC date, runtime versions, environment: restarted `dal-obscura-control-plane` on `127.0.0.1:8821` (PID 37393) with SQLite local profile, UI at `http://127.0.0.1:5173/`; CUA accessibility checks observed Connected → Signed out → Connected states, 2026-09-14.
+- Artifact and fixture hashes; evidence locations: browser session was manual CUA evidence; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: live OIDC/browser PKCE and session-expiry/revocation timing, PostgreSQL races, hostile transport counters, clean wheels/real consumers, recovery/mixed-load capacity, deployment integrity, and independent review remain VERIFY under N04–N16. Next action is continue cross-process and deployment qualification while retaining release HOLD.
+- Atomic implementation commits: `646fb53`; runtime evidence recorded separately.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
