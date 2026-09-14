@@ -2084,3 +2084,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: full rendered browser guard/race matrix, live OIDC/PKCE and revocation, hostile transport, PostgreSQL races/recovery, clean TLS/OIDC consumer cells, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable qualification packet without changing pickle behavior.
 - Atomic implementation commits: `b4c66d19`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N10 connection draft unsaved-change guard
+
+- Scope: prevent catalog draft, typed connection fields, ambiguous format selection, and plugin lifecycle edits from being silently abandoned.
+- Observable behavior delivered; FR/NFR and B/G subcases: all connection form controls report dirty state to the application shell. Refresh, switching to another catalog editor, route changes, logout, browser history, and unload require explicit discard; Cancel edit is an explicit discard action. Successful catalog saves clear the marker while rejected saves keep input visible. Lifecycle choices remain staged until Apply and are included in the guard. Secret fields continue to hold only scoped references. Pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/ConnectionsView.tsx` and `apps/governance-ui/src/components/ManagementViews.tsx`; no backend, serializer, serialized class/import path, payload, migration, dependency, or test deletion.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +25 UI production lines and -5 obsolete lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing UI query/lifecycle tests remain owners; no tests deleted. Rendered connection lifecycle, stale response, and forbidden-state journeys remain required B10/B14 evidence.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node_modules/.bin/vite build` (exit 0; 330.23 kB JavaScript / 99.67 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0; 14 passed), and `git diff --check` (exit 0), 2026-09-14, Node 26.8.2 local runtime (package policy remains Node 24). Commit hook used `SKIP=ty`; the documented repository `ty` baseline still reports 72 unrelated diagnostics.
+- Artifact and fixture hashes; evidence locations: implementation commit `0f22baa6`; local disposable UI/control-plane profile on `127.0.0.1:5173`/`127.0.0.1:8821`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: rendered browser confirmation and deferred-response matrix, live OIDC/PKCE/revocation, hostile transport, PostgreSQL races/recovery, clean TLS/OIDC consumer cells, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable qualification packet without changing pickle behavior.
+- Atomic implementation commits: `0f22baa6`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
