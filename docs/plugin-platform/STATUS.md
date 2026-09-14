@@ -2005,3 +2005,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: five-run throughput comparison, 16-consumer/metadata mixed-load RSS and cancellation cleanup, 10M schema/discovery deadlines, audit-load p95, and browser interaction measurements remain VERIFY under B19. Production OIDC/transport, PostgreSQL races/recovery, clean TLS/OIDC consumers, deployment integrity/SBOM, and independent review remain open. Release remains HOLD.
 - Atomic implementation commits: verification-only ledger entry; manifest implementation commit `93004cd` remains the source of truth.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N06 generated API contract check
+
+- Scope: verify the governance UI still matches the checked-in OpenAPI-derived DTO contract after the current candidate changes.
+- Observable behavior delivered; FR/NFR and B/G subcases: the UI API type generator ran in check mode with no diff, so the typed client remains synchronized with the control-plane contract. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: verification-only ledger entry; no source, serializer, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no source or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: `apps/governance-ui/scripts/generate-api-types.mjs --check` remains the generated-contract owner; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node scripts/generate-api-types.mjs --check` (exit 0) from `apps/governance-ui`, 2026-09-14, Node 26.8.2 local runtime (package policy remains Node 24).
+- Artifact and fixture hashes; evidence locations: generated API types under `apps/governance-ui/src/api.generated.ts`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: live OIDC/PKCE, hostile DNS/private-address transport, browser axe/screen-reader/responsive evidence, PostgreSQL races/recovery, clean TLS/OIDC consumers, five-run mixed-load capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD.
+- Atomic implementation commits: verification-only ledger entry; no source commit.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
