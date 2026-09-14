@@ -6,6 +6,7 @@ from dal_obscura_plugin_api import PluginDescriptor
 from fastapi import APIRouter, Depends
 
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
+from dal_obscura.control_plane.interfaces.routes.schemas import PluginListResponse
 
 
 def router(deps: ControlPlaneDeps) -> APIRouter:
@@ -13,8 +14,13 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
 
     api = APIRouter()
 
-    @api.get("/v1/plugins", dependencies=[Depends(deps.require_admin)])
-    def list_plugins() -> object:
+    @api.get(
+        "/v1/plugins",
+        dependencies=[Depends(deps.require_admin)],
+        response_model=PluginListResponse,
+        response_model_exclude_none=True,
+    )
+    def list_plugins() -> PluginListResponse:
         if deps.plugin_registry is None:
             raise RuntimeError("Plugin registry was not admitted during application startup")
         descriptors = list(deps.plugin_registry.admitted().values())
