@@ -150,12 +150,12 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
   }, [pluginId]);
   async function save() {
     if (savingRef.current) return;
-    savingRef.current = true;
-    setSaving(true);
     if (!name.trim()) return setMessage("Connection name is required.");
     const missing = effectiveFields.filter((field) => field.required && !config[field.name]?.trim());
     if (missing.length) return setMessage(`Required configuration missing: ${missing.map((field) => field.name).join(", ")}.`);
     if (!selectedPlugin) return setMessage("Select an admitted catalog adapter before saving.");
+    savingRef.current = true;
+    setSaving(true);
     const options: Record<string, unknown> = { ...pluginDefaults(selectedPlugin) };
     for (const field of effectiveFields) {
       const value = config[field.name]?.trim();

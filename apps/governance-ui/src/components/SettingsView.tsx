@@ -109,20 +109,20 @@ export function SettingsView({
 
   async function save() {
     if (savingRef.current) return;
-    savingRef.current = true;
-    setSaving(true);
     if (form.ticket_ttl_seconds < 1 || form.max_tickets < 1 || form.max_ticket_exchanges < 1) {
       setMessage("Enter positive values for all runtime limits before saving.");
       return;
     }
+    const pathRules = serializePathRules(pathRuleRoots);
+    if (!pathRules) {
+      setMessage("Every storage path root must be non-empty before saving.");
+      return;
+    }
+    savingRef.current = true;
+    setSaving(true);
     const controller = beginMutation();
     const operationEpoch = editEpoch.current;
     try {
-      const pathRules = serializePathRules(pathRuleRoots);
-      if (!pathRules) {
-        setMessage("Every storage path root must be non-empty before saving.");
-        return;
-      }
       await controlPlane.saveRuntimeSettings({ ...form, path_rules: pathRules }, controller.signal);
       if (controller.signal.aborted || operationEpoch !== editEpoch.current) return;
       setDirty(false);
@@ -136,12 +136,12 @@ export function SettingsView({
 
   async function saveProviders() {
     if (savingRef.current) return;
-    savingRef.current = true;
-    setSaving(true);
     if (Object.keys(providerErrors).length) {
       setMessage("Fix the highlighted identity provider fields before saving.");
       return;
     }
+    savingRef.current = true;
+    setSaving(true);
     const controller = beginMutation();
     const operationEpoch = editEpoch.current;
     try {
