@@ -46,13 +46,15 @@ from dal_obscura.control_plane.interfaces.routes import (
 from dal_obscura.control_plane.interfaces.routes import (
     workspace as workspace_routes,
 )
-from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
+from dal_obscura.control_plane.interfaces.routes.deps import (
+    AuthorizationCodeExchange,
+    ControlPlaneDeps,
+)
 from dal_obscura.control_plane.interfaces.session_api import (
     OidcActorResolver,
     OidcNonceActorResolver,
     create_oidc_nonce_actor_resolver,
     exchange_authorization_code,
-    exchange_demo_password_token,
 )
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
 from dal_obscura.data_plane.infrastructure.adapters.builtin_plugins import (
@@ -182,9 +184,6 @@ _create_oidc_nonce_actor_resolver = create_oidc_nonce_actor_resolver
 _exchange_authorization_code = exchange_authorization_code
 
 
-_exchange_demo_password_token = exchange_demo_password_token
-
-
 def create_app(  # noqa: C901
     session_maker: sessionmaker[Session],
     *,
@@ -196,6 +195,7 @@ def create_app(  # noqa: C901
     session_ttl_seconds: int = 28_800,
     session_idle_ttl_seconds: int = 1_800,
     oidc_nonce_actor_resolver: OidcNonceActorResolver | None = None,
+    authorization_code_exchange: AuthorizationCodeExchange | None = None,
     require_review: bool = False,
     review_secret: str | None = None,
     catalog_egress_allowlist: tuple[str, ...] = (),
@@ -378,10 +378,6 @@ def create_app(  # noqa: C901
         oidc_actor_resolver=oidc_actor_resolver,
         oidc_admin_group=oidc_admin_group,
         ui_auth_config=ui_auth_config,
-        demo_token_exchange=lambda config, username: _exchange_demo_password_token(
-            config,
-            username,
-        ),
         session_ttl_seconds=session_ttl_seconds,
         session_idle_ttl_seconds=session_idle_ttl_seconds,
         require_review=require_review,
@@ -396,10 +392,9 @@ def create_app(  # noqa: C901
         login_rate_limit_attempts=login_rate_limit_attempts,
         login_rate_limit_window_seconds=login_rate_limit_window_seconds,
         login_rate_limit_block_seconds=login_rate_limit_block_seconds,
-        authorization_code_exchange=lambda config, code, verifier: _exchange_authorization_code(
-            config,
-            code,
-            verifier,
+        authorization_code_exchange=(
+            authorization_code_exchange
+            or (lambda config, code, verifier: _exchange_authorization_code(config, code, verifier))
         ),
         plugin_registry=plugin_registry,
         secret_provider=secret_provider,

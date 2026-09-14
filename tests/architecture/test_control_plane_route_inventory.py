@@ -48,7 +48,6 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
         "/v1/catalogs/{name}",
         "/v1/catalogs/{name}/tables",
         "/v1/catalogs/{name}/diagnostics",
-        "/v1/demo-login",
         "/v1/logout",
         "/v1/session/bootstrap",
         "/v1/policy-versions",
@@ -104,12 +103,6 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
     )
     assert (
         paths["/v1/session/bootstrap"]["post"]["responses"]["200"]["content"]["application/json"][
-            "schema"
-        ]["$ref"]
-        == "#/components/schemas/AuthenticationMutationResponse"
-    )
-    assert (
-        paths["/v1/demo-login"]["post"]["responses"]["200"]["content"]["application/json"][
             "schema"
         ]["$ref"]
         == "#/components/schemas/AuthenticationMutationResponse"

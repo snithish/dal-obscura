@@ -5,7 +5,7 @@ import json
 import sys
 import urllib.error
 import urllib.request
-from typing import cast
+from pathlib import Path
 
 BASE_URL = "http://127.0.0.1:8821"
 
@@ -60,6 +60,18 @@ def json_object(raw: bytes, label: str) -> dict[str, object]:
     return value
 
 
+def control_plane_admin_token() -> str:
+    """Read local bootstrap secret without exposing it in smoke output."""
+    path = Path(__file__).resolve().parents[2] / ".runtime" / "control-plane.env"
+    if not path.exists():
+        raise SmokeFailure(f"missing local control-plane environment: {path}")
+    for line in path.read_text(encoding="utf-8").splitlines():
+        key, separator, value = line.partition("=")
+        if separator and key.strip() == "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN" and value.strip():
+            return value.strip()
+    raise SmokeFailure("control-plane environment omitted admin token")
+
+
 def main() -> None:
     cookies = http.cookiejar.CookieJar()
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookies))
@@ -71,37 +83,29 @@ def main() -> None:
 
     status, raw, _ = request(opener, "/v1/ui-auth-config")
     expect(status == 200, f"UI auth configuration returned {status}, expected 200")
-    shortcuts = json_object(raw, "UI auth configuration").get("login_shortcuts", [])
-    if not isinstance(shortcuts, list):
-        raise SmokeFailure("UI auth configuration has invalid login shortcuts")
-    owner = next(
-        (
-            item
-            for item in shortcuts
-            if isinstance(item, dict)
-            and cast(dict[str, object], item).get("login_hint") == "asset-owner"
-        ),
-        None,
-    )
-    if owner is None:
-        raise SmokeFailure("UI auth configuration omitted the asset-owner login shortcut")
+    auth_config = json_object(raw, "UI auth configuration")
+    expect(bool(auth_config.get("authority")), "UI auth configuration omitted OIDC authority")
+    expect(bool(auth_config.get("client_id")), "UI auth configuration omitted OIDC client ID")
 
     status, raw, _ = request(
-        opener, "/v1/demo-login", method="POST", payload={"login_hint": "asset-owner"}
+        opener,
+        "/v1/session/bootstrap",
+        method="POST",
+        headers={"authorization": f"Bearer {control_plane_admin_token()}"},
     )
     expect(
-        status == 200 and json_object(raw, "demo login") == {"authenticated": True},
-        "demo login did not create a browser session",
+        status == 200 and json_object(raw, "bootstrap") == {"authenticated": True},
+        "local bootstrap did not create a browser session",
     )
     csrf = cookie_value(cookies, "dal_obscura_csrf")
 
     status, raw, _ = request(opener, "/v1/session")
     expect(
-        status == 200 and json_object(raw, "session").get("principal") == "asset-owner",
-        "asset-owner browser session was not accepted",
+        status == 200 and json_object(raw, "session").get("principal") == "platform:admin",
+        "local admin browser session was not accepted",
     )
     status, _, _ = request(opener, "/v1/assets")
-    expect(status == 200, f"asset-owner asset inventory returned {status}, expected 200")
+    expect(status == 200, f"admin asset inventory returned {status}, expected 200")
 
     status, raw, _ = request(opener, "/v1/logout", method="POST", headers={"x-csrf-token": csrf})
     expect(

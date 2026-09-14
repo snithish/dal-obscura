@@ -361,13 +361,7 @@ def _ui_auth_config(values: Mapping[str, str]) -> dict[str, object] | None:
             values,
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_TOKEN_ENDPOINT",
         ),
-        "login_shortcuts": _login_shortcuts(
-            values.get("DAL_OBSCURA_CONTROL_PLANE_UI_LOGIN_SHORTCUTS", "")
-        ),
     }
-    demo_login = _demo_login_config(values)
-    if demo_login:
-        config["demo_login"] = demo_login
     return {key: value for key, value in config.items() if value is not None}
 
 
@@ -397,50 +391,6 @@ def _ui_nonce_resolver(values: Mapping[str, str]):
         subject_claim=subject_claim,
         group_claims=group_claims,
     )
-
-
-def _login_shortcuts(value: str) -> list[dict[str, str]]:
-    shortcuts = []
-    for entry in value.split(";"):
-        if not entry.strip():
-            continue
-        label, separator, login_hint = entry.partition("=")
-        if not separator or not label.strip() or not login_hint.strip():
-            raise ValueError("UI login shortcuts must use 'label=login_hint' entries")
-        shortcuts.append({"label": label.strip(), "login_hint": login_hint.strip()})
-    return shortcuts
-
-
-def _demo_login_config(values: Mapping[str, str]) -> dict[str, object]:
-    token_url = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_TOKEN_URL")
-    client_id = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_CLIENT_ID")
-    client_secret = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_CLIENT_SECRET")
-    passwords = _key_values(values.get("DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_PASSWORDS", ""))
-    configured = (token_url, client_id, client_secret, passwords)
-    if not any(configured):
-        return {}
-    if not all(configured):
-        raise ValueError("Demo login requires token URL, client ID, secret, and passwords")
-    return {
-        "token_url": token_url,
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "passwords": passwords,
-    }
-
-
-def _key_values(value: str) -> dict[str, str]:
-    pairs: dict[str, str] = {}
-    for entry in value.split(";"):
-        if not entry.strip():
-            continue
-        key, separator, item = entry.partition("=")
-        if not separator or not key.strip() or not item.strip():
-            raise ValueError("Expected semicolon-separated key=value entries")
-        if key.strip() in pairs:
-            raise ValueError(f"Duplicate configured key {key.strip()!r}")
-        pairs[key.strip()] = item.strip()
-    return pairs
 
 
 def _parser() -> argparse.ArgumentParser:

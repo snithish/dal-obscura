@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from urllib.parse import parse_qs, urlsplit
 from uuid import UUID
 
 from fastapi.testclient import TestClient
@@ -87,23 +88,29 @@ def _client_with_ui_auth_config() -> TestClient:
                 "post_logout_redirect_uri": "http://127.0.0.1:8820/ui",
                 "scope": "openid profile",
                 "client_secret": "must-not-leak",
-                "login_shortcuts": [
-                    {"label": "Platform owner", "login_hint": "demo-admin"},
-                    {"label": "Data asset owner", "login_hint": "asset-owner"},
-                    {"label": "Broken", "login_hint": ""},
-                ],
-                "demo_login": {
-                    "token_url": "http://keycloak/token",
-                    "client_id": "dal-obscura-cli",
-                    "client_secret": "secret",
-                    "passwords": {
-                        "demo-admin": "admin-pass",
-                        "asset-owner": "owner-pass",
-                    },
-                },
+            },
+            oidc_nonce_actor_resolver=lambda token, nonce_hash: {
+                "principal": "asset-owner",
+                "groups": ["asset-owners"],
+            },
+            authorization_code_exchange=lambda config, code, verifier: {
+                "access_token": "owner-token",
+                "id_token": "owner-id-token",
             },
         )
     )
+
+
+def _login_as_asset_owner(client: TestClient) -> Response:
+    start = client.get("/auth/login", follow_redirects=False)
+    assert start.status_code == 303
+    state = parse_qs(urlsplit(start.headers["location"]).query)["state"][0]
+    callback = client.get(
+        f"/auth/callback?code=test-code&state={state}",
+        follow_redirects=False,
+    )
+    assert callback.status_code == 303, callback.text
+    return callback
 
 
 def _bearer(token: str) -> dict[str, str]:
@@ -122,56 +129,12 @@ def test_ui_auth_config_returns_public_oidc_browser_config_without_secret():
         "redirect_uri": "http://127.0.0.1:8820/ui/auth/callback",
         "post_logout_redirect_uri": "http://127.0.0.1:8820/ui",
         "scope": "openid profile",
-        "login_shortcuts": [
-            {
-                "label": "Platform owner",
-                "login_hint": "demo-admin",
-                "demo_login_path": "/v1/demo-login",
-            },
-            {
-                "label": "Data asset owner",
-                "login_hint": "asset-owner",
-                "demo_login_path": "/v1/demo-login",
-            },
-        ],
     }
 
 
-def test_demo_login_sets_http_only_session_and_csrf_cookies(monkeypatch):
+def test_cookie_session_requires_csrf_header_for_mutations():
     client = _client_with_ui_auth_config()
-    calls = []
-
-    def fake_exchange(config, username):
-        calls.append((config["token_url"], config["client_id"], username))
-        return "owner-token"
-
-    monkeypatch.setattr(api_module, "_exchange_demo_password_token", fake_exchange)
-
-    response = client.post("/v1/demo-login", json={"login_hint": "asset-owner"})
-
-    assert response.status_code == 200
-    assert response.json() == {"authenticated": True}
-    assert response.cookies["dal_obscura_session"] != "owner-token"
-    assert len(response.cookies["dal_obscura_session"]) >= 40
-    assert response.cookies["dal_obscura_csrf"]
-    session_cookie = next(
-        cookie
-        for cookie in response.headers.get_list("set-cookie")
-        if "dal_obscura_session" in cookie
-    )
-    assert "HttpOnly" in session_cookie
-    assert "samesite=lax" in session_cookie.lower()
-    assert calls == [("http://keycloak/token", "dal-obscura-cli", "asset-owner")]
-
-
-def test_cookie_session_requires_csrf_header_for_mutations(monkeypatch):
-    client = _client_with_ui_auth_config()
-    monkeypatch.setattr(
-        api_module,
-        "_exchange_demo_password_token",
-        lambda config, username: "owner-token",
-    )
-    login = client.post("/v1/demo-login", json={"login_hint": "asset-owner"})
+    login = _login_as_asset_owner(client)
 
     cookie_header = (
         f"dal_obscura_session={login.cookies['dal_obscura_session']}; "
@@ -200,14 +163,9 @@ def test_cookie_session_requires_csrf_header_for_mutations(monkeypatch):
     assert csrf.json()["detail"] != "CSRF validation failed"
 
 
-def test_cookie_session_rejects_a_forged_csrf_cookie(monkeypatch):
+def test_cookie_session_rejects_a_forged_csrf_cookie():
     client = _client_with_ui_auth_config()
-    monkeypatch.setattr(
-        api_module,
-        "_exchange_demo_password_token",
-        lambda config, username: "owner-token",
-    )
-    login = client.post("/v1/demo-login", json={"login_hint": "asset-owner"})
+    login = _login_as_asset_owner(client)
     cookie_header = (
         f"dal_obscura_session={login.cookies['dal_obscura_session']}; dal_obscura_csrf=forged"
     )
@@ -218,14 +176,9 @@ def test_cookie_session_rejects_a_forged_csrf_cookie(monkeypatch):
     assert response.json()["detail"] == "CSRF validation failed"
 
 
-def test_cookie_session_rejects_conflicting_host_and_legacy_cookies(monkeypatch):
+def test_cookie_session_rejects_conflicting_host_and_legacy_cookies():
     client = _client_with_ui_auth_config()
-    monkeypatch.setattr(
-        api_module,
-        "_exchange_demo_password_token",
-        lambda config, username: "owner-token",
-    )
-    login = client.post("/v1/demo-login", json={"login_hint": "asset-owner"})
+    login = _login_as_asset_owner(client)
     cookie_header = (
         f"dal_obscura_session={login.cookies['dal_obscura_session']}; "
         f"__Host-dal_obscura_session=forged; "
@@ -238,14 +191,9 @@ def test_cookie_session_rejects_conflicting_host_and_legacy_cookies(monkeypatch)
     assert response.json()["detail"] == "Conflicting browser credentials"
 
 
-def test_cookie_session_logout_requires_csrf_and_expires_browser_cookies(monkeypatch):
+def test_cookie_session_logout_requires_csrf_and_expires_browser_cookies():
     client = _client_with_ui_auth_config()
-    monkeypatch.setattr(
-        api_module,
-        "_exchange_demo_password_token",
-        lambda config, username: "owner-token",
-    )
-    login = client.post("/v1/demo-login", json={"login_hint": "asset-owner"})
+    login = _login_as_asset_owner(client)
     cookie_header = (
         f"dal_obscura_session={login.cookies['dal_obscura_session']}; "
         f"dal_obscura_csrf={login.cookies['dal_obscura_csrf']}"
@@ -273,14 +221,9 @@ def test_cookie_session_logout_requires_csrf_and_expires_browser_cookies(monkeyp
     assert repeated.json() == {"authenticated": False}
 
 
-def test_cookie_mutation_rejects_untrusted_origin(monkeypatch):
+def test_cookie_mutation_rejects_untrusted_origin():
     client = _client_with_ui_auth_config()
-    monkeypatch.setattr(
-        api_module,
-        "_exchange_demo_password_token",
-        lambda config, username: "owner-token",
-    )
-    login = client.post("/v1/demo-login", json={"login_hint": "asset-owner"})
+    login = _login_as_asset_owner(client)
     cookie_header = (
         f"dal_obscura_session={login.cookies['dal_obscura_session']}; "
         f"dal_obscura_csrf={login.cookies['dal_obscura_csrf']}"
@@ -299,14 +242,9 @@ def test_cookie_mutation_rejects_untrusted_origin(monkeypatch):
     assert response.json()["detail"] == "Origin validation failed"
 
 
-def test_cookie_mutation_cannot_trust_forged_host_and_matching_origin(monkeypatch):
+def test_cookie_mutation_cannot_trust_forged_host_and_matching_origin():
     client = _client_with_ui_auth_config()
-    monkeypatch.setattr(
-        api_module,
-        "_exchange_demo_password_token",
-        lambda config, username: "owner-token",
-    )
-    login = client.post("/v1/demo-login", json={"login_hint": "asset-owner"})
+    login = _login_as_asset_owner(client)
     cookie_header = (
         f"dal_obscura_session={login.cookies['dal_obscura_session']}; "
         f"dal_obscura_csrf={login.cookies['dal_obscura_csrf']}"
@@ -326,10 +264,10 @@ def test_cookie_mutation_cannot_trust_forged_host_and_matching_origin(monkeypatc
     assert response.json()["detail"] == "Origin validation failed"
 
 
-def test_demo_login_rejects_unknown_shortcut():
+def test_removed_demo_login_route_is_absent():
     client = _client_with_ui_auth_config()
 
-    response = client.post("/v1/demo-login", json={"login_hint": "us-analyst"})
+    response = client.post("/v1/demo-login", json={"login_hint": "asset-owner"})
 
     assert response.status_code == 404
 

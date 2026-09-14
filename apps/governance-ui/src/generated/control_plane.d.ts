@@ -466,23 +466,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/demo-login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Demo Login */
-        post: operations["demo_login_v1_demo_login_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/logout": {
         parameters: {
             query?: never;
@@ -1250,35 +1233,10 @@ export interface components {
             /** Status */
             status: string;
         };
-        /**
-         * DemoLoginRequest
-         * @description Local demo-login request.
-         *
-         *     Example:
-         *         ```python
-         *         DemoLoginRequest(login_hint="alice")
-         *         ```
-         */
-        DemoLoginRequest: {
-            /** Login Hint */
-            login_hint: string;
-        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
-        };
-        /**
-         * LoginShortcutResponse
-         * @description Browser-safe named login shortcut.
-         */
-        LoginShortcutResponse: {
-            /** Demo Login Path */
-            demo_login_path?: string | null;
-            /** Label */
-            label: string;
-            /** Login Hint */
-            login_hint: string;
         };
         /**
          * PluginDescriptorResponse
@@ -1730,8 +1688,6 @@ export interface components {
             authority?: string | null;
             /** Client Id */
             client_id?: string | null;
-            /** Login Shortcuts */
-            login_shortcuts?: components["schemas"]["LoginShortcutResponse"][] | null;
             /** Post Logout Redirect Uri */
             post_logout_redirect_uri?: string | null;
             /** Redirect Uri */
@@ -2967,39 +2923,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CatalogTablesResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    demo_login_v1_demo_login_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DemoLoginRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthenticationMutationResponse"];
                 };
             };
             /** @description Validation Error */

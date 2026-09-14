@@ -52,13 +52,6 @@ STATIC_VALUES = {
     "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": ("http://127.0.0.1:8821/auth/callback"),
     "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI": ("http://127.0.0.1:8821"),
     "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_SCOPE": "openid profile",
-    "DAL_OBSCURA_CONTROL_PLANE_UI_LOGIN_SHORTCUTS": (
-        "Platform owner=demo-admin;Data asset owner=asset-owner"
-    ),
-    "DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_TOKEN_URL": (
-        "http://keycloak:8080/realms/dal-obscura-demo/protocol/openid-connect/token"
-    ),
-    "DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_CLIENT_ID": "dal-obscura-cli",
     "DAL_OBSCURA_API_BASE_URL": "http://127.0.0.1:8820",
     "DAL_OBSCURA_LOCATION": "grpc://0.0.0.0:8815",
     "DAL_OBSCURA_DATA_PLANE_HEALTH_HOST": "0.0.0.0",
@@ -96,12 +89,6 @@ def _load_or_create_values() -> dict[str, str]:
             values[key] = _secret(prefix)
             changed = True
     values["DAL_OBSCURA_DATABASE_URL"] = _postgres_database_url(values)
-    values["DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_CLIENT_SECRET"] = values[
-        "OIDC_CLI_CLIENT_SECRET"
-    ]
-    values["DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_PASSWORDS"] = (
-        f"demo-admin={values['DEMO_ADMIN_PASSWORD']};asset-owner={values['ASSET_OWNER_PASSWORD']}"
-    )
     if changed:
         _write_env_files(values)
     return values
@@ -166,11 +153,6 @@ def _write_env_files(values: dict[str, str]) -> None:
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_SCOPE",
-            "DAL_OBSCURA_CONTROL_PLANE_UI_LOGIN_SHORTCUTS",
-            "DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_TOKEN_URL",
-            "DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_CLIENT_ID",
-            "DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_CLIENT_SECRET",
-            "DAL_OBSCURA_CONTROL_PLANE_UI_DEMO_LOGIN_PASSWORDS",
         ),
     )
     _write_env_file(

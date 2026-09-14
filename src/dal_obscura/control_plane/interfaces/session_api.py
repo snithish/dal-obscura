@@ -137,81 +137,7 @@ def public_ui_auth_config(config: Mapping[str, object]) -> dict[str, object]:
     public: dict[str, object] = {
         key: value for key in public_keys if (value := str(config.get(key, "")).strip())
     }
-    demo_passwords = demo_login_passwords(config)
-    login_shortcuts = public_login_shortcuts(config.get("login_shortcuts"))
-    if login_shortcuts:
-        public["login_shortcuts"] = [
-            {
-                **shortcut,
-                **(
-                    {"demo_login_path": "/v1/demo-login"}
-                    if shortcut["login_hint"] in demo_passwords
-                    else {}
-                ),
-            }
-            for shortcut in login_shortcuts
-        ]
     return public
-
-
-def demo_login_config(config: Mapping[str, object]) -> dict[str, object]:
-    """Extracts server-only demo-login token exchange settings.
-
-    Example:
-        ```python
-        demo = demo_login_config(raw_config)
-        ```
-    """
-
-    value = config.get("demo_login")
-    if not isinstance(value, Mapping):
-        return {}
-    demo_login = cast(Mapping[str, object], value)
-    token_url = str(demo_login.get("token_url", "")).strip()
-    client_id = str(demo_login.get("client_id", "")).strip()
-    client_secret = str(demo_login.get("client_secret", "")).strip()
-    passwords = demo_login_passwords(config)
-    if not token_url or not client_id or not client_secret or not passwords:
-        return {}
-    return {
-        "token_url": token_url,
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "passwords": passwords,
-    }
-
-
-def exchange_demo_password_token(config: Mapping[str, object], username: str) -> str:
-    """Exchanges a configured demo password for an OIDC access token.
-
-    Example:
-        ```python
-        token = exchange_demo_password_token(config, "alice")
-        ```
-    """
-
-    passwords = cast(dict[str, str], config["passwords"])
-    body = urlencode(
-        {
-            "grant_type": "password",
-            "client_id": str(config["client_id"]),
-            "client_secret": str(config["client_secret"]),
-            "username": username,
-            "password": passwords[username],
-        }
-    ).encode()
-    request = UrlRequest(
-        str(config["token_url"]),
-        data=body,
-        headers={"content-type": "application/x-www-form-urlencoded"},
-        method="POST",
-    )
-    with _open_token_endpoint(request) as response:
-        payload = json.loads(response.read().decode("utf-8"))
-    token = str(payload.get("access_token", "")).strip()
-    if not token:
-        raise HTTPException(status_code=502, detail="Demo identity provider did not return a token")
-    return token
 
 
 def exchange_authorization_code(
@@ -298,51 +224,6 @@ def oidc_actor_from_header(
         platform_admin=bool(admin_group and admin_group in groups),
         issuer=_attribute_text(resolved, "issuer"),
     )
-
-
-def public_login_shortcuts(value: object) -> list[dict[str, str]]:
-    """Normalizes browser-visible login shortcuts.
-
-    Example:
-        ```python
-        shortcuts = public_login_shortcuts([{"label": "Alice", "login_hint": "alice"}])
-        ```
-    """
-
-    if not isinstance(value, list):
-        return []
-    shortcuts: list[dict[str, str]] = []
-    for item in value:
-        if not isinstance(item, Mapping):
-            continue
-        shortcut = cast(Mapping[str, object], item)
-        label = str(shortcut.get("label", "")).strip()
-        login_hint = str(shortcut.get("login_hint", "")).strip()
-        if label and login_hint:
-            shortcuts.append({"label": label, "login_hint": login_hint})
-    return shortcuts
-
-
-def demo_login_passwords(config: Mapping[str, object]) -> dict[str, str]:
-    """Returns configured demo-login passwords keyed by login hint.
-
-    Example:
-        ```python
-        passwords = demo_login_passwords(config)
-        ```
-    """
-
-    value = config.get("demo_login")
-    if not isinstance(value, Mapping):
-        return {}
-    passwords = cast(Mapping[str, object], value).get("passwords")
-    if not isinstance(passwords, Mapping):
-        return {}
-    return {
-        str(username).strip(): str(password).strip()
-        for username, password in cast(Mapping[object, object], passwords).items()
-        if str(username).strip() and str(password).strip()
-    }
 
 
 def _bearer_token(authorization: str) -> str | None:

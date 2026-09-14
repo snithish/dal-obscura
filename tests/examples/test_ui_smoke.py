@@ -21,9 +21,9 @@ def test_ui_smoke_runs_full_authenticated_browser_contract(monkeypatch, capsys) 
     responses = iter(
         [
             (200, b'<div id="root">', {"Content-Security-Policy": "default-src 'self'"}),
-            (200, b'{"login_shortcuts":[{"login_hint":"asset-owner"}]}', {}),
+            (200, b'{"authority":"http://keycloak","client_id":"dal-obscura-ui"}', {}),
             (200, b'{"authenticated":true}', {}),
-            (200, b'{"principal":"asset-owner"}', {}),
+            (200, b'{"principal":"platform:admin"}', {}),
             (200, b"[]", {}),
             (200, b'{"authenticated":false}', {}),
             (401, b'{"detail":"Unauthorized"}', {}),
@@ -31,6 +31,7 @@ def test_ui_smoke_runs_full_authenticated_browser_contract(monkeypatch, capsys) 
     )
     monkeypatch.setattr(module, "request", lambda *args, **kwargs: next(responses))
     monkeypatch.setattr(module, "cookie_value", lambda *args: "csrf-token")
+    monkeypatch.setattr(module, "control_plane_admin_token", lambda: "test-admin")
 
     module.main()
 

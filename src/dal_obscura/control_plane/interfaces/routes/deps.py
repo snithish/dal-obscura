@@ -8,7 +8,6 @@ Example:
         oidc_actor_resolver=None,
         oidc_admin_group=None,
         ui_auth_config=None,
-        demo_token_exchange=lambda config, username: "",
     )
     ```
 """
@@ -47,7 +46,6 @@ from dal_obscura.control_plane.interfaces.session_api import (
 )
 from dal_obscura.data_plane.infrastructure.adapters.secret_providers import SecretProvider
 
-DemoTokenExchange = Callable[[Mapping[str, object], str], str]
 AuthorizationCodeExchange = Callable[[Mapping[str, object], str, str], Mapping[str, object]]
 MAX_BROWSER_SESSION_TTL_SECONDS = 86_400
 MAX_BROWSER_IDLE_TTL_SECONDS = 7_200
@@ -68,7 +66,6 @@ class ControlPlaneDeps:
     oidc_actor_resolver: OidcActorResolver | None
     oidc_admin_group: str | None
     ui_auth_config: Mapping[str, object] | None
-    demo_token_exchange: DemoTokenExchange
     session_ttl_seconds: int = 28_800
     session_idle_ttl_seconds: int = 1_800
     allowed_origins: tuple[str, ...] = ()

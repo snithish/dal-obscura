@@ -12,7 +12,7 @@ import base64
 import hashlib
 import secrets
 from collections.abc import Mapping
-from typing import NoReturn, cast
+from typing import NoReturn
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, Response
@@ -22,20 +22,18 @@ from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 from dal_obscura.control_plane.interfaces.routes.schemas import (
     AuthenticationMutationResponse,
-    DemoLoginRequest,
     SessionOptionsResponse,
     SessionResponse,
     UiAuthConfigResponse,
 )
 from dal_obscura.control_plane.interfaces.session_api import (
     actor_response,
-    demo_login_config,
     public_ui_auth_config,
 )
 
 
 def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
-    """Builds session, UI auth config, and demo-login routes.
+    """Builds session and UI authentication routes.
 
     Example:
         ```python
@@ -239,58 +237,6 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         if deps.ui_auth_config is None:
             raise HTTPException(status_code=404, detail="UI auth is not configured")
         return public_ui_auth_config(deps.ui_auth_config)
-
-    @api.post("/v1/demo-login", response_model=AuthenticationMutationResponse)
-    def demo_login(
-        request: DemoLoginRequest,
-        response: Response,
-        http_request: Request,
-    ) -> AuthenticationMutationResponse:
-        if deps.ui_auth_config is None:
-            raise HTTPException(status_code=404, detail="Demo login is not configured")
-        _enforce_login_rate_limit(deps, http_request)
-        login_config = demo_login_config(deps.ui_auth_config)
-        if not login_config:
-            raise HTTPException(status_code=404, detail="Demo login is not configured")
-        username = request.login_hint.strip()
-        passwords = cast(dict[str, str], login_config["passwords"])
-        if username not in passwords:
-            raise HTTPException(status_code=404, detail="Demo persona is not configured")
-        try:
-            provider_token = deps.demo_token_exchange(login_config, username)
-        except HTTPException:
-            _callback_failure(deps, http_request, status_code=502, detail="Demo login failed")
-        except Exception:
-            _callback_failure(deps, http_request, status_code=502, detail="Demo login failed")
-        actor = deps.resolve_bearer_token(provider_token)
-        if actor is None:
-            _callback_failure(
-                deps,
-                http_request,
-                status_code=401,
-                detail="Demo identity provider token rejected",
-            )
-        session_token, csrf_token = deps.issue_browser_session_credentials(actor)
-        deps.clear_login_rate_limit(_client_rate_key(http_request))
-        secure = str(deps.ui_auth_config.get("redirect_uri", "")).startswith("https://")
-        session_cookie, csrf_cookie = _browser_cookie_names(deps.ui_auth_config)
-        response.set_cookie(
-            key=session_cookie,
-            value=session_token,
-            httponly=True,
-            secure=secure,
-            samesite="lax",
-            path="/",
-        )
-        response.set_cookie(
-            key=csrf_cookie,
-            value=csrf_token,
-            httponly=False,
-            secure=secure,
-            samesite="lax",
-            path="/",
-        )
-        return {"authenticated": True}
 
     @api.post("/v1/logout", response_model=AuthenticationMutationResponse)
     def logout(

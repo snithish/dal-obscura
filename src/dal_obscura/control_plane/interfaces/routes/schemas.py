@@ -136,14 +136,6 @@ class SessionResponse(BaseModel):
     issuer: str | None = None
 
 
-class LoginShortcutResponse(BaseModel):
-    """Browser-safe named login shortcut."""
-
-    label: str
-    login_hint: str
-    demo_login_path: str | None = None
-
-
 class UiAuthConfigResponse(BaseModel):
     """Browser-safe OIDC settings; secrets never appear here."""
 
@@ -152,7 +144,6 @@ class UiAuthConfigResponse(BaseModel):
     redirect_uri: str | None = None
     post_logout_redirect_uri: str | None = None
     scope: str | None = None
-    login_shortcuts: list[LoginShortcutResponse] | None = None
 
 
 class SessionOptionsResponse(BaseModel):
@@ -708,18 +699,6 @@ class AuthProvidersRequest(StrictModel):
 
     providers: list[dict[str, Any]] = Field(max_length=16)
     expected_revision: int | None = Field(default=None, ge=0)
-
-
-class DemoLoginRequest(StrictModel):
-    """Local demo-login request.
-
-    Example:
-        ```python
-        DemoLoginRequest(login_hint="alice")
-        ```
-    """
-
-    login_hint: str = Field(min_length=1)
 
 
 async def request_payload(request: Request) -> dict[str, object]:
