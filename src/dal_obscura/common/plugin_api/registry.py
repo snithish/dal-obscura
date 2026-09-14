@@ -225,6 +225,12 @@ class PluginRegistry:
                     continue
                 key = (kind, plugin_id)
                 if key in descriptors:
+                    if key in self._builtins:
+                        # Built-ins are explicit registrations owned by the
+                        # server.  An installed wheel may expose the same
+                        # entry point for discovery, but it must not shadow
+                        # or create an ambiguity with that trusted factory.
+                        continue
                     raise PluginAdmissionError(f"Duplicate plugin ID: {kind}:{plugin_id}")
                 admitted = self._allowlist.get(key)
                 if admitted is None:

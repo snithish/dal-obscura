@@ -233,6 +233,27 @@ def test_builtin_registration_is_admitted_without_entry_point_import() -> None:
     assert registry.load("catalog", "iceberg.sql") == {"builtin": True}
 
 
+def test_builtin_registration_wins_over_same_installed_entry_point() -> None:
+    descriptor = PluginDescriptor(
+        kind="catalog",
+        plugin_id="manifest",
+        api_version="1",
+        config_version=1,
+        distribution="dal-obscura",
+        version="0.1.0",
+    )
+    installed = _entry("manifest", "dal_obscura.catalogs.v1")
+    registry = PluginRegistry(
+        entry_points_fn=lambda: _EntryPoints([installed]),
+        builtins={("catalog", "manifest"): (descriptor, {"builtin": True})},
+    )
+
+    admitted = registry.reload()
+
+    assert admitted[("catalog", "manifest")] == descriptor
+    assert registry.load("catalog", "manifest") == {"builtin": True}
+
+
 def test_status_report_distinguishes_enabled_missing_and_incompatible_without_import() -> None:
     enabled = _entry("enabled", "dal_obscura.catalogs.v1")
     entries = [enabled]
