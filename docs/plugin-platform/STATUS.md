@@ -2435,3 +2435,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: actual hostile transport/DNS/private-address counters, live OIDC freshness/revocation, populated browser accessibility, PostgreSQL races/recovery, clean TLS/OIDC consumer matrix, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable governed backend slice.
 - Atomic implementation commits: `2b0e3019`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N04 strict manifest schema encoding
+
+- Scope: harden the manifest and Parquet handle schema boundary against permissive Base64 decoding.
+- Observable behavior delivered; FR/NFR and B/G subcases: manifest admission and Parquet format opening now require strict Base64 alphabet validation for Arrow IPC schema payloads. Noncanonical printable characters are rejected before schema parsing, preventing silent payload normalization across the plugin boundary. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `packages/manifest-parquet-plugin/src/dal_obscura_manifest_parquet/{catalog.py,format.py}` and `packages/manifest-parquet-plugin/tests/test_manifest_plugin.py`; no serializers, migrations, dependencies, or unrelated paths changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +4 production lines, +36 test lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: manifest plugin suite owns strict manifest and handle schema decoding; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest packages/manifest-parquet-plugin/tests/test_manifest_plugin.py -q` (exit 0, 18 passed), focused Ruff (exit 0), 2026-09-14, Python 3.12.
+- Artifact and fixture hashes; evidence locations: implementation commit `2cf6c05e`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: actual hostile transport/DNS/private-address counters, live OIDC freshness/revocation, populated browser accessibility, PostgreSQL races/recovery, clean TLS/OIDC consumer matrix, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable governed backend slice.
+- Atomic implementation commits: `2cf6c05e`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
