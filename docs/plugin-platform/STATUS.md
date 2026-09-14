@@ -1771,3 +1771,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live OIDC/transport/revocation, browser axe and screen-reader coverage, PostgreSQL races, consumers, recovery/capacity, deployment integrity, and independent review remain VERIFY under N04–N16. Next action is continue candidate-bound qualification while retaining release HOLD.
 - Atomic implementation commits: `1d45f16`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N05 provider chain ordering controls
+
+- Scope: make the ordered OIDC provider chain fully editable in the Settings UI.
+- Observable behavior delivered; FR/NFR and B/G subcases: each staged provider now exposes Move up and Move down controls. Reordering rewrites ordinals to match evaluation order before the existing revision-checked save; boundary buttons are disabled at the first and last rows. No authentication payload or pickle behavior changed.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/SettingsView.tsx`, `apps/governance-ui/src/styles.css`; no backend, serializer, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +11 UI/CSS lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: backend provider-chain validation and revision tests remain authority owners; UI TypeScript, Vite, Node, and browser control inspection cover the rendered surface; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node_modules/.bin/vite build` (exit 0; 328.63 kB JavaScript / 99.31 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (14 passed), and `git diff --check` (exit 0), 2026-09-14, Node 24.
+- Artifact and fixture hashes; evidence locations: implementation commit `2789236`; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: populated-chain browser keyboard/axe/screen-reader evidence, live OIDC freshness/revocation, hostile transport, PostgreSQL races, clean wheels/consumers, recovery/capacity, deployment integrity, and independent review remain VERIFY under N04–N16. Next action is continue rendered and live qualification while retaining release HOLD.
+- Atomic implementation commits: `2789236`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
