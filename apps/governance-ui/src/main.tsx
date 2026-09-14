@@ -79,6 +79,7 @@ function App() {
   const searchTimer = useRef<number | undefined>(undefined);
   const managementEpoch = useRef(0);
   const workspaceAbortController = useRef<AbortController | null>(null);
+  const mutationControllers = useRef<Set<AbortController>>(new Set());
   const [queryClient] = useState(
     () => new QueryClient({
       defaultOptions: {
@@ -148,6 +149,7 @@ function App() {
     managementEpoch.current += 1;
     if (searchTimer.current !== undefined) window.clearTimeout(searchTimer.current);
     workspaceAbortController.current?.abort();
+    abortMutations();
     void queryClient.cancelQueries();
     queryClient.clear();
   }, []);
@@ -183,6 +185,7 @@ function App() {
       inventoryEpoch.current += 1;
       managementEpoch.current += 1;
       workspaceAbortController.current?.abort();
+      abortMutations();
       clearPrivateState();
       setNotice("Your session expired or was revoked. Sign in again to continue.");
     };
@@ -441,19 +444,22 @@ function App() {
     }
     setLoggingIn(true);
     setAuthError("");
+    const controller = beginMutation();
     try {
-      await controlPlane.bootstrapLogin(token);
+      await controlPlane.bootstrapLogin(token, controller.signal);
       setBootstrapToken("");
       setAuthError("");
       loadEpoch.current += 1;
       await loadInitialWorkspace();
     } catch (error) {
+      if (isAbortError(error)) return;
       setAuthError((error as { status?: number })?.status === 429
         ? "Too many sign-in attempts. Wait a moment and try again."
         : "That local token was not accepted. Check the control-plane configuration and try again.");
       setWorkspace("unavailable");
       setNotice("Sign-in failed. No policy data was loaded.");
     } finally {
+      finishMutation(controller);
       setLoggingIn(false);
     }
   }
@@ -463,6 +469,7 @@ function App() {
     inventoryEpoch.current += 1;
     managementEpoch.current += 1;
     workspaceAbortController.current?.abort();
+    abortMutations();
     if (searchTimer.current !== undefined) {
       window.clearTimeout(searchTimer.current);
       searchTimer.current = undefined;
@@ -471,14 +478,37 @@ function App() {
     // server response must never leave policy data visible or let a late request
     // repopulate the previous session.
     clearPrivateState();
+    const controller = beginMutation();
     try {
-      await controlPlane.logout();
+      await controlPlane.logout(controller.signal);
       setLogoutPending(false);
       setNotice("Signed out. No policy data remains loaded in this browser.");
-    } catch {
+    } catch (error) {
+      if (isAbortError(error)) return;
       setLogoutPending(true);
       setNotice("Sign out could not be confirmed. Private data is hidden; retry sign out before closing this browser.");
+    } finally {
+      finishMutation(controller);
     }
+  }
+
+  function beginMutation(): AbortController {
+    const controller = new AbortController();
+    mutationControllers.current.add(controller);
+    return controller;
+  }
+
+  function finishMutation(controller: AbortController): void {
+    mutationControllers.current.delete(controller);
+  }
+
+  function abortMutations(): void {
+    for (const controller of mutationControllers.current) controller.abort();
+    mutationControllers.current.clear();
+  }
+
+  function isAbortError(error: unknown): boolean {
+    return error instanceof DOMException && error.name === "AbortError";
   }
 
   function clearPrivateState() {
@@ -695,8 +725,9 @@ function App() {
     const draftIdentity = draftId;
     const loadScope = loadEpoch.current;
     setSaveState("saving");
+    const controller = beginMutation();
     try {
-      const saved = await controlPlane.saveDraft(assetId, revision, rules);
+      const saved = await controlPlane.saveDraft(assetId, revision, rules, controller.signal);
       if (loadScope !== loadEpoch.current || editEpoch !== draftEditEpoch.current || draftIdentity !== draftId) {
         if (loadScope === loadEpoch.current) setSaveState("unsaved");
         return;
@@ -711,8 +742,11 @@ function App() {
       setFieldErrors([]);
       invalidateAssetQueries(assetId);
     } catch (error) {
+      if (isAbortError(error)) return;
       if (loadScope !== loadEpoch.current || editEpoch !== draftEditEpoch.current || draftIdentity !== draftId) return;
       setSaveState("failed"); setFieldErrors((error as { fieldErrors?: Array<{ field: string; message: string; type: string }> }).fieldErrors ?? []); setNotice(recoveryMessage(error, "Save failed. The unsaved draft remains in this browser."));
+    } finally {
+      finishMutation(controller);
     }
   }
   async function runPreview() {
@@ -724,6 +758,7 @@ function App() {
     const loadScope = loadEpoch.current;
     const editScope = draftEditEpoch.current;
     const draftIdentity = { id: draftId, revision: draftRevision };
+    const controller = beginMutation();
     try {
       let claims: Record<string, unknown> = {};
       if (previewClaims.trim()) {
@@ -731,12 +766,15 @@ function App() {
         if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") throw new Error("Claims must be a JSON object");
         claims = parsed as Record<string, unknown>;
       }
-      const result: Preview = await controlPlane.evaluate(asset.id, { principal: previewPrincipal.trim(), groups: previewGroups.split(",").map((value) => value.trim()).filter(Boolean), claims, draft_id: draftId ?? undefined, draft_revision: draftRevision });
+      const result: Preview = await controlPlane.evaluate(asset.id, { principal: previewPrincipal.trim(), groups: previewGroups.split(",").map((value) => value.trim()).filter(Boolean), claims, draft_id: draftId ?? undefined, draft_revision: draftRevision }, controller.signal);
       if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
       setPreview(result); setReviewToken(null); setNotice(`Server-side evaluation completed: ${result.decision === "allow" ? "allowed" : "denied"}.`);
     } catch (error) {
+      if (isAbortError(error)) return;
       if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
       setPreview(null); setReviewToken(null); setNotice(recoveryMessage(error, "Policy test could not run. This draft is not validated."));
+    } finally {
+      finishMutation(controller);
     }
   }
 
@@ -745,15 +783,19 @@ function App() {
     const loadScope = loadEpoch.current;
     const editScope = draftEditEpoch.current;
     const draftIdentity = { id: draftId, revision: draftRevision };
+    const controller = beginMutation();
     try {
       const claims = JSON.parse(previewClaims || "{}") as Record<string, object>;
       if (!claims || Array.isArray(claims) || typeof claims !== "object") throw new Error("Claims must be a JSON object");
-      const result = await controlPlane.review(asset.id, { principal: previewPrincipal.trim(), groups: previewGroups.split(",").map((value) => value.trim()).filter(Boolean), claims, draft_id: draftId ?? undefined, draft_revision: draftRevision });
+      const result = await controlPlane.review(asset.id, { principal: previewPrincipal.trim(), groups: previewGroups.split(",").map((value) => value.trim()).filter(Boolean), claims, draft_id: draftId ?? undefined, draft_revision: draftRevision }, controller.signal);
       if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
       setPreview(result); setReviewToken(result.review_token ?? null); setNotice("Server review is current for this saved draft revision. You can publish it now.");
     } catch (error) {
+      if (isAbortError(error)) return;
       if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
       setReviewToken(null); setNotice(recoveryMessage(error, "Review was rejected. Run a successful test against the saved draft and resolve any policy or schema errors."));
+    } finally {
+      finishMutation(controller);
     }
   }
 
@@ -764,17 +806,19 @@ function App() {
     const draftIdentity = { id: draftId, revision: draftRevision };
     const idempotencyKey = crypto.randomUUID();
     setPublishPending(true);
+    const controller = beginMutation();
     try {
-      await controlPlane.publishAsset(asset.id, draftRevision, reviewToken, idempotencyKey, draftId ?? undefined);
+      await controlPlane.publishAsset(asset.id, draftRevision, reviewToken, idempotencyKey, draftId ?? undefined, controller.signal);
       if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
       setReviewToken(null);
       setNotice("Published the saved draft.");
       invalidateAssetQueries(asset.id);
       void refreshAssetInventory(assetSearch);
-    } catch {
+    } catch (error) {
+      if (isAbortError(error)) return;
       if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
       try {
-        const operation = await controlPlane.getPublicationOperation(asset.id, idempotencyKey);
+        const operation = await controlPlane.getPublicationOperation(asset.id, idempotencyKey, controller.signal);
         if (operation.status === "committed") {
           setReviewToken(null);
           setNotice(`Publish committed as policy version ${operation.result.policy_version}.`);
@@ -788,6 +832,7 @@ function App() {
         setNotice(recoveryMessage(error, "Publish failed. Review the saved draft and active generation."));
       }
     } finally {
+      finishMutation(controller);
       if (loadScope === loadEpoch.current) {
         setPublishPending(false);
       }
@@ -800,8 +845,9 @@ function App() {
     const loadScope = loadEpoch.current;
     const editScope = draftEditEpoch.current;
     const draftIdentity = { id: draftId, revision: draftRevision };
+    const controller = beginMutation();
     try {
-      const restored = await controlPlane.restorePolicyVersion(asset.id, policyVersion, draftRevision);
+      const restored = await controlPlane.restorePolicyVersion(asset.id, policyVersion, draftRevision, controller.signal);
       if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
       draftEditEpoch.current += 1;
       replaceRules(restored.rules);
@@ -811,8 +857,11 @@ function App() {
       setNotice(`Version ${policyVersion} restored as draft revision ${restored.revision}. Review and publish it when ready.`);
       invalidateAssetQueries(asset.id);
     } catch (error) {
+      if (isAbortError(error)) return;
       if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
       setNotice(recoveryMessage(error, "Restore failed. The draft may have changed; reload the asset before trying again."));
+    } finally {
+      finishMutation(controller);
     }
   }
 

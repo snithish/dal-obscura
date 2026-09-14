@@ -366,11 +366,12 @@ export const controlPlane = {
     const options = await request<ApiSchemas["SessionOptionsResponse"]>("/v1/session/options", { signal });
     return { ...options, oidc: options.oidc ?? null } satisfies SessionOptions;
   },
-  bootstrapLogin: (token: string) => request<ApiSchemas["AuthenticationMutationResponse"]>("/v1/session/bootstrap", {
+  bootstrapLogin: (token: string, signal?: AbortSignal) => request<ApiSchemas["AuthenticationMutationResponse"]>("/v1/session/bootstrap", {
     method: "POST",
     headers: { authorization: `Bearer ${token}` },
+    signal,
   }),
-  logout: () => request<ApiSchemas["AuthenticationMutationResponse"]>("/v1/logout", { method: "POST" }),
+  logout: (signal?: AbortSignal) => request<ApiSchemas["AuthenticationMutationResponse"]>("/v1/logout", { method: "POST", signal }),
   listAssets: async () => (await request<ApiSchemas["AssetInventoryResponse"][]>("/v1/assets")).map(normalizeInventoryAsset),
   listAssetPage: async (params: { limit?: number; cursor?: string; search?: string; signal?: AbortSignal } = {}) => {
     const query = new URLSearchParams();
@@ -423,15 +424,16 @@ export const controlPlane = {
     return { items: page.items.map((event) => ({ ...event, correlation_id: event.correlation_id ?? null })), next_cursor: page.next_cursor ?? null } satisfies AuditEventPage;
   },
   listAssetHistory: (assetId: string, signal?: AbortSignal) => request<ApiSchemas["PolicyVersionResponse"][]>(`/v1/assets/${assetId}/policy-versions`, { signal }),
-  getPublicationOperation: (assetId: string, idempotencyKey: string) => request<ApiSchemas["PolicyOperationResponse"]>(`/v1/assets/${assetId}/policy-operations/${encodeURIComponent(idempotencyKey)}`),
+  getPublicationOperation: (assetId: string, idempotencyKey: string, signal?: AbortSignal) => request<ApiSchemas["PolicyOperationResponse"]>(`/v1/assets/${assetId}/policy-operations/${encodeURIComponent(idempotencyKey)}`, { signal }),
   getPolicyVersion: async (assetId: string, policyVersion: number, signal?: AbortSignal) => {
     const detail = await request<ApiSchemas["PolicyVersionDetailResponse"]>(`/v1/assets/${assetId}/policy-versions/${policyVersion}`, { signal });
     return { ...detail, rules: detail.rules as PolicyRule[] } satisfies PolicyVersionDetail;
   },
-  restorePolicyVersion: (assetId: string, policyVersion: number, expectedRevision: number) =>
+  restorePolicyVersion: (assetId: string, policyVersion: number, expectedRevision: number, signal?: AbortSignal) =>
     request<ApiSchemas["PolicyDraftResponse"]>(`/v1/assets/${assetId}/policy-versions/${policyVersion}/restore`, {
       method: "POST",
       body: JSON.stringify({ expected_revision: expectedRevision }),
+      signal,
     }) as Promise<PolicyDraft>,
   listCatalogs: (signal?: AbortSignal) => request<ApiSchemas["CatalogInventoryResponse"][]>("/v1/catalogs", { signal }),
   listWorkspacePublications: (signal?: AbortSignal) => request<ApiSchemas["WorkspacePublicationResponse"][]>("/v1/workspace/publications", { signal }),
@@ -484,21 +486,24 @@ export const controlPlane = {
     method: "PUT",
     body: JSON.stringify({ ticket_ttl_seconds: settings.ticket_ttl_seconds, max_tickets: settings.max_tickets, max_ticket_exchanges: settings.max_ticket_exchanges, path_rules: settings.path_rules, ...(settings.revision === undefined ? {} : { expected_revision: settings.revision }) }),
   }),
-  publishAsset: (assetId: string, expectedDraftRevision?: number, reviewToken?: string, idempotencyKey?: string, draftId?: string) => request<ApiSchemas["PolicyVersionCreateResponse"]>(`/v1/assets/${assetId}/policy-versions`, {
+  publishAsset: (assetId: string, expectedDraftRevision?: number, reviewToken?: string, idempotencyKey?: string, draftId?: string, signal?: AbortSignal) => request<ApiSchemas["PolicyVersionCreateResponse"]>(`/v1/assets/${assetId}/policy-versions`, {
     method: "POST",
     headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
     body: JSON.stringify({ ...(draftId ? { draft_id: draftId } : {}), ...(expectedDraftRevision === undefined ? {} : { expected_draft_revision: expectedDraftRevision }), ...(reviewToken ? { review_token: reviewToken } : {}) }),
+    signal,
   }),
   getDraft: (assetId: string, draftId?: string, signal?: AbortSignal) => request<ApiSchemas["PolicyDraftResponse"]>(draftId ? `/v1/assets/${assetId}/draft/${encodeURIComponent(draftId)}` : `/v1/assets/${assetId}/draft`, { signal }) as Promise<PolicyDraft>,
-  saveDraft: (assetId: string, expectedRevision: number, rules: PolicyRule[]) =>
+  saveDraft: (assetId: string, expectedRevision: number, rules: PolicyRule[], signal?: AbortSignal) =>
     request<ApiSchemas["PolicyDraftResponse"]>(`/v1/assets/${assetId}/draft`, {
       method: "PUT",
       body: JSON.stringify({ expected_revision: expectedRevision, rules }),
+      signal,
     }) as Promise<PolicyDraft>,
-  evaluate: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, unknown>; draft_id?: string; draft_revision?: number }) => {
+  evaluate: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, unknown>; draft_id?: string; draft_revision?: number }, signal?: AbortSignal) => {
     const raw = await request<ApiSchemas["PolicyEvaluationResponse"]>(`/v1/assets/${assetId}/policy-evaluate`, {
       method: "POST",
       body: JSON.stringify(persona),
+      signal,
     });
     return {
       decision: raw.decision,
@@ -512,10 +517,11 @@ export const controlPlane = {
       evidence: raw.evidence,
     } satisfies Preview;
   },
-  review: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, unknown>; draft_id?: string; draft_revision?: number }) => {
+  review: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, unknown>; draft_id?: string; draft_revision?: number }, signal?: AbortSignal) => {
     const raw = await request<ApiSchemas["PolicyReviewResponse"]>("/v1/assets/" + assetId + "/policy-review", {
       method: "POST",
       body: JSON.stringify(persona),
+      signal,
     });
     return {
       decision: raw.decision,
