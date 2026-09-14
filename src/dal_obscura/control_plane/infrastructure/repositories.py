@@ -2444,6 +2444,13 @@ _ICEBERG_CATALOG_MODULE = (
 
 
 def _catalog_plugin_id(config: Mapping[str, Any]) -> str | None:
+    # Published catalog rows carry the selected public plugin identity
+    # explicitly.  This is the canonical source for external catalogs; the
+    # legacy module checks below remain only for offline conversion of older
+    # Iceberg records.
+    explicit = config.get("plugin_id")
+    if isinstance(explicit, str) and explicit:
+        return explicit
     raw_plugins = config.get("plugins")
     if isinstance(raw_plugins, Mapping):
         value = raw_plugins.get("catalog")

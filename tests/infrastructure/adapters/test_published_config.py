@@ -228,7 +228,11 @@ def test_published_config_preserves_external_plugin_identity():
         publication_id=asset.publication_id,
         tenant_id=asset.tenant_id,
         catalog="analytics",
-        config={"type": "iceberg", "options": {"root": "/srv/data"}},
+        config={
+            "type": "plugin",
+            "plugin_id": "manifest",
+            "options": {"root": "/srv/data"},
+        },
     )
     resolved = _catalog_config_for_asset(
         catalog,

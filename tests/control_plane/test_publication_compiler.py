@@ -294,6 +294,12 @@ def test_compiler_accepts_only_admitted_external_catalog_and_format():
         "catalog": "manifest",
         "table_format": "parquet.dataset",
     }
+    assert compiled.catalogs[0].config == {
+        "type": "plugin",
+        "plugin_id": "manifest",
+        "options": {"type": "sql", "uri": "sqlite:///warehouse.db"},
+        "revision": 0,
+    }
 
 
 def test_compiler_rejects_external_plugin_without_registry():

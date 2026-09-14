@@ -66,7 +66,17 @@ class PublicationCompiler:
                 tenant_id=catalog.tenant_id,
                 catalog=catalog.name,
                 config={
-                    "type": "iceberg",
+                    # Keep the executable plugin identity in the immutable
+                    # catalog row.  The legacy Iceberg module is translated
+                    # to its qualified built-in ID; admitted external
+                    # catalogs retain their public plugin ID and use the
+                    # generic runtime type understood by the registry.
+                    "type": "iceberg" if catalog.module == _ICEBERG_CATALOG_MODULE else "plugin",
+                    "plugin_id": (
+                        "iceberg.sql"
+                        if catalog.module == _ICEBERG_CATALOG_MODULE
+                        else catalog.module
+                    ),
                     "options": dict(catalog.options),
                     "revision": catalog.revision,
                 },

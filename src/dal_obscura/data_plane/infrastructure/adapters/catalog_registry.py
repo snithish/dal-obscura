@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from threading import RLock
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 from dal_obscura.common.catalog.ports import (
     CatalogPlugin,
@@ -15,7 +15,10 @@ from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 from dal_obscura.data_plane.infrastructure.table_formats.iceberg import IcebergTableFormat
 
-CatalogType = Literal["iceberg"]
+# ``type`` remains a descriptive runtime discriminator for built-ins. Public
+# plugins are selected by ``plugin_id`` and use the generic ``plugin`` value,
+# so adding a plugin does not require changing this core type alias.
+CatalogType = str
 
 
 @dataclass(frozen=True)
