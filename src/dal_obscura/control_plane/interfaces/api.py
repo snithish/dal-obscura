@@ -68,6 +68,7 @@ class _RequestBodyTooLarge(Exception):
 
 
 _REQUEST_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+_CURRENT_REVISION = re.compile(r"\bcurrent(?:\s+revision)?\s+(\d+)\b")
 
 
 def _http_error_code(status_code: int) -> str:
@@ -104,6 +105,15 @@ def _structured_error_response(status_code: int, detail: str) -> JSONResponse:
     )
     response.headers["x-request-id"] = request_id
     return response
+
+
+def _revision_from_detail(detail: object) -> int | None:
+    """Extract only a numeric current revision from trusted conflict text."""
+
+    if not isinstance(detail, str):
+        return None
+    match = _CURRENT_REVISION.search(detail)
+    return int(match.group(1)) if match else None
 
 
 def create_oidc_actor_resolver(
@@ -217,16 +227,19 @@ def create_app(  # noqa: C901
         detail = exc.detail if isinstance(exc.detail, (str, list, dict)) else "Request rejected"
         message = detail if isinstance(detail, str) else "Request rejected"
         code = _http_error_code(exc.status_code)
+        error: dict[str, object] = {
+            "code": code,
+            "message": message,
+            "request_id": current_request_id(),
+        }
+        if (current_revision := _revision_from_detail(detail)) is not None:
+            error["current_revision"] = current_revision
         return JSONResponse(
             status_code=exc.status_code,
             headers=exc.headers,
             content={
                 "detail": detail,
-                "error": {
-                    "code": code,
-                    "message": message,
-                    "request_id": current_request_id(),
-                },
+                "error": error,
             },
         )
 

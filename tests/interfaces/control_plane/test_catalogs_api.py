@@ -107,6 +107,7 @@ def test_workspace_catalog_upsert_rejects_a_stale_revision():
     assert updated.status_code == 200
     assert stale.status_code == 409
     assert "Catalog revision changed" in stale.json()["detail"]
+    assert stale.json()["error"]["current_revision"] == 1
 
 
 def test_workspace_catalog_update_requires_revision_precondition():
