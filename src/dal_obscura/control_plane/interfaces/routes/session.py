@@ -20,7 +20,12 @@ from fastapi.responses import RedirectResponse
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
-from dal_obscura.control_plane.interfaces.routes.schemas import DemoLoginRequest, SessionResponse
+from dal_obscura.control_plane.interfaces.routes.schemas import (
+    DemoLoginRequest,
+    SessionOptionsResponse,
+    SessionResponse,
+    UiAuthConfigResponse,
+)
 from dal_obscura.control_plane.interfaces.session_api import (
     actor_response,
     demo_login_config,
@@ -154,8 +159,11 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
     def get_session(actor: ControlPlaneActor = Depends(deps.require_actor)) -> SessionResponse:  # noqa: B008
         return SessionResponse.model_validate(actor_response(actor))
 
-    @api.get("/v1/session/options")
-    def get_session_options() -> object:
+    @api.get(
+        "/v1/session/options",
+        response_model=SessionOptionsResponse,
+    )
+    def get_session_options() -> SessionOptionsResponse:
         """Returns browser-safe login methods for the current deployment.
 
         The local bootstrap flag is deliberately exposed as capability metadata
@@ -221,8 +229,12 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         )
         return {"authenticated": True}
 
-    @api.get("/v1/ui-auth-config")
-    def get_ui_auth_config() -> object:
+    @api.get(
+        "/v1/ui-auth-config",
+        response_model=UiAuthConfigResponse,
+        response_model_exclude_none=True,
+    )
+    def get_ui_auth_config() -> UiAuthConfigResponse:
         if deps.ui_auth_config is None:
             raise HTTPException(status_code=404, detail="UI auth is not configured")
         return public_ui_auth_config(deps.ui_auth_config)

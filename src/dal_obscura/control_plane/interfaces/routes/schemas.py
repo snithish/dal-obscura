@@ -134,6 +134,32 @@ class SessionResponse(BaseModel):
     issuer: str | None = None
 
 
+class LoginShortcutResponse(BaseModel):
+    """Browser-safe named login shortcut."""
+
+    label: str
+    login_hint: str
+    demo_login_path: str | None = None
+
+
+class UiAuthConfigResponse(BaseModel):
+    """Browser-safe OIDC settings; secrets never appear here."""
+
+    authority: str | None = None
+    client_id: str | None = None
+    redirect_uri: str | None = None
+    post_logout_redirect_uri: str | None = None
+    scope: str | None = None
+    login_shortcuts: list[LoginShortcutResponse] | None = None
+
+
+class SessionOptionsResponse(BaseModel):
+    """Available browser authentication methods."""
+
+    bootstrap_enabled: bool
+    oidc: UiAuthConfigResponse | None = None
+
+
 class AssetCapabilityResponse(BaseModel):
     """One server-resolved capability and its explainable reasons."""
 
