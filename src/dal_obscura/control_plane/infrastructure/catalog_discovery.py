@@ -7,8 +7,6 @@ from threading import BoundedSemaphore
 from time import monotonic
 from typing import Any, cast
 
-from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import CatalogType
-
 ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )
@@ -48,7 +46,6 @@ def discover_catalog_tables(
             max_namespaces=DEFAULT_MAX_NAMESPACES,
             deadline_at=monotonic() + DEFAULT_DEADLINE_SECONDS,
         )
-    _catalog_type(module)
     raise ValueError(f"Unsupported catalog module: {module}")
 
 
@@ -157,12 +154,6 @@ def _public_page_entries(page: object) -> tuple[object, ...] | list[object]:
     if len(entries) > DEFAULT_MAX_PAGE_ENTRIES:
         raise ValueError("Catalog plugin returned too many page entries")
     return cast(tuple[object, ...] | list[object], entries)
-
-
-def _catalog_type(module: str) -> CatalogType:
-    if module == ICEBERG_CATALOG_MODULE:
-        return "iceberg"
-    raise ValueError(f"Unsupported catalog module: {module}")
 
 
 def discover_iceberg_tables(
