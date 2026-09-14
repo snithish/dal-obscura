@@ -5,6 +5,7 @@ import type { Asset, AssetAccess, AssetGrant, Mask, PolicyRule, PolicyVersion, P
 import { controlPlane } from "../api";
 import { type AssetTab } from "../navigation";
 import { recoveryMessage } from "../recovery";
+import { isAbortError } from "../async";
 import { flattenSchemaTree } from "../schema_tree";
 
 type SaveState = "saved" | "saving" | "unsaved" | "failed";
@@ -24,10 +25,6 @@ function inventoryStatusLabel(asset: Asset): string {
   if (asset.policy_status === "configured") return "Policy configured";
   if (asset.policy_status === "missing") return "Policy missing";
   return "Policy status unavailable";
-}
-
-function isAbortError(error: unknown): boolean {
-  return (error instanceof DOMException && error.name === "AbortError") || (error instanceof Error && error.name === "CancelledError");
 }
 
 export function AssetWorkspace(props: { initialTab?: AssetTab; initialVersion?: number; assets: Asset[]; asset: Asset; access?: AssetAccess; history: PolicyVersion[]; grants: AssetGrant[]; onAsset: (id: string) => void; assetSearch: string; assetHasMore: boolean; assetInventoryLoading: boolean; onSearch: (value: string) => void; onLoadMore: () => void; rules: PolicyRule[]; activeRule?: PolicyRule; activeRevision: number; selectedRule: number; onRule: (index: number) => void; onMoveRule: (index: number, direction: -1 | 1) => void; selectedField: string; onField: (name: string) => void; selectedMask?: Mask; effectiveFields: Set<string>; saveState: SaveState; notice: string; fieldErrors?: Array<{ field: string; message: string; type: string }>; onToggleField: (name: string) => void; onMask: (mask?: Mask) => void; onUpdateRule: (change: (rule: PolicyRule) => PolicyRule) => void; onAddRule: () => void; onRemoveRule: () => void; onDuplicateRule: (index: number) => void; onUndo: () => void; onRedo: () => void; canUndo: boolean; canRedo: boolean; onSave: () => void; onPreview: () => void; onReview: () => void; previewPrincipal: string; previewGroups: string; previewClaims: string; onPreviewPrincipal: (value: string) => void; onPreviewGroups: (value: string) => void; onPreviewClaims: (value: string) => void; onPublish: () => void; publishing: boolean; onRestore: (version: number) => void; reviewToken?: string; preview: Preview | null; session: Session | null; onReloadAccess: () => void; reviewOnly?: boolean; draftId?: string | null; queryClient: QueryClient; sessionScope: string }) {

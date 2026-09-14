@@ -7,6 +7,7 @@ import { isCurrentEpoch } from "./lifecycle";
 import { locationFromUrl, pageFromHash, type UiPage } from "./navigation";
 import { assetInventoryQueryKey, sessionQueryScope } from "./query_scope";
 import { recoveryMessage } from "./recovery";
+import { isAbortError } from "./async";
 import { LoginPanel } from "./components/LoginPanel";
 import { SettingsView } from "./components/SettingsView";
 import { ConnectionsView } from "./components/ConnectionsView";
@@ -505,10 +506,6 @@ function App() {
   function abortMutations(): void {
     for (const controller of mutationControllers.current) controller.abort();
     mutationControllers.current.clear();
-  }
-
-  function isAbortError(error: unknown): boolean {
-    return error instanceof DOMException && error.name === "AbortError";
   }
 
   function clearPrivateState() {

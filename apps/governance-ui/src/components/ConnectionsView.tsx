@@ -4,6 +4,7 @@ import type { Catalog, CatalogDiagnostic, PluginDescriptor, PluginPair, PluginSt
 import { controlPlane } from "../api";
 import { preserveSecretReference } from "../connection_options";
 import { recoveryMessage } from "../recovery";
+import { isAbortError } from "../async";
 
 type PluginConfigField = { name: string; type: string; required: boolean; secret: boolean; options?: string[] };
 type PluginLifecycle = NonNullable<PluginState["lifecycle"]>;
@@ -71,10 +72,6 @@ function formConfigForCatalog(catalog: Catalog, plugin: PluginDescriptor | undef
   const fields = configFields(plugin);
   const options = catalog.options ?? {};
   return { ...pluginDefaults(plugin), ...Object.fromEntries(fields.map((field) => [field.name, safeFormValue(options[field.name], field)])) };
-}
-
-function isAbortError(error: unknown): boolean {
-  return (error instanceof DOMException && error.name === "AbortError") || (error instanceof Error && error.name === "CancelledError");
 }
 
 export type ConnectionsViewProps = {

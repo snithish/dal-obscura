@@ -3,6 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { AuthProvider, RuntimeSettings, WorkspacePublication } from "../api";
 import { controlPlane } from "../api";
 import { recoveryMessage } from "../recovery";
+import { isAbortError } from "../async";
 
 export type SettingsViewProps = {
   runtime?: RuntimeSettings | null;
@@ -20,10 +21,6 @@ const emptyRuntime: RuntimeSettings = {
   max_ticket_exchanges: 0,
   path_rules: [],
 };
-
-function isAbortError(error: unknown): boolean {
-  return (error instanceof DOMException && error.name === "AbortError") || (error instanceof Error && error.name === "CancelledError");
-}
 
 export function SettingsView({
   runtime,
