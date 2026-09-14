@@ -1224,3 +1224,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Verification: REST plugin and IO-boundary suites (26 passed), changed-path Ruff/format and diff checks passed. No serializers, pickle paths, or dependencies changed.
 - Atomic implementation commit: `b286610`.
 - Remaining subcases: DNS destination pinning, private-address policy, returned metadata/delete locations, cancellation cleanup, and live request-counter evidence remain VERIFY under B06/N04; release remains HOLD.
+
+## 2026-09-14 — N04 local file URI path enforcement
+
+- Scope: align published storage path enforcement with the explicitly supported local REST warehouse URI form.
+- Observable behavior delivered; FR/NFR and B/G subcases: `PathRuleEnforcer` now treats `file:///...` roots and descendants as local filesystem paths, accepts equivalent plain paths, and rejects remote file authorities and query-bearing roots. URI traversal and root-boundary checks remain enforced.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/data_plane/infrastructure/adapters/path_rules.py` and its focused tests changed. No serializers, serialized classes, payloads, import paths, migrations, or dependencies changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +12 production / +14 test logical lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `tests/infrastructure/adapters/test_path_rules.py` covers local URI acceptance, equivalent paths, descendant boundaries, and remote-authority rejection; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/infrastructure/adapters/test_path_rules.py tests/integration/test_io_boundary.py -q` (20 passed); changed-path Ruff and format checks (exit 0); 2026-09-14, Python 3.12/uv local workspace. Commit hooks passed with repository baseline `ty` diagnostics skipped (`SKIP=ty`).
+- Artifact and fixture hashes; evidence locations: atomic commit `e48f497`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: live hostile DNS/private/redirect counters, cancellation cleanup, provider network policy, and independent security/release evidence remain VERIFY under B06/N04/N16; next action is continue the next bounded acceptance slice without loosening explicit local/private allowlists.
+- Atomic implementation commits: `e48f497`.
+- Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
