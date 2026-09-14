@@ -21,6 +21,7 @@ from fastapi.responses import RedirectResponse
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 from dal_obscura.control_plane.interfaces.routes.schemas import (
+    AuthenticationMutationResponse,
     DemoLoginRequest,
     SessionOptionsResponse,
     SessionResponse,
@@ -180,12 +181,12 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             ),
         }
 
-    @api.post("/v1/session/bootstrap")
+    @api.post("/v1/session/bootstrap", response_model=AuthenticationMutationResponse)
     def bootstrap_session(
         request: Request,
         response: Response,
         authorization: str = Header(default=""),
-    ) -> object:
+    ) -> AuthenticationMutationResponse:
         """Exchanges the local admin bearer secret for a browser session.
 
         This route is a local-development bridge only. It requires the exact
@@ -239,8 +240,12 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             raise HTTPException(status_code=404, detail="UI auth is not configured")
         return public_ui_auth_config(deps.ui_auth_config)
 
-    @api.post("/v1/demo-login")
-    def demo_login(request: DemoLoginRequest, response: Response, http_request: Request) -> object:
+    @api.post("/v1/demo-login", response_model=AuthenticationMutationResponse)
+    def demo_login(
+        request: DemoLoginRequest,
+        response: Response,
+        http_request: Request,
+    ) -> AuthenticationMutationResponse:
         if deps.ui_auth_config is None:
             raise HTTPException(status_code=404, detail="Demo login is not configured")
         _enforce_login_rate_limit(deps, http_request)
@@ -287,7 +292,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         )
         return {"authenticated": True}
 
-    @api.post("/v1/logout")
+    @api.post("/v1/logout", response_model=AuthenticationMutationResponse)
     def logout(
         request: Request,
         response: Response,
@@ -295,7 +300,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         csrf_cookie: str | None = Cookie(default=None, alias="dal_obscura_csrf"),
         host_session_token: str | None = Cookie(default=None, alias="__Host-dal_obscura_session"),
         host_csrf_cookie: str | None = Cookie(default=None, alias="__Host-dal_obscura_csrf"),
-    ) -> object:
+    ) -> AuthenticationMutationResponse:
         """Expires browser credentials even when the server session is stale."""
         session_token = _cookie_text(host_session_token) or _cookie_text(session_token)
         csrf_cookie = _cookie_text(host_csrf_cookie) or _cookie_text(csrf_cookie)

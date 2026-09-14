@@ -18,6 +18,7 @@ from dal_obscura.control_plane.interfaces.routes.schemas import (
     CatalogInventoryResponse,
     CatalogMutationResponse,
     CatalogRequest,
+    CatalogTablesResponse,
     request_payload,
 )
 
@@ -41,11 +42,15 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
     def list_workspace_catalogs() -> list[CatalogInventoryResponse]:
         return deps.with_service(lambda service: service.list_workspace_catalogs())
 
-    @api.get("/v1/catalogs/{name}/tables", dependencies=[Depends(deps.require_admin)])
+    @api.get(
+        "/v1/catalogs/{name}/tables",
+        dependencies=[Depends(deps.require_admin)],
+        response_model=CatalogTablesResponse,
+    )
     def discover_workspace_catalog_tables(
         name: str,
         actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
-    ) -> object:
+    ) -> CatalogTablesResponse:
         return deps.with_service(
             lambda service: service.discover_workspace_catalog_tables(name, actor=actor)
         )

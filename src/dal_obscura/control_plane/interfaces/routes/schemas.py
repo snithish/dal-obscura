@@ -160,6 +160,12 @@ class SessionOptionsResponse(BaseModel):
     oidc: UiAuthConfigResponse | None = None
 
 
+class AuthenticationMutationResponse(BaseModel):
+    """Result of a browser session login or logout mutation."""
+
+    authenticated: bool
+
+
 class AssetCapabilityResponse(BaseModel):
     """One server-resolved capability and its explainable reasons."""
 
@@ -286,6 +292,13 @@ class CatalogMutationResponse(BaseModel):
 
     id: str
     name: str
+
+
+class CatalogTablesResponse(BaseModel):
+    """Bounded catalog discovery result returned to management clients."""
+
+    catalog: str
+    tables: list[dict[str, Any]]
 
 
 class CatalogDiagnosticResponse(BaseModel):

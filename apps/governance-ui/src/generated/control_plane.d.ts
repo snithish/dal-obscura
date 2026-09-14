@@ -1094,6 +1094,14 @@ export interface components {
             resource_type: string;
         };
         /**
+         * AuthenticationMutationResponse
+         * @description Result of a browser session login or logout mutation.
+         */
+        AuthenticationMutationResponse: {
+            /** Authenticated */
+            authenticated: boolean;
+        };
+        /**
          * AuthProviderResponse
          * @description Redacted authentication-provider record returned to management clients.
          */
@@ -1198,6 +1206,18 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+        };
+        /**
+         * CatalogTablesResponse
+         * @description Bounded catalog discovery result returned to management clients.
+         */
+        CatalogTablesResponse: {
+            /** Catalog */
+            catalog: string;
+            /** Tables */
+            tables: {
+                [key: string]: unknown;
+            }[];
         };
         /**
          * DataPlaneObservationResponse
@@ -2888,7 +2908,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CatalogTablesResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2921,7 +2941,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AuthenticationMutationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2955,7 +2975,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AuthenticationMutationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3133,7 +3153,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AuthenticationMutationResponse"];
                 };
             };
             /** @description Validation Error */

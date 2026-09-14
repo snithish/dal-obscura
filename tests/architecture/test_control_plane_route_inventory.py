@@ -96,6 +96,30 @@ def test_openapi_routes_match_the_p00_inventory() -> None:
         == "#/components/schemas/AssetSchemaResponse"
     )
     assert (
+        paths["/v1/catalogs/{name}/tables"]["get"]["responses"]["200"]["content"][
+            "application/json"
+        ]["schema"]["$ref"]
+        == "#/components/schemas/CatalogTablesResponse"
+    )
+    assert (
+        paths["/v1/session/bootstrap"]["post"]["responses"]["200"]["content"]["application/json"][
+            "schema"
+        ]["$ref"]
+        == "#/components/schemas/AuthenticationMutationResponse"
+    )
+    assert (
+        paths["/v1/demo-login"]["post"]["responses"]["200"]["content"]["application/json"][
+            "schema"
+        ]["$ref"]
+        == "#/components/schemas/AuthenticationMutationResponse"
+    )
+    assert (
+        paths["/v1/logout"]["post"]["responses"]["200"]["content"]["application/json"]["schema"][
+            "$ref"
+        ]
+        == "#/components/schemas/AuthenticationMutationResponse"
+    )
+    assert (
         paths["/v1/assets/{asset_id}/draft"]["get"]["responses"]["200"]["content"][
             "application/json"
         ]["schema"]["$ref"]

@@ -352,11 +352,11 @@ export const controlPlane = {
     const options = await request<ApiSchemas["SessionOptionsResponse"]>("/v1/session/options", { signal });
     return { ...options, oidc: options.oidc ?? null } satisfies SessionOptions;
   },
-  bootstrapLogin: (token: string) => request<{ authenticated: true }>("/v1/session/bootstrap", {
+  bootstrapLogin: (token: string) => request<ApiSchemas["AuthenticationMutationResponse"]>("/v1/session/bootstrap", {
     method: "POST",
     headers: { authorization: `Bearer ${token}` },
   }),
-  logout: () => request<{ authenticated: false }>("/v1/logout", { method: "POST" }),
+  logout: () => request<ApiSchemas["AuthenticationMutationResponse"]>("/v1/logout", { method: "POST" }),
   listAssets: async () => (await request<ApiSchemas["AssetInventoryResponse"][]>("/v1/assets")).map(normalizeInventoryAsset),
   listAssetPage: async (params: { limit?: number; cursor?: string; search?: string; signal?: AbortSignal } = {}) => {
     const query = new URLSearchParams();
@@ -426,7 +426,7 @@ export const controlPlane = {
     method: "POST",
     body: JSON.stringify({ expected_publication_id: expectedPublicationId ?? null }),
   }),
-  discoverCatalogTables: (name: string, signal?: AbortSignal) => request<{ catalog: string; tables: Array<Record<string, unknown>> }>(`/v1/catalogs/${encodeURIComponent(name)}/tables`, { signal }),
+  discoverCatalogTables: (name: string, signal?: AbortSignal) => request<ApiSchemas["CatalogTablesResponse"]>(`/v1/catalogs/${encodeURIComponent(name)}/tables`, { signal }),
   diagnoseCatalog: async (name: string, signal?: AbortSignal) => {
     const diagnostic = await request<ApiSchemas["CatalogDiagnosticResponse"]>(`/v1/catalogs/${encodeURIComponent(name)}/diagnostics`, { signal });
     return { ...diagnostic, sample_tables: diagnostic.sample_tables ?? undefined, table_count: diagnostic.table_count ?? undefined } satisfies CatalogDiagnostic;
