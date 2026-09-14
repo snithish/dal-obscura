@@ -1189,6 +1189,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `e8210e5`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — Repository regression sweep after contract cleanup
+
+- Scope: verify cross-package callers after removing demo-login, unpaginated audit, and unpaginated workspace history routes.
+- Observable behavior delivered; FR/NFR and B/G subcases: the complete repository suite passed with loopback socket permission; explicit integration/benchmark/PostgreSQL opt-ins remain skipped by their markers. Pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: no source changes in this verification slice; all prior cleanup commits remain atomic.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no code or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: full existing suite; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q` with loopback permission (exit 0; 100% collected tests passed, explicit skips retained), 2026-09-14, Python 3.12/uv.
+- Artifact and fixture hashes; evidence locations: source commits `de3cec08`, `5c2e9734`, and `79a0f10f`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: live OIDC/PKCE/revocation, hostile transport counters, rendered browser/axe evidence, PostgreSQL races/recovery, clean TLS/OIDC consumer matrix, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with next qualification packet without changing pickle behavior.
+- Atomic implementation commits: verification only; no implementation commit.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-14 — N09/N11 remove unpaginated policy history API
 
 - Scope: make bounded keyset pagination the sole workspace policy-history contract.
