@@ -867,6 +867,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: Connections now displays server-reported catalog status and governed-asset count beside each admitted catalog, while preserving escaped untrusted labels and plugin admission controls.
 - Verification: UI TypeScript compilation, Vite production build, eight UI tests, and `git diff --check` passed. Browser visual/keyboard lifecycle evidence remains VERIFY.
 
+## 2026-09-14 — N05 typed browser-auth responses
+
+- Scope: harden the authenticated UI bootstrap and OIDC discovery boundary.
+- Observable behavior delivered: session login options and public OIDC configuration now validate through shared response models. Null OIDC availability, safe login shortcuts, and secret omission remain explicit; bootstrap/OIDC authentication behavior is unchanged.
+- Verification: OIDC and actor-auth suites passed (41 tests); changed-path Ruff and format checks passed; UI TypeScript compilation passed. Live IdP/browser freshness and logout evidence remain VERIFY.
+
 ## 2026-09-14 — N09/N11 post-publication inventory refresh
 
 - Scope: keep governed asset status aligned after a successful publish response.
