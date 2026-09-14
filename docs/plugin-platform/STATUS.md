@@ -1019,6 +1019,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Verification: UI TypeScript compilation, 11 UI tests, Vite production build, generated DTO freshness, and pre-commit non-heavy hooks passed. Full visual/accessibility and independent acceptance evidence remain VERIFY; release remains HOLD.
 - Atomic implementation commit: `52c06c6`.
 
+## 2026-09-14 — N10 generic catalog form wording
+
+- Scope: finish removing backend-specific wording from catalog authoring controls.
+- Observable behavior delivered: URI labels and examples are now catalog-neutral, so external plugin descriptors can present their own configuration without misleading SQL or storage assumptions.
+- Verification: UI TypeScript compilation, 11 UI tests, Vite production build, and pre-commit non-heavy hooks passed. Full visual/accessibility and independent acceptance evidence remain VERIFY; release remains HOLD.
+- Atomic implementation commit: `715047b`.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
