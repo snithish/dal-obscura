@@ -810,6 +810,8 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Verification: UI TypeScript compilation, Vite production build, all eight UI tests, and `git diff --check` pass.
 - Remaining gate: the required 10,000-node Playwright stress journey, 200-row mount cap, 200% zoom, and screen-reader review remain VERIFY. Release remains HOLD.
 
+- Follow-up test coverage now asserts root, sibling, and nested descendant position metadata explicitly; the full UI test set remains green.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
