@@ -261,6 +261,14 @@ test count is now 8.
 - Evidence: direct UI TypeScript build, Vite production build (276.86 kB JavaScript / 83.62 kB gzip), all 8 UI lifecycle/schema/recovery tests, and `git diff --check` passed.
 - Remaining N07/N10/N11 work: session-scoped query/mutation cache, rendered deferred-response race coverage, live status recovery journeys, permission matrix/browser evidence, and production qualification. Release remains HOLD.
 
+## Implementation update — da2237e (2026-09-14)
+
+- Packet / status / candidate commit / owner: N06/B09 visual foundation partial / VERIFY / `da2237e` / governance UI.
+- Observable behavior delivered: the shared stylesheet now defines semantic light/dark canvas, surface, text, border, selection, focus, and status tokens; dark preference and explicit dark mode use the same token contract. The document prevents page-level horizontal overflow while preserving inner table/code scrolling and honors reduced-motion preferences.
+- Changed paths: `apps/governance-ui/src/styles.css`. No backend, session, pickle serializer, serialized class, payload, or import path changed.
+- Evidence: direct UI TypeScript build, Vite production build (276.86 kB JavaScript / 83.62 kB gzip; 20.10 kB CSS / 4.82 kB gzip), all 8 UI lifecycle/schema/recovery tests, and `git diff --check` passed.
+- Remaining N06 work: apply tokens consistently across component styles, adopt Lucide/accessibility primitives, and complete required 390/768/1440/200% browser, axe, keyboard, and screen-reader evidence. Release remains HOLD.
+
 Qualification follow-up (2026-09-14): the elevated full Python suite completed with
 837 collected, 823 passed, 14 explicit environment/benchmark skips, and zero
 failures or errors. The unprivileged attempt was discarded because the sandbox
