@@ -127,6 +127,15 @@ def _path_is_under_root(path: str, root: str) -> bool:
 
 def _normalize_uri_path(value: str) -> str:
     decoded = unquote(value or "/")
+    # Providers are allowed to perform their own URI decoding.  Collapse a
+    # bounded second encoding layer for path separators/dot segments so
+    # ``%252f..%252f`` cannot become traversal after this check succeeds.
+    for _ in range(2):
+        lowered = decoded.lower()
+        if not any(token in lowered for token in ("%2f", "%5c", "%2e")):
+            break
+        decoded = unquote(decoded)
+    decoded = decoded.replace("\\", "/")
     parts = [part for part in decoded.split("/") if part not in ("", ".")]
     normalized: list[str] = []
     for part in parts:

@@ -49,6 +49,8 @@ def test_path_rule_enforcer_normalizes_uri_traversal_before_root_check():
         enforcer.check("s3://analytics-demo/delta/part/../../secrets.parquet")
     with pytest.raises(PermissionError, match="Path is not allowed"):
         enforcer.check("s3://analytics-demo/delta%2F..%2Fsecrets.parquet")
+    with pytest.raises(PermissionError, match="Path is not allowed"):
+        enforcer.check("s3://analytics-demo/delta%252F..%252Fsecrets.parquet")
 
 
 def test_path_rule_enforcer_rejects_credential_and_query_roots():
