@@ -69,7 +69,9 @@ class ParquetDatasetFormat:
         ):
             raise ValueError("Parquet handle metadata is incomplete")
         try:
-            self._schema = pa.ipc.read_schema(pa.BufferReader(base64.b64decode(schema_ipc)))
+            self._schema = pa.ipc.read_schema(
+                pa.BufferReader(base64.b64decode(schema_ipc, validate=True))
+            )
         except Exception as exc:
             raise ValueError("Parquet handle schema is invalid") from exc
         _validate_handle_schema_identity(self._schema, metadata)

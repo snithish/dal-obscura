@@ -56,6 +56,15 @@ def _write_fixture(tmp_path):
     return root, manifest, table
 
 
+def _config_for_manifest(root, manifest):
+    return CatalogConfig(
+        plugin_id="manifest",
+        instance_id="fixture",
+        revision=1,
+        options={"root": str(root), "manifest_path": str(manifest)},
+    )
+
+
 def test_manifest_catalog_and_parquet_format_split_nested_rows(tmp_path):
     root, manifest, table = _write_fixture(tmp_path)
     context = _context()
@@ -90,6 +99,37 @@ def test_manifest_catalog_and_parquet_format_split_nested_rows(tmp_path):
     identities = dict(cast(tuple[tuple[str, str], ...], handle.metadata["schema_identities"]))
     assert identities["id"] == "iceberg:id"
     assert identities["profile.email"].startswith("synthetic:")
+
+
+def test_manifest_rejects_noncanonical_base64_schema_payload(tmp_path):
+    root, manifest, _table = _write_fixture(tmp_path)
+    payload = json.loads(manifest.read_text())
+    payload["tables"]["default.users"]["schema_ipc"] = (
+        payload["tables"]["default.users"]["schema_ipc"][:4]
+        + "!"
+        + payload["tables"]["default.users"]["schema_ipc"][4:]
+    )
+    manifest.write_text(json.dumps(payload))
+
+    with pytest.raises(ValueError, match="schema is invalid"):
+        ManifestCatalog(
+            _config_for_manifest(root, manifest),
+            _context(),
+        )
+
+
+def test_parquet_format_rejects_noncanonical_base64_schema_payload(tmp_path):
+    root, manifest, _table = _write_fixture(tmp_path)
+    initial = _context()
+    catalog = ManifestCatalog(_config_for_manifest(root, manifest), initial)
+    handle = catalog.resolve_table(TableIdentifier(namespace=("default",), name="users"), initial)
+    metadata = dict(handle.metadata)
+    schema_ipc = cast(str, metadata["schema_ipc"])
+    metadata["schema_ipc"] = schema_ipc[:4] + "!" + schema_ipc[4:]
+    forged = replace(handle, metadata=metadata)
+
+    with pytest.raises(ValueError, match="schema is invalid"):
+        ParquetDatasetFormat(forged, initial)
 
 
 def test_parquet_execute_propagates_cancellation_and_closes_reader(tmp_path, monkeypatch):

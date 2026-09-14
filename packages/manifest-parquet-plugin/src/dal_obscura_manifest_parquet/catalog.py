@@ -205,7 +205,9 @@ def _load_manifest(  # noqa: C901
         if not isinstance(raw_schema, str) or not raw_schema:
             raise ValueError("manifest table schema is missing")
         try:
-            schema = pa.ipc.read_schema(pa.BufferReader(base64.b64decode(raw_schema)))
+            schema = pa.ipc.read_schema(
+                pa.BufferReader(base64.b64decode(raw_schema, validate=True))
+            )
         except Exception as exc:
             raise ValueError("manifest table schema is invalid") from exc
         if not isinstance(raw_field_ids, list) or any(
