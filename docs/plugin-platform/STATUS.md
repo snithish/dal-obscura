@@ -770,6 +770,13 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Verification: UI TypeScript compilation, Vite production build, UI tests, and settings error-envelope tests pass.
 - Remaining gate: mutation-specific conflict reconciliation and rendered deferred-response coverage remain VERIFY.
 
+## 2026-09-14 — N10 governed catalog editing
+
+- Scope: authenticated catalog management UX and secret-preserving updates.
+- Observable behavior delivered: authorized operators can open an existing catalog, edit safe scalar options, see the admitted adapter selected, and cancel without mutation. Catalog names are locked during edit to preserve optimistic revision and secret scope. Secret fields are represented as deployment-managed references; clearing an untouched field sends the server redaction marker so the repository preserves the existing secret instead of erasing it. Unsupported or no-longer-admitted adapters fail closed with a refresh instruction.
+- Verification: UI TypeScript compilation, Vite production build, eight UI tests, and `git diff --check` pass. No pickle serializer or task payload paths changed.
+- Remaining gate: browser proof must verify non-secret prefill, redacted secret behavior, keyboard focus, and multi-actor permissions under N10/B09/B15. Release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.
