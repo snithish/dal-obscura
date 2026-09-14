@@ -1176,6 +1176,14 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `3a86a7a`.
 - Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N01/N02 plugin architecture documentation alignment
+
+- Scope: remove stale fixed-backend claims from the operator, developer, and quickstart entry points.
+- Observable behavior delivered: `docs/concepts.md`, `docs/development.md`, and `docs/quickstart.md` now describe allowlisted catalog/table-format plugins, descriptor-based selection, and the retained explicit security boundary.
+- Verification: documentation diff/link scope is limited to three existing files; `git diff --check` passed. No runtime, API, serializer, or pickle behavior changed.
+- Atomic implementation commit: `0b40ed1`.
+- Remaining subcases: N01 installed-toolchain baseline and N13 real plugin/consumer qualification remain VERIFY; release remains HOLD.
+
 Replace the corresponding queue entry and keep one current record per packet.
 Link detailed logs/artifacts instead of appending repeated full narratives.
 
