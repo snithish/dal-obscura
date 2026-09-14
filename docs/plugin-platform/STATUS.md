@@ -1216,3 +1216,11 @@ Link detailed logs/artifacts instead of appending repeated full narratives.
 
 Do not mark N16 complete on build/lint success or substitute agent self-review
 for independent review. Until candidate-bound gates all pass, release is HOLD.
+
+## 2026-09-14 — N04 REST redirect boundary
+
+- Scope: prevent provider-managed redirects from bypassing governed destination checks.
+- Observable behavior delivered: the shared bounded REST session forces `allow_redirects=False` on every request, so a 3xx response cannot trigger an unvalidated follow-up request; callers must re-enter the connection boundary before using a new destination.
+- Verification: REST plugin and IO-boundary suites (26 passed), changed-path Ruff/format and diff checks passed. No serializers, pickle paths, or dependencies changed.
+- Atomic implementation commit: `b286610`.
+- Remaining subcases: DNS destination pinning, private-address policy, returned metadata/delete locations, cancellation cleanup, and live request-counter evidence remain VERIFY under B06/N04; release remains HOLD.
