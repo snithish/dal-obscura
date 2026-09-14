@@ -48,3 +48,10 @@ test("recovery mapper covers every governed HTTP recovery status", () => {
   assert.equal(new Set(messages).size, 6);
   assert.ok(messages.every((message) => message !== "fallback"));
 });
+
+test("recovery mapper names safe validation fields", () => {
+  assert.equal(
+    recoveryMessage({ status: 422, fieldErrors: [{ field: "options.uri", message: "invalid", type: "value_error" }] }, "fallback"),
+    "The server rejected the submitted values. Correct the highlighted policy or configuration fields. Fields: options.uri.",
+  );
+});

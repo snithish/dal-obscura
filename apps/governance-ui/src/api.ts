@@ -279,7 +279,13 @@ export type ApiFailure = Error & {
   code?: string;
   requestId?: string;
   currentRevision?: number;
-  fieldErrors?: Record<string, string[]>;
+  fieldErrors?: ApiFieldError[];
+};
+
+export type ApiFieldError = {
+  field: string;
+  message: string;
+  type: string;
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -322,8 +328,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       : response.headers.get("x-request-id") ?? undefined;
     if (requestId) failure.requestId = requestId;
     if (typeof errorEnvelope.current_revision === "number") failure.currentRevision = errorEnvelope.current_revision;
-    if (errorEnvelope.field_errors && typeof errorEnvelope.field_errors === "object" && !Array.isArray(errorEnvelope.field_errors)) {
-      failure.fieldErrors = errorEnvelope.field_errors as Record<string, string[]>;
+    if (Array.isArray(errorEnvelope.field_errors)) {
+      failure.fieldErrors = errorEnvelope.field_errors.flatMap((item): ApiFieldError[] => {
+        if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+        const value = item as Record<string, unknown>;
+        if (typeof value.field !== "string" || typeof value.message !== "string" || typeof value.type !== "string") return [];
+        return [{ field: value.field, message: value.message, type: value.type }];
+      });
     }
     throw failure;
   }
