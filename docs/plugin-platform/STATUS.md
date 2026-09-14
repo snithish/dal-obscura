@@ -1176,6 +1176,14 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `3a86a7a`.
 - Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N07 policy validation summary
+
+- Scope: make server-side policy field errors directly actionable in the editor.
+- Observable behavior delivered: failed draft saves preserve the local rules, retain typed field errors from the correlated API envelope, and render them in a persistent focusable alert summary above the workspace. A successful save clears the summary; recovery status remains available for non-validation failures.
+- Verification: governance UI TypeScript compilation, Vite build (323.00 kB JS / 97.50 kB gzip), 12 UI tests, and diff checks passed. No backend, plugin, serializer, or pickle paths changed.
+- Atomic implementation commit: `32fadc0`.
+- Remaining subcases: rendered field focus routing, all mutation/deferred-response browser scenarios, and independent accessibility review remain VERIFY under N07/N16; release remains HOLD.
+
 ## 2026-09-14 — N04 strict path-rule request validation
 
 - Scope: close the direct API type boundary for runtime storage roots.
