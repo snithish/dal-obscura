@@ -32,6 +32,7 @@ export function LoginPanel({
   const showBootstrap =
     showAuth &&
     sessionOptions?.bootstrap_enabled &&
+    !authConfig?.authority &&
     onBootstrapToken &&
     onBootstrapLogin;
 
