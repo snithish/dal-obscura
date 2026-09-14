@@ -1289,3 +1289,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live OIDC code/PKCE, account-role freshness/revocation, two-process session evidence, and independent security/release review remain VERIFY under B07/B08/N05/N16; next action is continue the normal-auth and permission qualification work without reintroducing browser-token shortcuts.
 - Atomic implementation commits: `0da0c6b`.
 - Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N04 local file authority alignment
+
+- Scope: make REST URI admission and published path enforcement share one explicit local-file contract.
+- Observable behavior delivered; FR/NFR and B/G subcases: REST catalog auxiliary URIs accept authority-free `file:///...` paths and reject all file URI authorities, including `localhost`, before provider construction. Remote storage URIs retain their existing authority, credential, query, port, and egress checks.
+- Changed and deleted paths; old callers removed; protected pickle check: REST plugin validator and IO-boundary tests changed. No serializers, serialized classes, payloads, import paths, migrations, or dependencies changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +1 production / +5 test logical lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `tests/integration/test_io_boundary.py` and REST plugin tests cover local acceptance and authority rejection; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: REST/IO-boundary suite (27 passed), changed-path Ruff and format checks (exit 0), 2026-09-14, Python 3.12/uv local workspace. Commit hooks passed with repository baseline `ty` diagnostics skipped (`SKIP=ty`).
+- Artifact and fixture hashes; evidence locations: atomic commit `93dbe0a`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: live DNS/private/redirect counters, cancellation cleanup, provider network policy, and independent security/release evidence remain VERIFY under B06/N04/N16; next action is continue bounded security fixes and retain release HOLD.
+- Atomic implementation commits: `93dbe0a`.
+- Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
