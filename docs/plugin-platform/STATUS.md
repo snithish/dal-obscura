@@ -1458,3 +1458,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: benchmark and opt-in consumer/PostgreSQL/recovery skips remain explicit; live hostile DNS/redirect/private counters, provider-level network interception, rendered browser/accessibility, real consumer wheels, recovery, and independent review remain VERIFY under N01/N04–N16. Next action is continue the live transport-counter and clean-artifact qualification lanes while retaining release HOLD.
 - Atomic implementation commits: `1f151d0e`, `e8210e5a`, `81d7b107`; verification is documentation only.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N04 Iceberg partition-statistics path guard
+
+- Scope: cover one additional metadata-referenced storage destination in the Iceberg path boundary.
+- Observable behavior delivered; FR/NFR and B/G subcases: partition-statistics file locations are now checked alongside metadata, manifest lists, and historical metadata logs before a table is admitted. Unsafe statistics paths fail closed with the same published-root policy.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/data_plane/infrastructure/table_formats/iceberg.py`; no serializers, serialized classes, payloads, import paths, migrations, dependencies, or tests deleted.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +4 production lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing Iceberg metadata-location regression suite; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: Iceberg phase-regression suite (11 passed), changed-path Ruff check (exit 0), 2026-09-14, Python 3.12/uv local workspace. Commit hooks passed with repository baseline `ty` diagnostics skipped (`SKIP=ty`).
+- Artifact and fixture hashes; evidence locations: atomic implementation commit `b87727a`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: live provider manifest/data/delete interception, DNS/redirect/private destination counters, cancellation cleanup, deployment network controls, browser/consumer qualification, and independent review remain VERIFY under B06/N04/N16; next action is continue live transport-counter and cancellation-resource qualification.
+- Atomic implementation commits: `b87727a`.
+- Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
