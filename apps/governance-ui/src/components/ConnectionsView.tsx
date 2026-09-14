@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import type { Catalog, CatalogDiagnostic, PluginDescriptor, PluginPair, PluginState, WorkspacePublication } from "../api";
 import { controlPlane } from "../api";
+import { preserveSecretReference } from "../connection_options";
 import { recoveryMessage } from "../recovery";
 
 type PluginConfigField = { name: string; type: string; required: boolean; secret: boolean; options?: string[] };
@@ -121,7 +122,8 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
         // An empty secret field while editing means “keep the existing
         // server-held reference”, never “erase the credential”.
         if (field.secret && editingCatalog?.options[field.name] !== undefined) {
-          options[field.name] = { secret: "[redacted]", scope: `catalog:${editingCatalog.name}` };
+          const reference = preserveSecretReference(editingCatalog.options[field.name]);
+          if (reference) options[field.name] = reference;
         }
         continue;
       }
