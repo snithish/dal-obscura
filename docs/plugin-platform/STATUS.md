@@ -1445,3 +1445,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: DNS rebinding/pinning, redirect and returned metadata/data/delete destination counters, cancellation cleanup, and deployment network enforcement remain VERIFY under B06/N04; explicitly permitted local/private paths must continue to work. Next action is continue live transport qualification without weakening special-address denial.
 - Atomic implementation commits: `bcb1bfd`.
 - Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N01 suite verification after Iceberg path hardening
+
+- Scope: qualify the Iceberg metadata/delete-file and UI cancellation slices against the authoritative backend and UI checks.
+- Observable behavior delivered; FR/NFR and B/G subcases: no additional behavior changed by this entry; the elevated run confirms no regression across catalog resolution, Flight execution, policy enforcement, session flows, and plugin tests. The prior unprivileged run was invalidated by sandbox socket-bind denials; it is not used as release evidence.
+- Changed and deleted paths; old callers removed; protected pickle check: documentation only (`docs/plugin-platform/BASELINE_20260914.md` and this ledger entry); no source, serializer, migration, dependency, or fixture changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no source or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: existing full suite, focused Iceberg/catalog tests, and Node UI suite; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: elevated `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest --durations=20 --junitxml=/tmp/dal-obscura-after-iceberg-paths-elevated.xml -q -rs` (exit 0; 870 collected, 856 passed, 14 skipped, 0 failed, 0 errors, 131.504s); UI `tsc` (exit 0), Node tests (13 passed), Vite build (exit 0; 325.43 kB JS / 98.06 kB gzip); 2026-09-14, Python 3.12 and Node 24 local workspace.
+- Artifact and fixture hashes; evidence locations: JUnit report `/tmp/dal-obscura-after-iceberg-paths-elevated.xml`; baseline continuation in `docs/plugin-platform/BASELINE_20260914.md`; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: benchmark and opt-in consumer/PostgreSQL/recovery skips remain explicit; live hostile DNS/redirect/private counters, provider-level network interception, rendered browser/accessibility, real consumer wheels, recovery, and independent review remain VERIFY under N01/N04–N16. Next action is continue the live transport-counter and clean-artifact qualification lanes while retaining release HOLD.
+- Atomic implementation commits: `1f151d0e`, `e8210e5a`, `81d7b107`; verification is documentation only.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
