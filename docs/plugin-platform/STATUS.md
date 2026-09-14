@@ -1341,3 +1341,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: browser-rendered deferred settings races, live logout/401 and cross-process revocation, and independent accessibility/security/release review remain VERIFY under N05/N07/N16; next action is continue live acceptance and consumer qualification while retaining release HOLD.
 - Atomic implementation commits: `2240dd1`.
 - Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N07 lifecycle CORS preflight
+
+- Scope: make the cross-origin browser contract admit the plugin lifecycle `PATCH` mutation used by the authenticated Connections UI.
+- Observable behavior delivered; FR/NFR and B/G subcases: configured UI origins now receive a successful preflight for `PATCH` with CSRF/content-type headers; unconfigured origins remain denied. No authentication or authorization decision was widened.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/interfaces/api.py` and `tests/interfaces/control_plane/test_ui_shell.py`; no serializers, payloads, migrations, dependencies, or unrelated routes changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +1 production / +16 test logical lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `tests/interfaces/control_plane/test_ui_shell.py::test_cors_allows_plugin_lifecycle_patch_for_configured_ui_origin`; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: control-plane UI-shell suite (8 passed), changed-path Ruff and format checks (exit 0), 2026-09-14, Python 3.12/uv local workspace. Commit hooks passed with repository baseline `ty` diagnostics skipped (`SKIP=ty`).
+- Artifact and fixture hashes; evidence locations: atomic commit `ac8aab2`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: live separate-origin browser authentication/CSRF, rendered accessibility, and independent security/release evidence remain VERIFY under N05–N07/N16; next action is continue live browser and consumer qualification while retaining release HOLD.
+- Atomic implementation commits: `ac8aab2`.
+- Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
