@@ -1189,6 +1189,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `e8210e5`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N04 local Iceberg storage-property enforcement
+
+- Scope: extend returned-location checks to local filesystem paths carried in Iceberg IO properties.
+- Observable behavior delivered; FR/NFR and B/G subcases: catalog resolution now checks URI values and absolute/file local paths in provider storage options against the published path roots. An out-of-root local warehouse is rejected before the table descriptor is admitted; existing S3/URI checks and explicit local roots remain unchanged.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/data_plane/infrastructure/adapters/catalog_registry.py` and `tests/infrastructure/adapters/test_catalog_registry.py`; no serializers, serialized classes, payloads, import paths, migrations, or dependencies changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +28 production/test logical lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: catalog registry returned-location tests cover unsafe local storage properties; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: catalog registry suite (12 passed), changed-path Ruff checks (exit 0), 2026-09-14, Python 3.12/uv local workspace. Commit hooks passed with repository baseline `ty` diagnostics skipped (`SKIP=ty`).
+- Artifact and fixture hashes; evidence locations: atomic implementation commit `81d7b10`; no external artifact generated.
+- Remaining subcases; blocker and next concrete action: live hostile DNS/redirect/private destination counters, provider-level manifest/data/delete interception, cancellation cleanup, deployment network controls, browser/consumer qualification, and independent security/release evidence remain VERIFY under B06/N04/N16; next action is continue the live transport-counter harness and test actual provider requests under cancellation.
+- Atomic implementation commits: `81d7b10`.
+- Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-14 — N04 Iceberg metadata and delete-file path enforcement
 
 - Scope: close the remaining in-process Iceberg path-policy gap for locations returned by table metadata and scan tasks.
