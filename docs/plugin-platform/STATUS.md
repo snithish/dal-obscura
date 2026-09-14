@@ -2071,3 +2071,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: rendered browser back/forward/unload and full deferred-response matrix, live OIDC/PKCE and revocation, hostile transport, PostgreSQL races/recovery, clean TLS/OIDC consumer cells, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable qualification packet without changing pickle behavior.
 - Atomic implementation commits: `eec4d9b0`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N08 access editor unsaved-change guard
+
+- Scope: protect owner and delegated-capability authoring in the asset Access tab from silent discard.
+- Observable behavior delivered; FR/NFR and B/G subcases: owner text edits, grant principal/capability edits, grant add/remove, tab changes, history/version links, Refresh, browser history, asset navigation, logout, and unload now participate in the shared unsaved-change guard. Explicit discard and successful saves clear the marker; failed saves preserve the edits. Access data remains server-authorized and no source rows are exposed. Pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/AssetWorkspace.tsx` and `apps/governance-ui/src/main.tsx`; no backend, serializer, serialized class/import path, payload, migration, dependency, or test deletion.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +32 UI production lines and -9 obsolete lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing UI lifecycle/query tests remain owners; no tests deleted. Rendered owner/grant navigation and deferred-response journeys remain required B10/B15 evidence.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/tsc -p tsconfig.json --noEmit` (exit 0), `node_modules/.bin/vite build` (exit 0; 329.85 kB JavaScript / 99.55 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0; 14 passed), and `git diff --check` (exit 0), 2026-09-14, Node 26.8.2 local runtime (package policy remains Node 24). Commit hook used `SKIP=ty`; the documented repository `ty` baseline still reports 72 unrelated diagnostics.
+- Artifact and fixture hashes; evidence locations: implementation commit `b4c66d19`; local disposable UI/control-plane profile on `127.0.0.1:5173`/`127.0.0.1:8821`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: full rendered browser guard/race matrix, live OIDC/PKCE and revocation, hostile transport, PostgreSQL races/recovery, clean TLS/OIDC consumer cells, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable qualification packet without changing pickle behavior.
+- Atomic implementation commits: `b4c66d19`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
