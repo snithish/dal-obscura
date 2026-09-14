@@ -739,11 +739,13 @@ def _masked_field(field: pa.Field, path: str, masks: Mapping[str, MaskRule]) -> 
 def _masked_leaf_field(field: pa.Field, mask: MaskRule) -> pa.Field:
     """Adjusts the field type for a direct mask attached to the selected path."""
     mask_type = mask.type.lower()
+    if mask_type == "null":
+        return pa.field(field.name, field.type, nullable=True, metadata=field.metadata)
     if mask_type in {"hash", "redact", "email", "keep_last"}:
         return pa.field(field.name, pa.string(), nullable=True)
     if mask_type == "default":
         if mask.value is None:
-            return field
+            return pa.field(field.name, field.type, nullable=True, metadata=field.metadata)
         return pa.field(field.name, _default_mask_type(mask.value), nullable=field.nullable)
     return field
 

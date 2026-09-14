@@ -278,6 +278,7 @@ def test_default_null_mask_renders_null_and_null_schema():
 
     assert selection.select_list[0] == 'cast_to_type(NULL, "status") AS "status"'
     assert masked_schema.field("status").type == pa.string()
+    assert masked_schema.field("status").nullable
 
 
 def test_email_mask_renders_masking_expression():
