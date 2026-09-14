@@ -1862,3 +1862,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: REST-Iceberg live provider and all nine consumer/provider/version cells, OIDC/transport/revocation, PostgreSQL races/recovery, mixed-load capacity, deployment integrity/SBOM, browser accessibility, and independent review remain VERIFY under N04–N16. Next action is continue the next runnable candidate-bound qualification while retaining release HOLD.
 - Atomic implementation commits: `179650a`; wheel qualification evidence only otherwise.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N01 full-suite verification after wheel fixes
+
+- Scope: run the complete repository suite after the plugin descriptor and built-in precedence fixes.
+- Observable behavior delivered; FR/NFR and B/G subcases: all collected tests completed successfully; the known opt-in lanes remain explicit skips when their environment variables/services are absent. Pickle fixtures and serializer tests remain covered and unchanged.
+- Changed and deleted paths; old callers removed; protected pickle check: verification only; no source, serializer, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no source or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: existing full suite remains authoritative; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q` (exit 0; 100% collected tests passed; explicit integration/benchmark/PostgreSQL opt-ins remained skipped), and `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest --collect-only -q` (exit 0), 2026-09-14, Python 3.12/uv with loopback permissions.
+- Artifact and fixture hashes; evidence locations: candidate commits `aa013e1`, `179650a`, `6daa5c2`, `e286a1e`; no external artifact committed.
+- Remaining subcases; blocker and next concrete action: live REST provider, nine required consumer/provider/version cells with TLS/OIDC, PostgreSQL races/recovery, hostile transport counters, mixed-load capacity, deployment integrity/SBOM, browser accessibility and independent review remain VERIFY under N04–N16. Release remains HOLD.
+- Atomic implementation commits: verification only; no source commit.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
