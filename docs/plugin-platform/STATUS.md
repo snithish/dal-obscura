@@ -2370,3 +2370,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: rendered deferred/double-click and lost-response browser proof, live OIDC/PKCE/revocation, hostile transport, PostgreSQL races/recovery, clean TLS/OIDC consumers, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable qualification packet without changing pickle behavior.
 - Atomic implementation commits: `a3ed52cc`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+-
+## 2026-09-14 — N04 catalog discovery error propagation
+
+- Scope: correct root-namespace Iceberg discovery fallback behavior.
+- Observable behavior delivered; FR/NFR and B/G subcases: providers exposing a root-only `list_tables()` signature remain supported, while provider failures now propagate instead of being converted into a false empty catalog. This keeps outage and permission errors visible to operators and callers. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/infrastructure/catalog_discovery.py` and `tests/control_plane/test_catalog_discovery.py`; no serializer, migration, dependency, or unrelated path changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +36 test lines, +1 production comment/branch; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: discovery unit suite owns root-only signature compatibility and provider-error propagation; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane/test_catalog_discovery.py -q` (exit 0, 21 passed), focused Ruff (exit 0), `git diff --check` (exit 0), and UI/build suites (exit 0), 2026-09-14, Python 3.12/Node 26.8.2 local runtimes (package policy remains Node 24).
+- Artifact and fixture hashes; evidence locations: implementation commit `f11f2fd`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: live hostile transport/DNS/private-address counters, OIDC freshness/revocation, populated browser accessibility, PostgreSQL races/recovery, clean TLS/OIDC consumer matrix, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with the next runnable governed backend slice.
+- Atomic implementation commits: `f11f2fd`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
