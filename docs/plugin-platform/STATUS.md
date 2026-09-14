@@ -1189,6 +1189,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `e8210e5`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-14 — N05 legacy demo configuration regression guard
+
+- Scope: prevent removed demo-login environment settings from regressing into browser auth configuration.
+- Observable behavior delivered; FR/NFR and B/G subcases: a focused CLI contract test supplies all legacy shortcut/password-grant settings and proves `_ui_auth_config` emits only OIDC browser metadata. Pickle logic remains untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `tests/interfaces/control_plane/test_control_plane_cli.py`; no production, serializer, serialized class/import path, payload, migration, dependency, or test deletion.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +20 test lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: control-plane CLI configuration test owns legacy-setting exclusion; existing auth route and OpenAPI tests remain owners of route absence.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `uv run pytest tests/interfaces/control_plane/test_control_plane_cli.py -q` (exit 0; 21 passed) and `uv run ruff check tests/interfaces/control_plane/test_control_plane_cli.py` (exit 0), 2026-09-14, project `uv` runtime.
+- Artifact and fixture hashes; evidence locations: implementation commit `85364b4c`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: live OIDC/PKCE/revocation, hostile transport, rendered browser/axe evidence, PostgreSQL races/recovery, clean TLS/OIDC consumer matrix, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD; continue with next qualification packet without changing pickle behavior.
+- Atomic implementation commits: `85364b4c`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-14 — N05 remove obsolete demo password login
 
 - Scope: close the unsupported password-grant browser shortcut and keep authentication on governed OIDC or explicit local bootstrap flows.
