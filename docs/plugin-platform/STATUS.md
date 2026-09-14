@@ -927,6 +927,12 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Observable behavior delivered: Changes, Activity, Connections, and Settings reads now use stable TanStack Query keys containing the exact authenticated session scope, pass cancellation signals through the shared transport, deduplicate concurrent reads, and clear on session transitions. Existing epoch fences remain while cursor and mutation workflows are migrated.
 - Verification: UI TypeScript compilation, Vite production build (93.88 kB gzip JavaScript), 11 UI tests, and `git diff --check` passed. Remaining N07 work is cursor/mutation migration and rendered deferred-response coverage; release remains HOLD.
 
+## 2026-09-14 — N07 management cursor query reads
+
+- Scope: remove manual AbortController ownership from Changes and Activity pagination.
+- Observable behavior delivered: history and audit cursor pages now use session-scoped Query keys containing cursor and filter state, receive Query cancellation signals, and ignore cancellation as a recoverable UI outcome. Filter changes cancel the management query family before clearing visible results; epoch fences still protect component state during the remaining migration.
+- Verification: UI TypeScript compilation, Vite production build (93.82 kB gzip JavaScript), 11 UI tests, and `git diff --check` passed. Remaining N07 work is mutation migration and rendered deferred-response coverage; release remains HOLD.
+
 ## Per-packet record template
 
 Replace the corresponding queue entry and keep one current record per packet.

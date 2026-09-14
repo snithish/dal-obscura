@@ -77,8 +77,6 @@ function App() {
   const managementEpoch = useRef(0);
   const assetAbortController = useRef<AbortController | null>(null);
   const workspaceAbortController = useRef<AbortController | null>(null);
-  const historyAbortController = useRef<AbortController | null>(null);
-  const auditAbortController = useRef<AbortController | null>(null);
   const [queryClient] = useState(
     () => new QueryClient({
       defaultOptions: {
@@ -148,8 +146,6 @@ function App() {
     if (searchTimer.current !== undefined) window.clearTimeout(searchTimer.current);
     assetAbortController.current?.abort();
     workspaceAbortController.current?.abort();
-    historyAbortController.current?.abort();
-    auditAbortController.current?.abort();
     void queryClient.cancelQueries();
     queryClient.clear();
   }, []);
@@ -186,8 +182,6 @@ function App() {
       managementEpoch.current += 1;
       assetAbortController.current?.abort();
       workspaceAbortController.current?.abort();
-      historyAbortController.current?.abort();
-      auditAbortController.current?.abort();
       clearPrivateState();
       setNotice("Your session expired or was revoked. Sign in again to continue.");
     };
@@ -304,21 +298,20 @@ function App() {
     const cursor = managementData.historyNextCursor;
     if (!cursor || historyLoading) return;
     const scope = managementEpoch.current;
-    historyAbortController.current?.abort();
-    const controller = new AbortController();
-    historyAbortController.current = controller;
     setHistoryLoading(true);
     try {
-      const pageResult = await controlPlane.listHistoryPage({ limit: 50, cursor, signal: controller.signal });
+      const pageResult = await queryClient.fetchQuery({
+        queryKey: ["management", sessionCacheKey, "changes", "history", 50, cursor],
+        queryFn: ({ signal }) => controlPlane.listHistoryPage({ limit: 50, cursor, signal }),
+      });
       if (!isCurrentEpoch(scope, managementEpoch.current)) return;
       setManagementData((current) => ({ ...current, history: [...(current.history ?? []), ...pageResult.items], historyNextCursor: pageResult.next_cursor }));
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
+      if ((error instanceof DOMException && error.name === "AbortError") || (error instanceof Error && error.name === "CancelledError")) return;
       if (!isCurrentEpoch(scope, managementEpoch.current)) return;
       setNotice(recoveryMessage(error, "More history could not be loaded. The entries already visible remain available."));
     } finally {
       if (scope === managementEpoch.current) setHistoryLoading(false);
-      if (controller === historyAbortController.current) historyAbortController.current = null;
     }
   }
 
@@ -326,28 +319,26 @@ function App() {
     const cursor = managementData.eventsNextCursor;
     if (!cursor || auditLoading) return;
     const scope = managementEpoch.current;
-    auditAbortController.current?.abort();
-    const controller = new AbortController();
-    auditAbortController.current = controller;
     setAuditLoading(true);
     try {
-      const pageResult = await controlPlane.listAuditEventsPage({ limit: 50, cursor, ...auditFilters, signal: controller.signal });
+      const pageResult = await queryClient.fetchQuery({
+        queryKey: ["management", sessionCacheKey, "activity", "audit", JSON.stringify(auditFilters), 50, cursor],
+        queryFn: ({ signal }) => controlPlane.listAuditEventsPage({ limit: 50, cursor, ...auditFilters, signal }),
+      });
       if (!isCurrentEpoch(scope, managementEpoch.current)) return;
       setManagementData((current) => ({ ...current, events: [...(current.events ?? []), ...pageResult.items], eventsNextCursor: pageResult.next_cursor }));
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") return;
+      if ((error instanceof DOMException && error.name === "AbortError") || (error instanceof Error && error.name === "CancelledError")) return;
       if (!isCurrentEpoch(scope, managementEpoch.current)) return;
       setNotice(recoveryMessage(error, "More activity could not be loaded. The entries already visible remain available."));
     } finally {
       if (scope === managementEpoch.current) setAuditLoading(false);
-      if (controller === auditAbortController.current) auditAbortController.current = null;
     }
   }
 
   function updateAuditFilters(next: AuditFilters) {
     managementEpoch.current += 1;
-    historyAbortController.current?.abort();
-    auditAbortController.current?.abort();
+    void queryClient.cancelQueries({ queryKey: ["management", sessionCacheKey] });
     setManagementData({});
     setAuditFilters(next);
   }
@@ -468,8 +459,6 @@ function App() {
     managementEpoch.current += 1;
     assetAbortController.current?.abort();
     workspaceAbortController.current?.abort();
-    historyAbortController.current?.abort();
-    auditAbortController.current?.abort();
     if (searchTimer.current !== undefined) {
       window.clearTimeout(searchTimer.current);
       searchTimer.current = undefined;
