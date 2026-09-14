@@ -1953,3 +1953,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: REST DNS/private-address swaps, live OIDC, browser axe/screen-reader and responsive coverage, PostgreSQL process races/recovery, clean TLS/OIDC consumer cells, capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Next action is continue candidate-bound qualification while retaining release HOLD.
 - Atomic implementation commits: `93004cd`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N01 full-suite verification after manifest cancellation fix
+
+- Scope: run the complete Python repository suite after the manifest Parquet cancellation and reader-cleanup boundary change.
+- Observable behavior delivered; FR/NFR and B/G subcases: all collected tests passed; the new manifest cancellation regression is included, while benchmark, opt-in consumer, PostgreSQL race, and recovery lanes remain explicit skips when their required environments are absent. Pickle fixtures and serializer tests remain covered and unchanged.
+- Changed and deleted paths; old callers removed; protected pickle check: verification only; no source, serializer, migration, dependency, or test deletions.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no source or dependency delta for this verification entry.
+- Primary invariant test owners; tests consolidated/deleted: existing full suite remains authoritative; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q -rs --junitxml=/tmp/dal-obscura-post-manifest-cancel-full.xml` (exit 0; 882 tests, 865 passed, 17 explicit skips, 0 failures/errors, approximately 136 seconds), 2026-09-14, Python 3.12/uv with loopback permissions.
+- Artifact and fixture hashes; evidence locations: JUnit report `/tmp/dal-obscura-post-manifest-cancel-full.xml`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: live OIDC and hostile DNS/private-address transport, browser axe/screen-reader and responsive evidence, PostgreSQL process races/recovery, clean TLS/OIDC consumer cells, mixed-load capacity, deployment integrity/SBOM, and independent review remain VERIFY under N04–N16. Release remains HOLD.
+- Atomic implementation commits: verification only; implementation commit `93004cd` and ledger commit `7502a60` remain the source of truth.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
