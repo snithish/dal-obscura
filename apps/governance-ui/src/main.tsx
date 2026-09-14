@@ -85,6 +85,8 @@ function App() {
   const inventoryEpoch = useRef(0);
   const searchTimer = useRef<number | undefined>(undefined);
   const managementEpoch = useRef(0);
+  const historyLoadingRef = useRef(false);
+  const auditLoadingRef = useRef(false);
   const workspaceAbortController = useRef<AbortController | null>(null);
   const mutationControllers = useRef<Set<AbortController>>(new Set());
   const [queryClient] = useState(
@@ -308,7 +310,8 @@ function App() {
 
   async function loadMoreHistory() {
     const cursor = managementData.historyNextCursor;
-    if (!cursor || historyLoading) return;
+    if (!cursor || historyLoading || historyLoadingRef.current) return;
+    historyLoadingRef.current = true;
     const scope = managementEpoch.current;
     setHistoryLoading(true);
     try {
@@ -323,13 +326,15 @@ function App() {
       if (!isCurrentEpoch(scope, managementEpoch.current)) return;
       setNotice(recoveryMessage(error, "More history could not be loaded. The entries already visible remain available."));
     } finally {
+      historyLoadingRef.current = false;
       if (scope === managementEpoch.current) setHistoryLoading(false);
     }
   }
 
   async function loadMoreAudit() {
     const cursor = managementData.eventsNextCursor;
-    if (!cursor || auditLoading) return;
+    if (!cursor || auditLoading || auditLoadingRef.current) return;
+    auditLoadingRef.current = true;
     const scope = managementEpoch.current;
     setAuditLoading(true);
     try {
@@ -344,6 +349,7 @@ function App() {
       if (!isCurrentEpoch(scope, managementEpoch.current)) return;
       setNotice(recoveryMessage(error, "More activity could not be loaded. The entries already visible remain available."));
     } finally {
+      auditLoadingRef.current = false;
       if (scope === managementEpoch.current) setAuditLoading(false);
     }
   }
