@@ -17,7 +17,9 @@ from dal_obscura.control_plane.application.auth_provider_validation import (
     redact_auth_provider,
     validate_auth_provider_payloads,
 )
+from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
+from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 
 
 def required_workspace_context(store: PublicationStore):
@@ -83,6 +85,7 @@ def get_workspace_runtime_settings(store: PublicationStore) -> dict[str, object]
         "ticket_ttl_seconds": settings["ticket_ttl_seconds"],
         "max_tickets": settings["max_tickets"],
         "max_ticket_exchanges": settings["max_ticket_exchanges"],
+        "path_rules": list(settings.get("path_rules", [])),
         "revision": settings["revision"],
     }
 
@@ -210,6 +213,7 @@ def upsert_workspace_runtime_settings(
     ttl: int,
     max_tickets: int,
     max_ticket_exchanges: int,
+    path_rules: list[dict[str, Any]] | None = None,
     expected_revision: int | None = None,
     *,
     actor_principal: str = "system",
@@ -222,12 +226,18 @@ def upsert_workspace_runtime_settings(
         ```
     """
 
+    normalized_path_rules = [dict(rule) for rule in (path_rules or [])]
+    try:
+        PathRuleEnforcer(normalized_path_rules)
+    except (TypeError, ValueError) as exc:
+        raise ValidationFailure("Runtime path rules are invalid") from exc
     context = store.ensure_default_workspace_context()
     store.upsert_runtime_settings(
         cell_id=context.cell_id,
         ticket_ttl_seconds=ttl,
         max_tickets=max_tickets,
         max_ticket_exchanges=max_ticket_exchanges,
+        path_rules=normalized_path_rules,
         expected_revision=expected_revision,
     )
     store.record_workspace_audit_event(
@@ -241,6 +251,7 @@ def upsert_workspace_runtime_settings(
             "ticket_ttl_seconds": ttl,
             "max_tickets": max_tickets,
             "max_ticket_exchanges": max_ticket_exchanges,
+            "path_rules": normalized_path_rules,
         },
     )
     settings = store.get_runtime_settings(context.cell_id)
@@ -251,6 +262,7 @@ def upsert_workspace_runtime_settings(
             "ticket_ttl_seconds": settings["ticket_ttl_seconds"],
             "max_tickets": settings["max_tickets"],
             "max_ticket_exchanges": settings["max_ticket_exchanges"],
+            "path_rules": list(settings.get("path_rules", [])),
             "revision": settings["revision"],
         }
     )

@@ -112,6 +112,7 @@ class RuntimeSettingsRequest(StrictModel):
     ticket_ttl_seconds: int = Field(gt=0)
     max_tickets: int = Field(gt=0)
     max_ticket_exchanges: int = Field(gt=0)
+    path_rules: list[dict[str, object]] = Field(default_factory=list, max_length=256)
     expected_revision: int | None = Field(default=None, ge=0)
 
 
@@ -121,6 +122,7 @@ class RuntimeSettingsResponse(BaseModel):
     ticket_ttl_seconds: int
     max_tickets: int
     max_ticket_exchanges: int
+    path_rules: list[dict[str, str]]
     revision: int
 
 

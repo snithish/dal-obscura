@@ -450,6 +450,7 @@ class ProvisioningService:
         ttl: int,
         max_tickets: int,
         max_ticket_exchanges: int,
+        path_rules: list[dict[str, Any]] | None = None,
         expected_revision: int | None = None,
         actor: ControlPlaneActor | None = None,
     ) -> dict[str, object]:
@@ -458,6 +459,7 @@ class ProvisioningService:
             ttl=ttl,
             max_tickets=max_tickets,
             max_ticket_exchanges=max_ticket_exchanges,
+            path_rules=path_rules,
             expected_revision=expected_revision,
             actor_principal="system" if actor is None else actor.identity_key(),
         )

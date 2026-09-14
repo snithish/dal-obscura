@@ -83,6 +83,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
                 ttl=request.ticket_ttl_seconds,
                 max_tickets=request.max_tickets,
                 max_ticket_exchanges=request.max_ticket_exchanges,
+                path_rules=request.path_rules,
                 expected_revision=request.expected_revision,
                 actor=actor,
             )
@@ -94,6 +95,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
                 "ticket_ttl_seconds": request.ticket_ttl_seconds,
                 "max_tickets": request.max_tickets,
                 "max_ticket_exchanges": request.max_ticket_exchanges,
+                "path_rules": request.path_rules,
                 "revision": 0,
             },
         )

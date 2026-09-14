@@ -299,6 +299,7 @@ class PublicationStore:
         ticket_ttl_seconds: int,
         max_tickets: int,
         max_ticket_exchanges: int,
+        path_rules: list[dict[str, Any]] | None = None,
         expected_revision: int | None = None,
     ) -> None:
         self.lock_cell_for_publication(cell_id)
@@ -313,7 +314,7 @@ class PublicationStore:
                     ticket_ttl_seconds=ticket_ttl_seconds,
                     max_tickets=max_tickets,
                     max_ticket_exchanges=max_ticket_exchanges,
-                    path_rules_json=[],
+                    path_rules_json=[dict(rule) for rule in (path_rules or [])],
                 )
             )
         else:
@@ -332,12 +333,12 @@ class PublicationStore:
                 existing.ticket_ttl_seconds != ticket_ttl_seconds
                 or existing.max_tickets != max_tickets
                 or existing.max_ticket_exchanges != max_ticket_exchanges
-                or existing.path_rules_json != []
+                or existing.path_rules_json != list(path_rules or [])
             )
             existing.ticket_ttl_seconds = ticket_ttl_seconds
             existing.max_tickets = max_tickets
             existing.max_ticket_exchanges = max_ticket_exchanges
-            existing.path_rules_json = []
+            existing.path_rules_json = [dict(rule) for rule in (path_rules or [])]
             if changed:
                 existing.revision += 1
         self._session.flush()
@@ -811,6 +812,7 @@ class PublicationStore:
             "ticket_ttl_seconds": record.ticket_ttl_seconds,
             "max_tickets": record.max_tickets,
             "max_ticket_exchanges": record.max_ticket_exchanges,
+            "path_rules": [dict(rule) for rule in record.path_rules_json],
             "revision": record.revision,
         }
 

@@ -30,6 +30,7 @@ def test_workspace_runtime_settings_can_be_configured_without_tenant_or_cell_ids
         "ticket_ttl_seconds": 1200,
         "max_tickets": 32,
         "max_ticket_exchanges": 3,
+        "path_rules": [],
         "revision": 0,
     }
     updated = client.put(
@@ -64,10 +65,11 @@ def test_workspace_runtime_settings_can_be_configured_without_tenant_or_cell_ids
         "ticket_ttl_seconds": 1800,
         "max_tickets": 32,
         "max_ticket_exchanges": 3,
+        "path_rules": [],
     }
 
 
-def test_workspace_runtime_settings_rejects_path_rules():
+def test_workspace_runtime_settings_accepts_path_rules_and_audits_roots():
     client = _client()
 
     response = client.put(
@@ -81,7 +83,29 @@ def test_workspace_runtime_settings_rejects_path_rules():
         headers=ADMIN_HEADERS,
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert response.json()["path_rules"] == [{"root": "s3://warehouse"}]
+    events = client.get("/v1/audit/events", headers=ADMIN_HEADERS).json()
+    runtime_events = [event for event in events if event["action"] == "workspace.runtime.update"]
+    assert runtime_events[0]["details"]["path_rules"] == [{"root": "s3://warehouse"}]
+
+
+def test_workspace_runtime_settings_rejects_unsafe_path_rules():
+    client = _client()
+
+    response = client.put(
+        "/v1/settings/runtime",
+        json={
+            "ticket_ttl_seconds": 1200,
+            "max_tickets": 32,
+            "max_ticket_exchanges": 3,
+            "path_rules": [{"root": "s3://warehouse/*"}],
+        },
+        headers=ADMIN_HEADERS,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "validation_error"
 
 
 def test_workspace_auth_providers_can_be_configured_without_cell_ids():

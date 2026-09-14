@@ -1671,6 +1671,10 @@ export interface components {
             max_ticket_exchanges: number;
             /** Max Tickets */
             max_tickets: number;
+            /** Path Rules */
+            path_rules?: {
+                [key: string]: unknown;
+            }[];
             /** Ticket Ttl Seconds */
             ticket_ttl_seconds: number;
         };
@@ -1683,6 +1687,10 @@ export interface components {
             max_ticket_exchanges: number;
             /** Max Tickets */
             max_tickets: number;
+            /** Path Rules */
+            path_rules: {
+                [key: string]: string;
+            }[];
             /** Revision */
             revision: number;
             /** Ticket Ttl Seconds */

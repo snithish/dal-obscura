@@ -83,6 +83,8 @@ td small { display: block; color: #61736e; margin-top: 4px; }
 .field-tree.nested { margin: 0 0 0 8px; }
 .form-label { display: grid; gap: 6px; color: #52635e; font-size: 13px; font-weight: 700; margin-bottom: 12px; }
 .form-label input { width: 100%; border: 1px solid #bbc8c0; border-radius: 4px; padding: 9px 10px; background: #fff; color: inherit; font-weight: 400; }
+.runtime-path-rules { display: grid; gap: 6px; margin: 16px 0; color: #52635e; font-size: 13px; font-weight: 700; }
+.runtime-path-rules textarea { width: 100%; min-height: 96px; border: 1px solid #bbc8c0; border-radius: 4px; padding: 9px 10px; background: #fff; color: inherit; font: 12px/1.45 "SFMono-Regular", Consolas, monospace; }
 .grant-editor { display: grid; gap: 9px; }
 .grant-row { display: grid; grid-template-columns: minmax(180px, 1fr) 180px auto; gap: 9px; align-items: center; }
 .grant-row input, .grant-row select { width: 100%; border: 1px solid #bbc8c0; border-radius: 4px; padding: 9px 10px; background: #fff; color: inherit; }

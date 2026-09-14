@@ -18,6 +18,7 @@ const emptyRuntime: RuntimeSettings = {
   ticket_ttl_seconds: 0,
   max_tickets: 0,
   max_ticket_exchanges: 0,
+  path_rules: [],
 };
 
 export function SettingsView({
@@ -32,8 +33,9 @@ export function SettingsView({
   const [form, setForm] = useState<RuntimeSettings>(runtime ?? emptyRuntime);
   const [providerRows, setProviderRows] = useState<AuthProvider[]>(providers);
   const [message, setMessage] = useState("");
+  const [pathRulesText, setPathRulesText] = useState("[]");
 
-  useEffect(() => setForm(runtime ?? emptyRuntime), [runtime]);
+  useEffect(() => { const next = runtime ?? emptyRuntime; setForm(next); setPathRulesText(JSON.stringify(next.path_rules, null, 2)); }, [runtime]);
   useEffect(() => setProviderRows(providers), [providers]);
 
   async function save() {
@@ -42,7 +44,16 @@ export function SettingsView({
       return;
     }
     try {
-      await controlPlane.saveRuntimeSettings(form);
+      let pathRules: Array<Record<string, string>>;
+      try {
+        const parsed: unknown = JSON.parse(pathRulesText);
+        if (!Array.isArray(parsed) || parsed.some((item) => !item || typeof item !== "object" || Object.keys(item).length !== 1 || typeof (item as { root?: unknown }).root !== "string" || !(item as { root: string }).root.trim())) throw new Error("invalid");
+        pathRules = parsed as Array<Record<string, string>>;
+      } catch {
+        setMessage("Path rules must be a JSON array of objects with non-empty root values.");
+        return;
+      }
+      await controlPlane.saveRuntimeSettings({ ...form, path_rules: pathRules });
       void queryClient.invalidateQueries({ queryKey: ["management", sessionScope, "settings"] });
       setMessage("Runtime settings saved as draft configuration. Publish to make worker behavior change.");
       onReload();
@@ -103,6 +114,8 @@ export function SettingsView({
           <label>Max tickets<input type="number" min="1" value={form.max_tickets || ""} placeholder="64" onChange={(event) => setForm({ ...form, max_tickets: Number(event.target.value) })} /></label>
           <label>Ticket exchanges<input type="number" min="1" value={form.max_ticket_exchanges || ""} placeholder="2" onChange={(event) => setForm({ ...form, max_ticket_exchanges: Number(event.target.value) })} /></label>
         </div>
+        <label className="runtime-path-rules">Storage path roots (JSON)<textarea value={pathRulesText} onChange={(event) => setPathRulesText(event.target.value)} aria-label="Storage path roots JSON" spellCheck={false} placeholder={'[{"root":"s3://warehouse/curated"}]'} /></label>
+        <p className="help">Every metadata and data location must stay under one of these roots. Leave the list empty only for an explicitly local development profile.</p>
         <button className="primary" onClick={() => void save()}>Save runtime settings</button>
         {message && <p className="notice" role="status">{message}</p>}
       </div>

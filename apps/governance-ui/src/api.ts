@@ -214,6 +214,7 @@ export type RuntimeSettings = {
   ticket_ttl_seconds: number;
   max_tickets: number;
   max_ticket_exchanges: number;
+  path_rules: Array<Record<string, string>>;
   revision?: number;
 };
 
@@ -481,7 +482,7 @@ export const controlPlane = {
   }),
   saveRuntimeSettings: (settings: RuntimeSettings) => request<ApiSchemas["RuntimeSettingsResponse"]>("/v1/settings/runtime", {
     method: "PUT",
-    body: JSON.stringify({ ticket_ttl_seconds: settings.ticket_ttl_seconds, max_tickets: settings.max_tickets, max_ticket_exchanges: settings.max_ticket_exchanges, ...(settings.revision === undefined ? {} : { expected_revision: settings.revision }) }),
+    body: JSON.stringify({ ticket_ttl_seconds: settings.ticket_ttl_seconds, max_tickets: settings.max_tickets, max_ticket_exchanges: settings.max_ticket_exchanges, path_rules: settings.path_rules, ...(settings.revision === undefined ? {} : { expected_revision: settings.revision }) }),
   }),
   publishAsset: (assetId: string, expectedDraftRevision?: number, reviewToken?: string, idempotencyKey?: string, draftId?: string) => request<ApiSchemas["PolicyVersionCreateResponse"]>(`/v1/assets/${assetId}/policy-versions`, {
     method: "POST",
