@@ -82,6 +82,27 @@ def test_record_batch_validation_stops_unbounded_output_generators():
         check_record_batches(schema, endless_batches(), max_batches=2)
 
 
+def test_record_batch_validation_closes_provider_output_on_failure() -> None:
+    schema = pa.schema([pa.field("id", pa.int64())])
+    batch = pa.RecordBatch.from_pylist([{"id": 1}], schema=schema)
+
+    class ClosableBatches:
+        closed = False
+
+        def __iter__(self):
+            yield batch
+            yield batch
+
+        def close(self) -> None:
+            self.closed = True
+
+    batches = ClosableBatches()
+    with pytest.raises(ValueError, match="more than 1 output batches"):
+        check_record_batches(schema, batches, max_batches=1)
+
+    assert batches.closed is True
+
+
 def test_record_batch_validation_enforces_per_batch_byte_budget():
     schema = pa.schema([pa.field("payload", pa.binary())])
     batch = pa.RecordBatch.from_pylist([{"payload": b"secret"}], schema=schema)

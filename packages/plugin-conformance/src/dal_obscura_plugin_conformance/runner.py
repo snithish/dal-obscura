@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -176,31 +177,50 @@ def check_record_batches(  # noqa: C901
 
     iterator = iter(batches)
     index = 0
-    while True:
-        if deadline is not None and datetime.now(timezone.utc) >= deadline:
-            raise TimeoutError("execution context deadline expired while reading output")
-        if cancel_check is not None and cancel_check():
-            raise RuntimeError("execution context was cancelled while reading output")
-        try:
-            batch = next(iterator)
-        except StopIteration:
-            break
-        if index >= max_batches:
-            raise ValueError(f"format returned more than {max_batches} output batches")
-        if not isinstance(batch, pa.RecordBatch):
-            raise ValueError(f"batch {index} is not an Arrow record batch")
-        if batch.schema != schema:
-            raise ValueError(f"batch {index} schema differs from the declared output schema")
-        if batch.nbytes > max_batch_bytes:
-            raise ValueError(f"batch {index} exceeds the {max_batch_bytes}-byte batch byte budget")
-        if set(batch.schema.names) != set(schema.names):
-            raise ValueError(f"batch {index} contains undeclared output columns")
-        row_count += batch.num_rows
-        if row_count > max_rows:
-            raise ValueError(f"format returned more than {max_rows} output rows")
-        index += 1
+    try:
+        while True:
+            if deadline is not None and datetime.now(timezone.utc) >= deadline:
+                raise TimeoutError("execution context deadline expired while reading output")
+            if cancel_check is not None and cancel_check():
+                raise RuntimeError("execution context was cancelled while reading output")
+            try:
+                batch = next(iterator)
+            except StopIteration:
+                break
+            if index >= max_batches:
+                raise ValueError(f"format returned more than {max_batches} output batches")
+            if not isinstance(batch, pa.RecordBatch):
+                raise ValueError(f"batch {index} is not an Arrow record batch")
+            if batch.schema != schema:
+                raise ValueError(f"batch {index} schema differs from the declared output schema")
+            if batch.nbytes > max_batch_bytes:
+                raise ValueError(
+                    f"batch {index} exceeds the {max_batch_bytes}-byte batch byte budget"
+                )
+            if set(batch.schema.names) != set(schema.names):
+                raise ValueError(f"batch {index} contains undeclared output columns")
+            row_count += batch.num_rows
+            if row_count > max_rows:
+                raise ValueError(f"format returned more than {max_rows} output rows")
+            index += 1
+    finally:
+        _close_iterable_preserving_error(batches)
     if result is not None:
         result.record_pass("record_batches")
+
+
+def _close_iterable_preserving_error(value: object) -> None:
+    """Close provider output while retaining an active validation/cancel error."""
+
+    close = getattr(value, "close", None)
+    if not callable(close):
+        return
+    active_error = sys.exc_info()[1]
+    try:
+        close()
+    except Exception:
+        if active_error is None:
+            raise
 
 
 def _check_task_coverage(
