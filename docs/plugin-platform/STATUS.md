@@ -2942,3 +2942,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: supported-CI browser execution, live OIDC login/logout/expiry, screen-reader review, visual snapshots, and independent UX/security/release review remain VERIFY under N05/N06/N16. Release remains HOLD.
 - Atomic implementation commits: `da8c87ac`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N04 catalog reload primary-error fencing
+
+- Scope: retain the failed generation-build error when cleanup of partially built catalogs also fails.
+- Observable behavior delivered; FR/NFR and B/G subcases: catalog registry reload cleanup still attempts every candidate adapter and still reports cleanup failures after a successful generation swap, but suppresses cleanup failures while a candidate build exception is active. A failed reload therefore keeps the prior generation and reports the factory/validation cause instead of an incidental close error. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/data_plane/infrastructure/adapters/catalog_registry.py` and `tests/infrastructure/adapters/test_catalog_registry.py`; no serializers, APIs, migrations, dependencies, or durable records changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +3/-1 production lines and +32 test lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `tests/infrastructure/adapters/test_catalog_registry.py::test_catalog_registry_reload_preserves_build_failure_when_cleanup_fails`; existing all-adapter cleanup and prior-generation retention tests remain; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/infrastructure/adapters/test_catalog_registry.py -q` (exit 0, 24 passed), focused Ruff check/format (exit 0), and pre-commit Ruff/pytest hooks (exit 0). Repository Ty hook remains blocked by unrelated existing diagnostics outside this slice; 2026-09-15, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `0a4bc3b0`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: actual provider cancellation timing, hostile transport counters, capacity mixed load, PostgreSQL races/recovery, clean candidate consumers, deployment integrity/SBOM, and independent security/UX/release review remain VERIFY under N04/N12–N16. Release remains HOLD; continue bounded provider and deployment qualification.
+- Atomic implementation commits: `0a4bc3b0`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
