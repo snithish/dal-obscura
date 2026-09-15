@@ -1189,83 +1189,11 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `e8210e5`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
-## 2026-09-14 — N04 registry shutdown cleanup recovery
 
-- Scope: make data-plane catalog shutdown and generation replacement attempt cleanup for every catalog even when one provider close operation fails.
-- Observable behavior delivered; FR/NFR and B/G subcases: `_close_catalogs` records the first close exception, continues closing remaining adapters, then re-raises that first error. A failed provider can no longer leave later catalogs open during shutdown or reload. Catalog resolution, plugin admission, and pickle logic are unchanged.
-- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/data_plane/infrastructure/adapters/catalog_registry.py` and its focused unit test; no serializers, APIs, dependencies, or durable records changed.
-- Production/test logical SLOC delta; dependencies added/removed and reason: +9 production lines and +30 test lines for cleanup recovery; no dependencies changed.
-- Primary invariant test owners; tests consolidated/deleted: `tests/infrastructure/adapters/test_catalog_registry.py::test_catalog_registry_close_attempts_all_catalogs_when_one_fails`; no tests deleted.
-- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/infrastructure/adapters/test_catalog_registry.py -q` (exit 0, 23 passed) plus focused Ruff check/format (exit 0), 2026-09-14, Python 3.12.10.
-- Artifact and fixture hashes; evidence locations: implementation commit `d251e1c3`; no external artifact published.
-- Remaining subcases; blocker and next concrete action: real provider close/cancellation behavior and mixed-worker capacity remain VERIFY under N04/N14; release remains HOLD. Continue qualifying cleanup under stalled and failing provider IO.
-- Atomic implementation commits: `d251e1c3`.
-- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
-## 2026-09-14 — Full regression after migration and registry cleanup
 
-- Scope: qualify the complete Python suite after the maintenance-mode migration gate, discovery capacity recovery, and registry alias removal.
-- Observable behavior delivered; FR/NFR and B/G subcases: the full suite completed with no failures or errors. Explicit benchmark, external consumer, PostgreSQL race, and recovery cases remain visibly environment-gated; no skip was converted into a pass claim. Pickle logic is untouched.
-- Changed and deleted paths; old callers removed; protected pickle check: verification only; no source, serializer, migration, dependency, or test deletions in this verification slice.
-- Production/test logical SLOC delta; dependencies added/removed and reason: no additional code or dependency delta.
-- Primary invariant test owners; tests consolidated/deleted: existing full-suite owners remain authoritative; no tests deleted.
-- Exact commands, exit codes, UTC date, runtime versions, environment: elevated `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q -rs` (exit 0, no failures/errors; 21 explicit skips reported), 2026-09-14, Python 3.12.10 with loopback/subprocess permission.
-- Artifact and fixture hashes; evidence locations: terminal output only; no external artifact published.
-- Remaining subcases; blocker and next concrete action: PostgreSQL races/recovery, live OIDC/browser/accessibility, hostile transport/DNS counters, clean Node/image and TLS consumer lanes, capacity mixed-load, deployment integrity/SBOM, and independent review remain VERIFY. Release remains HOLD; qualify those external lanes against the committed candidate before release.
-- Atomic implementation commits: verification only; no implementation commit.
-- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
-## 2026-09-14 — N02 remove obsolete dynamic registry alias
 
-- Scope: remove the unused `DynamicCatalogRegistry` compatibility name and migrate all active benchmark, consumer, and Flight integration callers to `CatalogRegistry`.
-- Observable behavior delivered; FR/NFR and B/G subcases: one authoritative catalog registry class is exported and exercised. The removed alias had identical behavior and no production caller; imports of the retired name now fail instead of preserving an obsolete API surface. Built-in Iceberg resolution, public plugin admission, and pickle logic are unchanged.
-- Changed and deleted paths; old callers removed; protected pickle check: registry module/package export plus three test/benchmark caller files; no serializers, dependencies, runtime readers, or durable records changed.
-- Production/test logical SLOC delta; dependencies added/removed and reason: -5 production lines and -5 test lines after caller migration; no dependencies changed.
-- Primary invariant test owners; tests consolidated/deleted: catalog registry unit tests and Flight integration suite remain owners; no tests deleted.
-- Exact commands, exit codes, UTC date, runtime versions, environment: elevated `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/infrastructure/adapters/test_catalog_registry.py tests/interfaces/flight/test_integration_flight_backends.py -q` (exit 0, 26 passed), focused Ruff check/format (exit 0), 2026-09-14, Python 3.12.10 with loopback permission.
-- Artifact and fixture hashes; evidence locations: implementation commit `35b0a92f`; no external artifact published.
-- Remaining subcases; blocker and next concrete action: remaining `module` field migration inventory and populated PostgreSQL maintenance conversion remain VERIFY; N03–N16 live gates and independent review remain open. Release remains HOLD; continue deleting only proven-dead compatibility names after caller inventory.
-- Atomic implementation commits: `35b0a92f`.
-- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
-
-## 2026-09-14 — N04 discovery close-failure capacity recovery
-
-- Scope: close a resource-accounting hole in admitted public catalog discovery.
-- Observable behavior delivered; FR/NFR and B/G subcases: a plugin `close()` failure still surfaces as the provider error, while the bounded global discovery slot is released in a nested `finally`. Eight consecutive close failures no longer poison the ninth request; a healthy request remains admissible. Plugin/provider cleanup and pickle logic are untouched.
-- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/infrastructure/catalog_discovery.py` and its focused regression test; no APIs, serializers, dependencies, or legacy paths deleted.
-- Production/test logical SLOC delta; dependencies added/removed and reason: +7 production lines and +50 test lines for the capacity recovery invariant; no dependencies changed.
-- Primary invariant test owners; tests consolidated/deleted: `tests/control_plane/test_catalog_discovery.py::test_public_catalog_discovery_releases_capacity_when_close_fails`; no tests deleted.
-- Exact commands, exit codes, UTC date, runtime versions, environment: `uv run --no-sync pytest tests/control_plane/test_catalog_discovery.py -q` (exit 0, 20 passed) plus focused Ruff check/format (exit 0), 2026-09-14, Python 3.12.10.
-- Artifact and fixture hashes; evidence locations: implementation commit `348b27e5`; no external artifact published.
-- Remaining subcases; blocker and next concrete action: real provider cancellation/close behavior, hostile transport counters, and multi-worker capacity measurement remain VERIFY under N04/N14; release remains HOLD. Continue reviewing provider cleanup paths for bounded resource recovery without masking primary errors.
-- Atomic implementation commits: `348b27e5`.
-- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
-
-## 2026-09-14 — N02 remove unreachable discovery helper
-
-- Scope: delete a dead catalog-type helper from the control-plane discovery adapter.
-- Observable behavior delivered; FR/NFR and B/G subcases: unsupported catalog modules still fail closed with the same stable `ValueError`; the removed helper had no behavior beyond recomputing the built-in check immediately before raising. Built-in Iceberg discovery and admitted public-plugin discovery are unchanged. Pickle logic is untouched.
-- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/infrastructure/catalog_discovery.py`; one unused import and one unreachable helper deleted; no runtime serializer, migration, dependency, or API path changed.
-- Production/test logical SLOC delta; dependencies added/removed and reason: -9 production lines; no dependencies changed.
-- Primary invariant test owners; tests consolidated/deleted: existing catalog discovery and catalog API suites remain owners; no tests deleted.
-- Exact commands, exit codes, UTC date, runtime versions, environment: `uv run --no-sync pytest tests/control_plane/test_catalog_discovery.py tests/interfaces/control_plane/test_catalogs_api.py -q` (exit 0, 34 passed) plus focused Ruff check/format (exit 0), 2026-09-14, Python 3.12.10.
-- Artifact and fixture hashes; evidence locations: implementation commit `a6f11859`; no external artifact published.
-- Remaining subcases; blocker and next concrete action: N02 legacy module-field inventory and populated PostgreSQL maintenance conversion remain VERIFY; all N03–N16 live gates and independent review remain open. Release remains HOLD; continue removing only proven-dead legacy paths with owning behavioral coverage.
-- Atomic implementation commits: `a6f11859`.
-- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
-
-## 2026-09-14 — N02 maintenance-mode migration acknowledgement
-
-- Scope: enforce an explicit cutover acknowledgement before offline plugin-binding or federated identity rewrites can mutate durable records.
-- Observable behavior delivered; FR/NFR and B/G subcases: `dal-obscura-migrate plugin-bindings --apply` and `identity-keys --apply` now fail with exit code 2 unless `--maintenance-mode` is present. Preview commands remain read-only; canonical known-record conversion remains transactional and idempotent, while unknown records remain unsupported. The acknowledgement documents that admissions are stopped and writers are drained; the CLI cannot infer process state. Pickle logic is untouched.
-- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/common/config_store/cli.py`, migration CLI tests, and `docs/operators.md`; no serializers, runtime readers, dependencies, or legacy data were deleted.
-- Production/test logical SLOC delta; dependencies added/removed and reason: +17 production lines, +15 test lines, and operator runbook updates; no dependencies changed.
-- Primary invariant test owners; tests consolidated/deleted: `tests/common/config_store/test_plugin_bindings.py` and `tests/common/config_store/test_migration_cli.py` own the apply gate and prove no unauthorised apply path; no tests deleted.
-- Exact commands, exit codes, UTC date, runtime versions, environment: `uv run --no-sync pytest tests/common/config_store/test_plugin_bindings.py tests/common/config_store/test_migration_cli.py -q` (exit 0, 6 passed) and focused Ruff check/format (exit 0), 2026-09-14, Python 3.12.10.
-- Artifact and fixture hashes; evidence locations: implementation commit `db3c6c13`; operator guidance in `docs/operators.md`; no external artifact published.
-- Remaining subcases; blocker and next concrete action: populated PostgreSQL backup/rollback and two-process maintenance cutover remain VERIFY; remaining N02 legacy reader/input inventory and all N04–N16 live gates remain open. Release remains HOLD; execute the migration against a disposable populated PostgreSQL fixture with writers stopped, then record rollback evidence.
-- Atomic implementation commits: `db3c6c13`.
-- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
 ## 2026-09-14 — Repository regression sweep after contract cleanup
 
@@ -2759,4 +2687,82 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Artifact and fixture hashes; evidence locations: implementation commit `549eb201`; no external artifact published.
 - Remaining subcases; blocker and next concrete action: N02 populated-record maintenance conversion and full old-input matrix remain VERIFY; live N04/N05/N12/N13–N16 gates and independent review remain VERIFY. Release remains HOLD; continue canonical serving-reader and migration qualification.
 - Atomic implementation commits: `549eb201`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N04 registry shutdown cleanup recovery
+
+- Scope: make data-plane catalog shutdown and generation replacement attempt cleanup for every catalog even when one provider close operation fails.
+- Observable behavior delivered; FR/NFR and B/G subcases: `_close_catalogs` records the first close exception, continues closing remaining adapters, then re-raises that first error. A failed provider can no longer leave later catalogs open during shutdown or reload. Catalog resolution, plugin admission, and pickle logic are unchanged.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/data_plane/infrastructure/adapters/catalog_registry.py` and its focused unit test; no serializers, APIs, dependencies, or durable records changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +9 production lines and +30 test lines for cleanup recovery; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `tests/infrastructure/adapters/test_catalog_registry.py::test_catalog_registry_close_attempts_all_catalogs_when_one_fails`; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/infrastructure/adapters/test_catalog_registry.py -q` (exit 0, 23 passed) plus focused Ruff check/format (exit 0), 2026-09-14, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `d251e1c3`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: real provider close/cancellation behavior and mixed-worker capacity remain VERIFY under N04/N14; release remains HOLD. Continue qualifying cleanup under stalled and failing provider IO.
+- Atomic implementation commits: `d251e1c3`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — Full regression after migration and registry cleanup
+
+- Scope: qualify the complete Python suite after the maintenance-mode migration gate, discovery capacity recovery, and registry alias removal.
+- Observable behavior delivered; FR/NFR and B/G subcases: the full suite completed with no failures or errors. Explicit benchmark, external consumer, PostgreSQL race, and recovery cases remain visibly environment-gated; no skip was converted into a pass claim. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: verification only; no source, serializer, migration, dependency, or test deletions in this verification slice.
+- Production/test logical SLOC delta; dependencies added/removed and reason: no additional code or dependency delta.
+- Primary invariant test owners; tests consolidated/deleted: existing full-suite owners remain authoritative; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: elevated `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q -rs` (exit 0, no failures/errors; 21 explicit skips reported), 2026-09-14, Python 3.12.10 with loopback/subprocess permission.
+- Artifact and fixture hashes; evidence locations: terminal output only; no external artifact published.
+- Remaining subcases; blocker and next concrete action: PostgreSQL races/recovery, live OIDC/browser/accessibility, hostile transport/DNS counters, clean Node/image and TLS consumer lanes, capacity mixed-load, deployment integrity/SBOM, and independent review remain VERIFY. Release remains HOLD; qualify those external lanes against the committed candidate before release.
+- Atomic implementation commits: verification only; no implementation commit.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N02 remove obsolete dynamic registry alias
+
+- Scope: remove the unused `DynamicCatalogRegistry` compatibility name and migrate all active benchmark, consumer, and Flight integration callers to `CatalogRegistry`.
+- Observable behavior delivered; FR/NFR and B/G subcases: one authoritative catalog registry class is exported and exercised. The removed alias had identical behavior and no production caller; imports of the retired name now fail instead of preserving an obsolete API surface. Built-in Iceberg resolution, public plugin admission, and pickle logic are unchanged.
+- Changed and deleted paths; old callers removed; protected pickle check: registry module/package export plus three test/benchmark caller files; no serializers, dependencies, runtime readers, or durable records changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: -5 production lines and -5 test lines after caller migration; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: catalog registry unit tests and Flight integration suite remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: elevated `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/infrastructure/adapters/test_catalog_registry.py tests/interfaces/flight/test_integration_flight_backends.py -q` (exit 0, 26 passed), focused Ruff check/format (exit 0), 2026-09-14, Python 3.12.10 with loopback permission.
+- Artifact and fixture hashes; evidence locations: implementation commit `35b0a92f`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: remaining `module` field migration inventory and populated PostgreSQL maintenance conversion remain VERIFY; N03–N16 live gates and independent review remain open. Release remains HOLD; continue deleting only proven-dead compatibility names after caller inventory.
+- Atomic implementation commits: `35b0a92f`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N04 discovery close-failure capacity recovery
+
+- Scope: close a resource-accounting hole in admitted public catalog discovery.
+- Observable behavior delivered; FR/NFR and B/G subcases: a plugin `close()` failure still surfaces as the provider error, while the bounded global discovery slot is released in a nested `finally`. Eight consecutive close failures no longer poison the ninth request; a healthy request remains admissible. Plugin/provider cleanup and pickle logic are untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/infrastructure/catalog_discovery.py` and its focused regression test; no APIs, serializers, dependencies, or legacy paths deleted.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +7 production lines and +50 test lines for the capacity recovery invariant; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `tests/control_plane/test_catalog_discovery.py::test_public_catalog_discovery_releases_capacity_when_close_fails`; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `uv run --no-sync pytest tests/control_plane/test_catalog_discovery.py -q` (exit 0, 20 passed) plus focused Ruff check/format (exit 0), 2026-09-14, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `348b27e5`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: real provider cancellation/close behavior, hostile transport counters, and multi-worker capacity measurement remain VERIFY under N04/N14; release remains HOLD. Continue reviewing provider cleanup paths for bounded resource recovery without masking primary errors.
+- Atomic implementation commits: `348b27e5`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N02 remove unreachable discovery helper
+
+- Scope: delete a dead catalog-type helper from the control-plane discovery adapter.
+- Observable behavior delivered; FR/NFR and B/G subcases: unsupported catalog modules still fail closed with the same stable `ValueError`; the removed helper had no behavior beyond recomputing the built-in check immediately before raising. Built-in Iceberg discovery and admitted public-plugin discovery are unchanged. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/infrastructure/catalog_discovery.py`; one unused import and one unreachable helper deleted; no runtime serializer, migration, dependency, or API path changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: -9 production lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing catalog discovery and catalog API suites remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `uv run --no-sync pytest tests/control_plane/test_catalog_discovery.py tests/interfaces/control_plane/test_catalogs_api.py -q` (exit 0, 34 passed) plus focused Ruff check/format (exit 0), 2026-09-14, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `a6f11859`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: N02 legacy module-field inventory and populated PostgreSQL maintenance conversion remain VERIFY; all N03–N16 live gates and independent review remain open. Release remains HOLD; continue removing only proven-dead legacy paths with owning behavioral coverage.
+- Atomic implementation commits: `a6f11859`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-14 — N02 maintenance-mode migration acknowledgement
+
+- Scope: enforce an explicit cutover acknowledgement before offline plugin-binding or federated identity rewrites can mutate durable records.
+- Observable behavior delivered; FR/NFR and B/G subcases: `dal-obscura-migrate plugin-bindings --apply` and `identity-keys --apply` now fail with exit code 2 unless `--maintenance-mode` is present. Preview commands remain read-only; canonical known-record conversion remains transactional and idempotent, while unknown records remain unsupported. The acknowledgement documents that admissions are stopped and writers are drained; the CLI cannot infer process state. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/common/config_store/cli.py`, migration CLI tests, and `docs/operators.md`; no serializers, runtime readers, dependencies, or legacy data were deleted.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +17 production lines, +15 test lines, and operator runbook updates; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `tests/common/config_store/test_plugin_bindings.py` and `tests/common/config_store/test_migration_cli.py` own the apply gate and prove no unauthorised apply path; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `uv run --no-sync pytest tests/common/config_store/test_plugin_bindings.py tests/common/config_store/test_migration_cli.py -q` (exit 0, 6 passed) and focused Ruff check/format (exit 0), 2026-09-14, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `db3c6c13`; operator guidance in `docs/operators.md`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: populated PostgreSQL backup/rollback and two-process maintenance cutover remain VERIFY; remaining N02 legacy reader/input inventory and all N04–N16 live gates remain open. Release remains HOLD; execute the migration against a disposable populated PostgreSQL fixture with writers stopped, then record rollback evidence.
+- Atomic implementation commits: `db3c6c13`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
