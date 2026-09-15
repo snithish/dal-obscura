@@ -94,7 +94,9 @@ def list_workspace_catalogs(
     catalogs = store.list_workspace_catalogs(context)
     if plugin_registry is None:
         return catalogs
-    admitted = plugin_registry.admitted() or plugin_registry.reload()
+    # Admission is a startup concern. Request paths read the immutable
+    # snapshot and fail closed when startup did not admit the plugin.
+    admitted = plugin_registry.admitted()
     for catalog in catalogs:
         module = str(catalog.get("module", ""))
         if module == ICEBERG_CATALOG_MODULE:
@@ -263,7 +265,7 @@ def upsert_workspace_catalog(
     if module != "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog":
         if plugin_registry is None:
             raise ValidationFailure("Catalog plugin is not admitted")
-        admitted = plugin_registry.admitted() or plugin_registry.reload()
+        admitted = plugin_registry.admitted()
         if ("catalog", module) not in admitted:
             raise ValidationFailure("Catalog plugin is not admitted")
         validate_descriptor_options(admitted[("catalog", module)], options)
@@ -307,7 +309,7 @@ def validate_admitted_catalog_options(
         return
     if plugin_registry is None:
         raise ValidationFailure("Catalog plugin is not admitted")
-    admitted = plugin_registry.admitted() or plugin_registry.reload()
+    admitted = plugin_registry.admitted()
     descriptor = admitted.get(("catalog", module))
     if descriptor is None:
         raise ValidationFailure("Catalog plugin is not admitted")

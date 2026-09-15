@@ -155,7 +155,9 @@ def upsert_workspace_asset(
     if backend != "iceberg" or catalog_module != ICEBERG_CATALOG_MODULE:
         if plugin_registry is None:
             raise ValidationFailure("Plugin pair is not admitted")
-        admitted = plugin_registry.admitted() or plugin_registry.reload()
+        # Plugin admission is frozen at startup; never discover or import
+        # newly installed code while handling an asset mutation.
+        admitted = plugin_registry.admitted()
         catalog_descriptor = admitted.get(("catalog", catalog_module))
         format_descriptor = admitted.get(("table_format", backend))
         if catalog_descriptor is None or format_descriptor is None:

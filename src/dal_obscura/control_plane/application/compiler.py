@@ -280,10 +280,7 @@ class PublicationCompiler:
 
     def _admitted_plugins(self) -> dict[tuple[str, str], object]:
         assert self._plugin_registry is not None
-        admitted = self._plugin_registry.admitted()
-        if not admitted:
-            admitted = self._plugin_registry.reload()
-        return cast(dict[tuple[str, str], object], admitted)
+        return cast(dict[tuple[str, str], object], self._plugin_registry.admitted())
 
     def _compile_rule(self, rule: PolicyRuleDraft) -> CompiledPolicyRule:
         if rule.effect != "allow":
