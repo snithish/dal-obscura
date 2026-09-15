@@ -136,6 +136,36 @@ def test_rest_catalog_requests_receive_deadline_bounded_timeout() -> None:
     assert calls[0][2] is False
 
 
+def test_rest_catalog_closes_response_when_cancelled_after_request() -> None:
+    from dal_obscura_iceberg_rest import catalog as module
+
+    closed: list[bool] = []
+
+    class Response:
+        def close(self):
+            closed.append(True)
+
+    session = SimpleNamespace()
+    session.request = lambda method, url, **kwargs: Response()
+    checks = 0
+
+    def cancel_check() -> bool:
+        nonlocal checks
+        checks += 1
+        return checks >= 2
+
+    context = replace(_context(), cancel_check=cancel_check)
+    token = module._ACTIVE_REQUEST_BUDGET.set((context.deadline, context.cancel_check, 5.0, 30.0))
+    try:
+        module._install_request_timeout(session, 5.0, 30.0)
+        with pytest.raises(ValueError, match="cancelled"):
+            session.request("GET", "https://catalog.example")
+    finally:
+        module._ACTIVE_REQUEST_BUDGET.reset(token)
+
+    assert closed == [True]
+
+
 def test_rest_catalog_paginates_bounded_sorted_identifiers():
     plugin = RestCatalog(_config(), _context())
 

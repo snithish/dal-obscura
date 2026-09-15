@@ -404,7 +404,13 @@ def _install_request_timeout(session: Any, connect_timeout: float, read_timeout:
         # Redirects are a new destination and must be revalidated by the
         # governed connection boundary before any follow-up request.
         kwargs["allow_redirects"] = False
-        return original_request(method, url, **kwargs)
+        response = original_request(method, url, **kwargs)
+        if budget is not None and cancel_check is not None and cancel_check():
+            close = getattr(response, "close", None)
+            if callable(close):
+                close()
+            raise ValueError("REST catalog operation was cancelled")
+        return response
 
     session.request = request
 
