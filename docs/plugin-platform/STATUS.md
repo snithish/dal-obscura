@@ -3282,6 +3282,17 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Atomic implementation commits covered: `b0fa425`, `4002d386`; this entry is verification-only.
 - Human acceptance, if required: independent security, consumer, and release review remains VERIFY; release remains HOLD.
 
+## 2026-09-15 — OIDC exchange regression fixture correction
+
+- Scope: align the new authorization-code transport fake with the production helper signature.
+- Evidence: the broader auth/session regression now exits 0 with 66 tests passed, including the canonical token endpoint derivation and malformed endpoint cases. The correction changes test setup only; production behavior and pickle logic are unchanged.
+- Changed paths: `tests/interfaces/control_plane/test_oidc_login.py`; no production, migration, serializer, dependency, or durable-record changes.
+- Exact command, exit code, UTC date, runtime: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane/test_oidc_login.py tests/interfaces/control_plane/test_actor_auth.py tests/control_plane/test_auth_provider_validation.py tests/interfaces/control_plane/test_settings_api.py -q -ra` (exit 0, 66 passed), 2026-09-15, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: correction commit `362124db`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: live OIDC/PKCE, PostgreSQL process races/recovery, hostile transport/DNS counters, clean consumer artifacts, mixed-load capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY. Release remains HOLD.
+- Atomic implementation commits: `362124db` (test-only correction to `07cf0d91`).
+- Human acceptance, if required: independent security, consumer, and release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-15 — Canonical OIDC token endpoint exchange
 
 - Scope: repair the real browser authorization-code exchange path and harden its endpoint boundary.
