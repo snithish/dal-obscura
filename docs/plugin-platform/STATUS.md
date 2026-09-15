@@ -3191,3 +3191,11 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: rendered deferred publish/lost-response interleavings, live OIDC, populated browser, clean consumer artifacts, PostgreSQL race/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY under N07–N16. Release remains HOLD.
 - Atomic implementation commits: `ae5a6337`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — JVM connector qualification boundary
+
+- Scope: execute the declared JVM/Spark connector verification lane.
+- Evidence: `mvn -f connectors/jvm/pom.xml verify` compiled the Java client and Spark 3 datasource and passed 7 client tests plus 29 Spark/client tests. The connector-testkit fixture runner then failed when reserving its loopback port with `java.net.SocketException: Operation not permitted`; integration-tests-jvm was consequently skipped by Maven reactor fail-fast. This is the managed macOS socket boundary, not a source regression in the non-socket connector tests.
+- Pickle logic is untouched; no source or dependency changes were made.
+- Remaining subcases; blocker and next concrete action: rerun the full JVM fixture/integration lane on a CI/reference runner with loopback permission, then execute clean TLS/OIDC consumer qualification and bind evidence to exact artifacts. Release remains HOLD.
+- Atomic implementation commits: none (verification record only).
