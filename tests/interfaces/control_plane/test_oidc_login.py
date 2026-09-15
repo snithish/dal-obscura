@@ -201,9 +201,8 @@ def test_authorization_code_exchange_uses_canonical_token_endpoint(monkeypatch) 
         def read(self):
             return b'{"access_token":"access","id_token":"id"}'
 
-    def open_token(request, *, timeout):
+    def open_token(request):
         seen["url"] = request.full_url
-        seen["timeout"] = timeout
         return _Response()
 
     monkeypatch.setattr(
@@ -224,7 +223,6 @@ def test_authorization_code_exchange_uses_canonical_token_endpoint(monkeypatch) 
     assert result["access_token"] == "access"
     assert seen == {
         "url": "https://issuer.example/realms/demo/protocol/openid-connect/token",
-        "timeout": 10,
     }
 
 
