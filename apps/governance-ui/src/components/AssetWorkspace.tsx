@@ -280,17 +280,17 @@ function AccessView({ asset, access, grants, session, onReload, onDirtyChange, q
   const savingRef = useRef(false);
   const mutationControllers = useRef<Set<AbortController>>(new Set());
   useEffect(() => {
-    if (!ownersDirty) {
-      setOwners(asset.owners.join(", "));
-      setOwnersDirty(false);
-      ownersEditEpoch.current += 1;
-    }
-    if (!grantsDirty) {
-      setRows(grants);
-      setGrantsDirty(false);
-      grantsEditEpoch.current += 1;
-    }
-  }, [asset, grants, ownersDirty, grantsDirty]);
+    if (ownersDirty) return;
+    setOwners(asset.owners.join(", "));
+    setOwnersDirty(false);
+    ownersEditEpoch.current += 1;
+  }, [asset, ownersDirty]);
+  useEffect(() => {
+    if (grantsDirty) return;
+    setRows(grants);
+    setGrantsDirty(false);
+    grantsEditEpoch.current += 1;
+  }, [grants, grantsDirty]);
   const dirty = ownersDirty || grantsDirty;
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
   useEffect(() => () => {
