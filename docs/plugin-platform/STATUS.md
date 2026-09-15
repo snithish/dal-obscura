@@ -3207,3 +3207,11 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Pickle logic is untouched; no source or dependency changes were made.
 - Remaining subcases; blocker and next concrete action: clean-wheel installation, real TLS/OIDC Flight endpoints, SQL/REST/manifest dataset comparison, and all other N13 consumer/version cells remain VERIFY. This local JVM pass does not establish the release matrix. Release remains HOLD.
 - Atomic implementation commits: none (verification record only).
+
+## 2026-09-15 — Full Python suite with socket access
+
+- Scope: execute the complete Python test matrix on the final implementation tree with loopback permission enabled.
+- Evidence: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q -ra` reached 100% and exited 0: 924 tests collected, 907 passed, and 17 explicitly skipped. Skips are limited to seven benchmark cases (`--benchmark-skip`), four opt-in loopback consumer cases, five opt-in PostgreSQL publication-race cases, and one opt-in PostgreSQL recovery case. No failures or errors occurred. Pickle logic is untouched.
+- Environment: Python 3.12.10, managed macOS runner with elevated local socket permission, 2026-09-15. The JVM lane separately passed 44 tests.
+- Remaining subcases; blocker and next concrete action: the 17 skips are required release evidence, not passes; run benchmarks, consumer reads, PostgreSQL two-process races, and recovery with their declared fixtures. Live OIDC/browser accessibility, hostile transport, capacity, deployment integrity/SBOM, and independent review also remain VERIFY. Release remains HOLD.
+- Atomic implementation commits: none (verification record only).
