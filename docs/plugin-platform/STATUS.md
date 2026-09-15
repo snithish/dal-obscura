@@ -3132,3 +3132,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: rendered populated authoring/validation journeys and large-tree stress, live OIDC, clean artifact/consumer, PostgreSQL race/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY under N08–N16. Release remains HOLD; continue with bounded authoring correctness and candidate qualification.
 - Atomic implementation commits: `08890f7d`.
 - Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N08 condition validation feedback retention
+
+- Scope: keep condition-builder validation feedback visible after draft synchronization.
+- Observable behavior delivered; FR/NFR and B/G subcases: condition validation is derived from the synchronized draft value, so an incomplete claim or value remains visibly invalid until corrected or removed. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/AssetWorkspace.tsx`; no backend, serializer, migration, API, dependency, or durable-record changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +7/-1 UI lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing policy authoring and evaluator validation suites remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node node_modules/typescript/bin/tsc -p tsconfig.json --pretty false` (exit 0), `node node_modules/vite/bin/vite.js build` (exit 0; 335.92 kB JS / 101.17 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0, 14 passed), `node_modules/.bin/playwright test --config playwright.config.ts --list` (exit 0, 6 tests discovered), and `git diff --check` (exit 0), 2026-09-15, Node 24 workspace.
+- Artifact and fixture hashes; evidence locations: implementation commit `288fb00b`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: rendered populated authoring/validation journeys and large-tree stress, live OIDC, clean artifact/consumer, PostgreSQL race/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY under N08–N16. Release remains HOLD; continue with bounded authoring correctness and candidate qualification.
+- Atomic implementation commits: `288fb00b`.
+- Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
