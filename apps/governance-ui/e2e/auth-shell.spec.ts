@@ -28,4 +28,22 @@ test.describe("authenticated governance shell", () => {
     );
     expect(blockingViolations).toEqual([]);
   });
+
+  test("keeps keyboard focus in the public shell", async ({ page }) => {
+    await page.goto("/#assets");
+
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("link", { name: /DAL OBSCURA GOVERNANCE/i })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: "Open navigation menu" })).toBeFocused();
+  });
+
+  test("keeps sign-in usable at a narrow viewport", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/#assets");
+
+    await expect(page.getByRole("button", { name: "Open navigation menu" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Sign in to your workspace" })).toBeVisible();
+    await expect(page.getByLabel("Local control-plane token")).toBeVisible();
+  });
 });
