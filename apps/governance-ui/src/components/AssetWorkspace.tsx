@@ -225,7 +225,13 @@ function TestsView({ onPreview, preview, principal, groups, claims, onPrincipal,
 function ConditionBuilder({ value, disabled, onChange }: { value?: Record<string, string | string[]>; disabled: boolean; onChange: (value: Record<string, string | string[]>) => void }) {
   const [rows, setRows] = useState<Array<{ key: string; mode: "equals" | "one_of"; value: string }>>(() => conditionRows(value));
   const [error, setError] = useState("");
-  useEffect(() => { setRows(conditionRows(value)); setError(""); }, [value]);
+  useEffect(() => {
+    const nextRows = conditionRows(value);
+    setRows(nextRows);
+    if (nextRows.some((row) => !row.key.trim())) setError("Every condition needs a claim name.");
+    else if (nextRows.some((row) => !row.value.split(",").map((item) => item.trim()).filter(Boolean).length)) setError("Every condition needs a value.");
+    else setError("");
+  }, [value]);
   function commit(next: Array<{ key: string; mode: "equals" | "one_of"; value: string }>) {
     const result: Record<string, string | string[]> = {};
     let errorMessage = "";
