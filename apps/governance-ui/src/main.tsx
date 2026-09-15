@@ -849,6 +849,7 @@ function App() {
       if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
       try {
         const operation = await controlPlane.getPublicationOperation(asset.id, idempotencyKey, controller.signal);
+        if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
         if (operation.status === "committed") {
           setReviewToken(null);
           setNotice(`Publish committed as policy version ${operation.result.policy_version}.`);
