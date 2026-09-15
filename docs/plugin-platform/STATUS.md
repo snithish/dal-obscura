@@ -3282,6 +3282,19 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Atomic implementation commits covered: `b0fa425`, `4002d386`; this entry is verification-only.
 - Human acceptance, if required: independent security, consumer, and release review remains VERIFY; release remains HOLD.
 
+## 2026-09-15 — Canonical OIDC token endpoint exchange
+
+- Scope: repair the real browser authorization-code exchange path and harden its endpoint boundary.
+- Observable behavior delivered; FR/NFR and B/G subcases: authorization-code exchange now uses the canonical `token_endpoint` setting or derives `/protocol/openid-connect/token` from `authority`; it no longer indexes the nonexistent `token_url` key. Endpoint parsing rejects malformed hosts, invalid ports, credentials, query data, fragments, and non-HTTP(S) schemes with a bounded 503 configuration error. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/interfaces/session_api.py`, `tests/interfaces/control_plane/test_oidc_login.py`; no migrations, serializers, dependencies, or durable records changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +29 production lines, +57 test lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: OIDC session tests own canonical endpoint derivation, request timeout/URL, and malformed endpoint rejection; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane/test_oidc_login.py -q -ra` (exit 0, 14 passed), focused Ruff check/format and `ty check src/dal_obscura/control_plane/interfaces/session_api.py` (exit 0), and `git diff --check` (exit 0), 2026-09-15, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `07cf0d91`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: live IdP/PKCE callback, issuer freshness/revocation, hostile transport/DNS counters, PostgreSQL process races/recovery, clean consumer artifacts, mixed-load capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY. Release remains HOLD; run the live OIDC browser lane before claiming B08/N05 complete.
+- Atomic implementation commits: `07cf0d91`.
+- Human acceptance, if required: independent security, consumer, and release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-15 — OIDC login redirect parser hardening
 
 - Scope: keep OIDC completion safe when callback or post-login redirect configuration is malformed.
