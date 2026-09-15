@@ -3054,3 +3054,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Exact command, result, UTC date, runtime and environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q` reached 100% collection but ended with loopback/socket permission failures (Flight servers, HTTP fixture binds, and benchmark subprocess startup are denied by the managed macOS sandbox; 34 failures and 1 setup error were reported, with the remaining non-socket tests passing), 2026-09-15, Python 3.12.10/macOS managed runner.
 - Evidence and interpretation: failures contain `Operation not permitted` while binding `127.0.0.1`/Flight `127.0.0.1:0`; this is an environment restriction, not a regression in the touched audit/UI paths. The supported CI/release lane must run the full socket, browser, subprocess, and consumer matrix.
 - Remaining subcases; blocker and next concrete action: live loopback/Flight and external N04/N05/N12–N16 evidence remains VERIFY; rerun broad validation on the declared CI/reference runner before candidate acceptance. Release remains HOLD.
+
+## 2026-09-15 — N10 catalog discovery revision fencing
+
+- Scope: prevent late connection discovery and governance responses from applying to a newer catalog/plugin state.
+- Observable behavior delivered; FR/NFR and B/G subcases: `ConnectionsView` now advances a catalog/plugin-pair state epoch whenever authoritative connection data changes. Discovery results and discovered-table registration results are accepted only when both the request epoch and catalog state epoch still match; stale responses are discarded without replacing the current inventory or showing a false success. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/ConnectionsView.tsx`; no backend, serializer, migration, API, dependency, or durable-record changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +8/-2 UI lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing connection lifecycle logic and Playwright route lane remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node node_modules/typescript/bin/tsc -p tsconfig.json --pretty false` (exit 0), `node node_modules/vite/bin/vite.js build` (exit 0; 334.84 kB JS / 100.84 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0, 14 passed), `node_modules/.bin/playwright test --config playwright.config.ts --list` (exit 0, 6 tests discovered), and `git diff --check` (exit 0), 2026-09-15, Node 24 workspace.
+- Artifact and fixture hashes; evidence locations: implementation commit `81ffe13e`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: rendered populated connection lifecycle/race coverage, live OIDC, clean artifact/consumer, PostgreSQL race/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY under N10–N16. Release remains HOLD; continue with bounded lifecycle correctness and candidate qualification.
+- Atomic implementation commits: `81ffe13e`.
+- Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
