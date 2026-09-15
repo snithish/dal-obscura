@@ -3307,3 +3307,14 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live transport/DNS counters and cancellation remain VERIFY under N04; clean consumer artifacts, live OIDC, PostgreSQL races/recovery, mixed-load capacity, deployment integrity/SBOM, and independent review remain VERIFY. Release remains HOLD.
 - Atomic implementation commits: `143a2bca`.
 - Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — Structured malformed-URI API regression
+
+- Scope: verify that malformed catalog URLs stay within the public error contract.
+- Evidence: the control-plane catalog API now has a regression proving a malformed bracketed host returns HTTP 400 with `error.code=validation_error`, the bounded message, and a request ID. This exercises the route/service/exception-handler path after shared URI normalization. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `tests/interfaces/control_plane/test_catalogs_api.py`; no production, migration, serializer, or dependency changes.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/interfaces/control_plane/test_catalogs_api.py -q` (exit 0, 16 passed), focused Ruff and Ty checks (exit 0), and `git diff --check` (exit 0), 2026-09-15, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: test commit `40376e27`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: live transport/DNS/private-address counters and cancellation remain VERIFY under N04; clean consumers, OIDC, PostgreSQL races/recovery, mixed-load capacity, deployment integrity/SBOM, and independent review remain VERIFY. Release remains HOLD.
+- Atomic implementation commits: `40376e27`.
+- Human acceptance, if required: independent API/security/release review remains VERIFY; release remains HOLD.
