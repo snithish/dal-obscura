@@ -3199,3 +3199,11 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Pickle logic is untouched; no source or dependency changes were made.
 - Remaining subcases; blocker and next concrete action: rerun the full JVM fixture/integration lane on a CI/reference runner with loopback permission, then execute clean TLS/OIDC consumer qualification and bind evidence to exact artifacts. Release remains HOLD.
 - Atomic implementation commits: none (verification record only).
+
+## 2026-09-15 — JVM connector verification with local fixture
+
+- Scope: qualify the Java client, Spark datasource, connector testkit, and Spark integration lane with loopback permission enabled.
+- Evidence: elevated `mvn -f connectors/jvm/pom.xml verify` completed successfully. The reactor passed 7 Java-client tests, 29 Spark datasource tests, 2 fixture-runner tests, and 6 Spark integration tests (44 total); Spark integration exercised nested projection, masking, pushed/residual filters, planning fan-out, and auth/header paths. Runtime reported Spark 3.5.6, Java 17.0.20.1, macOS aarch64.
+- Pickle logic is untouched; no source or dependency changes were made.
+- Remaining subcases; blocker and next concrete action: clean-wheel installation, real TLS/OIDC Flight endpoints, SQL/REST/manifest dataset comparison, and all other N13 consumer/version cells remain VERIFY. This local JVM pass does not establish the release matrix. Release remains HOLD.
+- Atomic implementation commits: none (verification record only).
