@@ -261,3 +261,28 @@ def test_workspace_auth_providers_reject_unsupported_modules_and_inline_key_mate
     assert "only built-in OIDC" in unsupported.json()["detail"]
     assert inline_secret.status_code == 400
     assert "static JWKS" in inline_secret.json()["detail"]
+
+
+def test_workspace_auth_providers_normalize_malformed_endpoint_errors():
+    client = _client()
+
+    response = client.put(
+        "/v1/settings/auth-providers",
+        json={
+            "providers": [
+                {
+                    "ordinal": 1,
+                    "module": DEFAULT_AUTH_MODULE,
+                    "args": {"issuer": "https://[broken/realm"},
+                    "enabled": True,
+                }
+            ]
+        },
+        headers=ADMIN_HEADERS,
+    )
+
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["error"]["code"] == "validation_error"
+    assert "valid HTTP(S) URL" in payload["error"]["message"]
+    assert payload["error"]["request_id"]

@@ -51,6 +51,22 @@ def test_auth_provider_endpoints_reject_query_data(field: str):
 @pytest.mark.parametrize(
     ("field", "value"),
     [
+        ("issuer", "https://[broken/realm"),
+        ("jwks_url", "https://issuer.example:99999/certs"),
+    ],
+)
+def test_auth_provider_endpoints_normalize_malformed_uri_errors(field: str, value: str):
+    args: dict[str, object] = {"issuer": "https://issuer.example/realm", field: value}
+
+    with pytest.raises(ValidationFailure, match="valid HTTP\(S\) URL"):
+        validate_auth_provider_payloads(
+            [{"ordinal": 1, "module": OIDC_IDENTITY_MODULE, "args": args, "enabled": True}]
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
         ("subject_claim", "claims..sub"),
         ("group_claims", "groups"),
         ("attribute_claims", {"tenant": ["tenant"]}),

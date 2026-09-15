@@ -196,8 +196,14 @@ def _validate_claim_path(value: object, *, label: str) -> None:
 
 
 def _validate_endpoint(value: str, *, label: str) -> None:
-    parsed = urlsplit(value.strip())
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+    try:
+        parsed = urlsplit(value.strip())
+        hostname = parsed.hostname
+        # Accessing ``port`` validates bracketed hosts and numeric port ranges.
+        _ = parsed.port
+    except ValueError as exc:
+        raise ValidationFailure(f"{label} must be a valid HTTP(S) URL") from exc
+    if parsed.scheme not in {"http", "https"} or not hostname:
         raise ValidationFailure(f"{label} must use an HTTP(S) URL")
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise ValidationFailure(f"{label} must not contain credentials, query data, or a fragment")
