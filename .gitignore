@@ -106,6 +106,8 @@ ipython_config.py
 # JavaScript frontend dependencies and local build outputs
 apps/governance-ui/node_modules/
 apps/governance-ui/dist/
+apps/governance-ui/test-results/
+apps/governance-ui/playwright-report/
 node_modules/
 ui/node_modules/
 ui/dist/
