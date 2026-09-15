@@ -2968,3 +2968,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: route-level component decomposition, CSS module migration, full browser execution, live OIDC, screen-reader/visual review, and independent UX/security/release review remain VERIFY under N06–N16. Release remains HOLD.
 - Atomic implementation commits: `0a0941fc`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N06 typed command-palette extraction
+
+- Scope: move command-palette rendering and filtering out of the UI composition root.
+- Observable behavior delivered; FR/NFR and B/G subcases: `CommandPalette` now owns the dialog/listbox structure, authorized destination filtering, asset search results, explicit button semantics, empty-search messaging, and keyboard guidance. The root retains only palette state, authorization-derived command selection, navigation guards, and focus restoration. Publish/delete/revoke remain unavailable as commands. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/CommandPalette.tsx` and `apps/governance-ui/src/main.tsx`; no backend, serializer, migration, dependency, or durable-record changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +68/-0 lines in the new palette component and +3/-3 lines in the composition root; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing UI navigation/keyboard tests and Playwright shell lane remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node node_modules/typescript/bin/tsc -p tsconfig.json --pretty false` (exit 0), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0, 14 passed), `node node_modules/vite/bin/vite.js build` (exit 0; 332.89 kB JS / 100.40 kB gzip), `node scripts/generate-api-types.mjs --check` (exit 0), and `git diff --check` (exit 0), 2026-09-15, Node 24 workspace.
+- Artifact and fixture hashes; evidence locations: implementation commit `d3797b83`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: route-level form ownership/CSS module migration, full browser execution, live OIDC, screen-reader/visual review, and independent UX/security/release review remain VERIFY under N06–N16. Release remains HOLD.
+- Atomic implementation commits: `d3797b83`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
