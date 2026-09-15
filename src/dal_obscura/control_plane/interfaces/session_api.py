@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Mapping
 from typing import cast
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, build_opener
 from urllib.request import Request as UrlRequest
 
@@ -157,7 +157,7 @@ def exchange_authorization_code(
         }
     ).encode()
     request = UrlRequest(
-        str(config["token_url"]),
+        _token_endpoint(config),
         data=body,
         headers={"content-type": "application/x-www-form-urlencoded"},
         method="POST",
@@ -174,6 +174,31 @@ def exchange_authorization_code(
     if not str(payload.get("id_token", "")).strip():
         raise HTTPException(status_code=502, detail="OIDC token response omitted ID token")
     return cast(Mapping[str, object], payload)
+
+
+def _token_endpoint(config: Mapping[str, object]) -> str:
+    """Resolve and validate the configured OIDC token endpoint."""
+
+    configured = str(config.get("token_endpoint", "")).strip()
+    if not configured:
+        authority = str(config.get("authority", "")).strip().rstrip("/")
+        configured = f"{authority}/protocol/openid-connect/token" if authority else ""
+    try:
+        parsed = urlsplit(configured)
+        hostname = parsed.hostname
+        _ = parsed.port
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail="OIDC token endpoint is invalid") from exc
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise HTTPException(status_code=503, detail="OIDC token endpoint is invalid")
+    return configured
 
 
 class _RejectRedirects(HTTPRedirectHandler):

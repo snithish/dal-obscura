@@ -14,6 +14,7 @@ from dal_obscura.common.config_store.db import (
 from dal_obscura.control_plane.interfaces import api as api_module
 from dal_obscura.control_plane.interfaces.api import create_app
 from dal_obscura.control_plane.interfaces.routes.session import _post_login_redirect
+from dal_obscura.control_plane.interfaces.session_api import exchange_authorization_code
 
 
 def _client(nonce_resolver) -> TestClient:
@@ -185,3 +186,59 @@ def test_login_redirect_rejects_external_or_ambiguous_destination(configured: st
 def test_login_redirect_rejects_malformed_callback_configuration(redirect_uri: str) -> None:
     with pytest.raises(HTTPException, match="UI redirect URI is invalid"):
         _post_login_redirect({}, redirect_uri)
+
+
+def test_authorization_code_exchange_uses_canonical_token_endpoint(monkeypatch) -> None:
+    seen: dict[str, object] = {}
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b'{"access_token":"access","id_token":"id"}'
+
+    def open_token(request, *, timeout):
+        seen["url"] = request.full_url
+        seen["timeout"] = timeout
+        return _Response()
+
+    monkeypatch.setattr(
+        "dal_obscura.control_plane.interfaces.session_api._open_token_endpoint",
+        open_token,
+    )
+
+    result = exchange_authorization_code(
+        {
+            "authority": "https://issuer.example/realms/demo",
+            "client_id": "governance-ui",
+            "redirect_uri": "https://gateway.example/auth/callback",
+        },
+        "code",
+        "verifier",
+    )
+
+    assert result["access_token"] == "access"
+    assert seen == {
+        "url": "https://issuer.example/realms/demo/protocol/openid-connect/token",
+        "timeout": 10,
+    }
+
+
+@pytest.mark.parametrize(
+    "token_endpoint", ["https://[broken/token", "https://issuer.example:99999/token"]
+)
+def test_authorization_code_exchange_rejects_malformed_token_endpoint(token_endpoint: str) -> None:
+    with pytest.raises(HTTPException, match="token endpoint is invalid"):
+        exchange_authorization_code(
+            {
+                "token_endpoint": token_endpoint,
+                "client_id": "ui",
+                "redirect_uri": "https://gateway.example/callback",
+            },
+            "code",
+            "verifier",
+        )
