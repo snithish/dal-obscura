@@ -3106,3 +3106,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: rendered populated access/management journeys, live OIDC, clean artifact/consumer, PostgreSQL race/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY under N07–N16. Release remains HOLD; continue with bounded lifecycle correctness and candidate qualification.
 - Atomic implementation commits: `3a76e1d3`.
 - Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N07 access refresh effect isolation
+
+- Scope: ensure owner edits do not advance the delegated-grant save epoch and vice versa.
+- Observable behavior delivered; FR/NFR and B/G subcases: authoritative owner and grant refresh effects are now independent. Changes to one access form cannot invalidate an in-flight save in the other through cross-form synchronization. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/AssetWorkspace.tsx`; no backend, serializer, migration, API, dependency, or durable-record changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +11/-11 UI lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing access lifecycle and browser management lanes remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node node_modules/typescript/bin/tsc -p tsconfig.json --pretty false` (exit 0), `node node_modules/vite/bin/vite.js build` (exit 0; 335.75 kB JS / 101.11 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0, 14 passed), `node_modules/.bin/playwright test --config playwright.config.ts --list` (exit 0, 6 tests discovered), and `git diff --check` (exit 0), 2026-09-15, Node 24 workspace.
+- Artifact and fixture hashes; evidence locations: implementation commit `b6f22ce1`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: rendered populated access/management journeys, live OIDC, clean artifact/consumer, PostgreSQL race/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY under N07–N16. Release remains HOLD; continue with bounded async/form correctness and candidate qualification.
+- Atomic implementation commits: `b6f22ce1`.
+- Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
