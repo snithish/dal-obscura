@@ -3067,3 +3067,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: rendered populated connection lifecycle/race coverage, live OIDC, clean artifact/consumer, PostgreSQL race/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY under N10–N16. Release remains HOLD; continue with bounded lifecycle correctness and candidate qualification.
 - Atomic implementation commits: `81ffe13e`.
 - Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N07 settings draft isolation
+
+- Scope: prevent independent runtime and identity-provider forms from invalidating or overwriting one another.
+- Observable behavior delivered; FR/NFR and B/G subcases: Settings now tracks runtime and provider dirty state and edit epochs separately. Saving runtime settings clears only the runtime draft; saving providers clears only provider edits. Reload confirms against the combined dirty state, and authoritative prop refreshes are ignored for a form with unsaved local edits. Unrelated edits no longer invalidate an in-flight save. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/SettingsView.tsx`; no backend, serializer, migration, API, dependency, or durable-record changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +42/-30 UI lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing settings lifecycle implementation and browser management lane remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node node_modules/typescript/bin/tsc -p tsconfig.json --pretty false` (exit 0), `node node_modules/vite/bin/vite.js build` (exit 0; 335.17 kB JS / 100.95 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0, 14 passed), `node_modules/.bin/playwright test --config playwright.config.ts --list` (exit 0, 6 tests discovered), and `git diff --check` (exit 0), 2026-09-15, Node 24 workspace.
+- Artifact and fixture hashes; evidence locations: implementation commit `6f2c8a29`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: rendered deferred settings responses and populated management journeys, live OIDC, clean artifact/consumer, PostgreSQL race/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY under N07–N16. Release remains HOLD; continue with bounded form-state correctness and candidate qualification.
+- Atomic implementation commits: `6f2c8a29`.
+- Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
