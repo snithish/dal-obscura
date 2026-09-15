@@ -89,14 +89,6 @@ class PluginRegistry:
             entry = self._snapshot_entries.get(key)
             builtin = self._snapshot_builtins.get(key)
             admitted = key in self._snapshot
-        if entry is None and not admitted:
-            # Preserve the convenient first-use behavior while still making
-            # the resulting entry point part of one immutable generation.
-            self.reload()
-            with self._snapshot_lock:
-                entry = self._snapshot_entries.get(key)
-                builtin = self._snapshot_builtins.get(key)
-                admitted = key in self._snapshot
         if entry is None or not admitted:
             if builtin is not None:
                 return builtin

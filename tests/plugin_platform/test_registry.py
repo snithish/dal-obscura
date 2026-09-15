@@ -118,6 +118,9 @@ def test_admitted_entry_point_loads_only_after_lock_match() -> None:
     discovered = registry.discover()
 
     assert discovered[("catalog", "iceberg.sql")].api_version == "1"
+    with pytest.raises(PluginAdmissionError, match="not admitted"):
+        registry.load("catalog", "iceberg.sql")
+    registry.reload()
     assert registry.load("catalog", "iceberg.sql") == {"name": "iceberg.sql"}
 
 
