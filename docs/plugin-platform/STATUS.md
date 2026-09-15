@@ -2903,3 +2903,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: provider stalled-I/O cancellation timing, hostile transport counters, capacity mixed load, PostgreSQL races/recovery, clean candidate consumers, deployment integrity/SBOM, and independent security/UX/release review remain VERIFY under N04/N12–N16. Release remains HOLD; continue with bounded provider and deployment evidence.
 - Atomic implementation commits: `84dade5d`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N04 public-plugin setup cleanup fencing
+
+- Scope: preserve schema, planning, execution-setup, and catalog validation failures when provider shutdown also fails.
+- Observable behavior delivered; FR/NFR and B/G subcases: public table-format schema/plan/execute setup paths and catalog construction now use the error-preserving close helper. Cleanup errors still surface when no primary operation error exists, while an active validation or provider exception remains the actionable failure. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/data_plane/infrastructure/adapters/public_plugin_adapter.py` and `tests/plugin_platform/test_public_plugin_adapter.py`; no serializers, APIs, migrations, dependencies, or durable records changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +4/-4 production lines and +38 test lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `tests/plugin_platform/test_public_plugin_adapter.py::test_public_format_preserves_schema_error_when_close_fails` plus existing lazy-stream cleanup coverage; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/plugin_platform/test_public_plugin_adapter.py -q` (exit 0, 18 passed), focused Ruff check/format (exit 0), and pre-commit Ruff/pytest hooks (exit 0). Repository Ty hook was skipped for the commit because it retains unrelated existing diagnostics outside this slice; 2026-09-15, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `42c51e81`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: provider stalled-I/O cancellation timing, hostile transport counters, capacity mixed load, PostgreSQL races/recovery, clean candidate consumers, deployment integrity/SBOM, and independent security/UX/release review remain VERIFY under N04/N12–N16. Release remains HOLD; continue with bounded provider and deployment evidence.
+- Atomic implementation commits: `42c51e81`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
