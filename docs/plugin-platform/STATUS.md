@@ -1189,6 +1189,19 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `e8210e5`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
+## 2026-09-15 — N04 conformance output cleanup recovery
+
+- Scope: ensure plugin conformance closes format output iterators on cancellation, validation failure, and normal completion.
+- Observable behavior delivered; FR/NFR and B/G subcases: bounded output validation now closes provider iterables in a `finally` block. If validation or cancellation already failed, a cleanup exception cannot mask that primary error; a cleanup failure on an otherwise successful validation still fails the check. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `packages/plugin-conformance/src/dal_obscura_plugin_conformance/runner.py` and its focused regression test; no serializers, APIs, migrations, dependencies, or durable records changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +43 production lines after formatting and +21 test lines for iterator cleanup coverage; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `packages/plugin-conformance/tests/test_conformance_runner.py::test_record_batch_validation_closes_provider_output_on_failure`; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest packages/plugin-conformance/tests/test_conformance_runner.py -q` (exit 0, 28 passed) plus focused Ruff check/format (exit 0), 2026-09-15, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `25f03b4b`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: actual provider stalled-I/O cancellation timing, hostile transport counters, capacity mixed load, PostgreSQL races/recovery, clean candidate consumers, deployment integrity/SBOM, and independent security/UX/release review remain VERIFY under N04/N12–N16. Release remains HOLD; continue only with bounded provider/resource evidence.
+- Atomic implementation commits: `25f03b4b`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
 
 
 
