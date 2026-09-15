@@ -36,6 +36,11 @@ def test_catalog_options_reject_remote_file_authority() -> None:
         validate_catalog_options({"warehouse": "file://remote-host/warehouse"})
 
 
+def test_catalog_options_reject_malformed_uri_as_validation_failure() -> None:
+    with pytest.raises(ValidationFailure, match="invalid URI"):
+        validate_catalog_options({"uri": "https://[2001:db8::1/v1"})
+
+
 @pytest.mark.parametrize("host", ["169.254.169.254", "0.0.0.0", "224.0.0.1"])
 def test_catalog_options_reject_special_literal_even_when_allowlisted(host: str) -> None:
     with pytest.raises(ValidationFailure, match="special address"):

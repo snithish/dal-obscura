@@ -371,12 +371,21 @@ def validate_catalog_options(
     for key, value in _walk_strings(options):
         if "://" not in value:
             continue
-        parsed = urlsplit(value)
+        try:
+            parsed = urlsplit(value)
+            # Accessing hostname/credentials can itself validate bracketed
+            # hosts and ports, so keep those parser failures inside the
+            # user-facing validation boundary as well.
+            username = parsed.username
+            password = parsed.password
+            hostname = parsed.hostname
+        except ValueError as exc:
+            raise ValidationFailure(f"Catalog option {key!r} contains an invalid URI") from exc
         if parsed.scheme.lower() == "file" and parsed.netloc:
             raise ValidationFailure(
                 f"Catalog option {key!r} must use a local file URI without an authority"
             )
-        if parsed.username or parsed.password:
+        if username or password:
             raise ValidationFailure(
                 f"Catalog option {key!r} must use a secret reference, not URI credentials"
             )
@@ -385,7 +394,6 @@ def validate_catalog_options(
             for name, _item in parse_qsl(parsed.query, keep_blank_values=True)
         ):
             raise ValidationFailure(f"Catalog option {key!r} must not put secrets in a URI query")
-        hostname = parsed.hostname
         if hostname:
             _validate_ip_literal(hostname, key=key, allowlist=normalized_allowlist)
         if (
