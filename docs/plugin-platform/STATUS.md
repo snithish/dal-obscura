@@ -3318,3 +3318,12 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live transport/DNS/private-address counters and cancellation remain VERIFY under N04; clean consumers, OIDC, PostgreSQL races/recovery, mixed-load capacity, deployment integrity/SBOM, and independent review remain VERIFY. Release remains HOLD.
 - Atomic implementation commits: `40376e27`.
 - Human acceptance, if required: independent API/security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — Local governed consumer qualification
+
+- Scope: execute the opt-in consumer lane against the final implementation.
+- Evidence: `DAL_OBSCURA_RUN_CONSUMER_TESTS=1 UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/consumers/test_governed_reads.py -q -ra` exited 0 with 4 passed. The lane compared identical nested governed output through Python/Arrow and DuckDB and exercised real local SQL-Iceberg, manifest/Parquet, and REST-Iceberg fixtures through catalog resolution, schema/projection, masking/filter execution, and consumer reads. Pickle logic is untouched.
+- Environment: Python 3.12.10, managed macOS runner with loopback permission, 2026-09-15.
+- Remaining subcases; blocker and next concrete action: this closes the local Python/DuckDB fixture lane only. B17 still requires clean installed wheels, TLS/OIDC Flight, Spark/JVM cells for every advertised pair/version, retries/cancellation/partial failures, and invalid plugin variants; live OIDC, PostgreSQL races/recovery, hostile transport, mixed-load capacity, deployment integrity/SBOM, and independent review remain VERIFY. Release remains HOLD.
+- Atomic implementation commits covered: none (verification-only record).
+- Human acceptance, if required: independent consumer and release review remains VERIFY; release remains HOLD.
