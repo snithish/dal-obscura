@@ -3294,3 +3294,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: actual DNS rebinding/private-address counters and provider cancellation remain VERIFY under N04; clean consumer artifacts, live OIDC, PostgreSQL races/recovery, mixed-load capacity, deployment integrity/SBOM, and independent review remain VERIFY. Release remains HOLD.
 - Atomic implementation commits: `2ce21efc`.
 - Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — Malformed catalog URI error normalization
+
+- Scope: keep malformed URL parser failures inside the safe catalog validation contract.
+- Observable behavior delivered; FR/NFR and B/G subcases: malformed bracketed hosts or ports now raise `ValidationFailure` with a bounded invalid-URI message before provider construction, so direct API mutations return the structured client error instead of an internal 500. Credentials, private-address, allowlist, and local-file checks remain unchanged. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/application/catalog_service.py`, `tests/control_plane/test_catalog_option_validation.py`; no migrations, serializer, API shape, or dependency changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +10/+3 Python lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: added malformed-URI coverage to shared catalog validation; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: focused catalog validation/API suite (exit 0, 29 passed), focused Ruff and Ty checks (exit 0), and `git diff --check` (exit 0), 2026-09-15, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `143a2bca`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: live transport/DNS counters and cancellation remain VERIFY under N04; clean consumer artifacts, live OIDC, PostgreSQL races/recovery, mixed-load capacity, deployment integrity/SBOM, and independent review remain VERIFY. Release remains HOLD.
+- Atomic implementation commits: `143a2bca`.
+- Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
