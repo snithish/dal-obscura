@@ -3327,3 +3327,12 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: this closes the local Python/DuckDB fixture lane only. B17 still requires clean installed wheels, TLS/OIDC Flight, Spark/JVM cells for every advertised pair/version, retries/cancellation/partial failures, and invalid plugin variants; live OIDC, PostgreSQL races/recovery, hostile transport, mixed-load capacity, deployment integrity/SBOM, and independent review remain VERIFY. Release remains HOLD.
 - Atomic implementation commits covered: none (verification-only record).
 - Human acceptance, if required: independent consumer and release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — Full suite with governed consumers enabled
+
+- Scope: rerun the complete Python suite with the local consumer qualification enabled.
+- Evidence: elevated `DAL_OBSCURA_RUN_CONSUMER_TESTS=1 UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q -ra` exited 0. From 924 collected tests, 911 passed and 13 were explicitly skipped: seven benchmark cases excluded by `--benchmark-skip` and six PostgreSQL publication-race/recovery cases requiring `DAL_OBSCURA_POSTGRES_TEST_URL`. All four Python/Arrow/DuckDB consumer tests executed and passed. Pickle logic is untouched.
+- Environment: Python 3.12.10, managed macOS runner with loopback permission, 2026-09-15.
+- Remaining subcases; blocker and next concrete action: PostgreSQL two-process/recovery, real TLS/OIDC consumer matrix, hostile transport/DNS, mixed-load capacity, deployment integrity/SBOM, browser accessibility/OIDC, and independent review remain VERIFY. Release remains HOLD.
+- Atomic implementation commits covered: `b0fa425`, `4002d386`, `2ce21efc`, `143a2bca`, `40376e27`; this entry is verification-only.
+- Human acceptance, if required: independent security, consumer, and release review remains VERIFY; release remains HOLD.
