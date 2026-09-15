@@ -2851,3 +2851,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live browser OIDC login/logout/expiry, axe/keyboard/screen-reader and responsive visual evidence remain VERIFY under N05/N06/N16; execute the CI browser lane and real IdP journey before release. Release remains HOLD.
 - Atomic implementation commits: `9d07fa81`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N06 Playwright artifact hygiene
+
+- Scope: keep local and CI browser reports out of the source worktree.
+- Observable behavior delivered; FR/NFR and B/G subcases: Playwright `test-results/` and `playwright-report/` outputs are now ignored at the governance-UI boundary; source tests and release artifacts remain unaffected. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `.gitignore`; no runtime, API, serializer, migration, dependency, or durable-record changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +2 ignore entries; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: the N06 Playwright lane remains the owner; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `git status --short` remains clean after generated browser reports, 2026-09-15.
+- Artifact and fixture hashes; evidence locations: implementation commit `040c97c8`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: live browser OIDC, accessibility/responsive visual evidence and independent review remain VERIFY under N05/N06/N16. Release remains HOLD.
+- Atomic implementation commits: `040c97c8`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
