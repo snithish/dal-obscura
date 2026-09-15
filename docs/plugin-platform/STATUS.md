@@ -2792,3 +2792,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: real provider cancellation/close behavior and external N04/N12–N16 release gates remain VERIFY. Release remains HOLD; continue exercising cleanup under actual provider failures and cancellation.
 - Atomic implementation commits: `03c43cb3`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N04 REST provider/session cleanup recovery
+
+- Scope: harden the REST catalog close path when the provider catalog raises during cleanup.
+- Observable behavior delivered; FR/NFR and B/G subcases: `RestCatalog.close()` marks the adapter closed, attempts both provider and underlying session cleanup, and re-raises the first cleanup error. A provider close failure can no longer skip session cleanup or leave the adapter reusable. Request validation, timeout bounds, and pickle logic are unchanged.
+- Changed and deleted paths; old callers removed; protected pickle check: `packages/iceberg-rest-plugin/src/dal_obscura_iceberg_rest/catalog.py` and its focused test; no serializers, APIs, dependencies, or durable records changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +15 production lines and +18 test lines for cleanup recovery; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `packages/iceberg-rest-plugin/tests/test_rest_plugin.py::test_rest_catalog_close_attempts_session_when_provider_close_fails`; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest packages/iceberg-rest-plugin/tests/test_rest_plugin.py -q` (exit 0, 21 passed) plus focused Ruff check/format (exit 0), 2026-09-15, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `7bbc3029`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: cancellation during actual blocking provider I/O, hostile transport counters, and external N04/N12–N16 release gates remain VERIFY. Release remains HOLD; continue provider-level cancellation and network qualification.
+- Atomic implementation commits: `7bbc3029`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
