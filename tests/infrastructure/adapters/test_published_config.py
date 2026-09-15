@@ -26,6 +26,7 @@ from dal_obscura.data_plane.infrastructure.adapters.published_config import (
     PublishedAsset,
     PublishedCatalog,
     PublishedConfigAuthorizer,
+    PublishedConfigCatalogRegistry,
     PublishedConfigStore,
     _catalog_config_for_asset,
     _schema_identities,
@@ -35,6 +36,31 @@ from dal_obscura.data_plane.infrastructure.adapters.published_config import (
 ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )
+
+
+def test_published_registry_close_attempts_all_cached_generations_when_one_fails() -> None:
+    closed: list[str] = []
+
+    class FakeRegistry:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        def close(self) -> None:
+            closed.append(self.name)
+            if self.name == "first":
+                raise RuntimeError("first generation close failed")
+
+    registry = PublishedConfigCatalogRegistry(object())
+    registry._registry_cache = {
+        (uuid4(), uuid4(), "analytics", "first"): FakeRegistry("first"),
+        (uuid4(), uuid4(), "analytics", "second"): FakeRegistry("second"),
+    }
+
+    with pytest.raises(RuntimeError, match="first generation close failed"):
+        registry.close()
+
+    assert closed == ["first", "second"]
+    assert registry._registry_cache == {}
 
 
 @pytest.fixture

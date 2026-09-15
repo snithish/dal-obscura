@@ -418,8 +418,15 @@ class PublishedConfigCatalogRegistry:
 
         registries = tuple(self._registry_cache.values())
         self._registry_cache.clear()
+        first_error: Exception | None = None
         for registry in registries:
-            registry.close()
+            try:
+                registry.close()
+            except Exception as exc:
+                if first_error is None:
+                    first_error = exc
+        if first_error is not None:
+            raise first_error
 
     def describe(self, catalog: str | None, target: str, *, tenant_id: str) -> TableFormat:
         if catalog is None:
