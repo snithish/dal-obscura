@@ -10,6 +10,8 @@ from dal_obscura.data_plane.interfaces.flight.contracts import authentication_re
 from dal_obscura.data_plane.interfaces.flight.server import DataAccessFlightService
 from tests.support.flight import command_descriptor
 
+pytestmark = pytest.mark.socket
+
 
 class DummyContext:
     def __init__(self, headers):

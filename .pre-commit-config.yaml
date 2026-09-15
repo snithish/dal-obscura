@@ -25,4 +25,4 @@ repos:
       language: system
       pass_filenames: false
       files: ^(src|packages|tests)/.*\.py$
-      args: ["-m", "not heavy", "--maxfail=1", "--disable-warnings"]
+      args: ["-m", "not heavy and not integration and not socket", "--maxfail=1", "--disable-warnings"]

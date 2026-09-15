@@ -68,6 +68,7 @@ pythonpath = [
 markers = [
   "heavy: tests that are intentionally excluded from the default pre-commit pytest hook",
   "integration: tests that require external services such as PostgreSQL",
+  "socket: tests that bind local sockets and require network permissions",
 ]
 
 [tool.setuptools.package-data]

@@ -17,6 +17,8 @@ from dal_obscura.data_plane.interfaces.health import (
     published_runtime_readiness,
 )
 
+pytestmark = pytest.mark.socket
+
 
 def test_data_plane_healthz_reports_process_alive():
     app = create_health_app(readiness=lambda: {"status": "ready"})

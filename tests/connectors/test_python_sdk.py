@@ -16,6 +16,8 @@ from tests.support.flight import (
 )
 from tests.support.policy import allow_rule
 
+pytestmark = pytest.mark.socket
+
 
 class _StreamingReader:
     def __init__(self, batch):

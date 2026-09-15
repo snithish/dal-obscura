@@ -19,6 +19,8 @@ from tests.support.flight import (
 from tests.support.policy import allow_rule
 from tests.support.row_filters import FLIGHT_UNSAFE_ROW_FILTER_SMOKE_CASES
 
+pytestmark = pytest.mark.socket
+
 
 class DummyContext:
     def __init__(self, headers):

@@ -13,6 +13,8 @@ from dal_obscura.control_plane.application.catalog_service import validate_catal
 from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 
+pytestmark = pytest.mark.socket
+
 
 def _context() -> ExecutionContext:
     return ExecutionContext(
