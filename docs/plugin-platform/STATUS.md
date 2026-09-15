@@ -3178,3 +3178,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: copied snippets still require clean-wheel execution across qualified Python/DuckDB/Spark/Arrow versions; live OIDC, PostgreSQL process races/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY. Release remains HOLD.
 - Atomic implementation commits: `0c28b492`.
 - Human acceptance, if required: independent consumer and security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N07 publish reconciliation scope fence
+
+- Scope: prevent a delayed lost-response reconciliation from applying publish state to a newer editor context.
+- Observable behavior delivered; FR/NFR and B/G subcases: publish operation lookup now rechecks asset, draft, edit, and load scope after the lookup resolves and before updating review/publish state or refreshing inventory. Stale committed-operation results are discarded. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/main.tsx`; no backend, serializer, migration, API, dependency, or durable-record changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +1 UI line; no dependencies changed.
+- Primary invariant test owners; existing publication operation/recovery tests and browser publish lane remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node node_modules/typescript/bin/tsc -p tsconfig.json --pretty false` (exit 0), `node node_modules/vite/bin/vite.js build` (exit 0; 335.99 kB JS / 101.17 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0, 14 passed), `node_modules/.bin/playwright test --config playwright.config.ts --list` (exit 0, 6 tests discovered), and `git diff --check` (exit 0), 2026-09-15, Node 24 workspace.
+- Artifact and fixture hashes; evidence locations: implementation commit `ae5a6337`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: rendered deferred publish/lost-response interleavings, live OIDC, populated browser, clean consumer artifacts, PostgreSQL race/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY under N07–N16. Release remains HOLD.
+- Atomic implementation commits: `ae5a6337`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
