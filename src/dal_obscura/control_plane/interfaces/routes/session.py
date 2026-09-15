@@ -318,12 +318,28 @@ def _browser_cookie_names(config: Mapping[str, object]) -> tuple[str, str]:
 
 def _post_login_redirect(config: dict[str, object], redirect_uri: str) -> str:
     configured = str(config.get("post_login_redirect_uri", "")).strip()
-    callback = urlsplit(redirect_uri)
+    try:
+        callback = urlsplit(redirect_uri)
+        callback_hostname = callback.hostname
+        _ = callback.port
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail="UI redirect URI is invalid") from exc
+    if not callback.scheme or not callback.netloc or not callback_hostname:
+        raise HTTPException(status_code=503, detail="UI redirect URI is invalid")
     if configured:
-        target = urlsplit(configured)
+        try:
+            target = urlsplit(configured)
+            target_hostname = target.hostname
+            _ = target.port
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="UI post-login redirect is invalid",
+            ) from exc
         if (
             target.scheme.lower() != callback.scheme.lower()
             or target.netloc.lower() != callback.netloc.lower()
+            or not target_hostname
             or target.username is not None
             or target.password is not None
             or target.query

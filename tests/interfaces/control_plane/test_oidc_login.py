@@ -168,6 +168,7 @@ def test_login_redirect_does_not_reuse_logout_destination() -> None:
         "https://attacker.example/",
         "https://gateway.example/complete?next=https://attacker.example",
         "https://user:pass@gateway.example/",
+        "https://[broken/complete",
     ],
 )
 def test_login_redirect_rejects_external_or_ambiguous_destination(configured: str) -> None:
@@ -176,3 +177,11 @@ def test_login_redirect_rejects_external_or_ambiguous_destination(configured: st
             {"post_login_redirect_uri": configured},
             "https://gateway.example/auth/callback",
         )
+
+
+@pytest.mark.parametrize(
+    "redirect_uri", ["https://[broken/callback", "https://gateway.example:99999/callback"]
+)
+def test_login_redirect_rejects_malformed_callback_configuration(redirect_uri: str) -> None:
+    with pytest.raises(HTTPException, match="UI redirect URI is invalid"):
+        _post_login_redirect({}, redirect_uri)
