@@ -2766,3 +2766,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: populated PostgreSQL backup/rollback and two-process maintenance cutover remain VERIFY; remaining N02 legacy reader/input inventory and all N04–N16 live gates remain open. Release remains HOLD; execute the migration against a disposable populated PostgreSQL fixture with writers stopped, then record rollback evidence.
 - Atomic implementation commits: `db3c6c13`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N04 published-registry shutdown cleanup recovery
+
+- Scope: harden the published configuration registry when multiple cached catalog generations are closed during shutdown or cache invalidation.
+- Observable behavior delivered; FR/NFR and B/G subcases: every cached `CatalogRegistry` close is attempted even if one raises; the first close error is re-raised after all providers receive cleanup. The cache is cleared before cleanup, so a failed shutdown cannot retain stale generations. Catalog resolution, admission, and pickle logic are unchanged.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/data_plane/infrastructure/adapters/published_config.py` and its focused regression test; no serializers, APIs, dependencies, or durable records changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +8 production lines and +28 test lines for cleanup recovery; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `tests/infrastructure/adapters/test_published_config.py::test_published_registry_close_attempts_all_cached_generations_when_one_fails`; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/infrastructure/adapters/test_published_config.py -q` (exit 0, 30 passed) plus focused Ruff check/format (exit 0), 2026-09-15, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `3c5b2224`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: real provider cancellation/close behavior, multi-worker capacity, hostile transport counters, and external release gates remain VERIFY under N04/N12–N16. Release remains HOLD; continue qualifying cleanup through real provider failure and cancellation drills.
+- Atomic implementation commits: `3c5b2224`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
