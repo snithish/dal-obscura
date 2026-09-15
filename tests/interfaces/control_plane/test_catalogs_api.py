@@ -164,6 +164,25 @@ def test_workspace_catalog_rejects_credentials_embedded_in_uri():
     assert "secret reference" in response.json()["detail"]
 
 
+def test_workspace_catalog_rejects_malformed_uri_with_structured_error():
+    client = _client()
+
+    response = client.put(
+        "/v1/catalogs/analytics",
+        json={
+            "module": ICEBERG_CATALOG_MODULE,
+            "options": {"uri": "https://[2001:db8::1/api"},
+        },
+        headers=ADMIN_HEADERS,
+    )
+
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["error"]["code"] == "validation_error"
+    assert payload["error"]["message"] == "Catalog option 'options.uri' contains an invalid URI"
+    assert payload["error"]["request_id"]
+
+
 def test_workspace_catalog_rejects_nested_dynamic_loader_options():
     client = _client()
 
