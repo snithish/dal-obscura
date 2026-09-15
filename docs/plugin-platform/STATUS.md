@@ -3020,3 +3020,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: route-level state/form decomposition, populated-provider visual/screen-reader review, live OIDC, clean artifact/consumer, PostgreSQL race/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY under N06–N16. Release remains HOLD; continue with bounded UI and security implementation while retaining the release gate.
 - Atomic implementation commits: `5fb79b32`.
 - Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N06 typed workspace route boundary
+
+- Scope: remove nested authentication/management/asset route branching from the UI composition root.
+- Observable behavior delivered; FR/NFR and B/G subcases: `WorkspaceContent` now owns the signed-out gate, loading gate, management-route selection, empty-workspace fallback, and asset-route selection through typed props. The root still owns session and mutation authority; rendering decisions are isolated without changing access checks, deep links, or private-state fencing. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/WorkspaceContent.tsx` and `apps/governance-ui/src/main.tsx`; no backend, serializer, migration, API, dependency, or durable-record changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +32/-9 UI lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing Playwright shell lane, frontend unit tests, and build/type checks remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node node_modules/typescript/bin/tsc -p tsconfig.json --pretty false` (exit 0), `node scripts/generate-api-types.mjs --check` (exit 0), `node node_modules/vite/bin/vite.js build` (exit 0; 334.66 kB JS / 100.79 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0, 14 passed), `node_modules/.bin/playwright test --config playwright.config.ts --list` (exit 0, 6 tests discovered), and `git diff --check` (exit 0), 2026-09-15, Node 24 workspace.
+- Artifact and fixture hashes; evidence locations: implementation commit `bb74daa4`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: route-local async/form ownership, populated-provider visual/screen-reader review, live OIDC, clean artifact/consumer, PostgreSQL race/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY under N06–N16. Release remains HOLD; continue with bounded route/component extraction and candidate qualification.
+- Atomic implementation commits: `bb74daa4`.
+- Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
