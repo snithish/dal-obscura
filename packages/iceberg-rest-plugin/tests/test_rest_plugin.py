@@ -302,3 +302,27 @@ def test_rest_catalog_close_releases_provider_session_and_is_terminal() -> None:
     assert closed == [True]
     with pytest.raises(ValueError, match="closed"):
         plugin.list_tables(_context(), limit=1)
+
+
+def test_rest_catalog_close_attempts_session_when_provider_close_fails() -> None:
+    closed: list[str] = []
+    plugin = RestCatalog(_config(), _context())
+
+    class Session:
+        def close(self):
+            closed.append("session")
+
+    class FailingCatalog:
+        _session = Session()
+
+        def close(self):
+            closed.append("catalog")
+            raise RuntimeError("catalog close failed")
+
+    plugin._catalog = FailingCatalog()
+    with pytest.raises(RuntimeError, match="catalog close failed"):
+        plugin.close()
+
+    assert closed == ["catalog", "session"]
+    with pytest.raises(ValueError, match="closed"):
+        plugin.validate_config(_context())

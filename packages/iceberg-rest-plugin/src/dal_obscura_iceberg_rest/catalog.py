@@ -218,14 +218,23 @@ class RestCatalog(CatalogPlugin):
             self._catalog = None
             if catalog is None:
                 return
+            first_error: Exception | None = None
             close = getattr(catalog, "close", None)
             if callable(close):
-                close()
-                return
+                try:
+                    close()
+                except Exception as exc:
+                    first_error = exc
             session = getattr(catalog, "_session", None)
             close = getattr(session, "close", None)
             if callable(close):
-                close()
+                try:
+                    close()
+                except Exception as exc:
+                    if first_error is None:
+                        first_error = exc
+            if first_error is not None:
+                raise first_error
 
     def _load_catalog(self, context: ExecutionContext):
         self._validate_context(context)
