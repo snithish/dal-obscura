@@ -2877,3 +2877,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: browser execution on supported CI, live OIDC login/logout/expiry, responsive visual checks, keyboard and screen-reader review remain VERIFY under N05/N06/N16. Release remains HOLD.
 - Atomic implementation commits: `6b990f4b`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N14 fast local test lane
+
+- Scope: reduce local commit feedback cost while keeping full integration and release checks authoritative.
+- Observable behavior delivered; FR/NFR and B/G subcases: the pre-commit pytest hook now selects `not heavy and not integration and not socket`. Unmarked loopback Flight/HTTP suites are explicitly classified with the new `socket` marker, so restricted local hooks no longer attempt network binds. CI integration jobs continue collecting those suites without the marker exclusion. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `.pre-commit-config.yaml`, `pyproject.toml`, and five socket-backed test modules; no runtime/API/serializer/migration/dependency changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +12 test/config lines and one marker predicate change; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing socket-backed suites remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -m 'not heavy and not integration and not socket' -q` (exit 0, all selected tests passed), focused Ruff check/format (exit 0), 2026-09-15, Python 3.12.10. The pre-change predicate was verified to fail only because restricted local execution attempted socket binds.
+- Artifact and fixture hashes; evidence locations: implementation commit `9ad9eb5a`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: path-aware PR selection, five-run benchmark/resource metrics, and full release-lane evidence remain VERIFY under N14/N15. Release remains HOLD.
+- Atomic implementation commits: `9ad9eb5a`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
