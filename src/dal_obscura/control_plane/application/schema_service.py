@@ -242,10 +242,7 @@ def _load_public_plugin_schema(
     except Exception as exc:
         raise ValidationFailure("Schema discovery failed") from exc
     finally:
-        if format_plugin is not None:
-            _close_plugin(format_plugin)
-        if catalog_plugin is not None:
-            _close_plugin(catalog_plugin)
+        _close_plugins(format_plugin, catalog_plugin)
 
 
 def _validate_handle_contract(handle: Any, plugin: Any, format_plugin_id: str) -> None:
@@ -325,6 +322,22 @@ def _close_plugin(plugin: object) -> None:
     close = getattr(plugin, "close", None)
     if callable(close):
         close()
+
+
+def _close_plugins(*plugins: object | None) -> None:
+    """Close every opened plugin while preserving the first cleanup error."""
+
+    first_error: Exception | None = None
+    for plugin in plugins:
+        if plugin is None:
+            continue
+        try:
+            _close_plugin(plugin)
+        except Exception as exc:
+            if first_error is None:
+                first_error = exc
+    if first_error is not None:
+        raise first_error
 
 
 def _public_table_identifier(target: str, identifier_type: Any) -> Any:

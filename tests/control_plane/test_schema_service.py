@@ -185,6 +185,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
         ]
     )
     closed: list[str] = []
+    format_close_fails = False
 
     class PublicStore(_FakeStore):
         def get_workspace_asset(self, asset_id: UUID) -> dict[str, object]:
@@ -261,6 +262,8 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
 
         def close(self):
             closed.append("format")
+            if format_close_fails:
+                raise RuntimeError("format close failed")
 
     class Registry:
         def admitted(self):
@@ -287,6 +290,17 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
     assert result["stable_field_ids"] is False
     assert cast(list[dict[str, object]], result["fields"])[0]["name"] == "profile"
     assert closed == ["format", "catalog"]
+
+    format_close_fails = True
+    with pytest.raises(RuntimeError, match="format close failed"):
+        get_asset_schema(
+            PublicStore(asset_id),  # type: ignore[arg-type]
+            asset_id,
+            ControlPlaneActor.for_platform_admin("admin"),
+            plugin_registry=Registry(),
+        )
+    assert closed[-2:] == ["format", "catalog"]
+    format_close_fails = False
 
     class ForgedHandleCatalog(PublicCatalog):
         def resolve_table(self, value, context):
