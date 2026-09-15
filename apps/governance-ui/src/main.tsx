@@ -9,6 +9,7 @@ import { assetInventoryQueryKey, sessionQueryScope } from "./query_scope";
 import { recoveryMessage } from "./recovery";
 import { isAbortError } from "./async";
 import { AppShell } from "./components/AppShell";
+import { CommandPalette, type PaletteCommand } from "./components/CommandPalette";
 import { LoginPanel } from "./components/LoginPanel";
 import { ConnectionsView } from "./components/ConnectionsView";
 import { AssetWorkspace } from "./components/AssetWorkspace";
@@ -899,7 +900,7 @@ function App() {
 
   const signedOut = workspace === "unavailable" || (workspace === "loading" && !session);
   const canManageWorkspace = Boolean(session?.capabilities.includes("workspace:admin"));
-  const paletteCommands: Array<Page | "help"> = ["assets", "changes", "activity", ...(canManageWorkspace ? ["connections", "settings"] as const : []), "help"];
+  const paletteCommands: PaletteCommand[] = ["assets", "changes", "activity", ...(canManageWorkspace ? ["connections", "settings"] as const : []), "help"];
   const paletteAssets = assets.filter((item) => `${item.catalog} ${item.name}`.toLowerCase().includes(paletteQuery.trim().toLowerCase())).slice(0, 8);
   const accessView = <LoginPanel showAuth={workspace === "unavailable"} title={workspace === "loading" ? "Loading governed workspace" : "Sign in to your workspace"} message={workspace === "loading" ? "Checking your workspace access and available assets." : notice} retry={workspace === "unavailable" ? loadInitialWorkspace : undefined} authConfig={authConfig} sessionOptions={sessionOptions} bootstrapToken={bootstrapToken} onBootstrapToken={setBootstrapToken} onBootstrapLogin={() => void bootstrapLogin()} loggingIn={loggingIn} authError={authError} />;
   const content = signedOut
@@ -930,13 +931,12 @@ function App() {
       onLogout={() => void logout()}
     >
       {content}
-      {paletteOpen && <div className="palette-backdrop" role="presentation" onMouseDown={closePalette}><section className="command-palette" role="dialog" aria-modal="true" aria-label="Command palette" onMouseDown={(event) => event.stopPropagation()}><input autoFocus value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder="Jump to a destination or search an asset" aria-label="Command search" /><div role="listbox">{paletteCommands.filter((command) => command.includes(paletteQuery.toLowerCase())).map((command) => <button key={command} role="option" onClick={() => runPaletteCommand(command)}>{command === "help" ? "Keyboard and workflow help" : `Open ${titleFor(command)}`}</button>)}{paletteAssets.map((item) => <button key={item.id} role="option" onClick={() => openPaletteAsset(item.id)}><strong>{item.name}</strong><small>{item.catalog} · {item.backend}</small></button>)}{paletteQuery && !paletteCommands.some((command) => command.includes(paletteQuery.toLowerCase())) && !paletteAssets.length && <p className="help">No authorized destination or asset matches that search.</p>}</div><p className="help">Press Escape to close. Publishing, deletion, and revocation are never palette commands.</p></section></div>}
+      {paletteOpen && <CommandPalette query={paletteQuery} commands={paletteCommands} assets={paletteAssets} onQueryChange={setPaletteQuery} onCommand={runPaletteCommand} onAsset={openPaletteAsset} onClose={closePalette} />}
     </AppShell>
   );
 }
 
 
 
-function titleFor(page: Page) { return ({ changes: "Changes", activity: "Activity", connections: "Connections", settings: "Settings", assets: "Assets" })[page]; }
 function saveLabel(state: SaveState) { return ({ saved: "Saved draft", saving: "Saving draft", unsaved: "Unsaved changes", failed: "Save failed" })[state]; }
 createRoot(document.getElementById("root")!).render(<App />);
