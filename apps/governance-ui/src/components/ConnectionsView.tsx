@@ -109,6 +109,7 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const editEpoch = useRef(0);
+  const catalogStateEpoch = useRef(0);
   const discoveryEpoch = useRef(0);
   const diagnosticEpoch = useRef(0);
   const discoveredCatalogRef = useRef("");
@@ -122,6 +123,9 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
     for (const controller of mutationControllers.current) controller.abort();
     mutationControllers.current.clear();
   }, [sessionScope]);
+  useEffect(() => {
+    catalogStateEpoch.current += 1;
+  }, [catalogs, pluginPairs]);
   useEffect(() => {
     setPublishing(false);
     setLifecycleBusy(null);
@@ -225,6 +229,7 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
   }
   async function discover(catalog: string) {
     const epoch = ++discoveryEpoch.current;
+    const stateEpoch = catalogStateEpoch.current;
     try {
       const catalogRow = catalogs.find((item) => item.name === catalog);
       const catalogPluginId = catalogRow?.plugin_id;
@@ -233,7 +238,7 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
         queryKey: ["management", sessionScope, "connections", "discover", catalog],
         queryFn: ({ signal }) => controlPlane.discoverCatalogTables(catalog, signal),
       });
-      if (epoch !== discoveryEpoch.current) return;
+      if (epoch !== discoveryEpoch.current || stateEpoch !== catalogStateEpoch.current) return;
       setDiscoveredCatalog(catalog);
       discoveredCatalogRef.current = catalog;
       setSelectedFormatId(choices.length === 1 ? choices[0].format_plugin_id : "");
@@ -280,9 +285,10 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
     setGovernBusy(operationKey);
     const controller = beginMutation();
     const discoveryScope = discoveryEpoch.current;
+    const stateEpoch = catalogStateEpoch.current;
     try {
       await controlPlane.saveAsset(catalog, target, formatPlugin.plugin_id, identifier, controller.signal);
-      if (controller.signal.aborted || discoveryScope !== discoveryEpoch.current || discoveredCatalogRef.current !== catalog) return;
+      if (controller.signal.aborted || discoveryScope !== discoveryEpoch.current || stateEpoch !== catalogStateEpoch.current || discoveredCatalogRef.current !== catalog) return;
       void queryClient.invalidateQueries({ queryKey: ["management", sessionScope] }); void queryClient.invalidateQueries({ queryKey: ["asset-inventory", sessionScope] }); setMessage(`Governed asset ${target} registered. Assign owners and author a policy in Assets.`); await discover(catalog);
     } catch (error) {
       if (!isAbortError(error)) setMessage(recoveryMessage(error, "Asset registration was rejected; the source table was not changed."));
