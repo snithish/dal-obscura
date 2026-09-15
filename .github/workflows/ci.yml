@@ -463,6 +463,12 @@ jobs:
           pnpm --dir apps/governance-ui check:api-types
           pnpm --dir apps/governance-ui build
 
+      - name: Install Playwright browser
+        run: pnpm --dir apps/governance-ui exec playwright install --with-deps chromium
+
+      - name: Run authenticated-shell browser journey
+        run: pnpm --dir apps/governance-ui test:e2e
+
   ui-image:
     name: Build, scan, and publish UI image
     runs-on: ubuntu-24.04
