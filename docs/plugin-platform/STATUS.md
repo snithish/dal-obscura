@@ -2981,3 +2981,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: route-level form ownership/CSS module migration, full browser execution, live OIDC, screen-reader/visual review, and independent UX/security/release review remain VERIFY under N06–N16. Release remains HOLD.
 - Atomic implementation commits: `d3797b83`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N06 command palette module and button semantics
+
+- Scope: continue the visual-foundation cleanup with component-owned palette styles and explicit button behavior across the authenticated UI.
+- Observable behavior delivered; FR/NFR and B/G subcases: command-palette backdrop, dialog, option list, focus states, and theme colors now live in `CommandPalette.module.css`; the global palette rules were removed. Every UI button that is not a form submit now declares `type="button"`, preventing accidental form submission when components are composed into forms. Login's token action remains the sole explicit submit control. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/CommandPalette.module.css`, `CommandPalette.tsx`, `AppShell.tsx`, `AssetWorkspace.tsx`, `ConnectionsView.tsx`, `LoginPanel.tsx`, `ManagementViews.tsx`, `SettingsView.tsx`, and `styles.css`; no backend, serializer, migration, API, dependency, or durable-record changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +95/-36 UI lines (68 CSS-module lines, explicit button attributes, and palette class wiring); no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing Playwright shell/accessibility lane and frontend unit/build checks remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node node_modules/typescript/bin/tsc -p tsconfig.json --pretty false` (exit 0), `node scripts/generate-api-types.mjs --check` (exit 0), `node node_modules/vite/bin/vite.js build` (exit 0; 333.82 kB JS / 100.52 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0, 14 passed), and `git diff --check` (exit 0), 2026-09-15, Node 24 workspace.
+- Artifact and fixture hashes; evidence locations: implementation commit `1b34a60c`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: route-level state/form decomposition, full browser execution, live OIDC, screen-reader and visual review, clean artifact/consumer, PostgreSQL race/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY under N06–N16. Release remains HOLD; continue with the next bounded implementation slice and candidate-bound qualification.
+- Atomic implementation commits: `1b34a60c`.
+- Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
