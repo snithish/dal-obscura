@@ -372,6 +372,10 @@ def validate_catalog_options(
         if "://" not in value:
             continue
         parsed = urlsplit(value)
+        if parsed.scheme.lower() == "file" and parsed.netloc:
+            raise ValidationFailure(
+                f"Catalog option {key!r} must use a local file URI without an authority"
+            )
         if parsed.username or parsed.password:
             raise ValidationFailure(
                 f"Catalog option {key!r} must use a secret reference, not URI credentials"

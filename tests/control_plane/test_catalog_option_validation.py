@@ -31,6 +31,11 @@ def test_catalog_options_allow_explicit_private_literal() -> None:
     )
 
 
+def test_catalog_options_reject_remote_file_authority() -> None:
+    with pytest.raises(ValidationFailure, match="local file URI"):
+        validate_catalog_options({"warehouse": "file://remote-host/warehouse"})
+
+
 @pytest.mark.parametrize("host", ["169.254.169.254", "0.0.0.0", "224.0.0.1"])
 def test_catalog_options_reject_special_literal_even_when_allowlisted(host: str) -> None:
     with pytest.raises(ValidationFailure, match="special address"):
