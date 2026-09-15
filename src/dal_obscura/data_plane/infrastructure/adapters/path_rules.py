@@ -48,7 +48,13 @@ class PathRuleEnforcer:
         """Raises `PermissionError` when `path` is outside every configured root."""
         if not self._rules:
             return
-        normalized = _normalize_path(path)
+        try:
+            normalized = _normalize_path(path)
+        except ValueError as exc:
+            # Returned provider locations are untrusted data. Treat malformed
+            # or above-root paths as an authorization denial at this boundary,
+            # rather than leaking an internal validation error to callers.
+            raise PermissionError("Path is not allowed") from exc
         if not normalized:
             raise PermissionError("Path is not allowed")
         if any(_path_is_under_root(normalized, rule.root) for rule in self._rules):
