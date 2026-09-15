@@ -3281,3 +3281,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: skipped consumer and PostgreSQL gates remain mandatory release evidence; live OIDC/browser accessibility, hostile transport, clean dependency-isolated wheels, mixed-load capacity, deployment integrity/SBOM, and independent review remain VERIFY. Release remains HOLD.
 - Atomic implementation commits covered: `b0fa425`, `4002d386`; this entry is verification-only.
 - Human acceptance, if required: independent security, consumer, and release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — Shared local-file URI enforcement
+
+- Scope: align generic catalog validation with the built-in adapter's local filesystem boundary.
+- Observable behavior delivered; FR/NFR and B/G subcases: any `file:` catalog option containing a URI authority (for example `file://remote-host/...`) is rejected before an admitted plugin is constructed. Local `file:///...` paths remain supported; no credentials or remote file host can cross the shared validator boundary. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/application/catalog_service.py`, `tests/control_plane/test_catalog_option_validation.py`; no migrations, serializer, API, or dependency changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +5/+4 Python lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: added shared-validator coverage; existing REST and path-boundary tests remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: elevated focused validator, IO-boundary, and catalog API suite (exit 0, 38 passed), focused Ruff and Ty checks (exit 0), and `git diff --check` (exit 0), 2026-09-15, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `2ce21efc`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: actual DNS rebinding/private-address counters and provider cancellation remain VERIFY under N04; clean consumer artifacts, live OIDC, PostgreSQL races/recovery, mixed-load capacity, deployment integrity/SBOM, and independent review remain VERIFY. Release remains HOLD.
+- Atomic implementation commits: `2ce21efc`.
+- Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
