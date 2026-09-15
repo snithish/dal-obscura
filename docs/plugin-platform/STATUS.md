@@ -2994,3 +2994,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: route-level state/form decomposition, full browser execution, live OIDC, screen-reader and visual review, clean artifact/consumer, PostgreSQL race/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY under N06–N16. Release remains HOLD; continue with the next bounded implementation slice and candidate-bound qualification.
 - Atomic implementation commits: `1b34a60c`.
 - Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N11 audit visibility workspace-boundary hardening
+
+- Scope: close the remaining tenant/cell scoping gap in non-admin audit pagination.
+- Observable behavior delivered; FR/NFR and B/G subcases: the audit repository now requires the asset visibility `EXISTS` subquery to match the active workspace cell and tenant before applying owner/grant visibility. An owner principal shared by another tenant can no longer see that tenant's audit rows. Keyset ordering, filters, page bounds, redaction, and admin behavior are unchanged. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/infrastructure/repositories.py` and `tests/control_plane/test_audit_repository.py`; no serializers, migrations, APIs, dependencies, or durable records changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +2 production lines and +118 regression-test lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `tests/control_plane/test_audit_repository.py::test_scoped_audit_visibility_enforces_cell_and_tenant_context` owns cross-tenant/cell isolation; existing `tests/interfaces/control_plane/test_audit_api.py` owns endpoint pagination/filter/redaction behavior; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane/test_audit_repository.py tests/interfaces/control_plane/test_audit_api.py -q` (exit 0, 5 passed), focused Ruff check/format (exit 0), and pre-commit Ruff/pytest hooks (exit 0), 2026-09-15, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `63950c66`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: route-level UI state decomposition, live browser/OIDC/accessibility, hostile transport, PostgreSQL process races/recovery, clean consumer artifacts, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY under N06–N16. Release remains HOLD; continue with bounded security fixes and candidate qualification.
+- Atomic implementation commits: `63950c66`.
+- Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
