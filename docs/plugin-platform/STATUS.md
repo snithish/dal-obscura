@@ -2838,3 +2838,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: actual provider stalled-I/O cancellation timing, hostile transport counters, capacity mixed load, PostgreSQL races/recovery, clean candidate consumers, deployment integrity/SBOM, and independent security/UX/release review remain VERIFY under N04/N12–N16. Release remains HOLD; continue only with bounded provider/resource evidence.
 - Atomic implementation commits: `25f03b4b`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N06 Playwright authentication shell lane
+
+- Scope: add the required browser-level UI qualification for normal sign-in gating and retired demo-bypass removal.
+- Observable behavior delivered; FR/NFR and B/G subcases: the governance UI now has a pinned Playwright `test:e2e` command. The journey opens a protected `#assets` deep link, verifies the signed-out login panel and disabled private navigation, then verifies `?demo` cannot restore a workspace. The CI UI job installs Chromium and executes this lane after type-check/build. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/package.json`, `apps/governance-ui/pnpm-lock.yaml`, `apps/governance-ui/playwright.config.ts`, `apps/governance-ui/e2e/auth-shell.spec.ts`, and `.github/workflows/ci.yml`; no backend, serializer, migration, or durable-record changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +83 tracked UI/CI/config/test lines and one pinned dev dependency (`@playwright/test` 1.63.0); no runtime dependency added.
+- Primary invariant test owners; tests consolidated/deleted: `apps/governance-ui/e2e/auth-shell.spec.ts` owns browser sign-in gating and demo-bypass absence; existing Node lifecycle tests remain unchanged.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/tsc -b --pretty false` (exit 0), `node_modules/.bin/playwright test --list` (exit 0, 2 tests), `git diff --check` (exit 0), 2026-09-15, Node 24 workspace. Browser execution was attempted against the live UI but macOS Chromium launch failed with a Mach-port permission error; CI installs the supported Linux browser runtime.
+- Artifact and fixture hashes; evidence locations: implementation commit `9d07fa81`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: live browser OIDC login/logout/expiry, axe/keyboard/screen-reader and responsive visual evidence remain VERIFY under N05/N06/N16; execute the CI browser lane and real IdP journey before release. Release remains HOLD.
+- Atomic implementation commits: `9d07fa81`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
