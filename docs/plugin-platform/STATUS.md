@@ -2929,3 +2929,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: real stalled-I/O cancellation timing, hostile transport counters, capacity mixed load, PostgreSQL races/recovery, clean candidate consumers, deployment integrity/SBOM, and independent security/UX/release review remain VERIFY under N04/N12–N16. Release remains HOLD; continue with bounded transport and deployment evidence.
 - Atomic implementation commits: `51193e74`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N06 keyboard and responsive shell coverage
+
+- Scope: make the normal signed-out UI browser gate cover keyboard focus and narrow-screen login usability.
+- Observable behavior delivered; FR/NFR and B/G subcases: the Playwright shell lane now verifies tab order reaches the brand link and navigation menu control, and a 390px viewport keeps the menu, sign-in heading, and local authentication control visible. Axe and demo-bypass checks remain in the same lane. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/e2e/auth-shell.spec.ts`; no backend, serializer, migration, dependency, or durable-record changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +18 browser-test lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `apps/governance-ui/e2e/auth-shell.spec.ts` owns signed-out focus and responsive shell checks; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node apps/governance-ui/node_modules/typescript/bin/tsc -p apps/governance-ui/tsconfig.json --pretty false` (exit 0), `apps/governance-ui/node_modules/.bin/playwright test --config apps/governance-ui/playwright.config.ts --list` (exit 0, 5 tests), and `git diff --check` (exit 0), 2026-09-15, Node 24 workspace. Browser execution remains VERIFY because local macOS Chromium launch is denied by the sandbox Mach-port policy; CI installs Chromium with system dependencies.
+- Artifact and fixture hashes; evidence locations: implementation commit `da8c87ac`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: supported-CI browser execution, live OIDC login/logout/expiry, screen-reader review, visual snapshots, and independent UX/security/release review remain VERIFY under N05/N06/N16. Release remains HOLD.
+- Atomic implementation commits: `da8c87ac`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
