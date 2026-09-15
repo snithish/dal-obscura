@@ -139,9 +139,15 @@ def resolve_secret_refs(
         mapping = cast(Mapping[object, object], value)
         secret_key = mapping.get("secret")
         reference_scope = mapping.get("scope")
-        if isinstance(secret_key, str) and set(mapping) != {"secret", "scope"}:
-            raise ValueError("Secret reference scope is required")
-        if set(mapping) == {"secret", "scope"} and isinstance(secret_key, str):
+        # A mapping that names ``secret`` is always a secret reference. Never
+        # let malformed values fall through as ordinary provider options: that
+        # would make validation and resolution disagree at the security
+        # boundary.
+        if "secret" in mapping and not isinstance(secret_key, Mapping):
+            if set(mapping) != {"secret", "scope"} or not isinstance(secret_key, str):
+                raise ValueError("Secret reference scope is required")
+            if not secret_key.strip():
+                raise ValueError("Secret reference name is required")
             if (
                 not isinstance(reference_scope, str)
                 or not reference_scope.strip()

@@ -119,6 +119,22 @@ def test_resolve_secret_refs_uses_explicit_secret_shape_only(monkeypatch: pytest
     }
 
 
+def test_resolve_secret_refs_rejects_malformed_secret_mappings():
+    provider = EnvSecretProvider()
+    with pytest.raises(ValueError, match="scope"):
+        resolve_secret_refs(
+            {"password": {"secret": 42, "scope": "identity"}},
+            provider=provider,
+            expected_scope="identity",
+        )
+    with pytest.raises(ValueError, match="name"):
+        resolve_secret_refs(
+            {"password": {"secret": "", "scope": "identity"}},
+            provider=provider,
+            expected_scope="identity",
+        )
+
+
 def test_resolve_secret_refs_rejects_missing_secret():
     provider = EnvSecretProvider()
 
