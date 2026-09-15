@@ -84,6 +84,16 @@ def test_ui_auth_config_excludes_removed_demo_login_settings() -> None:
     }
 
 
+@pytest.mark.parametrize(
+    "value",
+    ["https://[broken/realm", "https://issuer.example:99999/realm"],
+)
+def test_production_url_helpers_fail_closed_on_malformed_urls(value: str) -> None:
+    assert control_plane_cli._is_https_url(value) is False
+    assert control_plane_cli._is_https_origin(value) is False
+    assert control_plane_cli._origin(value) == ""
+
+
 def test_control_plane_cli_passes_configured_secret_provider(monkeypatch, tmp_path) -> None:
     database_url = f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
     migrate_config_store(create_engine_from_url(database_url))

@@ -175,10 +175,17 @@ def _csv(value: str) -> tuple[str, ...]:
 def _is_https_url(value: str | None) -> bool:
     if not value:
         return False
-    parsed = urlsplit(value.strip())
+    parsed = _safe_urlsplit(value)
+    if parsed is None:
+        return False
+    try:
+        hostname = parsed.hostname
+        _ = parsed.port
+    except ValueError:
+        return False
     return (
         parsed.scheme.lower() == "https"
-        and bool(parsed.hostname)
+        and bool(hostname)
         and parsed.username is None
         and parsed.password is None
         and not parsed.fragment
@@ -186,17 +193,32 @@ def _is_https_url(value: str | None) -> bool:
 
 
 def _is_https_origin(value: str) -> bool:
-    parsed = urlsplit(value.strip())
+    parsed = _safe_urlsplit(value)
+    if parsed is None:
+        return False
     return _is_https_url(value) and not parsed.path.rstrip("/") and not parsed.query
 
 
 def _origin(value: str | None) -> str:
     if not value:
         return ""
-    parsed = urlsplit(value.strip())
+    parsed = _safe_urlsplit(value)
+    if parsed is None:
+        return ""
+    try:
+        _ = parsed.port
+    except ValueError:
+        return ""
     if not parsed.scheme or not parsed.netloc:
         return ""
     return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}"
+
+
+def _safe_urlsplit(value: str):
+    try:
+        return urlsplit(value.strip())
+    except ValueError:
+        return None
 
 
 def _validate_optional_https(values: Mapping[str, str], name: str, label: str) -> None:
