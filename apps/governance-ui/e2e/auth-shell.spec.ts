@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 test.describe("authenticated governance shell", () => {
@@ -16,5 +17,15 @@ test.describe("authenticated governance shell", () => {
     await expect(page.getByRole("heading", { name: "Sign in to your workspace" })).toBeVisible();
     await expect(page.getByText("Not signed in")).toBeVisible();
     await expect(page.getByText("Use demo persona")).toHaveCount(0);
+  });
+
+  test("has no serious or critical accessibility violations when signed out", async ({ page }) => {
+    await page.goto("/#assets");
+
+    const results = await new AxeBuilder({ page }).analyze();
+    const blockingViolations = results.violations.filter(
+      (violation) => violation.impact === "serious" || violation.impact === "critical",
+    );
+    expect(blockingViolations).toEqual([]);
   });
 });
