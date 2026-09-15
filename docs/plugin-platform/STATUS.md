@@ -3233,3 +3233,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: the runner is offline and could not resolve missing third-party dependencies into a fresh empty environment (`pyarrow`/`pyiceberg` index fetch failed), so this is package/entry-point qualification rather than a complete dependency-isolated B17 pass. Execute the clean artifact matrix on a networked CI runner with exact lock resolution, TLS/OIDC Flight, real SQL/REST/manifest datasets, nested row-set comparisons, retries/cancellation, and invalid plugin variants. Release remains HOLD.
 - Atomic implementation commits: none (qualification record only).
 - Human acceptance, if required: independent artifact and consumer review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — Strict malformed secret-reference rejection
+
+- Scope: close a parser ambiguity at the catalog/provider secret boundary.
+- Observable behavior delivered; FR/NFR and B/G subcases: any mapping that carries a scalar `secret` key must be an exact `{secret, scope}` reference with a non-empty name and matching request scope. Malformed non-string, empty-name, or mixed-field references now fail closed instead of being treated as ordinary plugin options; nested objects that contain a valid reference remain supported. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/data_plane/infrastructure/adapters/secret_providers.py`, `tests/infrastructure/adapters/test_secret_providers.py`; no migrations, API, dependency, or serializer changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +22/-3 Python lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: added malformed-reference coverage to the secret-provider suite; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/infrastructure/adapters/test_secret_providers.py tests/control_plane/test_catalog_option_validation.py tests/interfaces/control_plane/test_catalogs_api.py -q` (exit 0, 40 passed), focused Ruff and Ty checks (exit 0), and `git diff --check` (exit 0), 2026-09-15, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `b0fa425`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: live hostile transport/DNS/private-address counters and cancellation cleanup remain VERIFY under N04; clean wheel/consumer matrix, OIDC freshness/revocation, PostgreSQL races/recovery, mixed-load capacity, deployment integrity/SBOM, and independent review remain VERIFY. Release remains HOLD.
+- Atomic implementation commits: `b0fa425`.
+- Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
