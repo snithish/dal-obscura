@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
 from collections.abc import Callable
 from typing import Any, cast
 from uuid import UUID
@@ -325,8 +326,9 @@ def _close_plugin(plugin: object) -> None:
 
 
 def _close_plugins(*plugins: object | None) -> None:
-    """Close every opened plugin while preserving the first cleanup error."""
+    """Close every opened plugin without masking an active operation error."""
 
+    active_error = sys.exc_info()[1]
     first_error: Exception | None = None
     for plugin in plugins:
         if plugin is None:
@@ -336,7 +338,7 @@ def _close_plugins(*plugins: object | None) -> None:
         except Exception as exc:
             if first_error is None:
                 first_error = exc
-    if first_error is not None:
+    if first_error is not None and active_error is None:
         raise first_error
 
 

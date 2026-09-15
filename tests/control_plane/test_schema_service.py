@@ -24,6 +24,7 @@ from dal_obscura.control_plane.application.schema_service import (
     MAX_SCHEMA_DEPTH,
     MAX_SCHEMA_NODES,
     _arrow_field_id,
+    _close_plugins,
     _load_legacy_iceberg_schema,
     get_asset_schema,
     schema_fingerprint,
@@ -573,6 +574,19 @@ def test_get_asset_schema_redacts_catalog_provider_errors() -> None:
         )
 
     assert "catalog-password" not in str(failure.value)
+
+
+def test_schema_plugin_cleanup_does_not_mask_primary_error() -> None:
+    class FailingClose:
+        def close(self) -> None:
+            raise RuntimeError("cleanup failed")
+
+    with pytest.raises(ValueError, match="primary failure"):
+        try:
+            raise ValueError("primary failure")
+        except ValueError:
+            _close_plugins(FailingClose())
+            raise
 
 
 def test_get_asset_schema_rejects_excessive_node_count() -> None:
