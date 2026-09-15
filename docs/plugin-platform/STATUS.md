@@ -3007,3 +3007,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: route-level UI state decomposition, live browser/OIDC/accessibility, hostile transport, PostgreSQL process races/recovery, clean consumer artifacts, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY under N06–N16. Release remains HOLD; continue with bounded security fixes and candidate qualification.
 - Atomic implementation commits: `63950c66`.
 - Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N06 command palette focus containment
+
+- Scope: make the command palette keyboard-complete for the public and authenticated shell.
+- Observable behavior delivered; FR/NFR and B/G subcases: the dialog closes on Escape and cycles Tab/Shift+Tab between its enabled controls, so focus cannot escape into the underlying workspace while the modal is open. The Playwright shell lane now verifies opening, initial focus, reverse wrap, and forward wrap. Publish/delete/revoke remain absent from palette commands. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/CommandPalette.tsx` and `apps/governance-ui/e2e/auth-shell.spec.ts`; no backend, serializer, migration, dependency, or durable-record changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +42 UI lines (focus containment helper and one browser journey); no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `apps/governance-ui/e2e/auth-shell.spec.ts` owns command-palette keyboard containment; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/playwright test --config playwright.config.ts --list` (exit 0, 6 tests discovered), `node node_modules/typescript/bin/tsc -p tsconfig.json --pretty false` (exit 0), and `git diff --check` (exit 0), 2026-09-15, Node 24 workspace. Browser execution remains VERIFY because local macOS Chromium launch is denied by the sandbox Mach-port policy; CI installs Chromium with system dependencies.
+- Artifact and fixture hashes; evidence locations: implementation commit `5fb79b32`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: route-level state/form decomposition, populated-provider visual/screen-reader review, live OIDC, clean artifact/consumer, PostgreSQL race/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY under N06–N16. Release remains HOLD; continue with bounded UI and security implementation while retaining the release gate.
+- Atomic implementation commits: `5fb79b32`.
+- Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
