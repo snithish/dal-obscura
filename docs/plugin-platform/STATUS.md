@@ -3282,6 +3282,15 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Atomic implementation commits covered: `b0fa425`, `4002d386`; this entry is verification-only.
 - Human acceptance, if required: independent security, consumer, and release review remains VERIFY; release remains HOLD.
 
+## 2026-09-15 — Full suite after URL boundary hardening
+
+- Scope: rerun the complete Python matrix with governed consumers enabled after OIDC endpoint and CLI URL parser hardening.
+- Evidence: elevated `DAL_OBSCURA_RUN_CONSUMER_TESTS=1 UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q -ra` exited 0. The run collected 924 tests, passed 911, and explicitly skipped 13: seven benchmark cases excluded by `--benchmark-skip` and six PostgreSQL publication-race/recovery cases requiring `DAL_OBSCURA_POSTGRES_TEST_URL`. All four consumer qualification tests executed; no failures or errors occurred. Pickle logic is untouched.
+- Environment: Python 3.12.10, managed macOS runner with elevated loopback/subprocess permission, 2026-09-15. The implementation tree was clean before and after the run.
+- Remaining subcases; blocker and next concrete action: PostgreSQL two-process/recovery, live TLS/OIDC browser and Flight matrix, hostile transport/DNS counters, mixed-load capacity, deployment integrity/SBOM, clean dependency-isolated consumer artifacts, and independent UX/security/release review remain VERIFY. Release remains HOLD; continue with the next bounded implementation slice or run the declared external gates.
+- Atomic implementation commits covered: `56153045`, `b0e56ee1`; this entry is verification-only.
+- Human acceptance, if required: independent security, consumer, and release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-15 — CLI OIDC URL boundary hardening
 
 - Scope: make production startup URL checks fail closed for malformed hosts and ports.
