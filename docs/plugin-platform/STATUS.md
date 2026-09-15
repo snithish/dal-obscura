@@ -3215,3 +3215,12 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Environment: Python 3.12.10, managed macOS runner with elevated local socket permission, 2026-09-15. The JVM lane separately passed 44 tests.
 - Remaining subcases; blocker and next concrete action: the 17 skips are required release evidence, not passes; run benchmarks, consumer reads, PostgreSQL two-process races, and recovery with their declared fixtures. Live OIDC/browser accessibility, hostile transport, capacity, deployment integrity/SBOM, and independent review also remain VERIFY. Release remains HOLD.
 - Atomic implementation commits: none (verification record only).
+
+## 2026-09-15 — Clean five-run capacity evidence
+
+- Scope: rerun the repository capacity benchmark harness from a clean committed tree with artifacts outside the repository.
+- Evidence: `DAL_OBSCURA_CAPACITY_RUNS=5 ./scripts/run_capacity_benchmarks.sh /tmp/dal-obscura-capacity-20260915T134500Z` completed successfully. The harness ran five repetitions of row-filter/masking, Iceberg multifile, and ticket-to-response suites; every executed benchmark passed and the ticket suite reported its two declared opt-in skips. The clean summary records Iceberg multifile mean 1.911 ms, row-filter-only mean 4.033 ms, nested-mask mean 7.141 ms, top-level-mask mean 8.016 ms, mask-only mean 12.390 ms, complex ticket mean 34.243 ms, and the 25M-row masked stream mean 41,795.703 ms. The captured metadata reports commit `89187e9320acf8da4f8f57b52d160de55e6be568`, `git_dirty=false`, Python 3.12.10, arm64 Darwin, and the current lockfile hash.
+- Artifact and fixture hashes; evidence locations: `/tmp/dal-obscura-capacity-20260915T134500Z/summary.json` SHA-256 `a8bce4a8f32f2402242e796b8e4f2191ad06d9d5b31900b53356688b8bc2ecaf`; `metadata.txt` SHA-256 `5636a1101efb487dd468d5d8de592665113bc5d10babedae31f595ca247b8892`. Pickle logic is untouched.
+- Remaining subcases; blocker and next concrete action: this harness is repeatable local microbenchmark evidence only. N14 still requires the declared mixed-load run with 10M rows, 1M audit records, 16 concurrent consumers, resource telemetry, and pass/fail thresholds; N13 clean wheels/real datasets/TLS/OIDC, N12 PostgreSQL process races/recovery, N04 hostile transport/DNS, N15 deployment integrity/SBOM, and N16 independent review remain VERIFY. Release remains HOLD.
+- Atomic implementation commits: none (verification record only).
+- Human acceptance, if required: independent capacity and release review remains VERIFY; release remains HOLD.
