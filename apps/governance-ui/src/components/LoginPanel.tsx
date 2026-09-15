@@ -42,7 +42,7 @@ export function LoginPanel({
       <h2>{title}</h2>
       <p>{message}</p>
       {showAuth && authConfig?.authority && (
-        <button className="primary login-shortcut" onClick={controlPlane.startLogin}>
+        <button type="button" className="primary login-shortcut" onClick={controlPlane.startLogin}>
           Sign in with SSO
         </button>
       )}
@@ -81,7 +81,7 @@ export function LoginPanel({
         </p>
       )}
       {retry && (
-        <button className="secondary" onClick={() => void retry()}>
+        <button type="button" className="secondary" onClick={() => void retry()}>
           Retry connection
         </button>
       )}

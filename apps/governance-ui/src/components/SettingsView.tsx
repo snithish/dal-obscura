@@ -270,7 +270,7 @@ export function SettingsView({
           <h2>Runtime and identity</h2>
           <p className="muted">These controls affect ticket fan-out and authentication. Changes are server-validated and do not expose secrets.</p>
         </div>
-        <button className="secondary" onClick={reload}>Refresh</button>
+        <button type="button" className="secondary" onClick={reload}>Refresh</button>
       </div>
       <div className="form-card">
         <h3>Runtime limits</h3>
@@ -289,7 +289,7 @@ export function SettingsView({
           </div>)}</div>
           <button className="secondary" type="button" onClick={() => { markDirty(); setPathRuleRoots((current) => [...current, ""]); }}>Add storage root</button>
         </fieldset>
-        <button className="primary" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save runtime settings"}</button>
+        <button type="button" className="primary" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save runtime settings"}</button>
         {message && <p className="notice" role="status">{message}</p>}
       </div>
       <div className="form-card">
@@ -334,7 +334,7 @@ export function SettingsView({
             </div>
           </fieldset>;
         })}</div> : <p className="empty-result"><strong>No identity providers configured.</strong><br />Add the first OIDC provider through the control-plane bootstrap or API before publishing.</p>}
-        <button className="primary" disabled={saving || Object.keys(providerErrors).length > 0} onClick={() => void saveProviders()}>{saving ? "Saving…" : "Save identity providers"}</button>
+        <button type="button" className="primary" disabled={saving || Object.keys(providerErrors).length > 0} onClick={() => void saveProviders()}>{saving ? "Saving…" : "Save identity providers"}</button>
       </div>
     </section>
   );

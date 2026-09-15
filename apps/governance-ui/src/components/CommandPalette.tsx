@@ -1,4 +1,5 @@
 import type { Asset } from "../api";
+import styles from "./CommandPalette.module.css";
 
 export type PaletteCommand = "assets" | "changes" | "activity" | "connections" | "settings" | "help";
 
@@ -26,9 +27,9 @@ export function CommandPalette({
   const hasSearchResult = visibleCommands.length > 0 || assets.length > 0;
 
   return (
-    <div className="palette-backdrop" role="presentation" onMouseDown={onClose}>
+    <div className={styles.backdrop} role="presentation" onMouseDown={onClose}>
       <section
-        className="command-palette"
+        className={styles.palette}
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
@@ -41,14 +42,14 @@ export function CommandPalette({
           placeholder="Jump to a destination or search an asset"
           aria-label="Command search"
         />
-        <div role="listbox">
+        <div className={styles.options} role="listbox">
           {visibleCommands.map((command) => (
-            <button key={command} type="button" role="option" onClick={() => onCommand(command)}>
+            <button className={styles.option} key={command} type="button" role="option" onClick={() => onCommand(command)}>
               {command === "help" ? "Keyboard and workflow help" : `Open ${titleFor(command)}`}
             </button>
           ))}
           {assets.map((asset) => (
-            <button key={asset.id} type="button" role="option" onClick={() => onAsset(asset.id)}>
+            <button className={styles.option} key={asset.id} type="button" role="option" onClick={() => onAsset(asset.id)}>
               <strong>{asset.name}</strong>
               <small>{asset.catalog} · {asset.backend}</small>
             </button>

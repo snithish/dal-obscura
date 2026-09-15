@@ -48,7 +48,7 @@ export function AppShell({
   return (
     <div className="app-shell">
       {mobileNavOpen && (
-        <button className="mobile-nav-backdrop" aria-label="Close navigation menu" onClick={onMobileNavClose} />
+        <button type="button" className="mobile-nav-backdrop" aria-label="Close navigation menu" onClick={onMobileNavClose} />
       )}
       <aside
         id="primary-navigation"
@@ -84,7 +84,7 @@ export function AppShell({
                     ? "plug"
                     : "settings";
             return (
-              <button
+              <button type="button"
                 key={item}
                 className={page === item ? "nav-item active" : "nav-item"}
                 onClick={() => onNavigate(item)}
@@ -143,8 +143,8 @@ export function AppShell({
                 <option value="dark">Dark theme</option>
               </select>
             </label>
-            {session && <button className="text-button" onClick={onLogout}>Sign out</button>}
-            {logoutPending && <button className="text-button" onClick={onLogout}>Retry sign out</button>}
+            {session && <button type="button" className="text-button" onClick={onLogout}>Sign out</button>}
+            {logoutPending && <button type="button" className="text-button" onClick={onLogout}>Retry sign out</button>}
           </div>
         </header>
         {children}
