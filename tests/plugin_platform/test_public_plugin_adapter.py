@@ -270,6 +270,44 @@ def test_public_format_requires_explicit_close_lifecycle() -> None:
         table_format.get_schema()
 
 
+def test_public_format_preserves_schema_error_when_close_fails() -> None:
+    identifier = TableIdentifier(namespace=("default",), name="users")
+    handle = TableHandle(
+        catalog_plugin_id="manifest",
+        catalog_instance_id="fixture",
+        catalog_revision=1,
+        identifier=identifier,
+        format_plugin_id="parquet.dataset",
+        handle_version=1,
+    )
+
+    class FailingCloseFormat:
+        def close(self):
+            raise RuntimeError("close failed")
+
+        def schema(self, value, context):
+            del value, context
+            return object()
+
+        def plan(self, value, descriptor, context, *, projection, row_filter, max_tasks):
+            del value, descriptor, context, projection, row_filter, max_tasks
+            return []
+
+        def execute(self, task, context):
+            del task, context
+            return pa.schema([]), []
+
+    table_format = PublicPluginTableFormat(
+        catalog_name="fixture",
+        table_name="default.users",
+        format="parquet.dataset",
+        format_factory=lambda value, context: FailingCloseFormat(),
+        handle=handle,
+    )
+    with pytest.raises(ValueError, match="invalid schema descriptor"):
+        table_format.get_schema()
+
+
 def test_public_format_validates_lazy_batch_schema_before_streaming() -> None:
     identifier = TableIdentifier(namespace=("default",), name="users")
     handle = TableHandle(

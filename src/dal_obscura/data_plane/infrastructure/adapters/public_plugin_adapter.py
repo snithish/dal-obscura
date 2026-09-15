@@ -82,7 +82,7 @@ class PublicPluginTableFormat(TableFormat):
             _validate_schema_descriptor(descriptor)
             return descriptor.arrow_schema
         finally:
-            _close_plugin(plugin)
+            _close_plugin_preserving_error(plugin)
 
     def plan(self, request: PlanRequest, max_tickets: int) -> Plan:
         if max_tickets <= 0:
@@ -136,7 +136,7 @@ class PublicPluginTableFormat(TableFormat):
                 residual_row_filter=request.row_filter,
             )
         finally:
-            _close_plugin(plugin)
+            _close_plugin_preserving_error(plugin)
 
     def execute(self, partition: InputPartition) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
         if not isinstance(partition, PublicPluginPartition):
@@ -152,7 +152,7 @@ class PublicPluginTableFormat(TableFormat):
                 raise ValueError("Public plugin changed the declared output schema")
             checked = _checked_plugin_batches(batches, output_schema, context)
         except Exception:
-            _close_plugin(plugin)
+            _close_plugin_preserving_error(plugin)
             raise
         return output_schema, _close_after(checked, plugin)
 
@@ -223,7 +223,7 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
             ):
                 raise ValueError("Public catalog factory returned a mismatched descriptor")
         except Exception:
-            _close_plugin(catalog)
+            _close_plugin_preserving_error(catalog)
             raise
         self._catalog = catalog
         self._closed = False
