@@ -2864,3 +2864,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live browser OIDC, accessibility/responsive visual evidence and independent review remain VERIFY under N05/N06/N16. Release remains HOLD.
 - Atomic implementation commits: `040c97c8`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N06 axe accessibility browser gate
+
+- Scope: add automated accessibility coverage to the authenticated-shell browser lane.
+- Observable behavior delivered; FR/NFR and B/G subcases: the Playwright journey now runs axe against the signed-out application shell and fails on any serious or critical violation. The check uses the same pinned browser lane and does not weaken functional login gating. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/package.json`, `apps/governance-ui/pnpm-lock.yaml`, and `apps/governance-ui/e2e/auth-shell.spec.ts`; no backend, serializer, migration, or durable-record changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +31 UI dependency/lock/test lines and one pinned dev dependency (`@axe-core/playwright` 4.13.0); no runtime dependency added.
+- Primary invariant test owners; tests consolidated/deleted: `apps/governance-ui/e2e/auth-shell.spec.ts` owns signed-out serious/critical axe enforcement; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node_modules/.bin/tsc -b --pretty false` (exit 0), `node_modules/.bin/playwright test --list` (exit 0, 3 tests), `git diff --check` (exit 0), 2026-09-15, Node 24 workspace. Browser execution remains VERIFY because the local macOS Chromium launch is denied by the sandbox Mach-port policy; CI installs Chromium with system dependencies.
+- Artifact and fixture hashes; evidence locations: implementation commit `6b990f4b`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: browser execution on supported CI, live OIDC login/logout/expiry, responsive visual checks, keyboard and screen-reader review remain VERIFY under N05/N06/N16. Release remains HOLD.
+- Atomic implementation commits: `6b990f4b`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
