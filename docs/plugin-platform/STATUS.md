@@ -3259,3 +3259,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live provider lifecycle propagation and multi-process activation remain VERIFY under N10/N12; clean plugin wheel/consumer matrix, live OIDC, hostile transport, mixed-load capacity, deployment integrity/SBOM, and independent review remain VERIFY. Release remains HOLD.
 - Atomic implementation commits: `4002d386`.
 - Human acceptance, if required: independent plugin/security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — Request-time plugin admission freeze
+
+- Scope: remove remaining request-path fallbacks that rebuilt the plugin registry when its snapshot was empty.
+- Observable behavior delivered; FR/NFR and B/G subcases: catalog listing, catalog validation, asset pair admission, and compiler validation now read only the startup-frozen registry snapshot. An empty or missing snapshot fails closed; newly installed entry points require an explicit maintenance/startup reload before they can be used. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/application/catalog_service.py`, `src/dal_obscura/control_plane/application/asset_service.py`, `src/dal_obscura/control_plane/application/compiler.py`; no migrations, serializer, API, or dependency changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: -4/+6 Python lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: registry, catalog, schema, compiler, plugin lifecycle, and consumer suites remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: focused suite (exit 0, 100 passed, 4 explicit consumer skips), focused Ruff and Ty checks (exit 0), and `git diff --check` (exit 0), 2026-09-15, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `c4d58d70`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: startup/maintenance reload observability and multi-process lifecycle propagation remain VERIFY under N10/N12; clean wheel/consumer matrix, live OIDC, hostile transport, mixed-load capacity, deployment integrity/SBOM, and independent review remain VERIFY. Release remains HOLD.
+- Atomic implementation commits: `c4d58d70`.
+- Human acceptance, if required: independent plugin/security/release review remains VERIFY; release remains HOLD.
