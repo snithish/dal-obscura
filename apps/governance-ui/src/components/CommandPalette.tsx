@@ -1,3 +1,5 @@
+import { useRef } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { Asset } from "../api";
 import styles from "./CommandPalette.module.css";
 
@@ -22,18 +24,45 @@ export function CommandPalette({
   onAsset,
   onClose,
 }: CommandPaletteProps) {
+  const paletteRef = useRef<HTMLElement | null>(null);
   const normalizedQuery = query.toLowerCase();
   const visibleCommands = commands.filter((command) => command.includes(normalizedQuery));
   const hasSearchResult = visibleCommands.length > 0 || assets.length > 0;
 
+  function keepFocusInside(event: ReactKeyboardEvent<HTMLElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = Array.from(
+      paletteRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), [href], select:not([disabled]), textarea:not([disabled])',
+      ) ?? [],
+    );
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   return (
     <div className={styles.backdrop} role="presentation" onMouseDown={onClose}>
       <section
+        ref={paletteRef}
         className={styles.palette}
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
         onMouseDown={(event) => event.stopPropagation()}
+        onKeyDown={keepFocusInside}
       >
         <input
           autoFocus

@@ -38,6 +38,19 @@ test.describe("authenticated governance shell", () => {
     await expect(page.getByRole("button", { name: "Open navigation menu" })).toBeFocused();
   });
 
+  test("traps keyboard focus inside the command palette", async ({ page }) => {
+    await page.goto("/#assets");
+
+    await page.keyboard.press("Control+k");
+    await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
+    await expect(page.getByLabel("Command search")).toBeFocused();
+
+    await page.keyboard.press("Shift+Tab");
+    await expect(page.getByRole("option", { name: "Keyboard and workflow help" })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.getByLabel("Command search")).toBeFocused();
+  });
+
   test("keeps sign-in usable at a narrow viewport", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/#assets");
