@@ -3156,3 +3156,12 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: real OIDC/PKCE, populated authenticated browser workflows, clean wheel/consumer qualification, PostgreSQL process races/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY. Release remains HOLD; run those gates on the declared CI/reference environment.
 - Atomic implementation commits: none (verification record only).
 - Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — Final focused security regression lane
+
+- Scope: rerun the owning backend security and policy suites after the final UI changes.
+- Observable behavior delivered; FR/NFR and B/G subcases: no backend behavior changed in this step; row-filter SQL rejection, DuckDB masking/transforms, access-control rules, audit scoping, and audit API pagination/filter behavior remain green. Pickle logic is untouched.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/domain/access_control/test_row_filters.py tests/interfaces/flight/test_service_streaming.py::test_parse_descriptor_rejects_unsafe_row_filter_sql tests/infrastructure/adapters/test_duckdb_transform.py tests/control_plane/test_audit_repository.py tests/interfaces/control_plane/test_audit_api.py -q` (exit 0, 70 passed), 2026-09-15, Python 3.12.10/managed macOS runner.
+- Remaining subcases; blocker and next concrete action: full socket/Flight, live OIDC, populated browser, clean wheel/consumer, PostgreSQL process races/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY. Release remains HOLD; execute those gates on the declared CI/reference environment.
+- Atomic implementation commits: none (verification record only).
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
