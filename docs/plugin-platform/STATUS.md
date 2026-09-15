@@ -3145,3 +3145,14 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: rendered populated authoring/validation journeys and large-tree stress, live OIDC, clean artifact/consumer, PostgreSQL race/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY under N08–N16. Release remains HOLD; continue with bounded authoring correctness and candidate qualification.
 - Atomic implementation commits: `288fb00b`.
 - Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — Local authenticated shell readiness check
+
+- Scope: verify the running local control plane and UI after the implementation pass.
+- Observable behavior delivered; FR/NFR and B/G subcases: `GET /readyz` returned HTTP 200 with `{"status":"ready","checks":{"database":"ok"}}`; the UI returned HTTP 200 with no-cache headers. The live browser shell at `http://127.0.0.1:5173/#assets` presents the normal signed-out workspace with disabled protected navigation, local control-plane token sign-in, retry, and no demo-persona bypass. Security headers include a restrictive same-origin CSP, `X-Frame-Options: DENY`, `nosniff`, `no-referrer`, and restrictive Permissions-Policy. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: no source changes; runtime-only verification.
+- Exact commands, exit codes, UTC date, runtime versions, environment: elevated local `curl` readiness/header checks (exit 0) and CUA accessibility inspection (success), 2026-09-15, managed macOS runner; native app inspection remains unavailable because the Mac is locked.
+- Artifact and fixture hashes; evidence locations: request ID `04d829c3f1db4dc8b93f54415b38459b` from readiness response; no external artifact published.
+- Remaining subcases; blocker and next concrete action: real OIDC/PKCE, populated authenticated browser workflows, clean wheel/consumer qualification, PostgreSQL process races/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY. Release remains HOLD; run those gates on the declared CI/reference environment.
+- Atomic implementation commits: none (verification record only).
+- Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
