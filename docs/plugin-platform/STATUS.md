@@ -1189,25 +1189,6 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `e8210e5`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
 
-## 2026-09-15 — N04 conformance output cleanup recovery
-
-- Scope: ensure plugin conformance closes format output iterators on cancellation, validation failure, and normal completion.
-- Observable behavior delivered; FR/NFR and B/G subcases: bounded output validation now closes provider iterables in a `finally` block. If validation or cancellation already failed, a cleanup exception cannot mask that primary error; a cleanup failure on an otherwise successful validation still fails the check. Pickle logic is untouched.
-- Changed and deleted paths; old callers removed; protected pickle check: `packages/plugin-conformance/src/dal_obscura_plugin_conformance/runner.py` and its focused regression test; no serializers, APIs, migrations, dependencies, or durable records changed.
-- Production/test logical SLOC delta; dependencies added/removed and reason: +43 production lines after formatting and +21 test lines for iterator cleanup coverage; no dependencies changed.
-- Primary invariant test owners; tests consolidated/deleted: `packages/plugin-conformance/tests/test_conformance_runner.py::test_record_batch_validation_closes_provider_output_on_failure`; no tests deleted.
-- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest packages/plugin-conformance/tests/test_conformance_runner.py -q` (exit 0, 28 passed) plus focused Ruff check/format (exit 0), 2026-09-15, Python 3.12.10.
-- Artifact and fixture hashes; evidence locations: implementation commit `25f03b4b`; no external artifact published.
-- Remaining subcases; blocker and next concrete action: actual provider stalled-I/O cancellation timing, hostile transport counters, capacity mixed load, PostgreSQL races/recovery, clean candidate consumers, deployment integrity/SBOM, and independent security/UX/release review remain VERIFY under N04/N12–N16. Release remains HOLD; continue only with bounded provider/resource evidence.
-- Atomic implementation commits: `25f03b4b`.
-- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
-
-
-
-
-
-
-
 ## 2026-09-14 — Repository regression sweep after contract cleanup
 
 - Scope: verify cross-package callers after removing demo-login, unpaginated audit, and unpaginated workspace history routes.
@@ -2830,4 +2811,30 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Artifact and fixture hashes; evidence locations: implementation commit `0cedece2`; no external artifact published.
 - Remaining subcases; blocker and next concrete action: cancellation cannot interrupt a synchronous provider call until its bounded timeout expires; real stalled-I/O cancellation, hostile transport counters, and external N04/N12–N16 gates remain VERIFY. Release remains HOLD; qualify actual transport cancellation and cleanup timing.
 - Atomic implementation commits: `0cedece2`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N04 path denial error classification
+
+- Scope: keep malformed and above-root provider storage paths inside the authorization boundary.
+- Observable behavior delivered; FR/NFR and B/G subcases: `PathRuleEnforcer.check()` now translates untrusted path normalization failures into the stable `PermissionError("Path is not allowed")` response. Traversal cannot escape as an internal validation error or reveal implementation details. Configuration-time root validation remains strict `ValueError`; pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/data_plane/infrastructure/adapters/path_rules.py` and its focused regression test; no serializers, APIs, migrations, dependencies, or durable records changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +8 production lines and +6 test lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `tests/infrastructure/adapters/test_path_rules.py::test_path_rule_enforcer_denies_traversal_above_uri_root_as_permission_error`; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: elevated `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/infrastructure/adapters/test_path_rules.py tests/integration/test_io_boundary.py -q` (exit 0, 20 passed; loopback socket permission), plus focused Ruff check/format (exit 0), 2026-09-15, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `bd836f1`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: DNS rebinding and hostile transport counters, stalled-I/O cancellation timing, capacity mixed load, PostgreSQL races/recovery, clean candidate consumers, deployment integrity/SBOM, and independent security/UX/release review remain VERIFY under N04/N12–N16. Release remains HOLD; qualify actual deployment network behavior.
+- Atomic implementation commits: `bd836f1`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N04 conformance output cleanup recovery
+
+- Scope: ensure plugin conformance closes format output iterators on cancellation, validation failure, and normal completion.
+- Observable behavior delivered; FR/NFR and B/G subcases: bounded output validation now closes provider iterables in a `finally` block. If validation or cancellation already failed, a cleanup exception cannot mask that primary error; a cleanup failure on an otherwise successful validation still fails the check. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `packages/plugin-conformance/src/dal_obscura_plugin_conformance/runner.py` and its focused regression test; no serializers, APIs, migrations, dependencies, or durable records changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +43 production lines after formatting and +21 test lines for iterator cleanup coverage; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `packages/plugin-conformance/tests/test_conformance_runner.py::test_record_batch_validation_closes_provider_output_on_failure`; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest packages/plugin-conformance/tests/test_conformance_runner.py -q` (exit 0, 28 passed) plus focused Ruff check/format (exit 0), 2026-09-15, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `25f03b4b`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: actual provider stalled-I/O cancellation timing, hostile transport counters, capacity mixed load, PostgreSQL races/recovery, clean candidate consumers, deployment integrity/SBOM, and independent security/UX/release review remain VERIFY under N04/N12–N16. Release remains HOLD; continue only with bounded provider/resource evidence.
+- Atomic implementation commits: `25f03b4b`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
