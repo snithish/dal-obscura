@@ -2779,3 +2779,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: real provider cancellation/close behavior, multi-worker capacity, hostile transport counters, and external release gates remain VERIFY under N04/N12–N16. Release remains HOLD; continue qualifying cleanup through real provider failure and cancellation drills.
 - Atomic implementation commits: `3c5b2224`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N04 schema plugin cleanup recovery
+
+- Scope: ensure schema discovery closes every opened public plugin when one plugin cleanup operation fails.
+- Observable behavior delivered; FR/NFR and B/G subcases: schema discovery now attempts table-format and catalog plugin cleanup independently, then re-raises the first cleanup error. A format-plugin close failure can no longer prevent the catalog plugin from closing. Schema validation, handle identity checks, and pickle logic are unchanged.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/application/schema_service.py` and its focused regression test; no serializers, APIs, dependencies, or durable records changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +15 production lines and +16 test lines for cleanup recovery; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `tests/control_plane/test_schema_service.py::test_get_asset_schema_routes_admitted_catalog_and_format_plugins`; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane/test_schema_service.py -q` (exit 0, 14 passed) plus focused Ruff check/format (exit 0), 2026-09-15, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `03c43cb3`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: real provider cancellation/close behavior and external N04/N12–N16 release gates remain VERIFY. Release remains HOLD; continue exercising cleanup under actual provider failures and cancellation.
+- Atomic implementation commits: `03c43cb3`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
