@@ -464,6 +464,38 @@ def test_catalog_registry_reload_closes_partially_built_generation(monkeypatch):
     assert closed == ["catalog"]
 
 
+def test_catalog_registry_reload_preserves_build_failure_when_cleanup_fails(monkeypatch):
+    calls = 0
+
+    class FailingCloseCatalog:
+        def close(self):
+            raise RuntimeError("cleanup failed")
+
+    def build(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 3:
+            raise ValueError("factory failed")
+        return FailingCloseCatalog()
+
+    monkeypatch.setattr(registry_module, "_build_catalog", build)
+    registry = CatalogRegistry(
+        ServiceConfig(
+            catalogs={"analytics": CatalogConfig(name="analytics", type="iceberg", options={})}
+        )
+    )
+
+    with pytest.raises(ValueError, match="factory failed"):
+        registry.reload(
+            ServiceConfig(
+                catalogs={
+                    "analytics": CatalogConfig(name="analytics", type="iceberg", options={}),
+                    "replacement": CatalogConfig(name="replacement", type="iceberg", options={}),
+                }
+            )
+        )
+
+
 def test_catalog_registry_reload_closes_retired_generation(monkeypatch):
     closed: list[str] = []
 

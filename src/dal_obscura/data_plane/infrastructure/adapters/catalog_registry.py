@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from threading import RLock
@@ -227,6 +228,7 @@ class IcebergCatalog(CatalogPlugin):
 
 
 def _close_catalogs(catalogs: Iterable[object]) -> None:
+    active_error = sys.exc_info()[1]
     first_error: Exception | None = None
     for catalog in catalogs:
         close = getattr(catalog, "close", None)
@@ -236,7 +238,7 @@ def _close_catalogs(catalogs: Iterable[object]) -> None:
             except Exception as exc:
                 if first_error is None:
                     first_error = exc
-    if first_error is not None:
+    if first_error is not None and active_error is None:
         raise first_error
 
 
