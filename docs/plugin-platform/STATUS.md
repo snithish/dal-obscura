@@ -2805,3 +2805,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: cancellation during actual blocking provider I/O, hostile transport counters, and external N04/N12–N16 release gates remain VERIFY. Release remains HOLD; continue provider-level cancellation and network qualification.
 - Atomic implementation commits: `7bbc3029`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N04 REST post-request cancellation fencing
+
+- Scope: fence responses that arrive after a REST provider request is cancelled.
+- Observable behavior delivered; FR/NFR and B/G subcases: the bounded request wrapper rechecks the execution context after the provider call, closes any returned response, and raises cancellation before callers can consume data. Pre-request deadline/cancellation checks and redirect suppression remain unchanged; pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `packages/iceberg-rest-plugin/src/dal_obscura_iceberg_rest/catalog.py` and its focused test; no serializers, APIs, dependencies, or durable records changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +7 production lines and +29 test lines for post-request fencing; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: `packages/iceberg-rest-plugin/tests/test_rest_plugin.py::test_rest_catalog_closes_response_when_cancelled_after_request`; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest packages/iceberg-rest-plugin/tests/test_rest_plugin.py -q` (exit 0, 22 passed) plus focused Ruff check/format (exit 0), 2026-09-15, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `0cedece2`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: cancellation cannot interrupt a synchronous provider call until its bounded timeout expires; real stalled-I/O cancellation, hostile transport counters, and external N04/N12–N16 gates remain VERIFY. Release remains HOLD; qualify actual transport cancellation and cleanup timing.
+- Atomic implementation commits: `0cedece2`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
