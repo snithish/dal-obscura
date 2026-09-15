@@ -3046,3 +3046,11 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: populated 10,000-node browser stress and visual/screen-reader review, live OIDC, clean artifact/consumer, PostgreSQL race/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY under N08–N16. Release remains HOLD; continue with bounded UI correctness and candidate qualification.
 - Atomic implementation commits: `30be4aa5`.
 - Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — Broad validation environment boundary
+
+- Scope: execute the repository-wide pytest lane after the audit and UI changes.
+- Observable behavior delivered; FR/NFR and B/G subcases: no source behavior changed in this validation step; focused audit, UI, and non-socket backend suites remain green. Pickle logic is untouched.
+- Exact command, result, UTC date, runtime and environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q` reached 100% collection but ended with loopback/socket permission failures (Flight servers, HTTP fixture binds, and benchmark subprocess startup are denied by the managed macOS sandbox; 34 failures and 1 setup error were reported, with the remaining non-socket tests passing), 2026-09-15, Python 3.12.10/macOS managed runner.
+- Evidence and interpretation: failures contain `Operation not permitted` while binding `127.0.0.1`/Flight `127.0.0.1:0`; this is an environment restriction, not a regression in the touched audit/UI paths. The supported CI/release lane must run the full socket, browser, subprocess, and consumer matrix.
+- Remaining subcases; blocker and next concrete action: live loopback/Flight and external N04/N05/N12–N16 evidence remains VERIFY; rerun broad validation on the declared CI/reference runner before candidate acceptance. Release remains HOLD.
