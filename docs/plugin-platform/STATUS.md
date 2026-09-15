@@ -1090,19 +1090,6 @@ benchmark, and live process-boundary lanes remain VERIFY in this environment.
 - Atomic implementation commits: `7054afd`.
 - Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
 
-## 2026-09-15 — N07 access draft isolation
-
-- Scope: prevent owner and delegated-capability editors from invalidating or overwriting one another's unsaved work.
-- Observable behavior delivered; FR/NFR and B/G subcases: the access view now tracks owner and grant dirty state and edit epochs independently. Saving owners clears only the owner draft, saving capabilities clears only the grant draft, and authoritative refreshes skip whichever form still has local edits. A save response from one form cannot discard edits in the other. Pickle logic is untouched.
-- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/AssetWorkspace.tsx`; no backend, serializer, migration, API, dependency, or durable-record changes.
-- Production/test logical SLOC delta; dependencies added/removed and reason: +36/-15 UI lines; no dependencies changed.
-- Primary invariant test owners; tests consolidated/deleted: existing access lifecycle and browser management lanes remain owners; no tests deleted.
-- Exact commands, exit codes, UTC date, runtime versions, environment: `node node_modules/typescript/bin/tsc -p tsconfig.json --pretty false` (exit 0), `node node_modules/vite/bin/vite.js build` (exit 0; 335.34 kB JS / 101.02 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0, 14 passed), `node_modules/.bin/playwright test --config playwright.config.ts --list` (exit 0, 6 tests discovered), and `git diff --check` (exit 0), 2026-09-15, Node 24 workspace.
-- Artifact and fixture hashes; evidence locations: implementation commit `3a76e1d3`; no external artifact published.
-- Remaining subcases; blocker and next concrete action: rendered populated access/management journeys, live OIDC, clean artifact/consumer, PostgreSQL race/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY under N07–N16. Release remains HOLD; continue with bounded lifecycle correctness and candidate qualification.
-- Atomic implementation commits: `3a76e1d3`.
-- Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
-
 ## 2026-09-14 — N10 plugin lifecycle controls
 
 - Scope: make admitted plugin lifecycle state operator-actionable in the authenticated management UI.
@@ -3092,4 +3079,30 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Artifact and fixture hashes; evidence locations: implementation commit `6f2c8a29`; no external artifact published.
 - Remaining subcases; blocker and next concrete action: rendered deferred settings responses and populated management journeys, live OIDC, clean artifact/consumer, PostgreSQL race/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY under N07–N16. Release remains HOLD; continue with bounded form-state correctness and candidate qualification.
 - Atomic implementation commits: `6f2c8a29`.
+- Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N07 connection lifecycle draft isolation
+
+- Scope: prevent catalog connection edits and plugin lifecycle selections from sharing mutation state.
+- Observable behavior delivered; FR/NFR and B/G subcases: Connections now tracks connection and lifecycle dirty state and edit epochs independently. A catalog save cannot clear or invalidate a pending lifecycle selection; a lifecycle response cannot discard connection form edits. Lifecycle selectors resynchronize from authoritative plugin state when that state changes, while unsaved selections remain local. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/ConnectionsView.tsx`; no backend, serializer, migration, API, dependency, or durable-record changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +44/-20 UI lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing connection lifecycle and browser management lanes remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node node_modules/typescript/bin/tsc -p tsconfig.json --pretty false` (exit 0), `node node_modules/vite/bin/vite.js build` (exit 0; 335.73 kB JS / 101.11 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0, 14 passed), `node_modules/.bin/playwright test --config playwright.config.ts --list` (exit 0, 6 tests discovered), and `git diff --check` (exit 0), 2026-09-15, Node 24 workspace.
+- Artifact and fixture hashes; evidence locations: implementation commit `aba51280`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: rendered populated connection lifecycle/race coverage, live OIDC, clean artifact/consumer, PostgreSQL race/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY under N07–N16. Release remains HOLD; continue with bounded async/form correctness and candidate qualification.
+- Atomic implementation commits: `aba51280`.
+- Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N07 access draft isolation
+
+- Scope: prevent owner and delegated-capability editors from invalidating or overwriting one another's unsaved work.
+- Observable behavior delivered; FR/NFR and B/G subcases: the access view now tracks owner and grant dirty state and edit epochs independently. Saving owners clears only the owner draft, saving capabilities clears only the grant draft, and authoritative refreshes skip whichever form still has local edits. A save response from one form cannot discard edits in the other. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/AssetWorkspace.tsx`; no backend, serializer, migration, API, dependency, or durable-record changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +36/-15 UI lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing access lifecycle and browser management lanes remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node node_modules/typescript/bin/tsc -p tsconfig.json --pretty false` (exit 0), `node node_modules/vite/bin/vite.js build` (exit 0; 335.34 kB JS / 101.02 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0, 14 passed), `node_modules/.bin/playwright test --config playwright.config.ts --list` (exit 0, 6 tests discovered), and `git diff --check` (exit 0), 2026-09-15, Node 24 workspace.
+- Artifact and fixture hashes; evidence locations: implementation commit `3a76e1d3`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: rendered populated access/management journeys, live OIDC, clean artifact/consumer, PostgreSQL race/recovery, hostile transport, capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY under N07–N16. Release remains HOLD; continue with bounded lifecycle correctness and candidate qualification.
+- Atomic implementation commits: `3a76e1d3`.
 - Human acceptance, if required: independent UX/security/release review remains VERIFY; release remains HOLD.
