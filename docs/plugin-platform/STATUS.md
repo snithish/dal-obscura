@@ -3246,3 +3246,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: live hostile transport/DNS/private-address counters and cancellation cleanup remain VERIFY under N04; clean wheel/consumer matrix, OIDC freshness/revocation, PostgreSQL races/recovery, mixed-load capacity, deployment integrity/SBOM, and independent review remain VERIFY. Release remains HOLD.
 - Atomic implementation commits: `b0fa425`.
 - Human acceptance, if required: independent security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — Startup-only plugin admission
+
+- Scope: enforce the plugin registry generation boundary during ordinary requests.
+- Observable behavior delivered; FR/NFR and B/G subcases: `PluginRegistry.load()` no longer calls `reload()` when a requested plugin is absent from the immutable snapshot. Entry-point discovery and factory admission now happen only through explicit startup/maintenance reloads; a request cannot silently admit code installed after startup. Built-in startup wiring already performs the explicit reload. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/common/plugin_api/registry.py`, `tests/plugin_platform/test_registry.py`; no serializer, migration, API, dependency, or durable-record changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: -8/+3 Python lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: registry admission tests now assert that discovery alone does not authorize loading and that an explicit reload is required; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: focused registry, built-in, discovery, and schema suites (exit 0, 63 passed), focused Ruff and Ty checks (exit 0), and `git diff --check` (exit 0), 2026-09-15, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `4002d386`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: live provider lifecycle propagation and multi-process activation remain VERIFY under N10/N12; clean plugin wheel/consumer matrix, live OIDC, hostile transport, mixed-load capacity, deployment integrity/SBOM, and independent review remain VERIFY. Release remains HOLD.
+- Atomic implementation commits: `4002d386`.
+- Human acceptance, if required: independent plugin/security/release review remains VERIFY; release remains HOLD.
