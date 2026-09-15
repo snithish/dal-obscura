@@ -283,8 +283,12 @@ def test_public_format_validates_lazy_batch_schema_before_streaming() -> None:
     schema = pa.schema([pa.field("id", pa.int64())])
 
     class BadBatchFormat:
+        def __init__(self):
+            self.executed = False
+
         def close(self):
-            return None
+            if self.executed:
+                raise RuntimeError("close failed")
 
         def schema(self, value, context):
             del value, context
@@ -298,6 +302,7 @@ def test_public_format_validates_lazy_batch_schema_before_streaming() -> None:
 
         def execute(self, task, context):
             del task, context
+            self.executed = True
             wrong_schema = pa.schema([pa.field("secret", pa.string())])
             return schema, [pa.RecordBatch.from_pylist([{"secret": "hidden"}], schema=wrong_schema)]
 

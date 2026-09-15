@@ -9,6 +9,7 @@ reference. Request contexts and live plugin instances are recreated at use time.
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, fields, is_dataclass
 from datetime import datetime, timedelta, timezone
@@ -389,9 +390,20 @@ def _close_after(batches: Iterable[pa.RecordBatch], plugin: object) -> Iterable[
         try:
             yield from batches
         finally:
-            _close_plugin(plugin)
+            _close_plugin_preserving_error(plugin)
 
     return closed()
+
+
+def _close_plugin_preserving_error(plugin: object) -> None:
+    """Close a provider without masking an active stream error."""
+
+    active_error = sys.exc_info()[1]
+    try:
+        _close_plugin(plugin)
+    except Exception:
+        if active_error is None:
+            raise
 
 
 def _validate_schema_descriptor(descriptor: SchemaDescriptor) -> None:
