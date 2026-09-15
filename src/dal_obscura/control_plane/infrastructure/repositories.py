@@ -1637,6 +1637,8 @@ class PublicationStore:
                 return AuditEventPage(items=[], next_cursor=None)
             visible_asset = exists(
                 select(1).where(
+                    AssetRecord.cell_id == context.cell_id,
+                    AssetRecord.tenant_id == context.tenant_id,
                     func.replace(sql_cast(AssetRecord.id, String), "-", "")
                     == func.replace(AuditEventRecord.resource_id, "-", ""),
                     or_(
