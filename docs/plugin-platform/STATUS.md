@@ -2955,3 +2955,16 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: actual provider cancellation timing, hostile transport counters, capacity mixed load, PostgreSQL races/recovery, clean candidate consumers, deployment integrity/SBOM, and independent security/UX/release review remain VERIFY under N04/N12–N16. Release remains HOLD; continue bounded provider and deployment qualification.
 - Atomic implementation commits: `0a4bc3b0`.
 - Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — N06 typed application-shell extraction
+
+- Scope: isolate persistent navigation/header behavior from the UI composition root without changing authorization or session semantics.
+- Observable behavior delivered; FR/NFR and B/G subcases: `AppShell` now owns the responsive rail, mobile menu/backdrop, workspace status, asset-aware heading, theme selector, account/sign-out controls, and capability-gated navigation. Brand navigation now respects unsaved-change guards before changing location. Private data rendering, sign-out fencing, and command-palette state remain in the composition root. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `apps/governance-ui/src/components/AppShell.tsx` and `apps/governance-ui/src/main.tsx`; no backend, serializer, migration, dependency, or durable-record changes.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +162/-0 lines in the new shell component and +31/-20 lines in the composition root; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: existing Playwright shell/accessibility lane and UI navigation unit tests remain owners; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `node node_modules/typescript/bin/tsc -p tsconfig.json --pretty false` (exit 0), `node scripts/generate-api-types.mjs --check` (exit 0), `node node_modules/vite/bin/vite.js build` (exit 0; 332.68 kB JS / 100.35 kB gzip), `node --experimental-strip-types --test tests/*.test.mjs` (exit 0, 14 passed), and `git diff --check` (exit 0), 2026-09-15, Node 24 workspace.
+- Artifact and fixture hashes; evidence locations: implementation commit `0a0941fc`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: route-level component decomposition, CSS module migration, full browser execution, live OIDC, screen-reader/visual review, and independent UX/security/release review remain VERIFY under N06–N16. Release remains HOLD.
+- Atomic implementation commits: `0a0941fc`.
+- Human acceptance, if required: independent security/UX/release review remains VERIFY; release remains HOLD.
