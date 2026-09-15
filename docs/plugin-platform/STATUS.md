@@ -3272,3 +3272,12 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Remaining subcases; blocker and next concrete action: startup/maintenance reload observability and multi-process lifecycle propagation remain VERIFY under N10/N12; clean wheel/consumer matrix, live OIDC, hostile transport, mixed-load capacity, deployment integrity/SBOM, and independent review remain VERIFY. Release remains HOLD.
 - Atomic implementation commits: `c4d58d70`.
 - Human acceptance, if required: independent plugin/security/release review remains VERIFY; release remains HOLD.
+
+## 2026-09-15 — Final broad regression after admission hardening
+
+- Scope: rerun the full Python matrix after strict secret parsing and startup-only plugin admission changes.
+- Evidence: elevated `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest -q -ra` exited 0 with 924 collected, 907 passed, and 17 explicit skips. The skips are the seven benchmark cases excluded by the default benchmark option, four opt-in loopback consumer cases, five opt-in PostgreSQL publication-race cases, and one opt-in PostgreSQL recovery case. No failures or errors occurred. Pickle logic is untouched.
+- Environment: Python 3.12.10, managed macOS runner with loopback permission, 2026-09-15. Focused Ruff/Ty checks for changed modules also passed.
+- Remaining subcases; blocker and next concrete action: skipped consumer and PostgreSQL gates remain mandatory release evidence; live OIDC/browser accessibility, hostile transport, clean dependency-isolated wheels, mixed-load capacity, deployment integrity/SBOM, and independent review remain VERIFY. Release remains HOLD.
+- Atomic implementation commits covered: `b0fa425`, `4002d386`; this entry is verification-only.
+- Human acceptance, if required: independent security, consumer, and release review remains VERIFY; release remains HOLD.
