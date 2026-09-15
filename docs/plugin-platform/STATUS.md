@@ -3282,6 +3282,19 @@ for independent review. Until candidate-bound gates all pass, release is HOLD.
 - Atomic implementation commits covered: `b0fa425`, `4002d386`; this entry is verification-only.
 - Human acceptance, if required: independent security, consumer, and release review remains VERIFY; release remains HOLD.
 
+## 2026-09-15 — OIDC endpoint parser error normalization
+
+- Scope: keep malformed identity-provider endpoint URLs inside the control-plane validation boundary.
+- Observable behavior delivered; FR/NFR and B/G subcases: malformed bracketed hosts and out-of-range ports in `issuer` or `jwks_url` now raise the existing `ValidationFailure` instead of leaking a `ValueError`. The settings API returns HTTP 400 with `error.code=validation_error`, a bounded message, and a request ID. Pickle logic is untouched.
+- Changed and deleted paths; old callers removed; protected pickle check: `src/dal_obscura/control_plane/application/auth_provider_validation.py`, `tests/control_plane/test_auth_provider_validation.py`, and `tests/interfaces/control_plane/test_settings_api.py`; no migrations, serializers, dependencies, or durable records changed.
+- Production/test logical SLOC delta; dependencies added/removed and reason: +10 production lines, +41 test lines; no dependencies changed.
+- Primary invariant test owners; tests consolidated/deleted: direct OIDC validator tests and settings API contract tests own malformed endpoint behavior; no tests deleted.
+- Exact commands, exit codes, UTC date, runtime versions, environment: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run --no-sync pytest tests/control_plane/test_auth_provider_validation.py tests/interfaces/control_plane/test_settings_api.py -q -ra` (exit 0, 19 passed), focused Ruff check/format and `ty check src/dal_obscura/control_plane/application/auth_provider_validation.py` (exit 0), and `git diff --check` (exit 0), 2026-09-15, Python 3.12.10.
+- Artifact and fixture hashes; evidence locations: implementation commit `56153045`; no external artifact published.
+- Remaining subcases; blocker and next concrete action: live OIDC/PKCE and issuer freshness/revocation, hostile transport/DNS counters, PostgreSQL process races/recovery, clean consumer artifacts, mixed-load capacity, deployment integrity/SBOM, and independent UX/security/release review remain VERIFY. Release remains HOLD; continue with the next bounded security or qualification slice.
+- Atomic implementation commits: `56153045`.
+- Human acceptance, if required: independent security, consumer, and release review remains VERIFY; release remains HOLD.
+
 ## 2026-09-15 — Shared local-file URI enforcement
 
 - Scope: align generic catalog validation with the built-in adapter's local filesystem boundary.
