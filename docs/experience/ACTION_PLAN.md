@@ -260,8 +260,9 @@ and exact candidate/runbook. **Done:** all gates pass; otherwise release HOLD.
 
 ## Execution ledger
 
-All R packets start OPEN at this planning baseline. R01/R04 are ready to begin;
-the remaining packets await their dependencies. Existing functionality is reused,
+Current execution and evidence: [STATUS.md](STATUS.md). All R packets started
+OPEN at the planning baseline; the status file records subsequent slices and
+blockers. Existing functionality is reused,
 not relabeled as absent. Replace an entry with ACTIVE/VERIFY/DONE and one concise
 evidence record when implementation resumes. Do not append another thousands-line
 progress narrative or report component existence as a finished user journey.

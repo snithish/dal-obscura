@@ -31,3 +31,17 @@ remain open; these focused checks do not close E01.
 
 R04: ACTIVE investigation of Mantine production-CSP slice.
 R02/R03/R05/R07–R12: OPEN. No production readiness or live Cloudflare claim.
+
+### Dependency access blocker (2026-09-21)
+
+Official registry metadata confirms Mantine core/hooks 9.6.1 and React ^19.2.0
+peer requirements. Network installation could not complete: both system pnpm
+12.4.2 and bundled pnpm 11 requests failed; a direct Node 24 HTTPS request timed
+out, and the exact cached pnpm 12.3.4 install also stalled. curl reaches the same
+official registry. Failed/stalled task-owned processes were stopped. No Mantine
+dependency or unverified lockfile changes are committed. No TLS/CSP/security
+checks were bypassed. Resume with registry access restored for the pinned package
+manager, then perform R04's CSP/bundle slice before broad UI migration.
+
+R04/R05 remain open; the existing production UI is still in place. No inference
+about Mantine CSP compatibility is possible from inspecting package source alone.

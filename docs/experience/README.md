@@ -2,7 +2,9 @@
 
 Source baseline: `eed277728a856801af7ef794d73d99f0b28c42ea`.
 **Planning only. No application implementation, tunnel exposure, account changes or application test runs.**
-Paid-production release remains HOLD.
+Paid-production release remains HOLD. Implementation is now authorized; see
+[execution status](STATUS.md) for completed slices and current blockers. The
+planning-only statement above describes the original review deliverable.
 
 Component-library amendment: Mantine is the selected maintained MIT-licensed
 library. R01/R04/R05 and E08/E10 now require direct reuse, one shared theme and
