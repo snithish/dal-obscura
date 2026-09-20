@@ -5,11 +5,22 @@ import { assetInventoryQueryKey, sessionQueryScope } from "../src/query_scope.ts
 
 test("session query scope separates anonymous and exact authenticated identities", () => {
   assert.equal(sessionQueryScope(null), "anonymous");
-  assert.equal(sessionQueryScope({ issuer: "https://issuer.example/", principal: "alice" }), "https://issuer.example/|alice");
   assert.notEqual(
     sessionQueryScope({ issuer: "https://issuer.example/", principal: "alice" }),
     sessionQueryScope({ issuer: "https://issuer.example/", principal: "bob" }),
   );
+});
+
+test("delimiter-containing identities cannot read each other's cached inventory", () => {
+  const client = new QueryClient();
+  const first = sessionQueryScope({ issuer: "https://issuer.example/|team", principal: "alice" });
+  const second = sessionQueryScope({ issuer: "https://issuer.example/", principal: "team|alice" });
+  const firstKey = assetInventoryQueryKey(first, "", null);
+  const secondKey = assetInventoryQueryKey(second, "", null);
+  client.setQueryData(firstKey, { items: ["private-asset"] });
+  assert.equal(client.getQueryData(secondKey), undefined);
+  assert.deepEqual(client.getQueryData(firstKey), { items: ["private-asset"] });
+  client.clear();
 });
 
 test("inventory query keys include session, search and cursor", () => {
