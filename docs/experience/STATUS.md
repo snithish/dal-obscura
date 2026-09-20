@@ -18,7 +18,16 @@ Validation: all 16 existing UI unit tests and TypeScript check pass on bundled
 Node 24.19.0. Initial collision-only validation also passed on Node 26.8.2.
 Commit identities are available from this file's history.
 
+## R01 — ACTIVE: build tooling ownership
+
+Moved Vite and its React build plugin from runtime to development dependencies,
+retaining exact versions/integrities. Frozen offline install passed with the
+cached pnpm 12.3.4 binary and Node 24.19.0. Production build passed: JS 101.38 kB
+gzip, CSS 5.28 kB gzip. Existing package-boundary, route-inventory, plugin-contract
+and registry tests: 38 passed. Full support/advisory and clean-artifact evidence
+remain open; these focused checks do not close E01.
+
 ## Remaining packets
 
-R01/R04: ACTIVE investigation of supported pins and Mantine production-CSP slice.
+R04: ACTIVE investigation of Mantine production-CSP slice.
 R02/R03/R05/R07–R12: OPEN. No production readiness or live Cloudflare claim.
