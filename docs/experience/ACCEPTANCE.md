@@ -106,12 +106,21 @@ External setup requires authorization; no live result can be inferred from mocks
 
 ## E08 — Single design source and fonts (R04)
 
-App and Storybook import identical semantic tokens, licensed self-hosted fonts and
-actual shared primitives. Required color/font literals are confined to the design
+App and Storybook use identical Mantine styles, theme/resolver, provider settings,
+licensed self-hosted fonts and actual product compositions. Core/hooks versions
+match, licenses are recorded and peer checks pass. No parallel Radix/custom
+primitive library or per-control forwarding wrappers. Required color/font literals are confined to the design
 source; no old green/indigo palette overrides remain in feature styles. No remote
 font requests or Storybook code in the production app bundle. Core text remains
 readable with fonts blocked/offline; no layout shift beyond E16.
 Owner: style lint/build plus one loaded-app network check.
+
+Before broad migration, exercise Button/TextInput, Modal focus, Select popup and
+responsive shell in a production build under enforced production CSP. No blocked
+styles/scripts or broken positioning; no unsafe-inline/unsafe-eval or disabled
+policy. If nonces are used, prove unique response values and rejection of missing/
+wrong nonces; do not confuse style-element nonce support with style attributes.
+Existing JS/CSS budgets still pass. Failure blocks library adoption, not security.
 
 ## E09 — Correct themes, contrast and layout (R04/R06)
 
@@ -128,11 +137,13 @@ plus manual review, not a screenshot for every prop combination.
 
 ## E10 — Storybook documentation and behavior (R05)
 
-Static Storybook builds with Foundations/Components/Patterns/Workflows/Contribution
+Static Storybook uses the official Mantine integration pattern and builds with Foundations/Components/Patterns/Workflows/Contribution
 sections. Each shipped shared component documents purpose, variants, tokens,
 keyboard contract and limitations, with meaningful state stories. App and stories
 import the same component module. A token change visibly updates both.
 
+Storybook links upstream Mantine APIs and documents our theme and workflow choices;
+it neither clones the library nor retests every upstream prop combination.
 Play tests exercise validation, pending, failure/conflict, dialog/menu focus and
 unknown-outcome recovery. Deliberately broken labels/focus must fail the relevant
 test. Automated axe has zero serious/critical violations; manual screen-reader

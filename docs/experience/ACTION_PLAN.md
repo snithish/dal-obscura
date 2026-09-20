@@ -40,7 +40,7 @@ tests/acceptance, CI, docs/plugin-platform/BASELINE_20260914.md.
 canonical SDK ownership, explicit pair admission, mandatory revision errors,
 retired public routes and migrated callers; retain passing implementation.
 Inventory actual leftovers before deleting anything. Select maintained stable
-versions compatible with Storybook/Vite/React/Node 24, pin the tested set, and move
+versions compatible with Mantine/Storybook/Vite/React/Node 24, pin the tested set, and move
 build tooling to devDependencies. Update generated DTOs only from the canonical API.
 
 **NFR:** no new runner/service, no “latest” release tag, no source-string assertions
@@ -100,14 +100,17 @@ executes authorized external setup. No fake “Access enforced” green check.
 **FR:** implement the exact semantic palette, IBM Plex type scale, density, spacing,
 icons and theme resolution in DESIGN_SYSTEM.md. Self-host licensed font assets.
 Remove hardcoded competing palettes/serif headings; resolve System-light behavior.
-Create only shared primitives needed by actual screens, with native semantics or
-the selected accessible primitive set.
+Use Mantine core/hooks directly through the shared theme/provider defined in
+DESIGN_SYSTEM.md; do not build a custom primitive layer. First qualify a small
+real production-CSP/bundle slice before broad adoption. Map existing controls to
+the documented Mantine components, then delete replaced CSS/focus/theme code.
 
-**NFR:** one token source, one icon family, one primitive set, no remote font
+**NFR:** one Mantine theme/token source, one icon family, no second component library, no remote font
 dependency, no inline CSS exception to production CSP. Existing working screens
 continue using the shared layer while being converted; no second app/theme system.
 
-**Proof:** measured contrast/token checks and a representative real component
+**Proof:** library license/version/peer checks, real CSP and bundle checks,
+measured contrast/token checks and a representative real component
 composition. E09 validates both actual CSS themes, not only hex arithmetic.
 **Done:** E08/E09 foundations pass, replaced values removed and visual board
 translated into actual components; this does not accept all screen workflows.
@@ -117,13 +120,15 @@ translated into actual components; this does not accept all screen workflows.
 **Dependencies:** R01/R04. **Acceptance:** E10/E11.
 **Files:** proposed .storybook, colocated stories, designbook MDX, UI package scripts/CI.
 
-**FR:** wire the actual app tokens, fonts, components and provider fixtures into
+**FR:** wire the actual Mantine theme, styles, fonts, components and provider fixtures into
 React/Vite Storybook; add Docs/a11y/Vitest integration. Cover required foundations,
 components, patterns and synthetic workflows. Document keyboard behavior/content/
 states. Stories provide primary component behavior tests where appropriate.
 
 **NFR:** no production API/IdP calls, no secrets, no Storybook-only replicas, no
-second full design framework. Tooling remains dev-only and absent from app bundle.
+second design framework. Mantine core/hooks are runtime dependencies; Storybook
+tooling remains dev-only and absent from app bundle. Test our configured behavior,
+not the entire upstream library's internals.
 Freeze time/data, wait for fonts and disable motion in representative visual checks.
 
 **Proof:** static build, deterministic play/a11y checks, unexpected-network failure
@@ -140,7 +145,8 @@ api.ts, navigation and actual feature hooks.
 query identities and session generation. Keep server data in the existing query
 client, forms in their owning feature, mutation reconciliation in one explicit
 flow. Preserve scope checks after every await/finally, including draft-reference
-changes. Replace custom focus trap and misleading listbox behavior.
+changes. Replace custom focus trap and misleading listbox behavior using Mantine
+Modal/Combobox; use its shell/menu controls and one color-scheme manager.
 
 **NFR:** no parallel caches, private persistence, Redux or generic event bus.
 Delete replaced epoch/arithmetic tests only when a rendered story owns the fault.

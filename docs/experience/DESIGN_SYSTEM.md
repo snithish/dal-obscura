@@ -24,11 +24,54 @@ allowing arbitrary color literals in components. Our concrete palette below is
 a product choice, not a claim that it is an official Radix palette.
 [Radix scale roles](https://www.radix-ui.com/colors/docs/palette-composition/understanding-the-scale)
 
-Keep the existing Lucide family, using named imports. Use Radix primitives for
-the few complex interactive controls that need dialog/menu/focus behavior; retain
-native controls where sufficient. Do not install Carbon components, another icon
-set and another theme framework alongside them.
-[Radix accessibility](https://www.radix-ui.com/primitives/docs/overview/accessibility)
+## Component library decision — Mantine
+
+Use **Mantine** as the single production component library. This supersedes the
+previous Radix-plus-custom-primitives proposal. Mantine packages are MIT-licensed,
+have published maintenance releases, documented component APIs and an official
+Storybook integration. Support here means maintained open-source documentation,
+issues and releases, not a contracted vendor SLA.
+[License and setup](https://mantine.dev/getting-started/),
+[releases](https://github.com/mantinedev/mantine/releases),
+[Storybook integration](https://mantine.dev/guides/storybook/)
+
+Start with @mantine/core and @mantine/hooks on the same exact supported stable
+version. R01 verifies React/Vite/TypeScript/Storybook peer compatibility, license
+notices and advisories before pinning; do not install a floating latest tag.
+Keep Lucide named imports. Do not add Radix, shadcn, MUI, Carbon components,
+Tailwind or a parallel homegrown primitive library. Optional Mantine packages
+require a concrete current workflow that core cannot cover; no speculative installs.
+
+Use these existing components directly:
+
+- Shell/navigation: AppShell, NavLink, Breadcrumbs, Burger and Drawer.
+- Forms: TextInput, Textarea, NativeSelect/Select, Checkbox, Switch and NumberInput
+  only where its value semantics match the API. Keep schema-driven validation.
+- Actions/status: Button, ActionIcon, Badge, Alert, Loader and Skeleton.
+- Overlays/review: Modal, Menu, Tooltip, Tabs and Accordion. Use Modal, not the
+  non-modal Dialog, for trapped focus and confirmation boundaries.
+- Inventory/audit: Table and Pagination with existing server queries. Do not
+  introduce an additional grid package for already supported table requirements.
+- Command search: Modal plus Combobox with documented keyboard semantics.
+
+Keep custom code for domain behavior: nested virtual schema, policy rules,
+semantic diff and publication reconciliation. Do not replace the proven virtual
+tree with Mantine Tree unless the 10k-node performance/keyboard gates pass.
+No wrapper around every Mantine component and no generic re-export facade:
+shared wrappers must encode a repeated product behavior, not rename props.
+[Component catalog and shell](https://mantine.dev/core/app-shell/)
+
+R04 starts with a small built-app compatibility slice: themed Button/TextInput,
+Modal, Select popup and responsive shell under the real production CSP. Measure
+JS/CSS and inspect CSP violations before migrating all screens. Prefer CSS Modules
+and supported Styles API overrides. Mantine can generate style elements and inline
+styles; a nonce on style elements does not authorize style attributes. Verify
+the selected release's actual output. Use a server-generated per-response nonce
+only where needed and supported; never add unsafe-inline/unsafe-eval, disable CSP,
+fork the library or silently relax budgets. If a required component cannot meet
+these gates through supported APIs, record the blocker before broad migration.
+[MantineProvider and nonce support](https://mantine.dev/theming/mantine-provider/),
+[Styles API](https://mantine.dev/styles/styles-api/)
 
 ## Exact starting tokens
 
@@ -63,7 +106,10 @@ These arithmetic checks do not establish rendered accessibility: opacity,
 hover/focus, overlays, disabled states and forced colors still need E09/E10.
 [WCAG contrast criterion](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)
 
-One token file defines light/dark values. System preference resolves to an
+One Mantine theme module and its CSS-variable resolver define light/dark values.
+Map the semantic palette through supported theme/component defaults; do not copy
+the same constants into independently maintained CSS. Reuse Mantine's color-scheme
+manager rather than keeping a second theme state machine. System preference resolves to an
 effective light/dark theme; components consume only semantic values. Remove
 selectors treating “not explicit light” as equivalent to dark. Browser storage
 may persist theme/density preferences, never private policy/session data.
@@ -152,10 +198,11 @@ near-identical component tests.
 
 Proposed locations (not created by this plan):
 
-- src/design/tokens.css, typography.css and licensed font assets: single source.
-- src/components/ui/: only reused Button/IconButton, Field, Input/Select,
-  Badge, Alert, Tabs, Dialog/Menu and related primitives actually needed.
-- .storybook/main.ts and preview.tsx: same tokens/fonts/providers as production,
+- src/design/theme.ts and AppProviders.tsx, typography.css and licensed font assets:
+  shared Mantine theme, semantic variable resolver and provider configuration.
+- Feature components: direct Mantine imports; shared components contain only
+  repeated domain compositions, never a replacement Button/Input/Modal library.
+- .storybook/main.ts and preview.tsx: same Mantine styles/theme/fonts as production,
   theme and viewport toolbar, synthetic session/query fixtures.
 - Colocated *.stories.tsx: import the actual production component.
 - designbook/*.mdx: foundations, patterns, copy, accessibility and contribution
@@ -165,8 +212,9 @@ Navigation within Storybook:
 
 1. Foundations: color roles, full contrast matrix, typography samples, spacing,
    density, icons, light/dark/System behavior and motion.
-2. Components: every public primitive with default/focus/disabled/loading/error
-   where meaningful; usage guidance and prohibited misuse.
+2. Components: the Mantine components actually used, with configured product
+   variants and representative states; link upstream APIs instead of copying
+   their entire documentation or recreating upstream component tests.
 3. Patterns: field validation, async panel, permission explanation, policy status,
    semantic diff, confirmation, empty state and unknown-outcome recovery.
 4. Workflows: synthetic Login, Asset inventory, Nested policy editor, Review,

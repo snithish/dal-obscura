@@ -4,6 +4,10 @@ Source baseline: `eed277728a856801af7ef794d73d99f0b28c42ea`.
 **Planning only. No application implementation, tunnel exposure, account changes or application test runs.**
 Paid-production release remains HOLD.
 
+Component-library amendment: Mantine is the selected maintained MIT-licensed
+library. R01/R04/R05 and E08/E10 now require direct reuse, one shared theme and
+Storybook integration, with early CSP/size qualification. No library installed.
+
 Read [implementation review](REVIEW.md), [action plan](ACTION_PLAN.md),
 [local HTTPS/SSO design](LOCAL_ACCESS.md), [design system and Storybook](DESIGN_SYSTEM.md),
 then [acceptance specifications](ACCEPTANCE.md).
