@@ -1,5 +1,9 @@
 # UI and UX implementation contract
 
+**Visual direction superseded 2026-09-20:** use [Obscura Workbench and Storybook](../experience/DESIGN_SYSTEM.md).
+Keep functional guarantees below except where the new acceptance specification
+explicitly refines them. Do not reintroduce the old palette/typography.
+
 Applies to N06–N11; measured by B09–B15/B19/B22 in [acceptance](ACCEPTANCE.md).
 This specifies the replacement experience. Existing screenshots and prototypes
 are historical references, not constraints. This document does not implement UI.

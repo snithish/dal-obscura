@@ -1,7 +1,11 @@
-# Plugin platform: current implementation handoff
+# Plugin platform: historical implementation handoff
+
+**Superseded 2026-09-20.** Start with the [current review and R01–R12 plan](../experience/README.md).
+Completed N work is reconciled there. This page and the N queue below are retained
+for historical context, not current execution. Existing B/G guarantees still apply.
 
 Reviewed 2026-09-13 at c464152. **Planning documents only; paid-production HOLD.**
-The active queue is N01–N16. Start with N01, not the archived X00 queue.
+The historical queue was N01–N16; current execution starts at R01 in the linked plan.
 Second pass at c6230b1 confirmed the same implementation baseline; the current
 documents additionally specify separate editor/publisher handoff, bounded audit
 backend queries and removal of obsolete policy routes and test constraints.

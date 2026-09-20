@@ -1,4 +1,8 @@
-# Remaining-work ledger
+# Historical N implementation ledger
+
+**Current execution moved 2026-09-20:** [R01–R12](../experience/ACTION_PLAN.md).
+Entries below preserve implementation evidence, not current task status.
+The [current review](../experience/REVIEW.md) reconciles completed N work.
 
 Review baseline: c46415282a2a796cf737a9c3b7f7ba941f19bf7b (2026-09-13).
 **Release HOLD. Implementation continues; unresolved live gates remain VERIFY.**

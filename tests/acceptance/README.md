@@ -1,12 +1,21 @@
 # Acceptance case ownership registry
 
-The active specification is [G01–G05 and B01–B22](../../docs/plugin-platform/ACCEPTANCE.md).
-The active queue is [N01–N16](../../docs/plugin-platform/IMPLEMENTATION_PLAN.md).
+The active specification is [E01–E18 with inherited G/B gates](../../docs/experience/ACCEPTANCE.md).
+The active queue is [R01–R12](../../docs/experience/ACTION_PLAN.md).
+The N assignments below are historical test-location references, not task order.
 This Markdown registry defines future executable ownership; it is not a pass report.
 Old A01–A23 cases remain in the [archived specification](../../docs/plugin-platform/ACCEPTANCE_ARCHIVE_20260913.md)
 and are grouped under G guarantees. Do not create a second runner per packet.
 
 ## Primary locations and evidence
+
+Current E ownership: E01 uses existing package/API/plugin suites; E02/E03 existing
+session/profile API suites; E04–E07 the existing local launcher/profile and real
+browser/consumer harnesses with the proposed tunnel overlay; E08–E12 proposed
+colocated Storybook stories and shared UI design sources; E13/E14 real policy/
+management browser journeys plus existing API suites; E15 integration/conformance/
+consumers/JVM; E16/E17 existing capacity/CI/recovery; E18 human candidate dossier.
+No executable Storybook, Cloudflare or acceptance test is added by this plan.
 
 - **B01/B02, N01:** existing package/import/build CI and baseline report. Inventory
   resolved toolchains/collection/durations; no executable test of packet prose.

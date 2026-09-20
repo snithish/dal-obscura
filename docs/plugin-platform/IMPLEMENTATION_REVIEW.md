@@ -1,5 +1,8 @@
 # Implementation reconciliation — 2026-09-13
 
+**Historical findings.** The [2026-09-20 review](../experience/REVIEW.md) supersedes
+this assessment, including fixes now present for identity, audit and draft handoff.
+
 Reviewed source baseline: `c46415282a2a796cf737a9c3b7f7ba941f19bf7b`.
 Documentation-only review. No runtime, UI, dependency, database or executable test
 changes. Paid-production release: **HOLD**.

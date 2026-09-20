@@ -1,5 +1,8 @@
 # Acceptance specification — remaining implementation
 
+**Current ownership (2026-09-20):** [R01–R12 and E01–E18](../experience/ACCEPTANCE.md).
+G/B cases below remain inherited guarantees, with the explicit amendments there.
+
 Baseline `c464152`; 2026-09-13. These are **test specifications**, not new executable
 tests or pass claims. Implement only when implementation is authorized.
 Packet owners: [N01–N16](IMPLEMENTATION_PLAN.md). UX details: [UX](UX_REQUIREMENTS.md).

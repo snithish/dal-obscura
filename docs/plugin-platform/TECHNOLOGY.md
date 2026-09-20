@@ -1,5 +1,10 @@
 # Technology decisions and upgrade procedure
 
+**Current execution:** [R01/R04/R05](../experience/ACTION_PLAN.md). This dated
+research is historical; verify supported stable versions against current locks
+and Storybook compatibility. [Designbook choices](../experience/DESIGN_SYSTEM.md)
+supersede the earlier component-test and font defaults.
+
 Planning snapshot: 2026-09-13; implementation owner N01. Lock exact versions when
 N01 runs and verify official release/security metadata again then. A published
 new version is not evidence that this repository works with it.

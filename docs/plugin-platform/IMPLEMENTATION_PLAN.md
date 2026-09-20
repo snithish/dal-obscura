@@ -1,4 +1,8 @@
-# Remaining implementation plan
+# Historical N implementation plan
+
+**Do not restart this queue.** The [R01–R12 action plan](../experience/ACTION_PLAN.md)
+supersedes it after review at eed27772 on 2026-09-20. See the
+[reconciliation](../experience/REVIEW.md) for completed portions and remaining proof.
 
 Baseline: `c464152`, reviewed 2026-09-13. **Planning only; release HOLD.**
 This replaces the original X00–X23 execution queue. Completed implementation is
