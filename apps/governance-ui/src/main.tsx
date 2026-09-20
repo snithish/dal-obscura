@@ -63,6 +63,7 @@ function App() {
   const [notice, setNotice] = useState("Loading workspace…");
   const [fieldErrors, setFieldErrors] = useState<Array<{ field: string; message: string; type: string }>>([]);
   const [session, setSession] = useState<Session | null>(null);
+  const [sessionGeneration, setSessionGeneration] = useState(0);
   const [authConfig, setAuthConfig] = useState<UiAuthConfig | null>(null);
   const [sessionOptions, setSessionOptions] = useState<SessionOptions | null>(null);
   const [bootstrapToken, setBootstrapToken] = useState("");
@@ -99,7 +100,7 @@ function App() {
       },
     }),
   );
-  const sessionCacheKey = sessionQueryScope(session);
+  const sessionCacheKey = sessionQueryScope(session, sessionGeneration);
   const previousSessionCacheKey = useRef(sessionCacheKey);
   const [logoutPending, setLogoutPending] = useState(false);
   const logoutInFlight = useRef(false);
@@ -375,10 +376,14 @@ function App() {
       // The first authenticated page is fetched before React commits the
       // session state. Mark the cache scope now so the session transition
       // effect does not immediately discard that private result.
-      previousSessionCacheKey.current = sessionQueryScope(loadedSession);
+      const loadedSessionScope = sessionQueryScope(loadedSession, epoch);
+      void queryClient.cancelQueries();
+      queryClient.clear();
+      previousSessionCacheKey.current = loadedSessionScope;
+      setSessionGeneration(epoch);
       setSession(loadedSession);
       const loadedPage = await queryClient.fetchQuery({
-        queryKey: assetInventoryQueryKey(sessionQueryScope(loadedSession), "", null),
+        queryKey: assetInventoryQueryKey(loadedSessionScope, "", null),
         queryFn: ({ signal }) => controlPlane.listAssetPage({ limit: 50, signal }),
       });
       const loaded = loadedPage.items;
@@ -396,7 +401,7 @@ function App() {
       const requestedDraftId = location.draftId;
       const selected = loaded.find((item) => item.id === requestedAssetId) ?? loaded[0];
       setReviewOnly(Boolean(requestedDraftId));
-      await loadAsset(selected.id, loaded, epoch, requestedDraftId ?? undefined, sessionQueryScope(loadedSession));
+      await loadAsset(selected.id, loaded, epoch, requestedDraftId ?? undefined, loadedSessionScope);
       if (epoch !== loadEpoch.current) return;
       setWorkspace("ready");
       restorePostLoginHash();

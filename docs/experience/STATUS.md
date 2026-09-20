@@ -8,12 +8,15 @@ No packet is DONE until all of its acceptance criteria pass.
 Replaced delimiter-concatenated issuer/subject cache scope with an unambiguous
 serialized tuple. The existing QueryClient test now exercises a collision pair
 against actual cached inventory: failed before the fix, passes afterward.
-This closes the delimiter collision only; session-generation and rendered
-interleaving coverage remain open. No authentication or pickle changes.
+Each accepted session load now also uses its load generation in cache keys and
+clears the old cache before loading inventory. A second real QueryClient test
+proves same-identity reauthentication cannot reuse prior inventory, even if its
+cache lifetime has not expired. Both cases failed before their fixes.
+Rendered interleaving coverage remains open. No authentication or pickle changes.
 
-Validation: Node 26.8.2, existing UI unit suite and TypeScript check. This local
-runtime differs from the declared Node 24 release target; release qualification
-still requires that target. Commit identity is available from this file's history.
+Validation: all 16 existing UI unit tests and TypeScript check pass on bundled
+Node 24.19.0. Initial collision-only validation also passed on Node 26.8.2.
+Commit identities are available from this file's history.
 
 ## Remaining packets
 

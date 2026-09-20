@@ -4,22 +4,33 @@ import { QueryClient } from "@tanstack/react-query";
 import { assetInventoryQueryKey, sessionQueryScope } from "../src/query_scope.ts";
 
 test("session query scope separates anonymous and exact authenticated identities", () => {
-  assert.equal(sessionQueryScope(null), "anonymous");
+  assert.equal(sessionQueryScope(null, 0), "anonymous");
   assert.notEqual(
-    sessionQueryScope({ issuer: "https://issuer.example/", principal: "alice" }),
-    sessionQueryScope({ issuer: "https://issuer.example/", principal: "bob" }),
+    sessionQueryScope({ issuer: "https://issuer.example/", principal: "alice" }, 1),
+    sessionQueryScope({ issuer: "https://issuer.example/", principal: "bob" }, 1),
   );
 });
 
 test("delimiter-containing identities cannot read each other's cached inventory", () => {
   const client = new QueryClient();
-  const first = sessionQueryScope({ issuer: "https://issuer.example/|team", principal: "alice" });
-  const second = sessionQueryScope({ issuer: "https://issuer.example/", principal: "team|alice" });
+  const first = sessionQueryScope({ issuer: "https://issuer.example/|team", principal: "alice" }, 1);
+  const second = sessionQueryScope({ issuer: "https://issuer.example/", principal: "team|alice" }, 1);
   const firstKey = assetInventoryQueryKey(first, "", null);
   const secondKey = assetInventoryQueryKey(second, "", null);
   client.setQueryData(firstKey, { items: ["private-asset"] });
   assert.equal(client.getQueryData(secondKey), undefined);
   assert.deepEqual(client.getQueryData(firstKey), { items: ["private-asset"] });
+  client.clear();
+});
+
+test("reauthentication does not reuse cached inventory for the same identity", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
+  const actor = { issuer: "https://issuer.example/", principal: "alice" };
+  const before = assetInventoryQueryKey(sessionQueryScope(actor, 1), "", null);
+  const after = assetInventoryQueryKey(sessionQueryScope(actor, 2), "", null);
+  client.setQueryData(before, { items: ["revoked-asset"] });
+  const result = await client.fetchQuery({ queryKey: after, queryFn: async () => ({ items: [] }) });
+  assert.deepEqual(result, { items: [] });
   client.clear();
 });
 

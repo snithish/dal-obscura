@@ -1,8 +1,11 @@
 import type { Session } from "./api";
 
 /** Stable private-cache scope. Empty/anonymous scope is never shared with a user. */
-export function sessionQueryScope(session: Pick<Session, "issuer" | "principal"> | null): string {
-  return session ? JSON.stringify([session.issuer ?? null, session.principal]) : "anonymous";
+export function sessionQueryScope(
+  session: Pick<Session, "issuer" | "principal"> | null,
+  generation: number,
+): string {
+  return session ? JSON.stringify([session.issuer ?? null, session.principal, generation]) : "anonymous";
 }
 
 /** Inventory keys include actor scope, search and cursor so pages cannot cross sessions. */
