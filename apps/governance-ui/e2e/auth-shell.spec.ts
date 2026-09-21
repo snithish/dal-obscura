@@ -239,6 +239,19 @@ test("administrator plugin lifecycle applies disable and retire transitions", as
   await expect(page.getByText("Synthetic Iceberg lifecycle is now removed.")).toBeVisible();
 });
 
+test("publisher completes the saved draft review and publication journey", async ({ page }) => {
+  await authenticatedApi(page, { allowPublish: true });
+  await page.goto("/#assets");
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Save deny-all draft" }).click();
+  await expect(page.getByText("Policy draft saved to the control plane.")).toBeVisible();
+  await page.getByRole("button", { name: "Review for publish" }).click();
+  await expect(page.getByText("Server review is current for this saved draft revision. You can publish it now.")).toBeVisible();
+  await page.getByRole("button", { name: "Publish reviewed deny-all" }).click();
+  await expect(page.getByText("Published the saved draft.")).toBeVisible();
+});
+
 test("mutation HTML challenges clear private workspace state", async ({ page }) => {
   await authenticatedApi(page);
   await page.goto("/#assets");
