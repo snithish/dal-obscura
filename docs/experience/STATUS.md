@@ -351,3 +351,16 @@ Proof: `pnpm check`, `pnpm build`, `pnpm test:stories`, and
 `pnpm build-storybook` pass; the Storybook browser suite reports 9 files and
 29 tests. R08 remains ACTIVE pending live settings/access/audit requests and
 authorized backend effects.
+
+## R07 — ACTIVE: deny-all draft state coverage (2026-09-21)
+
+Added an executable policy-workspace story for an intentional deny-all draft.
+It verifies the real editor explains the empty rule set, keeps deny-all save
+available, requires review before publish, and offers the first-rule action.
+No policy mutation runs in Storybook; author/reviewer/publisher backend races
+remain open.
+
+Proof: `pnpm check`, `pnpm build`, `pnpm test:stories`, and
+`pnpm build-storybook` pass; the Storybook browser suite reports 9 files and
+30 tests. R07 remains ACTIVE pending real author/reviewer/publisher and
+restore qualification.
