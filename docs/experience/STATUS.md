@@ -522,3 +522,16 @@ Proof: `pnpm check`, 33 Storybook tests, the production budget build (161.79 KiB
 JS gzip, 38.00 KiB CSS gzip, 83.72 KiB fonts), and 9 built-browser auth/design
 system tests pass. R04 remains ACTIVE pending rendered contrast matrix,
 responsive/zoom/forced-colors review, and owner visual approval.
+
+## R08 — ACTIVE: platform-admin lifecycle affordance boundary (2026-09-21)
+
+Disabled plugin lifecycle selectors and apply actions for non-platform-admin
+sessions. The control plane already requires platform-admin authorization for
+these mutations; the UI now reflects that boundary before a request can be
+attempted. Added a read-only Storybook workflow asserting both controls are
+disabled while admitted plugin status remains visible.
+
+Proof: `pnpm check`, 34 Storybook browser tests, and the production budget build
+(161.83 KiB JS gzip, 38.00 KiB CSS gzip, 83.72 KiB fonts) pass. R08 remains
+ACTIVE pending the complete live settings/access/audit journey and authorized
+backend mutation evidence.
