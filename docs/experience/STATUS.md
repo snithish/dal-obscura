@@ -902,6 +902,21 @@ tool binaries provide equivalent evidence. R06 remains ACTIVE pending the
 remaining load/save/evaluate/review/publish/restore matrix, live identity and
 provider qualification, and production process-race evidence.
 
+## R06 — ACTIVE: deferred policy-evaluation response race (2026-09-21)
+
+Added a held server-side policy evaluation. The browser starts the evaluation,
+adds a new local rule while it is pending, then releases the old response. The
+newer draft stays unsaved and no stale preview or completion notice appears.
+This covers evaluation ownership across a draft edit-epoch change.
+
+Proof: `tsc -b`, the focused evaluation-race browser test, the full built
+browser suite (30 tests), the UI node suite (20 tests), Storybook browser tests
+(45 tests), production build, and bundle-budget gate pass. Measured budgets
+remain 163.03 KiB JS gzip, 38.01 KiB CSS gzip, and 83.72 KiB fonts. Atomic
+implementation commit: `ff34d4bc test(ui): cover deferred policy evaluations`.
+R06 remains ACTIVE pending review/publish/restore races, live identity and
+provider qualification, and production process-race evidence.
+
 ## R06 — ACTIVE: deferred policy-version detail lookup race (2026-09-21)
 
 Added two synthetic immutable revisions to the authenticated asset workflow and
