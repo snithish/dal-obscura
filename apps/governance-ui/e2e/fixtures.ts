@@ -46,7 +46,7 @@ export async function edgeChallengeApi(page: Page, options: EdgeChallengeOptions
  * This fixture proves browser composition and capability presentation only;
  * it is never evidence of a live identity provider or production backend.
  */
-export async function authenticatedApi(page: Page, options: { admin?: boolean; allowPublish?: boolean; configuredSettings?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse; deferredSettings?: DeferredResponse; deferredConnections?: DeferredResponse; deferredInventory?: DeferredResponse; deferredVersion?: DeferredResponse; deferredSave?: DeferredResponse; deferredEvaluate?: DeferredResponse; deferredRestore?: DeferredResponse; deferredReview?: DeferredResponse; deferredPublish?: DeferredResponse } = {}) {
+export async function authenticatedApi(page: Page, options: { admin?: boolean; allowPublish?: boolean; configuredSettings?: boolean; configuredConnections?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse; deferredSettings?: DeferredResponse; deferredConnections?: DeferredResponse; deferredInventory?: DeferredResponse; deferredVersion?: DeferredResponse; deferredSave?: DeferredResponse; deferredEvaluate?: DeferredResponse; deferredRestore?: DeferredResponse; deferredReview?: DeferredResponse; deferredPublish?: DeferredResponse } = {}) {
   const assetId = "00000000-0000-4000-8000-000000000001";
   const identity = {
     principal: "alex@example.invalid",
@@ -73,6 +73,25 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; a
     options: {},
     policy_rules: [],
     schema_fields: [{ name: "order_id", type: "string", nullable: false }],
+  };
+  const configuredCatalog = {
+    id: "catalog-analytics",
+    name: "analytics",
+    module: "synthetic.catalog",
+    plugin_id: "synthetic.catalog.iceberg",
+    options: { uri: "https://catalog.example", password: { secret: "catalog/analytics", scope: "catalog:analytics" } },
+    status: "ready",
+    revision: 1,
+    discovered_table_count: 1,
+    governed_asset_count: 0,
+  };
+  const configuredPlugins = {
+    plugins: [
+      { kind: "catalog", plugin_id: "synthetic.catalog.iceberg", api_version: "1", config_version: 1, distribution: "synthetic-catalog", version: "1.0.0", display_name: "Synthetic Iceberg Catalog", capabilities: ["discover"], output_formats: ["iceberg"], handle_versions: [1], config_schema: { fields: [{ name: "uri", type: "uri", required: true }, { name: "password", type: "secret_reference", required: true, secret: true }] }, status: "admitted" },
+      { kind: "table_format", plugin_id: "synthetic.table.iceberg", api_version: "1", config_version: 1, distribution: "synthetic-iceberg", version: "1.0.0", display_name: "Synthetic Iceberg", capabilities: ["scan"], output_formats: ["iceberg"], handle_versions: [1], config_schema: { fields: [] }, status: "admitted" },
+    ],
+    states: [],
+    pairs: [{ catalog_plugin_id: "synthetic.catalog.iceberg", format_plugin_id: "synthetic.table.iceberg", capabilities: ["scan"], handle_versions: [1], status: "admitted" }],
   };
   let auditCalls = 0;
   let historyCalls = 0;
@@ -113,8 +132,9 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; a
     }
     if (path === "/v1/workspace/summary") return route.fulfill({ json: { asset_count: 1, catalog_count: 1, draft_change_count: 0, enabled_auth_provider_count: 1, missing_policy_count: 0, runtime_configured: true, unowned_asset_count: 0 } });
     if (path === "/v1/workspace/observations") return route.fulfill({ json: { available: true, data_plane: { status: "ready", reason: "synthetic fixture" }, generation: null, observed_at: "2026-09-21T00:00:00Z", source: "synthetic fixture" } });
-    if (options.admin && path === "/v1/plugins") return route.fulfill({ json: { plugins: [], states: [], pairs: [] } });
+    if (options.admin && path === "/v1/plugins") return route.fulfill({ json: options.configuredConnections ? configuredPlugins : { plugins: [], states: [], pairs: [] } });
     if (options.admin && path === "/v1/catalogs") {
+      if (options.configuredConnections) return route.fulfill({ json: [configuredCatalog] });
       catalogCalls += 1;
       if (catalogCalls === 1 && options.deferredConnections) {
         options.deferredConnections.markStarted();
@@ -123,6 +143,14 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; a
       if (!options.deferredConnections) return route.fulfill({ json: [] });
       const catalogName = catalogCalls === 1 ? "stale-catalog" : "fresh-catalog";
       return route.fulfill({ json: [{ id: `catalog-${catalogCalls}`, name: catalogName, module: "synthetic.catalog", plugin_id: null, options: {}, status: "ready", revision: catalogCalls, discovered_table_count: 0, governed_asset_count: 0 }] });
+    }
+    const catalogMatch = path.match(/^\/v1\/catalogs\/([^/]+)(?:\/(.*))?$/);
+    if (options.admin && options.configuredConnections && catalogMatch) {
+      const catalogName = decodeURIComponent(catalogMatch[1]);
+      const suffix = catalogMatch[2] ?? "";
+      if (request.method() === "PUT" && !suffix) return route.fulfill({ json: { ...configuredCatalog, name: catalogName, id: `catalog-${catalogName}` } });
+      if (suffix === "diagnostics") return route.fulfill({ json: { catalog: catalogName, status: "ready", message: "Catalog reachable", checked_at: "2026-09-21T00:00:00Z", table_count: 1, sample_tables: ["orders"] } });
+      if (suffix === "tables") return route.fulfill({ json: { catalog: catalogName, tables: [{ name: "orders", backend: "iceberg", identifier: "demo.orders", governed: false }] } });
     }
     if (options.admin && path === "/v1/workspace/publications") return route.fulfill({ json: [] });
     if (options.admin && path === "/v1/settings/runtime") {

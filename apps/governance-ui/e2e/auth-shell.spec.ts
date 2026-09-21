@@ -176,6 +176,24 @@ test("administrator settings submits staged runtime changes", async ({ page }) =
   await expect(page.getByText("Runtime settings saved as draft configuration. Publish to make worker behavior change.")).toBeVisible();
 });
 
+test("administrator catalogs save, diagnose, and discover through admitted plugins", async ({ page }) => {
+  await authenticatedApi(page, { admin: true, configuredConnections: true });
+  await page.goto("/#connections");
+  await expect(page.getByRole("heading", { name: "Catalog connections" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "analytics" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Check connection" }).click();
+  await expect(page.getByText("Catalog reachable · 1 tables")).toBeVisible();
+  await page.getByRole("button", { name: "Discover tables" }).click();
+  await expect(page.getByRole("cell", { name: "orders" })).toBeVisible();
+
+  await page.getByLabel("Name").fill("warehouse");
+  await page.getByLabel("Catalog URI").fill("https://warehouse.example");
+  await page.getByLabel("Password secret reference").fill("catalog/warehouse");
+  await page.getByRole("button", { name: "Save connection" }).click();
+  await expect(page.getByText("Connection saved. Discovery remains bounded to this configured catalog.")).toBeVisible();
+});
+
 test("mutation HTML challenges clear private workspace state", async ({ page }) => {
   await authenticatedApi(page);
   await page.goto("/#assets");
