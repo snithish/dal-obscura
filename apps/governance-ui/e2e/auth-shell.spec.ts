@@ -123,3 +123,17 @@ test("late management responses cannot replace the current page", async ({ page 
   await expect(page.getByText("fresh-audit")).toBeVisible();
   await expect(page.getByText("stale-audit")).toHaveCount(0);
 });
+
+test("reader deep links fail closed before admin settings requests", async ({ page }) => {
+  const adminRequests: string[] = [];
+  page.on("request", (request) => {
+    const path = new URL(request.url()).pathname;
+    if (path.startsWith("/v1/settings/")) adminRequests.push(path);
+  });
+  await authenticatedApi(page);
+  await page.goto("/#settings");
+
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  await expect.poll(() => new URL(page.url()).hash).toBe("#assets");
+  expect(adminRequests).toEqual([]);
+});

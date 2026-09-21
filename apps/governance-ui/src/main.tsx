@@ -210,9 +210,26 @@ function App() {
     void loadManagement(page);
   }, [page, session, auditFilters]);
 
+  useEffect(() => {
+    if (!session || (page !== "connections" && page !== "settings") || session.capabilities.includes("workspace:admin")) return;
+    managementEpoch.current += 1;
+    void queryClient.cancelQueries({ queryKey: ["management", sessionCacheKey] });
+    setManagementData({});
+    setManagementError("");
+    setPage("assets");
+    if (window.location.hash !== "#assets") window.history.replaceState(null, "", "#assets");
+    setNotice("This workspace view requires platform administrator capability.");
+  }, [page, queryClient, session, sessionCacheKey]);
+
   async function loadManagement(destination: Page) {
     const epoch = ++managementEpoch.current;
     await queryClient.cancelQueries({ queryKey: ["management", sessionCacheKey] });
+    if ((destination === "connections" || destination === "settings") && !session?.capabilities.includes("workspace:admin")) {
+      setManagementData({});
+      setManagementError("");
+      setManagementLoading(false);
+      return;
+    }
     setManagementLoading(true);
     setManagementError("");
     try {
