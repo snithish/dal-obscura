@@ -1316,6 +1316,20 @@ passes. Atomic implementation commit: `7642fe07 test(ui): cover management
 theme contrast`. R04/R08 remain VERIFY pending live management authorization,
 manual contrast/keyboard/screen-reader review, and owner approval.
 
+## R04/R06/R08 — ACTIVE: administrator tablet overflow fix (2026-09-21)
+
+The new administrator responsive check found a real 768 px defect: the
+activity metric grid required five fixed minimum columns and filter inputs kept
+their native 210 px minimum, producing 23 px of page overflow. Production CSS
+now uses auto-fitting metric columns and zero minimum widths for form labels and
+inputs. The browser regression covers activity, history, connections, and
+settings at 390×844, 768×1024, and 1440×900.
+
+Proof: the focused regression and complete built browser suite (49 tests), plus
+TypeScript, pass after the fix. Atomic implementation commit: `fa0c65a0
+fix(ui): prevent management grid overflow`. R04/R06/R08 remain ACTIVE pending
+manual visual/keyboard/screen-reader review and live authorization evidence.
+
 ## R06/R11 — VERIFY: authenticated local web-vitals check (2026-09-21)
 
 Added a built-browser LCP/CLS assertion for the authenticated nested policy
