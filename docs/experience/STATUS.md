@@ -156,6 +156,19 @@ checks. `pnpm check`, `pnpm build`, and `pnpm test:stories` also pass; the
 Storybook suite remains 7 files and 17 tests. R04 remains ACTIVE because the
 broader legacy CSS/token migration and authenticated visual review are open.
 
+## R04 — ACTIVE: Mantine semantic palette ownership (2026-09-21)
+
+Removed the duplicate root palette and font declarations from the legacy
+stylesheet. Mantine's shared CSS variable resolver is now the single source for
+canvas, surfaces, text, borders, focus, status colors, and typography tokens;
+the feature stylesheet retains layout and behavior rules only.
+
+Proof: all 8 design-system and shell browser tests, 17 Storybook browser tests,
+TypeScript, and the production build pass. The production bundle remains
+within the recorded budgets at 165.29 kB JS gzip and 39.36 kB CSS gzip. R04
+remains ACTIVE because hardcoded feature colors and authenticated visual review
+still require migration and qualification.
+
 ## R05 — ACTIVE: runtime and identity workflow coverage (2026-09-21)
 
 Added executable stories for the production `SettingsView` with configured
