@@ -49,6 +49,19 @@ test("System follows OS changes and explicit choice overrides the OS", async ({ 
   await expect(page.locator("html")).toHaveAttribute("data-mantine-color-scheme", "light");
 });
 
+test("forced-colors mode keeps the signed-out controls discoverable", async ({ page }) => {
+  await page.emulateMedia({ forcedColors: "active" });
+  await page.goto("/");
+
+  await expect.poll(() => page.evaluate(() => window.matchMedia("(forced-colors: active)").matches)).toBe(true);
+  const token = page.getByLabel("Local control-plane token");
+  await token.focus();
+  await expect(token).toBeFocused();
+  await expect.poll(() => token.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
+  await expect.poll(() => token.evaluate((element) => getComputedStyle(element).outlineWidth)).toBe("2px");
+  await expect(page.getByRole("button", { name: "Sign in locally" })).toBeVisible();
+});
+
 test("CSP rejects missing and wrong style nonces", async ({ page }) => {
   await page.goto("/");
   const result = await page.evaluate(() => {
