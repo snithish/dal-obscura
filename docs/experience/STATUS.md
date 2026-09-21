@@ -795,3 +795,17 @@ refactor(ui-tests): type edge challenge fixture`; TypeScript and the focused
 four-case edge/mutation matrix pass.
 E03/R02 remains ACTIVE pending live local/Cloudflare SSO allow/deny and
 re-authentication evidence, plus the production deployment qualification.
+
+## R06 — ACTIVE: deferred policy-history response race (2026-09-21)
+
+Extended the authenticated browser boundary with a held Published Changes
+history response. The test navigates from Changes to Activity and back to
+Changes, verifies the fresh history entry, then releases the original response
+and proves the stale entry cannot replace the current page. This complements
+the existing Activity audit race and exercises the same epoch, cancellation, and
+session-scoped query ownership through a second management resource.
+
+Proof: `tsc -b`, the focused history-race browser test, and the full built
+browser suite (21 tests) pass. Atomic implementation commit: `5b954e62
+test(ui): cover deferred history responses`. R06 remains ACTIVE pending the
+broader parameterized workflow matrix and live identity/provider qualification.
