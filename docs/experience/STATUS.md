@@ -1390,3 +1390,9 @@ Proof: the focused authenticated management contrast/axe check and TypeScript
 pass after the markup change. Atomic implementation commit: `79f090e3
 fix(ui): name scrollable data regions`. R04/R06 remain ACTIVE pending the full
 browser matrix, manual screen-reader review, and live workflow evidence.
+
+Follow-up axe review found duplicate landmark names when policy history and its
+immutable rule details were shown together. The regions now have distinct
+accessible names, and the complete Storybook behavior suite reports 46 passed
+tests. Atomic correction commit: `16cfcb9f fix(ui): disambiguate table
+landmarks`.
