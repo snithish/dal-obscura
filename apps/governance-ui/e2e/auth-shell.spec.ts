@@ -31,6 +31,17 @@ test.describe("signed-out governance shell", () => {
     await expect(page.getByText("Use demo persona")).toHaveCount(0);
   });
 
+  test("uses the configured SSO entry and hides local bootstrap", async ({ page }) => {
+    await signedOutApi(page, { oidc: { authority: "https://idp.example.invalid", client_id: "governance-ui", redirect_uri: "https://ui.example.invalid/auth/callback" } });
+    await page.route("**/auth/login", async (route) => route.fulfill({ status: 200, headers: { "content-type": "text/html" }, body: "<title>SSO redirect</title>" }));
+    await page.goto("/");
+
+    await expect(page.getByRole("button", { name: "Sign in with SSO" })).toBeVisible();
+    await expect(page.getByLabel("Local control-plane token")).toHaveCount(0);
+    await page.getByRole("button", { name: "Sign in with SSO" }).click();
+    await expect(page).toHaveURL(/\/auth\/login$/);
+  });
+
   test("HTML edge challenges never become API success", async ({ page }) => {
     await assertEdgeChallenge(page, {});
   });

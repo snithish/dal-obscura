@@ -16,11 +16,11 @@ export function deferredResponse(): DeferredResponse {
 }
 
 /** Synthetic API boundary for component tests, never evidence of live SSO. */
-export async function signedOutApi(page: Page) {
+export async function signedOutApi(page: Page, options: { oidc?: { authority: string; client_id: string; redirect_uri: string } } = {}) {
   await page.route("**/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
-    if (path === "/v1/session/options") return route.fulfill({ json: { bootstrap_enabled: true, oidc: null } });
-    if (path === "/v1/ui-auth-config") return route.fulfill({ json: { authority: null } });
+    if (path === "/v1/session/options") return route.fulfill({ json: { bootstrap_enabled: !options.oidc, oidc: options.oidc ?? null } });
+    if (path === "/v1/ui-auth-config") return route.fulfill({ json: { authority: options.oidc?.authority ?? null } });
     return route.fulfill({ status: 401, json: { detail: "Sign in required" } });
   });
 }
