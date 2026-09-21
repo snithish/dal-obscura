@@ -723,3 +723,18 @@ Proof: `pnpm check` and the full built-browser suite pass with 16 tests. Atomic
 implementation commit: `0dd4754e fix(ui): fail closed on reader admin deep links`.
 R02/R06/R08 remain ACTIVE pending live identity qualification and authorized
 backend settings/access/audit journeys.
+
+## R08 — ACTIVE: last-owner UI safeguard (2026-09-21)
+
+The asset access editor now blocks an empty owner list before creating a
+mutation request and explains that a replacement owner must be assigned first.
+This mirrors the control-plane last-owner invariant while preserving server
+authorization and revision checks. A real `AssetWorkspace` Storybook workflow
+clears the owner field, submits the form, and verifies the actionable status
+message without contacting the API.
+
+Proof: `pnpm check`, `pnpm test:stories` (44 browser tests), and `pnpm build`
+pass; the budget gate measures 162.82 KiB JS gzip, 38.01 KiB CSS gzip, and
+83.72 KiB fonts. Atomic implementation commit: `590c627f fix(ui): prevent
+empty asset ownership`. R08 remains ACTIVE pending live settings/access/audit
+journeys and authorized backend mutation evidence.
