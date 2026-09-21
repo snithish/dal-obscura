@@ -666,3 +666,15 @@ pass; the budget gate measures 162.48 KiB JS gzip, 38.01 KiB CSS gzip, and
 83.72 KiB fonts. Atomic implementation commit: `fea21100 fix(ui): confirm
 identity provider lockout`. R08 remains ACTIVE pending live settings/access/
 audit journeys and authorized backend mutation evidence.
+
+R08 settings validation now also rejects empty issuer URLs, malformed or
+credential-bearing HTTP(S) issuer/JWKS URLs, empty signing-algorithm lists, and
+OIDC cache values outside the backend's documented bounds before a mutation
+payload is created. The new issuer-error workflow keeps Save disabled while the
+field is invalid; server validation remains authoritative for all other cases.
+
+Proof: `pnpm check`, `pnpm test:stories` (43 browser tests), and `pnpm build`
+pass; the budget gate measures 162.70 KiB JS gzip, 38.01 KiB CSS gzip, and
+83.72 KiB fonts. Atomic implementation commit: `e928562a fix(ui): validate
+oidc fields before save`. R08 remains ACTIVE pending live settings/access/audit
+journeys and authorized backend mutation evidence.
