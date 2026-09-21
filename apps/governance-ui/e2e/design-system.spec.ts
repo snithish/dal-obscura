@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { authenticatedApi, signedOutApi } from "./fixtures";
 
@@ -147,6 +148,9 @@ test("authenticated management screens keep rendered text and controls readable 
         const ratio = contrastRatio(parseRgb(sample.color), parseRgb(sample.background));
         expect(ratio, `${theme} ${hash} ${sample.role} contrast`).toBeGreaterThanOrEqual(4.5);
       }
+      const results = await new AxeBuilder({ page }).analyze();
+      const blockingViolations = results.violations.filter((violation) => violation.impact === "serious" || violation.impact === "critical");
+      expect(blockingViolations, `${theme} ${hash} accessibility`).toEqual([]);
     }
   }
 });
