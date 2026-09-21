@@ -466,7 +466,12 @@ jobs:
       - name: Install Playwright browser
         run: pnpm --dir apps/governance-ui exec playwright install --with-deps chromium
 
-      - name: Run authenticated-shell browser journey
+      - name: Build and test the designbook
+        run: |
+          pnpm --dir apps/governance-ui build-storybook
+          pnpm --dir apps/governance-ui test:stories
+
+      - name: Run built-shell browser checks
         run: pnpm --dir apps/governance-ui test:e2e
 
   ui-image:

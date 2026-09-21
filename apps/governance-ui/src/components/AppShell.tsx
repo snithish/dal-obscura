@@ -64,7 +64,7 @@ export function AppShell(props: AppShellProps) {
         <Stack justify="space-between" h="100%">
           {links}
           <Stack gap="xs">
-            <Badge variant="light" color={props.workspace === "ready" ? "green" : "gray"}>{props.workspace === "loading" ? "Checking access" : props.workspace === "ready" ? "Connected" : "Unavailable"}</Badge>
+            <Badge variant="light" className="workbench-health" data-ready={props.workspace === "ready" || undefined}>{props.workspace === "loading" ? "Checking access" : props.workspace === "ready" ? "Connected" : "Unavailable"}</Badge>
             {props.assetCatalog && <Text size="sm" c="dimmed">{props.assetCatalog}</Text>}
           </Stack>
         </Stack>

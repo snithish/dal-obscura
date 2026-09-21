@@ -10,6 +10,9 @@
   },
   "scripts": {
     "dev": "vite",
+    "storybook": "storybook dev --host 127.0.0.1 --port 6006 --no-open --disable-telemetry",
+    "build-storybook": "storybook build --disable-telemetry",
+    "test:stories": "vitest run --config vitest.config.ts",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "check": "tsc -b",
@@ -32,11 +35,18 @@
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
     "@playwright/test": "1.63.0",
+    "@storybook/addon-a11y": "10.6.0",
+    "@storybook/addon-docs": "10.6.0",
+    "@storybook/addon-vitest": "10.6.0",
+    "@storybook/react-vite": "10.6.0",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "5.2.0",
+    "@vitest/browser-playwright": "4.1.11",
     "openapi-typescript": "7.13.0",
+    "storybook": "10.6.0",
     "typescript": "5.9.3",
-    "vite": "7.3.6"
+    "vite": "7.3.6",
+    "vitest": "4.1.11"
   }
 }

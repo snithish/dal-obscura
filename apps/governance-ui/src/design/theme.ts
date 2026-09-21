@@ -1,4 +1,4 @@
-import { createTheme, type CSSVariablesResolver } from "@mantine/core";
+import { Button, createTheme, type CSSVariablesResolver } from "@mantine/core";
 
 export const palette = {
   light: {
@@ -31,6 +31,7 @@ export const theme = createTheme({
   },
   defaultRadius: "sm",
   autoContrast: true,
+  components: { Button: Button.extend({ defaultProps: { variant: "filled" } }) },
 });
 
 const semanticVariables = (tokens: typeof palette.light) => ({

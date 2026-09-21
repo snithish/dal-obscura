@@ -30,7 +30,8 @@ remain open; these focused checks do not close E01.
 ## Remaining packets
 
 R04: ACTIVE; Mantine production-CSP foundation qualified below.
-R02/R03/R05/R07–R12: OPEN. No production readiness or live Cloudflare claim.
+R05: ACTIVE; initial executable designbook below.
+R02/R03/R07–R12: OPEN. No production readiness or live Cloudflare claim.
 
 ## R04/R06 — ACTIVE: Mantine shell and CSP foundation (2026-09-21)
 
@@ -60,3 +61,34 @@ stored in the lockfile or runtime configuration.
 Remaining: convert feature controls and competing legacy CSS values, measure both
 themes across authenticated screens, finish workbench/query ownership, Storybook,
 and live identity/provider qualification. R04/R06 are not DONE.
+
+## R05 — ACTIVE: executable designbook foundation (2026-09-21)
+
+Storybook 10.6.0 React/Vite, Docs, accessibility and Vitest integration are pinned
+as development dependencies. Vitest/browser provider 4.1.11 satisfies the addon
+peer range (the newer Vitest 5 is not supported by that range). Storybook imports
+the actual AppProviders, theme, styles, LoginPanel and AppShell. Ten stories cover
+semantic palette/type/icons, login unavailable/rejected/pending states, reader
+and administrator navigation, and representative dark themes. Contribution MDX
+documents ownership, limitations and remaining workflow coverage.
+
+Ten browser story tests pass, including axe and actual retry/submission/capability
+behavior. They first exposed two real contrast failures: dark primary-button text
+and the connected badge. The shared filled-button default and semantic status
+tokens now fix those failures. No accessibility rule was disabled. Static
+Storybook and production application builds pass; app JS 165.63 kB gzip, CSS
+39.63 kB gzip. TypeScript and frozen offline install pass. CI now builds and tests
+stories using its existing Chromium install. Storybook has a separate Vite config
+without production API/auth proxies, loopback binding and telemetry disabled.
+
+Commands from apps/governance-ui: `pnpm storybook`, `pnpm build-storybook`,
+`pnpm test:stories`. Story tests use Playwright Chromium; the existing
+DAL_OBSCURA_E2E_EXECUTABLE_PATH override also works for a local browser install.
+
+Still OPEN before E10/E11 can pass: network interception with fail-on-unexpected
+requests (do not add networked stories before this), complete documented component/
+pattern/workflow coverage, contrast matrix, reviewed responsive visual baselines,
+manual keyboard/screen-reader/zoom checks and owner visual approval. Current
+stories are synthetic and do not prove SSO or backend authorization. Production
+Playwright retains distinct CSP, focus and OS-theme boundary checks; no existing
+security tests were removed in favor of stories. R05 is not DONE.

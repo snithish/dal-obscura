@@ -10,6 +10,8 @@ Component-library amendment: Mantine is the selected maintained MIT-licensed
 library. R01/R04/R05 and E08/E10 now require direct reuse, one shared theme and
 Storybook integration, with early CSP/size qualification. Mantine shell/login
 foundation is installed and qualified; see the execution ledger for remaining work.
+The initial executable designbook is available with
+`pnpm --dir apps/governance-ui storybook`; it uses the real application components.
 
 Read [implementation review](REVIEW.md), [action plan](ACTION_PLAN.md),
 [local HTTPS/SSO design](LOCAL_ACCESS.md), [design system and Storybook](DESIGN_SYSTEM.md),

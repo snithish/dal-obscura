@@ -16,6 +16,8 @@ code, pre, .mono { font-family: var(--mantine-font-family-monospace); }
 .workbench-principal { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workbench-theme { width: 148px; }
 .workbench-main { max-width: none; }
+.workbench-health { color: var(--text-secondary); background: var(--surface-subtle); }
+.workbench-health[data-ready] { color: var(--success); background: var(--success-surface); }
 .mantine-AppShell-navbar, .mantine-Drawer-content, .mantine-Drawer-header, .mantine-Combobox-dropdown { background: var(--surface); color: var(--text); border-color: var(--border); }
 .mantine-NavLink-root { border-radius: 6px; min-height: 44px; }
 .mantine-NavLink-root[data-disabled] { opacity: 1; color: var(--text-secondary); background: transparent; }

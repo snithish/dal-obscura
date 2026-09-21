@@ -108,6 +108,7 @@ apps/governance-ui/node_modules/
 apps/governance-ui/dist/
 apps/governance-ui/test-results/
 apps/governance-ui/playwright-report/
+apps/governance-ui/storybook-static/
 node_modules/
 ui/node_modules/
 ui/dist/

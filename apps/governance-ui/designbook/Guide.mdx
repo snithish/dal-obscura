@@ -1,0 +1,52 @@
+import { Meta, Canvas } from '@storybook/addon-docs/blocks';
+import * as Foundations from '../src/design/Foundations.stories';
+import * as Login from '../src/components/LoginPanel.stories';
+
+<Meta title="Contribution/Designbook guide" />
+
+# One product, one component system
+
+This designbook imports the real application provider, fonts, theme and components.
+It is a partial implementation of R05, not proof of a production-ready service.
+Every identity and token shown here is synthetic. No real API or identity provider
+is required. Keep this development server bound to loopback.
+
+## Foundation ownership
+
+`src/design/theme.ts` owns semantic colors and the Mantine theme. `AppProviders`
+owns fonts and color-scheme management. `base.css` owns shared composition styles.
+Use the toolbar for Light, Dark and System; System follows the operating system.
+Use IBM Plex Sans for prose and controls, Mono only for code and identifiers.
+Keep meaningful status text alongside Lucide icons; never rely on color alone.
+
+<Canvas of={Foundations.Light} />
+
+Use [Mantine components](https://mantine.dev/core/getting-started/) directly.
+Do not create replacement Button, Input or Modal wrappers. Extract only repeated
+domain compositions. Link upstream APIs instead of duplicating their prop docs.
+
+## Patterns: errors and pending actions
+
+Explain what failed and how to recover. Keep entered values after rejection.
+Disable repeated submission while pending; unknown outcomes require reconciliation,
+never a false success toast. Login stories verify retained input, retry dispatch,
+pending submission and accessible error feedback in actual `LoginPanel`.
+
+<Canvas of={Login.LocalRejected} />
+
+## Contribution acceptance
+
+1. Reuse semantic tokens and the actual application component, not copied markup.
+2. Document purpose, states, keyboard behavior, content and known limitations.
+3. Add a play test only for a distinct product behavior. Keep algorithm tests in
+   unit tests and actual authentication/network boundaries in Playwright.
+4. Run `pnpm check`, `pnpm test:stories` and `pnpm build-storybook`.
+5. Review both themes, 390px and 1440px widths, keyboard use and 200% zoom.
+   Automated accessibility checks supplement human review.
+6. Add no customer data, credentials, API proxies, remote fonts or IdP calls.
+   Unexpected-network enforcement and visual baselines remain open E11 work;
+   do not add networked stories until that boundary is implemented.
+
+Remaining coverage: command search, full contrast matrix, validation/conflict and
+unknown-outcome patterns, inventory, nested editor, review, connections and activity.
+Human screen-reader review and approved visual baselines remain acceptance gates.

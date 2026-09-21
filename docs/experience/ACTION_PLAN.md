@@ -25,9 +25,9 @@ or meets a named requirement. No rewrite of publication, SDK, policy evaluator
 or sessions merely to reorganize files. No runtime compatibility shims. Update
 obsolete tests in the same commit that removes their behavior.
 
-Use uv, existing pnpm scripts and existing JVM/CI harnesses. R05 adds storybook,
-build-storybook and test:stories scripts; these are planned command names, not
-currently available commands. Keep browser tests against built artifacts for
+Use uv, existing pnpm scripts and existing JVM/CI harnesses. R05's storybook,
+build-storybook and test:stories scripts are available for the initial designbook.
+See STATUS.md for incomplete acceptance gates. Keep browser tests against built artifacts for
 release proof; the Vite development server is not production-image evidence.
 
 ## R01 — Establish current ownership and close remaining contract ambiguity
