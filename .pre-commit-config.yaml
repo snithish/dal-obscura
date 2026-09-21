@@ -6,6 +6,7 @@ repos:
       entry: uv run ruff format
       language: system
       types: [python]
+      exclude: ^src/dal_obscura/flight/v1/.*_pb2\.py$
       args: ["--"]
     - id: ruff-check
       name: Ruff lint
