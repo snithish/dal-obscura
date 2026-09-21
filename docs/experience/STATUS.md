@@ -1098,3 +1098,19 @@ implementation commit: `8b8d830c test(ui): cover plugin lifecycle
 management`. R08 remains ACTIVE pending live settings/access/audit and
 publication effects, real plugin registry qualification, and production
 operations evidence.
+
+## R07 — ACTIVE: successful publisher policy journey (2026-09-21)
+
+Added a successful-path browser journey for a publisher-capable session. The
+production AssetWorkspace saves the deny-all draft, obtains server review for
+the saved revision, and publishes only after the review token is current. This
+is synthetic control-plane evidence and does not qualify independent author and
+reviewer identities, cross-process revision races, or a live data-plane read of
+the resulting publication.
+
+Proof: the focused publisher browser test passes against the built shell, and
+the existing deferred save/review/publish race tests remain green. Atomic
+implementation commit: `51004419 test(ui): cover publisher policy journey`.
+R07 remains ACTIVE pending live author/reviewer/publisher qualification,
+publication reconciliation, consumer reads, and production process-race
+evidence.
