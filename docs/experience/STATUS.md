@@ -491,6 +491,17 @@ production build budget gate pass (161.79 KiB JS gzip, 37.89 KiB CSS gzip,
 83.72 KiB fonts); `pnpm build-storybook` also passes. R05/R08 remain ACTIVE pending real consumer endpoint runs,
 the complete administration journey, and live authorization evidence.
 
+## R08 — ACTIVE: complete audit resource filters (2026-09-21)
+
+Aligned the Activity view's resource selector with the backend's authoritative
+audit vocabulary: asset, catalog, plugin, publication, and workspace. The
+Storybook filter journey now asserts the previously missing management scopes;
+filter submission still delegates to the existing paginated API query.
+
+Proof: `pnpm check` and 33 Storybook browser tests pass. R08 remains ACTIVE
+pending the complete settings/access/audit management journey and authorized
+backend mutation evidence.
+
 ## R04 — ACTIVE: focus and forced-colors fallback (2026-09-21)
 
 Aligned the legacy feature focus ring with the design system's 2px semantic
