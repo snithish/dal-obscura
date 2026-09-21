@@ -315,3 +315,15 @@ Proof: `pnpm check`, `pnpm build`, `pnpm test:stories`, and
 `pnpm build-storybook` pass; the Storybook browser suite reports 9 files and
 26 tests. R08 remains ACTIVE pending live settings/access/audit requests and
 authorized backend effects.
+
+## R08 — ACTIVE: identity-provider validation coverage (2026-09-21)
+
+Added an executable settings story for malformed attribute-claim mappings. It
+verifies the production form reports the actionable field error and disables
+identity-provider save until the mapping is corrected. No provider mutation or
+network request runs in Storybook.
+
+Proof: `pnpm check`, `pnpm build`, `pnpm test:stories`, and
+`pnpm build-storybook` pass; the Storybook browser suite reports 9 files and
+27 tests. R08 remains ACTIVE pending live settings/access/audit requests and
+authorized backend effects.
