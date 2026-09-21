@@ -1603,3 +1603,18 @@ interaction tests, the static Storybook suite's rendered fixtures, and all 54
 built browser tests pass. R04/R08 remain VERIFY pending manual visual,
 keyboard, and screen-reader review, live management authorization, and real
 catalog credentials.
+
+## R04/R08 — VERIFY: Mantine settings controls (2026-09-22)
+
+Migrated runtime limits, storage-root paths, OIDC provider fields, and provider
+enablement to Mantine `TextInput` and `Checkbox` components. Labels and error
+descriptions remain attached to the owning field, while staged-save,
+provider-order, secret-reference, and capability behavior stay in the existing
+settings use case. Atomic implementation commit: `c4468a8e
+refactor(ui): migrate settings controls to Mantine`.
+
+Proof: TypeScript, Vite production build, static Storybook build, 46 Storybook
+interaction tests, the focused settings/keyboard browser journeys (2), and all
+54 built browser tests pass. R04/R08 remain VERIFY pending manual visual,
+keyboard, and screen-reader review, live management authorization, and actual
+OIDC provider qualification.
