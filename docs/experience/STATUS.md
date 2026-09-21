@@ -523,6 +523,13 @@ JS gzip, 38.00 KiB CSS gzip, 83.72 KiB fonts), and 9 built-browser auth/design
 system tests pass. R04 remains ACTIVE pending rendered contrast matrix,
 responsive/zoom/forced-colors review, and owner visual approval.
 
+Follow-up browser proof adds a forced-colors signed-out journey. It verifies the
+browser media mode, keyboard focus, explicit two-pixel focus outline, and local
+sign-in visibility against the production build. The forced-colors fallback now
+sets the complete outline because Mantine inputs may reset the base outline.
+The built browser suite reports 10 passing tests; R04 remains ACTIVE pending
+manual OS contrast/zoom review and owner visual approval.
+
 ## R08 — ACTIVE: platform-admin lifecycle affordance boundary (2026-09-21)
 
 Disabled plugin lifecycle selectors and apply actions for non-platform-admin
