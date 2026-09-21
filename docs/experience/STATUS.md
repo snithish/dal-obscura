@@ -1324,14 +1324,14 @@ their native 210 px minimum, producing 23 px of page overflow. Production CSS
 now uses auto-fitting metric columns and zero minimum widths for form labels and
 inputs. The browser regression covers activity, history, connections, and
 settings at 390×844, 768×1024, and 1440×900, plus the activity screen at 200%
-zoom.
+zoom. It now exercises all four management screens at 200% as well.
 
 Proof: the focused regression and complete built browser suite (49 tests), plus
 TypeScript, the Storybook behavior suite (46 tests), Node tests (20), and the
 production build/budget gate pass after the fix. The build measures 147.46 KiB
 initial JS gzip, 165.50 KiB total JS gzip, 38.03 KiB CSS gzip, and 83.72 KiB
 fonts. Atomic implementation commits: `fa0c65a0 fix(ui): prevent management
-grid overflow` and `e7f1c1f9 test(ui): cover management zoom bounds`.
+grid overflow` and `7976ca26 test(ui): cover management zoom matrix`.
 The static Storybook build also completes successfully. R04/R06/R08 remain
 ACTIVE pending manual visual/keyboard/screen-reader review and live
 authorization evidence.
