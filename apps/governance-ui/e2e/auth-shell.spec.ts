@@ -318,6 +318,26 @@ test("late policy evaluations cannot replace a newer draft preview", async ({ pa
   await expect(page.getByText("Server-side evaluation completed: denied.")).toHaveCount(0);
 });
 
+test("late policy restores cannot replace a newer local edit", async ({ page }) => {
+  const deferredRestore = deferredResponse();
+  await authenticatedApi(page, { deferredRestore });
+  await page.goto("/#assets");
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  await page.getByRole("tab", { name: "History" }).click();
+  await expect(page.getByRole("heading", { name: "Published policy revisions" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Restore to draft" }).nth(0).click();
+  await deferredRestore.started;
+  await page.getByRole("tab", { name: "Policy" }).click();
+  await page.getByRole("button", { name: "Add first rule" }).click();
+  await expect(page.getByRole("button", { name: "Save draft" })).toBeVisible();
+  await expect(page.getByText("Unsaved changes")).toBeVisible();
+
+  deferredRestore.release();
+  await expect(page.getByText("Unsaved changes")).toBeVisible();
+  await expect(page.getByText(/restored as draft revision/)).toHaveCount(0);
+});
+
 test("reader deep links fail closed before admin settings requests", async ({ page }) => {
   const adminRequests: string[] = [];
   page.on("request", (request) => {

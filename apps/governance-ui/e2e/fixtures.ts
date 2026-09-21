@@ -46,7 +46,7 @@ export async function edgeChallengeApi(page: Page, options: EdgeChallengeOptions
  * This fixture proves browser composition and capability presentation only;
  * it is never evidence of a live identity provider or production backend.
  */
-export async function authenticatedApi(page: Page, options: { admin?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse; deferredSettings?: DeferredResponse; deferredConnections?: DeferredResponse; deferredInventory?: DeferredResponse; deferredVersion?: DeferredResponse; deferredSave?: DeferredResponse; deferredEvaluate?: DeferredResponse } = {}) {
+export async function authenticatedApi(page: Page, options: { admin?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse; deferredSettings?: DeferredResponse; deferredConnections?: DeferredResponse; deferredInventory?: DeferredResponse; deferredVersion?: DeferredResponse; deferredSave?: DeferredResponse; deferredEvaluate?: DeferredResponse; deferredRestore?: DeferredResponse } = {}) {
   const assetId = "00000000-0000-4000-8000-000000000001";
   const identity = {
     principal: "alex@example.invalid",
@@ -172,11 +172,17 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; d
       }
       if (suffix === "draft" || suffix.startsWith("draft/")) return route.fulfill({ json: { id: "current-draft", asset_id: assetId, author_principal: identity.principal, revision: 0, base_policy_version: 1, rules: [], content_hash: "" } });
       if (suffix === "policy-versions") {
-        if (!options.deferredVersion) return route.fulfill({ json: [] });
+        if (!options.deferredVersion && !options.deferredRestore) return route.fulfill({ json: [] });
         return route.fulfill({ json: [
           { asset_id: assetId, asset_name: "orders", catalog: "demo", target: "demo.orders", policy_version: 1, active: false, created_at: "2026-09-20T00:00:00Z" },
           { asset_id: assetId, asset_name: "orders", catalog: "demo", target: "demo.orders", policy_version: 2, active: true, created_at: "2026-09-21T00:00:00Z" },
         ] });
+      }
+      const restoreMatch = suffix.match(/^policy-versions\/(\d+)\/restore$/);
+      if (restoreMatch && request.method() === "POST" && options.deferredRestore) {
+        options.deferredRestore.markStarted();
+        await options.deferredRestore.wait();
+        return route.fulfill({ json: { id: "stale-restore", asset_id: assetId, author_principal: identity.principal, revision: 2, base_policy_version: Number(restoreMatch[1]), rules: [{ ordinal: 10, effect: "allow", principals: ["group:stale-restore"], columns: ["order_id"], masks: {}, row_filter: null }], content_hash: "stale-restore" } });
       }
       const versionMatch = suffix.match(/^policy-versions\/(\d+)$/);
       if (versionMatch && options.deferredVersion) {
