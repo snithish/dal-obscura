@@ -33,6 +33,7 @@ function configFields(plugin?: PluginDescriptor): PluginConfigField[] {
 
 function configFieldLabel(name: string): string {
   if (name === "uri") return "Catalog URI";
+  if (name === "tls") return "TLS";
   if (name === "user") return "Database username";
   if (name === "password") return "Password secret reference";
   return name.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());

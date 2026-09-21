@@ -26,6 +26,20 @@ const catalogPlugin: PluginDescriptor = {
   status: "admitted",
 };
 
+const typedCatalogPlugin: PluginDescriptor = {
+  ...catalogPlugin,
+  plugin_id: "typed-catalog",
+  display_name: "Typed catalog adapter",
+  config_schema: {
+    fields: [
+      { name: "uri", type: "string", required: true, secret: false },
+      { name: "port", type: "integer", required: true, secret: false },
+      { name: "tls", type: "boolean", required: true, secret: false },
+      { name: "region", type: "enum", required: false, secret: false, options: ["eu-west-1", "us-east-1"] },
+    ],
+  },
+};
+
 const catalogs: Catalog[] = [{
   id: "catalog-analytics",
   name: "analytics",
@@ -126,5 +140,22 @@ export const SecretReferenceEditing: Story = {
     await expect(secretField).toHaveValue("vault/catalog/password");
     await expect(canvas.getByText(/Secret references remain deployment-managed/)).toBeVisible();
     await expect(canvas.queryByText("super-secret-password")).not.toBeInTheDocument();
+  },
+};
+
+export const TypedConfiguration: Story = {
+  args: {
+    plugins: [typedCatalogPlugin],
+    catalogs: [{
+      ...catalogs[0],
+      plugin_id: "typed-catalog",
+      options: { uri: "https://catalog.example", port: 443, tls: true, region: "eu-west-1" },
+    }],
+  },
+  play: async ({ canvas }) => {
+    await canvas.getByRole("button", { name: "Edit" }).click();
+    await expect(canvas.getByLabelText("Port")).toHaveAttribute("type", "number");
+    await expect(canvas.getByLabelText("TLS")).toHaveValue("true");
+    await expect(canvas.getByLabelText("Region (optional)")).toHaveValue("eu-west-1");
   },
 };
