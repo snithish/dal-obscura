@@ -46,7 +46,7 @@ export async function edgeChallengeApi(page: Page, options: EdgeChallengeOptions
  * This fixture proves browser composition and capability presentation only;
  * it is never evidence of a live identity provider or production backend.
  */
-export async function authenticatedApi(page: Page, options: { admin?: boolean; allowPublish?: boolean; configuredSettings?: boolean; configuredConnections?: boolean; configuredPublications?: boolean; configuredLifecycle?: boolean; configuredAudit?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse; deferredSettings?: DeferredResponse; deferredConnections?: DeferredResponse; deferredInventory?: DeferredResponse; deferredVersion?: DeferredResponse; deferredSave?: DeferredResponse; deferredEvaluate?: DeferredResponse; deferredRestore?: DeferredResponse; deferredReview?: DeferredResponse; deferredPublish?: DeferredResponse } = {}) {
+export async function authenticatedApi(page: Page, options: { admin?: boolean; allowPublish?: boolean; configuredSettings?: boolean; configuredConnections?: boolean; configuredPublications?: boolean; configuredLifecycle?: boolean; configuredAudit?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse; deferredSettings?: DeferredResponse; deferredConnections?: DeferredResponse; deferredDiscovery?: DeferredResponse; deferredInventory?: DeferredResponse; deferredVersion?: DeferredResponse; deferredSave?: DeferredResponse; deferredEvaluate?: DeferredResponse; deferredRestore?: DeferredResponse; deferredReview?: DeferredResponse; deferredPublish?: DeferredResponse } = {}) {
   const assetId = "00000000-0000-4000-8000-000000000001";
   const identity = {
     principal: "alex@example.invalid",
@@ -111,6 +111,7 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; a
   let historyCalls = 0;
   let settingsCalls = 0;
   let catalogCalls = 0;
+  let discoveryCalls = 0;
   await page.route("**/v1/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -184,7 +185,15 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; a
       const suffix = catalogMatch[2] ?? "";
       if (request.method() === "PUT" && !suffix) return route.fulfill({ json: { ...configuredCatalog, name: catalogName, id: `catalog-${catalogName}` } });
       if (suffix === "diagnostics") return route.fulfill({ json: { catalog: catalogName, status: "ready", message: "Catalog reachable", checked_at: "2026-09-21T00:00:00Z", table_count: 1, sample_tables: ["orders"] } });
-      if (suffix === "tables") return route.fulfill({ json: { catalog: catalogName, tables: [{ name: "orders", backend: "iceberg", identifier: "demo.orders", governed: false }] } });
+      if (suffix === "tables") {
+        discoveryCalls += 1;
+        if (discoveryCalls === 1 && options.deferredDiscovery) {
+          options.deferredDiscovery.markStarted();
+          await options.deferredDiscovery.wait();
+        }
+        const tableName = options.deferredDiscovery ? (discoveryCalls === 1 ? "stale-orders" : "fresh-orders") : "orders";
+        return route.fulfill({ json: { catalog: catalogName, tables: [{ name: tableName, backend: "iceberg", identifier: `demo.${tableName}`, governed: false }] } });
+      }
     }
     if (options.admin && path === "/v1/workspace/publications") {
       if (request.method() === "GET") return route.fulfill({ json: workspacePublications });

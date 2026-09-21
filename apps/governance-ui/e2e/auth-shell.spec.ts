@@ -265,6 +265,26 @@ test("administrator activity filters and paginates the permitted audit records",
   await expect(page.getByText("policy.publish")).toBeVisible();
 });
 
+test("late catalog discovery cannot replace the current table inventory", async ({ page }) => {
+  const deferredDiscovery = deferredResponse();
+  await authenticatedApi(page, { admin: true, configuredConnections: true, deferredDiscovery });
+  await page.goto("/#connections");
+  await expect(page.getByRole("heading", { name: "Catalog connections" })).toBeVisible();
+  await page.getByRole("button", { name: "Discover tables" }).click();
+  await deferredDiscovery.started;
+
+  await page.getByRole("button", { name: "Assets" }).click();
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  await page.getByRole("button", { name: "Connections" }).click();
+  await expect(page.getByRole("heading", { name: "Catalog connections" })).toBeVisible();
+  await page.getByRole("button", { name: "Discover tables" }).click();
+  await expect(page.getByRole("cell", { name: "fresh-orders" })).toBeVisible();
+
+  deferredDiscovery.release();
+  await expect(page.getByRole("cell", { name: "fresh-orders" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "stale-orders" })).toHaveCount(0);
+});
+
 test("mutation HTML challenges clear private workspace state", async ({ page }) => {
   await authenticatedApi(page);
   await page.goto("/#assets");
