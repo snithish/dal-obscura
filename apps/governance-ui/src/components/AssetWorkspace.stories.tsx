@@ -177,6 +177,16 @@ export const NestedPolicyDraft: Story = {
   },
 };
 
+export const DarkNestedPolicy: Story = {
+  ...NestedPolicyDraft,
+  globals: { theme: "dark" },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("heading", { name: "Fields & access" })).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "Select customer.email" })).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "Save draft" })).toBeEnabled();
+  },
+};
+
 export const AccessAndGrants: Story = {
   args: {
     initialTab: "access",
