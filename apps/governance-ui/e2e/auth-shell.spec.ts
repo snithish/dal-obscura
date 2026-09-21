@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
-import { signedOutApi } from "./fixtures";
+import { authenticatedApi, signedOutApi } from "./fixtures";
 
 test.describe("signed-out governance shell", () => {
   test.beforeEach(async ({ page }) => signedOutApi(page));
@@ -73,4 +73,26 @@ test.describe("signed-out governance shell", () => {
     expect(zoomedBox!.x).toBeGreaterThanOrEqual(0);
     expect(zoomedBox!.x + zoomedBox!.width).toBeLessThanOrEqual(1440 + 1);
   });
+});
+
+test("authenticated mobile navigation respects capabilities and restores focus", async ({ page }) => {
+  await authenticatedApi(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/#assets");
+
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  const openNavigation = page.getByRole("button", { name: "Open navigation menu" });
+  await openNavigation.click();
+  await expect(page.getByRole("dialog", { name: "Navigation" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Navigation" }).getByRole("button", { name: "Settings" })).toBeDisabled();
+  await expect(page.getByRole("dialog", { name: "Navigation" }).getByRole("button", { name: "Assets" })).toHaveAttribute("aria-current", "page");
+
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Navigation" })).toHaveCount(0);
+  await expect(openNavigation).toBeFocused();
+
+  await openNavigation.click();
+  await page.getByRole("dialog", { name: "Navigation" }).getByRole("button", { name: "Activity" }).click();
+  await expect(page.getByRole("heading", { name: "Activity" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Navigation" })).toHaveCount(0);
 });

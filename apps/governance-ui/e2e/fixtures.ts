@@ -9,3 +9,68 @@ export async function signedOutApi(page: Page) {
     return route.fulfill({ status: 401, json: { detail: "Sign in required" } });
   });
 }
+
+/** Synthetic authenticated API boundary for shell integration checks.
+ * This fixture proves browser composition and capability presentation only;
+ * it is never evidence of a live identity provider or production backend.
+ */
+export async function authenticatedApi(page: Page) {
+  const assetId = "00000000-0000-4000-8000-000000000001";
+  const identity = {
+    principal: "alex@example.invalid",
+    groups: ["analysts"],
+    platform_admin: false,
+    capabilities: ["asset:read", "asset:edit"],
+  };
+  const inventory = {
+    id: assetId,
+    catalog: "demo",
+    name: "orders",
+    backend: "iceberg",
+    table_identifier: "demo.orders",
+    owner_count: 1,
+    owners: ["alex@example.invalid"],
+    policy_status: "configured",
+    draft_status: "published",
+    active_policy_version: 1,
+    last_published_at: "2026-09-21T00:00:00Z",
+  };
+  const detail = {
+    ...inventory,
+    revision: 1,
+    options: {},
+    policy_rules: [],
+    schema_fields: [{ name: "order_id", type: "string", nullable: false }],
+  };
+  await page.route("**/v1/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (path === "/v1/session" && request.method() === "GET") return route.fulfill({ json: identity });
+    if (path === "/v1/assets/page") return route.fulfill({ json: { items: [inventory], next_cursor: null } });
+    const match = path.match(/^\/v1\/assets\/([^/]+)(?:\/(.*))?$/);
+    if (match && match[1] === assetId) {
+      const suffix = match[2] ?? "";
+      if (suffix === "schema") return route.fulfill({ json: {
+        asset_id: assetId,
+        catalog: "demo",
+        target: "demo.orders",
+        schema_version: 1,
+        schema_fingerprint: "orders-schema",
+        stable_field_ids: true,
+        supported_masks: ["null", "redact", "hash", "email", "keep_last", "default"],
+        fields: [{ field_id: 1, name: "order_id", human_path: "order_id", type: "string", nullable: false, kind: "scalar", path: { version: 1, segments: [{ kind: "field", name: "order_id", field_id: 1 }] } }],
+      } });
+      if (suffix === "grants") return route.fulfill({ json: [] });
+      if (suffix === "access") return route.fulfill({ json: { asset_id: assetId, principal: identity.principal, issuer: null, capabilities: [
+        { capability: "read", allowed: true, reasons: ["owner"] },
+        { capability: "edit", allowed: true, reasons: ["owner"] },
+        { capability: "publish", allowed: false, reasons: [] },
+        { capability: "grant", allowed: false, reasons: [] },
+      ] } });
+      if (suffix === "draft") return route.fulfill({ json: { id: null, asset_id: assetId, author_principal: identity.principal, revision: 0, base_policy_version: 1, rules: [], content_hash: "" } });
+      if (suffix === "policy-versions") return route.fulfill({ json: [] });
+      return route.fulfill({ json: detail });
+    }
+    return route.fulfill({ status: 404, json: { detail: "synthetic fixture route missing" } });
+  });
+}
