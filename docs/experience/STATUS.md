@@ -1476,6 +1476,12 @@ reports 31 diagnostics in examples, plugin test import environments, and
 loosely typed fixtures; R01/R08 remain ACTIVE until those packaging and test
 typing gaps are addressed.
 
+Follow-up tooling correction: the four plugin source roots now live in
+`[tool.ty.environment]` in `pyproject.toml`, and the pre-commit hook uses the
+plain `uv run ty check` command. The same repository-wide command now passes
+without command-line overrides. Atomic configuration commit: `2d7a906a
+build(typing): persist plugin search paths`.
+
 ## R01/R10 — VERIFY: repository-wide typing configuration (2026-09-22)
 
 Closed the remaining repository type diagnostics that were actionable in the
