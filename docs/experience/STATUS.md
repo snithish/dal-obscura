@@ -1078,3 +1078,23 @@ implementation commit: `33350015 test(ui): cover workspace publication
 lifecycle`. R08 remains ACTIVE pending live catalog/settings/access/audit and
 publication effects, real plugin lifecycle qualification, and production
 operations evidence.
+
+## R08 — ACTIVE: admitted plugin lifecycle journey (2026-09-21)
+
+Added a stateful plugin fixture and exercised the production Connections view
+through an administrator disabling a catalog adapter, revoking a table-format
+adapter, and confirming its retirement. The journey verifies lifecycle options
+follow the admitted state machine, every transition issues the typed PATCH
+request, refreshed cards show the returned state, and retirement requires an
+explicit confirmation. This remains synthetic browser evidence; it does not
+prove live plugin registry persistence, in-flight drain behavior, catalog
+retirement safety, or production process coordination.
+
+Proof: `tsc -b`, the focused plugin-lifecycle browser test, the full built
+browser suite (38 tests), the UI node suite (20 tests), Storybook browser tests
+(45 tests), production build, and bundle-budget gate pass. Measured budgets are
+163.10 KiB JS gzip, 38.01 KiB CSS gzip, and 83.72 KiB fonts. Atomic
+implementation commit: `8b8d830c test(ui): cover plugin lifecycle
+management`. R08 remains ACTIVE pending live settings/access/audit and
+publication effects, real plugin registry qualification, and production
+operations evidence.
