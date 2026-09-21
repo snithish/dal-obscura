@@ -406,3 +406,6 @@ secure-local/production architecture tests (6 passed), `ruff check`,
 `ty` hook remains blocked by 73 pre-existing diagnostics in unrelated demo,
 plugin, and application typing paths. R02 remains ACTIVE pending the full
 origin/header matrix and live local/Cloudflare SSO verification.
+
+Follow-up regression `dec4a450` proves a successful callback clears only the
+forwarded client bucket; it cannot reset the shared trusted-gateway budget.
