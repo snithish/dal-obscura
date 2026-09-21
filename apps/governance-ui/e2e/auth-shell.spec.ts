@@ -119,6 +119,28 @@ test("authenticated mobile navigation respects capabilities and restores focus",
   await expect(page.getByRole("dialog", { name: "Navigation" })).toHaveCount(0);
 });
 
+test("authenticated policy workspace stays within the page at supported sizes and zoom", async ({ page }) => {
+  await authenticatedApi(page);
+  for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1440, height: 900 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/#assets");
+    await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+    const dimensions = await page.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: document.documentElement.clientWidth,
+    }));
+    expect(dimensions.documentWidth, `${viewport.width}px page overflow`).toBeLessThanOrEqual(dimensions.viewportWidth + 1);
+  }
+
+  await page.evaluate(() => { document.body.style.zoom = "2"; });
+  const zoomedDimensions = await page.evaluate(() => ({
+    documentWidth: document.documentElement.scrollWidth,
+    viewportWidth: document.documentElement.clientWidth,
+  }));
+  expect(zoomedDimensions.documentWidth, "200% zoom page overflow").toBeLessThanOrEqual(zoomedDimensions.viewportWidth + 1);
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+});
+
 test("authenticated reader shell has no serious or critical accessibility violations", async ({ page }) => {
   await authenticatedApi(page);
   await page.goto("/#assets");
