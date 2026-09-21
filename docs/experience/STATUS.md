@@ -579,6 +579,19 @@ Proof: `pnpm check` and 37 Storybook browser tests pass. R08 remains ACTIVE
 pending live settings/access/audit journeys and authorized backend mutation
 evidence.
 
+## R07 — ACTIVE: semantic history diff (2026-09-21)
+
+The history workspace now compares the saved draft with a selected immutable
+policy revision. The diff is keyed by rule ordinal, normalizes set-like
+principals, columns, masks, and condition values, and reports added, removed,
+and changed rules without evaluating policy in the browser. The pure diff
+algorithm is isolated from JSX for direct unit coverage, while Storybook seeds
+the real history query client and renders the workflow without network access.
+
+Proof: `pnpm check`, 19 UI unit tests, 38 Storybook browser tests, `pnpm build`,
+and `pnpm build-storybook` pass. R07 remains ACTIVE pending the real
+author/reviewer/publisher, restore, and process-race journeys.
+
 ## R08 — ACTIVE: platform-admin lifecycle affordance boundary (2026-09-21)
 
 Disabled plugin lifecycle selectors and apply actions for non-platform-admin
