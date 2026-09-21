@@ -96,3 +96,17 @@ def test_ci_builds_scans_and_records_the_exact_ui_image() -> None:
     assert "Write candidate release manifest" in workflow
     assert "needs.ui-image.outputs.ui_digest" in workflow
     assert "actions/upload-artifact@v4" in workflow
+
+
+def test_ci_binds_published_candidates_to_attestations_and_lanes() -> None:
+    workflow = Path(".github/workflows/ci.yml").read_text()
+
+    assert "name: Verify pushed candidate attestations" in workflow
+    assert "docker buildx imagetools inspect" in workflow
+    assert "https://slsa.dev/provenance/v1" in workflow
+    assert "https://spdx.dev/Document" in workflow
+    assert "server_attestation_index_sha256" in workflow
+    assert "ui_attestation_index_sha256" in workflow
+    assert "workflow_run_id" in workflow
+    assert "mandatory_lanes" in workflow
+    assert "not-published-on-pull-request" in workflow

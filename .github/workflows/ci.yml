@@ -667,6 +667,31 @@ jobs:
           ${PROMOTION_TAGS}
           EOF
 
+      - name: Verify pushed candidate attestations
+        if: github.event_name != 'pull_request'
+        env:
+          SERVER_DIGEST: ${{ steps.image.outputs.digest }}
+          UI_DIGEST: ${{ needs.ui-image.outputs.ui_digest }}
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/release-manifest"
+          docker buildx imagetools inspect \
+            "${REGISTRY}/${IMAGE_NAME}@${SERVER_DIGEST}" --raw \
+            > "$RUNNER_TEMP/release-manifest/server-index.json"
+          docker buildx imagetools inspect \
+            "${REGISTRY}/${IMAGE_NAME}-ui@${UI_DIGEST}" --raw \
+            > "$RUNNER_TEMP/release-manifest/ui-index.json"
+          for index in \
+            "$RUNNER_TEMP/release-manifest/server-index.json" \
+            "$RUNNER_TEMP/release-manifest/ui-index.json"; do
+            grep -q 'https://slsa.dev/provenance/v1' "$index"
+            grep -q 'https://spdx.dev/Document' "$index"
+          done
+          sha256sum "$RUNNER_TEMP/release-manifest/server-index.json" \
+            > "$RUNNER_TEMP/release-manifest/server-index.json.sha256"
+          sha256sum "$RUNNER_TEMP/release-manifest/ui-index.json" \
+            > "$RUNNER_TEMP/release-manifest/ui-index.json.sha256"
+
       - name: Write candidate release manifest
         env:
           SERVER_DIGEST: ${{ steps.image.outputs.digest }}
@@ -675,16 +700,30 @@ jobs:
         run: |
           set -eu
           mkdir -p "$RUNNER_TEMP/release-manifest"
+          server_attestation_hash=not-published-on-pull-request
+          ui_attestation_hash=not-published-on-pull-request
+          attestation_status=not-published-on-pull-request
+          if [ -f "$RUNNER_TEMP/release-manifest/server-index.json.sha256" ]; then
+            server_attestation_hash=$(awk '{print $1}' "$RUNNER_TEMP/release-manifest/server-index.json.sha256")
+            ui_attestation_hash=$(awk '{print $1}' "$RUNNER_TEMP/release-manifest/ui-index.json.sha256")
+            attestation_status=verified-slsa-provenance-and-spdx-sbom
+          fi
           cat > "$RUNNER_TEMP/release-manifest/release.json" <<EOF
           {
             "schema_version": 1,
             "git_commit": "${GITHUB_SHA}",
+            "workflow_run_id": "${GITHUB_RUN_ID}",
+            "workflow_attempt": "${GITHUB_RUN_ATTEMPT}",
             "server_image_digest": "${SERVER_DIGEST}",
             "ui_image_digest": "${UI_DIGEST}",
             "plugin_lock_sha256": "${PLUGIN_LOCK_SHA256}",
             "tested_platforms": "${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}",
             "dependency_audit": "passed",
-            "image_scan": "passed"
+            "image_scan": "passed",
+            "attestation_status": "${attestation_status}",
+            "server_attestation_index_sha256": "${server_attestation_hash}",
+            "ui_attestation_index_sha256": "${ui_attestation_hash}",
+            "mandatory_lanes": "python-quality,python-contract-tests,python-integration-tests,postgres-race-tests,python-package,python-plugin-contract,python-plugin-integration,python-native-iceberg,dependency-audit,jvm,governance-ui,ui-image"
           }
           EOF
           sha256sum "$RUNNER_TEMP/release-manifest/release.json" > "$RUNNER_TEMP/release-manifest/release.json.sha256"
