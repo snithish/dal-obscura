@@ -167,7 +167,7 @@ const meta = {
   parameters: {
     docs: {
       description: {
-        component: "The production policy workspace with a nested struct schema, field-level access, DuckDB row filtering, masking, and a reviewable draft. It uses only deterministic fixtures; version loading and mutations stay out of Storybook.",
+        component: "The production policy workspace with a nested struct schema, field-level access, DuckDB row filtering, masking, a reviewable draft, and an immutable-history semantic diff. The diff compares saved rules by ordinal while normalizing set-like fields; it does not evaluate policy or replace server review. It uses only deterministic fixtures; version loading is seeded and mutations stay out of Storybook.",
       },
     },
   },
