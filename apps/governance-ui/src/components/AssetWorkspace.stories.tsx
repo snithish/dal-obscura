@@ -176,3 +176,12 @@ export const NestedPolicyDraft: Story = {
     await expect(canvas.getByRole("button", { name: "Save draft" })).toBeEnabled();
   },
 };
+
+export const SchemaUnavailable: Story = {
+  args: { asset: { ...asset, schema: undefined }, selectedField: "", rules: [], activeRule: undefined, selectedMask: undefined },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("Authoritative schema unavailable")).toBeVisible();
+    await expect(canvas.queryByRole("tree")).not.toBeInTheDocument();
+    await expect(canvas.getByText("No authoritative fields available")).toBeVisible();
+  },
+};
