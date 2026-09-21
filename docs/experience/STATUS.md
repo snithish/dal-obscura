@@ -868,3 +868,16 @@ Proof: TypeScript, the focused Settings-race browser test, and the full built
 browser suite (25 tests) pass. Atomic implementation commit: `ed83e65e
 test(ui): cover deferred settings responses`. R06 remains ACTIVE pending the
 remaining parameterized workflow matrix and live identity/provider qualification.
+
+## R06 — ACTIVE: deferred Connections response race (2026-09-21)
+
+Extended the authenticated administrator boundary with a held catalog response.
+The test navigates from Connections to Assets and back, verifies the fresh
+catalog card, then releases the original response and proves the stale card
+cannot replace the current page. Activity, Changes, Settings, and Connections
+now each have explicit deferred-response coverage.
+
+Proof: TypeScript, the focused Connections-race browser test, and the full built
+browser suite (26 tests) pass. Atomic implementation commit: `db290e8a
+test(ui): cover deferred connection responses`. R06 remains ACTIVE pending the
+remaining parameterized workflow matrix and live identity/provider qualification.
