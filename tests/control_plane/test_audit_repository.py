@@ -111,8 +111,8 @@ def test_scoped_audit_visibility_enforces_cell_and_tenant_context(db_session) ->
     )
     db_session.flush()
 
-    page = store.list_audit_events_page(
-        store.get_default_workspace_context(), principals={"shared-owner"}, limit=50
-    )
+    context = store.get_default_workspace_context()
+    assert context is not None
+    page = store.list_audit_events_page(context, principals={"shared-owner"}, limit=50)
 
     assert [item["action"] for item in page.items] == ["visible.action"]

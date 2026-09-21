@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from time import sleep
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from dal_obscura_iceberg_rest.catalog import RestCatalog, _snapshot_id
@@ -111,10 +112,10 @@ def test_rest_catalog_context_cancellation_is_fail_closed():
 def test_rest_catalog_requests_receive_deadline_bounded_timeout() -> None:
     from dal_obscura_iceberg_rest import catalog as module
 
-    calls: list[tuple[object, object]] = []
+    calls: list[tuple[tuple[float, float], object | None, bool]] = []
     session = SimpleNamespace()
 
-    def original_request(method, url, **kwargs):
+    def original_request(method: str, url: str, **kwargs: Any):
         calls.append((kwargs["timeout"], kwargs.get("headers"), kwargs["allow_redirects"]))
         return "ok"
 

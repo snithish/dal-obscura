@@ -10,6 +10,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from dal_obscura.common.config_store.db import create_engine_from_url, migrate_config_store
 from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.control_plane.interfaces import control_plane_cli
+from dal_obscura.data_plane.infrastructure.adapters.secret_providers import SecretProvider
 
 
 def test_control_plane_cli_starts_configured_app(monkeypatch, tmp_path) -> None:
@@ -117,7 +118,7 @@ def test_control_plane_cli_passes_configured_secret_provider(monkeypatch, tmp_pa
     monkeypatch.setattr(control_plane_cli.uvicorn, "run", lambda app, **kwargs: None)
 
     assert control_plane_cli.run(environment) == 0
-    provider = captured["secret_provider"]
+    provider = cast(SecretProvider, captured["secret_provider"])
     assert provider.get_secret("catalog-password") == "value"
 
 

@@ -159,7 +159,8 @@ def _workspace_state(fixture: dict[str, Any]) -> str:
     assets = _as_list(assets_response, "assets")
     if not isinstance(history_response, dict):
         raise RuntimeError("policy version history returned an unexpected response")
-    history = _as_list(history_response.get("items"), "policy version history")
+    history_payload = cast(dict[str, Any], history_response)
+    history = _as_list(history_payload.get("items"), "policy version history")
     asset_by_target = {
         (str(asset.get("catalog")), str(asset.get("target"))): asset for asset in assets
     }
@@ -297,21 +298,30 @@ def _promote_table(fixture: dict[str, Any], table_fixture: dict[str, Any]) -> st
         f"/v1/assets/{asset_id}/draft",
         {"expected_revision": 0, "rules": fixture["policies"]},
     )
-    if not isinstance(draft, dict) or not isinstance(draft.get("revision"), int):
+    if not isinstance(draft, dict):
+        raise RuntimeError("policy draft save returned an unexpected response")
+    draft_payload = cast(dict[str, Any], draft)
+    if not isinstance(draft_payload.get("revision"), int):
         raise RuntimeError("policy draft save returned an unexpected response")
     _request(
         "POST",
         f"/v1/assets/{asset_id}/policy-versions",
-        {"draft_id": draft.get("id"), "expected_draft_revision": draft["revision"]},
+        {
+            "draft_id": draft_payload.get("id"),
+            "expected_draft_revision": draft_payload["revision"],
+        },
     )
     return asset_id
 
 
 def _asset_revision(asset_id: str) -> int:
     asset = _request("GET", f"/v1/assets/{asset_id}")
-    if not isinstance(asset, dict) or not isinstance(asset.get("revision"), int):
+    if not isinstance(asset, dict):
         raise RuntimeError("asset lookup returned no revision")
-    return asset["revision"]
+    asset_payload = cast(dict[str, Any], asset)
+    if not isinstance(asset_payload.get("revision"), int):
+        raise RuntimeError("asset lookup returned no revision")
+    return asset_payload["revision"]
 
 
 def _scoped_demo_owners(raw_owners: object) -> list[str]:

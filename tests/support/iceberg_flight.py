@@ -52,7 +52,7 @@ def _dict(raw: object) -> dict[str, object]:
 def _catalog_type(raw_config: dict[str, Any]) -> CatalogType:
     raw_type = raw_config.get("type")
     if raw_type is not None:
-        return cast(CatalogType, str(raw_type))
+        return str(raw_type)
     module = str(raw_config.get("module", ""))
     if module == ICEBERG_CATALOG_MODULE:
         return "iceberg"

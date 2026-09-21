@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import replace
-from uuid import uuid4
+from typing import cast
+from uuid import UUID, uuid4
 
 import pyarrow as pa
 import pytest
@@ -23,6 +24,7 @@ from dal_obscura.common.config_store.orm import (
 from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
 from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 from dal_obscura.data_plane.infrastructure.adapters.published_config import (
+    CatalogRegistry,
     PublishedAsset,
     PublishedCatalog,
     PublishedConfigAuthorizer,
@@ -50,11 +52,14 @@ def test_published_registry_close_attempts_all_cached_generations_when_one_fails
             if self.name == "first":
                 raise RuntimeError("first generation close failed")
 
-    registry = PublishedConfigCatalogRegistry(object())
-    registry._registry_cache = {
-        (uuid4(), uuid4(), "analytics", "first"): FakeRegistry("first"),
-        (uuid4(), uuid4(), "analytics", "second"): FakeRegistry("second"),
-    }
+    registry = PublishedConfigCatalogRegistry(cast(PublishedConfigStore, object()))
+    registry._registry_cache = cast(
+        dict[tuple[UUID, UUID, str, str], CatalogRegistry],
+        {
+            (uuid4(), uuid4(), "analytics", "first"): FakeRegistry("first"),
+            (uuid4(), uuid4(), "analytics", "second"): FakeRegistry("second"),
+        },
+    )
 
     with pytest.raises(RuntimeError, match="first generation close failed"):
         registry.close()
