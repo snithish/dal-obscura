@@ -487,3 +487,15 @@ Proof: `pnpm check`, 16 UI unit tests, 33 Storybook browser tests, and the
 production build budget gate pass (161.79 KiB JS gzip, 37.89 KiB CSS gzip,
 83.72 KiB fonts); `pnpm build-storybook` also passes. R05/R08 remain ACTIVE pending real consumer endpoint runs,
 the complete administration journey, and live authorization evidence.
+
+## R04 — ACTIVE: focus and forced-colors fallback (2026-09-21)
+
+Aligned the legacy feature focus ring with the design system's 2px semantic
+focus token and added a forced-colors media fallback for controls, selected
+rows, status chips, notices, and selection contrast. This is a browser fallback
+for system high-contrast modes; it does not replace manual OS review.
+
+Proof: `pnpm check`, 33 Storybook tests, the production budget build (161.79 KiB
+JS gzip, 38.00 KiB CSS gzip, 83.72 KiB fonts), and 9 built-browser auth/design
+system tests pass. R04 remains ACTIVE pending rendered contrast matrix,
+responsive/zoom/forced-colors review, and owner visual approval.
