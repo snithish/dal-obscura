@@ -550,6 +550,13 @@ visible and inside the viewport at each size. The full built browser suite
 reports 12 passing tests; R04 remains ACTIVE pending manual visual, screen-reader,
 and authenticated workflow review.
 
+The reauthentication journey now also exercises the actual authenticated policy
+workspace in explicit dark and light themes. It verifies the Mantine scheme
+attribute and rendered `.studio` surface in both modes before releasing the
+held stale response. The full built browser suite remains at 12 passing tests;
+R04/R06 remain ACTIVE pending manual contrast/screen-reader review and live
+identity qualification.
+
 R05 workflow coverage also adds deterministic management loading and retry-error
 stories. They exercise the real `ManagementView` boundary, retain the retry
 callback, and keep server failure copy in an alert region. Storybook now reports
