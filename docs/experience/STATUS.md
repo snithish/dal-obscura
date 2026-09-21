@@ -387,3 +387,22 @@ enforcement, OS/theme override behavior, signed-out deep-link gating, keyboard
 focus, narrow viewport sign-in, and accessibility checks. These checks do not
 qualify live OIDC, Cloudflare Access, backend mutations, or production
 operations.
+
+## R02 — ACTIVE: trusted proxy login attribution (2026-09-21)
+
+Added an explicit trusted-proxy contract for browser login rate limiting. The
+control plane accepts a sanitized `X-Forwarded-For` client address only when
+the direct peer matches an operator-configured IP or CIDR. It also maintains a
+separate aggregate gateway budget so one tunnel user cannot exhaust every
+client bucket, while untrusted or malformed forwarding headers fall back to
+the direct peer. The UI NGINX boundary overwrites forwarding metadata rather
+than appending caller-controlled values. Production and secure-local examples
+document both settings, and architecture tests protect the forwarding and
+deployment contracts.
+
+Proof: focused OIDC/CLI tests (39 passed), the full control-plane suite,
+secure-local/production architecture tests (6 passed), `ruff check`,
+`ruff format --check`, and the non-heavy pre-commit suite pass. The repository
+`ty` hook remains blocked by 73 pre-existing diagnostics in unrelated demo,
+plugin, and application typing paths. R02 remains ACTIVE pending the full
+origin/header matrix and live local/Cloudflare SSO verification.
