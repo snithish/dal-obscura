@@ -530,6 +530,12 @@ sets the complete outline because Mantine inputs may reset the base outline.
 The built browser suite reports 10 passing tests; R04 remains ACTIVE pending
 manual OS contrast/zoom review and owner visual approval.
 
+R05 workflow coverage also adds deterministic management loading and retry-error
+stories. They exercise the real `ManagementView` boundary, retain the retry
+callback, and keep server failure copy in an alert region. Storybook now reports
+36 passing browser tests; R05 remains ACTIVE pending broader workflow breadth,
+manual accessibility review, and authenticated backend evidence.
+
 ## R08 — ACTIVE: platform-admin lifecycle affordance boundary (2026-09-21)
 
 Disabled plugin lifecycle selectors and apply actions for non-platform-admin
