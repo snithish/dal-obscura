@@ -708,3 +708,18 @@ Proof: `pnpm check` and the full built-browser suite pass with 15 tests. Atomic
 implementation commit: `7e7f4eda test(ui): cover deferred management responses`.
 R06 remains ACTIVE pending the broader parameterized workflow matrix and live
 identity/provider qualification.
+
+## R02/R06/R08 — ACTIVE: fail-closed reader admin deep links (2026-09-21)
+
+Authenticated readers who open `#connections` or `#settings` directly are now
+redirected to the Assets workspace before admin management requests are issued.
+The loader also guards the route independently, so a transient direct-link
+state cannot start a settings or connection fetch without the
+`workspace:admin` capability. A built-browser reader fixture proves the hash
+redirect and asserts that no `/v1/settings/*` request was sent; server
+authorization remains authoritative.
+
+Proof: `pnpm check` and the full built-browser suite pass with 16 tests. Atomic
+implementation commit: `0dd4754e fix(ui): fail closed on reader admin deep links`.
+R02/R06/R08 remain ACTIVE pending live identity qualification and authorized
+backend settings/access/audit journeys.
