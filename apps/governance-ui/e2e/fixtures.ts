@@ -46,7 +46,7 @@ export async function edgeChallengeApi(page: Page, options: EdgeChallengeOptions
  * This fixture proves browser composition and capability presentation only;
  * it is never evidence of a live identity provider or production backend.
  */
-export async function authenticatedApi(page: Page, options: { admin?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse; deferredSettings?: DeferredResponse; deferredConnections?: DeferredResponse; deferredInventory?: DeferredResponse } = {}) {
+export async function authenticatedApi(page: Page, options: { admin?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse; deferredSettings?: DeferredResponse; deferredConnections?: DeferredResponse; deferredInventory?: DeferredResponse; deferredVersion?: DeferredResponse } = {}) {
   const assetId = "00000000-0000-4000-8000-000000000001";
   const identity = {
     principal: "alex@example.invalid",
@@ -157,7 +157,26 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; d
         { capability: "grant", allowed: false, reasons: [] },
       ] } });
       if (suffix === "draft" || suffix.startsWith("draft/")) return route.fulfill({ json: { id: "current-draft", asset_id: assetId, author_principal: identity.principal, revision: 0, base_policy_version: 1, rules: [], content_hash: "" } });
-      if (suffix === "policy-versions") return route.fulfill({ json: [] });
+      if (suffix === "policy-versions") {
+        if (!options.deferredVersion) return route.fulfill({ json: [] });
+        return route.fulfill({ json: [
+          { asset_id: assetId, asset_name: "orders", catalog: "demo", target: "demo.orders", policy_version: 1, active: false, created_at: "2026-09-20T00:00:00Z" },
+          { asset_id: assetId, asset_name: "orders", catalog: "demo", target: "demo.orders", policy_version: 2, active: true, created_at: "2026-09-21T00:00:00Z" },
+        ] });
+      }
+      const versionMatch = suffix.match(/^policy-versions\/(\d+)$/);
+      if (versionMatch && options.deferredVersion) {
+        const version = Number(versionMatch[1]);
+        if (version === 1) {
+          options.deferredVersion.markStarted();
+          await options.deferredVersion.wait();
+        }
+        return route.fulfill({ json: {
+          asset_id: assetId,
+          policy_version: version,
+          rules: [{ ordinal: 10, effect: "allow", principals: [version === 1 ? "group:stale" : "group:fresh"], columns: ["order_id"], masks: {}, row_filter: null }],
+        } });
+      }
       return route.fulfill({ json: detail });
     }
     return route.fulfill({ status: 404, json: { detail: "synthetic fixture route missing" } });

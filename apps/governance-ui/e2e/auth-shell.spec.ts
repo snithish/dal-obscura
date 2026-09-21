@@ -265,6 +265,26 @@ test("late asset lookup responses cannot replace the current inventory", async (
   await expect(page.locator("#asset-select")).not.toContainText("demo / stale-orders");
 });
 
+test("late policy version lookups cannot replace the selected revision", async ({ page }) => {
+  const deferredVersion = deferredResponse();
+  await authenticatedApi(page, { deferredVersion });
+  await page.goto("/#assets");
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  await page.getByRole("tab", { name: "History" }).click();
+  await expect(page.getByRole("heading", { name: "Published policy revisions" })).toBeVisible();
+
+  await page.getByRole("button", { name: "View details" }).nth(0).click();
+  await deferredVersion.started;
+  await page.getByRole("button", { name: "View details" }).nth(1).click();
+  await expect(page.getByRole("heading", { name: "Version 2 details" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "group:fresh" })).toBeVisible();
+
+  deferredVersion.release();
+  await expect(page.getByRole("heading", { name: "Version 2 details" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "group:fresh" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "group:stale" })).toHaveCount(0);
+});
+
 test("reader deep links fail closed before admin settings requests", async ({ page }) => {
   const adminRequests: string[] = [];
   page.on("request", (request) => {
