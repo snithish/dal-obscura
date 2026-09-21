@@ -377,3 +377,13 @@ Proof: `pnpm check`, `pnpm build`, `pnpm test:stories`, and
 `pnpm build-storybook` pass; the Storybook browser suite reports 9 files and
 31 tests. R07 remains ACTIVE pending real author/reviewer/publisher and
 restore qualification.
+
+## R04/R05/R06 — ACTIVE: final shell regression evidence (2026-09-21)
+
+Re-ran the UI unit suite and built-shell browser boundary checks after the
+workflow coverage slices. The unit suite reports 16 passing tests. Playwright
+reports 8 passing auth-shell/design-system tests, including CSP nonce
+enforcement, OS/theme override behavior, signed-out deep-link gating, keyboard
+focus, narrow viewport sign-in, and accessibility checks. These checks do not
+qualify live OIDC, Cloudflare Access, backend mutations, or production
+operations.
