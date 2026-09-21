@@ -119,6 +119,17 @@ test("authenticated mobile navigation respects capabilities and restores focus",
   await expect(page.getByRole("dialog", { name: "Navigation" })).toHaveCount(0);
 });
 
+test("administrator management routes load through the authenticated shell", async ({ page }) => {
+  await authenticatedApi(page, { admin: true });
+  await page.goto("/#connections");
+
+  await expect(page.getByRole("heading", { name: "Catalog connections" })).toBeVisible();
+  await expect(page.getByText("No catalogs configured")).toBeVisible();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await expect(page.getByRole("heading", { name: "Runtime and identity" })).toBeVisible();
+  await expect(page.getByText("No identity providers configured.")).toBeVisible();
+});
+
 test("mutation HTML challenges clear private workspace state", async ({ page }) => {
   await authenticatedApi(page);
   await page.goto("/#assets");

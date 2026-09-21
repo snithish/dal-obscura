@@ -46,13 +46,13 @@ export async function edgeChallengeApi(page: Page, options: EdgeChallengeOptions
  * This fixture proves browser composition and capability presentation only;
  * it is never evidence of a live identity provider or production backend.
  */
-export async function authenticatedApi(page: Page, options: { deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse } = {}) {
+export async function authenticatedApi(page: Page, options: { admin?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse } = {}) {
   const assetId = "00000000-0000-4000-8000-000000000001";
   const identity = {
     principal: "alex@example.invalid",
     groups: ["analysts"],
-    platform_admin: false,
-    capabilities: ["asset:read", "asset:edit"],
+    platform_admin: Boolean(options.admin),
+    capabilities: options.admin ? ["asset:read", "asset:edit", "workspace:admin"] : ["asset:read", "asset:edit"],
   };
   const inventory = {
     id: assetId,
@@ -102,6 +102,12 @@ export async function authenticatedApi(page: Page, options: { deferredAudit?: De
     }
     if (path === "/v1/workspace/summary") return route.fulfill({ json: { asset_count: 1, catalog_count: 1, draft_change_count: 0, enabled_auth_provider_count: 1, missing_policy_count: 0, runtime_configured: true, unowned_asset_count: 0 } });
     if (path === "/v1/workspace/observations") return route.fulfill({ json: { available: true, data_plane: { status: "ready", reason: "synthetic fixture" }, generation: null, observed_at: "2026-09-21T00:00:00Z", source: "synthetic fixture" } });
+    if (options.admin && path === "/v1/plugins") return route.fulfill({ json: { plugins: [], states: [], pairs: [] } });
+    if (options.admin && path === "/v1/catalogs") return route.fulfill({ json: [] });
+    if (options.admin && path === "/v1/workspace/publications") return route.fulfill({ json: [] });
+    if (options.admin && path === "/v1/settings/runtime") return route.fulfill({ json: null });
+    if (options.admin && path === "/v1/settings/auth-providers") return route.fulfill({ json: [] });
+    if (options.admin && path === "/v1/settings/auth-providers/revision") return route.fulfill({ json: { revision: 0 } });
     const match = path.match(/^\/v1\/assets\/([^/]+)(?:\/(.*))?$/);
     if (match && match[1] === assetId) {
       const suffix = match[2] ?? "";
