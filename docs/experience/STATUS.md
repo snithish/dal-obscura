@@ -1396,3 +1396,16 @@ immutable rule details were shown together. The regions now have distinct
 accessible names, and the complete Storybook behavior suite reports 46 passed
 tests. Atomic correction commit: `16cfcb9f fix(ui): disambiguate table
 landmarks`.
+
+## R08 — ACTIVE: discovered table identity preservation (2026-09-22)
+
+Hardened the catalog workflow to accept the canonical `table_identifier` and
+common `identifier`/`target` aliases from admitted discovery adapters. Governing
+now sends the complete stable identifier to the control plane and uses it for
+row keys, avoiding namespace truncation and duplicate-name reconciliation bugs.
+
+Proof: the focused administrator catalog journey captures the PUT request and
+asserts `table_identifier: demo.orders`; TypeScript passes. Atomic implementation
+commit: `38225652 fix(ui): preserve discovered table identifiers`. R08 remains
+ACTIVE pending live catalog credentials, backend mutation effects, and the full
+administration qualification journey.
