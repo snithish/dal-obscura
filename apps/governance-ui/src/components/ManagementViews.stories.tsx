@@ -109,6 +109,9 @@ export const FilteredAuditPagination: Story = {
   },
   play: async ({ canvas, args }) => {
     await userEvent.type(canvas.getByPlaceholderText("platform:admin"), "user:admin@example.com");
+    await expect(canvas.getByRole("option", { name: "Catalog" })).toBeVisible();
+    await expect(canvas.getByRole("option", { name: "Plugin" })).toBeVisible();
+    await expect(canvas.getByRole("option", { name: "Publication" })).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "Apply filters" }));
     await expect(args.onFiltersChange).toHaveBeenCalledWith({ actor: "user:admin@example.com" });
     await expect(canvas.getByRole("button", { name: "Load more activity" })).toBeVisible();
