@@ -46,7 +46,7 @@ export async function edgeChallengeApi(page: Page, options: EdgeChallengeOptions
  * This fixture proves browser composition and capability presentation only;
  * it is never evidence of a live identity provider or production backend.
  */
-export async function authenticatedApi(page: Page, options: { deferredAudit?: DeferredResponse } = {}) {
+export async function authenticatedApi(page: Page, options: { deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse } = {}) {
   const assetId = "00000000-0000-4000-8000-000000000001";
   const identity = {
     principal: "alex@example.invalid",
@@ -75,6 +75,7 @@ export async function authenticatedApi(page: Page, options: { deferredAudit?: De
     schema_fields: [{ name: "order_id", type: "string", nullable: false }],
   };
   let auditCalls = 0;
+  let historyCalls = 0;
   await page.route("**/v1/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -89,7 +90,16 @@ export async function authenticatedApi(page: Page, options: { deferredAudit?: De
       const action = auditCalls === 1 ? "stale-audit" : "fresh-audit";
       return route.fulfill({ json: { items: [{ id: `event-${auditCalls}`, actor: "alex@example.invalid", action, resource_type: "workspace", resource_id: "workspace", outcome: "success", details: {}, correlation_id: null, created_at: "2026-09-21T00:00:00Z" }], next_cursor: null } });
     }
-    if (path === "/v1/policy-versions/page") return route.fulfill({ json: { items: [], next_cursor: null } });
+    if (path === "/v1/policy-versions/page") {
+      historyCalls += 1;
+      if (historyCalls === 1 && options.deferredHistory) {
+        options.deferredHistory.markStarted();
+        await options.deferredHistory.wait();
+      }
+      if (!options.deferredHistory) return route.fulfill({ json: { items: [], next_cursor: null } });
+      const assetName = historyCalls === 1 ? "stale-history" : "fresh-history";
+      return route.fulfill({ json: { items: [{ asset_id: assetId, asset_name: assetName, catalog: "demo", target: "demo.orders", policy_version: historyCalls, active: true, created_at: "2026-09-21T00:00:00Z" }], next_cursor: null } });
+    }
     if (path === "/v1/workspace/summary") return route.fulfill({ json: { asset_count: 1, catalog_count: 1, draft_change_count: 0, enabled_auth_provider_count: 1, missing_policy_count: 0, runtime_configured: true, unowned_asset_count: 0 } });
     if (path === "/v1/workspace/observations") return route.fulfill({ json: { available: true, data_plane: { status: "ready", reason: "synthetic fixture" }, generation: null, observed_at: "2026-09-21T00:00:00Z", source: "synthetic fixture" } });
     const match = path.match(/^\/v1\/assets\/([^/]+)(?:\/(.*))?$/);

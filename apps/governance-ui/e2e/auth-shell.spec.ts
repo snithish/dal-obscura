@@ -163,6 +163,23 @@ test("late management responses cannot replace the current page", async ({ page 
   await expect(page.getByText("stale-audit")).toHaveCount(0);
 });
 
+test("late history responses cannot replace the current changes page", async ({ page }) => {
+  const deferredHistory = deferredResponse();
+  await authenticatedApi(page, { deferredHistory });
+  await page.goto("/#changes");
+  await deferredHistory.started;
+
+  await page.getByRole("button", { name: "Activity" }).click();
+  await expect(page.getByRole("heading", { name: "Workspace status" })).toBeVisible();
+  await page.getByRole("button", { name: "Changes" }).click();
+  await expect(page.getByRole("heading", { name: "Published policy history" })).toBeVisible();
+  await expect(page.getByText("fresh-history")).toBeVisible();
+
+  deferredHistory.release();
+  await expect(page.getByText("fresh-history")).toBeVisible();
+  await expect(page.getByText("stale-history")).toHaveCount(0);
+});
+
 test("reader deep links fail closed before admin settings requests", async ({ page }) => {
   const adminRequests: string[] = [];
   page.on("request", (request) => {
