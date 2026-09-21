@@ -124,7 +124,12 @@ those remote resources. Do not automatically recreate a missing Access policy.
 - Solve client rate-limit attribution at that trusted boundary. Current direct
   peer keys will group all tunnel users. Accept a sanitized client address only
   from a configured trusted gateway; keep a bounded aggregate limiter as well.
-  Different users cannot lock everyone out, and spoofed headers cannot evade limits.
+  Different users cannot lock everyone out, and spoofed headers cannot evade
+  limits. Configure `DAL_OBSCURA_CONTROL_PLANE_TRUSTED_PROXY_PEERS` with exact
+  gateway IPs/CIDRs; an empty value keeps all forwarded headers untrusted.
+  `DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_AGGREGATE_ATTEMPTS` bounds the
+  shared gateway budget. The UI NGINX boundary overwrites `X-Forwarded-For`
+  rather than appending caller-supplied values.
 - Use connector Access JWT enforcement with exact audience and expiry checking.
   The isolated origin still performs app auth. No bypass rule for /v1 or /auth;
   a normal authorized browser callback must pass the edge gate. Keep Access

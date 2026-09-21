@@ -54,6 +54,10 @@ def test_production_reference_contains_immutable_and_private_topology() -> None:
     assert "DAL_OBSCURA_PLUGIN_LOCK_FILE" in env_example
     assert "DAL_OBSCURA_PLUGIN_LOCK_FILE" in control_block
     assert "DAL_OBSCURA_PLUGIN_LOCK_FILE" in data_block
+    assert "DAL_OBSCURA_CONTROL_PLANE_TRUSTED_PROXY_PEERS" in env_example
+    assert "DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_AGGREGATE_ATTEMPTS" in env_example
+    assert "DAL_OBSCURA_CONTROL_PLANE_TRUSTED_PROXY_PEERS" in control_block
+    assert "DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_AGGREGATE_ATTEMPTS" in control_block
     assert "DAL_OBSCURA_SECRET_PROVIDER_CONFIG" in env_example
     assert "DAL_OBSCURA_SECRET_PROVIDER_CONFIG" in control_block
     assert "DAL_OBSCURA_SECRET_PROVIDER_CONFIG" in data_block

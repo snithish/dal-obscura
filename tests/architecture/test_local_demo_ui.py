@@ -19,6 +19,9 @@ def test_keycloak_demo_builds_the_governance_ui_and_proxies_api_same_origin() ->
     assert "nginxinc/nginx-unprivileged:1.27-alpine" in dockerfile
     assert "location /v1/" in nginx
     assert "proxy_pass http://control-plane:8820" in nginx
+    assert "proxy_set_header X-Forwarded-For $remote_addr;" in nginx
+    assert "proxy_set_header X-Forwarded-Host $host;" in nginx
+    assert "proxy_add_x_forwarded_for" not in nginx
     assert "Content-Security-Policy" in nginx
     assert "location /assets/" in nginx
     assert "try_files $uri =404" in nginx

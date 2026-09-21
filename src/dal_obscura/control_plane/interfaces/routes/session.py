@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import ipaddress
 import secrets
 from collections.abc import Mapping
 from typing import NoReturn
@@ -131,7 +132,8 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         if actor is None:
             _callback_failure(deps, request, status_code=401, detail="OIDC ID token was rejected")
         session_token, csrf_token = deps.issue_browser_session_credentials(actor)
-        deps.clear_login_rate_limit(_client_rate_key(request))
+        client_key, _aggregate_key = _login_rate_keys(deps, request)
+        deps.clear_login_rate_limit(client_key)
         result = RedirectResponse(_post_login_redirect(config, redirect_uri), status_code=303)
         result.headers["cache-control"] = "no-store"
         session_cookie, csrf_cookie = _browser_cookie_names(config)
@@ -196,7 +198,8 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             raise HTTPException(status_code=404, detail="Local bootstrap login is disabled")
         _enforce_login_rate_limit(deps, request)
         if authorization != f"Bearer {deps.admin_token}":
-            decision = deps.record_login_failure(_client_rate_key(request))
+            client_key, aggregate_key = _login_rate_keys(deps, request)
+            decision = deps.record_login_failure(client_key, aggregate_key=aggregate_key)
             if not decision.allowed:
                 raise HTTPException(
                     status_code=429,
@@ -206,7 +209,8 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             raise HTTPException(status_code=401, detail="Invalid bootstrap credential")
         actor = ControlPlaneActor.for_platform_admin("platform:admin")
         session_token, csrf_token = deps.issue_browser_session_credentials(actor)
-        deps.clear_login_rate_limit(_client_rate_key(request))
+        client_key, _aggregate_key = _login_rate_keys(deps, request)
+        deps.clear_login_rate_limit(client_key)
         config = dict(deps.ui_auth_config or {})
         session_cookie, csrf_cookie = _browser_cookie_names(config)
         secure = _secure_cookie(config)
@@ -351,15 +355,53 @@ def _post_login_redirect(config: dict[str, object], redirect_uri: str) -> str:
     return urlunsplit((callback.scheme, callback.netloc, "/", "", ""))
 
 
-def _client_rate_key(request: Request) -> str:
-    """Returns a direct connection key; forwarded headers are never trusted."""
+def _rate_key_for_request(
+    request: Request,
+    trusted_proxy_peers: tuple[str, ...],
+) -> tuple[str, str | None]:
+    """Return client and optional aggregate keys under an explicit proxy contract."""
 
     client = request.client
-    return client.host if client is not None and client.host else "unknown"
+    direct_peer = client.host if client is not None and client.host else "unknown"
+    client_address = direct_peer
+    aggregate_key = None
+    if _peer_matches_networks(direct_peer, trusted_proxy_peers):
+        forwarded = request.headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
+        if _is_ip_address(forwarded):
+            client_address = forwarded
+            aggregate_key = f"aggregate:{direct_peer}"
+    return f"client:{client_address}", aggregate_key
+
+
+def _login_rate_keys(deps: ControlPlaneDeps, request: Request) -> tuple[str, str | None]:
+    return _rate_key_for_request(request, deps.trusted_proxy_peers)
+
+
+def _peer_matches_networks(peer: str, configured: tuple[str, ...]) -> bool:
+    if not configured or not _is_ip_address(peer):
+        return False
+    address = ipaddress.ip_address(peer)
+    for value in configured:
+        try:
+            network = ipaddress.ip_network(value, strict=False)
+        except ValueError:
+            continue
+        if address in network:
+            return True
+    return False
+
+
+def _is_ip_address(value: str) -> bool:
+    try:
+        ipaddress.ip_address(value)
+    except ValueError:
+        return False
+    return True
 
 
 def _enforce_login_rate_limit(deps: ControlPlaneDeps, request: Request) -> None:
-    decision = deps.check_login_rate_limit(_client_rate_key(request))
+    client_key, aggregate_key = _login_rate_keys(deps, request)
+    decision = deps.check_login_rate_limit(client_key, aggregate_key=aggregate_key)
     if decision.allowed:
         return
     raise HTTPException(
@@ -376,7 +418,8 @@ def _callback_failure(
     status_code: int,
     detail: str,
 ) -> NoReturn:
-    decision = deps.record_login_failure(_client_rate_key(request))
+    client_key, aggregate_key = _login_rate_keys(deps, request)
+    decision = deps.record_login_failure(client_key, aggregate_key=aggregate_key)
     if not decision.allowed:
         raise HTTPException(
             status_code=429,

@@ -118,6 +118,16 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
                 values.get("DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_BLOCK_SECONDS", "300"),
                 "DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_BLOCK_SECONDS",
             ),
+            login_rate_limit_aggregate_attempts=_positive_int(
+                values.get(
+                    "DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_AGGREGATE_ATTEMPTS",
+                    "200",
+                ),
+                "DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_AGGREGATE_ATTEMPTS",
+            ),
+            trusted_proxy_peers=_csv(
+                values.get("DAL_OBSCURA_CONTROL_PLANE_TRUSTED_PROXY_PEERS", "")
+            ),
             plugin_registry=plugin_registry,
             secret_provider=secret_provider,
         )

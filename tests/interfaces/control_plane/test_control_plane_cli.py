@@ -45,6 +45,8 @@ def test_control_plane_cli_passes_login_rate_limits(monkeypatch, tmp_path) -> No
         "DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_ATTEMPTS": "5",
         "DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_WINDOW_SECONDS": "120",
         "DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_BLOCK_SECONDS": "42",
+        "DAL_OBSCURA_CONTROL_PLANE_LOGIN_RATE_LIMIT_AGGREGATE_ATTEMPTS": "77",
+        "DAL_OBSCURA_CONTROL_PLANE_TRUSTED_PROXY_PEERS": "10.0.0.8/32, 10.0.0.9",
     }
 
     monkeypatch.setattr(
@@ -58,6 +60,8 @@ def test_control_plane_cli_passes_login_rate_limits(monkeypatch, tmp_path) -> No
     assert captured["login_rate_limit_attempts"] == 5
     assert captured["login_rate_limit_window_seconds"] == 120
     assert captured["login_rate_limit_block_seconds"] == 42
+    assert captured["login_rate_limit_aggregate_attempts"] == 77
+    assert captured["trusted_proxy_peers"] == ("10.0.0.8/32", "10.0.0.9")
     assert captured["cors_origins"] == ("http://127.0.0.1:5173", "http://localhost:5173")
     registry = cast(PluginRegistry, captured["plugin_registry"])
     assert ("catalog", "iceberg.sql") in registry.admitted()

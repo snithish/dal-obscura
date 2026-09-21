@@ -204,6 +204,8 @@ def create_app(  # noqa: C901
     login_rate_limit_attempts: int = 20,
     login_rate_limit_window_seconds: int = 60,
     login_rate_limit_block_seconds: int = 300,
+    login_rate_limit_aggregate_attempts: int = 200,
+    trusted_proxy_peers: tuple[str, ...] = (),
     plugin_registry: PluginRegistry | None = None,
     secret_provider: SecretProvider | None = None,
 ) -> FastAPI:
@@ -221,6 +223,7 @@ def create_app(  # noqa: C901
         login_rate_limit_attempts <= 0
         or login_rate_limit_window_seconds <= 0
         or login_rate_limit_block_seconds <= 0
+        or login_rate_limit_aggregate_attempts <= 0
     ):
         raise ValueError("login rate-limit values must be positive")
 
@@ -392,6 +395,8 @@ def create_app(  # noqa: C901
         login_rate_limit_attempts=login_rate_limit_attempts,
         login_rate_limit_window_seconds=login_rate_limit_window_seconds,
         login_rate_limit_block_seconds=login_rate_limit_block_seconds,
+        login_rate_limit_aggregate_attempts=login_rate_limit_aggregate_attempts,
+        trusted_proxy_peers=trusted_proxy_peers,
         authorization_code_exchange=(
             authorization_code_exchange
             or (lambda config, code, verifier: _exchange_authorization_code(config, code, verifier))

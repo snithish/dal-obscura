@@ -3,7 +3,7 @@ from __future__ import annotations
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from fastapi.testclient import TestClient
 
 from dal_obscura.common.config_store.db import (
@@ -13,6 +13,7 @@ from dal_obscura.common.config_store.db import (
 )
 from dal_obscura.control_plane.interfaces import api as api_module
 from dal_obscura.control_plane.interfaces.api import create_app
+from dal_obscura.control_plane.interfaces.routes import session as session_routes
 from dal_obscura.control_plane.interfaces.routes.session import _post_login_redirect
 from dal_obscura.control_plane.interfaces.session_api import exchange_authorization_code
 
@@ -129,6 +130,72 @@ def test_oidc_login_is_bounded_per_client_and_returns_retry_after() -> None:
     assert blocked_payload["detail"] == "Login temporarily unavailable"
     assert blocked_payload["error"]["code"] == "rate_limited"
     assert blocked_payload["error"]["request_id"]
+
+
+def _request_with_peer(peer: str, forwarded: str | None = None) -> Request:
+    headers = [] if forwarded is None else [(b"x-forwarded-for", forwarded.encode())]
+    return Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/auth/login",
+            "headers": headers,
+            "client": (peer, 443),
+            "scheme": "https",
+            "server": ("gateway.example", 443),
+        }
+    )
+
+
+def test_forwarded_login_rate_identity_requires_configured_proxy_peer() -> None:
+    trusted = _request_with_peer("10.0.0.8", "198.51.100.7")
+    spoofed = _request_with_peer("198.51.100.8", "198.51.100.7")
+    malformed = _request_with_peer("10.0.0.8", "not-an-ip")
+
+    assert session_routes._rate_key_for_request(trusted, ("10.0.0.8/32",)) == (
+        "client:198.51.100.7",
+        "aggregate:10.0.0.8",
+    )
+    assert session_routes._rate_key_for_request(spoofed, ("10.0.0.8/32",)) == (
+        "client:198.51.100.8",
+        None,
+    )
+    assert session_routes._rate_key_for_request(malformed, ("10.0.0.8/32",)) == (
+        "client:10.0.0.8",
+        None,
+    )
+
+
+def test_trusted_gateway_keeps_per_client_and_aggregate_login_budgets() -> None:
+    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+    migrate_config_store(engine)
+    app = create_app(
+        session_factory(engine),
+        admin_token="test-admin",
+        ui_auth_config={
+            "authority": "https://issuer.example/realms/demo",
+            "client_id": "dal-obscura-ui",
+            "redirect_uri": "http://testserver/auth/callback",
+        },
+        login_rate_limit_attempts=10,
+        login_rate_limit_aggregate_attempts=1,
+        trusted_proxy_peers=("10.0.0.8/32",),
+    )
+    first_client = TestClient(
+        app,
+        client=("10.0.0.8", 443),
+        headers={"x-forwarded-for": "198.51.100.7"},
+    )
+    second_client = TestClient(
+        app,
+        client=("10.0.0.8", 443),
+        headers={"x-forwarded-for": "198.51.100.8"},
+    )
+
+    assert first_client.get("/auth/login", follow_redirects=False).status_code == 303
+    blocked = second_client.get("/auth/login", follow_redirects=False)
+
+    assert blocked.status_code == 429
 
 
 def test_successful_oidc_callback_clears_client_login_limit(monkeypatch) -> None:

@@ -14,6 +14,7 @@ Example:
 
 from __future__ import annotations
 
+import ipaddress
 import secrets
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -78,6 +79,8 @@ class ControlPlaneDeps:
     login_rate_limit_attempts: int = 20
     login_rate_limit_window_seconds: int = 60
     login_rate_limit_block_seconds: int = 300
+    login_rate_limit_aggregate_attempts: int = 200
+    trusted_proxy_peers: tuple[str, ...] = ()
     plugin_registry: PluginRegistry | None = None
     secret_provider: SecretProvider | None = None
 
@@ -88,6 +91,10 @@ class ControlPlaneDeps:
             raise ValueError("idle session TTL must be between 1 second and 2 hours")
         if self.session_idle_ttl_seconds > self.session_ttl_seconds:
             raise ValueError("idle session TTL cannot exceed session TTL")
+        if self.login_rate_limit_aggregate_attempts <= 0:
+            raise ValueError("aggregate login rate-limit attempts must be positive")
+        for peer in self.trusted_proxy_peers:
+            _parse_proxy_network(peer)
 
     def require_actor(
         self,
@@ -225,29 +232,55 @@ class ControlPlaneDeps:
             )
             session.commit()
 
-    def check_login_rate_limit(self, client_key: str) -> LoginRateLimitDecision:
+    def check_login_rate_limit(
+        self,
+        client_key: str,
+        *,
+        aggregate_key: str | None = None,
+    ) -> LoginRateLimitDecision:
         """Records a login start and returns the generic admission decision."""
 
         with self.session_maker() as session:
-            decision = LoginRateLimiter(session).allow(
+            limiter = LoginRateLimiter(session)
+            decision = limiter.allow(
                 client_key,
                 max_attempts=self.login_rate_limit_attempts,
                 window_seconds=self.login_rate_limit_window_seconds,
                 block_seconds=self.login_rate_limit_block_seconds,
             )
+            if decision.allowed and aggregate_key and aggregate_key != client_key:
+                decision = limiter.allow(
+                    aggregate_key,
+                    max_attempts=self.login_rate_limit_aggregate_attempts,
+                    window_seconds=self.login_rate_limit_window_seconds,
+                    block_seconds=self.login_rate_limit_block_seconds,
+                )
             session.commit()
             return decision
 
-    def record_login_failure(self, client_key: str) -> LoginRateLimitDecision:
+    def record_login_failure(
+        self,
+        client_key: str,
+        *,
+        aggregate_key: str | None = None,
+    ) -> LoginRateLimitDecision:
         """Records a failed callback using the same durable client window."""
 
         with self.session_maker() as session:
-            decision = LoginRateLimiter(session).record_failure(
+            limiter = LoginRateLimiter(session)
+            decision = limiter.record_failure(
                 client_key,
                 max_attempts=self.login_rate_limit_attempts,
                 window_seconds=self.login_rate_limit_window_seconds,
                 block_seconds=self.login_rate_limit_block_seconds,
             )
+            if decision.allowed and aggregate_key and aggregate_key != client_key:
+                decision = limiter.record_failure(
+                    aggregate_key,
+                    max_attempts=self.login_rate_limit_aggregate_attempts,
+                    window_seconds=self.login_rate_limit_window_seconds,
+                    block_seconds=self.login_rate_limit_block_seconds,
+                )
             session.commit()
             return decision
 
@@ -390,3 +423,15 @@ def _canonical_origin(value: str) -> str | None:
         host = f"[{host}]"
     default_port = (scheme == "http" and port == 80) or (scheme == "https" and port == 443)
     return f"{scheme}://{host}{'' if port is None or default_port else f':{port}'}"
+
+
+def _parse_proxy_network(value: str) -> ipaddress.IPv4Network | ipaddress.IPv6Network:
+    """Parse an operator-configured proxy peer without DNS resolution."""
+
+    text = value.strip()
+    try:
+        if "/" in text:
+            return ipaddress.ip_network(text, strict=False)
+        return ipaddress.ip_network(f"{text}/32" if ":" not in text else f"{text}/128")
+    except ValueError as exc:
+        raise ValueError(f"trusted proxy peer must be an IP address or CIDR: {value!r}") from exc
