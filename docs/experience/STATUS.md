@@ -505,6 +505,11 @@ the focused named-tunnel/local-parity tests pass. R03 remains ACTIVE pending an
 authorized named tunnel, real Access allow/deny probes, and local/edge SSO
 evidence.
 
+The Python contract CI job now renders production, secure-local, and named-
+tunnel overlays with their checked-in example environments before running
+contract tests. Atomic CI commit: `7d5c1b3a ci(deployment): render all profile
+overlays`.
+
 ## R05/R08 — ACTIVE: consumer handoff clipboard recovery (2026-09-21)
 
 Consumer snippets in the real `AssetWorkspace` now expose a visible retry and
