@@ -536,6 +536,18 @@ callback, and keep server failure copy in an alert region. Storybook now reports
 36 passing browser tests; R05 remains ACTIVE pending broader workflow breadth,
 manual accessibility review, and authenticated backend evidence.
 
+## R02/R07 — ACTIVE: encoded asset route segments (2026-09-21)
+
+Centralized browser API construction for asset-scoped routes through an encoded
+path-segment helper. Asset IDs containing slashes, query delimiters, or dot
+segments can no longer change the request route shape; ordinary UUIDs are
+unchanged. The helper is covered by unit cases for normal, traversal-shaped,
+and query-shaped identifiers.
+
+Proof: `pnpm check` and 17 UI unit tests pass. This hardens the client boundary;
+server authorization and live hostile-destination qualification remain open in
+R02/R10.
+
 ## R08 — ACTIVE: platform-admin lifecycle affordance boundary (2026-09-21)
 
 Disabled plugin lifecycle selectors and apply actions for non-platform-admin
