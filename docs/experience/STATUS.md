@@ -1029,3 +1029,17 @@ browser suite (35 tests), the UI node suite (20 tests), Storybook browser tests
 implementation commit: `c528c944 fix(ui): preserve management views during
 refresh`. R08 remains ACTIVE pending live settings/access/audit requests,
 backend authorization effects, and production qualification.
+
+## R02/R03/R08/R10 — ACTIVE: local backend regression qualification (2026-09-21)
+
+Re-ran the repository's local end-to-end smoke, control-plane authentication,
+UI shell, secure-local parity, secure-local architecture, and named-tunnel
+architecture suites. The full Python suite also completed successfully; skipped
+cases remain reported by pytest and are not treated as proof of live providers,
+Cloudflare Access, PostgreSQL process races, or consumer qualification.
+
+Proof: `uv run pytest tests/test_e2e_smoke.py -q` passes; the focused auth/local
+profile selection passes; and `uv run pytest -q` completes at 100% with exit 0.
+This strengthens local contract evidence only. R02/R03/R08/R10 remain ACTIVE
+pending real IdP/edge allow-deny, live backend mutation, PostgreSQL/process,
+consumer, and production operations evidence.
