@@ -190,6 +190,16 @@ test("administrator management screens stay within the page at supported sizes",
       expect(dimensions.documentWidth, `${hash} at ${viewport.width}px page overflow`).toBeLessThanOrEqual(dimensions.viewportWidth + 1);
     }
   }
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/#activity");
+  await page.evaluate(() => { document.body.style.zoom = "2"; });
+  const zoomedDimensions = await page.evaluate(() => ({
+    documentWidth: document.documentElement.scrollWidth,
+    viewportWidth: document.documentElement.clientWidth,
+  }));
+  expect(zoomedDimensions.documentWidth, "administrator activity at 200% zoom page overflow").toBeLessThanOrEqual(zoomedDimensions.viewportWidth + 1);
+  await expect(page.getByRole("heading", { name: "Workspace status" })).toBeVisible();
 });
 
 test("authenticated reader shell has no serious or critical accessibility violations", async ({ page }) => {
