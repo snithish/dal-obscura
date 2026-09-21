@@ -223,3 +223,16 @@ Proof: `pnpm check`, `pnpm build`, `pnpm test`, and `pnpm test:stories` pass;
 the Storybook browser suite reports 8 files and 20 tests. R07 remains ACTIVE:
 the real author/reviewer/publisher journey, stale-link qualification, restore,
 and process races still require backend evidence.
+
+## R07 — ACTIVE: exact draft-revision review links (2026-09-21)
+
+Review links now include `draft_revision`. Navigation preserves the typed
+revision, and asset loading compares it with the saved draft before rendering
+review content. A mismatch renders an explicit stale-link notice with no newer
+policy substituted, while links without the new parameter retain the existing
+draft-id behavior for compatibility.
+
+Proof: `pnpm check`, `pnpm build`, `pnpm test`, and `pnpm test:stories` pass;
+the navigation unit test covers the revision parameter and the Storybook suite
+remains 8 files and 20 tests. R07 remains ACTIVE pending real author/reviewer/
+publisher, restore, and process-race qualification.
