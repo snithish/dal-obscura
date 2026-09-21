@@ -177,6 +177,21 @@ export const NestedPolicyDraft: Story = {
   },
 };
 
+export const AccessAndGrants: Story = {
+  args: {
+    initialTab: "access",
+    grants: [{ principal: "group:analysts", capability: "read" }],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("heading", { name: "Owners and delegated capabilities" })).toBeVisible();
+    await expect(canvas.getByRole("heading", { name: "Your effective capabilities" })).toBeVisible();
+    await expect(canvas.getByLabelText("Owner principals")).toHaveValue("data-platform");
+    await expect(canvas.getByLabelText("Grant principal 1")).toHaveValue("group:analysts");
+    await expect(canvas.getByLabelText("Grant capability 1")).toHaveValue("read");
+    await expect(canvas.getByRole("button", { name: "Save capabilities" })).toBeEnabled();
+  },
+};
+
 export const SchemaUnavailable: Story = {
   args: { asset: { ...asset, schema: undefined }, selectedField: "", rules: [], activeRule: undefined, selectedMask: undefined },
   play: async ({ canvas }) => {
