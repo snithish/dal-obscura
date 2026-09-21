@@ -1413,6 +1413,20 @@ administration qualification journey.
 Follow-up verification: the complete built browser suite remains green at 51
 tests after this change.
 
+## R08 — VERIFY: explicit admitted table-format selection (2026-09-22)
+
+Added a capability-scoped administrator journey where one catalog advertises two
+admitted table formats. The UI refuses to govern until the operator chooses a
+format, then sends the selected plugin id and complete table identifier to the
+control plane. This preserves the plugin-pair boundary instead of guessing from
+the catalog or display name.
+
+Proof: the focused built browser journey passes and asserts the selected Delta
+backend in the governing PUT request; TypeScript passes. Atomic implementation
+commit: `7573e0e9 test(ui): qualify table format selection`. R08 remains VERIFY
+pending live plugin-pair persistence, backend mutation effects, and the complete
+administration qualification journey.
+
 ## R06/R07/R11 — VERIFY: large nested schema tree qualification (2026-09-22)
 
 Added a built application regression with 10,000 authoritative scalar fields.
