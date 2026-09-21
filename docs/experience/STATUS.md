@@ -881,3 +881,23 @@ Proof: TypeScript, the focused Connections-race browser test, and the full built
 browser suite (26 tests) pass. Atomic implementation commit: `db290e8a
 test(ui): cover deferred connection responses`. R06 remains ACTIVE pending the
 remaining parameterized workflow matrix and live identity/provider qualification.
+
+## R06 — ACTIVE: deferred asset lookup response race (2026-09-21)
+
+Added a held asset-inventory search response. The test starts a stale lookup,
+navigates away and back, issues a newer lookup, verifies the fresh inventory,
+then releases the stale response and proves it cannot replace the current
+selection. This found and fixed a real state-ownership defect: management-route
+loads replaced asset-scoped access metadata, so returning to the still-mounted
+editor temporarily became read-only. Management results now merge into shared
+state while preserving asset access, grants, and history metadata.
+
+Proof: `tsc -b`, the focused lookup-race browser test, the full built-browser
+suite (27 tests), the UI node suite (20 tests), Storybook browser tests (45
+tests), production build, and bundle-budget gate pass. Measured budgets are
+163.03 KiB JS gzip, 38.01 KiB CSS gzip, and 83.72 KiB fonts. Atomic
+implementation commit: `09a828b2 fix(ui): preserve asset access across
+management navigation`. `pnpm` remains unavailable in this runner; direct
+tool binaries provide equivalent evidence. R06 remains ACTIVE pending the
+remaining load/save/evaluate/review/publish/restore matrix, live identity and
+provider qualification, and production process-race evidence.
