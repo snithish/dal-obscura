@@ -126,3 +126,18 @@ the browser suite reports 5 files and 13 tests passing. No networked fixture,
 backend, authentication, or pickle behavior was changed. R05 remains ACTIVE;
 the remaining coverage, visual review, manual accessibility, and owner approval
 gates are unchanged.
+
+## R05 — ACTIVE: connections management workflow coverage (2026-09-21)
+
+Added executable stories for the production `ConnectionsView` using admitted
+Iceberg catalog metadata, plugin lifecycle state, an active configuration
+generation, and the empty state. The stories verify rendered management
+headings and controls without invoking mutating callbacks or making network
+requests. Vitest now pre-optimizes React Query as well as the existing icon
+dependency, preventing browser-story reload races when management components
+are imported.
+
+Proof: `pnpm check`, `pnpm build`, `pnpm test`, and `pnpm test:stories` pass;
+the Storybook browser suite reports 6 files and 15 tests passing. R05 remains
+ACTIVE because component/pattern/workflow breadth, contrast and responsive
+review, manual accessibility checks, and owner approval are still open.
