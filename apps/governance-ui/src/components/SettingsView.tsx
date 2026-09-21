@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Checkbox, TextInput } from "@mantine/core";
 import type { QueryClient } from "@tanstack/react-query";
 import type { AuthProvider, RuntimeSettings, WorkspacePublication } from "../api";
 import { controlPlane } from "../api";
@@ -331,15 +332,15 @@ export function SettingsView({
         <h3>Runtime limits</h3>
         <p className="help">{runtime ? "Serving values are loaded from the control plane. Saving creates a staged configuration." : "No runtime settings are configured yet. Enter values to create the first staged configuration."}</p>
         <div className="form-grid three">
-          <label>Ticket TTL (seconds)<input type="number" min="1" value={form.ticket_ttl_seconds || ""} placeholder="900" onChange={(event) => { markDirty("runtime"); setForm({ ...form, ticket_ttl_seconds: Number(event.target.value) }); }} /></label>
-          <label>Max tickets<input type="number" min="1" value={form.max_tickets || ""} placeholder="64" onChange={(event) => { markDirty("runtime"); setForm({ ...form, max_tickets: Number(event.target.value) }); }} /></label>
-          <label>Ticket exchanges<input type="number" min="1" value={form.max_ticket_exchanges || ""} placeholder="2" onChange={(event) => { markDirty("runtime"); setForm({ ...form, max_ticket_exchanges: Number(event.target.value) }); }} /></label>
+          <TextInput label="Ticket TTL (seconds)" type="number" min={1} value={form.ticket_ttl_seconds || ""} placeholder="900" onChange={(event) => { markDirty("runtime"); setForm({ ...form, ticket_ttl_seconds: Number(event.currentTarget.value) }); }} />
+          <TextInput label="Max tickets" type="number" min={1} value={form.max_tickets || ""} placeholder="64" onChange={(event) => { markDirty("runtime"); setForm({ ...form, max_tickets: Number(event.currentTarget.value) }); }} />
+          <TextInput label="Ticket exchanges" type="number" min={1} value={form.max_ticket_exchanges || ""} placeholder="2" onChange={(event) => { markDirty("runtime"); setForm({ ...form, max_ticket_exchanges: Number(event.currentTarget.value) }); }} />
         </div>
         <fieldset className="runtime-path-rules">
           <legend>Storage path roots</legend>
           <p className="help">Every metadata and data location must stay under one of these roots. Leave the list empty only for an explicitly local development profile.</p>
           <div className="path-rule-list">{pathRuleRoots.map((root, index) => <div className="path-rule-row" key={`${index}-${root}`}>
-            <label><span className="sr-only">Storage path root {index + 1}</span><input type="text" value={root} onChange={(event) => updatePathRule(index, event.target.value)} placeholder="s3://warehouse/curated" /></label>
+            <TextInput aria-label={`Storage path root ${index + 1}`} value={root} onChange={(event) => updatePathRule(index, event.currentTarget.value)} placeholder="s3://warehouse/curated" />
             <button className="danger" type="button" onClick={() => { markDirty("runtime"); setPathRuleRoots((current) => current.filter((_, row) => row !== index)); }}>Remove</button>
           </div>)}</div>
           <button className="secondary" type="button" onClick={() => { markDirty("runtime"); setPathRuleRoots((current) => [...current, ""]); }}>Add storage root</button>
@@ -359,22 +360,23 @@ export function SettingsView({
           const providerField = (key: string, label: string, options: { type?: string; placeholder?: string; help?: string } = {}) => {
             const fieldKey = `${provider.id}:${key}`;
             const error = providerErrors[fieldKey];
-            return <label className="provider-field" key={key}>{label}
-              <input
+            return <div className="provider-field" key={key}>
+              <TextInput
+                label={label}
                 type={options.type ?? "text"}
                 value={providerTexts[fieldKey] ?? providerText(provider, key)}
                 placeholder={options.placeholder}
                 aria-invalid={error ? "true" : undefined}
                 aria-describedby={error ? `${fieldKey}-error` : undefined}
-                onChange={(event) => updateProviderText(index, key, event.target.value)}
+                onChange={(event) => updateProviderText(index, key, event.currentTarget.value)}
               />
               {options.help && !error && <small>{options.help}</small>}
               {error && <span className="auth-error" id={`${fieldKey}-error`} role="alert">{error}</span>}
-            </label>;
+            </div>;
           };
           return <fieldset className="provider-editor" key={provider.id}>
             <legend><span>{provider.module.split(".").at(-1) ?? provider.module}</span><small>Order {provider.ordinal}</small><span className="provider-order-actions"><button className="secondary" type="button" disabled={index === 0} onClick={() => moveProvider(index, -1)}>Move up</button><button className="secondary" type="button" disabled={index === providerRows.length - 1} onClick={() => moveProvider(index, 1)}>Move down</button><button className="danger" type="button" onClick={() => removeProvider(index)}>Remove</button></span></legend>
-            <label className="provider-enabled"><input type="checkbox" checked={provider.enabled} onChange={(event) => updateProviderEnabled(index, event.target.checked)} /> Enabled</label>
+            <Checkbox className="provider-enabled" checked={provider.enabled} onChange={(event) => updateProviderEnabled(index, event.currentTarget.checked)} label="Enabled" />
             <div className="form-grid">
               {providerField("issuer", "Issuer URL", { placeholder: "https://id.example.com/" })}
               {providerField("audience", "Audience", { placeholder: "optional or comma-separated" })}
