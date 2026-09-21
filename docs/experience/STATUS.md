@@ -678,3 +678,18 @@ pass; the budget gate measures 162.70 KiB JS gzip, 38.01 KiB CSS gzip, and
 83.72 KiB fonts. Atomic implementation commit: `e928562a fix(ui): validate
 oidc fields before save`. R08 remains ACTIVE pending live settings/access/audit
 journeys and authorized backend mutation evidence.
+
+## R07 — ACTIVE: stale review-link browser proof (2026-09-21)
+
+The built authenticated shell suite now opens a review URL carrying an older
+`draft_revision`, serves a newer saved draft from the synthetic API boundary,
+and verifies the real application displays its explicit stale-link notice. The
+workspace remains read-only: the deny-all save action and asset selector are
+disabled, so a stale link cannot silently substitute or edit newer content.
+This is deterministic browser integration evidence only; it does not qualify a
+live author/reviewer/publisher backend or a concurrent revision race.
+
+Proof: `pnpm check` and the full built-browser suite pass with 14 tests. Atomic
+implementation commit: `b4775319 test(ui): prove stale review links stay
+read-only`. R07 remains ACTIVE pending the real author/reviewer/publisher,
+restore, and process-race journey.
