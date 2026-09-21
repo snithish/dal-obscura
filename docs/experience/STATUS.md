@@ -1348,3 +1348,16 @@ Proof: the complete built browser suite reports 47 passed tests and TypeScript
 passes. Atomic implementation commit: `15e716d9 test(ui): measure authenticated
 web vitals`. R06/R11 remain VERIFY pending authenticated fixed-runner LCP/CLS,
 capacity, restore/provenance, and live identity evidence.
+
+## R06/R08 — VERIFY: administrator management keyboard order (2026-09-21)
+
+Added a production browser focus regression for the administrator Activity and
+Settings screens. It focuses the first audit filter and runtime limit, advances
+with Tab, and verifies the next labeled controls receive focus in document
+order. This supplements the command-palette and mobile-navigation focus tests;
+it does not replace manual keyboard or screen-reader review.
+
+Proof: the complete built browser suite reports 50 passed tests and TypeScript
+passes. Atomic implementation commit: `815de8b5 test(ui): verify management
+keyboard order`. R06/R08 remain VERIFY pending broader manual keyboard and
+screen-reader review plus live authorization evidence.
