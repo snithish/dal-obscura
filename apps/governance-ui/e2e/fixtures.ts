@@ -25,7 +25,9 @@ export async function signedOutApi(page: Page) {
   });
 }
 
-export async function edgeChallengeApi(page: Page, options: { status?: number; redirect?: boolean } = {}) {
+export type EdgeChallengeOptions = { status?: number; redirect?: boolean };
+
+export async function edgeChallengeApi(page: Page, options: EdgeChallengeOptions = {}) {
   await page.unroute("**/v1/**");
   await page.route("**/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;

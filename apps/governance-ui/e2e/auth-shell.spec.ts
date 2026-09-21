@@ -1,8 +1,8 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
-import { authenticatedApi, deferredResponse, edgeChallengeApi, signedOutApi } from "./fixtures";
+import { expect, test, type Page } from "@playwright/test";
+import { authenticatedApi, deferredResponse, edgeChallengeApi, signedOutApi, type EdgeChallengeOptions } from "./fixtures";
 
-async function assertEdgeChallenge(page: Parameters<typeof edgeChallengeApi>[0], options: Parameters<typeof edgeChallengeApi>[1]) {
+async function assertEdgeChallenge(page: Page, options: EdgeChallengeOptions) {
   await edgeChallengeApi(page, options);
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Sign in to your workspace" })).toBeVisible();
