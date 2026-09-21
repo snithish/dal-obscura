@@ -613,8 +613,10 @@ values before the identity-provider payload is built. A Storybook workflow
 drives the real Maximum JWKS keys control, verifies the field alert, and keeps
 the save action disabled.
 
-Proof: `pnpm check` and 41 Storybook browser tests pass. R05/R08 remain ACTIVE
-pending live settings/access/audit journeys and authorized backend evidence.
+Proof: `pnpm check`, `pnpm test:stories` (41 browser tests), and `pnpm build`
+pass; the production budget gate measures 162.40 KiB JS gzip, 38.01 KiB CSS
+gzip, and 83.72 KiB fonts. R05/R08 remain ACTIVE pending live
+settings/access/audit journeys and authorized backend evidence.
 
 ## R08 — ACTIVE: platform-admin lifecycle affordance boundary (2026-09-21)
 
