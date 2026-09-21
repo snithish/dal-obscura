@@ -917,3 +917,19 @@ implementation commit: `0f129afd test(ui): cover deferred policy version
 lookups`. R06 remains ACTIVE pending the remaining load/save/evaluate/review/
 publish/restore matrix, live identity and provider qualification, and
 production process-race evidence.
+
+## R06 — ACTIVE: deferred draft-save response race (2026-09-21)
+
+Added a held draft-save response. The browser starts saving the deny-all draft,
+adds a new rule while the request is pending, then releases the old response.
+The editor remains unsaved, retains the newer rule editor, and never reports
+the stale save as current. This covers mutation ownership across a draft
+identity/edit-epoch change.
+
+Proof: `tsc -b`, the focused draft-save browser test, the full built browser
+suite (29 tests), the UI node suite (20 tests), Storybook browser tests (45
+tests), production build, and bundle-budget gate pass. Measured budgets remain
+163.03 KiB JS gzip, 38.01 KiB CSS gzip, and 83.72 KiB fonts. Atomic
+implementation commit: `7eb0e6cf test(ui): cover deferred draft saves`. R06
+remains ACTIVE pending evaluate/review/publish/restore races, live identity and
+provider qualification, and production process-race evidence.
