@@ -837,3 +837,15 @@ Proof: TypeScript, the focused administrator journey, and the full built-browser
 suite (23 tests) pass. Atomic implementation commit: `08598994 test(ui): cover
 administrator management routes`. R08 remains ACTIVE pending live settings,
 access, audit, and authorized backend mutation evidence.
+
+## R04/R06 — ACTIVE: authenticated shell accessibility scan (2026-09-21)
+
+Added an axe scan after the real built application loads an authenticated reader
+asset workspace. Serious and critical violations fail the browser test, covering
+the populated shell state that the signed-out scan cannot exercise.
+
+Proof: TypeScript, the focused authenticated axe test, and the full built-browser
+suite (24 tests) pass. Atomic implementation commit: `440856a7 test(ui): scan
+authenticated shell accessibility`. R04/R06 remain ACTIVE pending manual
+screen-reader/visual review, contrast and zoom review, and live identity
+qualification.
