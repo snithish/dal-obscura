@@ -1363,3 +1363,18 @@ Proof: the complete built browser suite reports 50 passed tests and TypeScript
 passes. Atomic implementation commit: `815de8b5 test(ui): verify management
 keyboard order`. R06/R08 remain VERIFY pending broader manual keyboard and
 screen-reader review plus live authorization evidence.
+
+## R04/R06/R08 — VERIFY: authenticated forced-colors coverage (2026-09-22)
+
+Extended the built browser accessibility lane beyond the signed-out shell. The
+authenticated policy workspace now verifies focus visibility in forced-colors
+mode, while Activity, Connections, and Settings verify discoverable headings and
+no page-level overflow at the same media setting. This is rendered local
+coverage only; it does not replace manual operating-system review or live
+identity qualification.
+
+Proof: the focused forced-colors check and the complete built browser suite
+(51 tests) pass; TypeScript also passes. Atomic implementation commit:
+`831c9be2 test(ui): cover authenticated forced colors`. R04/R06/R08 remain
+VERIFY pending manual forced-colors/keyboard/screen-reader review, owner
+approval, and live management authorization.
