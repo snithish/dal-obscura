@@ -159,3 +159,12 @@ export const TypedConfiguration: Story = {
     await expect(canvas.getByLabelText("Region (optional)")).toHaveValue("eu-west-1");
   },
 };
+
+export const ReadOnlyPluginLifecycle: Story = {
+  args: { canActivate: false },
+  play: async ({ canvas }) => {
+    const lifecycle = canvas.getByLabelText("Lifecycle for Iceberg REST catalog");
+    await expect(lifecycle).toBeDisabled();
+    await expect(canvas.getByRole("button", { name: "Apply" })).toBeDisabled();
+  },
+};
