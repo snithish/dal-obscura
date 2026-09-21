@@ -192,6 +192,25 @@ export const AccessAndGrants: Story = {
   },
 };
 
+export const DelegatedGrantActor: Story = {
+  args: {
+    initialTab: "access",
+    session: { ...session, platform_admin: false, capabilities: ["read"] },
+    access: {
+      ...access,
+      capabilities: access.capabilities.map((item) => item.capability === "grant" ? { ...item, allowed: true, reasons: ["delegated grant capability"] } : { ...item, allowed: item.capability === "read", reasons: item.capability === "read" ? ["delegated read capability"] : [] }),
+    },
+    grants: [{ principal: "group:analysts", capability: "read" }],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("delegated grant capability")).toBeVisible();
+    await expect(canvas.getByLabelText("Owner principals")).toBeDisabled();
+    await expect(canvas.getByRole("button", { name: "Save owners" })).toBeDisabled();
+    await expect(canvas.getByLabelText("Grant principal 1")).toBeEnabled();
+    await expect(canvas.getByRole("button", { name: "Save capabilities" })).toBeEnabled();
+  },
+};
+
 export const SchemaUnavailable: Story = {
   args: { asset: { ...asset, schema: undefined }, selectedField: "", rules: [], activeRule: undefined, selectedMask: undefined },
   play: async ({ canvas }) => {
