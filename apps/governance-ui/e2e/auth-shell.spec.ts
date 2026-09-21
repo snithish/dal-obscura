@@ -140,6 +140,12 @@ test("administrator management routes load through the authenticated shell", asy
   await page.getByRole("button", { name: "Settings" }).click();
   await expect(page.getByRole("heading", { name: "Runtime and identity" })).toBeVisible();
   await expect(page.getByText("No identity providers configured.")).toBeVisible();
+
+  const results = await new AxeBuilder({ page }).analyze();
+  const blockingViolations = results.violations.filter(
+    (violation) => violation.impact === "serious" || violation.impact === "critical",
+  );
+  expect(blockingViolations).toEqual([]);
 });
 
 test("mutation HTML challenges clear private workspace state", async ({ page }) => {
