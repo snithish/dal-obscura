@@ -1562,7 +1562,10 @@ Pull requests explicitly record that publication attestations are unavailable
 instead of claiming release evidence.
 
 Proof: the CI YAML parses, the workflow contract suite passes, and the release
-manifest gate is represented in the checked-in workflow. Atomic implementation
-commit: `f8c91be3 ci(release): bind candidate manifest to attestations`. R11
-remains VERIFY until a published candidate executes this gate and the complete
-release dossier is reviewed.
+manifest gate is represented in the checked-in workflow. A follow-up fetches
+the attestation descriptors from each image index and checks the raw SLSA and
+SPDX predicate manifests before hashing the evidence. Atomic implementation
+commits: `f8c91be3 ci(release): bind candidate manifest to attestations` and
+`ee8e48ba fix(ci): inspect attestation manifests`. R11 remains VERIFY until a
+published candidate executes this gate and the complete release dossier is
+reviewed.
