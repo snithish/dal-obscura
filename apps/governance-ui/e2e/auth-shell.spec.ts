@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
-import { authenticatedApi, signedOutApi } from "./fixtures";
+import { authenticatedApi, deferredResponse, signedOutApi } from "./fixtures";
 
 test.describe("signed-out governance shell", () => {
   test.beforeEach(async ({ page }) => signedOutApi(page));
@@ -93,7 +93,7 @@ test("authenticated mobile navigation respects capabilities and restores focus",
 
   await openNavigation.click();
   await page.getByRole("dialog", { name: "Navigation" }).getByRole("button", { name: "Activity" }).click();
-  await expect(page.getByRole("heading", { name: "Activity" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Activity", exact: true })).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Navigation" })).toHaveCount(0);
 });
 
@@ -105,4 +105,21 @@ test("stale review links remain explicit and read-only", async ({ page }) => {
   await expect(page.getByText(/This review link is stale: it requested draft revision 2/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Save deny-all draft" })).toBeDisabled();
   await expect(page.getByLabel("Find governed asset")).toBeDisabled();
+});
+
+test("late management responses cannot replace the current page", async ({ page }) => {
+  const deferredAudit = deferredResponse();
+  await authenticatedApi(page, { deferredAudit });
+  await page.goto("/#activity");
+  await deferredAudit.started;
+
+  await page.getByRole("button", { name: "Changes" }).click();
+  await expect(page.getByRole("heading", { name: "Published policy history" })).toBeVisible();
+  await page.getByRole("button", { name: "Activity" }).click();
+  await expect(page.getByRole("heading", { name: "Workspace status" })).toBeVisible();
+  await expect(page.getByText("fresh-audit")).toBeVisible();
+
+  deferredAudit.release();
+  await expect(page.getByText("fresh-audit")).toBeVisible();
+  await expect(page.getByText("stale-audit")).toHaveCount(0);
 });
