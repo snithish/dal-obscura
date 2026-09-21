@@ -1163,3 +1163,21 @@ browser suite (41 tests), the UI node suite (20 tests), Storybook browser tests
 implementation commit: `bc1928c4 test(ui): cover stale catalog discovery`.
 R06/R08 remain ACTIVE pending the remaining live identity, backend mutation,
 plugin, consumer, and production process evidence.
+
+## R10 — VERIFY: local consumer qualification lane (2026-09-21)
+
+Executed the opt-in local consumer suites instead of counting their default
+skips as proof. The Python lane passed four nested-data tests covering the
+Python/Arrow SDK, DuckDB reader, SQL Iceberg, manifest/Parquet, and REST Iceberg
+paths. The JVM reactor passed the Spark integration suite (6 tests), Java Flight
+client suite (7), Spark datasource suite (29), and connector testkit suite (2),
+with zero failures, errors, or skips. These are loopback/local fixtures with
+local authentication and do not qualify E15's TLS/OIDC, two-process PostgreSQL
+publication races, exact installed plugin artifacts, or every advertised
+consumer pair.
+
+Proof: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache
+DAL_OBSCURA_RUN_CONSUMER_TESTS=1 uv run pytest
+tests/consumers/test_governed_reads.py -q` reports 4 passed; `mvn -f
+connectors/jvm/pom.xml verify` reports all reactor tests green. R10 remains
+VERIFY pending the real boundary matrix and production process evidence.
