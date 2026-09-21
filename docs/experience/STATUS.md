@@ -12,11 +12,17 @@ Each accepted session load now also uses its load generation in cache keys and
 clears the old cache before loading inventory. A second real QueryClient test
 proves same-identity reauthentication cannot reuse prior inventory, even if its
 cache lifetime has not expired. Both cases failed before their fixes.
-Rendered interleaving coverage remains open. No authentication or pickle changes.
+Added a built-app Playwright journey that holds a pre-logout asset response,
+signs out, reauthenticates the same principal with changed capabilities, and
+releases the late response. The new session remains on its own asset and the
+old response cannot repopulate the workspace. No authentication or pickle
+changes.
 
-Validation: all 16 existing UI unit tests and TypeScript check pass on bundled
-Node 24.19.0. Initial collision-only validation also passed on Node 26.8.2.
-Commit identities are available from this file's history.
+Validation: all 16 existing UI unit tests, TypeScript check, and 9 built-shell
+Playwright tests pass on bundled Node 24.19.0. Initial collision-only
+validation also passed on Node 26.8.2. Commit identities are available from
+this file's history. R06 remains ACTIVE pending the full parameterized
+workflow matrix and live identity/provider qualification.
 
 ## R01 — ACTIVE: build tooling ownership
 
