@@ -290,6 +290,10 @@ export type ApiFieldError = {
   type: string;
 };
 
+export function assetPath(assetId: string): string {
+  return `/v1/assets/${encodeURIComponent(assetId)}`;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const csrf = readCookie("dal_obscura_csrf");
   const headers = new Headers(init?.headers);
@@ -381,23 +385,23 @@ export const controlPlane = {
     const page = await request<ApiSchemas["AssetInventoryPageResponse"]>(`/v1/assets/page${suffix}`, { signal: params.signal });
     return { items: page.items.map(normalizeInventoryAsset), next_cursor: page.next_cursor ?? null } satisfies AssetPage;
   },
-  getAsset: async (assetId: string, signal?: AbortSignal) => normalizeDetailAsset(await request<ApiSchemas["AssetDetailResponse"]>(`/v1/assets/${assetId}`, { signal })),
+  getAsset: async (assetId: string, signal?: AbortSignal) => normalizeDetailAsset(await request<ApiSchemas["AssetDetailResponse"]>(assetPath(assetId), { signal })),
   getAssetAccess: async (assetId: string, signal?: AbortSignal) => {
-    const access = await request<ApiSchemas["AssetAccessResponse"]>(`/v1/assets/${assetId}/access`, { signal });
+    const access = await request<ApiSchemas["AssetAccessResponse"]>(`${assetPath(assetId)}/access`, { signal });
     return { ...access, issuer: access.issuer ?? null } satisfies AssetAccess;
   },
-  listGrants: (assetId: string, signal?: AbortSignal) => request<ApiSchemas["AssetGrantResponse"][]>(`/v1/assets/${assetId}/grants`, { signal }),
-  saveOwners: (assetId: string, owners: string[], expectedRevision?: number, signal?: AbortSignal) => request<ApiSchemas["AssetOwnersResponse"]>(`/v1/assets/${assetId}/owners`, {
+  listGrants: (assetId: string, signal?: AbortSignal) => request<ApiSchemas["AssetGrantResponse"][]>(`${assetPath(assetId)}/grants`, { signal }),
+  saveOwners: (assetId: string, owners: string[], expectedRevision?: number, signal?: AbortSignal) => request<ApiSchemas["AssetOwnersResponse"]>(`${assetPath(assetId)}/owners`, {
     method: "PUT",
     body: JSON.stringify({ owners, ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }) }),
     signal,
   }),
-  saveGrants: (assetId: string, grants: AssetGrant[], expectedRevision?: number, signal?: AbortSignal) => request<ApiSchemas["AssetGrantsResponse"]>(`/v1/assets/${assetId}/grants`, {
+  saveGrants: (assetId: string, grants: AssetGrant[], expectedRevision?: number, signal?: AbortSignal) => request<ApiSchemas["AssetGrantsResponse"]>(`${assetPath(assetId)}/grants`, {
     method: "PUT",
     body: JSON.stringify({ grants, ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }) }),
     signal,
   }),
-  getSchema: (assetId: string, signal?: AbortSignal) => request<ApiSchemas["AssetSchemaResponse"]>(`/v1/assets/${assetId}/schema`, { signal }) as Promise<AssetSchema>,
+  getSchema: (assetId: string, signal?: AbortSignal) => request<ApiSchemas["AssetSchemaResponse"]>(`${assetPath(assetId)}/schema`, { signal }) as Promise<AssetSchema>,
   listHistoryPage: async (params: { limit?: number; cursor?: string; signal?: AbortSignal } = {}) => {
     const query = new URLSearchParams();
     if (params.limit !== undefined) query.set("limit", String(params.limit));
@@ -422,14 +426,14 @@ export const controlPlane = {
     const page = await request<ApiSchemas["AuditEventPageResponse"]>(`/v1/audit/events/page${suffix}`, { signal: params.signal });
     return { items: page.items.map((event) => ({ ...event, correlation_id: event.correlation_id ?? null })), next_cursor: page.next_cursor ?? null } satisfies AuditEventPage;
   },
-  listAssetHistory: (assetId: string, signal?: AbortSignal) => request<ApiSchemas["PolicyVersionResponse"][]>(`/v1/assets/${assetId}/policy-versions`, { signal }),
-  getPublicationOperation: (assetId: string, idempotencyKey: string, signal?: AbortSignal) => request<ApiSchemas["PolicyOperationResponse"]>(`/v1/assets/${assetId}/policy-operations/${encodeURIComponent(idempotencyKey)}`, { signal }),
+  listAssetHistory: (assetId: string, signal?: AbortSignal) => request<ApiSchemas["PolicyVersionResponse"][]>(`${assetPath(assetId)}/policy-versions`, { signal }),
+  getPublicationOperation: (assetId: string, idempotencyKey: string, signal?: AbortSignal) => request<ApiSchemas["PolicyOperationResponse"]>(`${assetPath(assetId)}/policy-operations/${encodeURIComponent(idempotencyKey)}`, { signal }),
   getPolicyVersion: async (assetId: string, policyVersion: number, signal?: AbortSignal) => {
-    const detail = await request<ApiSchemas["PolicyVersionDetailResponse"]>(`/v1/assets/${assetId}/policy-versions/${policyVersion}`, { signal });
+    const detail = await request<ApiSchemas["PolicyVersionDetailResponse"]>(`${assetPath(assetId)}/policy-versions/${policyVersion}`, { signal });
     return { ...detail, rules: detail.rules as PolicyRule[] } satisfies PolicyVersionDetail;
   },
   restorePolicyVersion: (assetId: string, policyVersion: number, expectedRevision: number, signal?: AbortSignal) =>
-    request<ApiSchemas["PolicyDraftResponse"]>(`/v1/assets/${assetId}/policy-versions/${policyVersion}/restore`, {
+    request<ApiSchemas["PolicyDraftResponse"]>(`${assetPath(assetId)}/policy-versions/${policyVersion}/restore`, {
       method: "POST",
       body: JSON.stringify({ expected_revision: expectedRevision }),
       signal,
@@ -491,21 +495,21 @@ export const controlPlane = {
     body: JSON.stringify({ ticket_ttl_seconds: settings.ticket_ttl_seconds, max_tickets: settings.max_tickets, max_ticket_exchanges: settings.max_ticket_exchanges, path_rules: settings.path_rules, ...(settings.revision === undefined ? {} : { expected_revision: settings.revision }) }),
     signal,
   }),
-  publishAsset: (assetId: string, expectedDraftRevision?: number, reviewToken?: string, idempotencyKey?: string, draftId?: string, signal?: AbortSignal) => request<ApiSchemas["PolicyVersionCreateResponse"]>(`/v1/assets/${assetId}/policy-versions`, {
+  publishAsset: (assetId: string, expectedDraftRevision?: number, reviewToken?: string, idempotencyKey?: string, draftId?: string, signal?: AbortSignal) => request<ApiSchemas["PolicyVersionCreateResponse"]>(`${assetPath(assetId)}/policy-versions`, {
     method: "POST",
     headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
     body: JSON.stringify({ ...(draftId ? { draft_id: draftId } : {}), ...(expectedDraftRevision === undefined ? {} : { expected_draft_revision: expectedDraftRevision }), ...(reviewToken ? { review_token: reviewToken } : {}) }),
     signal,
   }),
-  getDraft: (assetId: string, draftId?: string, signal?: AbortSignal) => request<ApiSchemas["PolicyDraftResponse"]>(draftId ? `/v1/assets/${assetId}/draft/${encodeURIComponent(draftId)}` : `/v1/assets/${assetId}/draft`, { signal }) as Promise<PolicyDraft>,
+  getDraft: (assetId: string, draftId?: string, signal?: AbortSignal) => request<ApiSchemas["PolicyDraftResponse"]>(draftId ? `${assetPath(assetId)}/draft/${encodeURIComponent(draftId)}` : `${assetPath(assetId)}/draft`, { signal }) as Promise<PolicyDraft>,
   saveDraft: (assetId: string, expectedRevision: number, rules: PolicyRule[], signal?: AbortSignal) =>
-    request<ApiSchemas["PolicyDraftResponse"]>(`/v1/assets/${assetId}/draft`, {
+    request<ApiSchemas["PolicyDraftResponse"]>(`${assetPath(assetId)}/draft`, {
       method: "PUT",
       body: JSON.stringify({ expected_revision: expectedRevision, rules }),
       signal,
     }) as Promise<PolicyDraft>,
   evaluate: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, unknown>; draft_id?: string; draft_revision?: number }, signal?: AbortSignal) => {
-    const raw = await request<ApiSchemas["PolicyEvaluationResponse"]>(`/v1/assets/${assetId}/policy-evaluate`, {
+    const raw = await request<ApiSchemas["PolicyEvaluationResponse"]>(`${assetPath(assetId)}/policy-evaluate`, {
       method: "POST",
       body: JSON.stringify(persona),
       signal,
@@ -523,7 +527,7 @@ export const controlPlane = {
     } satisfies Preview;
   },
   review: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, unknown>; draft_id?: string; draft_revision?: number }, signal?: AbortSignal) => {
-    const raw = await request<ApiSchemas["PolicyReviewResponse"]>("/v1/assets/" + assetId + "/policy-review", {
+    const raw = await request<ApiSchemas["PolicyReviewResponse"]>(`${assetPath(assetId)}/policy-review`, {
       method: "POST",
       body: JSON.stringify(persona),
       signal,
