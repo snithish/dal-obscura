@@ -252,3 +252,16 @@ Proof: `pnpm build` passes with 161.74 KiB JS gzip, 38.44 KiB CSS gzip, and
 83.72 KiB WOFF2 fonts; `pnpm check`, `pnpm test`, and `pnpm test:stories` also
 pass. R11 remains ACTIVE because route/LCP/CLS, release provenance, and real
 backup/restore qualification are still open.
+
+## R08 — ACTIVE: activity and audit workflow coverage (2026-09-21)
+
+Added executable stories for the production `ManagementView` activity surface.
+The connected state renders server summary counts, measured data-plane health,
+active generation metadata, a redacted audit event, and filter controls. The
+unknown state distinguishes unavailable observations from an empty audit log.
+No story invokes a mutation or network request.
+
+Proof: `pnpm check`, `pnpm build`, `pnpm test`, and `pnpm test:stories` pass;
+the Storybook browser suite reports 9 files and 22 tests. R08 remains ACTIVE:
+real settings/access/audit journeys and authorized backend effects still need
+qualification.
