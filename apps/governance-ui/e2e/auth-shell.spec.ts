@@ -165,6 +165,17 @@ test("administrator access management submits owner and grant changes", async ({
   await expect(page.getByText("Delegated capabilities updated. Changes take effect on the next authorized request.")).toBeVisible();
 });
 
+test("administrator settings submits staged runtime changes", async ({ page }) => {
+  await authenticatedApi(page, { admin: true, configuredSettings: true });
+  await page.goto("/#settings");
+  await expect(page.getByRole("heading", { name: "Runtime and identity" })).toBeVisible();
+  await expect(page.getByLabel("Ticket TTL (seconds)")).toHaveValue("11");
+
+  await page.getByLabel("Ticket TTL (seconds)").fill("30");
+  await page.getByRole("button", { name: "Save runtime settings" }).click();
+  await expect(page.getByText("Runtime settings saved as draft configuration. Publish to make worker behavior change.")).toBeVisible();
+});
+
 test("mutation HTML challenges clear private workspace state", async ({ page }) => {
   await authenticatedApi(page);
   await page.goto("/#assets");
