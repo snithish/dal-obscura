@@ -1243,3 +1243,16 @@ JavaScript budget remains 165.50 KiB gzip under the 200 KiB limit. TypeScript,
 Atomic implementation commit: `2b54edb5 perf(ui): split policy and management
 routes`. R06/R11 remain ACTIVE pending LCP/CLS measurement, complete capacity
 evidence, and the remaining live identity and production gates.
+
+## R05 — ACTIVE: designbook guidance synchronization (2026-09-21)
+
+Corrected the contribution guide so it reflects the implemented preview network
+guard. The guide now treats the guard as enforced and keeps reviewed visual
+baselines as the remaining designbook evidence; it no longer tells contributors
+to wait for a boundary that already exists.
+
+Proof: `storybook build --disable-telemetry` completes successfully after the
+documentation change. Atomic implementation commit: `1c8800db docs(ui): align
+designbook network guidance`. R05 remains ACTIVE pending the contrast matrix,
+responsive visual review, manual keyboard/screen-reader/zoom checks, and owner
+approval.
