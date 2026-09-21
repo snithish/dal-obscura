@@ -52,8 +52,8 @@ customer-data journeys in the application browser suites.
 5. Review both themes, 390px and 1440px widths, keyboard use and 200% zoom.
    Automated accessibility checks supplement human review.
 6. Add no customer data, credentials, API proxies, remote fonts or IdP calls.
-   Unexpected-network enforcement and visual baselines remain open E11 work;
-   do not add networked stories until that boundary is implemented.
+   The preview network guard enforces this boundary; reviewed visual baselines
+   remain open E11 work and must not be replaced by networked stories.
 
 Current executable coverage includes command search, authenticated shell states,
 inventory and nested policy editing, stale review links, semantic history diff,
