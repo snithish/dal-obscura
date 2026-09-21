@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 import type { Asset, AssetAccess, Mask, PolicyRule, PolicyVersionDetail, SchemaNode, Session } from "../api";
 import { AssetWorkspace } from "./AssetWorkspace";
 
@@ -233,6 +233,20 @@ export const SemanticHistoryDiff: Story = {
     await expect(canvas.getByRole("region", { name: "Semantic diff against policy version 4" })).toBeVisible();
     await expect(canvas.getByText("Changed rules")).toBeVisible();
     await expect(within(canvas.getByRole("region", { name: "Semantic diff against policy version 4" })).getByText("1", { exact: true })).toBeVisible();
+  },
+};
+
+export const RestorePublishedVersion: Story = {
+  args: {
+    initialTab: "history",
+    initialVersion: 4,
+    queryClient: historyQueryClient,
+    onRestore: fn(),
+    history: [{ asset_id: asset.id, asset_name: asset.name, catalog: asset.catalog, target: asset.table_identifier, policy_version: 4, active: true, created_at: "2026-09-21T08:00:00Z" }],
+  },
+  play: async ({ canvas, args }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Restore to draft" }));
+    await expect(args.onRestore).toHaveBeenCalledWith(4);
   },
 };
 
