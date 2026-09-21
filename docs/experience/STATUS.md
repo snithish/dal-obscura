@@ -291,3 +291,15 @@ Proof: `pnpm check`, `pnpm build`, `pnpm test:stories`, and
 `pnpm build-storybook` pass; the Storybook browser suite reports 9 files and
 24 tests. R08 remains ACTIVE pending live settings/access/audit requests and
 their backend authorization effects.
+
+## R08 — ACTIVE: catalog secret-reference editing coverage (2026-09-21)
+
+Added a real `ConnectionsView` story for editing a catalog with a scoped secret
+reference. It verifies the password control remains masked, preserves the
+deployment-managed reference for editing, and never renders a credential value.
+The story uses the production form and does not issue a save or network call.
+
+Proof: `pnpm check`, `pnpm build`, `pnpm test:stories`, and
+`pnpm build-storybook` pass; the Storybook browser suite reports 9 files and
+25 tests. R08 remains ACTIVE pending live settings/access/audit requests and
+their authorized backend effects.
