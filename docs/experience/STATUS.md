@@ -1631,3 +1631,17 @@ Proof: TypeScript, Vite production build, the focused activity-filter journey,
 and 46 Storybook interaction tests pass. R04/R08 remain VERIFY pending the
 complete built browser matrix after this slice, manual visual/keyboard/screen-
 reader review, and live audit authorization evidence.
+
+## R04/R07 — VERIFY: Mantine policy test controls (2026-09-22)
+
+Migrated mask selection/value editing, synthetic persona tests, and condition
+builder rows to Mantine `NativeSelect`, `TextInput`, and `Textarea` controls.
+Mask JSON/scalar handling, condition validation, and policy evaluation callbacks
+remain unchanged and server-authoritative. Atomic implementation commit:
+`31b6987f refactor(ui): migrate policy test controls to Mantine`.
+
+Proof: TypeScript, Vite production build, UI budgets (170.45 KiB JS gzip,
+38.04 KiB CSS gzip, 83.72 KiB fonts), 46 Storybook interaction tests, and all
+54 built browser tests pass. R04/R07 remain VERIFY pending manual visual,
+keyboard, and screen-reader review plus the real author/reviewer/publisher
+journey against a governed backend.
