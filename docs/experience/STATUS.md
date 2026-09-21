@@ -809,3 +809,16 @@ Proof: `tsc -b`, the focused history-race browser test, and the full built
 browser suite (21 tests) pass. Atomic implementation commit: `5b954e62
 test(ui): cover deferred history responses`. R06 remains ACTIVE pending the
 broader parameterized workflow matrix and live identity/provider qualification.
+
+## R02/R06/R08 — ACTIVE: reader connection deep-link guard (2026-09-21)
+
+Added the companion built-browser proof for a reader opening `#connections`.
+The application redirects to Assets before issuing catalog, plugin, publication,
+or settings requests. This complements the existing `#settings` proof and
+keeps the server-side capability check authoritative for both administrator
+routes.
+
+Proof: TypeScript and the full built-browser suite (22 tests) pass; the focused
+reader deep-link matrix passes 2/2. Atomic implementation commit: `24e1ea4c
+test(ui): cover reader connection deep links`. R02/R06/R08 remain ACTIVE
+pending live identity qualification and authorized backend management journeys.
