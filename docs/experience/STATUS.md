@@ -1531,3 +1531,18 @@ Ruff passes. Atomic implementation commit: `9495c1aa chore(typing): close
 repository diagnostics`. The plain `uv run ty check` invocation now passes
 because those roots are persisted in `[tool.ty.environment]`; the enforced
 pre-commit command uses the same project configuration.
+
+## R11 — VERIFY: portable encrypted-backup checksums (2026-09-22)
+
+Made PostgreSQL backup sidecars relocatable: new checksums record the encrypted
+backup basename, and restore verifies from the sidecar's directory before
+decrypting or invoking provider tools. This prevents a valid backup copied to a
+different working directory from failing checksum validation while preserving
+the fail-closed checksum gate and post-restore access invalidation.
+
+Proof: the recovery integration probes pass (four synthetic cases plus the
+explicitly skipped operator-PostgreSQL drill), the production deployment
+contract passes, shell syntax and Ruff pass, and the cross-directory restore
+case exercises the real scripts. Atomic implementation commit: `a980d5fd fix(recovery):
+make checksum sidecars portable`. R11 remains VERIFY pending actual encrypted
+PostgreSQL RPO/RTO evidence, provenance, capacity, and release-candidate lanes.
