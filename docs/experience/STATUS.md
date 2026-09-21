@@ -1618,3 +1618,16 @@ interaction tests, the focused settings/keyboard browser journeys (2), and all
 54 built browser tests pass. R04/R08 remain VERIFY pending manual visual,
 keyboard, and screen-reader review, live management authorization, and actual
 OIDC provider qualification.
+
+## R04/R08 — VERIFY: Mantine activity filters (2026-09-22)
+
+Migrated audit actor/action/request filters, resource and outcome selectors,
+and time-range fields to Mantine `TextInput` and `NativeSelect` controls. The
+existing audit query serialization, clear/apply behavior, and server-side
+pagination remain authoritative. Atomic implementation commit: `d842f812
+refactor(ui): migrate activity filters to Mantine`.
+
+Proof: TypeScript, Vite production build, the focused activity-filter journey,
+and 46 Storybook interaction tests pass. R04/R08 remain VERIFY pending the
+complete built browser matrix after this slice, manual visual/keyboard/screen-
+reader review, and live audit authorization evidence.
