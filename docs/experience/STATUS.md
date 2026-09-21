@@ -539,6 +539,11 @@ sets the complete outline because Mantine inputs may reset the base outline.
 The built browser suite reports 10 passing tests; R04 remains ACTIVE pending
 manual OS contrast/zoom review and owner visual approval.
 
+The built browser suite now also verifies `prefers-reduced-motion: reduce` and
+the production shell's animation/transition durations. It reports 11 passing
+tests; R04 remains ACTIVE pending manual OS contrast/zoom review and owner
+visual approval.
+
 R05 workflow coverage also adds deterministic management loading and retry-error
 stories. They exercise the real `ManagementView` boundary, retain the retry
 callback, and keep server failure copy in an alert region. Storybook now reports
