@@ -194,6 +194,19 @@ test("administrator catalogs save, diagnose, and discover through admitted plugi
   await expect(page.getByText("Connection saved. Discovery remains bounded to this configured catalog.")).toBeVisible();
 });
 
+test("management refresh failure preserves the loaded connections view", async ({ page }) => {
+  await authenticatedApi(page, { admin: true, configuredConnections: true });
+  await page.goto("/#connections");
+  await expect(page.getByRole("heading", { name: "Catalog connections" })).toBeVisible();
+  await page.route("**/v1/catalogs", async (route) => route.fulfill({ status: 503, json: { detail: "catalog backend unavailable" } }));
+
+  await page.getByRole("button", { name: "Refresh" }).click();
+  await expect(page.getByRole("heading", { name: "Catalog connections" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "analytics" })).toBeVisible();
+  await expect(page.getByRole("alert")).toContainText("control plane is temporarily unavailable");
+  await expect(page.getByRole("button", { name: "Retry refresh" })).toBeVisible();
+});
+
 test("administrator publication lifecycle creates and activates a workspace snapshot", async ({ page }) => {
   await authenticatedApi(page, { admin: true, configuredConnections: true, configuredPublications: true });
   await page.goto("/#connections");
