@@ -1214,3 +1214,16 @@ suite (43 tests), TypeScript, UI node suite (20 tests), Storybook browser tests
 implementation commit: `e4b068ca fix(ui): preserve management state on refresh
 errors`. R06/R08 remain ACTIVE pending live identity, backend mutation,
 authorization, plugin, consumer, and production process evidence.
+
+## R05/R06 — ACTIVE: refresh-error designbook contract (2026-09-21)
+
+Added a production-component Storybook play case for the management refresh
+failure state. The story keeps the loaded audit view visible, exposes the
+server error as an alert, and verifies that the retry action is wired to the
+owning reload callback. This documents the state in the executable designbook
+without introducing a Storybook-only component.
+
+Proof: the complete Storybook behavior suite reports 46 passed tests. Atomic
+implementation commit: `1430ab62 test(ui): document refresh error retention`.
+R05/R06 remain ACTIVE pending the remaining live workflow, accessibility,
+identity, and production evidence.
