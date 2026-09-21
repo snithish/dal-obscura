@@ -850,3 +850,8 @@ authenticated shell accessibility`. R04/R06 remain ACTIVE pending manual
 screen-reader/visual review, contrast and zoom review, and live identity
 qualification. The Storybook browser regression suite remains green at 45
 tests after this shell coverage was added.
+
+Follow-up `5783b78e test(ui): scan administrator settings accessibility` adds
+axe coverage for the capability-gated Settings form; the full built-browser
+suite remains green at 24 tests. Automated checks do not replace manual
+screen-reader, visual, contrast, or owner review.
