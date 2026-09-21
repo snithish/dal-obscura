@@ -902,6 +902,21 @@ tool binaries provide equivalent evidence. R06 remains ACTIVE pending the
 remaining load/save/evaluate/review/publish/restore matrix, live identity and
 provider qualification, and production process-race evidence.
 
+## R06 — ACTIVE: deferred policy-restore response race (2026-09-21)
+
+Added a held restore-to-draft response. The browser starts restoring an
+immutable revision, switches back to Policy, creates a newer local rule, then
+releases the restore response. The editor remains unsaved and never applies
+the stale restored rules or success notice.
+
+Proof: `tsc -b`, the focused restore-race browser test, the full built browser
+suite (31 tests), the UI node suite (20 tests), Storybook browser tests (45
+tests), production build, and bundle-budget gate pass. Measured budgets remain
+163.03 KiB JS gzip, 38.01 KiB CSS gzip, and 83.72 KiB fonts. Atomic
+implementation commit: `b98c74f1 test(ui): cover deferred policy restores`.
+R06 remains ACTIVE pending review/publish races, live identity and provider
+qualification, and production process-race evidence.
+
 ## R06 — ACTIVE: deferred policy-evaluation response race (2026-09-21)
 
 Added a held server-side policy evaluation. The browser starts the evaluation,
