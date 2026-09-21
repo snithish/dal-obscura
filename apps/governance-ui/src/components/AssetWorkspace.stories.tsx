@@ -229,6 +229,19 @@ export const DenyAllDraft: Story = {
   },
 };
 
+export const ReviewOnlyPublisher: Story = {
+  args: {
+    reviewOnly: true,
+    reviewToken: "review-token",
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("button", { name: "Save draft" })).toBeDisabled();
+    await expect(canvas.getByRole("button", { name: "Publish reviewed draft" })).toBeEnabled();
+    await expect(canvas.getByLabelText("Find governed asset")).toBeDisabled();
+    await expect(canvas.getByRole("button", { name: "Review current" })).toBeEnabled();
+  },
+};
+
 export const SchemaUnavailable: Story = {
   args: { asset: { ...asset, schema: undefined }, selectedField: "", rules: [], activeRule: undefined, selectedMask: undefined },
   play: async ({ canvas }) => {
