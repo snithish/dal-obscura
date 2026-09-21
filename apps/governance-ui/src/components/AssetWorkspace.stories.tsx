@@ -277,3 +277,21 @@ export const ClipboardFailure: Story = {
     }
   },
 };
+
+export const ConsumerCopyFailure: Story = {
+  args: { initialTab: "consumers" },
+  play: async ({ canvas }) => {
+    const clipboard = navigator.clipboard;
+    const originalWrite = clipboard?.writeText;
+    if (!clipboard || !originalWrite) throw new Error("Clipboard API is unavailable in the Storybook browser");
+    Object.defineProperty(clipboard, "writeText", { configurable: true, value: async () => { throw new Error("blocked"); } });
+    try {
+      await userEvent.click(canvas.getAllByRole("button", { name: "Copy" })[0]);
+      await expect(canvas.getAllByRole("status")[1]).toHaveTextContent("Clipboard access is unavailable");
+      await expect(canvas.getAllByRole("button", { name: "Retry copy" })[0]).toBeVisible();
+      await expect(canvas.getAllByText(/DAL_OBSCURA_FLIGHT_URI/)[0]).toBeVisible();
+    } finally {
+      Object.defineProperty(clipboard, "writeText", { configurable: true, value: originalWrite });
+    }
+  },
+};

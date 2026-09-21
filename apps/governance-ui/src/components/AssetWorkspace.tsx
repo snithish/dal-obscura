@@ -276,16 +276,19 @@ function ConsumerView({ asset }: { asset: Asset }) {
 
 function CopyableCode({ title, code }: { title: string; code: string }) {
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
   async function copy() {
     try {
       await navigator.clipboard.writeText(code);
+      setCopyError(false);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1_500);
     } catch {
       setCopied(false);
+      setCopyError(true);
     }
   }
-  return <article className="consumer-card"><div className="consumer-card-head"><h3>{title}</h3><button type="button" className="secondary compact" onClick={() => void copy()}>{copied ? "Copied" : "Copy"}</button></div><pre><code>{code}</code></pre></article>;
+  return <article className="consumer-card"><div className="consumer-card-head"><h3>{title}</h3><button type="button" className="secondary compact" onClick={() => void copy()}>{copied ? "Copied" : copyError ? "Retry copy" : "Copy"}</button></div><pre><code>{code}</code></pre>{copyError && <p className="help" role="status">Clipboard access is unavailable. Select the code above or retry copying.</p>}</article>;
 }
 
 function AccessView({ asset, access, grants, session, onReload, onDirtyChange, queryClient, sessionScope }: { asset: Asset; access?: AssetAccess; grants: AssetGrant[]; session: Session | null; onReload: () => void; onDirtyChange?: (dirty: boolean) => void; queryClient: QueryClient; sessionScope: string }) {
