@@ -211,3 +211,15 @@ Proof: `pnpm check`, `pnpm build`, `pnpm test`, and `pnpm test:stories` pass;
 the Storybook browser suite reports 8 files and 19 tests. R07 remains ACTIVE:
 real author/reviewer/publisher, stale-link, restore, and process-race journeys
 still require backend qualification.
+
+## R07 — ACTIVE: review-link clipboard recovery (2026-09-21)
+
+`AssetWorkspace` no longer silently ignores a failed clipboard write. It keeps
+the exact asset/draft URL in a read-only field, explains that clipboard access
+is unavailable, and offers a retry action. Storybook covers the real component
+failure path by forcing the browser clipboard write to reject.
+
+Proof: `pnpm check`, `pnpm build`, `pnpm test`, and `pnpm test:stories` pass;
+the Storybook browser suite reports 8 files and 20 tests. R07 remains ACTIVE:
+the real author/reviewer/publisher journey, stale-link qualification, restore,
+and process races still require backend evidence.
