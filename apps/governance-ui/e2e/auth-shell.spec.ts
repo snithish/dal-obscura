@@ -148,6 +148,23 @@ test("administrator management routes load through the authenticated shell", asy
   expect(blockingViolations).toEqual([]);
 });
 
+test("administrator access management submits owner and grant changes", async ({ page }) => {
+  await authenticatedApi(page, { admin: true });
+  await page.goto("/#assets");
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  await page.getByRole("tab", { name: "Access" }).click();
+  await expect(page.getByRole("heading", { name: "Owners and delegated capabilities" })).toBeVisible();
+
+  await page.getByLabel("Owner principals").fill("alex@example.invalid, steward@example.invalid");
+  await page.getByRole("button", { name: "Save owners" }).click();
+  await expect(page.getByText("Owners updated. Existing drafts and publications are unchanged.")).toBeVisible();
+
+  await page.getByRole("button", { name: "Add capability" }).click();
+  await page.getByLabel("Grant principal 1").fill("group:data-stewards");
+  await page.getByRole("button", { name: "Save capabilities" }).click();
+  await expect(page.getByText("Delegated capabilities updated. Changes take effect on the next authorized request.")).toBeVisible();
+});
+
 test("mutation HTML challenges clear private workspace state", async ({ page }) => {
   await authenticatedApi(page);
   await page.goto("/#assets");

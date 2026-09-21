@@ -149,6 +149,10 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; a
         supported_masks: ["null", "redact", "hash", "email", "keep_last", "default"],
         fields: [{ field_id: 1, name: "order_id", human_path: "order_id", type: "string", nullable: false, kind: "scalar", path: { version: 1, segments: [{ kind: "field", name: "order_id", field_id: 1 }] } }],
       } });
+      if (suffix === "grants" && request.method() === "PUT") {
+        const payload = request.postDataJSON() as { grants?: unknown[] };
+        return route.fulfill({ json: { asset_id: assetId, grants: payload.grants ?? [] } });
+      }
       if (suffix === "grants") return route.fulfill({ json: [] });
       if (suffix === "access") return route.fulfill({ json: { asset_id: assetId, principal: identity.principal, issuer: null, capabilities: [
         { capability: "read", allowed: true, reasons: ["owner"] },
@@ -156,6 +160,10 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; a
         { capability: "publish", allowed: Boolean(options.allowPublish), reasons: options.allowPublish ? ["synthetic publisher"] : [] },
         { capability: "grant", allowed: false, reasons: [] },
       ] } });
+      if (suffix === "owners" && request.method() === "PUT") {
+        const payload = request.postDataJSON() as { owners?: string[] };
+        return route.fulfill({ json: { asset_id: assetId, owners: payload.owners ?? [] } });
+      }
       if (suffix === "draft" && request.method() === "PUT") {
         if (options.deferredSave) {
           options.deferredSave.markStarted();
