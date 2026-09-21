@@ -444,3 +444,17 @@ Follow-up regression `dec4a450` proves a successful callback clears only the
 forwarded client bucket; it cannot reset the shared trusted-gateway budget.
 Configuration regressions in `cf8b8a00` prove malformed or hostname-based proxy
 peer values are rejected at app construction rather than silently trusted.
+
+## R03 — ACTIVE: bounded secure-local doctor (2026-09-21)
+
+Added `deployment/local-secure/run doctor` after profile validation and Compose
+rendering. It reports only redacted local state: HTTPS callback/origin shape,
+bootstrap mode, browser OIDC configuration presence, loopback Flight exposure,
+UI certificate trust/SAN checks, and current Compose service state. The runbook
+explicitly marks Cloudflare Access as unverified; the command makes no external
+edge, identity-provider, connector, consumer, or production-readiness claim.
+
+Proof: `sh -n deployment/local-secure/run`, `git diff --check`, Ruff, and
+`tests/architecture/test_secure_local_profile.py` plus
+`tests/production/test_local_parity.py` (4 passed). R03 remains ACTIVE pending
+the named-tunnel profile and authorized real local/edge SSO qualification.
