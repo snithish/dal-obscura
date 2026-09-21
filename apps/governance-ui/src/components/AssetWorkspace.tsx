@@ -348,12 +348,17 @@ function AccessView({ asset, access, grants, session, onReload, onDirtyChange, q
   async function saveOwners() {
     if (!canManageOwners) return setMessage("Only a platform administrator can change owners.");
     if (savingRef.current) return;
+    const normalized = owners.split(",").map((value) => value.trim()).filter(Boolean);
+    if (!normalized.length) {
+      setMessage("At least one owner is required. Assign a replacement before removing the last owner.");
+      return;
+    }
     savingRef.current = true;
     setSaving(true);
     const operationEpoch = ownersEditEpoch.current;
     const controller = beginMutation();
     try {
-      await controlPlane.saveOwners(asset.id, owners.split(",").map((value) => value.trim()).filter(Boolean), asset.revision, controller.signal);
+      await controlPlane.saveOwners(asset.id, normalized, asset.revision, controller.signal);
       if (controller.signal.aborted || operationEpoch !== ownersEditEpoch.current) return;
       setOwnersDirty(false); void queryClient.invalidateQueries({ queryKey: ["asset", sessionScope, asset.id] }); void queryClient.invalidateQueries({ queryKey: ["asset-inventory", sessionScope] }); setMessage("Owners updated. Existing drafts and publications are unchanged."); onReload();
     } catch (error) {

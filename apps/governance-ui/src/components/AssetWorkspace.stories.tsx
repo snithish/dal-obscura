@@ -210,6 +210,17 @@ export const AccessAndGrants: Story = {
   },
 };
 
+export const PreventLastOwnerRemoval: Story = {
+  args: { initialTab: "access" },
+  play: async ({ canvas }) => {
+    const owners = canvas.getByLabelText("Owner principals");
+    await userEvent.clear(owners);
+    await userEvent.click(canvas.getByRole("button", { name: "Save owners" }));
+    const statuses = canvas.getAllByRole("status");
+    await expect(statuses[statuses.length - 1]).toHaveTextContent("At least one owner is required");
+  },
+};
+
 export const SemanticHistoryDiff: Story = {
   args: {
     initialTab: "history",
