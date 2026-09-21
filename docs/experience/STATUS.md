@@ -1030,6 +1030,22 @@ implementation commit: `c528c944 fix(ui): preserve management views during
 refresh`. R08 remains ACTIVE pending live settings/access/audit requests,
 backend authorization effects, and production qualification.
 
+## R08 — ACTIVE: admitted catalog workflow journey (2026-09-21)
+
+Added a typed admitted catalog/table-format fixture and exercised the production
+Connections view through catalog save, connection diagnostics, and table
+discovery. The journey uses scoped secret-reference input and plugin-pair
+metadata; it proves rendered control wiring and bounded discovery behavior while
+remaining synthetic and credential-free.
+
+Proof: `tsc -b`, the focused catalog-workflow browser test, the full built
+browser suite (36 tests), the UI node suite (20 tests), Storybook browser tests
+(45 tests), production build, and bundle-budget gate pass. Measured budgets are
+163.10 KiB JS gzip, 38.01 KiB CSS gzip, and 83.72 KiB fonts. Atomic
+implementation commit: `81462532 test(ui): cover admitted catalog workflow`.
+R08 remains ACTIVE pending live catalog credentials, backend mutation effects,
+publication activation, and production qualification.
+
 ## R02/R03/R08/R10 — ACTIVE: local backend regression qualification (2026-09-21)
 
 Re-ran the repository's local end-to-end smoke, control-plane authentication,
