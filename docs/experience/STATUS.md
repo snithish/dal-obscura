@@ -1115,6 +1115,21 @@ R07 remains ACTIVE pending live author/reviewer/publisher qualification,
 publication reconciliation, consumer reads, and production process-race
 evidence.
 
+## R07 — ACTIVE: review-only publisher link journey (2026-09-21)
+
+Added a built-browser journey for an exact saved-draft review link. The
+publisher can inspect the saved revision while asset navigation and authoring
+remain disabled, then can complete server review and publish only with the
+session's explicit publish capability. This remains synthetic and does not
+qualify separate live author/reviewer identities, cross-process revisions, or a
+live data-plane read.
+
+Proof: the focused review-only publisher browser test passes against the built
+shell. Atomic implementation commit: `a8eac89e test(ui): cover review-only
+publisher links`. R07 remains ACTIVE pending live author/reviewer/publisher
+qualification, publication reconciliation, consumer reads, and production
+process-race evidence.
+
 ## R08 — ACTIVE: audit filtering and cursor journey (2026-09-21)
 
 Added a stateful audit fixture and exercised the production Activity view through
