@@ -37,3 +37,11 @@ def test_named_tunnel_runner_fails_closed_and_redacts_edge_claims() -> None:
     assert "cloudflare_access=not-verified" in source
     assert "cloudflared.token" in source
     assert "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN" not in source
+
+
+def test_deployment_secret_directories_are_ignored() -> None:
+    gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+
+    assert "deployment/local-secure/secrets/*" in gitignore
+    assert "deployment/named-tunnel/secrets/*" in gitignore
+    assert "deployment/production/secrets/*" in gitignore
