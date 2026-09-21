@@ -1586,3 +1586,20 @@ browser tests (54), Storybook Vitest tests (46), and the static Storybook
 build all pass. R04 remains VERIFY pending manual visual, keyboard, and
 screen-reader review plus owner approval; live SSO, backend authorization,
 consumer TLS/OIDC, and production deployment evidence remain separate gates.
+
+## R04/R08 — VERIFY: Mantine connection controls (2026-09-22)
+
+Migrated admitted-plugin lifecycle, catalog name and adapter, dynamic plugin
+configuration, and discovered table-format controls to Mantine
+`NativeSelect`/`TextInput` components. The migration retains capability guards,
+secret-reference handling, and existing mutation ownership. Event values are
+captured synchronously before deferred React state updates so lifecycle changes
+cannot fail after the browser event is released. Atomic implementation commit:
+`93dfa088 refactor(ui): migrate connection controls to Mantine`.
+
+Proof: TypeScript, Vite production build, UI budgets (167.92 KiB JS gzip,
+38.04 KiB CSS gzip, 83.72 KiB fonts), 20 Node unit tests, 46 Storybook
+interaction tests, the static Storybook suite's rendered fixtures, and all 54
+built browser tests pass. R04/R08 remain VERIFY pending manual visual,
+keyboard, and screen-reader review, live management authorization, and real
+catalog credentials.
