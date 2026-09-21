@@ -72,3 +72,91 @@ test("CSP rejects missing and wrong style nonces", async ({ page }) => {
   expect(result.wrong).toBe(result.before);
   expect(result.accepted).toBe("rgb(1, 2, 3)");
 });
+
+test("late pre-logout asset responses cannot repopulate a reauthenticated workspace", async ({ page }) => {
+  const assetA = "00000000-0000-4000-8000-000000000001";
+  const assetB = "00000000-0000-4000-8000-000000000002";
+  const identityA = { principal: "alice", groups: ["analysts"], platform_admin: false, capabilities: ["asset:read", "asset:edit"] };
+  const identityB = { principal: "alice", groups: ["reviewers"], platform_admin: false, capabilities: ["asset:read"] };
+  const inventory = (id: string, name: string) => ({
+    id,
+    catalog: "demo",
+    name,
+    backend: "iceberg",
+    table_identifier: `demo.${name}`,
+    owner_count: 1,
+    owners: ["alice"],
+    policy_status: "configured",
+    draft_status: "published",
+    active_policy_version: 1,
+    last_published_at: "2026-09-21T00:00:00Z",
+  });
+  const detail = (id: string, name: string) => ({
+    ...inventory(id, name),
+    revision: 1,
+    options: {},
+    policy_rules: [],
+    schema_fields: [{ name: "order_id", type: "string", nullable: false }],
+  });
+  const schema = (id: string, name: string) => ({
+    asset_id: id,
+    catalog: "demo",
+    target: `demo.${name}`,
+    schema_version: 1,
+    schema_fingerprint: id,
+    stable_field_ids: true,
+    supported_masks: ["null", "redact", "hash", "email", "keep_last", "default"],
+    fields: [{ field_id: 1, name: "order_id", human_path: "order_id", type: "string", nullable: false, kind: "scalar", path: { version: 1, segments: [{ kind: "field", name: "order_id", field_id: 1 }] } }],
+  });
+  const draft = (id: string) => ({ id: null, asset_id: id, author_principal: "alice", revision: 0, base_policy_version: 1, rules: [], content_hash: "" });
+  let sessionCalls = 0;
+  let staleSchemaRelease: (() => void) | undefined;
+  let staleSchemaStarted: Promise<void> | undefined;
+  await page.route("**/v1/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname;
+    if (path === "/v1/session" && request.method() === "GET") {
+      sessionCalls += 1;
+      return route.fulfill({ json: sessionCalls === 1 ? identityA : identityB });
+    }
+    if (path === "/v1/assets/page") {
+      const current = sessionCalls === 1 ? inventory(assetA, "alpha-orders") : inventory(assetB, "beta-orders");
+      return route.fulfill({ json: { items: [current], next_cursor: null } });
+    }
+    const match = path.match(/^\/v1\/assets\/([^/]+)(?:\/(.*))?$/);
+    if (match) {
+      const id = match[1];
+      const name = id === assetA ? "alpha-orders" : "beta-orders";
+      const suffix = match[2] ?? "";
+      if (id === assetA && suffix === "schema" && !staleSchemaStarted) {
+        staleSchemaStarted = new Promise((resolve) => { staleSchemaRelease = resolve; });
+        await staleSchemaStarted;
+      }
+      if (suffix === "schema") return route.fulfill({ json: schema(id, name) });
+      if (suffix === "grants") return route.fulfill({ json: [] });
+      if (suffix === "access") return route.fulfill({ json: { asset_id: id, principal: "alice", issuer: null, capabilities: [{ capability: "read", allowed: true, reasons: ["owner"] }, { capability: "edit", allowed: id === assetA, reasons: id === assetA ? ["owner"] : [] }, { capability: "publish", allowed: false, reasons: [] }, { capability: "grant", allowed: false, reasons: [] }] } });
+      if (suffix === "draft") return route.fulfill({ json: draft(id) });
+      if (suffix === "policy-versions") return route.fulfill({ json: [] });
+      return route.fulfill({ json: detail(id, name) });
+    }
+    if (path === "/v1/session/options") return route.fulfill({ json: { bootstrap_enabled: true, oidc: null } });
+    if (path === "/v1/ui-auth-config") return route.fulfill({ json: { authority: null } });
+    if (path === "/v1/session/bootstrap" && request.method() === "POST") return route.fulfill({ json: { authenticated: true } });
+    if (path === "/v1/logout" && request.method() === "POST") return route.fulfill({ json: { authenticated: false } });
+    return route.fulfill({ status: 404, json: { detail: "fixture route missing" } });
+  });
+
+  await page.goto("/#assets");
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Assets" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByRole("heading", { name: "Sign in to your workspace" })).toBeVisible();
+  await page.getByLabel("Local control-plane token").fill("synthetic-token");
+  await page.getByRole("button", { name: "Sign in locally" }).click();
+  await expect(page.getByRole("heading", { name: "beta-orders" })).toBeVisible();
+  expect(await page.getByRole("heading", { name: "alpha-orders" }).count()).toBe(0);
+  staleSchemaRelease?.();
+  await expect(page.getByRole("heading", { name: "beta-orders" })).toBeVisible();
+});
