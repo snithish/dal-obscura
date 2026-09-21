@@ -17,6 +17,7 @@
     "preview": "vite preview",
     "check": "tsc -b",
     "check:budgets": "node scripts/check-budgets.mjs",
+    "measure:web-vitals": "node scripts/measure-web-vitals.mjs",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "test:e2e": "playwright test",
     "generate:api-types": "node scripts/generate-api-types.mjs",
