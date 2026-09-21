@@ -458,3 +458,19 @@ Proof: `sh -n deployment/local-secure/run`, `git diff --check`, Ruff, and
 `tests/architecture/test_secure_local_profile.py` plus
 `tests/production/test_local_parity.py` (4 passed). R03 remains ACTIVE pending
 the named-tunnel profile and authorized real local/edge SSO qualification.
+
+## R03 — ACTIVE: named-tunnel development overlay (2026-09-21)
+
+Added `deployment/named-tunnel` as an explicit optional Compose overlay over the
+production and secure-local profiles. The connector has no published port; the
+origin remains loopback-bound and uses operator-provided hostname certificates,
+while Flight stays on the private local TLS endpoint. The runner validates a
+stable DNS hostname, exact HTTPS callback/logout/CORS origins, disabled
+bootstrap, required owner-readable secret files, and immutable image digests.
+It never creates DNS, tunnel, or Access resources and its doctor output marks
+Cloudflare Access as unverified.
+
+Proof: shell syntax, YAML parsing, Ruff, and six architecture/production parity
+tests pass. Compose runtime rendering could not be executed because the local
+Podman socket was unavailable. R03 remains ACTIVE pending an authorized named
+tunnel, real Access allow/deny probes, and local/edge SSO evidence.
