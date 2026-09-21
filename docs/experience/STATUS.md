@@ -239,3 +239,16 @@ publisher, restore, and process-race qualification.
 
 Static Storybook verification also passes after revision-bound links were added:
 `pnpm build-storybook` completed successfully with the 8-story-file inventory.
+
+## R11 — ACTIVE: production UI budget gate (2026-09-21)
+
+Added `check:budgets` and wired it into the normal UI production build. The
+gate measures the built asset directory rather than trusting Vite's display
+rounding: JavaScript and CSS are summed after gzip, while initial WOFF2 fonts
+are measured as raw bytes. It fails the build when E16's 200 KiB JS, 50 KiB
+CSS, or 120 KiB font limits are exceeded.
+
+Proof: `pnpm build` passes with 161.74 KiB JS gzip, 38.44 KiB CSS gzip, and
+83.72 KiB WOFF2 fonts; `pnpm check`, `pnpm test`, and `pnpm test:stories` also
+pass. R11 remains ACTIVE because route/LCP/CLS, release provenance, and real
+backup/restore qualification are still open.
