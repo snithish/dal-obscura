@@ -25,6 +25,21 @@ export async function signedOutApi(page: Page) {
   });
 }
 
+export async function edgeChallengeApi(page: Page, options: { status?: number; redirect?: boolean } = {}) {
+  await page.unroute("**/v1/**");
+  await page.route("**/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/v1/session" && route.request().method() === "GET") {
+      if (options.redirect) return route.fulfill({ status: 302, headers: { location: "/v1/session/challenge" } });
+      return route.fulfill({ status: options.status ?? 200, headers: { "content-type": "text/html" }, body: "<html><title>Sign in</title></html>" });
+    }
+    if (path === "/v1/session/challenge") return route.fulfill({ status: 200, headers: { "content-type": "text/html" }, body: "<html><title>Sign in</title></html>" });
+    if (path === "/v1/session/options") return route.fulfill({ json: { bootstrap_enabled: false, oidc: null } });
+    if (path === "/v1/ui-auth-config") return route.fulfill({ json: { authority: null } });
+    return route.fulfill({ status: 401, json: { detail: "Sign in required" } });
+  });
+}
+
 /** Synthetic authenticated API boundary for shell integration checks.
  * This fixture proves browser composition and capability presentation only;
  * it is never evidence of a live identity provider or production backend.

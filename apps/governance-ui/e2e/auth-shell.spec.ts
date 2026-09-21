@@ -1,6 +1,16 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
-import { authenticatedApi, deferredResponse, signedOutApi } from "./fixtures";
+import { authenticatedApi, deferredResponse, edgeChallengeApi, signedOutApi } from "./fixtures";
+
+async function assertEdgeChallenge(page: Parameters<typeof edgeChallengeApi>[0], options: Parameters<typeof edgeChallengeApi>[1]) {
+  await edgeChallengeApi(page, options);
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Sign in to your workspace" })).toBeVisible();
+  await expect(page.getByText("The browser or edge session expired. Sign in again to continue.")).toBeVisible();
+  await expect(page.getByText("Use demo persona")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "orders" })).toHaveCount(0);
+  await expect(page.getByLabel("Find governed asset")).toHaveCount(0);
+}
 
 test.describe("signed-out governance shell", () => {
   test.beforeEach(async ({ page }) => signedOutApi(page));
@@ -22,24 +32,15 @@ test.describe("signed-out governance shell", () => {
   });
 
   test("HTML edge challenges never become API success", async ({ page }) => {
-    await page.unroute("**/v1/**");
-    await page.route("**/v1/**", async (route) => {
-      const path = new URL(route.request().url()).pathname;
-      if (path === "/v1/session" && route.request().method() === "GET") {
-        return route.fulfill({ status: 200, headers: { "content-type": "text/html" }, body: "<html><title>Sign in</title></html>" });
-      }
-      if (path === "/v1/session/options") return route.fulfill({ json: { bootstrap_enabled: false, oidc: null } });
-      if (path === "/v1/ui-auth-config") return route.fulfill({ json: { authority: null } });
-      return route.fulfill({ status: 401, json: { detail: "Sign in required" } });
-    });
+    await assertEdgeChallenge(page, {});
+  });
 
-    await page.goto("/");
+  test("forbidden HTML edge challenges never become API success", async ({ page }) => {
+    await assertEdgeChallenge(page, { status: 403 });
+  });
 
-    await expect(page.getByRole("heading", { name: "Sign in to your workspace" })).toBeVisible();
-    await expect(page.getByText("The browser or edge session expired. Sign in again to continue.")).toBeVisible();
-    await expect(page.getByText("Use demo persona")).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: "orders" })).toHaveCount(0);
-    await expect(page.getByLabel("Find governed asset")).toHaveCount(0);
+  test("redirected edge challenges never become API success", async ({ page }) => {
+    await assertEdgeChallenge(page, { redirect: true });
   });
 
   test("has no serious or critical accessibility violations when signed out", async ({ page }) => {
