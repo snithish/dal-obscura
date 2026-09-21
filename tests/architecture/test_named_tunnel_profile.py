@@ -13,13 +13,19 @@ def test_named_tunnel_profile_keeps_connector_private_and_origin_bound() -> None
 
     assert "cloudflared:" in compose
     assert "--token-file" in compose
+    assert "image: ${DAL_OBSCURA_EDGE_IMAGE:?set DAL_OBSCURA_EDGE_IMAGE}" in compose
+    assert "condition: service_healthy" in compose
+    assert "  ui:\n    # The named origin" in compose
+    assert "    ports: []" in compose
     assert (
         "DAL_OBSCURA_NAMED_HOST: ${DAL_OBSCURA_NAMED_HOST:?set DAL_OBSCURA_NAMED_HOST}" in compose
     )
-    assert "ports:" not in compose
+    assert "ports:\n      - " not in compose
     assert "named_origin_cert" in compose and "named_origin_key" in compose
     assert "DAL_OBSCURA_CLOUDFLARED_IMAGE=cloudflare/cloudflared@sha256:" in env
     assert "DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED=false" in env
+    assert "DAL_OBSCURA_UI_TLS_CERT_SOURCE=../local-secure/secrets/ui.crt" in env
+    assert "DAL_OBSCURA_UI_TLS_KEY_SOURCE=../local-secure/secrets/ui.key" in env
     assert "DAL_OBSCURA_SECRET_PROVIDER_CONFIG=" in env
     assert "https://{$DAL_OBSCURA_NAMED_HOST}:8443" in caddy
     assert "Create the DNS record, tunnel, Access application" in readme

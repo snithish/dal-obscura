@@ -4,7 +4,16 @@ name: dal-obscura-named-tunnel
 # production plus local-secure; the connector has no published port and the
 # origin remains bound to loopback on the host.
 services:
+  ui:
+    # The named origin is the only browser ingress; do not inherit the
+    # production loopback UI publication from the base compose file.
+    ports: []
+
   edge:
+    image: ${DAL_OBSCURA_EDGE_IMAGE:?set DAL_OBSCURA_EDGE_IMAGE}
+    depends_on:
+      ui:
+        condition: service_healthy
     environment:
       DAL_OBSCURA_NAMED_HOST: ${DAL_OBSCURA_NAMED_HOST:?set DAL_OBSCURA_NAMED_HOST}
     secrets:
