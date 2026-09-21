@@ -198,6 +198,19 @@ def test_trusted_gateway_keeps_per_client_and_aggregate_login_budgets() -> None:
     assert blocked.status_code == 429
 
 
+@pytest.mark.parametrize("peer", ["gateway.internal", "10.0.0.8/not-a-mask", ""])
+def test_invalid_trusted_proxy_configuration_fails_closed(peer: str) -> None:
+    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+    migrate_config_store(engine)
+
+    with pytest.raises(ValueError, match="trusted proxy peer"):
+        create_app(
+            session_factory(engine),
+            admin_token="test-admin",
+            trusted_proxy_peers=(peer,),
+        )
+
+
 def test_successful_oidc_callback_clears_client_login_limit(monkeypatch) -> None:
     monkeypatch.setattr(
         api_module,
