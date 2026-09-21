@@ -1,8 +1,49 @@
-import { expect, test } from "@playwright/test";
-import { signedOutApi } from "./fixtures";
+import { expect, test, type Page } from "@playwright/test";
+import { authenticatedApi, signedOutApi } from "./fixtures";
 
 // Component integration only. Real OIDC/Access qualification remains E07.
 test.beforeEach(async ({ page }) => signedOutApi(page));
+
+type Rgb = [number, number, number];
+
+function contrastRatio(foreground: Rgb, background: Rgb) {
+  const luminance = (rgb: Rgb) => rgb.reduce((total, channel, index) => {
+    const normalized = channel / 255;
+    const linear = normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+    return total + linear * [0.2126, 0.7152, 0.0722][index];
+  }, 0);
+  const foregroundLuminance = luminance(foreground);
+  const backgroundLuminance = luminance(background);
+  const lighter = Math.max(foregroundLuminance, backgroundLuminance);
+  const darker = Math.min(foregroundLuminance, backgroundLuminance);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function parseRgb(value: string): Rgb {
+  const match = value.match(/rgba?\(([^)]+)\)/);
+  expect(match).not.toBeNull();
+  const channels = match![1].split(",").slice(0, 3).map((channel) => Number(channel.trim()));
+  expect(channels).toHaveLength(3);
+  return channels as Rgb;
+}
+
+async function renderedContrastSamples(page: Page, selector: string) {
+  return page.locator(selector).evaluateAll((elements) => elements.map((element) => {
+    const color = getComputedStyle(element).color;
+    let current: Element | null = element;
+    let background = "rgb(255, 255, 255)";
+    while (current) {
+      const candidate = getComputedStyle(current).backgroundColor;
+      const channels = candidate.match(/rgba?\(([^)]+)\)/)?.[1].split(",").map((channel) => Number(channel.trim()));
+      if (channels && (channels.length < 4 || channels[3] > 0)) {
+        background = candidate;
+        break;
+      }
+      current = current.parentElement;
+    }
+    return { role: element.tagName.toLowerCase(), color, background };
+  }));
+}
 
 test("built shell has a fresh style nonce and working library controls under CSP", async ({ page }) => {
   const violations: string[] = [];
@@ -50,48 +91,31 @@ test("System follows OS changes and explicit choice overrides the OS", async ({ 
 });
 
 test("rendered light and dark shell states meet the text contrast threshold", async ({ page }) => {
-  const contrastRatio = (foreground: [number, number, number], background: [number, number, number]) => {
-    const luminance = (rgb: [number, number, number]) => rgb.reduce((total, channel, index) => {
-      const normalized = channel / 255;
-      const linear = normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
-      return total + linear * [0.2126, 0.7152, 0.0722][index];
-    }, 0);
-    const foregroundLuminance = luminance(foreground);
-    const backgroundLuminance = luminance(background);
-    const lighter = Math.max(foregroundLuminance, backgroundLuminance);
-    const darker = Math.min(foregroundLuminance, backgroundLuminance);
-    return (lighter + 0.05) / (darker + 0.05);
-  };
-  const parseRgb = (value: string): [number, number, number] => {
-    const match = value.match(/rgba?\(([^)]+)\)/);
-    expect(match).not.toBeNull();
-    const channels = match![1].split(",").slice(0, 3).map((channel) => Number(channel.trim()));
-    expect(channels).toHaveLength(3);
-    return channels as [number, number, number];
-  };
-
   for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme });
     await page.goto("/");
-    const samples = await page.locator(".login-panel h2, .login-panel .mantine-Text-root, .login-panel button, .login-panel input").evaluateAll((elements) => elements.map((element) => {
-      const color = getComputedStyle(element).color;
-      let current: Element | null = element;
-      let background = "rgb(255, 255, 255)";
-      while (current) {
-        const candidate = getComputedStyle(current).backgroundColor;
-        const channels = candidate.match(/rgba?\(([^)]+)\)/)?.[1].split(",").map((channel) => Number(channel.trim()));
-        if (channels && (channels.length < 4 || channels[3] > 0)) {
-          background = candidate;
-          break;
-        }
-        current = current.parentElement;
-      }
-      return { role: element.tagName.toLowerCase(), color, background };
-    }));
+    const samples = await renderedContrastSamples(page, ".login-panel h2, .login-panel .mantine-Text-root, .login-panel button, .login-panel input");
     expect(samples.length).toBeGreaterThan(3);
     for (const sample of samples) {
       const ratio = contrastRatio(parseRgb(sample.color), parseRgb(sample.background));
       expect(ratio, `${scheme} ${sample.role} contrast`).toBeGreaterThanOrEqual(4.5);
+    }
+  }
+});
+
+test("authenticated policy workspace keeps rendered text and controls readable in both themes", async ({ page }) => {
+  await authenticatedApi(page);
+  await page.goto("/#assets");
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+
+  for (const theme of ["Light theme", "Dark theme"] as const) {
+    await page.getByRole("combobox", { name: "Color theme" }).click();
+    await page.getByRole("option", { name: theme, exact: true }).click();
+    const samples = await renderedContrastSamples(page, ".studio h2, .studio h3, .studio p, .studio button, .studio input, .studio select, .studio textarea");
+    expect(samples.length).toBeGreaterThan(5);
+    for (const sample of samples) {
+      const ratio = contrastRatio(parseRgb(sample.color), parseRgb(sample.background));
+      expect(ratio, `${theme} ${sample.role} contrast`).toBeGreaterThanOrEqual(4.5);
     }
   }
 });
