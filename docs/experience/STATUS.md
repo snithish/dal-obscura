@@ -764,3 +764,24 @@ Proof: `pnpm check`, `pnpm test:stories` (45 browser tests), and
 `pnpm build-storybook` pass. Atomic implementation commit: `57238433 test(ui):
 cover policy history restore`. R07 remains ACTIVE pending the real
 author/reviewer/publisher, restore, and process-race journey.
+
+## E03/R02 — ACTIVE: HTML edge authentication challenge recovery (2026-09-21)
+
+The API boundary now treats redirected responses, HTML responses, and followed
+SSO login URLs as authentication challenges before attempting JSON parsing. It
+dispatches the existing auth-expired event, clears the private workspace through
+the normal recovery path, and exposes a specific sign-in-again message. This
+prevents an edge or identity-provider login document from being accepted as a
+successful API response. Unit coverage verifies the recovery wording, and the
+built shell journey serves a `200 text/html` challenge for `/v1/session` and
+proves the UI remains signed out without demo data or authenticated asset
+controls.
+
+Proof: `tsc -b`, the UI node suite (20 tests), Storybook browser tests (45
+tests), production build plus budget gate (162.98 KiB JS gzip, 38.01 KiB CSS
+gzip, 83.72 KiB fonts), and the full built-browser suite (17 tests) pass.
+`pnpm` itself did not return in this runner, so equivalent direct binaries were
+used for the TypeScript, Vitest, Vite, and Playwright checks. Atomic
+implementation commit: `d80327fd fix(ui): fail closed on html auth challenges`.
+E03/R02 remains ACTIVE pending live local/Cloudflare SSO allow/deny and
+re-authentication evidence, plus the production deployment qualification.
