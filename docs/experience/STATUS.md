@@ -902,6 +902,24 @@ tool binaries provide equivalent evidence. R06 remains ACTIVE pending the
 remaining load/save/evaluate/review/publish/restore matrix, live identity and
 provider qualification, and production process-race evidence.
 
+## R06/R07 — ACTIVE: deferred publish response race (2026-09-21)
+
+Added a publisher-capable synthetic fixture and held publication response. The
+browser completes server review, starts publish, edits locally, then releases
+the old response. The new draft remains unsaved; stale publication success does
+not apply, and rule edits clear review authority so the old token cannot be
+reused. This closes the local save/evaluate/review/publish/lookup/restore race
+matrix for the policy authoring path.
+
+Proof: `tsc -b`, the focused publish-race browser test, the full built browser
+suite (33 tests), the UI node suite (20 tests), Storybook browser tests (45
+tests), production build, and bundle-budget gate pass. Measured budgets are
+163.03 KiB JS gzip, 38.01 KiB CSS gzip, and 83.72 KiB fonts. Atomic
+implementation commit: `9c968683 fix(ui): invalidate review authority on new
+edits`. R06/R07 remain ACTIVE pending live author/reviewer/publisher identity,
+backend publication, real consumer, manual owner, and production process-race
+qualification.
+
 ## R06 — ACTIVE: deferred policy-review response race (2026-09-21)
 
 Added a held server review response. The browser requests publish authority,
