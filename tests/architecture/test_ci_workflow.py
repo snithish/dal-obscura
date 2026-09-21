@@ -32,6 +32,16 @@ def test_ci_python_jobs_have_single_clear_responsibilities() -> None:
     assert "name: Build, scan, and publish image" in workflow
 
 
+def test_ci_renders_each_deployment_profile_before_contracts() -> None:
+    workflow = Path(".github/workflows/ci.yml").read_text()
+
+    assert "name: Render deployment profiles" in workflow
+    assert "docker compose --env-file deployment/production/.env.example" in workflow
+    assert "docker compose --env-file deployment/local-secure/.env.example" in workflow
+    assert "docker compose --env-file deployment/named-tunnel/.env.example" in workflow
+    assert "-f deployment/named-tunnel/compose.yaml config --quiet" in workflow
+
+
 def test_ci_requires_locked_dependency_audit_before_image_promotion() -> None:
     workflow = Path(".github/workflows/ci.yml").read_text()
 

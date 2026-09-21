@@ -87,6 +87,18 @@ jobs:
       - name: Install dependencies
         run: uv sync --dev --extra server --extra postgres --frozen
 
+      - name: Render deployment profiles
+        run: |
+          docker compose --env-file deployment/production/.env.example \
+            -f deployment/production/compose.yaml config --quiet
+          docker compose --env-file deployment/local-secure/.env.example \
+            -f deployment/production/compose.yaml \
+            -f deployment/local-secure/compose.yaml config --quiet
+          docker compose --env-file deployment/named-tunnel/.env.example \
+            -f deployment/production/compose.yaml \
+            -f deployment/local-secure/compose.yaml \
+            -f deployment/named-tunnel/compose.yaml config --quiet
+
       - name: Run deterministic contracts
         run: >-
           uv run pytest tests/common tests/domain tests/application tests/connectors
