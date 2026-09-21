@@ -1412,3 +1412,16 @@ administration qualification journey.
 
 Follow-up verification: the complete built browser suite remains green at 51
 tests after this change.
+
+## R06/R07/R11 — VERIFY: large nested schema tree qualification (2026-09-22)
+
+Added a built application regression with 10,000 authoritative scalar fields.
+The real virtual schema tree stays at or below 200 mounted rows and its Arrow-
+style keyboard navigation remains below the 200 ms E16 p95 interaction budget
+over 20 movements. The test uses the production tree and focus path; it does
+not replace manual screen-reader review or fixed-runner performance evidence.
+
+Proof: the focused browser test passes in 3.0 seconds. Atomic implementation
+commit: `04995eed test(ui): qualify large schema tree performance`. R06/R07/R11
+remain VERIFY pending fixed-runner measurements, manual accessibility review,
+and the live authoring workflow.
