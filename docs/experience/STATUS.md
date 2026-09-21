@@ -592,6 +592,14 @@ Proof: `pnpm check`, 19 UI unit tests, 38 Storybook browser tests, `pnpm build`,
 and `pnpm build-storybook` pass. R07 remains ACTIVE pending the real
 author/reviewer/publisher, restore, and process-race journeys.
 
+R08 workflow coverage also adds a seeded catalog diagnostic failure. It invokes
+the real `ConnectionsView` check action and renders the measured unavailable
+state with its transport error, without contacting an external endpoint.
+
+Proof: `pnpm check` and 39 Storybook browser tests pass. R08 remains ACTIVE
+pending live settings/access/audit journeys and authorized backend mutation
+evidence.
+
 ## R08 — ACTIVE: platform-admin lifecycle affordance boundary (2026-09-21)
 
 Disabled plugin lifecycle selectors and apply actions for non-platform-admin
