@@ -142,6 +142,20 @@ the Storybook browser suite reports 6 files and 15 tests passing. R05 remains
 ACTIVE because component/pattern/workflow breadth, contrast and responsive
 review, manual accessibility checks, and owner approval are still open.
 
+## R04 — ACTIVE: explicit Mantine scheme boundary (2026-09-21)
+
+Removed the legacy `prefers-color-scheme` fallback that treated a missing
+Mantine scheme attribute as dark. Remaining feature overrides now require
+`data-mantine-color-scheme="dark"`, matching the provider's explicit light,
+dark, and auto resolution and preventing system/light sessions from inheriting
+dark feature styles.
+
+Proof: all 8 existing design-system and shell browser tests pass, including OS
+theme switching, CSP, keyboard focus, narrow viewport, and signed-out axe
+checks. `pnpm check`, `pnpm build`, and `pnpm test:stories` also pass; the
+Storybook suite remains 7 files and 17 tests. R04 remains ACTIVE because the
+broader legacy CSS/token migration and authenticated visual review are open.
+
 ## R05 — ACTIVE: runtime and identity workflow coverage (2026-09-21)
 
 Added executable stories for the production `SettingsView` with configured
