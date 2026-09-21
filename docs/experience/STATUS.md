@@ -1013,3 +1013,19 @@ tests), production build, and bundle-budget gate pass. Measured budgets remain
 implementation commit: `31a37305 test(ui): cover administrator access
 mutations`. R08 remains ACTIVE pending live settings/access/audit journeys,
 backend authorization effects, and production qualification.
+
+## R08 — ACTIVE: authenticated runtime-settings mutation journey (2026-09-21)
+
+Added a configured administrator settings fixture and exercised the production
+runtime form through a staged TTL update. The journey exposed a real refresh
+ownership bug: `ManagementView` unmounted loaded children whenever a reload
+started, dropping success feedback. Loaded management children now remain
+mounted during refresh; initial loads still show the loading state.
+
+Proof: `tsc -b`, the focused settings-mutation browser test, the full built
+browser suite (35 tests), the UI node suite (20 tests), Storybook browser tests
+(45 tests), production build, and bundle-budget gate pass. Measured budgets are
+163.10 KiB JS gzip, 38.01 KiB CSS gzip, and 83.72 KiB fonts. Atomic
+implementation commit: `c528c944 fix(ui): preserve management views during
+refresh`. R08 remains ACTIVE pending live settings/access/audit requests,
+backend authorization effects, and production qualification.
