@@ -145,8 +145,15 @@ class ControlPlaneDeps:
 
         if not csrf_cookie or request.headers.get("x-csrf-token") != csrf_cookie:
             raise HTTPException(status_code=403, detail="CSRF validation failed")
+        allowed_origins = self._allowed_browser_origins()
+        allowed_hosts = {
+            parsed.netloc.lower() for value in allowed_origins if (parsed := urlsplit(value)).netloc
+        }
+        request_host = _canonical_request_host(request.headers.get("host", ""))
+        if allowed_hosts and (request_host is None or request_host not in allowed_hosts):
+            raise HTTPException(status_code=403, detail="Origin validation failed")
         origin = request.headers.get("origin", "").strip()
-        if origin and _canonical_origin(origin) not in self._allowed_browser_origins():
+        if origin and _canonical_origin(origin) not in allowed_origins:
             raise HTTPException(status_code=403, detail="Origin validation failed")
 
     def _allowed_browser_origins(self) -> set[str]:
@@ -423,6 +430,27 @@ def _canonical_origin(value: str) -> str | None:
         host = f"[{host}]"
     default_port = (scheme == "http" and port == 80) or (scheme == "https" and port == 443)
     return f"{scheme}://{host}{'' if port is None or default_port else f':{port}'}"
+
+
+def _canonical_request_host(value: str) -> str | None:
+    """Normalize a Host header without trusting forwarded host metadata."""
+
+    raw = value.strip()
+    if not raw or "," in raw or any(character.isspace() for character in raw):
+        return None
+    try:
+        parsed = urlsplit(f"https://{raw}")
+        hostname = parsed.hostname
+        port = parsed.port
+    except ValueError:
+        return None
+    if not hostname or parsed.path not in ("", "/") or parsed.query or parsed.fragment:
+        return None
+    host = hostname.lower()
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    default_port = port in (None, 443)
+    return f"{host}{'' if default_port else f':{port}'}"
 
 
 def _parse_proxy_network(value: str) -> ipaddress.IPv4Network | ipaddress.IPv6Network:

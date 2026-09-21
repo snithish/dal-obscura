@@ -97,7 +97,8 @@ def _client_with_ui_auth_config() -> TestClient:
                 "access_token": "owner-token",
                 "id_token": "owner-id-token",
             },
-        )
+        ),
+        base_url="http://127.0.0.1:8820",
     )
 
 
@@ -262,6 +263,46 @@ def test_cookie_mutation_cannot_trust_forged_host_and_matching_origin():
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Origin validation failed"
+
+
+def test_cookie_mutation_rejects_forged_host_without_origin_header():
+    client = _client_with_ui_auth_config()
+    login = _login_as_asset_owner(client)
+    cookie_header = (
+        f"dal_obscura_session={login.cookies['dal_obscura_session']}; "
+        f"dal_obscura_csrf={login.cookies['dal_obscura_csrf']}"
+    )
+
+    response = client.post(
+        "/v1/logout",
+        headers={
+            "cookie": cookie_header,
+            "x-csrf-token": login.cookies["dal_obscura_csrf"],
+            "host": "attacker.example",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Origin validation failed"
+
+
+def test_cookie_mutation_accepts_configured_host_without_origin_header():
+    client = _client_with_ui_auth_config()
+    login = _login_as_asset_owner(client)
+    cookie_header = (
+        f"dal_obscura_session={login.cookies['dal_obscura_session']}; "
+        f"dal_obscura_csrf={login.cookies['dal_obscura_csrf']}"
+    )
+
+    response = client.post(
+        "/v1/logout",
+        headers={
+            "cookie": cookie_header,
+            "x-csrf-token": login.cookies["dal_obscura_csrf"],
+        },
+    )
+
+    assert response.status_code == 200
 
 
 def test_removed_demo_login_route_is_absent():
