@@ -902,6 +902,21 @@ tool binaries provide equivalent evidence. R06 remains ACTIVE pending the
 remaining load/save/evaluate/review/publish/restore matrix, live identity and
 provider qualification, and production process-race evidence.
 
+## R06 — ACTIVE: deferred policy-review response race (2026-09-21)
+
+Added a held server review response. The browser requests publish authority,
+edits the draft while review is pending, then releases the old response. The
+newer draft remains unsaved and no stale review-current message or authority is
+attached to it.
+
+Proof: `tsc -b`, the focused review-race browser test, the full built browser
+suite (32 tests), the UI node suite (20 tests), Storybook browser tests (45
+tests), production build, and bundle-budget gate pass. Measured budgets remain
+163.03 KiB JS gzip, 38.01 KiB CSS gzip, and 83.72 KiB fonts. Atomic
+implementation commit: `484a1757 test(ui): cover deferred policy reviews`.
+R06 remains ACTIVE pending publish races, live identity and provider
+qualification, and production process-race evidence.
+
 ## R06 — ACTIVE: deferred policy-restore response race (2026-09-21)
 
 Added a held restore-to-draft response. The browser starts restoring an
