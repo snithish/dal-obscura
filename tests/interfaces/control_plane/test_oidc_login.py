@@ -220,6 +220,53 @@ def test_successful_oidc_callback_clears_client_login_limit(monkeypatch) -> None
     assert client.get("/auth/login", follow_redirects=False).status_code == 303
 
 
+def test_successful_oidc_callback_does_not_clear_shared_gateway_budget(monkeypatch) -> None:
+    monkeypatch.setattr(
+        api_module,
+        "_exchange_authorization_code",
+        lambda config, code, verifier: {"access_token": "access", "id_token": "id"},
+    )
+    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+    migrate_config_store(engine)
+    app = create_app(
+        session_factory(engine),
+        admin_token="test-admin",
+        oidc_nonce_actor_resolver=lambda token, nonce_hash: {
+            "principal": "alice",
+            "groups": [],
+        },
+        ui_auth_config={
+            "authority": "https://issuer.example/realms/demo",
+            "client_id": "dal-obscura-ui",
+            "redirect_uri": "http://testserver/auth/callback",
+        },
+        login_rate_limit_attempts=10,
+        login_rate_limit_aggregate_attempts=1,
+        trusted_proxy_peers=("10.0.0.8/32",),
+    )
+    first_client = TestClient(
+        app,
+        client=("10.0.0.8", 443),
+        headers={"x-forwarded-for": "198.51.100.7"},
+    )
+    second_client = TestClient(
+        app,
+        client=("10.0.0.8", 443),
+        headers={"x-forwarded-for": "198.51.100.8"},
+    )
+
+    start = first_client.get("/auth/login", follow_redirects=False)
+    state = parse_qs(urlsplit(start.headers["location"]).query)["state"][0]
+    callback = first_client.get(
+        "/auth/callback",
+        params={"code": "code", "state": state},
+        follow_redirects=False,
+    )
+
+    assert callback.status_code == 303
+    assert second_client.get("/auth/login", follow_redirects=False).status_code == 429
+
+
 def test_login_redirect_does_not_reuse_logout_destination() -> None:
     assert (
         _post_login_redirect(
