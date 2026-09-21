@@ -181,3 +181,17 @@ Proof: `pnpm check`, `pnpm test`, and `pnpm test:stories` pass from
 `apps/governance-ui`; the Storybook browser suite reports 7 files and 17 tests
 passing. R05 remains ACTIVE pending broader pattern/workflow coverage, visual
 review, manual accessibility checks, and owner approval.
+
+## R04/R05 — ACTIVE: nested policy workspace accessibility (2026-09-21)
+
+Added an executable story for the production `AssetWorkspace` with a nested
+struct schema (`customer.email`), field-level grant state, DuckDB row filter,
+email mask, reviewable draft, and administrator capabilities. The story uses
+only deterministic fixtures. Its axe run exposed and fixed an invalid
+`aria-setsize` on the tree container and contrast failures for selected field
+types and rule principals; metadata now uses the shared semantic text token.
+
+Proof: TypeScript, production build, all 8 design-system/shell E2E tests, and
+the Storybook browser suite pass; Storybook now reports 8 files and 18 tests.
+R04/R05 remain ACTIVE pending broader token migration, authenticated visual
+review, manual accessibility checks, and owner approval.
