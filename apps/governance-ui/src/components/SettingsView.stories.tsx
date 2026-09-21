@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect } from "storybook/test";
+import { expect, userEvent } from "storybook/test";
 import type { AuthProvider, RuntimeSettings, WorkspacePublication } from "../api";
 import { SettingsView } from "./SettingsView";
 
@@ -82,5 +82,15 @@ export const NoProvidersConfigured: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText("No identity providers configured.")).toBeVisible();
     await expect(canvas.getByRole("button", { name: "Add OIDC provider" })).toBeVisible();
+  },
+};
+
+export const InvalidAttributeMapping: Story = {
+  play: async ({ canvas }) => {
+    const field = canvas.getByPlaceholderText("tenant=tenant.id");
+    await userEvent.clear(field);
+    await userEvent.type(field, "tenant");
+    await expect(canvas.getByRole("alert")).toHaveTextContent("Use name=claim.path entries separated by commas.");
+    await expect(canvas.getByRole("button", { name: "Save identity providers" })).toBeDisabled();
   },
 };
