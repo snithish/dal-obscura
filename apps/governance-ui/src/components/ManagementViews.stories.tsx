@@ -110,6 +110,17 @@ export const ErrorWithRetry: Story = {
   },
 };
 
+export const RefreshFailureRetainsState: Story = {
+  args: { error: "The control plane is temporarily unavailable.", data, page: "activity", onReload: fn() },
+  play: async ({ canvas, args }) => {
+    await expect(canvas.getByRole("heading", { name: "Workspace status" })).toBeVisible();
+    await expect(canvas.getByText("policy.draft.save")).toBeVisible();
+    await expect(canvas.getByRole("alert")).toHaveTextContent("Workspace refresh failed");
+    await userEvent.click(canvas.getByRole("button", { name: "Retry refresh" }));
+    await expect(args.onReload).toHaveBeenCalledOnce();
+  },
+};
+
 export const UnknownActivity: Story = {
   args: { data: { events: [], eventsNextCursor: null }, session: null },
   play: async ({ canvas }) => {
