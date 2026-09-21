@@ -106,3 +106,25 @@ export const EmptyState: Story = {
     await expect(canvas.getByText("Connect an admitted catalog adapter to begin asset onboarding.")).toBeVisible();
   },
 };
+
+export const SecretReferenceEditing: Story = {
+  args: {
+    catalogs: [{
+      ...catalogs[0],
+      options: {
+        uri: "https://catalog.example",
+        password: { secret: "vault/catalog/password", scope: "catalog:analytics" },
+      },
+    }],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("button", { name: "Edit" })).toBeVisible();
+    await canvas.getByRole("button", { name: "Edit" }).click();
+    await expect(canvas.getByDisplayValue("https://catalog.example")).toBeVisible();
+    const secretField = canvas.getByLabelText(/Password secret reference/);
+    await expect(secretField).toHaveAttribute("type", "password");
+    await expect(secretField).toHaveValue("vault/catalog/password");
+    await expect(canvas.getByText(/Secret references remain deployment-managed/)).toBeVisible();
+    await expect(canvas.queryByText("super-secret-password")).not.toBeInTheDocument();
+  },
+};
