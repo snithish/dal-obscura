@@ -127,3 +127,12 @@ export const InvalidProviderNumber: Story = {
     await expect(canvas.getByRole("button", { name: "Save identity providers" })).toBeDisabled();
   },
 };
+
+export const InvalidProviderIssuer: Story = {
+  play: async ({ canvas }) => {
+    const field = canvas.getByLabelText("Issuer URL");
+    await userEvent.clear(field);
+    await expect(canvas.getByRole("alert")).toHaveTextContent("Issuer URL is required");
+    await expect(canvas.getByRole("button", { name: "Save identity providers" })).toBeDisabled();
+  },
+};

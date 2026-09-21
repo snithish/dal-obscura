@@ -189,9 +189,16 @@ export function SettingsView({
     markDirty("providers");
     const fieldKey = `${provider.id}:${key}`;
     setProviderTexts((current) => ({ ...current, [fieldKey]: value }));
+    const setError = (message: string): void => {
+      setProviderErrors((current) => ({ ...current, [fieldKey]: message }));
+    };
     let parsed: unknown = value;
     if (key === "group_claims" || key === "algorithms") {
       parsed = value.split(",").map((item) => item.trim()).filter(Boolean);
+      if (key === "algorithms" && !(parsed as string[]).length) {
+        setError("Enter at least one signing algorithm.");
+        return;
+      }
     } else if (key === "attribute_claims") {
       const entries = value.split(",").map((item) => item.trim()).filter(Boolean);
       const mapping: Record<string, string> = {};
@@ -209,11 +216,40 @@ export function SettingsView({
       else {
         const numeric = Number(value);
         if (!Number.isFinite(numeric) || !Number.isInteger(numeric) || numeric < 0) {
-          setProviderErrors((current) => ({ ...current, [fieldKey]: "Enter a non-negative integer." }));
+          setError("Enter a non-negative integer.");
+          return;
+        }
+        const bounds: Record<string, [number, number]> = {
+          leeway_seconds: [0, 300],
+          jwks_refresh_interval_seconds: [1, 86_400],
+          max_jwks_keys: [1, 4_096],
+        };
+        const [minimum, maximum] = bounds[key];
+        if (numeric < minimum || numeric > maximum) {
+          setError(`Enter a value between ${minimum} and ${maximum}.`);
           return;
         }
         parsed = numeric;
       }
+    } else if (key === "issuer" || key === "jwks_url") {
+      const trimmed = value.trim();
+      if (!trimmed && key === "issuer") {
+        setError("Issuer URL is required.");
+        return;
+      }
+      if (trimmed) {
+        try {
+          const url = new URL(trimmed);
+          if (!(["http:", "https:"] as string[]).includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+            setError("Use an HTTP(S) URL without credentials, query data, or a fragment.");
+            return;
+          }
+        } catch {
+          setError("Enter a valid HTTP(S) URL.");
+          return;
+        }
+      }
+      parsed = trimmed;
     }
     setProviderErrors((current) => { const next = { ...current }; delete next[fieldKey]; return next; });
     setProviderRows((current) => current.map((item, row) => row === index ? {
