@@ -485,5 +485,5 @@ Arrow examples.
 
 Proof: `pnpm check`, 16 UI unit tests, 33 Storybook browser tests, and the
 production build budget gate pass (161.79 KiB JS gzip, 37.89 KiB CSS gzip,
-83.72 KiB fonts). R05/R08 remain ACTIVE pending real consumer endpoint runs,
+83.72 KiB fonts); `pnpm build-storybook` also passes. R05/R08 remain ACTIVE pending real consumer endpoint runs,
 the complete administration journey, and live authorization evidence.
