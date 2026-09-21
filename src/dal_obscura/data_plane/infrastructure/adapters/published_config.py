@@ -750,5 +750,5 @@ def _catalog_type(config: dict[str, Any]) -> CatalogType:
 
 def _known_catalog_type(value: str) -> CatalogType:
     if value in {"iceberg", "plugin"}:
-        return cast(CatalogType, value)
+        return value
     raise ValueError(f"Unsupported catalog type: {value}")

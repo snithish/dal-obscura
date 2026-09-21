@@ -106,7 +106,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
                 actor=actor,
             )
         )
-        return {"asset_id": str(asset_id), "owners": owners}
+        return AssetOwnersResponse(asset_id=str(asset_id), owners=owners)
 
     @api.get("/v1/assets/{asset_id}/grants", response_model=list[AssetGrantResponse])
     def list_asset_grants(
@@ -146,7 +146,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
                 expected_revision=request.expected_revision,
             )
         )
-        return {"asset_id": str(asset_id), "fields": fields}
+        return AssetSchemaFieldsResponse(asset_id=str(asset_id), fields=fields)
 
     @api.put(
         "/v1/assets/{catalog}/{target}",

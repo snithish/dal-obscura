@@ -9,7 +9,7 @@ Example:
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
@@ -81,11 +81,13 @@ def get_workspace_runtime_settings(store: PublicationStore) -> dict[str, object]
     settings = store.get_runtime_settings(context.cell_id)
     if settings is None:
         return None
+    raw_path_rules = settings.get("path_rules", [])
+    path_rules = raw_path_rules if isinstance(raw_path_rules, list) else []
     return {
         "ticket_ttl_seconds": settings["ticket_ttl_seconds"],
         "max_tickets": settings["max_tickets"],
         "max_ticket_exchanges": settings["max_ticket_exchanges"],
-        "path_rules": list(settings.get("path_rules", [])),
+        "path_rules": list(path_rules),
         "revision": settings["revision"],
     }
 
@@ -267,17 +269,19 @@ def upsert_workspace_runtime_settings(
         },
     )
     settings = store.get_runtime_settings(context.cell_id)
-    return (
-        {}
-        if settings is None
-        else {
-            "ticket_ttl_seconds": settings["ticket_ttl_seconds"],
-            "max_tickets": settings["max_tickets"],
-            "max_ticket_exchanges": settings["max_ticket_exchanges"],
-            "path_rules": list(settings.get("path_rules", [])),
-            "revision": settings["revision"],
-        }
+    if settings is None:
+        return {}
+    raw_path_rules = settings.get("path_rules", [])
+    path_rules = (
+        cast(list[dict[str, Any]], raw_path_rules) if isinstance(raw_path_rules, list) else []
     )
+    return {
+        "ticket_ttl_seconds": settings["ticket_ttl_seconds"],
+        "max_tickets": settings["max_tickets"],
+        "max_ticket_exchanges": settings["max_ticket_exchanges"],
+        "path_rules": list(path_rules),
+        "revision": settings["revision"],
+    }
 
 
 def activate_workspace_publication(

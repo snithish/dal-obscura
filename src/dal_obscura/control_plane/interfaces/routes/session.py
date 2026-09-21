@@ -172,14 +172,16 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         production profile disables this method at startup.
         """
 
-        return {
-            "bootstrap_enabled": deps.bootstrap_enabled,
-            "oidc": (
-                public_ui_auth_config(deps.ui_auth_config)
-                if deps.ui_auth_config is not None
-                else None
-            ),
-        }
+        return SessionOptionsResponse.model_validate(
+            {
+                "bootstrap_enabled": deps.bootstrap_enabled,
+                "oidc": (
+                    public_ui_auth_config(deps.ui_auth_config)
+                    if deps.ui_auth_config is not None
+                    else None
+                ),
+            }
+        )
 
     @api.post("/v1/session/bootstrap", response_model=AuthenticationMutationResponse)
     def bootstrap_session(
@@ -230,7 +232,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             samesite="lax",
             path="/",
         )
-        return {"authenticated": True}
+        return AuthenticationMutationResponse(authenticated=True)
 
     @api.get(
         "/v1/ui-auth-config",
@@ -240,7 +242,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
     def get_ui_auth_config() -> UiAuthConfigResponse:
         if deps.ui_auth_config is None:
             raise HTTPException(status_code=404, detail="UI auth is not configured")
-        return public_ui_auth_config(deps.ui_auth_config)
+        return UiAuthConfigResponse.model_validate(public_ui_auth_config(deps.ui_auth_config))
 
     @api.post("/v1/logout", response_model=AuthenticationMutationResponse)
     def logout(
@@ -261,7 +263,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             response.delete_cookie(key=cookie_name, path="/")
         for cookie_name in ("dal_obscura_csrf", "__Host-dal_obscura_csrf"):
             response.delete_cookie(key=cookie_name, path="/")
-        return {"authenticated": False}
+        return AuthenticationMutationResponse(authenticated=False)
 
     return api
 

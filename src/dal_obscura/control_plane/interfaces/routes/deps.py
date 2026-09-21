@@ -18,7 +18,7 @@ import ipaddress
 import secrets
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import cast
+from typing import TypeVar, cast
 from urllib.parse import urlsplit
 
 from fastapi import Cookie, Header, HTTPException, Request
@@ -48,6 +48,7 @@ from dal_obscura.control_plane.interfaces.session_api import (
 from dal_obscura.data_plane.infrastructure.adapters.secret_providers import SecretProvider
 
 AuthorizationCodeExchange = Callable[[Mapping[str, object], str, str], Mapping[str, object]]
+ServiceResult = TypeVar("ServiceResult")
 MAX_BROWSER_SESSION_TTL_SECONDS = 86_400
 MAX_BROWSER_IDLE_TTL_SECONDS = 7_200
 
@@ -352,7 +353,9 @@ class ControlPlaneDeps:
             raise HTTPException(status_code=403, detail="Platform admin required")
         return actor
 
-    def with_service(self, callback: Callable[[ProvisioningService], object]) -> object:
+    def with_service(
+        self, callback: Callable[[ProvisioningService], ServiceResult]
+    ) -> ServiceResult:
         with self.session_maker() as session:
             service = ProvisioningService(
                 session,

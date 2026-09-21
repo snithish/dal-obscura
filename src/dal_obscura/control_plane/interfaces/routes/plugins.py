@@ -31,11 +31,13 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
             raise RuntimeError("Plugin registry was not admitted during application startup")
         descriptors = list(deps.plugin_registry.admitted().values())
         states = list(deps.plugin_registry.status_report())
-        return {
-            "plugins": [_descriptor_payload(descriptor) for descriptor in descriptors],
-            "pairs": _pair_payload(descriptors),
-            "states": states,
-        }
+        return PluginListResponse.model_validate(
+            {
+                "plugins": [_descriptor_payload(descriptor) for descriptor in descriptors],
+                "pairs": _pair_payload(descriptors),
+                "states": states,
+            }
+        )
 
     @api.patch(
         "/v1/plugins/{kind}/{plugin_id}/lifecycle",

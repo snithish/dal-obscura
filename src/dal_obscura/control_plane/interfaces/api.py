@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
+from typing import cast
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
@@ -128,12 +129,13 @@ def _field_errors_from_detail(detail: object) -> list[dict[str, str]]:
     for item in detail:
         if not isinstance(item, Mapping):
             continue
-        location = item.get("loc", ())
+        error = cast(Mapping[str, object], item)
+        location = error.get("loc", ())
         if not isinstance(location, (list, tuple)):
             location = ()
         field = ".".join(str(part) for part in location if part != "body")
-        message = item.get("msg", "Invalid value")
-        error_type = item.get("type", "value_error")
+        message = error.get("msg", "Invalid value")
+        error_type = error.get("type", "value_error")
         field_errors.append({"field": field, "message": str(message), "type": str(error_type)})
     return field_errors
 
