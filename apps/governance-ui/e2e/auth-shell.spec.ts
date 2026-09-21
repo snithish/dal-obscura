@@ -225,6 +225,23 @@ test("late settings responses cannot replace the current administrator page", as
   await expect(page.getByLabel("Ticket TTL (seconds)")).toHaveValue("22");
 });
 
+test("late connection responses cannot replace the current administrator page", async ({ page }) => {
+  const deferredConnections = deferredResponse();
+  await authenticatedApi(page, { admin: true, deferredConnections });
+  await page.goto("/#connections");
+  await deferredConnections.started;
+
+  await page.getByRole("button", { name: "Assets" }).click();
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  await page.getByRole("button", { name: "Connections" }).click();
+  await expect(page.getByRole("heading", { name: "Catalog connections" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "fresh-catalog" })).toBeVisible();
+
+  deferredConnections.release();
+  await expect(page.getByRole("heading", { name: "fresh-catalog" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "stale-catalog" })).toHaveCount(0);
+});
+
 test("reader deep links fail closed before admin settings requests", async ({ page }) => {
   const adminRequests: string[] = [];
   page.on("request", (request) => {

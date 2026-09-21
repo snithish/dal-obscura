@@ -46,7 +46,7 @@ export async function edgeChallengeApi(page: Page, options: EdgeChallengeOptions
  * This fixture proves browser composition and capability presentation only;
  * it is never evidence of a live identity provider or production backend.
  */
-export async function authenticatedApi(page: Page, options: { admin?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse; deferredSettings?: DeferredResponse } = {}) {
+export async function authenticatedApi(page: Page, options: { admin?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse; deferredSettings?: DeferredResponse; deferredConnections?: DeferredResponse } = {}) {
   const assetId = "00000000-0000-4000-8000-000000000001";
   const identity = {
     principal: "alex@example.invalid",
@@ -77,6 +77,7 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; d
   let auditCalls = 0;
   let historyCalls = 0;
   let settingsCalls = 0;
+  let catalogCalls = 0;
   await page.route("**/v1/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -104,7 +105,16 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; d
     if (path === "/v1/workspace/summary") return route.fulfill({ json: { asset_count: 1, catalog_count: 1, draft_change_count: 0, enabled_auth_provider_count: 1, missing_policy_count: 0, runtime_configured: true, unowned_asset_count: 0 } });
     if (path === "/v1/workspace/observations") return route.fulfill({ json: { available: true, data_plane: { status: "ready", reason: "synthetic fixture" }, generation: null, observed_at: "2026-09-21T00:00:00Z", source: "synthetic fixture" } });
     if (options.admin && path === "/v1/plugins") return route.fulfill({ json: { plugins: [], states: [], pairs: [] } });
-    if (options.admin && path === "/v1/catalogs") return route.fulfill({ json: [] });
+    if (options.admin && path === "/v1/catalogs") {
+      catalogCalls += 1;
+      if (catalogCalls === 1 && options.deferredConnections) {
+        options.deferredConnections.markStarted();
+        await options.deferredConnections.wait();
+      }
+      if (!options.deferredConnections) return route.fulfill({ json: [] });
+      const catalogName = catalogCalls === 1 ? "stale-catalog" : "fresh-catalog";
+      return route.fulfill({ json: [{ id: `catalog-${catalogCalls}`, name: catalogName, module: "synthetic.catalog", plugin_id: null, options: {}, status: "ready", revision: catalogCalls, discovered_table_count: 0, governed_asset_count: 0 }] });
+    }
     if (options.admin && path === "/v1/workspace/publications") return route.fulfill({ json: [] });
     if (options.admin && path === "/v1/settings/runtime") {
       settingsCalls += 1;
