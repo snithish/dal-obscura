@@ -1570,3 +1570,19 @@ commits: `f8c91be3 ci(release): bind candidate manifest to attestations` and
 the hashes of the combined raw attestation evidence (`f63afdea fix(ci): record
 attestation evidence hashes`). R11 remains VERIFY until a published candidate
 executes this gate and the complete release dossier is reviewed.
+
+## R04 — VERIFY: Mantine policy-control migration (2026-09-22)
+
+Migrated the authenticated policy workspace's search, asset selection,
+review-link recovery, principal entry, advanced conditions JSON, and DuckDB
+row-filter controls to the shared Mantine `TextInput`, `NativeSelect`, and
+`Textarea` components. Existing policy handlers, validation, nested schema
+selection, and native tree/mask controls remain unchanged. Atomic
+implementation commit: `4ca670ec refactor(ui): use Mantine policy controls`.
+
+Proof: TypeScript build, production Vite build, UI budgets (167.52 KiB JS
+gzip, 38.04 KiB CSS gzip, 83.72 KiB fonts), Node unit tests (20), built
+browser tests (54), Storybook Vitest tests (46), and the static Storybook
+build all pass. R04 remains VERIFY pending manual visual, keyboard, and
+screen-reader review plus owner approval; live SSO, backend authorization,
+consumer TLS/OIDC, and production deployment evidence remain separate gates.
