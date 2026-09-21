@@ -557,6 +557,17 @@ Proof: `pnpm check` and 17 UI unit tests pass. This hardens the client boundary;
 server authorization and live hostile-destination qualification remain open in
 R02/R10.
 
+## R08 — ACTIVE: typed numeric configuration validation (2026-09-21)
+
+Catalog forms now reject non-finite numeric values and fractional values for
+integer fields before constructing the mutation payload. The error names the
+typed field and preserves the editor contents. A Storybook workflow proves an
+invalid integer is blocked without contacting the control plane.
+
+Proof: `pnpm check` and 37 Storybook browser tests pass. R08 remains ACTIVE
+pending live settings/access/audit journeys and authorized backend mutation
+evidence.
+
 ## R08 — ACTIVE: platform-admin lifecycle affordance boundary (2026-09-21)
 
 Disabled plugin lifecycle selectors and apply actions for non-platform-admin
