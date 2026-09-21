@@ -152,6 +152,12 @@ export function SettingsView({
       setMessage("Fix the highlighted identity provider fields before saving.");
       return;
     }
+    if (!providerRows.some((provider) => provider.enabled) && !window.confirm(
+      "No identity provider will remain enabled. Stage this lockout configuration anyway?",
+    )) {
+      setMessage("Identity provider changes were not saved. Keep at least one provider enabled unless lockout is intentional.");
+      return;
+    }
     savingRef.current = true;
     setSaving(true);
     const controller = beginMutation();

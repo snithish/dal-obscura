@@ -85,6 +85,21 @@ export const NoProvidersConfigured: Story = {
   },
 };
 
+export const PreventAccidentalProviderLockout: Story = {
+  play: async ({ canvas }) => {
+    const originalConfirm = window.confirm;
+    window.confirm = () => false;
+    try {
+      const removeButtons = canvas.getAllByRole("button", { name: "Remove" });
+      await userEvent.click(removeButtons[removeButtons.length - 1]);
+      await userEvent.click(canvas.getByRole("button", { name: "Save identity providers" }));
+      await expect(canvas.getByRole("status")).toHaveTextContent("were not saved");
+    } finally {
+      window.confirm = originalConfirm;
+    }
+  },
+};
+
 export const InvalidAttributeMapping: Story = {
   play: async ({ canvas }) => {
     const field = canvas.getByPlaceholderText("tenant=tenant.id");
