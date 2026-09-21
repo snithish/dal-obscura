@@ -1311,10 +1311,12 @@ headings, copy, buttons, inputs, selects, and textareas against the 4.5:1 text
 threshold. It uses synthetic management data and does not qualify live
 authorization or manual review.
 
-Proof: the complete built browser suite reports 48 passed tests and TypeScript
-passes. Atomic implementation commit: `7642fe07 test(ui): cover management
-theme contrast`. R04/R08 remain VERIFY pending live management authorization,
-manual contrast/keyboard/screen-reader review, and owner approval.
+Proof: the complete built browser suite reports 50 passed tests and TypeScript
+passes; each management screen/theme pair also completes a serious/critical
+axe scan. Atomic implementation commits: `7642fe07 test(ui): cover management
+theme contrast` and `219197b2 test(ui): scan management accessibility matrix`.
+R04/R08 remain VERIFY pending live management authorization, manual contrast/
+keyboard/screen-reader review, and owner approval.
 
 ## R04/R06/R08 — ACTIVE: administrator tablet overflow fix (2026-09-21)
 
