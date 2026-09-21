@@ -855,3 +855,16 @@ Follow-up `5783b78e test(ui): scan administrator settings accessibility` adds
 axe coverage for the capability-gated Settings form; the full built-browser
 suite remains green at 24 tests. Automated checks do not replace manual
 screen-reader, visual, contrast, or owner review.
+
+## R06 — ACTIVE: deferred Settings response race (2026-09-21)
+
+Extended the authenticated browser boundary with a held administrator runtime
+settings response. The test navigates from Settings to Assets and back to
+Settings, verifies the fresh ticket TTL, then releases the original response
+and proves the fresh value remains. This complements the Activity and Changes
+race proofs across three management resources.
+
+Proof: TypeScript, the focused Settings-race browser test, and the full built
+browser suite (25 tests) pass. Atomic implementation commit: `ed83e65e
+test(ui): cover deferred settings responses`. R06 remains ACTIVE pending the
+remaining parameterized workflow matrix and live identity/provider qualification.
