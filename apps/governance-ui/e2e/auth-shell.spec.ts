@@ -119,6 +119,23 @@ test("authenticated mobile navigation respects capabilities and restores focus",
   await expect(page.getByRole("dialog", { name: "Navigation" })).toHaveCount(0);
 });
 
+test("mutation HTML challenges clear private workspace state", async ({ page }) => {
+  await authenticatedApi(page);
+  await page.goto("/#assets");
+
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  await page.route("**/v1/assets/**/draft", async (route) => route.fulfill({
+    status: 200,
+    headers: { "content-type": "text/html" },
+    body: "<html><title>Sign in</title></html>",
+  }));
+  await page.getByRole("button", { name: "Save deny-all draft" }).click();
+  await expect(page.getByRole("heading", { name: "Sign in to your workspace" })).toBeVisible();
+  await expect(page.getByText("The browser or edge session expired. Sign in again to continue.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "orders" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Save deny-all draft" })).toHaveCount(0);
+});
+
 test("stale review links remain explicit and read-only", async ({ page }) => {
   await authenticatedApi(page);
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001&draft=old-draft&draft_revision=2#assets");
