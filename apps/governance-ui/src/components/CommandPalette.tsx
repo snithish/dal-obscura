@@ -15,10 +15,15 @@ export type CommandPaletteProps = {
 
 export function CommandPalette(props: CommandPaletteProps) {
   const store = useCombobox({ opened: props.opened });
-  const commands = props.commands.filter((command) => command.includes(props.query.toLowerCase()));
+  const query = props.query.trim().toLowerCase();
+  const commands = props.commands.filter((command) => command.includes(query));
+  const assets = props.assets.filter((asset) =>
+    [asset.id, asset.name, asset.catalog, asset.table_identifier]
+      .some((value) => value.toLowerCase().includes(query)),
+  );
   const options = [
     ...commands.map((command) => ({ value: `command:${command}`, label: command === "help" ? "Keyboard and workflow help" : `Open ${command[0].toUpperCase()}${command.slice(1)}`, select: () => props.onCommand(command) })),
-    ...props.assets.map((asset) => ({ value: `asset:${asset.id}`, label: `${asset.name} · ${asset.catalog}`, select: () => props.onAsset(asset.id) })),
+    ...assets.map((asset) => ({ value: `asset:${asset.id}`, label: `${asset.name} · ${asset.catalog}`, select: () => props.onAsset(asset.id) })),
   ];
   return (
     <Modal opened={props.opened} onClose={props.onClose} title="Command palette" closeButtonProps={{ "aria-label": "Close command palette" }} centered size="lg">
