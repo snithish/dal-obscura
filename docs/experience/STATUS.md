@@ -1430,6 +1430,19 @@ administration qualification journey.
 Follow-up verification: the complete built browser suite passes at 53 tests,
 including the 10k-node tree and multi-format catalog journeys.
 
+## R02/R06 — VERIFY: configured SSO entry composition (2026-09-22)
+
+Added a built-shell login case with a server-advertised OIDC provider. The real
+LoginPanel shows the SSO action, omits the disposable local bootstrap form, and
+navigates to `/auth/login`; no provider response is treated as an authenticated
+session. This proves browser composition only and does not qualify PKCE, nonce,
+issuer, audience, or live identity-provider behavior.
+
+Proof: the focused browser journey and TypeScript pass. Atomic implementation
+commit: `9795a02f test(ui): cover configured sso entry`. R02/R06 remain VERIFY
+pending live local/Cloudflare SSO, callback, logout, expiry, and authorization
+evidence.
+
 ## R06/R07/R11 — VERIFY: large nested schema tree qualification (2026-09-22)
 
 Added a built application regression with 10,000 authoritative scalar fields.
