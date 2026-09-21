@@ -309,7 +309,11 @@ function App() {
         next = { runtime, providers, providerRevision: revision.revision, publications };
       }
       if (!isCurrentEpoch(epoch, managementEpoch.current)) return;
-      setManagementData(next);
+      // Keep asset-scoped access metadata while a management route is active.
+      // The asset editor stays mounted behind navigation; replacing this object
+      // would temporarily erase edit capability and make the editor read-only
+      // when the user returns to Assets.
+      setManagementData((current) => ({ ...current, ...next }));
     } catch (error) {
       if (!isCurrentEpoch(epoch, managementEpoch.current)) return;
       if ((error instanceof DOMException && error.name === "AbortError") || (error instanceof Error && error.name === "CancelledError")) return;

@@ -242,6 +242,29 @@ test("late connection responses cannot replace the current administrator page", 
   await expect(page.getByRole("heading", { name: "stale-catalog" })).toHaveCount(0);
 });
 
+test("late asset lookup responses cannot replace the current inventory", async ({ page }) => {
+  const deferredInventory = deferredResponse();
+  await authenticatedApi(page, { deferredInventory });
+  await page.goto("/#assets");
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+
+  const search = page.getByLabel("Find governed asset");
+  await search.fill("stale");
+  await deferredInventory.started;
+
+  await page.getByRole("button", { name: "Activity" }).click();
+  await expect(page.getByRole("heading", { name: "Activity", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Assets" }).click();
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  await expect(search).toBeEnabled();
+  await search.fill("fresh");
+  await expect(page.locator("#asset-select")).toContainText("demo / fresh-orders");
+
+  deferredInventory.release();
+  await expect(page.locator("#asset-select")).toContainText("demo / fresh-orders");
+  await expect(page.locator("#asset-select")).not.toContainText("demo / stale-orders");
+});
+
 test("reader deep links fail closed before admin settings requests", async ({ page }) => {
   const adminRequests: string[] = [];
   page.on("request", (request) => {

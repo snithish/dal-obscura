@@ -46,7 +46,7 @@ export async function edgeChallengeApi(page: Page, options: EdgeChallengeOptions
  * This fixture proves browser composition and capability presentation only;
  * it is never evidence of a live identity provider or production backend.
  */
-export async function authenticatedApi(page: Page, options: { admin?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse; deferredSettings?: DeferredResponse; deferredConnections?: DeferredResponse } = {}) {
+export async function authenticatedApi(page: Page, options: { admin?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse; deferredSettings?: DeferredResponse; deferredConnections?: DeferredResponse; deferredInventory?: DeferredResponse } = {}) {
   const assetId = "00000000-0000-4000-8000-000000000001";
   const identity = {
     principal: "alex@example.invalid",
@@ -82,7 +82,16 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; d
     const request = route.request();
     const path = new URL(request.url()).pathname;
     if (path === "/v1/session" && request.method() === "GET") return route.fulfill({ json: identity });
-    if (path === "/v1/assets/page") return route.fulfill({ json: { items: [inventory], next_cursor: null } });
+    if (path === "/v1/assets/page") {
+      const search = new URL(request.url()).searchParams.get("search");
+      if (search === "stale" && options.deferredInventory) {
+        options.deferredInventory.markStarted();
+        await options.deferredInventory.wait();
+      }
+      if (search === "stale") return route.fulfill({ json: { items: [{ ...inventory, name: "stale-orders" }], next_cursor: null } });
+      if (search === "fresh") return route.fulfill({ json: { items: [{ ...inventory, name: "fresh-orders" }], next_cursor: null } });
+      return route.fulfill({ json: { items: [inventory], next_cursor: null } });
+    }
     if (path === "/v1/audit/events/page") {
       auditCalls += 1;
       if (auditCalls === 1 && options.deferredAudit) {
