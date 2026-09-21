@@ -195,3 +195,6 @@ Proof: TypeScript, production build, all 8 design-system/shell E2E tests, and
 the Storybook browser suite pass; Storybook now reports 8 files and 18 tests.
 R04/R05 remain ACTIVE pending broader token migration, authenticated visual
 review, manual accessibility checks, and owner approval.
+
+Static Storybook verification also passes after the nested workflow addition:
+`pnpm build-storybook` completed successfully with the 8-story-file inventory.
