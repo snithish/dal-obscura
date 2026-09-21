@@ -1130,3 +1130,18 @@ remain green. Atomic implementation commit: `aa0bf254 test(ui): cover audit
 filtering and pagination`. R08 remains ACTIVE pending live settings/access/
 audit and publication effects, real plugin registry qualification, and
 production operations evidence.
+
+## R06/R08 — ACTIVE: stale catalog discovery race (2026-09-21)
+
+Added a held table-discovery response and exercised the production Connections
+view across navigation. The browser starts discovery, leaves the management
+page, performs a fresh discovery after returning, and then releases the older
+response. The fresh table inventory remains visible and the stale table never
+replaces it, covering the existing discovery epoch and management-query
+cancellation boundary. The fixture is synthetic and does not qualify live
+catalog latency, cancellation, or backend authorization.
+
+Proof: TypeScript and the focused stale-discovery browser test pass against the
+built shell. Atomic implementation commit: `bc1928c4 test(ui): cover stale
+catalog discovery`. R06/R08 remain ACTIVE pending the remaining live identity,
+backend mutation, plugin, consumer, and production process evidence.
