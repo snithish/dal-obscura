@@ -600,6 +600,14 @@ Proof: `pnpm check` and 39 Storybook browser tests pass. R08 remains ACTIVE
 pending live settings/access/audit journeys and authorized backend mutation
 evidence.
 
+R05/R08 workflow coverage adds a runtime-settings validation story. It edits
+the real ticket TTL field to an invalid non-positive value, verifies the
+actionable status message, and stops before any mutation request is created.
+
+Proof: `pnpm check` and 40 Storybook browser tests pass. R05/R08 remain ACTIVE
+pending broader authenticated workflow coverage and live backend mutation
+evidence.
+
 ## R08 — ACTIVE: platform-admin lifecycle affordance boundary (2026-09-21)
 
 Disabled plugin lifecycle selectors and apply actions for non-platform-admin
