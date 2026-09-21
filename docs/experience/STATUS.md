@@ -491,10 +491,19 @@ Cloudflare Access as unverified.
 Follow-up `98ea7223` explicitly ignores generated secret material for all three
 deployment profiles and protects that contract with an architecture test.
 
-Proof: shell syntax, YAML parsing, Ruff, and six architecture/production parity
-tests pass. Compose runtime rendering could not be executed because the local
-Podman socket was unavailable. R03 remains ACTIVE pending an authorized named
-tunnel, real Access allow/deny probes, and local/edge SSO evidence.
+The overlay initially had two runtime defects: no image for its `edge` service
+and inherited UI host-port exposure; its example environment also omitted the
+secure-local UI certificate paths. The merged profile now defines the pinned
+edge image, waits for the healthy UI, clears inherited UI ports, and supplies
+all inherited TLS paths. Atomic implementation commit: `7d0d4ed2
+fix(deployment): make named tunnel overlay runnable`.
+
+Proof: `docker compose --env-file deployment/named-tunnel/.env.example -f
+deployment/production/compose.yaml -f deployment/local-secure/compose.yaml -f
+deployment/named-tunnel/compose.yaml config --quiet`, shell syntax, Ruff, and
+the focused named-tunnel/local-parity tests pass. R03 remains ACTIVE pending an
+authorized named tunnel, real Access allow/deny probes, and local/edge SSO
+evidence.
 
 ## R05/R08 — ACTIVE: consumer handoff clipboard recovery (2026-09-21)
 
