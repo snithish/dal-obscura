@@ -62,6 +62,19 @@ test("forced-colors mode keeps the signed-out controls discoverable", async ({ p
   await expect(page.getByRole("button", { name: "Sign in locally" })).toBeVisible();
 });
 
+test("reduced-motion preference disables shell motion", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+
+  await expect.poll(() => page.evaluate(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches)).toBe(true);
+  const motion = await page.locator(".login-panel").evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { animationDuration: style.animationDuration, transitionDuration: style.transitionDuration };
+  });
+  expect(motion.animationDuration).toMatch(/^(0s|0\.01ms)$/);
+  expect(motion.transitionDuration).toMatch(/^(0s|0\.01ms)$/);
+});
+
 test("CSP rejects missing and wrong style nonces", async ({ page }) => {
   await page.goto("/");
   const result = await page.evaluate(() => {
