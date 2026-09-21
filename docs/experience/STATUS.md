@@ -790,5 +790,8 @@ challenges` adds 403-HTML and followed-redirect cases; the full built-browser
 suite now passes 19 tests. Mutation coverage `22caa646 test(ui): prove mutation
 challenges clear private state` exercises a challenged deny-all draft save and
 the full built-browser suite now passes 20 tests.
+The shared challenge fixture contract is explicit in `cd742c6e
+refactor(ui-tests): type edge challenge fixture`; TypeScript and the focused
+four-case edge/mutation matrix pass.
 E03/R02 remains ACTIVE pending live local/Cloudflare SSO allow/deny and
 re-authentication evidence, plus the production deployment qualification.
