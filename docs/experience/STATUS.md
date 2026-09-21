@@ -401,6 +401,21 @@ The production dependency graph reports no known vulnerabilities with
 the full E01 toolchain/support inventory and repository-wide typing diagnostics
 remain open.
 
+## R04 — ACTIVE: feature CSS semantic-token consolidation (2026-09-21)
+
+Migrated the remaining feature stylesheet onto the Mantine semantic variables
+for surfaces, text, borders, controls, focus, selection, success, warning, and
+danger states. Removed the competing hardcoded dark palette and legacy green/
+cream color literals, and routed feature typography through the shared IBM Plex
+font variables. This keeps authenticated screens on the same light/dark token
+source as the shell and Storybook.
+
+Proof: `pnpm check`, 16 UI unit tests, 31 Storybook tests, `pnpm build` with
+161.75 KiB JS gzip, 37.89 KiB CSS gzip, and 83.72 KiB fonts, 9 built-browser
+tests, and `pnpm build-storybook` all pass. R04 remains ACTIVE pending the
+contrast matrix, responsive/zoom/forced-colors review, and owner visual
+approval.
+
 ## R02 — ACTIVE: trusted proxy login attribution (2026-09-21)
 
 Added an explicit trusted-proxy contract for browser login rate limiting. The
