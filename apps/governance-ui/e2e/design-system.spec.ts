@@ -120,6 +120,37 @@ test("authenticated policy workspace keeps rendered text and controls readable i
   }
 });
 
+test("authenticated management screens keep rendered text and controls readable in both themes", async ({ page }) => {
+  await authenticatedApi(page, {
+    admin: true,
+    configuredSettings: true,
+    configuredConnections: true,
+    configuredPublications: true,
+    configuredLifecycle: true,
+    configuredAudit: true,
+  });
+  const screens = [
+    ["#activity", "Workspace status"],
+    ["#changes", "Published policy history"],
+    ["#connections", "Catalog connections"],
+    ["#settings", "Runtime and identity"],
+  ] as const;
+  for (const theme of ["Light theme", "Dark theme"] as const) {
+    for (const [hash, heading] of screens) {
+      await page.goto(`/${hash}`);
+      await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+      await page.getByRole("combobox", { name: "Color theme" }).click();
+      await page.getByRole("option", { name: theme, exact: true }).click();
+      const samples = await renderedContrastSamples(page, ".management-view h2, .management-view h3, .management-view p, .management-view button, .management-view input, .management-view select, .management-view textarea");
+      expect(samples.length).toBeGreaterThan(3);
+      for (const sample of samples) {
+        const ratio = contrastRatio(parseRgb(sample.color), parseRgb(sample.background));
+        expect(ratio, `${theme} ${hash} ${sample.role} contrast`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  }
+});
+
 test("forced-colors mode keeps the signed-out controls discoverable", async ({ page }) => {
   await page.emulateMedia({ forcedColors: "active" });
   await page.goto("/");
