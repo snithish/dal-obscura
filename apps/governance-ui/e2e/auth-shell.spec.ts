@@ -119,6 +119,18 @@ test("authenticated mobile navigation respects capabilities and restores focus",
   await expect(page.getByRole("dialog", { name: "Navigation" })).toHaveCount(0);
 });
 
+test("authenticated reader shell has no serious or critical accessibility violations", async ({ page }) => {
+  await authenticatedApi(page);
+  await page.goto("/#assets");
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+
+  const results = await new AxeBuilder({ page }).analyze();
+  const blockingViolations = results.violations.filter(
+    (violation) => violation.impact === "serious" || violation.impact === "critical",
+  );
+  expect(blockingViolations).toEqual([]);
+});
+
 test("administrator management routes load through the authenticated shell", async ({ page }) => {
   await authenticatedApi(page, { admin: true });
   await page.goto("/#connections");
