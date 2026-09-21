@@ -198,3 +198,16 @@ review, manual accessibility checks, and owner approval.
 
 Static Storybook verification also passes after the nested workflow addition:
 `pnpm build-storybook` completed successfully with the 8-story-file inventory.
+
+## R07 — ACTIVE: authoritative schema identity guard (2026-09-21)
+
+Removed `AssetWorkspace`'s index-based fallback for legacy flat schema
+summaries. When the authoritative nested schema response is missing, the UI now
+shows an explicit unavailable state and does not create or select fabricated
+field identities. Added a Storybook edge-case story beside the nested policy
+workflow story.
+
+Proof: `pnpm check`, `pnpm build`, `pnpm test`, and `pnpm test:stories` pass;
+the Storybook browser suite reports 8 files and 19 tests. R07 remains ACTIVE:
+real author/reviewer/publisher, stale-link, restore, and process-race journeys
+still require backend qualification.
