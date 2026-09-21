@@ -848,4 +848,5 @@ Proof: TypeScript, the focused authenticated axe test, and the full built-browse
 suite (24 tests) pass. Atomic implementation commit: `440856a7 test(ui): scan
 authenticated shell accessibility`. R04/R06 remain ACTIVE pending manual
 screen-reader/visual review, contrast and zoom review, and live identity
-qualification.
+qualification. The Storybook browser regression suite remains green at 45
+tests after this shell coverage was added.
