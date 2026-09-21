@@ -13,6 +13,7 @@ def test_named_tunnel_profile_keeps_connector_private_and_origin_bound() -> None
 
     assert "cloudflared:" in compose
     assert "--token-file" in compose
+    assert 'profiles: ["connector"]' in compose
     assert "image: ${DAL_OBSCURA_EDGE_IMAGE:?set DAL_OBSCURA_EDGE_IMAGE}" in compose
     assert "condition: service_healthy" in compose
     assert "  ui:\n    # The named origin" in compose
@@ -42,6 +43,9 @@ def test_named_tunnel_runner_fails_closed_and_redacts_edge_claims() -> None:
     assert "Bootstrap login must be disabled" in source
     assert "cloudflare_access=not-verified" in source
     assert "cloudflared.token" in source
+    assert "compose --profile connector up -d --wait cloudflared" in source
+    assert "compose up -d --wait" in source
+    assert "compose --profile connector down" in source
     assert "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN" not in source
 
 

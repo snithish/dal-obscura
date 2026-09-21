@@ -25,6 +25,7 @@ services:
       - ../named-tunnel/Caddyfile:/etc/caddy/Caddyfile:ro
 
   cloudflared:
+    profiles: ["connector"]
     image: ${DAL_OBSCURA_CLOUDFLARED_IMAGE:?set DAL_OBSCURA_CLOUDFLARED_IMAGE}
     command: ["tunnel", "--no-autoupdate", "run", "--token-file", "/run/secrets/cloudflared_token"]
     depends_on:

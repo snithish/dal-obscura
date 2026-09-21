@@ -48,7 +48,7 @@ doctor() {
   if openssl x509 -in "$ROOT/secrets/origin.crt" -checkhost "$host" -noout >/dev/null 2>&1; then
     san=validated
   fi
-  connector_state=$(compose ps --format '{{.Service}}={{.State}}' cloudflared 2>/dev/null || true)
+  connector_state=$(compose --profile connector ps --format '{{.Service}}={{.State}}' cloudflared 2>/dev/null || true)
   [ -n "$connector_state" ] || connector_state=not-running
   printf '%s\n' \
     'profile=named-tunnel' \
@@ -75,11 +75,16 @@ EOF
 
 [ "$#" -gt 0 ] || { usage >&2; exit 2; }
 case "$1" in
-  config) [ -f "$PROFILE" ] || { echo "Create $PROFILE first" >&2; exit 2; }; validate_profile; compose config --quiet ;;
-  up) [ -f "$PROFILE" ] || { echo "Create $PROFILE first" >&2; exit 2; }; validate_profile; compose up -d --wait ;;
+  config) [ -f "$PROFILE" ] || { echo "Create $PROFILE first" >&2; exit 2; }; validate_profile; compose --profile connector config --quiet ;;
+  up)
+    [ -f "$PROFILE" ] || { echo "Create $PROFILE first" >&2; exit 2; }
+    validate_profile
+    compose up -d --wait
+    compose --profile connector up -d --wait cloudflared
+    ;;
   doctor) doctor ;;
-  down) [ -f "$PROFILE" ] || exit 0; compose down ;;
-  reset) [ -f "$PROFILE" ] || exit 0; compose down --volumes --remove-orphans ;;
-  logs) [ -f "$PROFILE" ] || { echo "Create $PROFILE first" >&2; exit 2; }; validate_profile; compose logs "${2:-cloudflared}" ;;
+  down) [ -f "$PROFILE" ] || exit 0; compose --profile connector down ;;
+  reset) [ -f "$PROFILE" ] || exit 0; compose --profile connector down --volumes --remove-orphans ;;
+  logs) [ -f "$PROFILE" ] || { echo "Create $PROFILE first" >&2; exit 2; }; validate_profile; compose --profile connector logs "${2:-cloudflared}" ;;
   *) usage >&2; exit 2 ;;
 esac

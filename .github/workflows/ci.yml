@@ -94,7 +94,7 @@ jobs:
           docker compose --env-file deployment/local-secure/.env.example \
             -f deployment/production/compose.yaml \
             -f deployment/local-secure/compose.yaml config --quiet
-          docker compose --env-file deployment/named-tunnel/.env.example \
+          docker compose --profile connector --env-file deployment/named-tunnel/.env.example \
             -f deployment/production/compose.yaml \
             -f deployment/local-secure/compose.yaml \
             -f deployment/named-tunnel/compose.yaml config --quiet

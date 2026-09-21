@@ -34,7 +34,9 @@ chmod 600 secrets/cloudflared.token secrets/origin.key
 
 `./run doctor` validates the local overlay, stable HTTPS callback, origin
 certificate SAN, and connector process state. It emits redacted diagnostics and
-marks Cloudflare Access as unverified. `./run down` stops only this Compose
-project and keeps PostgreSQL data; `./run reset` is destructive to the local
-profile. Use `./run logs cloudflared` for connector diagnostics without passing
-the token on a command line.
+marks Cloudflare Access as unverified. `./run up` first waits for the private
+stack and only then enables the connector profile, so a connector cannot be
+started as the private services are still becoming ready. `./run down` stops
+only this Compose project and keeps PostgreSQL data; `./run reset` is
+destructive to the local profile. Use `./run logs cloudflared` for connector
+diagnostics without passing the token on a command line.
