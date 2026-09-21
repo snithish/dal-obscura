@@ -204,6 +204,30 @@ test("administrator management screens stay within the page at supported sizes",
   }
 });
 
+test("administrator management forms keep predictable keyboard order", async ({ page }) => {
+  await authenticatedApi(page, { admin: true, configuredSettings: true, configuredAudit: true });
+  await page.goto("/#activity");
+  const actor = page.getByPlaceholder("platform:admin");
+  const action = page.getByPlaceholder("policy.draft.save");
+  const requestId = page.getByPlaceholder("Correlation ID");
+  await actor.focus();
+  await expect(actor).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(action).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(requestId).toBeFocused();
+
+  await page.goto("/#settings");
+  const ttl = page.getByLabel("Ticket TTL (seconds)");
+  const maxTickets = page.getByLabel("Max tickets");
+  const exchanges = page.getByLabel("Ticket exchanges");
+  await ttl.focus();
+  await page.keyboard.press("Tab");
+  await expect(maxTickets).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(exchanges).toBeFocused();
+});
+
 test("authenticated reader shell has no serious or critical accessibility violations", async ({ page }) => {
   await authenticatedApi(page);
   await page.goto("/#assets");
