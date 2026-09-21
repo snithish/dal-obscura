@@ -327,3 +327,15 @@ Proof: `pnpm check`, `pnpm build`, `pnpm test:stories`, and
 `pnpm build-storybook` pass; the Storybook browser suite reports 9 files and
 27 tests. R08 remains ACTIVE pending live settings/access/audit requests and
 authorized backend effects.
+
+## R08 — ACTIVE: audit filter and pagination coverage (2026-09-21)
+
+Added an executable activity story with an audit cursor. It verifies applying a
+server-facing actor filter calls the owning callback with the typed filter and
+that the production “Load more activity” control invokes the pagination
+callback. Fixtures remain deterministic and mutation-free.
+
+Proof: `pnpm check`, `pnpm build`, `pnpm test:stories`, and
+`pnpm build-storybook` pass; the Storybook browser suite reports 9 files and
+28 tests. R08 remains ACTIVE pending live settings/access/audit requests and
+authorized backend effects.
