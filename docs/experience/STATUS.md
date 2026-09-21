@@ -1488,6 +1488,12 @@ and `uv run pytest -m 'not heavy and not integration and not socket'
 regression evidence only; it does not close E07, E15, E17, or E18's live and
 manual acceptance gates.
 
+The complete pre-commit lane now also passes (Ruff format/lint, ty, and the
+non-heavy test hook). Ruff's formatter is explicitly prevented from rewriting
+generated protobuf modules while lint and type checks remain active for them.
+Atomic tooling commit: `90df26dd build(quality): exclude generated protobuf
+formatting`.
+
 ## R01/R10 — VERIFY: repository-wide typing configuration (2026-09-22)
 
 Closed the remaining repository type diagnostics that were actionable in the
