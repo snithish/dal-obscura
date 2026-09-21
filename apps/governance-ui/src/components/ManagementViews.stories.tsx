@@ -93,6 +93,23 @@ export const ConnectedActivity: Story = {
   },
 };
 
+export const LoadingState: Story = {
+  args: { loading: true, data: {}, page: "activity" },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("heading", { name: "Loading activity" })).toBeVisible();
+    await expect(canvas.getByText("Checking the current workspace state and your capabilities.")).toBeVisible();
+  },
+};
+
+export const ErrorWithRetry: Story = {
+  args: { error: "The control plane is temporarily unavailable.", data: {}, page: "activity", onReload: fn() },
+  play: async ({ canvas, args }) => {
+    await expect(canvas.getByRole("alert")).toHaveTextContent("temporarily unavailable");
+    await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
+    await expect(args.onReload).toHaveBeenCalledOnce();
+  },
+};
+
 export const UnknownActivity: Story = {
   args: { data: { events: [], eventsNextCursor: null }, session: null },
   play: async ({ canvas }) => {
