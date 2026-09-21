@@ -67,7 +67,7 @@ export async function authenticatedApi(page: Page) {
         { capability: "publish", allowed: false, reasons: [] },
         { capability: "grant", allowed: false, reasons: [] },
       ] } });
-      if (suffix === "draft") return route.fulfill({ json: { id: null, asset_id: assetId, author_principal: identity.principal, revision: 0, base_policy_version: 1, rules: [], content_hash: "" } });
+      if (suffix === "draft" || suffix.startsWith("draft/")) return route.fulfill({ json: { id: "current-draft", asset_id: assetId, author_principal: identity.principal, revision: 0, base_policy_version: 1, rules: [], content_hash: "" } });
       if (suffix === "policy-versions") return route.fulfill({ json: [] });
       return route.fulfill({ json: detail });
     }

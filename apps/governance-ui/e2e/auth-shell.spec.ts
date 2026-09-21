@@ -96,3 +96,13 @@ test("authenticated mobile navigation respects capabilities and restores focus",
   await expect(page.getByRole("heading", { name: "Activity" })).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Navigation" })).toHaveCount(0);
 });
+
+test("stale review links remain explicit and read-only", async ({ page }) => {
+  await authenticatedApi(page);
+  await page.goto("/?asset=00000000-0000-4000-8000-000000000001&draft=old-draft&draft_revision=2#assets");
+
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  await expect(page.getByText(/This review link is stale: it requested draft revision 2/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save deny-all draft" })).toBeDisabled();
+  await expect(page.getByLabel("Find governed asset")).toBeDisabled();
+});
