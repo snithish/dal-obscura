@@ -141,6 +141,48 @@ test("authenticated policy workspace stays within the page at supported sizes an
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
 });
 
+test("nested schema tree virtualizes 10k fields and keeps keyboard movement responsive", async ({ page }) => {
+  await authenticatedApi(page);
+  const fields = Array.from({ length: 10_000 }, (_, index) => ({
+    field_id: index + 1,
+    name: `field_${index}`,
+    human_path: `field_${index}`,
+    type: "string",
+    nullable: true,
+    kind: "scalar",
+    path: { version: 1, segments: [{ kind: "field", name: `field_${index}`, field_id: index + 1 }] },
+  }));
+  await page.route("**/v1/assets/00000000-0000-4000-8000-000000000001/schema", async (route) => route.fulfill({
+    json: {
+      asset_id: "00000000-0000-4000-8000-000000000001",
+      catalog: "demo",
+      target: "demo.orders",
+      schema_version: 1,
+      schema_fingerprint: "large-schema",
+      stable_field_ids: true,
+      supported_masks: ["null", "redact", "hash", "email", "keep_last", "default"],
+      fields,
+    },
+  }));
+  await page.goto("/#assets");
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+
+  const tree = page.getByRole("tree", { name: "Schema fields" });
+  await expect(tree).toBeVisible();
+  const mountedRows = tree.getByRole("treeitem");
+  expect(await mountedRows.count()).toBeLessThanOrEqual(200);
+  await mountedRows.first().focus();
+  const durations: number[] = [];
+  for (let index = 0; index < 20; index += 1) {
+    const started = await page.evaluate(() => performance.now());
+    await page.keyboard.press("ArrowDown");
+    const finished = await page.evaluate(() => performance.now());
+    durations.push(finished - started);
+  }
+  durations.sort((left, right) => left - right);
+  expect(durations[Math.floor(durations.length * 0.95)], "95th percentile tree key latency").toBeLessThan(200);
+});
+
 test("authenticated policy workspace meets local web-vitals thresholds", async ({ page }) => {
   await authenticatedApi(page);
   await page.addInitScript(() => {
