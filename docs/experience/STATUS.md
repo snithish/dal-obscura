@@ -1114,3 +1114,19 @@ implementation commit: `51004419 test(ui): cover publisher policy journey`.
 R07 remains ACTIVE pending live author/reviewer/publisher qualification,
 publication reconciliation, consumer reads, and production process-race
 evidence.
+
+## R08 — ACTIVE: audit filtering and cursor journey (2026-09-21)
+
+Added a stateful audit fixture and exercised the production Activity view through
+an action filter followed by cursor pagination. The journey verifies the first
+page contains only the requested action, unrelated records are absent, and the
+next permitted page appends without replacing the filtered result set. This is
+synthetic browser evidence and does not qualify live audit authorization,
+retention, redaction, or database cursor behavior.
+
+Proof: the focused audit-filter browser test passes against the built shell;
+existing Activity loading/error/empty and deferred-response Storybook cases
+remain green. Atomic implementation commit: `aa0bf254 test(ui): cover audit
+filtering and pagination`. R08 remains ACTIVE pending live settings/access/
+audit and publication effects, real plugin registry qualification, and
+production operations evidence.
