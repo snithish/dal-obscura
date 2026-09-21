@@ -7,7 +7,8 @@ import * as Login from '../src/components/LoginPanel.stories';
 # One product, one component system
 
 This designbook imports the real application provider, fonts, theme and components.
-It is a partial implementation of R05, not proof of a production-ready service.
+It documents the executable R05 foundation and representative workflows; it is
+not proof of a production-ready service.
 Every identity and token shown here is synthetic. No real API or identity provider
 is required. Keep this development server bound to loopback.
 
@@ -54,6 +55,15 @@ customer-data journeys in the application browser suites.
    Unexpected-network enforcement and visual baselines remain open E11 work;
    do not add networked stories until that boundary is implemented.
 
-Remaining coverage: command search, full contrast matrix, validation/conflict and
-unknown-outcome patterns, inventory, nested editor, review, connections and activity.
-Human screen-reader review and approved visual baselines remain acceptance gates.
+Current executable coverage includes command search, authenticated shell states,
+inventory and nested policy editing, stale review links, semantic history diff,
+consumer handoff, access and grant management, connections and diagnostics,
+runtime and identity settings, audit filters/pagination, lifecycle capability
+guards, validation failures, and deferred-response recovery. These stories use
+the production components and deterministic fixtures under the network guard.
+
+Remaining acceptance gates are the full contrast matrix, reviewed responsive
+visual baselines, manual keyboard/screen-reader/zoom review, owner visual
+approval, and real backend/identity-provider journeys. Keep those checks in the
+application browser and integration suites; never replace them with a story
+fixture.
