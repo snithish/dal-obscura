@@ -751,3 +751,16 @@ from live identity/backend qualification and manual visual review.
 Proof: `pnpm build-storybook` completes successfully. Atomic documentation
 commit: `23ea70ba docs(ui): refresh designbook coverage`. R05 remains ACTIVE
 pending complete visual/manual review and live authenticated workflow evidence.
+
+## R07 — ACTIVE: policy-history restore affordance coverage (2026-09-21)
+
+Added a real `AssetWorkspace` Storybook workflow for an immutable published
+revision. It selects the revision's restore action and verifies the production
+component invokes the owning `onRestore(4)` callback; mutation and reconciliation
+remain outside Storybook. This complements the semantic diff and stale-link
+proofs without claiming a backend restore transaction.
+
+Proof: `pnpm check`, `pnpm test:stories` (45 browser tests), and
+`pnpm build-storybook` pass. Atomic implementation commit: `57238433 test(ui):
+cover policy history restore`. R07 remains ACTIVE pending the real
+author/reviewer/publisher, restore, and process-race journey.
