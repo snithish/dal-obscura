@@ -1659,3 +1659,17 @@ Proof: TypeScript, Vite production build, UI budgets (170.45 KiB JS gzip,
 policy/access journeys (3), and all 54 built browser tests pass. R04/R07/R08
 remain VERIFY pending manual visual, keyboard, and screen-reader review, live
 management authorization, and the real author/reviewer/publisher workflow.
+
+## R04/R08 — VERIFY: Mantine delegated access controls (2026-09-22)
+
+Migrated owner principals and delegated-capability editing to Mantine
+`TextInput` and `NativeSelect` controls. Capability guards, last-owner safety,
+revision-aware mutations, and the existing access API remain unchanged.
+Synchronous event capture also prevents deferred grant edits from reading a
+released browser event. Atomic implementation commit: `adbc42fe
+refactor(ui): migrate delegated access controls to Mantine`.
+
+Proof: TypeScript, Vite production build, 46 Storybook interaction tests, the
+focused access-management journey, and all 54 built browser tests pass. R04/R08
+remain VERIFY pending manual visual, keyboard, and screen-reader review plus
+live management authorization evidence.
