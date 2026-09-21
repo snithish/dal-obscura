@@ -1227,3 +1227,19 @@ Proof: the complete Storybook behavior suite reports 46 passed tests. Atomic
 implementation commit: `1430ab62 test(ui): document refresh error retention`.
 R05/R06 remain ACTIVE pending the remaining live workflow, accessibility,
 identity, and production evidence.
+
+## R06/R11 — ACTIVE: route-level UI code splitting (2026-09-21)
+
+Moved the nested policy workspace and management views behind React lazy
+boundaries with accessible loading states. The authenticated shell now loads a
+smaller initial entry while preserving the existing application components and
+route behavior; route chunks remain same-origin production assets under the
+existing CSP.
+
+Proof: the production build reports a 147.46 KiB gzip initial entry,
+10.94 KiB policy-workspace chunk, and 11.07 KiB management chunk; the summed
+JavaScript budget remains 165.50 KiB gzip under the 200 KiB limit. TypeScript,
+43 built-browser tests, 46 Storybook behavior tests, and 20 Node tests pass.
+Atomic implementation commit: `2b54edb5 perf(ui): split policy and management
+routes`. R06/R11 remain ACTIVE pending LCP/CLS measurement, complete capacity
+evidence, and the remaining live identity and production gates.
