@@ -46,7 +46,7 @@ export async function edgeChallengeApi(page: Page, options: EdgeChallengeOptions
  * This fixture proves browser composition and capability presentation only;
  * it is never evidence of a live identity provider or production backend.
  */
-export async function authenticatedApi(page: Page, options: { admin?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse; deferredSettings?: DeferredResponse; deferredConnections?: DeferredResponse; deferredInventory?: DeferredResponse; deferredVersion?: DeferredResponse; deferredSave?: DeferredResponse; deferredEvaluate?: DeferredResponse; deferredRestore?: DeferredResponse; deferredReview?: DeferredResponse } = {}) {
+export async function authenticatedApi(page: Page, options: { admin?: boolean; allowPublish?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse; deferredSettings?: DeferredResponse; deferredConnections?: DeferredResponse; deferredInventory?: DeferredResponse; deferredVersion?: DeferredResponse; deferredSave?: DeferredResponse; deferredEvaluate?: DeferredResponse; deferredRestore?: DeferredResponse; deferredReview?: DeferredResponse; deferredPublish?: DeferredResponse } = {}) {
   const assetId = "00000000-0000-4000-8000-000000000001";
   const identity = {
     principal: "alex@example.invalid",
@@ -153,7 +153,7 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; d
       if (suffix === "access") return route.fulfill({ json: { asset_id: assetId, principal: identity.principal, issuer: null, capabilities: [
         { capability: "read", allowed: true, reasons: ["owner"] },
         { capability: "edit", allowed: true, reasons: ["owner"] },
-        { capability: "publish", allowed: false, reasons: [] },
+        { capability: "publish", allowed: Boolean(options.allowPublish), reasons: options.allowPublish ? ["synthetic publisher"] : [] },
         { capability: "grant", allowed: false, reasons: [] },
       ] } });
       if (suffix === "draft" && request.method() === "PUT") {
@@ -179,6 +179,12 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; d
       }
       if (suffix === "draft" || suffix.startsWith("draft/")) return route.fulfill({ json: { id: "current-draft", asset_id: assetId, author_principal: identity.principal, revision: 0, base_policy_version: 1, rules: [], content_hash: "" } });
       if (suffix === "policy-versions") {
+        if (request.method() === "POST" && options.deferredPublish) {
+          options.deferredPublish.markStarted();
+          await options.deferredPublish.wait();
+          return route.fulfill({ json: { asset_id: assetId, policy_version: 2 } });
+        }
+        if (request.method() === "POST" && options.allowPublish) return route.fulfill({ json: { asset_id: assetId, policy_version: 2 } });
         if (!options.deferredVersion && !options.deferredRestore) return route.fulfill({ json: [] });
         return route.fulfill({ json: [
           { asset_id: assetId, asset_name: "orders", catalog: "demo", target: "demo.orders", policy_version: 1, active: false, created_at: "2026-09-20T00:00:00Z" },

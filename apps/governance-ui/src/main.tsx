@@ -725,7 +725,7 @@ function App() {
     const ordinal = Math.max(0, ...rules.map((rule) => rule.ordinal)) + 10;
     replaceRules([...rulesRef.current, newRule(selectedField, ordinal)]);
     draftEditEpoch.current += 1;
-    setSelectedRule(rules.length); setSaveState("unsaved"); setPreview(null);
+    setSelectedRule(rules.length); setSaveState("unsaved"); setPreview(null); setReviewToken(null);
     setNotice("New rule added locally. Add at least one principal before saving.");
   }
   function duplicateRule(index: number) {
@@ -749,7 +749,7 @@ function App() {
     if (!activeRule) return;
     replaceRules(rulesRef.current.filter((_, index) => index !== selectedRule));
     draftEditEpoch.current += 1;
-    setSelectedRule(Math.max(0, selectedRule - 1)); setSaveState("unsaved"); setPreview(null);
+    setSelectedRule(Math.max(0, selectedRule - 1)); setSaveState("unsaved"); setPreview(null); setReviewToken(null);
     setNotice("Rule removed locally. Save the draft to persist the change.");
   }
   function moveRule(index: number, direction: -1 | 1) {
