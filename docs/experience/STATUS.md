@@ -303,3 +303,15 @@ Proof: `pnpm check`, `pnpm build`, `pnpm test:stories`, and
 `pnpm build-storybook` pass; the Storybook browser suite reports 9 files and
 25 tests. R08 remains ACTIVE pending live settings/access/audit requests and
 their authorized backend effects.
+
+## R08 — ACTIVE: typed catalog configuration coverage (2026-09-21)
+
+Added a typed plugin fixture and executable connection story covering integer,
+boolean, enum, and URI fields. The story verifies production form controls
+preserve typed values and improves acronym presentation for TLS fields. No
+configuration mutation or network request runs in Storybook.
+
+Proof: `pnpm check`, `pnpm build`, `pnpm test:stories`, and
+`pnpm build-storybook` pass; the Storybook browser suite reports 9 files and
+26 tests. R08 remains ACTIVE pending live settings/access/audit requests and
+authorized backend effects.
