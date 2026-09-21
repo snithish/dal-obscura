@@ -26,8 +26,8 @@ test("hash navigation accepts governed pages and defaults unknown values safely"
 
 test("typed asset locations preserve review draft and tab deep links", () => {
   assert.deepEqual(
-    locationFromUrl("#assets", "?asset=asset-42&draft=draft-7&tab=history&version=3"),
-    { page: "assets", assetId: "asset-42", draftId: "draft-7", tab: "history", version: 3 },
+    locationFromUrl("#assets", "?asset=asset-42&draft=draft-7&draft_revision=4&tab=history&version=3"),
+    { page: "assets", assetId: "asset-42", draftId: "draft-7", draftRevision: 4, tab: "history", version: 3 },
   );
   assert.deepEqual(locationFromUrl("#assets", "?tab=unknown&version=0"), { page: "assets" });
 });

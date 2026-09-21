@@ -4,6 +4,7 @@ export type UiLocation = {
   page: UiPage;
   assetId?: string;
   draftId?: string;
+  draftRevision?: number;
   tab?: AssetTab;
   version?: number;
 };
@@ -24,8 +25,11 @@ export function locationFromUrl(hash: string, search: string): UiLocation {
   const location: UiLocation = { page: pageFromHash(hash) };
   const assetId = params.get("asset");
   const draftId = params.get("draft");
+  const rawDraftRevision = params.get("draft_revision");
+  const parsedDraftRevision = rawDraftRevision && /^\d+$/.test(rawDraftRevision) ? Number(rawDraftRevision) : undefined;
   if (assetId) location.assetId = assetId;
   if (draftId) location.draftId = draftId;
+  if (parsedDraftRevision !== undefined && parsedDraftRevision > 0) location.draftRevision = parsedDraftRevision;
   if (rawTab && assetTabs.includes(rawTab as AssetTab)) location.tab = rawTab as AssetTab;
   if (parsedVersion && parsedVersion > 0) location.version = parsedVersion;
   return location;

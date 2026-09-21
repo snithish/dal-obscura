@@ -106,6 +106,7 @@ export function AssetWorkspace(props: { initialTab?: AssetTab; initialVersion?: 
     const params = new URLSearchParams(url.search);
     params.set("asset", props.asset.id);
     params.set("draft", props.draftId);
+    params.set("draft_revision", String(props.activeRevision));
     if (tab === "policy") params.delete("tab"); else params.set("tab", tab);
     url.search = params.toString();
    url.hash = "assets";

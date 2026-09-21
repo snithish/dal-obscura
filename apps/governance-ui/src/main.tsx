@@ -162,11 +162,14 @@ function App() {
         return;
       }
       setPage(next);
-      if (next === "assets" && session && location.assetId && location.assetId !== asset?.id) {
+      const currentDraftId = reviewOnly ? draftId : undefined;
+      const currentDraftRevision = reviewOnly ? draftRevision : undefined;
+      const draftLocationChanged = location.draftId !== currentDraftId || location.draftRevision !== currentDraftRevision;
+      if (next === "assets" && session && location.assetId && (location.assetId !== asset?.id || draftLocationChanged)) {
         const target = assets.find((item) => item.id === location.assetId);
         if (target && confirmDiscardUnsaved()) {
           setReviewOnly(Boolean(location.draftId));
-          void loadAsset(target.id, assets, undefined, location.draftId);
+          void loadAsset(target.id, assets, undefined, location.draftId, sessionCacheKey, location.draftRevision);
         }
       }
     };
@@ -176,7 +179,7 @@ function App() {
       window.removeEventListener("hashchange", syncBrowserLocation);
       window.removeEventListener("popstate", syncBrowserLocation);
     };
-  }, [asset?.id, assets, managementDirty, page, saveState, session]);
+  }, [asset?.id, assets, draftId, draftRevision, managementDirty, page, reviewOnly, saveState, session, sessionCacheKey]);
 
   useEffect(() => {
     const handleAuthExpired = () => {
@@ -387,7 +390,7 @@ function App() {
       const requestedDraftId = location.draftId;
       const selected = loaded.find((item) => item.id === requestedAssetId) ?? loaded[0];
       setReviewOnly(Boolean(requestedDraftId));
-      await loadAsset(selected.id, loaded, epoch, requestedDraftId ?? undefined, loadedSessionScope);
+      await loadAsset(selected.id, loaded, epoch, requestedDraftId ?? undefined, loadedSessionScope, location.draftRevision);
       if (epoch !== loadEpoch.current) return;
       setWorkspace("ready");
       restorePostLoginHash();
@@ -605,6 +608,7 @@ function App() {
     inheritedEpoch?: number,
     selectedDraftId?: string,
     inheritedSessionScope = sessionCacheKey,
+    selectedDraftRevision?: number,
   ) {
     const epoch = inheritedEpoch ?? ++loadEpoch.current;
     await queryClient.cancelQueries({ queryKey: ["asset", inheritedSessionScope] });
@@ -623,9 +627,24 @@ function App() {
         queryFn: ({ signal }) => controlPlane.getDraft(assetId, selectedDraftId, signal),
       });
       if (epoch !== loadEpoch.current) return;
+      const hydratedAsset: Asset = { ...fullAsset, schema };
+      if (selectedDraftId && selectedDraftRevision !== undefined && draft?.revision !== selectedDraftRevision) {
+        setManagementData((current) => ({ ...current, history, grants, access }));
+        setAssets(knownAssets);
+        setAsset(hydratedAsset);
+        resetRuleHistory([]);
+        setDraftRevision(draft?.revision ?? 0);
+        setDraftId(null);
+        setSelectedRule(0);
+        setReviewToken(null);
+        setSelectedField("");
+        setPreview(null);
+        setSaveState("saved");
+        setNotice(`This review link is stale: it requested draft revision ${selectedDraftRevision}, but the saved draft is now revision ${draft?.revision ?? 0}. Refresh the link before reviewing.`);
+        return;
+      }
       const effectiveRules = draft?.rules ?? [];
       setManagementData((current) => ({ ...current, history, grants, access }));
-      const hydratedAsset: Asset = { ...fullAsset, schema };
       setAssets(knownAssets); setAsset(hydratedAsset); resetRuleHistory(effectiveRules); setDraftRevision(draft?.revision ?? 0); setDraftId(draft?.id ?? null); setSelectedRule(0); setReviewToken(null);
       draftEditEpoch.current += 1;
       setSelectedField(schema.fields[0]?.human_path ?? hydratedAsset.schema_fields[0]?.name ?? ""); setPreview(null); setSaveState("saved");
