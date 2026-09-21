@@ -45,6 +45,16 @@ const events: AuditEvent[] = [{
   created_at: "2026-09-21T08:00:00Z",
 }];
 
+const history: NonNullable<ManagementData["history"]> = [{
+  asset_id: "asset-orders",
+  asset_name: "orders",
+  catalog: "analytics",
+  target: "orders",
+  policy_version: 4,
+  active: true,
+  created_at: "2026-09-21T08:00:00Z",
+}];
+
 const data: ManagementData = { summary, observations, events, eventsNextCursor: null };
 
 const meta = {
@@ -103,6 +113,21 @@ export const FilteredAuditPagination: Story = {
     await expect(args.onFiltersChange).toHaveBeenCalledWith({ actor: "user:admin@example.com" });
     await expect(canvas.getByRole("button", { name: "Load more activity" })).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "Load more activity" }));
+    await expect(args.onLoadMore).toHaveBeenCalledTimes(1);
+  },
+};
+
+export const PublishedHistoryPagination: Story = {
+  args: {
+    page: "changes",
+    data: { history, historyNextCursor: "history-cursor-2" },
+    onLoadMore: fn(),
+  },
+  play: async ({ canvas, args }) => {
+    await expect(canvas.getByRole("heading", { name: "Published policy history" })).toBeVisible();
+    await expect(canvas.getByText("orders")).toBeVisible();
+    await expect(canvas.getByText("Active")).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Load more history" }));
     await expect(args.onLoadMore).toHaveBeenCalledTimes(1);
   },
 };
