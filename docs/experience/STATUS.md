@@ -1287,3 +1287,17 @@ implementation commits: `b9d58b92 test(ui): verify rendered theme contrast`
 and `8f7c5c1f test(ui): cover authenticated theme contrast`. R04 remains VERIFY
 pending the broader authenticated contrast matrix, responsive/zoom/forced-colors
 manual review, and owner approval.
+
+## R04/R06 — VERIFY: authenticated responsive bounds (2026-09-21)
+
+Added a built-browser assertion over the real policy workspace at 390×844,
+768×1024, and 1440×900, followed by 200% browser zoom. The check verifies the
+document itself does not overflow the viewport while preserving named internal
+scroll regions. It complements the mobile navigation, signed-out viewport, and
+forced-colors checks; it is not a substitute for manual screen-reader or visual
+review.
+
+Proof: the complete built browser suite reports 46 passed tests and TypeScript
+passes. Atomic implementation commit: `9f3222db test(ui): cover authenticated
+responsive bounds`. R04/R06 remain VERIFY pending manual contrast, keyboard,
+screen-reader, visual, and owner review plus live identity qualification.
