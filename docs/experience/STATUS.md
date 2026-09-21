@@ -901,3 +901,19 @@ management navigation`. `pnpm` remains unavailable in this runner; direct
 tool binaries provide equivalent evidence. R06 remains ACTIVE pending the
 remaining load/save/evaluate/review/publish/restore matrix, live identity and
 provider qualification, and production process-race evidence.
+
+## R06 — ACTIVE: deferred policy-version detail lookup race (2026-09-21)
+
+Added two synthetic immutable revisions to the authenticated asset workflow and
+held revision 1 detail while selecting revision 2. The browser proof confirms
+the selected revision 2 snapshot remains visible after the late revision 1
+response is released; stale rules never replace the newer detail panel.
+
+Proof: `tsc -b`, the focused policy-version lookup browser test, the full built
+browser suite (28 tests), the UI node suite (20 tests), Storybook browser tests
+(45 tests), production build, and bundle-budget gate pass. Measured budgets
+remain 163.03 KiB JS gzip, 38.01 KiB CSS gzip, and 83.72 KiB fonts. Atomic
+implementation commit: `0f129afd test(ui): cover deferred policy version
+lookups`. R06 remains ACTIVE pending the remaining load/save/evaluate/review/
+publish/restore matrix, live identity and provider qualification, and
+production process-race evidence.
