@@ -141,6 +141,28 @@ test("authenticated policy workspace stays within the page at supported sizes an
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
 });
 
+test("authenticated policy workspace meets local web-vitals thresholds", async ({ page }) => {
+  await authenticatedApi(page);
+  await page.addInitScript(() => {
+    window.__dalObscuraWebVitals = { lcp: null, cls: 0 };
+    new PerformanceObserver((list) => {
+      const last = list.getEntries().at(-1);
+      if (last) window.__dalObscuraWebVitals.lcp = last.startTime;
+    }).observe({ type: "largest-contentful-paint", buffered: true });
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        if (!entry.hadRecentInput) window.__dalObscuraWebVitals.cls += entry.value;
+      }
+    }).observe({ type: "layout-shift", buffered: true });
+  });
+  await page.goto("/#assets", { waitUntil: "networkidle" });
+  await page.evaluate(() => document.fonts.ready);
+  const metrics = await page.evaluate(() => window.__dalObscuraWebVitals);
+  expect(metrics.lcp).not.toBeNull();
+  expect(metrics.lcp, "local authenticated LCP").toBeLessThanOrEqual(2500);
+  expect(metrics.cls, "local authenticated CLS").toBeLessThanOrEqual(0.1);
+});
+
 test("authenticated reader shell has no serious or critical accessibility violations", async ({ page }) => {
   await authenticatedApi(page);
   await page.goto("/#assets");
