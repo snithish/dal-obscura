@@ -278,3 +278,16 @@ Proof: `pnpm check`, `pnpm build`, `pnpm test`, `pnpm test:stories`, and
 `pnpm build-storybook` pass; the Storybook browser suite reports 9 files and
 23 tests. R08 remains ACTIVE: live settings/access/audit journeys and
 authorized backend effects still need qualification.
+
+## R08 — ACTIVE: delegated authorization state coverage (2026-09-21)
+
+Added a second access story for a non-admin actor with delegated grant
+capability. It verifies the production workspace disables owner management,
+keeps delegated grant editing available, and explains the capability reason
+from the control-plane fixture. This covers UI authorization state only; it
+does not substitute for an authorized backend mutation journey.
+
+Proof: `pnpm check`, `pnpm build`, `pnpm test:stories`, and
+`pnpm build-storybook` pass; the Storybook browser suite reports 9 files and
+24 tests. R08 remains ACTIVE pending live settings/access/audit requests and
+their backend authorization effects.
