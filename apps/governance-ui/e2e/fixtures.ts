@@ -46,7 +46,7 @@ export async function edgeChallengeApi(page: Page, options: EdgeChallengeOptions
  * This fixture proves browser composition and capability presentation only;
  * it is never evidence of a live identity provider or production backend.
  */
-export async function authenticatedApi(page: Page, options: { admin?: boolean; allowPublish?: boolean; configuredSettings?: boolean; configuredConnections?: boolean; configuredPublications?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse; deferredSettings?: DeferredResponse; deferredConnections?: DeferredResponse; deferredInventory?: DeferredResponse; deferredVersion?: DeferredResponse; deferredSave?: DeferredResponse; deferredEvaluate?: DeferredResponse; deferredRestore?: DeferredResponse; deferredReview?: DeferredResponse; deferredPublish?: DeferredResponse } = {}) {
+export async function authenticatedApi(page: Page, options: { admin?: boolean; allowPublish?: boolean; configuredSettings?: boolean; configuredConnections?: boolean; configuredPublications?: boolean; configuredLifecycle?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse; deferredSettings?: DeferredResponse; deferredConnections?: DeferredResponse; deferredInventory?: DeferredResponse; deferredVersion?: DeferredResponse; deferredSave?: DeferredResponse; deferredEvaluate?: DeferredResponse; deferredRestore?: DeferredResponse; deferredReview?: DeferredResponse; deferredPublish?: DeferredResponse } = {}) {
   const assetId = "00000000-0000-4000-8000-000000000001";
   const identity = {
     principal: "alex@example.invalid",
@@ -85,12 +85,16 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; a
     discovered_table_count: 1,
     governed_asset_count: 0,
   };
+  let pluginStates = options.configuredLifecycle ? [
+    { kind: "catalog", plugin_id: "synthetic.catalog.iceberg", status: "ready", lifecycle: "enabled" },
+    { kind: "table_format", plugin_id: "synthetic.table.iceberg", status: "ready", lifecycle: "enabled" },
+  ] : [];
   const configuredPlugins = {
     plugins: [
       { kind: "catalog", plugin_id: "synthetic.catalog.iceberg", api_version: "1", config_version: 1, distribution: "synthetic-catalog", version: "1.0.0", display_name: "Synthetic Iceberg Catalog", capabilities: ["discover"], output_formats: ["iceberg"], handle_versions: [1], config_schema: { fields: [{ name: "uri", type: "uri", required: true }, { name: "password", type: "secret_reference", required: true, secret: true }] }, status: "admitted" },
       { kind: "table_format", plugin_id: "synthetic.table.iceberg", api_version: "1", config_version: 1, distribution: "synthetic-iceberg", version: "1.0.0", display_name: "Synthetic Iceberg", capabilities: ["scan"], output_formats: ["iceberg"], handle_versions: [1], config_schema: { fields: [] }, status: "admitted" },
     ],
-    states: [],
+    states: pluginStates,
     pairs: [{ catalog_plugin_id: "synthetic.catalog.iceberg", format_plugin_id: "synthetic.table.iceberg", capabilities: ["scan"], handle_versions: [1], status: "admitted" }],
   };
   let workspacePublications = options.configuredPublications ? [{
@@ -142,7 +146,18 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; a
     }
     if (path === "/v1/workspace/summary") return route.fulfill({ json: { asset_count: 1, catalog_count: 1, draft_change_count: 0, enabled_auth_provider_count: 1, missing_policy_count: 0, runtime_configured: true, unowned_asset_count: 0 } });
     if (path === "/v1/workspace/observations") return route.fulfill({ json: { available: true, data_plane: { status: "ready", reason: "synthetic fixture" }, generation: null, observed_at: "2026-09-21T00:00:00Z", source: "synthetic fixture" } });
-    if (options.admin && path === "/v1/plugins") return route.fulfill({ json: options.configuredConnections ? configuredPlugins : { plugins: [], states: [], pairs: [] } });
+    if (options.admin && path === "/v1/plugins") return route.fulfill({ json: options.configuredConnections ? { ...configuredPlugins, states: pluginStates } : { plugins: [], states: [], pairs: [] } });
+    const lifecycleMatch = path.match(/^\/v1\/plugins\/([^/]+)\/([^/]+)\/lifecycle$/);
+    if (options.admin && options.configuredConnections && lifecycleMatch && request.method() === "PATCH") {
+      const kind = decodeURIComponent(lifecycleMatch[1]);
+      const pluginId = decodeURIComponent(lifecycleMatch[2]);
+      const target = (request.postDataJSON() as { target?: string }).target;
+      if (!target || !pluginStates.some((state) => state.kind === kind && state.plugin_id === pluginId)) {
+        return route.fulfill({ status: 404, json: { detail: "Plugin lifecycle target not found" } });
+      }
+      pluginStates = pluginStates.map((state) => state.kind === kind && state.plugin_id === pluginId ? { ...state, lifecycle: target } : state);
+      return route.fulfill({ json: { kind, plugin_id: pluginId, lifecycle: target } });
+    }
     if (options.admin && path === "/v1/catalogs") {
       if (options.configuredConnections) return route.fulfill({ json: [configuredCatalog] });
       catalogCalls += 1;

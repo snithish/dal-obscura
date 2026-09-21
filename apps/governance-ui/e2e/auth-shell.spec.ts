@@ -215,6 +215,30 @@ test("administrator publication lifecycle creates and activates a workspace snap
   await expect(page.getByText("Serving", { exact: true })).toHaveCount(1);
 });
 
+test("administrator plugin lifecycle applies disable and retire transitions", async ({ page }) => {
+  await authenticatedApi(page, { admin: true, configuredConnections: true, configuredLifecycle: true });
+  await page.goto("/#connections");
+  await expect(page.getByRole("heading", { name: "Catalog connections" })).toBeVisible();
+
+  const catalogPlugin = page.locator("article.plugin-card").filter({ hasText: "Synthetic Iceberg Catalog" });
+  await catalogPlugin.getByLabel("Lifecycle for Synthetic Iceberg Catalog").selectOption("disabled");
+  await catalogPlugin.getByRole("button", { name: "Apply" }).click();
+  await expect(page.getByText("Synthetic Iceberg Catalog lifecycle is now disabled.")).toBeVisible();
+  await expect(catalogPlugin.getByLabel("Lifecycle for Synthetic Iceberg Catalog")).toHaveValue("disabled");
+
+  const formatPlugin = page.locator("article.plugin-card").filter({ hasText: "Synthetic Iceberg" }).filter({ hasNotText: "Catalog" });
+  await formatPlugin.getByLabel("Lifecycle for Synthetic Iceberg").selectOption("revoked");
+  await formatPlugin.getByRole("button", { name: "Apply" }).click();
+  await expect(page.getByText("Synthetic Iceberg lifecycle is now revoked.")).toBeVisible();
+  await formatPlugin.getByLabel("Lifecycle for Synthetic Iceberg").selectOption("removed");
+  await expect(formatPlugin.getByRole("button", { name: "Apply" })).toBeEnabled();
+  page.once("dialog", (dialog) => dialog.accept());
+  const removalResponse = page.waitForResponse((response) => response.url().includes("/v1/plugins/table_format/synthetic.table.iceberg/lifecycle") && response.request().method() === "PATCH");
+  await formatPlugin.getByRole("button", { name: "Apply" }).click();
+  await expect((await removalResponse).status()).toBe(200);
+  await expect(page.getByText("Synthetic Iceberg lifecycle is now removed.")).toBeVisible();
+});
+
 test("mutation HTML challenges clear private workspace state", async ({ page }) => {
   await authenticatedApi(page);
   await page.goto("/#assets");
