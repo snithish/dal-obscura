@@ -348,6 +348,21 @@ test("administrator catalogs save, diagnose, and discover through admitted plugi
   await expect(page.getByText("Connection saved. Discovery remains bounded to this configured catalog.")).toBeVisible();
 });
 
+test("administrator chooses an admitted table format before governing discovery", async ({ page }) => {
+  await authenticatedApi(page, { admin: true, configuredConnections: true, multipleFormats: true });
+  await page.goto("/#connections");
+  await page.getByRole("button", { name: "Discover tables" }).click();
+  await expect(page.getByLabel("Selected table format")).toBeVisible();
+
+  await page.getByRole("button", { name: "Govern table" }).click();
+  await expect(page.getByText("Select the table format explicitly before governing a discovered table.")).toBeVisible();
+
+  await page.getByLabel("Selected table format").selectOption("synthetic.table.delta");
+  const governRequest = page.waitForRequest((request) => request.method() === "PUT" && request.url().endsWith("/v1/assets/analytics/orders"));
+  await page.getByRole("button", { name: "Govern table" }).click();
+  await expect((await governRequest).postDataJSON()).toMatchObject({ backend: "synthetic.table.delta", table_identifier: "demo.orders" });
+});
+
 test("management refresh failure preserves the loaded connections view", async ({ page }) => {
   await authenticatedApi(page, { admin: true, configuredConnections: true });
   await page.goto("/#connections");
