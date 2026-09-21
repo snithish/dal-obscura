@@ -1551,3 +1551,18 @@ commits: `a980d5fd fix(recovery): make checksum sidecars portable` and
 `40f049fd fix(recovery): bind checksum verification to backup`. R11 remains
 VERIFY pending actual encrypted PostgreSQL RPO/RTO evidence, provenance,
 capacity, and release-candidate lanes.
+
+## R11 — VERIFY: candidate attestation binding (2026-09-22)
+
+Extended the release workflow so non-PR candidates inspect the exact pushed
+server and UI digests, require both SLSA provenance and SPDX SBOM predicates,
+hash the inspected manifest indexes, and record those hashes alongside the
+plugin lock, workflow run, commit, scan, audit, and mandatory-lane metadata.
+Pull requests explicitly record that publication attestations are unavailable
+instead of claiming release evidence.
+
+Proof: the CI YAML parses, the workflow contract suite passes, and the release
+manifest gate is represented in the checked-in workflow. Atomic implementation
+commit: `f8c91be3 ci(release): bind candidate manifest to attestations`. R11
+remains VERIFY until a published candidate executes this gate and the complete
+release dossier is reviewed.
