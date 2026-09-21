@@ -1302,6 +1302,20 @@ passes. Atomic implementation commit: `9f3222db test(ui): cover authenticated
 responsive bounds`. R04/R06 remain VERIFY pending manual contrast, keyboard,
 screen-reader, visual, and owner review plus live identity qualification.
 
+## R04/R08 — VERIFY: authenticated management contrast matrix (2026-09-21)
+
+Extended the rendered contrast oracle to the production activity, published
+history, catalog connections, and runtime/identity settings screens. The matrix
+runs each screen in explicit light and dark themes and checks its actual
+headings, copy, buttons, inputs, selects, and textareas against the 4.5:1 text
+threshold. It uses synthetic management data and does not qualify live
+authorization or manual review.
+
+Proof: the complete built browser suite reports 48 passed tests and TypeScript
+passes. Atomic implementation commit: `7642fe07 test(ui): cover management
+theme contrast`. R04/R08 remain VERIFY pending live management authorization,
+manual contrast/keyboard/screen-reader review, and owner approval.
+
 ## R06/R11 — VERIFY: authenticated local web-vitals check (2026-09-21)
 
 Added a built-browser LCP/CLS assertion for the authenticated nested policy
