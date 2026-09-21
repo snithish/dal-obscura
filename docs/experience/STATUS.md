@@ -1471,10 +1471,10 @@ pickle-backed task delivery or request behavior.
 Proof: `uv run ty check src` and Ruff pass with zero diagnostics; the focused
 control-plane route, audit, catalog, actor-auth, and route-inventory tests pass
 (62 tests). The atomic implementation commit is `7af0c64b fix(control-plane):
-preserve route result types`. The repository-wide `uv run ty check` gate still
-reports 31 diagnostics in examples, plugin test import environments, and
-loosely typed fixtures; R01/R08 remain ACTIVE until those packaging and test
-typing gaps are addressed.
+preserve route result types`. At the time of this slice, repository-wide `ty`
+reported 31 diagnostics in examples, plugin test import environments, and
+loosely typed fixtures; the later R01/R10 typing slice below records their
+resolution.
 
 Follow-up tooling correction: the four plugin source roots now live in
 `[tool.ty.environment]` in `pyproject.toml`, and the pre-commit hook uses the
@@ -1508,6 +1508,6 @@ packages/manifest-parquet-plugin/src --extra-search-path
 packages/iceberg-rest-plugin/src` passes; the focused plugin, audit, published
 configuration, control-plane CLI, and flight-support tests pass (76 tests), and
 Ruff passes. Atomic implementation commit: `9495c1aa chore(typing): close
-repository diagnostics`. The plain `uv run ty check` invocation remains a
-documentation compatibility gap because ty does not read pytest's
-`pythonpath`; the enforced pre-commit command carries the explicit roots.
+repository diagnostics`. The plain `uv run ty check` invocation now passes
+because those roots are persisted in `[tool.ty.environment]`; the enforced
+pre-commit command uses the same project configuration.
