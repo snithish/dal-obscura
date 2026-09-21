@@ -1274,15 +1274,16 @@ restore/provenance checks, and the remaining live gates.
 
 ## R04 — VERIFY: rendered light/dark contrast check (2026-09-21)
 
-Added a built-browser contrast assertion over the actual login shell. It walks
-the rendered heading, supporting text, button, and input colors in both light
-and dark schemes, resolves transparent elements to their rendered ancestor
-background, and enforces E09's 4.5:1 text threshold. This complements the
-existing axe and theme-state checks without claiming manual screen-reader or
-visual approval.
+Added a built-browser contrast assertion over the actual login shell and the
+authenticated nested policy workspace. It walks rendered headings, supporting
+text, buttons, inputs, selects, and textareas in both light and dark schemes,
+resolves transparent elements to their rendered ancestor background, and
+enforces E09's 4.5:1 text threshold. This complements the existing axe and
+theme-state checks without claiming manual screen-reader or visual approval.
 
-Proof: the complete built browser suite reports 44 passed tests, including the
-new contrast case; TypeScript also passes. Atomic implementation commit:
-`b9d58b92 test(ui): verify rendered theme contrast`. R04 remains VERIFY pending
-the broader authenticated contrast matrix, responsive/zoom/forced-colors
+Proof: the complete built browser suite reports 45 passed tests, including the
+signed-out and authenticated contrast cases; TypeScript also passes. Atomic
+implementation commits: `b9d58b92 test(ui): verify rendered theme contrast`
+and `8f7c5c1f test(ui): cover authenticated theme contrast`. R04 remains VERIFY
+pending the broader authenticated contrast matrix, responsive/zoom/forced-colors
 manual review, and owner approval.
