@@ -103,3 +103,12 @@ export const InvalidRuntimeLimits: Story = {
     await expect(canvas.getByRole("status")).toHaveTextContent("positive values");
   },
 };
+
+export const InvalidProviderNumber: Story = {
+  play: async ({ canvas }) => {
+    await userEvent.clear(canvas.getByLabelText("Maximum JWKS keys"));
+    await userEvent.type(canvas.getByLabelText("Maximum JWKS keys"), "1.5");
+    await expect(canvas.getByRole("alert")).toHaveTextContent("non-negative integer");
+    await expect(canvas.getByRole("button", { name: "Save identity providers" })).toBeDisabled();
+  },
+};

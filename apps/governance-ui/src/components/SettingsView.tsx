@@ -201,11 +201,12 @@ export function SettingsView({
     } else if (["leeway_seconds", "jwks_refresh_interval_seconds", "max_jwks_keys"].includes(key)) {
       if (value.trim() === "") parsed = undefined;
       else {
-        parsed = Number(value);
-        if (!Number.isFinite(parsed)) {
-          setProviderErrors((current) => ({ ...current, [fieldKey]: "Enter a finite number." }));
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric) || !Number.isInteger(numeric) || numeric < 0) {
+          setProviderErrors((current) => ({ ...current, [fieldKey]: "Enter a non-negative integer." }));
           return;
         }
+        parsed = numeric;
       }
     }
     setProviderErrors((current) => { const next = { ...current }; delete next[fieldKey]; return next; });
