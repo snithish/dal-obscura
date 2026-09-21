@@ -1,0 +1,85 @@
+#!/usr/bin/env sh
+set -eu
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PRODUCTION="$ROOT/../production/compose.yaml"
+LOCAL_SECURE="$ROOT/../local-secure/compose.yaml"
+PROFILE="$ROOT/.env"
+OVERRIDE="$ROOT/compose.yaml"
+
+compose() {
+  docker compose --env-file "$PROFILE" -f "$PRODUCTION" -f "$LOCAL_SECURE" -f "$OVERRIDE" "$@"
+}
+
+profile_value() {
+  sed -n "s/^$1=//p" "$PROFILE" | head -n 1
+}
+
+validate_profile() {
+  if grep -Eq '^[A-Za-z_][A-Za-z0-9_]*=.*REPLACE_WITH' "$PROFILE"; then
+    echo "$PROFILE still contains REPLACE_WITH placeholders; configure every secret, hostname and image digest" >&2
+    exit 2
+  fi
+  for required in "$ROOT/secrets/origin.crt" "$ROOT/secrets/origin.key" "$ROOT/secrets/cloudflared.token" "$ROOT/../local-secure/secrets/flight.crt" "$ROOT/../local-secure/secrets/flight.key" "$ROOT/../local-secure/secrets/client-ca.crt"; do
+    if [ ! -r "$required" ]; then
+      echo "Missing readable named-tunnel secret or Flight TLS material: $required" >&2
+      exit 2
+    fi
+  done
+  host=$(profile_value DAL_OBSCURA_NAMED_HOST)
+  case "$host" in
+    ''|localhost|127.*|*/*|*\ *|*'?'*) echo "DAL_OBSCURA_NAMED_HOST must be a stable DNS hostname" >&2; exit 2 ;;
+  esac
+  callback=$(profile_value DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI)
+  logout=$(profile_value DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI)
+  cors=$(profile_value DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS)
+  [ "$callback" = "https://$host/auth/callback" ] || { echo "OIDC callback must equal https://$host/auth/callback" >&2; exit 2; }
+  [ "$logout" = "https://$host" ] || { echo "OIDC post-logout origin must equal https://$host" >&2; exit 2; }
+  [ "$cors" = "https://$host" ] || { echo "CORS origin must equal https://$host" >&2; exit 2; }
+  [ "$(profile_value DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED)" = "false" ] || { echo "Bootstrap login must be disabled for named mode" >&2; exit 2; }
+}
+
+doctor() {
+  [ -f "$PROFILE" ] || { echo "Create $PROFILE first" >&2; exit 2; }
+  validate_profile
+  compose config --quiet
+  host=$(profile_value DAL_OBSCURA_NAMED_HOST)
+  san=invalid
+  if openssl x509 -in "$ROOT/secrets/origin.crt" -checkhost "$host" -noout >/dev/null 2>&1; then
+    san=validated
+  fi
+  connector_state=$(compose ps --format '{{.Service}}={{.State}}' cloudflared 2>/dev/null || true)
+  [ -n "$connector_state" ] || connector_state=not-running
+  printf '%s\n' \
+    'profile=named-tunnel' \
+    "public_origin=https://$host" \
+    'callback=validated' \
+    'bootstrap=disabled' \
+    'flight_endpoint=loopback-only' \
+    "origin_tls_san=$san" \
+    "connector=$connector_state" \
+    'cloudflare_access=not-verified (operator must prove external allow/deny policy)'
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./run config       render and validate production + secure-local + tunnel overlays
+  ./run up           start the private stack and connector
+  ./run doctor       report redacted local origin and connector state
+  ./run down         stop this profile without deleting PostgreSQL data
+  ./run reset        stop this profile and delete its local database volume
+  ./run logs [svc]   show logs (default: cloudflared)
+EOF
+}
+
+[ "$#" -gt 0 ] || { usage >&2; exit 2; }
+case "$1" in
+  config) [ -f "$PROFILE" ] || { echo "Create $PROFILE first" >&2; exit 2; }; validate_profile; compose config --quiet ;;
+  up) [ -f "$PROFILE" ] || { echo "Create $PROFILE first" >&2; exit 2; }; validate_profile; compose up -d --wait ;;
+  doctor) doctor ;;
+  down) [ -f "$PROFILE" ] || exit 0; compose down ;;
+  reset) [ -f "$PROFILE" ] || exit 0; compose down --volumes --remove-orphans ;;
+  logs) [ -f "$PROFILE" ] || { echo "Create $PROFILE first" >&2; exit 2; }; validate_profile; compose logs "${2:-cloudflared}" ;;
+  *) usage >&2; exit 2 ;;
+esac

@@ -15,6 +15,7 @@ def test_secure_local_profile_reuses_production_security_contract() -> None:
     assert '"127.0.0.1:8443:8443"' in compose
     assert "../local-secure/Caddyfile:/etc/caddy/Caddyfile:ro" in compose
     assert "DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED=false" in env
+    assert "DAL_OBSCURA_SECRET_PROVIDER_CONFIG=" in env
     assert "DAL_OBSCURA_TLS_VERIFY_CLIENT=true" in env
     assert "DAL_OBSCURA_EDGE_IMAGE=caddy@sha256:" in env
     assert (

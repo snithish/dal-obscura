@@ -1,0 +1,47 @@
+name: dal-obscura-named-tunnel
+
+# Optional overlay for an operator-managed Cloudflare Tunnel. It layers over
+# production plus local-secure; the connector has no published port and the
+# origin remains bound to loopback on the host.
+services:
+  edge:
+    environment:
+      DAL_OBSCURA_NAMED_HOST: ${DAL_OBSCURA_NAMED_HOST:?set DAL_OBSCURA_NAMED_HOST}
+    secrets:
+      - source: named_origin_cert
+        target: named-origin.crt
+      - source: named_origin_key
+        target: named-origin.key
+    volumes:
+      - ../named-tunnel/Caddyfile:/etc/caddy/Caddyfile:ro
+
+  cloudflared:
+    image: ${DAL_OBSCURA_CLOUDFLARED_IMAGE:?set DAL_OBSCURA_CLOUDFLARED_IMAGE}
+    command: ["tunnel", "--no-autoupdate", "run", "--token-file", "/run/secrets/cloudflared_token"]
+    depends_on:
+      edge:
+        condition: service_started
+    networks:
+      - backend
+    secrets:
+      - source: cloudflared_token
+        target: cloudflared_token
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+networks:
+  backend:
+    internal: true
+
+secrets:
+  named_origin_cert:
+    file: ${DAL_OBSCURA_NAMED_ORIGIN_CERT_SOURCE:?set DAL_OBSCURA_NAMED_ORIGIN_CERT_SOURCE}
+  named_origin_key:
+    file: ${DAL_OBSCURA_NAMED_ORIGIN_KEY_SOURCE:?set DAL_OBSCURA_NAMED_ORIGIN_KEY_SOURCE}
+  cloudflared_token:
+    file: ${DAL_OBSCURA_CLOUDFLARED_TOKEN_SOURCE:?set DAL_OBSCURA_CLOUDFLARED_TOKEN_SOURCE}
