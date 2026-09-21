@@ -209,6 +209,22 @@ test("late history responses cannot replace the current changes page", async ({ 
   await expect(page.getByText("stale-history")).toHaveCount(0);
 });
 
+test("late settings responses cannot replace the current administrator page", async ({ page }) => {
+  const deferredSettings = deferredResponse();
+  await authenticatedApi(page, { admin: true, deferredSettings });
+  await page.goto("/#settings");
+  await deferredSettings.started;
+
+  await page.getByRole("button", { name: "Assets" }).click();
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  await page.getByRole("button", { name: "Settings" }).click();
+  await expect(page.getByRole("heading", { name: "Runtime and identity" })).toBeVisible();
+  await expect(page.getByLabel("Ticket TTL (seconds)")).toHaveValue("22");
+
+  deferredSettings.release();
+  await expect(page.getByLabel("Ticket TTL (seconds)")).toHaveValue("22");
+});
+
 test("reader deep links fail closed before admin settings requests", async ({ page }) => {
   const adminRequests: string[] = [];
   page.on("request", (request) => {

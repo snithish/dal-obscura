@@ -46,7 +46,7 @@ export async function edgeChallengeApi(page: Page, options: EdgeChallengeOptions
  * This fixture proves browser composition and capability presentation only;
  * it is never evidence of a live identity provider or production backend.
  */
-export async function authenticatedApi(page: Page, options: { admin?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse } = {}) {
+export async function authenticatedApi(page: Page, options: { admin?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse; deferredSettings?: DeferredResponse } = {}) {
   const assetId = "00000000-0000-4000-8000-000000000001";
   const identity = {
     principal: "alex@example.invalid",
@@ -76,6 +76,7 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; d
   };
   let auditCalls = 0;
   let historyCalls = 0;
+  let settingsCalls = 0;
   await page.route("**/v1/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -105,7 +106,15 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; d
     if (options.admin && path === "/v1/plugins") return route.fulfill({ json: { plugins: [], states: [], pairs: [] } });
     if (options.admin && path === "/v1/catalogs") return route.fulfill({ json: [] });
     if (options.admin && path === "/v1/workspace/publications") return route.fulfill({ json: [] });
-    if (options.admin && path === "/v1/settings/runtime") return route.fulfill({ json: null });
+    if (options.admin && path === "/v1/settings/runtime") {
+      settingsCalls += 1;
+      if (settingsCalls === 1 && options.deferredSettings) {
+        options.deferredSettings.markStarted();
+        await options.deferredSettings.wait();
+      }
+      if (!options.deferredSettings) return route.fulfill({ json: null });
+      return route.fulfill({ json: { ticket_ttl_seconds: settingsCalls === 1 ? 11 : 22, max_tickets: 64, max_ticket_exchanges: 2, path_rules: [{ root: "file:///fresh-settings" }], revision: settingsCalls } });
+    }
     if (options.admin && path === "/v1/settings/auth-providers") return route.fulfill({ json: [] });
     if (options.admin && path === "/v1/settings/auth-providers/revision") return route.fulfill({ json: { revision: 0 } });
     const match = path.match(/^\/v1\/assets\/([^/]+)(?:\/(.*))?$/);
