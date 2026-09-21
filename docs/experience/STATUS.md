@@ -1332,8 +1332,9 @@ production build/budget gate pass after the fix. The build measures 147.46 KiB
 initial JS gzip, 165.50 KiB total JS gzip, 38.03 KiB CSS gzip, and 83.72 KiB
 fonts. Atomic implementation commits: `fa0c65a0 fix(ui): prevent management
 grid overflow` and `e7f1c1f9 test(ui): cover management zoom bounds`.
-R04/R06/R08 remain ACTIVE pending manual visual/keyboard/screen-reader review
-and live authorization evidence.
+The static Storybook build also completes successfully. R04/R06/R08 remain
+ACTIVE pending manual visual/keyboard/screen-reader review and live
+authorization evidence.
 
 ## R06/R11 — VERIFY: authenticated local web-vitals check (2026-09-21)
 
