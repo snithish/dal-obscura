@@ -3,7 +3,7 @@ import { playwright } from "@vitest/browser-playwright";
 import { storybookTest } from "@storybook/addon-vitest/vitest-plugin";
 
 export default defineConfig({
-  optimizeDeps: { include: ["lucide-react"] },
+  optimizeDeps: { include: ["lucide-react", "@tanstack/react-query"] },
   plugins: [storybookTest({ configDir: ".storybook" })],
   test: {
     name: "stories",
