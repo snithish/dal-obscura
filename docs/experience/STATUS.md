@@ -474,3 +474,16 @@ Proof: shell syntax, YAML parsing, Ruff, and six architecture/production parity
 tests pass. Compose runtime rendering could not be executed because the local
 Podman socket was unavailable. R03 remains ACTIVE pending an authorized named
 tunnel, real Access allow/deny probes, and local/edge SSO evidence.
+
+## R05/R08 — ACTIVE: consumer handoff clipboard recovery (2026-09-21)
+
+Consumer snippets in the real `AssetWorkspace` now expose a visible retry and
+manual-selection message when browser clipboard access fails. Added an
+executable Storybook journey that forces the browser write to reject and checks
+the recovery state without changing the generated Python, DuckDB, Spark, or
+Arrow examples.
+
+Proof: `pnpm check`, 16 UI unit tests, 33 Storybook browser tests, and the
+production build budget gate pass (161.79 KiB JS gzip, 37.89 KiB CSS gzip,
+83.72 KiB fonts). R05/R08 remain ACTIVE pending real consumer endpoint runs,
+the complete administration journey, and live authorization evidence.
