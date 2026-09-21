@@ -46,4 +46,31 @@ test.describe("signed-out governance shell", () => {
     await expect(page.getByRole("heading", { name: "Sign in to your workspace" })).toBeVisible();
     await expect(page.getByLabel("Local control-plane token")).toBeVisible();
   });
+
+  test("keeps signed-out actions inside the viewport at supported sizes and zoom", async ({ page }) => {
+    for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1440, height: 900 }]) {
+      await page.setViewportSize(viewport);
+      await page.goto("/");
+      const login = page.getByRole("heading", { name: "Sign in to your workspace" });
+      const token = page.getByLabel("Local control-plane token");
+      const button = page.getByRole("button", { name: "Sign in locally" });
+      await expect(login).toBeVisible();
+      await expect(token).toBeVisible();
+      await expect(button).toBeVisible();
+      for (const element of [login, token, button]) {
+        const box = await element.boundingBox();
+        expect(box).not.toBeNull();
+        expect(box!.x).toBeGreaterThanOrEqual(0);
+        expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width + 1);
+      }
+    }
+
+    await page.evaluate(() => { document.body.style.zoom = "2"; });
+    const zoomedButton = page.getByRole("button", { name: "Sign in locally" });
+    await expect(zoomedButton).toBeVisible();
+    const zoomedBox = await zoomedButton.boundingBox();
+    expect(zoomedBox).not.toBeNull();
+    expect(zoomedBox!.x).toBeGreaterThanOrEqual(0);
+    expect(zoomedBox!.x + zoomedBox!.width).toBeLessThanOrEqual(1440 + 1);
+  });
 });
