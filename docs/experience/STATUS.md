@@ -92,3 +92,23 @@ manual keyboard/screen-reader/zoom checks and owner visual approval. Current
 stories are synthetic and do not prove SSO or backend authorization. Production
 Playwright retains distinct CSP, focus and OS-theme boundary checks; no existing
 security tests were removed in favor of stories. R05 is not DONE.
+
+## R05 — ACTIVE: Storybook network boundary (2026-09-21)
+
+Added a preview-level network guard and a contribution story that proves
+synthetic stories fail immediately when they attempt to call `/v1/*`, `/auth/*`,
+an identity provider, or another origin. The guard wraps fetch, XHR and beacon
+requests and returns Storybook's cleanup callback so one story cannot leak its
+boundary into the next. The designbook now documents this rule and keeps real
+API/IdP/customer-data journeys in application browser suites. The story uses
+Mantine primitives for its explanation; it does not duplicate product UI.
+
+Proof: `pnpm check`, `pnpm build`, `pnpm test`, `pnpm build-storybook`, and
+`pnpm test:stories` all pass from `apps/governance-ui`; the browser suite now
+reports 4 files and 11 tests passing with the pinned Playwright Chromium. No
+backend, authentication, or pickle code changed.
+
+Still OPEN before E10/E11 can pass: complete documented component/pattern/
+workflow coverage, contrast matrix, reviewed responsive visual baselines,
+manual keyboard/screen-reader/zoom checks, owner visual approval, and the
+remaining R04 feature-CSS migration. R05 remains ACTIVE.
