@@ -1,5 +1,6 @@
 export type RecoveryFailure = {
   status?: number;
+  code?: string;
   requestId?: string;
   fieldErrors?: Array<{ field: string; message: string; type: string }>;
 };
@@ -15,7 +16,9 @@ const statusMessages: Record<number, string> = {
 
 export function recoveryMessage(error: unknown, fallback: string): string {
   const failure = error as RecoveryFailure | null;
-  const message = failure?.status !== undefined ? statusMessages[failure.status] : undefined;
+  const message = failure?.code === "auth_challenge"
+    ? "The browser or edge session expired. Sign in again to continue."
+    : failure?.status !== undefined ? statusMessages[failure.status] : undefined;
   const result = message ?? fallback;
   const fields = failure?.fieldErrors?.map((item) => item.field.trim()).filter(Boolean) ?? [];
   const withFields = fields.length ? `${result} Fields: ${fields.join(", ")}.` : result;

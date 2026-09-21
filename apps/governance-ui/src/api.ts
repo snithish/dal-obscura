@@ -307,6 +307,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     credentials: "same-origin",
     headers,
   });
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+  const isHtmlChallenge = response.redirected || contentType.includes("text/html") || response.url.includes("/auth/login");
+  if (isHtmlChallenge) {
+    window.dispatchEvent(new Event("dal-obscura-auth-expired"));
+    const failure = new Error("Authentication challenge returned instead of API JSON") as ApiFailure;
+    failure.status = 401;
+    failure.code = "auth_challenge";
+    const requestId = response.headers.get("x-request-id") ?? undefined;
+    if (requestId) failure.requestId = requestId;
+    throw failure;
+  }
   if (!response.ok) {
     if (response.status === 401) {
       window.dispatchEvent(new Event("dal-obscura-auth-expired"));

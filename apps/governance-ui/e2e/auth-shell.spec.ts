@@ -21,6 +21,26 @@ test.describe("signed-out governance shell", () => {
     await expect(page.getByText("Use demo persona")).toHaveCount(0);
   });
 
+  test("HTML edge challenges never become API success", async ({ page }) => {
+    await page.unroute("**/v1/**");
+    await page.route("**/v1/**", async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      if (path === "/v1/session" && route.request().method() === "GET") {
+        return route.fulfill({ status: 200, headers: { "content-type": "text/html" }, body: "<html><title>Sign in</title></html>" });
+      }
+      if (path === "/v1/session/options") return route.fulfill({ json: { bootstrap_enabled: false, oidc: null } });
+      if (path === "/v1/ui-auth-config") return route.fulfill({ json: { authority: null } });
+      return route.fulfill({ status: 401, json: { detail: "Sign in required" } });
+    });
+
+    await page.goto("/");
+
+    await expect(page.getByRole("heading", { name: "Sign in to your workspace" })).toBeVisible();
+    await expect(page.getByText("Use demo persona")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "orders" })).toHaveCount(0);
+    await expect(page.getByLabel("Find governed asset")).toHaveCount(0);
+  });
+
   test("has no serious or critical accessibility violations when signed out", async ({ page }) => {
     await page.goto("/#assets");
 

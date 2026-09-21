@@ -44,6 +44,13 @@ test("recovery messages distinguish actionable HTTP failures and retain request 
   assert.equal(recoveryMessage({ status: 418 }, "fallback"), "fallback");
 });
 
+test("recovery messages explain an HTML authentication challenge", () => {
+  assert.equal(
+    recoveryMessage({ status: 401, code: "auth_challenge" }, "fallback"),
+    "The browser or edge session expired. Sign in again to continue.",
+  );
+});
+
 test("recovery mapper covers every governed HTTP recovery status", () => {
   const messages = [403, 404, 409, 422, 429, 503].map((status) => recoveryMessage({ status }, "fallback"));
   assert.equal(new Set(messages).size, 6);
