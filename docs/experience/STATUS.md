@@ -265,3 +265,16 @@ Proof: `pnpm check`, `pnpm build`, `pnpm test`, and `pnpm test:stories` pass;
 the Storybook browser suite reports 9 files and 22 tests. R08 remains ACTIVE:
 real settings/access/audit journeys and authorized backend effects still need
 qualification.
+
+## R08 — ACTIVE: access and grant-management workflow coverage (2026-09-21)
+
+Added an executable `AssetWorkspace` access story using the real production
+component. It verifies effective capability cards, owner principals, delegated
+grant principal/capability values, and the enabled save affordance with
+deterministic fixtures. The story performs no mutation or network request, so
+backend authorization effects remain unverified.
+
+Proof: `pnpm check`, `pnpm build`, `pnpm test`, `pnpm test:stories`, and
+`pnpm build-storybook` pass; the Storybook browser suite reports 9 files and
+23 tests. R08 remains ACTIVE: live settings/access/audit journeys and
+authorized backend effects still need qualification.
