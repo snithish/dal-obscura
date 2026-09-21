@@ -1326,9 +1326,12 @@ inputs. The browser regression covers activity, history, connections, and
 settings at 390×844, 768×1024, and 1440×900.
 
 Proof: the focused regression and complete built browser suite (49 tests), plus
-TypeScript, pass after the fix. Atomic implementation commit: `fa0c65a0
-fix(ui): prevent management grid overflow`. R04/R06/R08 remain ACTIVE pending
-manual visual/keyboard/screen-reader review and live authorization evidence.
+TypeScript, the Storybook behavior suite (46 tests), Node tests (20), and the
+production build/budget gate pass after the fix. The build measures 147.46 KiB
+initial JS gzip, 165.50 KiB total JS gzip, 38.03 KiB CSS gzip, and 83.72 KiB
+fonts. Atomic implementation commit: `fa0c65a0 fix(ui): prevent management
+grid overflow`. R04/R06/R08 remain ACTIVE pending manual
+visual/keyboard/screen-reader review and live authorization evidence.
 
 ## R06/R11 — VERIFY: authenticated local web-vitals check (2026-09-21)
 
