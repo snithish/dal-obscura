@@ -1482,6 +1482,12 @@ plain `uv run ty check` command. The same repository-wide command now passes
 without command-line overrides. Atomic configuration commit: `2d7a906a
 build(typing): persist plugin search paths`.
 
+Broad local verification also passes: `uv run ruff check .`, `uv run ty check`,
+and `uv run pytest -m 'not heavy and not integration and not socket'
+--maxfail=1 --disable-warnings -q` all exit successfully. This is local
+regression evidence only; it does not close E07, E15, E17, or E18's live and
+manual acceptance gates.
+
 ## R01/R10 — VERIFY: repository-wide typing configuration (2026-09-22)
 
 Closed the remaining repository type diagnostics that were actionable in the
