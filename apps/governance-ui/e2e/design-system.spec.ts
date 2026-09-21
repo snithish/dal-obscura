@@ -183,6 +183,16 @@ test("late pre-logout asset responses cannot repopulate a reauthenticated worksp
   await page.getByRole("button", { name: "Sign in locally" }).click();
   await expect(page.getByRole("heading", { name: "beta-orders" })).toBeVisible();
   expect(await page.getByRole("heading", { name: "alpha-orders" }).count()).toBe(0);
+  await expect(page.locator(".studio")).toBeVisible();
+  const theme = page.getByRole("combobox", { name: "Color theme" });
+  await theme.click();
+  await page.getByRole("option", { name: "Dark theme", exact: true }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-mantine-color-scheme", "dark");
+  await expect(page.locator(".studio")).toHaveCSS("background-color", "rgb(23, 31, 44)");
+  await theme.click();
+  await page.getByRole("option", { name: "Light theme", exact: true }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-mantine-color-scheme", "light");
+  await expect(page.locator(".studio")).toHaveCSS("background-color", "rgb(255, 255, 255)");
   staleSchemaRelease?.();
   await expect(page.getByRole("heading", { name: "beta-orders" })).toBeVisible();
 });
