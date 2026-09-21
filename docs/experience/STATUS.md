@@ -608,6 +608,14 @@ Proof: `pnpm check` and 40 Storybook browser tests pass. R05/R08 remain ACTIVE
 pending broader authenticated workflow coverage and live backend mutation
 evidence.
 
+OIDC provider numeric fields now reject fractional, negative, and non-finite
+values before the identity-provider payload is built. A Storybook workflow
+drives the real Maximum JWKS keys control, verifies the field alert, and keeps
+the save action disabled.
+
+Proof: `pnpm check` and 41 Storybook browser tests pass. R05/R08 remain ACTIVE
+pending live settings/access/audit journeys and authorized backend evidence.
+
 ## R08 — ACTIVE: platform-admin lifecycle affordance boundary (2026-09-21)
 
 Disabled plugin lifecycle selectors and apply actions for non-platform-admin
