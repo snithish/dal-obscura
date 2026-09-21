@@ -141,3 +141,16 @@ Proof: `pnpm check`, `pnpm build`, `pnpm test`, and `pnpm test:stories` pass;
 the Storybook browser suite reports 6 files and 15 tests passing. R05 remains
 ACTIVE because component/pattern/workflow breadth, contrast and responsive
 review, manual accessibility checks, and owner approval are still open.
+
+## R05 — ACTIVE: runtime and identity workflow coverage (2026-09-21)
+
+Added executable stories for the production `SettingsView` with configured
+runtime limits, governed storage roots, deployment-managed OIDC metadata, an
+active generation, and the no-provider state. Fixtures contain no credentials;
+the stories only inspect rendered controls and do not invoke save or identity
+provider actions.
+
+Proof: `pnpm check`, `pnpm test`, and `pnpm test:stories` pass from
+`apps/governance-ui`; the Storybook browser suite reports 7 files and 17 tests
+passing. R05 remains ACTIVE pending broader pattern/workflow coverage, visual
+review, manual accessibility checks, and owner approval.
