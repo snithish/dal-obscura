@@ -175,6 +175,12 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
     if (!name.trim()) return setMessage("Connection name is required.");
     const missing = effectiveFields.filter((field) => field.required && !config[field.name]?.trim());
     if (missing.length) return setMessage(`Required configuration missing: ${missing.map((field) => field.name).join(", ")}.`);
+    const invalidNumber = effectiveFields.find((field) => {
+      if ((field.type !== "integer" && field.type !== "number") || !config[field.name]?.trim()) return false;
+      const parsed = Number(config[field.name]);
+      return !Number.isFinite(parsed) || (field.type === "integer" && !Number.isInteger(parsed));
+    });
+    if (invalidNumber) return setMessage(`${configFieldLabel(invalidNumber.name)} must be a valid ${invalidNumber.type} value.`);
     if (!selectedPlugin) return setMessage("Select an admitted catalog adapter before saving.");
     savingRef.current = true;
     setSaving(true);

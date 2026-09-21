@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect } from "storybook/test";
+import { expect, userEvent } from "storybook/test";
 import type { Catalog, PluginDescriptor, PluginPair, PluginState, WorkspacePublication } from "../api";
 import { ConnectionsView } from "./ConnectionsView";
 
@@ -157,6 +157,24 @@ export const TypedConfiguration: Story = {
     await expect(canvas.getByLabelText("Port")).toHaveAttribute("type", "number");
     await expect(canvas.getByLabelText("TLS")).toHaveValue("true");
     await expect(canvas.getByLabelText("Region (optional)")).toHaveValue("eu-west-1");
+  },
+};
+
+export const InvalidTypedValue: Story = {
+  args: {
+    plugins: [typedCatalogPlugin],
+    catalogs: [{
+      ...catalogs[0],
+      plugin_id: "typed-catalog",
+      options: { uri: "https://catalog.example", port: 443, tls: true, region: "eu-west-1" },
+    }],
+  },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Edit" }));
+    await userEvent.clear(canvas.getByLabelText("Port"));
+    await userEvent.type(canvas.getByLabelText("Port"), "1.5");
+    await userEvent.click(canvas.getByRole("button", { name: "Save catalog changes" }));
+    await expect(canvas.getByText("Port must be a valid integer value.")).toBeVisible();
   },
 };
 
