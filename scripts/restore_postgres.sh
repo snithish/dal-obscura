@@ -28,14 +28,22 @@ checksum="${backup}.sha256"
 if [ -e "$checksum" ]; then
   test -r "$checksum" || { echo "backup checksum is not readable: $checksum" >&2; exit 2; }
   checksum_directory=$(dirname -- "$checksum")
-  checksum_name=$(basename -- "$checksum")
-  (
+  backup_name=$(basename -- "$backup")
+  expected_digest=$(awk '$1 ~ /^[[:xdigit:]]{64}$/ {print $1; exit}' "$checksum")
+  verification_checksum=$(mktemp "${TMPDIR:-/tmp}/dal-obscura-restore-checksum.XXXXXX")
+  printf '%s  %s\n' "$expected_digest" "$backup_name" > "$verification_checksum"
+  checksum_valid=0
+  if (
     cd -- "$checksum_directory"
-    sha256sum --check "$checksum_name" >/dev/null
-  ) || {
+    sha256sum --check "$verification_checksum" >/dev/null
+  ); then
+    checksum_valid=1
+  fi
+  rm -f -- "$verification_checksum"
+  if [ "$checksum_valid" -ne 1 ]; then
     echo "backup checksum verification failed: $backup" >&2
     exit 1
-  }
+  fi
 fi
 test -r "$DAL_OBSCURA_AGE_IDENTITY" || {
   echo "age identity is not readable: $DAL_OBSCURA_AGE_IDENTITY" >&2

@@ -189,6 +189,44 @@ def test_restore_helper_verifies_relative_backup_from_checksum_directory(
     assert "restore completed" in result.stdout
 
 
+def test_restore_helper_cannot_validate_a_decoy_checksum_path(tmp_path: Path) -> None:
+    """A sidecar cannot redirect verification to a different local file."""
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _fake_command(bin_dir, "age", "exit 99")
+    _fake_command(bin_dir, "pg_restore", "exit 99")
+    _fake_command(bin_dir, "dal-obscura-maintenance", "exit 99")
+    artifact_dir = tmp_path / "artifacts"
+    artifact_dir.mkdir()
+    backup = artifact_dir / "backup.age"
+    backup.write_bytes(b"synthetic-backup")
+    decoy = artifact_dir / "decoy.age"
+    decoy.write_bytes(b"different-content")
+    backup.with_name(backup.name + ".sha256").write_text(
+        f"{hashlib.sha256(decoy.read_bytes()).hexdigest()}  {decoy}\n"
+    )
+    identity = tmp_path / "identity"
+    identity.write_text("AGE-SECRET-KEY-1SYNTHETIC\n")
+    script = Path(__file__).parents[2] / "scripts" / "restore_postgres.sh"
+    result = subprocess.run(
+        ["sh", str(script), "artifacts/backup.age"],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "DAL_OBSCURA_DATABASE_URL": "postgresql://synthetic",
+            "DAL_OBSCURA_AGE_IDENTITY": str(identity),
+            "DAL_OBSCURA_RESTORE_CONFIRM": "I_UNDERSTAND_ISOLATED_RESTORE",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "checksum verification failed" in result.stderr
+
+
 @pytest.fixture()
 def postgres_sessions() -> sessionmaker[Session]:
     database_url = os.getenv("DAL_OBSCURA_POSTGRES_TEST_URL", "").strip()
