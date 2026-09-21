@@ -252,6 +252,19 @@ test("publisher completes the saved draft review and publication journey", async
   await expect(page.getByText("Published the saved draft.")).toBeVisible();
 });
 
+test("administrator activity filters and paginates the permitted audit records", async ({ page }) => {
+  await authenticatedApi(page, { admin: true, configuredAudit: true });
+  await page.goto("/#activity");
+  await expect(page.getByRole("heading", { name: "Workspace status" })).toBeVisible();
+  await page.getByLabel("Action").fill("policy.draft.save");
+  await page.getByRole("button", { name: "Apply filters" }).click();
+  await expect(page.getByText("policy.draft.save")).toBeVisible();
+  await expect(page.getByText("policy.publish")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Load more activity" }).click();
+  await expect(page.getByText("policy.publish")).toBeVisible();
+});
+
 test("mutation HTML challenges clear private workspace state", async ({ page }) => {
   await authenticatedApi(page);
   await page.goto("/#assets");

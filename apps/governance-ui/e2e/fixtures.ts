@@ -46,7 +46,7 @@ export async function edgeChallengeApi(page: Page, options: EdgeChallengeOptions
  * This fixture proves browser composition and capability presentation only;
  * it is never evidence of a live identity provider or production backend.
  */
-export async function authenticatedApi(page: Page, options: { admin?: boolean; allowPublish?: boolean; configuredSettings?: boolean; configuredConnections?: boolean; configuredPublications?: boolean; configuredLifecycle?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse; deferredSettings?: DeferredResponse; deferredConnections?: DeferredResponse; deferredInventory?: DeferredResponse; deferredVersion?: DeferredResponse; deferredSave?: DeferredResponse; deferredEvaluate?: DeferredResponse; deferredRestore?: DeferredResponse; deferredReview?: DeferredResponse; deferredPublish?: DeferredResponse } = {}) {
+export async function authenticatedApi(page: Page, options: { admin?: boolean; allowPublish?: boolean; configuredSettings?: boolean; configuredConnections?: boolean; configuredPublications?: boolean; configuredLifecycle?: boolean; configuredAudit?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse; deferredSettings?: DeferredResponse; deferredConnections?: DeferredResponse; deferredInventory?: DeferredResponse; deferredVersion?: DeferredResponse; deferredSave?: DeferredResponse; deferredEvaluate?: DeferredResponse; deferredRestore?: DeferredResponse; deferredReview?: DeferredResponse; deferredPublish?: DeferredResponse } = {}) {
   const assetId = "00000000-0000-4000-8000-000000000001";
   const identity = {
     principal: "alex@example.invalid",
@@ -126,6 +126,15 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; a
       return route.fulfill({ json: { items: [inventory], next_cursor: null } });
     }
     if (path === "/v1/audit/events/page") {
+      if (options.configuredAudit) {
+        const requestUrl = new URL(request.url());
+        const action = requestUrl.searchParams.get("action");
+        const cursor = requestUrl.searchParams.get("cursor");
+        if (action !== "policy.draft.save") return route.fulfill({ json: { items: [], next_cursor: null } });
+        const event = (eventAction: string, id: string) => ({ id, actor: "alex@example.invalid", action: eventAction, resource_type: "policy", resource_id: assetId, outcome: "success", details: {}, correlation_id: null, created_at: "2026-09-21T00:00:00Z" });
+        if (!cursor) return route.fulfill({ json: { items: [event("policy.draft.save", "filtered-draft")], next_cursor: "audit-next" } });
+        return route.fulfill({ json: { items: [event("policy.publish", "filtered-publish")], next_cursor: null } });
+      }
       auditCalls += 1;
       if (auditCalls === 1 && options.deferredAudit) {
         options.deferredAudit.markStarted();
