@@ -112,3 +112,17 @@ Still OPEN before E10/E11 can pass: complete documented component/pattern/
 workflow coverage, contrast matrix, reviewed responsive visual baselines,
 manual keyboard/screen-reader/zoom checks, owner visual approval, and the
 remaining R04 feature-CSS migration. R05 remains ACTIVE.
+
+## R05 — ACTIVE: command palette coverage and search correctness (2026-09-21)
+
+Added executable stories for the production `CommandPalette` component. The
+stories use deterministic assets and verify both scoped search results and the
+real selection callback through the Mantine modal portal. While covering this
+component, fixed a functional gap: asset search now matches id, name, catalog,
+and table identifier instead of showing every authorized asset for any query.
+
+Proof: `pnpm check` and `pnpm test:stories` pass from `apps/governance-ui`;
+the browser suite reports 5 files and 13 tests passing. No networked fixture,
+backend, authentication, or pickle behavior was changed. R05 remains ACTIVE;
+the remaining coverage, visual review, manual accessibility, and owner approval
+gates are unchanged.
