@@ -454,6 +454,15 @@ Proof: the full `tests/interfaces/control_plane` suite and focused OIDC/auth
 tests pass; Ruff passes. R02 remains ACTIVE pending the complete origin/header
 matrix and live local/Cloudflare SSO verification.
 
+Follow-up parameterized auth coverage exercises the cookie-mutation matrix for
+implicit configured host, explicit configured origin/host, forged Host,
+attacker Origin, and caller-supplied `X-Forwarded-Host`. The forwarded host is
+ignored and only the configured browser boundary can succeed.
+
+Proof: `uv run pytest tests/interfaces/control_plane/test_actor_auth.py -q`
+passes (including the six matrix cases). R02 remains ACTIVE pending live local
+and Cloudflare SSO verification.
+
 ## R03 — ACTIVE: bounded secure-local doctor (2026-09-21)
 
 Added `deployment/local-secure/run doctor` after profile validation and Compose
