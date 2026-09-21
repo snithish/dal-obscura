@@ -15,12 +15,7 @@ repos:
       args: ["--"]
     - id: ty
       name: Ty type check
-      entry: >-
-        uv run ty check
-        --extra-search-path packages/plugin-api/src
-        --extra-search-path packages/plugin-conformance/src
-        --extra-search-path packages/manifest-parquet-plugin/src
-        --extra-search-path packages/iceberg-rest-plugin/src
+      entry: uv run ty check
       language: system
       pass_filenames: false
       files: ^(src|packages)/.*\.py$

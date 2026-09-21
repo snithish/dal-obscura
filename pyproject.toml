@@ -78,6 +78,14 @@ markers = [
   "migrations/versions/*.py",
 ]
 
+[tool.ty.environment]
+extra-paths = [
+  "packages/plugin-api/src",
+  "packages/plugin-conformance/src",
+  "packages/manifest-parquet-plugin/src",
+  "packages/iceberg-rest-plugin/src",
+]
+
 [dependency-groups]
 dev = [
   "pre-commit>=3.4.0",
