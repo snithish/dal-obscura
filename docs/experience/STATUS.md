@@ -652,3 +652,17 @@ Proof: `pnpm check` and the full built browser suite pass with 13 tests. Atomic
 implementation commit: `8e787f77 test(ui): cover authenticated mobile navigation`.
 R04/R05/R06 remain ACTIVE pending manual screen-reader/visual review, live
 identity qualification, and the broader authenticated feature journeys.
+
+## R08 — ACTIVE: identity-provider lockout confirmation (2026-09-21)
+
+Settings now requires an explicit browser confirmation before staging a provider
+chain with no enabled identity provider. Cancelling leaves the staged form
+unsaved and reports the recovery action; the server-side revision and publication
+readiness rules remain authoritative. A Storybook workflow removes the only
+provider, cancels the confirmation, and verifies the visible status message.
+
+Proof: `pnpm check`, `pnpm test:stories` (42 browser tests), and `pnpm build`
+pass; the budget gate measures 162.48 KiB JS gzip, 38.01 KiB CSS gzip, and
+83.72 KiB fonts. Atomic implementation commit: `fea21100 fix(ui): confirm
+identity provider lockout`. R08 remains ACTIVE pending live settings/access/
+audit journeys and authorized backend mutation evidence.
