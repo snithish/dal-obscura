@@ -285,6 +285,19 @@ test("late catalog discovery cannot replace the current table inventory", async 
   await expect(page.getByRole("cell", { name: "stale-orders" })).toHaveCount(0);
 });
 
+test("review-only publisher links preserve read-only authoring while permitting publish", async ({ page }) => {
+  await authenticatedApi(page, { allowPublish: true });
+  await page.goto("/?asset=00000000-0000-4000-8000-000000000001&draft=current-draft&draft_revision=0#assets");
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save deny-all draft" })).toBeDisabled();
+  await expect(page.locator("#asset-select")).toBeDisabled();
+
+  await page.getByRole("button", { name: "Review for publish" }).click();
+  await expect(page.getByText("Server review is current for this saved draft revision. You can publish it now.")).toBeVisible();
+  await page.getByRole("button", { name: "Publish reviewed deny-all" }).click();
+  await expect(page.getByText("Published the saved draft.")).toBeVisible();
+});
+
 test("mutation HTML challenges clear private workspace state", async ({ page }) => {
   await authenticatedApi(page);
   await page.goto("/#assets");
