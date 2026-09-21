@@ -470,6 +470,9 @@ bootstrap, required owner-readable secret files, and immutable image digests.
 It never creates DNS, tunnel, or Access resources and its doctor output marks
 Cloudflare Access as unverified.
 
+Follow-up `98ea7223` explicitly ignores generated secret material for all three
+deployment profiles and protects that contract with an architecture test.
+
 Proof: shell syntax, YAML parsing, Ruff, and six architecture/production parity
 tests pass. Compose runtime rendering could not be executed because the local
 Podman socket was unavailable. R03 remains ACTIVE pending an authorized named
