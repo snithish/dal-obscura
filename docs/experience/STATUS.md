@@ -1566,6 +1566,7 @@ manifest gate is represented in the checked-in workflow. A follow-up fetches
 the attestation descriptors from each image index and checks the raw SLSA and
 SPDX predicate manifests before hashing the evidence. Atomic implementation
 commits: `f8c91be3 ci(release): bind candidate manifest to attestations` and
-`ee8e48ba fix(ci): inspect attestation manifests`. R11 remains VERIFY until a
-published candidate executes this gate and the complete release dossier is
-reviewed.
+`ee8e48ba fix(ci): inspect attestation manifests`. The manifest also records
+the hashes of the combined raw attestation evidence (`f63afdea fix(ci): record
+attestation evidence hashes`). R11 remains VERIFY until a published candidate
+executes this gate and the complete release dossier is reviewed.
