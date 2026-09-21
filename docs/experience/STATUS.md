@@ -445,6 +445,15 @@ forwarded client bucket; it cannot reset the shared trusted-gateway budget.
 Configuration regressions in `cf8b8a00` prove malformed or hostname-based proxy
 peer values are rejected at app construction rather than silently trusted.
 
+Follow-up `97254480` closes a host-boundary gap for browser cookie mutations:
+the request Host must match a configured browser origin before CSRF-valid state
+changes proceed, while forwarded host metadata remains ignored. Regression tests
+cover forged and configured hosts with and without an Origin header.
+
+Proof: the full `tests/interfaces/control_plane` suite and focused OIDC/auth
+tests pass; Ruff passes. R02 remains ACTIVE pending the complete origin/header
+matrix and live local/Cloudflare SSO verification.
+
 ## R03 — ACTIVE: bounded secure-local doctor (2026-09-21)
 
 Added `deployment/local-secure/run doctor` after profile validation and Compose
