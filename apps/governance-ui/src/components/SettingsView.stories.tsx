@@ -94,3 +94,12 @@ export const InvalidAttributeMapping: Story = {
     await expect(canvas.getByRole("button", { name: "Save identity providers" })).toBeDisabled();
   },
 };
+
+export const InvalidRuntimeLimits: Story = {
+  play: async ({ canvas }) => {
+    await userEvent.clear(canvas.getByLabelText("Ticket TTL (seconds)"));
+    await userEvent.type(canvas.getByLabelText("Ticket TTL (seconds)"), "0");
+    await userEvent.click(canvas.getByRole("button", { name: "Save runtime settings" }));
+    await expect(canvas.getByRole("status")).toHaveTextContent("positive values");
+  },
+};
