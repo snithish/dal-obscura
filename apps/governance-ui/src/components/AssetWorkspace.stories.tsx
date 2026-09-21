@@ -211,6 +211,24 @@ export const DelegatedGrantActor: Story = {
   },
 };
 
+export const DenyAllDraft: Story = {
+  args: {
+    rules: [],
+    activeRule: undefined,
+    selectedField: "",
+    selectedMask: undefined,
+    effectiveFields: new Set(),
+    reviewToken: undefined,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("No draft rules")).toBeVisible();
+    await expect(canvas.getByText(/This is an intentional deny-all policy/)).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "Save deny-all draft" })).toBeEnabled();
+    await expect(canvas.getByRole("button", { name: "Publish reviewed deny-all" })).toBeDisabled();
+    await expect(canvas.getByRole("button", { name: "Add first rule" })).toBeEnabled();
+  },
+};
+
 export const SchemaUnavailable: Story = {
   args: { asset: { ...asset, schema: undefined }, selectedField: "", rules: [], activeRule: undefined, selectedMask: undefined },
   play: async ({ canvas }) => {
