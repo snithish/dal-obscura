@@ -996,3 +996,20 @@ tests), production build, and bundle-budget gate pass. Measured budgets remain
 implementation commit: `7eb0e6cf test(ui): cover deferred draft saves`. R06
 remains ACTIVE pending evaluate/review/publish/restore races, live identity and
 provider qualification, and production process-race evidence.
+
+## R08 — ACTIVE: authenticated access mutation journey (2026-09-21)
+
+Added a capability-gated browser fixture for the production access workspace.
+The administrator journey edits owner principals, saves them, adds a delegated
+grant, and saves the grant through typed owner APIs. This proves rendered
+control wiring, capability presentation, mutation feedback, and reload
+composition in the built app; the fixture remains synthetic and does not prove
+live backend authorization or persistence.
+
+Proof: `tsc -b`, the focused access-mutation browser test, the full built browser
+suite (34 tests), the UI node suite (20 tests), Storybook browser tests (45
+tests), production build, and bundle-budget gate pass. Measured budgets remain
+163.03 KiB JS gzip, 38.01 KiB CSS gzip, and 83.72 KiB fonts. Atomic
+implementation commit: `31a37305 test(ui): cover administrator access
+mutations`. R08 remains ACTIVE pending live settings/access/audit journeys,
+backend authorization effects, and production qualification.
