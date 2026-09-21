@@ -168,6 +168,36 @@ test("forced-colors mode keeps the signed-out controls discoverable", async ({ p
   await expect(page.getByRole("button", { name: "Sign in locally" })).toBeVisible();
 });
 
+test("forced-colors mode keeps authenticated workflows discoverable", async ({ page }) => {
+  await authenticatedApi(page, {
+    admin: true,
+    configuredSettings: true,
+    configuredConnections: true,
+    configuredPublications: true,
+    configuredLifecycle: true,
+    configuredAudit: true,
+  });
+  await page.emulateMedia({ forcedColors: "active" });
+
+  await page.goto("/#assets");
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  const policyControl = page.getByRole("button", { name: "Run policy test" });
+  await policyControl.focus();
+  await expect(policyControl).toBeFocused();
+  await expect.poll(() => policyControl.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
+  await expect.poll(() => policyControl.evaluate((element) => getComputedStyle(element).outlineWidth)).toBe("2px");
+
+  for (const [hash, heading] of [["#activity", "Workspace status"], ["#connections", "Catalog connections"], ["#settings", "Runtime and identity"]] as const) {
+    await page.goto(`/${hash}`);
+    await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+    const dimensions = await page.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: document.documentElement.clientWidth,
+    }));
+    expect(dimensions.documentWidth, `${hash} forced-colors page overflow`).toBeLessThanOrEqual(dimensions.viewportWidth + 1);
+  }
+});
+
 test("reduced-motion preference disables shell motion", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
