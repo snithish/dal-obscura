@@ -693,3 +693,18 @@ Proof: `pnpm check` and the full built-browser suite pass with 14 tests. Atomic
 implementation commit: `b4775319 test(ui): prove stale review links stay
 read-only`. R07 remains ACTIVE pending the real author/reviewer/publisher,
 restore, and process-race journey.
+
+## R06 — ACTIVE: deferred management-response race proof (2026-09-21)
+
+Added a built-browser race journey over the real management query ownership. The
+first Activity audit response is held, navigation moves to Changes and back to
+Activity, the newer response renders, and only then is the stale response
+released. The current Activity view retains the fresh event and never renders
+the stale event, exercising page epochs, query cancellation, and session-scoped
+management state together. The fixture is synthetic and does not qualify a live
+identity provider or backend process race.
+
+Proof: `pnpm check` and the full built-browser suite pass with 15 tests. Atomic
+implementation commit: `7e7f4eda test(ui): cover deferred management responses`.
+R06 remains ACTIVE pending the broader parameterized workflow matrix and live
+identity/provider qualification.
