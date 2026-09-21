@@ -236,3 +236,6 @@ Proof: `pnpm check`, `pnpm build`, `pnpm test`, and `pnpm test:stories` pass;
 the navigation unit test covers the revision parameter and the Storybook suite
 remains 8 files and 20 tests. R07 remains ACTIVE pending real author/reviewer/
 publisher, restore, and process-race qualification.
+
+Static Storybook verification also passes after revision-bound links were added:
+`pnpm build-storybook` completed successfully with the 8-story-file inventory.
