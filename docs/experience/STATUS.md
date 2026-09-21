@@ -1409,3 +1409,6 @@ asserts `table_identifier: demo.orders`; TypeScript passes. Atomic implementatio
 commit: `38225652 fix(ui): preserve discovered table identifiers`. R08 remains
 ACTIVE pending live catalog credentials, backend mutation effects, and the full
 administration qualification journey.
+
+Follow-up verification: the complete built browser suite remains green at 51
+tests after this change.
