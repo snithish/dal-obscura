@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, userEvent } from "storybook/test";
-import type { Asset, AssetAccess, Mask, PolicyRule, SchemaNode, Session } from "../api";
+import { expect, userEvent, within } from "storybook/test";
+import type { Asset, AssetAccess, Mask, PolicyRule, PolicyVersionDetail, SchemaNode, Session } from "../api";
 import { AssetWorkspace } from "./AssetWorkspace";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -74,6 +74,14 @@ const rule: PolicyRule = {
   effect: "allow",
   when: { tenant: "analytics" },
 };
+
+const publishedDetail: PolicyVersionDetail = {
+  asset_id: asset.id,
+  policy_version: 4,
+  rules: [{ ...rule, columns: ["region"], masks: {}, row_filter: null }],
+};
+const historyQueryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+historyQueryClient.setQueryData(["asset", "storybook|admin", asset.id, "version", 4], publishedDetail);
 
 const access: AssetAccess = {
   asset_id: asset.id,
@@ -199,6 +207,21 @@ export const AccessAndGrants: Story = {
     await expect(canvas.getByLabelText("Grant principal 1")).toHaveValue("group:analysts");
     await expect(canvas.getByLabelText("Grant capability 1")).toHaveValue("read");
     await expect(canvas.getByRole("button", { name: "Save capabilities" })).toBeEnabled();
+  },
+};
+
+export const SemanticHistoryDiff: Story = {
+  args: {
+    initialTab: "history",
+    initialVersion: 4,
+    queryClient: historyQueryClient,
+    history: [{ asset_id: asset.id, asset_name: asset.name, catalog: asset.catalog, target: asset.table_identifier, policy_version: 4, active: true, created_at: "2026-09-21T08:00:00Z" }],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("heading", { name: "Version 4 details" })).toBeVisible();
+    await expect(canvas.getByRole("region", { name: "Semantic diff against policy version 4" })).toBeVisible();
+    await expect(canvas.getByText("Changed rules")).toBeVisible();
+    await expect(within(canvas.getByRole("region", { name: "Semantic diff against policy version 4" })).getByText("1", { exact: true })).toBeVisible();
   },
 };
 
