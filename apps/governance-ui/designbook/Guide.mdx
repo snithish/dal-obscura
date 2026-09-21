@@ -34,6 +34,13 @@ pending submission and accessible error feedback in actual `LoginPanel`.
 
 <Canvas of={Login.LocalRejected} />
 
+## Network boundary
+
+The preview installs a cleanup-safe network guard. Stories reject `/v1/*`,
+`/auth/*`, identity-provider, and other cross-origin requests immediately. Use
+deterministic props and callbacks for component behavior; keep real API, IdP and
+customer-data journeys in the application browser suites.
+
 ## Contribution acceptance
 
 1. Reuse semantic tokens and the actual application component, not copied markup.

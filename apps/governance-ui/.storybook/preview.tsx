@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useMantineColorScheme } from "@mantine/core";
 import type { Preview } from "@storybook/react-vite";
 import { AppProviders } from "../src/design/AppProviders";
+import { installStoryNetworkGuard } from "../src/design/storyNetworkGuard";
 import "../src/styles.css";
 import "../src/design/base.css";
 
@@ -24,6 +25,9 @@ const preview: Preview = {
     options: { storySort: { order: ["Foundations", "Components", "Patterns", "Workflows", "Contribution"] } },
   },
   decorators: [(Story, context) => <AppProviders><Theme choice={context.globals.theme} /><Story /></AppProviders>],
-  beforeEach: async () => { await document.fonts.ready; },
+  beforeEach: async () => {
+    await document.fonts.ready;
+    return installStoryNetworkGuard();
+  },
 };
 export default preview;
