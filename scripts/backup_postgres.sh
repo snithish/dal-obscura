@@ -13,6 +13,7 @@ command -v pg_dump >/dev/null 2>&1 || { echo "pg_dump is required" >&2; exit 2; 
 command -v age >/dev/null 2>&1 || { echo "age is required" >&2; exit 2; }
 output=$1
 checksum="${output}.sha256"
+backup_name=$(basename -- "$output")
 if [ -e "$output" ] || [ -e "$checksum" ]; then
   echo "refusing to overwrite existing backup or checksum: $output" >&2
   exit 2
@@ -31,7 +32,7 @@ pg_dump --format=custom --no-owner --no-acl --dbname="$DAL_OBSCURA_DATABASE_URL"
 test -s "$temporary" || { echo "encrypted backup is empty" >&2; exit 1; }
 digest=$(sha256sum "$temporary" | awk '{print $1}')
 test -n "$digest" || { echo "could not compute backup checksum" >&2; exit 1; }
-printf '%s  %s\n' "$digest" "$output" > "$checksum_temporary"
+printf '%s  %s\n' "$digest" "$backup_name" > "$checksum_temporary"
 test -s "$checksum_temporary" || { echo "backup checksum is empty" >&2; exit 1; }
 mv -- "$temporary" "$output"
 mv -- "$checksum_temporary" "$checksum"

@@ -108,7 +108,7 @@ def test_backup_helper_writes_checksum_and_refuses_overwrite(tmp_path: Path) -> 
     assert output.read_bytes() == b"synthetic-backup"
     checksum = output.with_name(output.name + ".sha256")
     assert checksum.read_text() == (
-        f"{hashlib.sha256(b'synthetic-backup').hexdigest()}  {output}\n"
+        f"{hashlib.sha256(b'synthetic-backup').hexdigest()}  {output.name}\n"
     )
 
     second = subprocess.run(
@@ -149,6 +149,44 @@ def test_restore_helper_rejects_corrupt_checksum_before_provider_tools(tmp_path:
     )
     assert result.returncode == 1
     assert "checksum verification failed" in result.stderr
+
+
+def test_restore_helper_verifies_relative_backup_from_checksum_directory(
+    tmp_path: Path,
+) -> None:
+    """A backup and sidecar remain verifiable when restore runs elsewhere."""
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _fake_command(bin_dir, "age", "printf 'decrypted-backup'")
+    _fake_command(bin_dir, "pg_restore", "exit 0")
+    _fake_command(bin_dir, "dal-obscura-maintenance", "exit 0")
+    artifact_dir = tmp_path / "artifacts"
+    artifact_dir.mkdir()
+    backup = artifact_dir / "backup.age"
+    backup.write_bytes(b"synthetic-backup")
+    backup.with_name(backup.name + ".sha256").write_text(
+        f"{hashlib.sha256(backup.read_bytes()).hexdigest()}  {backup.name}\n"
+    )
+    identity = tmp_path / "identity"
+    identity.write_text("AGE-SECRET-KEY-1SYNTHETIC\n")
+    script = Path(__file__).parents[2] / "scripts" / "restore_postgres.sh"
+    result = subprocess.run(
+        ["sh", str(script), "artifacts/backup.age"],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "DAL_OBSCURA_DATABASE_URL": "postgresql://synthetic",
+            "DAL_OBSCURA_AGE_IDENTITY": str(identity),
+            "DAL_OBSCURA_RESTORE_CONFIRM": "I_UNDERSTAND_ISOLATED_RESTORE",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "restore completed" in result.stdout
 
 
 @pytest.fixture()

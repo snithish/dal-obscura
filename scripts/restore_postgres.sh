@@ -27,7 +27,12 @@ test -r "$backup" || { echo "backup is not readable: $backup" >&2; exit 2; }
 checksum="${backup}.sha256"
 if [ -e "$checksum" ]; then
   test -r "$checksum" || { echo "backup checksum is not readable: $checksum" >&2; exit 2; }
-  sha256sum --check "$checksum" >/dev/null || {
+  checksum_directory=$(dirname -- "$checksum")
+  checksum_name=$(basename -- "$checksum")
+  (
+    cd -- "$checksum_directory"
+    sha256sum --check "$checksum_name" >/dev/null
+  ) || {
     echo "backup checksum verification failed: $backup" >&2
     exit 1
   }
