@@ -416,6 +416,11 @@ tests, and `pnpm build-storybook` all pass. R04 remains ACTIVE pending the
 contrast matrix, responsive/zoom/forced-colors review, and owner visual
 approval.
 
+Follow-up story `97da75b1` adds the real nested policy workspace under the dark
+theme. The Storybook suite now reports 32 passing tests and the static
+designbook rebuild passes; this improves theme coverage but does not replace
+manual contrast, zoom, forced-colors, or owner review.
+
 ## R02 — ACTIVE: trusted proxy login attribution (2026-09-21)
 
 Added an explicit trusted-proxy contract for browser login rate limiting. The
