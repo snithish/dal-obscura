@@ -675,22 +675,25 @@ jobs:
         run: |
           set -eu
           mkdir -p "$RUNNER_TEMP/release-manifest"
-          docker buildx imagetools inspect \
-            "${REGISTRY}/${IMAGE_NAME}@${SERVER_DIGEST}" --raw \
-            > "$RUNNER_TEMP/release-manifest/server-index.json"
-          docker buildx imagetools inspect \
-            "${REGISTRY}/${IMAGE_NAME}-ui@${UI_DIGEST}" --raw \
-            > "$RUNNER_TEMP/release-manifest/ui-index.json"
-          for index in \
-            "$RUNNER_TEMP/release-manifest/server-index.json" \
-            "$RUNNER_TEMP/release-manifest/ui-index.json"; do
-            grep -q 'https://slsa.dev/provenance/v1' "$index"
-            grep -q 'https://spdx.dev/Document' "$index"
-          done
-          sha256sum "$RUNNER_TEMP/release-manifest/server-index.json" \
-            > "$RUNNER_TEMP/release-manifest/server-index.json.sha256"
-          sha256sum "$RUNNER_TEMP/release-manifest/ui-index.json" \
-            > "$RUNNER_TEMP/release-manifest/ui-index.json.sha256"
+          verify_attestations() {
+            image=$1
+            digest=$2
+            name=$3
+            index="$RUNNER_TEMP/release-manifest/${name}-index.json"
+            evidence="$RUNNER_TEMP/release-manifest/${name}-attestations.json"
+            docker buildx imagetools inspect --raw "${image}@${digest}" > "$index"
+            jq -e '[.manifests[] | select(.annotations["vnd.docker.reference.type"] == "attestation-manifest")] | length >= 2' "$index" >/dev/null
+            : > "$evidence"
+            for attestation in $(jq -r '.manifests[] | select(.annotations["vnd.docker.reference.type"] == "attestation-manifest") | .digest' "$index"); do
+              docker buildx imagetools inspect --raw "${image}@${attestation}" >> "$evidence"
+            done
+            grep -q 'https://slsa.dev/provenance/v1' "$evidence"
+            grep -q 'https://spdx.dev/Document' "$evidence"
+            sha256sum "$index" > "$index.sha256"
+            sha256sum "$evidence" > "$evidence.sha256"
+          }
+          verify_attestations "${REGISTRY}/${IMAGE_NAME}" "$SERVER_DIGEST" server
+          verify_attestations "${REGISTRY}/${IMAGE_NAME}-ui" "$UI_DIGEST" ui
 
       - name: Write candidate release manifest
         env:

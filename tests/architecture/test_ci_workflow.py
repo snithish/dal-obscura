@@ -103,6 +103,8 @@ def test_ci_binds_published_candidates_to_attestations_and_lanes() -> None:
 
     assert "name: Verify pushed candidate attestations" in workflow
     assert "docker buildx imagetools inspect" in workflow
+    assert "vnd.docker.reference.type" in workflow
+    assert "jq -e" in workflow
     assert "https://slsa.dev/provenance/v1" in workflow
     assert "https://spdx.dev/Document" in workflow
     assert "server_attestation_index_sha256" in workflow
