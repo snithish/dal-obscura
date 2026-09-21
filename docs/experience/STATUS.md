@@ -782,6 +782,8 @@ tests), production build plus budget gate (162.98 KiB JS gzip, 38.01 KiB CSS
 gzip, 83.72 KiB fonts), and the full built-browser suite (17 tests) pass.
 `pnpm` itself did not return in this runner, so equivalent direct binaries were
 used for the TypeScript, Vitest, Vite, and Playwright checks. Atomic
-implementation commit: `d80327fd fix(ui): fail closed on html auth challenges`.
+implementation commits: `d80327fd fix(ui): fail closed on html auth challenges`
+and `74b07f8e fix(ui): preserve auth challenge recovery state`. The follow-up
+keeps the actionable edge-session message visible after private state is cleared.
 E03/R02 remains ACTIVE pending live local/Cloudflare SSO allow/deny and
 re-authentication evidence, plus the production deployment qualification.
