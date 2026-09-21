@@ -637,3 +637,18 @@ Proof: `pnpm check`, 34 Storybook browser tests, and the production budget build
 (161.83 KiB JS gzip, 38.00 KiB CSS gzip, 83.72 KiB fonts) pass. R08 remains
 ACTIVE pending the complete live settings/access/audit journey and authorized
 backend mutation evidence.
+
+## R04/R05/R06 — ACTIVE: authenticated responsive shell proof (2026-09-21)
+
+Added a reusable synthetic authenticated browser fixture and a production-build
+journey at 390×844. It loads the real policy workspace, opens the Mantine mobile
+navigation Drawer, verifies the reader cannot activate the admin-only Settings
+destination, confirms Escape closes the Drawer and restores focus to its trigger,
+and confirms an enabled Activity navigation action closes the Drawer and changes
+the rendered page. The fixture is explicitly synthetic and does not qualify an
+identity provider, Cloudflare Access, or a live backend.
+
+Proof: `pnpm check` and the full built browser suite pass with 13 tests. Atomic
+implementation commit: `8e787f77 test(ui): cover authenticated mobile navigation`.
+R04/R05/R06 remain ACTIVE pending manual screen-reader/visual review, live
+identity qualification, and the broader authenticated feature journeys.
