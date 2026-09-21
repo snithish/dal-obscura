@@ -1197,3 +1197,20 @@ tests/benchmarks/test_masking_row_filter_benchmarks.py
 tests/benchmarks/test_iceberg_multifile_benchmark.py --benchmark-only -q` and
 the focused complex-schema ticket benchmark both pass. R11 remains VERIFY
 pending the complete capacity, restore, provenance, and release lanes.
+
+## R06/R08 — ACTIVE: management refresh error retention (2026-09-21)
+
+Fixed the production management shell so a refresh failure does not discard a
+successfully loaded page. Connections, activity, settings, and changes retain
+their current state and show an actionable recovery alert with a retry control;
+initial load failures still use the full-page recovery path. This protects
+operator context during transient control-plane outages while keeping the
+existing fail-closed entry behavior.
+
+Proof: the focused refresh-failure browser test and the full built browser
+suite (43 tests), TypeScript, UI node suite (20 tests), Storybook browser tests
+(45 tests), production build, and bundle-budget gate pass. Measured budgets are
+163.18 KiB JS gzip, 38.01 KiB CSS gzip, and 83.72 KiB fonts. Atomic
+implementation commit: `e4b068ca fix(ui): preserve management state on refresh
+errors`. R06/R08 remain ACTIVE pending live identity, backend mutation,
+authorization, plugin, consumer, and production process evidence.
