@@ -25,6 +25,7 @@ token as proof that Access is enforcing a policy.
 ```bash
 cd deployment/named-tunnel
 cp .env.example .env
+mkdir -p secrets
 chmod 600 secrets/cloudflared.token secrets/origin.key
 ./run config
 ./run up
