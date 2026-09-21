@@ -29,10 +29,67 @@ Usage:
   ./run init       generate local TLS material (never commits it)
   ./run config     render and validate the layered topology
   ./run up         migrate and start the secure-local services
+  ./run doctor     report redacted local TLS, origin, service and auth state
   ./run down       stop services without deleting PostgreSQL data
   ./run reset      stop services and delete the local database volume
   ./run logs [svc] show logs (default: edge)
 EOF
+}
+
+profile_value() {
+  sed -n "s/^$1=//p" "$PROFILE" | head -n 1
+}
+
+doctor() {
+  [ -f "$PROFILE" ] || { echo "Create $PROFILE first" >&2; exit 2; }
+  validate_profile
+  compose config --quiet
+
+  callback=$(profile_value DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI)
+  origin=invalid
+  callback_state=invalid
+  case "$callback" in
+    https://*/auth/callback)
+      origin=${callback%/auth/callback}
+      callback_state=validated
+      ;;
+  esac
+
+  bootstrap_state=disabled
+  [ "$(profile_value DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED)" = "false" ] || bootstrap_state=unexpected
+
+  browser_oidc_state=missing
+  if [ -n "$(profile_value DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER)" ] \
+    && [ -n "$(profile_value DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID)" ] \
+    && [ "$callback_state" = validated ]; then
+    browser_oidc_state=configured
+  fi
+
+  ui_tls_state=invalid-ca
+  if openssl verify -CAfile "$ROOT/secrets/ca.crt" "$ROOT/secrets/ui.crt" >/dev/null 2>&1; then
+    ui_tls_state=valid-ca
+  fi
+  ui_tls_san_state=invalid
+  if openssl x509 -in "$ROOT/secrets/ui.crt" -noout -text 2>/dev/null \
+    | grep -Eq 'DNS:localhost|IP Address:127\.0\.0\.1'; then
+    ui_tls_san_state=localhost
+  fi
+
+  service_state=$(compose ps --format '{{.Service}}={{.State}}' 2>/dev/null || true)
+  [ -n "$service_state" ] || service_state=not-running
+
+  printf '%s\n' \
+    'profile=secure-local' \
+    "public_origin=$origin" \
+    "callback=$callback_state" \
+    "bootstrap=$bootstrap_state" \
+    "browser_oidc=$browser_oidc_state" \
+    'flight_endpoint=loopback-only' \
+    "ui_tls=$ui_tls_state" \
+    "ui_tls_san=$ui_tls_san_state" \
+    "services=$service_state" \
+    'connector=not-configured' \
+    'cloudflare_access=not-verified (secure-local does not claim external edge protection)'
 }
 
 init_tls() {
@@ -79,6 +136,7 @@ case "$1" in
   init) init_tls ;;
   config) [ -f "$PROFILE" ] || { echo "Create $PROFILE first" >&2; exit 2; }; validate_profile; compose config --quiet ;;
   up) [ -f "$PROFILE" ] || { echo "Create $PROFILE first" >&2; exit 2; }; validate_profile; compose up -d --wait ;;
+  doctor) doctor ;;
   down) [ -f "$PROFILE" ] || exit 0; compose down ;;
   reset) [ -f "$PROFILE" ] || exit 0; compose down --volumes --remove-orphans ;;
   logs) [ -f "$PROFILE" ] || { echo "Create $PROFILE first" >&2; exit 2; }; validate_profile; compose logs "${2:-edge}" ;;

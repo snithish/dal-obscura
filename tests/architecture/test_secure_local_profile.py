@@ -26,4 +26,18 @@ def test_secure_local_profile_reuses_production_security_contract() -> None:
     assert "separate `localhost` certificates" in readme
     assert "REPLACE_WITH placeholders" in runner
     assert "Missing readable TLS material" in runner
+    assert "doctor) doctor" in runner
+    assert "compose config --quiet" in runner
+    assert "cloudflare_access=not-verified" in runner
     assert "same production services and security settings" in readme
+
+
+def test_secure_local_doctor_reports_redacted_local_state_only() -> None:
+    runner = (PROFILE / "run").read_text(encoding="utf-8")
+
+    assert "public_origin=" in runner
+    assert "browser_oidc=" in runner
+    assert "flight_endpoint=loopback-only" in runner
+    assert "connector=not-configured" in runner
+    assert "cloudflare_access=not-verified" in runner
+    assert "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN" not in runner

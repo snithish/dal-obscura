@@ -17,6 +17,7 @@ cp .env.example .env
 # approved catalog hosts, and a real local OIDC issuer/client.
 ./run config
 ./run up
+./run doctor
 ```
 
 Open `https://localhost:8443`. `./run init` creates a disposable local CA plus
@@ -31,3 +32,10 @@ is destructive to this disposable profile. Keep `secrets/`, `.env`, and generate
 certificates out of version control. This profile provides the secure-local
 topology and commands; real IdP, provider, artifact, consumer, and recovery runs
 remain required evidence for paid-production acceptance.
+
+`./run doctor` validates the layered Compose configuration and reports only
+redacted local state: HTTPS origin/callback shape, bootstrap mode, browser OIDC
+configuration, TLS trust/SANs, and container state. It deliberately reports
+Cloudflare Access as unverified because this profile cannot prove an external
+edge policy. Live identity-provider, connector, consumer, recovery, and owner
+acceptance checks remain required for production.
