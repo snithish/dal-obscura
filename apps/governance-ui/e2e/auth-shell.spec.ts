@@ -302,6 +302,22 @@ test("late draft saves cannot clear a newer local edit", async ({ page }) => {
   await expect(page.getByText("Policy draft saved to the control plane.")).toHaveCount(0);
 });
 
+test("late policy evaluations cannot replace a newer draft preview", async ({ page }) => {
+  const deferredEvaluate = deferredResponse();
+  await authenticatedApi(page, { deferredEvaluate });
+  await page.goto("/#assets");
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Run policy test" }).click();
+  await deferredEvaluate.started;
+  await page.getByRole("button", { name: "Add first rule" }).click();
+  await expect(page.getByText("Unsaved changes")).toBeVisible();
+
+  deferredEvaluate.release();
+  await expect(page.getByText("Unsaved changes")).toBeVisible();
+  await expect(page.getByText("Server-side evaluation completed: denied.")).toHaveCount(0);
+});
+
 test("reader deep links fail closed before admin settings requests", async ({ page }) => {
   const adminRequests: string[] = [];
   page.on("request", (request) => {
