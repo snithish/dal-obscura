@@ -785,5 +785,8 @@ used for the TypeScript, Vitest, Vite, and Playwright checks. Atomic
 implementation commits: `d80327fd fix(ui): fail closed on html auth challenges`
 and `74b07f8e fix(ui): preserve auth challenge recovery state`. The follow-up
 keeps the actionable edge-session message visible after private state is cleared.
+Follow-up browser matrix `192e4ca4 test(ui): cover forbidden and redirected edge
+challenges` adds 403-HTML and followed-redirect cases; the full built-browser
+suite now passes 19 tests.
 E03/R02 remains ACTIVE pending live local/Cloudflare SSO allow/deny and
 re-authentication evidence, plus the production deployment qualification.
