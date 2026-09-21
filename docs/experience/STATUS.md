@@ -1458,3 +1458,20 @@ Proof: the focused browser test passes in 3.0 seconds. Atomic implementation
 commit: `04995eed test(ui): qualify large schema tree performance`. R06/R07/R11
 remain VERIFY pending fixed-runner measurements, manual accessibility review,
 and the live authoring workflow.
+
+## R01/R08 — ACTIVE: control-plane source typing boundary (2026-09-22)
+
+Made the control-plane dependency wrapper preserve callback result types and
+returned typed response models from asset, plugin, and session routes. Runtime
+path-rule normalization now narrows malformed storage values before copying
+them, and the published catalog discriminator no longer uses an unnecessary
+cast. These changes keep the transport boundary explicit without changing
+pickle-backed task delivery or request behavior.
+
+Proof: `uv run ty check src` and Ruff pass with zero diagnostics; the focused
+control-plane route, audit, catalog, actor-auth, and route-inventory tests pass
+(62 tests). The atomic implementation commit is `7af0c64b fix(control-plane):
+preserve route result types`. The repository-wide `uv run ty check` gate still
+reports 31 diagnostics in examples, plugin test import environments, and
+loosely typed fixtures; R01/R08 remain ACTIVE until those packaging and test
+typing gaps are addressed.
