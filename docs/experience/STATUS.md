@@ -1141,7 +1141,10 @@ replaces it, covering the existing discovery epoch and management-query
 cancellation boundary. The fixture is synthetic and does not qualify live
 catalog latency, cancellation, or backend authorization.
 
-Proof: TypeScript and the focused stale-discovery browser test pass against the
-built shell. Atomic implementation commit: `bc1928c4 test(ui): cover stale
-catalog discovery`. R06/R08 remain ACTIVE pending the remaining live identity,
-backend mutation, plugin, consumer, and production process evidence.
+Proof: TypeScript, the focused stale-discovery browser test, the full built
+browser suite (41 tests), the UI node suite (20 tests), Storybook browser tests
+(45 tests), production build, and bundle-budget gate pass. Measured budgets are
+163.10 KiB JS gzip, 38.01 KiB CSS gzip, and 83.72 KiB fonts. Atomic
+implementation commit: `bc1928c4 test(ui): cover stale catalog discovery`.
+R06/R08 remain ACTIVE pending the remaining live identity, backend mutation,
+plugin, consumer, and production process evidence.
