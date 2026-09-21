@@ -822,3 +822,18 @@ Proof: TypeScript and the full built-browser suite (22 tests) pass; the focused
 reader deep-link matrix passes 2/2. Atomic implementation commit: `24e1ea4c
 test(ui): cover reader connection deep links`. R02/R06/R08 remain ACTIVE
 pending live identity qualification and authorized backend management journeys.
+
+## R08 — ACTIVE: administrator management route composition (2026-09-21)
+
+Added a capability-scoped authenticated browser fixture and exercised the real
+application route composition for an administrator. Connections loads its
+empty-state management view, then Settings loads runtime and identity state;
+the fixture exposes `workspace:admin` and returns only synthetic, non-secret
+management data. This proves positive UI capability presentation and route
+loading, while live backend authorization and mutation effects remain separate
+acceptance gates.
+
+Proof: TypeScript, the focused administrator journey, and the full built-browser
+suite (23 tests) pass. Atomic implementation commit: `08598994 test(ui): cover
+administrator management routes`. R08 remains ACTIVE pending live settings,
+access, audit, and authorized backend mutation evidence.
