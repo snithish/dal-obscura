@@ -1536,13 +1536,18 @@ pre-commit command uses the same project configuration.
 
 Made PostgreSQL backup sidecars relocatable: new checksums record the encrypted
 backup basename, and restore verifies from the sidecar's directory before
-decrypting or invoking provider tools. This prevents a valid backup copied to a
-different working directory from failing checksum validation while preserving
-the fail-closed checksum gate and post-restore access invalidation.
+decrypting or invoking provider tools. Restore now extracts the digest and
+binds verification to the requested backup basename, so a tampered sidecar
+cannot redirect `sha256sum --check` to a decoy file. This prevents a valid
+backup copied to a different working directory from failing checksum
+validation while preserving the fail-closed checksum gate and post-restore
+access invalidation.
 
-Proof: the recovery integration probes pass (four synthetic cases plus the
+Proof: the recovery integration probes pass (six synthetic cases plus the
 explicitly skipped operator-PostgreSQL drill), the production deployment
 contract passes, shell syntax and Ruff pass, and the cross-directory restore
-case exercises the real scripts. Atomic implementation commit: `a980d5fd fix(recovery):
-make checksum sidecars portable`. R11 remains VERIFY pending actual encrypted
-PostgreSQL RPO/RTO evidence, provenance, capacity, and release-candidate lanes.
+case and decoy-path rejection exercise the real scripts. Atomic implementation
+commits: `a980d5fd fix(recovery): make checksum sidecars portable` and
+`40f049fd fix(recovery): bind checksum verification to backup`. R11 remains
+VERIFY pending actual encrypted PostgreSQL RPO/RTO evidence, provenance,
+capacity, and release-candidate lanes.
