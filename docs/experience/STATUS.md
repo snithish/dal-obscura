@@ -364,3 +364,16 @@ Proof: `pnpm check`, `pnpm build`, `pnpm test:stories`, and
 `pnpm build-storybook` pass; the Storybook browser suite reports 9 files and
 30 tests. R07 remains ACTIVE pending real author/reviewer/publisher and
 restore qualification.
+
+## R07 — ACTIVE: review-only publisher workflow coverage (2026-09-21)
+
+Added a policy story for a separate review-only publisher. It verifies editing
+controls stay disabled, asset switching stays restricted, the exact reviewed
+draft can be inspected, and a permitted publisher can see the publish action.
+Storybook performs no publication request; author/reviewer/publisher race and
+backend authorization evidence remain open.
+
+Proof: `pnpm check`, `pnpm build`, `pnpm test:stories`, and
+`pnpm build-storybook` pass; the Storybook browser suite reports 9 files and
+31 tests. R07 remains ACTIVE pending real author/reviewer/publisher and
+restore qualification.
