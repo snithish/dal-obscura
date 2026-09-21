@@ -339,3 +339,15 @@ Proof: `pnpm check`, `pnpm build`, `pnpm test:stories`, and
 `pnpm build-storybook` pass; the Storybook browser suite reports 9 files and
 28 tests. R08 remains ACTIVE pending live settings/access/audit requests and
 authorized backend effects.
+
+## R08 — ACTIVE: published-history pagination coverage (2026-09-21)
+
+Added an executable changes story for an active published policy version with a
+continuation cursor. It verifies production history rendering and invokes the
+owner pagination callback. Backend history retrieval and restore authorization
+remain integration work, so R07/R08 stay ACTIVE.
+
+Proof: `pnpm check`, `pnpm build`, `pnpm test:stories`, and
+`pnpm build-storybook` pass; the Storybook browser suite reports 9 files and
+29 tests. R08 remains ACTIVE pending live settings/access/audit requests and
+authorized backend effects.
