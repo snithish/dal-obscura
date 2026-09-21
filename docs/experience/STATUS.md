@@ -1475,3 +1475,21 @@ preserve route result types`. The repository-wide `uv run ty check` gate still
 reports 31 diagnostics in examples, plugin test import environments, and
 loosely typed fixtures; R01/R08 remain ACTIVE until those packaging and test
 typing gaps are addressed.
+
+## R01/R10 — VERIFY: repository-wide typing configuration (2026-09-22)
+
+Closed the remaining repository type diagnostics that were actionable in the
+checked-in example and test boundaries, and configured the pre-commit `ty` hook
+with all four standalone plugin source roots. The check now resolves the same
+plugin modules used by pytest instead of treating their uninstalled wheel names
+as missing imports.
+
+Proof: `uv run ty check --extra-search-path packages/plugin-api/src
+--extra-search-path packages/plugin-conformance/src --extra-search-path
+packages/manifest-parquet-plugin/src --extra-search-path
+packages/iceberg-rest-plugin/src` passes; the focused plugin, audit, published
+configuration, control-plane CLI, and flight-support tests pass (76 tests), and
+Ruff passes. Atomic implementation commit: `9495c1aa chore(typing): close
+repository diagnostics`. The plain `uv run ty check` invocation remains a
+documentation compatibility gap because ty does not read pytest's
+`pythonpath`; the enforced pre-commit command carries the explicit roots.
