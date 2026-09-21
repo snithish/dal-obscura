@@ -1181,3 +1181,19 @@ DAL_OBSCURA_RUN_CONSUMER_TESTS=1 uv run pytest
 tests/consumers/test_governed_reads.py -q` reports 4 passed; `mvn -f
 connectors/jvm/pom.xml verify` reports all reactor tests green. R10 remains
 VERIFY pending the real boundary matrix and production process evidence.
+
+## R11 — VERIFY: local performance baselines (2026-09-21)
+
+Executed the repository-owned focused benchmark lanes. The nested ticket-to-
+response benchmark averaged 40.4818 ms over 23 rounds; row-filter and masking
+benchmarks averaged 5.2612 ms (row filter only), 8.8987 ms (nested masks),
+10.1326 ms (top-level masks), and 15.2330 ms (mask only); the multi-file
+Iceberg fixture averaged 2.4605 ms over 365 rounds. These measurements are
+repeatable local fixture baselines, not production capacity, LCP, p95 tree
+interaction, encrypted-PostgreSQL, or 25-million-row release evidence.
+
+Proof: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run pytest
+tests/benchmarks/test_masking_row_filter_benchmarks.py
+tests/benchmarks/test_iceberg_multifile_benchmark.py --benchmark-only -q` and
+the focused complex-schema ticket benchmark both pass. R11 remains VERIFY
+pending the complete capacity, restore, provenance, and release lanes.
