@@ -46,7 +46,7 @@ export async function edgeChallengeApi(page: Page, options: EdgeChallengeOptions
  * This fixture proves browser composition and capability presentation only;
  * it is never evidence of a live identity provider or production backend.
  */
-export async function authenticatedApi(page: Page, options: { admin?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse; deferredSettings?: DeferredResponse; deferredConnections?: DeferredResponse; deferredInventory?: DeferredResponse; deferredVersion?: DeferredResponse } = {}) {
+export async function authenticatedApi(page: Page, options: { admin?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse; deferredSettings?: DeferredResponse; deferredConnections?: DeferredResponse; deferredInventory?: DeferredResponse; deferredVersion?: DeferredResponse; deferredSave?: DeferredResponse } = {}) {
   const assetId = "00000000-0000-4000-8000-000000000001";
   const identity = {
     principal: "alex@example.invalid",
@@ -156,6 +156,13 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; d
         { capability: "publish", allowed: false, reasons: [] },
         { capability: "grant", allowed: false, reasons: [] },
       ] } });
+      if (suffix === "draft" && request.method() === "PUT") {
+        if (options.deferredSave) {
+          options.deferredSave.markStarted();
+          await options.deferredSave.wait();
+        }
+        return route.fulfill({ json: { id: "stale-draft", asset_id: assetId, author_principal: identity.principal, revision: 1, base_policy_version: 1, rules: [], content_hash: "stale" } });
+      }
       if (suffix === "draft" || suffix.startsWith("draft/")) return route.fulfill({ json: { id: "current-draft", asset_id: assetId, author_principal: identity.principal, revision: 0, base_policy_version: 1, rules: [], content_hash: "" } });
       if (suffix === "policy-versions") {
         if (!options.deferredVersion) return route.fulfill({ json: [] });

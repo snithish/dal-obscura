@@ -285,6 +285,23 @@ test("late policy version lookups cannot replace the selected revision", async (
   await expect(page.getByRole("cell", { name: "group:stale" })).toHaveCount(0);
 });
 
+test("late draft saves cannot clear a newer local edit", async ({ page }) => {
+  const deferredSave = deferredResponse();
+  await authenticatedApi(page, { deferredSave });
+  await page.goto("/#assets");
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Save deny-all draft" }).click();
+  await deferredSave.started;
+  await page.getByRole("button", { name: "Add first rule" }).click();
+  await expect(page.getByRole("button", { name: "Save draft" })).toBeVisible();
+  await expect(page.getByText("Unsaved changes")).toBeVisible();
+
+  deferredSave.release();
+  await expect(page.getByText("Unsaved changes")).toBeVisible();
+  await expect(page.getByText("Policy draft saved to the control plane.")).toHaveCount(0);
+});
+
 test("reader deep links fail closed before admin settings requests", async ({ page }) => {
   const adminRequests: string[] = [];
   page.on("request", (request) => {
