@@ -1443,6 +1443,9 @@ commit: `9795a02f test(ui): cover configured sso entry`. R02/R06 remain VERIFY
 pending live local/Cloudflare SSO, callback, logout, expiry, and authorization
 evidence.
 
+Follow-up verification: the complete built browser suite passes at 54 tests
+after the configured SSO composition case.
+
 ## R06/R07/R11 — VERIFY: large nested schema tree qualification (2026-09-22)
 
 Added a built application regression with 10,000 authoritative scalar fields.
