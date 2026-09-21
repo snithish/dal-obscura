@@ -1301,3 +1301,16 @@ Proof: the complete built browser suite reports 46 passed tests and TypeScript
 passes. Atomic implementation commit: `9f3222db test(ui): cover authenticated
 responsive bounds`. R04/R06 remain VERIFY pending manual contrast, keyboard,
 screen-reader, visual, and owner review plus live identity qualification.
+
+## R06/R11 — VERIFY: authenticated local web-vitals check (2026-09-21)
+
+Added a built-browser LCP/CLS assertion for the authenticated nested policy
+workspace using the existing synthetic API boundary. The test waits for the
+production route and self-hosted fonts, requires an LCP event, and enforces
+LCP ≤2.5 seconds and CLS ≤0.1. It is deliberately scoped to local fixture
+evidence and does not replace real-network, fixed-runner, or production tests.
+
+Proof: the complete built browser suite reports 47 passed tests and TypeScript
+passes. Atomic implementation commit: `15e716d9 test(ui): measure authenticated
+web vitals`. R06/R11 remain VERIFY pending authenticated fixed-runner LCP/CLS,
+capacity, restore/provenance, and live identity evidence.
