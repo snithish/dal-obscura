@@ -1059,3 +1059,22 @@ profile selection passes; and `uv run pytest -q` completes at 100% with exit 0.
 This strengthens local contract evidence only. R02/R03/R08/R10 remain ACTIVE
 pending real IdP/edge allow-deny, live backend mutation, PostgreSQL/process,
 consumer, and production operations evidence.
+
+## R08 — ACTIVE: workspace publication lifecycle journey (2026-09-21)
+
+Added a stateful administrator fixture for workspace publication generations and
+exercised the production Connections view through snapshot creation and explicit
+activation. The journey verifies the staged generation is rendered after create,
+the activation request carries the current-generation precondition, the new
+generation becomes the sole serving snapshot, and the previous generation stays
+available as staged history. The fixture is synthetic and does not prove live
+publication persistence, authorization, data-plane reload, or process safety.
+
+Proof: `tsc -b`, the focused publication-lifecycle browser test, the full built
+browser suite (37 tests), the UI node suite (20 tests), Storybook browser tests
+(45 tests), production build, and bundle-budget gate pass. Measured budgets are
+163.10 KiB JS gzip, 38.01 KiB CSS gzip, and 83.72 KiB fonts. Atomic
+implementation commit: `33350015 test(ui): cover workspace publication
+lifecycle`. R08 remains ACTIVE pending live catalog/settings/access/audit and
+publication effects, real plugin lifecycle qualification, and production
+operations evidence.
