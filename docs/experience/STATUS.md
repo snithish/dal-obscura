@@ -738,3 +738,16 @@ pass; the budget gate measures 162.82 KiB JS gzip, 38.01 KiB CSS gzip, and
 83.72 KiB fonts. Atomic implementation commit: `590c627f fix(ui): prevent
 empty asset ownership`. R08 remains ACTIVE pending live settings/access/audit
 journeys and authorized backend mutation evidence.
+
+## R05 — ACTIVE: designbook coverage synchronization (2026-09-21)
+
+Updated `designbook/Guide.mdx` to document the workflows now covered by the
+actual production components: command search, authenticated shell states,
+nested policy and stale-link handling, consumer handoff, access/grants,
+connections, settings, audit, lifecycle guards, validation, and deferred
+response recovery. The guide continues to separate synthetic Storybook proof
+from live identity/backend qualification and manual visual review.
+
+Proof: `pnpm build-storybook` completes successfully. Atomic documentation
+commit: `23ea70ba docs(ui): refresh designbook coverage`. R05 remains ACTIVE
+pending complete visual/manual review and live authenticated workflow evidence.
