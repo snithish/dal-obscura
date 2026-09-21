@@ -5,6 +5,11 @@ import type { Catalog, PluginDescriptor, PluginPair, PluginState, WorkspacePubli
 import { ConnectionsView } from "./ConnectionsView";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+const diagnosticQueryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+diagnosticQueryClient.setQueryData(
+  ["management", "storybook|admin", "connections", "diagnose", "analytics"],
+  { catalog: "analytics", status: "unavailable", message: "TLS handshake failed", checked_at: "2026-09-21T08:00:00Z" },
+);
 
 const catalogPlugin: PluginDescriptor = {
   kind: "catalog",
@@ -110,6 +115,14 @@ export const AdminWorkspace: Story = {
     await expect(canvas.getByText("Iceberg REST catalog")).toBeVisible();
     await expect(canvas.getByText("generation-0")).toBeVisible();
     await expect(canvas.getByRole("button", { name: "Save connection" })).toBeVisible();
+  },
+};
+
+export const DiagnosticFailure: Story = {
+  args: { queryClient: diagnosticQueryClient },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Check connection" }));
+    await expect(canvas.getByRole("status")).toHaveTextContent("TLS handshake failed");
   },
 };
 
