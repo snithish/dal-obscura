@@ -1494,13 +1494,6 @@ generated protobuf modules while lint and type checks remain active for them.
 Atomic tooling commit: `90df26dd build(quality): exclude generated protobuf
 formatting`.
 
-R10 follow-up: the opt-in consumer qualification lane now passes all four
- nested Python/DuckDB cases, including executable SQL-Iceberg and
- manifest-Parquet adapters (`DAL_OBSCURA_RUN_CONSUMER_TESTS=1 uv run pytest
- tests/consumers/test_governed_reads.py -q`). This strengthens local adapter
- evidence but does not close R10: Spark/JVM, two-process PostgreSQL barriers,
- TLS/OIDC, cancellation, and artifact-identity cells remain outstanding.
-
 ## R01/R10 — VERIFY: repository-wide typing configuration (2026-09-22)
 
 Closed the remaining repository type diagnostics that were actionable in the
