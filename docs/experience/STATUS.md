@@ -394,6 +394,13 @@ focus, narrow viewport sign-in, and accessibility checks. These checks do not
 qualify live OIDC, Cloudflare Access, backend mutations, or production
 operations.
 
+## R01 — ACTIVE: production UI advisory check (2026-09-21)
+
+The production dependency graph reports no known vulnerabilities with
+`pnpm audit --prod`. This closes the current production-UI advisory check only;
+the full E01 toolchain/support inventory and repository-wide typing diagnostics
+remain open.
+
 ## R02 — ACTIVE: trusted proxy login attribution (2026-09-21)
 
 Added an explicit trusted-proxy contract for browser login rate limiting. The
