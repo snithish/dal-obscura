@@ -1645,3 +1645,17 @@ Proof: TypeScript, Vite production build, UI budgets (170.45 KiB JS gzip,
 54 built browser tests pass. R04/R07 remain VERIFY pending manual visual,
 keyboard, and screen-reader review plus the real author/reviewer/publisher
 journey against a governed backend.
+
+## R04/R07/R08 — VERIFY: Mantine policy access controls (2026-09-22)
+
+Migrated the policy field-include control to Mantine `Checkbox` while keeping
+the server-owned nested-field selection and read-only capability guard intact.
+This completes the current policy authoring, mask/test, condition, and access
+control migration slice without changing policy semantics or pickle behavior.
+Atomic implementation commit: `e978c9a0 refactor(ui): migrate policy access controls to Mantine`.
+
+Proof: TypeScript, Vite production build, UI budgets (170.45 KiB JS gzip,
+38.04 KiB CSS gzip, 83.72 KiB fonts), 46 Storybook interaction tests, focused
+policy/access journeys (3), and all 54 built browser tests pass. R04/R07/R08
+remain VERIFY pending manual visual, keyboard, and screen-reader review, live
+management authorization, and the real author/reviewer/publisher workflow.
