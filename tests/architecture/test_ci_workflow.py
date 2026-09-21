@@ -109,6 +109,8 @@ def test_ci_binds_published_candidates_to_attestations_and_lanes() -> None:
     assert "https://spdx.dev/Document" in workflow
     assert "server_attestation_index_sha256" in workflow
     assert "ui_attestation_index_sha256" in workflow
+    assert "server_attestation_evidence_sha256" in workflow
+    assert "ui_attestation_evidence_sha256" in workflow
     assert "workflow_run_id" in workflow
     assert "mandatory_lanes" in workflow
     assert "not-published-on-pull-request" in workflow

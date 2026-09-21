@@ -705,10 +705,14 @@ jobs:
           mkdir -p "$RUNNER_TEMP/release-manifest"
           server_attestation_hash=not-published-on-pull-request
           ui_attestation_hash=not-published-on-pull-request
+          server_evidence_hash=not-published-on-pull-request
+          ui_evidence_hash=not-published-on-pull-request
           attestation_status=not-published-on-pull-request
           if [ -f "$RUNNER_TEMP/release-manifest/server-index.json.sha256" ]; then
             server_attestation_hash=$(awk '{print $1}' "$RUNNER_TEMP/release-manifest/server-index.json.sha256")
             ui_attestation_hash=$(awk '{print $1}' "$RUNNER_TEMP/release-manifest/ui-index.json.sha256")
+            server_evidence_hash=$(awk '{print $1}' "$RUNNER_TEMP/release-manifest/server-attestations.json.sha256")
+            ui_evidence_hash=$(awk '{print $1}' "$RUNNER_TEMP/release-manifest/ui-attestations.json.sha256")
             attestation_status=verified-slsa-provenance-and-spdx-sbom
           fi
           cat > "$RUNNER_TEMP/release-manifest/release.json" <<EOF
@@ -726,6 +730,8 @@ jobs:
             "attestation_status": "${attestation_status}",
             "server_attestation_index_sha256": "${server_attestation_hash}",
             "ui_attestation_index_sha256": "${ui_attestation_hash}",
+            "server_attestation_evidence_sha256": "${server_evidence_hash}",
+            "ui_attestation_evidence_sha256": "${ui_evidence_hash}",
             "mandatory_lanes": "python-quality,python-contract-tests,python-integration-tests,postgres-race-tests,python-package,python-plugin-contract,python-plugin-integration,python-native-iceberg,dependency-audit,jvm,governance-ui,ui-image"
           }
           EOF
