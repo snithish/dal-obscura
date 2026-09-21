@@ -1427,6 +1427,9 @@ commit: `7573e0e9 test(ui): qualify table format selection`. R08 remains VERIFY
 pending live plugin-pair persistence, backend mutation effects, and the complete
 administration qualification journey.
 
+Follow-up verification: the complete built browser suite passes at 53 tests,
+including the 10k-node tree and multi-format catalog journeys.
+
 ## R06/R07/R11 — VERIFY: large nested schema tree qualification (2026-09-22)
 
 Added a built application regression with 10,000 authoritative scalar fields.
