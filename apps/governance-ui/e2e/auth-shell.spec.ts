@@ -163,6 +163,35 @@ test("authenticated policy workspace meets local web-vitals thresholds", async (
   expect(metrics.cls, "local authenticated CLS").toBeLessThanOrEqual(0.1);
 });
 
+test("administrator management screens stay within the page at supported sizes", async ({ page }) => {
+  await authenticatedApi(page, {
+    admin: true,
+    configuredSettings: true,
+    configuredConnections: true,
+    configuredPublications: true,
+    configuredLifecycle: true,
+    configuredAudit: true,
+  });
+  const screens = [
+    ["#activity", "Workspace status"],
+    ["#changes", "Published policy history"],
+    ["#connections", "Catalog connections"],
+    ["#settings", "Runtime and identity"],
+  ] as const;
+  for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1440, height: 900 }]) {
+    await page.setViewportSize(viewport);
+    for (const [hash, heading] of screens) {
+      await page.goto(`/${hash}`);
+      await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+      const dimensions = await page.evaluate(() => ({
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: document.documentElement.clientWidth,
+      }));
+      expect(dimensions.documentWidth, `${hash} at ${viewport.width}px page overflow`).toBeLessThanOrEqual(dimensions.viewportWidth + 1);
+    }
+  }
+});
+
 test("authenticated reader shell has no serious or critical accessibility violations", async ({ page }) => {
   await authenticatedApi(page);
   await page.goto("/#assets");
