@@ -510,6 +510,12 @@ tunnel overlays with their checked-in example environments before running
 contract tests. Atomic CI commit: `7d5c1b3a ci(deployment): render all profile
 overlays`.
 
+The named runner now starts the private stack with `compose up -d --wait`, then
+enables the `connector` profile in a second readiness-gated command. Doctor,
+logs, teardown, reset, and CI Compose rendering include that profile. Atomic
+implementation commit: `5e6072b5 fix(deployment): gate connector startup on
+private readiness`.
+
 ## R05/R08 — ACTIVE: consumer handoff clipboard recovery (2026-09-21)
 
 Consumer snippets in the real `AssetWorkspace` now expose a visible retry and
