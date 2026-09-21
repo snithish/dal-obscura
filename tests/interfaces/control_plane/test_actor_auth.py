@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from urllib.parse import parse_qs, urlsplit
 from uuid import UUID
 
+import pytest
 from fastapi.testclient import TestClient
 from httpx import Response
 
@@ -303,6 +304,48 @@ def test_cookie_mutation_accepts_configured_host_without_origin_header():
     )
 
     assert response.status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("extra_headers", "expected_status"),
+    [
+        ({}, 200),
+        ({"origin": "http://127.0.0.1:8820"}, 200),
+        (
+            {
+                "origin": "http://127.0.0.1:8820",
+                "x-forwarded-host": "attacker.example",
+            },
+            200,
+        ),
+        ({"host": "attacker.example"}, 403),
+        ({"origin": "https://attacker.example"}, 403),
+        (
+            {
+                "host": "127.0.0.1:8820",
+                "origin": "http://127.0.0.1:8820",
+            },
+            200,
+        ),
+    ],
+)
+def test_cookie_mutation_origin_and_host_matrix(
+    extra_headers: dict[str, str], expected_status: int
+) -> None:
+    client = _client_with_ui_auth_config()
+    login = _login_as_asset_owner(client)
+    headers = {
+        "cookie": (
+            f"dal_obscura_session={login.cookies['dal_obscura_session']}; "
+            f"dal_obscura_csrf={login.cookies['dal_obscura_csrf']}"
+        ),
+        "x-csrf-token": login.cookies["dal_obscura_csrf"],
+        **extra_headers,
+    }
+
+    response = client.post("/v1/logout", headers=headers)
+
+    assert response.status_code == expected_status
 
 
 def test_removed_demo_login_route_is_absent():
