@@ -295,6 +295,9 @@ test("administrator catalogs save, diagnose, and discover through admitted plugi
   await expect(page.getByText("Catalog reachable · 1 tables")).toBeVisible();
   await page.getByRole("button", { name: "Discover tables" }).click();
   await expect(page.getByRole("cell", { name: "orders" })).toBeVisible();
+  const governRequest = page.waitForRequest((request) => request.method() === "PUT" && request.url().endsWith("/v1/assets/analytics/orders"));
+  await page.getByRole("button", { name: "Govern table" }).click();
+  await expect((await governRequest).postDataJSON()).toMatchObject({ table_identifier: "demo.orders" });
 
   await page.getByLabel("Name").fill("warehouse");
   await page.getByLabel("Catalog URI").fill("https://warehouse.example");

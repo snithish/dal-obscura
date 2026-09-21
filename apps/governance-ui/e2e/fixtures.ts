@@ -234,6 +234,9 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; a
     }
     if (options.admin && path === "/v1/settings/auth-providers") return route.fulfill({ json: [] });
     if (options.admin && path === "/v1/settings/auth-providers/revision") return route.fulfill({ json: { revision: 0 } });
+    if (options.admin && path === "/v1/assets/analytics/orders" && request.method() === "PUT") {
+      return route.fulfill({ json: { id: "governed-orders", catalog: "analytics", name: "orders", backend: "synthetic.table.iceberg", table_identifier: "demo.orders", owners: [], schema_fields: [] } });
+    }
     const match = path.match(/^\/v1\/assets\/([^/]+)(?:\/(.*))?$/);
     if (match && match[1] === assetId) {
       const suffix = match[2] ?? "";
