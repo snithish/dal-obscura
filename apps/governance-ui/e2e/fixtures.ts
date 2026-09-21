@@ -46,7 +46,7 @@ export async function edgeChallengeApi(page: Page, options: EdgeChallengeOptions
  * This fixture proves browser composition and capability presentation only;
  * it is never evidence of a live identity provider or production backend.
  */
-export async function authenticatedApi(page: Page, options: { admin?: boolean; allowPublish?: boolean; configuredSettings?: boolean; configuredConnections?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse; deferredSettings?: DeferredResponse; deferredConnections?: DeferredResponse; deferredInventory?: DeferredResponse; deferredVersion?: DeferredResponse; deferredSave?: DeferredResponse; deferredEvaluate?: DeferredResponse; deferredRestore?: DeferredResponse; deferredReview?: DeferredResponse; deferredPublish?: DeferredResponse } = {}) {
+export async function authenticatedApi(page: Page, options: { admin?: boolean; allowPublish?: boolean; configuredSettings?: boolean; configuredConnections?: boolean; configuredPublications?: boolean; deferredAudit?: DeferredResponse; deferredHistory?: DeferredResponse; deferredSettings?: DeferredResponse; deferredConnections?: DeferredResponse; deferredInventory?: DeferredResponse; deferredVersion?: DeferredResponse; deferredSave?: DeferredResponse; deferredEvaluate?: DeferredResponse; deferredRestore?: DeferredResponse; deferredReview?: DeferredResponse; deferredPublish?: DeferredResponse } = {}) {
   const assetId = "00000000-0000-4000-8000-000000000001";
   const identity = {
     principal: "alex@example.invalid",
@@ -93,6 +93,16 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; a
     states: [],
     pairs: [{ catalog_plugin_id: "synthetic.catalog.iceberg", format_plugin_id: "synthetic.table.iceberg", capabilities: ["scan"], handle_versions: [1], status: "admitted" }],
   };
+  let workspacePublications = options.configuredPublications ? [{
+    id: "publication-active",
+    schema_version: 1,
+    status: "active",
+    manifest_hash: "a".repeat(64),
+    active: true,
+    asset_count: 1,
+    catalog_count: 1,
+    created_at: "2026-09-21T00:00:00Z",
+  }] : [];
   let auditCalls = 0;
   let historyCalls = 0;
   let settingsCalls = 0;
@@ -152,7 +162,33 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; a
       if (suffix === "diagnostics") return route.fulfill({ json: { catalog: catalogName, status: "ready", message: "Catalog reachable", checked_at: "2026-09-21T00:00:00Z", table_count: 1, sample_tables: ["orders"] } });
       if (suffix === "tables") return route.fulfill({ json: { catalog: catalogName, tables: [{ name: "orders", backend: "iceberg", identifier: "demo.orders", governed: false }] } });
     }
-    if (options.admin && path === "/v1/workspace/publications") return route.fulfill({ json: [] });
+    if (options.admin && path === "/v1/workspace/publications") {
+      if (request.method() === "GET") return route.fulfill({ json: workspacePublications });
+      if (request.method() === "POST") {
+        const staged = {
+          id: "publication-staged",
+          schema_version: 1,
+          status: "staged",
+          manifest_hash: "b".repeat(64),
+          active: false,
+          asset_count: 1,
+          catalog_count: 1,
+          created_at: "2026-09-21T00:01:00Z",
+        };
+        workspacePublications = [...workspacePublications.filter((publication) => publication.id !== staged.id), staged];
+        return route.fulfill({ json: { publication_id: staged.id, asset_count: staged.asset_count, catalog_count: staged.catalog_count, manifest_hash: staged.manifest_hash } });
+      }
+    }
+    const publicationActivationMatch = path.match(/^\/v1\/workspace\/publications\/([^/]+)\/activate$/);
+    if (options.admin && publicationActivationMatch && request.method() === "POST") {
+      const publicationId = decodeURIComponent(publicationActivationMatch[1]);
+      const expected = (request.postDataJSON() as { expected_publication_id?: string | null }).expected_publication_id;
+      const current = workspacePublications.find((publication) => publication.active)?.id ?? null;
+      if (expected !== current) return route.fulfill({ status: 409, json: { detail: "Active publication changed; reread before activating." } });
+      if (!workspacePublications.some((publication) => publication.id === publicationId)) return route.fulfill({ status: 404, json: { detail: "Publication not found" } });
+      workspacePublications = workspacePublications.map((publication) => ({ ...publication, active: publication.id === publicationId, status: publication.id === publicationId ? "active" : "staged" }));
+      return route.fulfill({ json: { publication_id: publicationId } });
+    }
     if (options.admin && path === "/v1/settings/runtime") {
       if (request.method() === "PUT") return route.fulfill({ json: { ticket_ttl_seconds: 30, max_tickets: 64, max_ticket_exchanges: 2, path_rules: [{ root: "file:///fresh-settings" }], revision: 2 } });
       settingsCalls += 1;

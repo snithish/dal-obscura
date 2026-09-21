@@ -194,6 +194,27 @@ test("administrator catalogs save, diagnose, and discover through admitted plugi
   await expect(page.getByText("Connection saved. Discovery remains bounded to this configured catalog.")).toBeVisible();
 });
 
+test("administrator publication lifecycle creates and activates a workspace snapshot", async ({ page }) => {
+  await authenticatedApi(page, { admin: true, configuredConnections: true, configuredPublications: true });
+  await page.goto("/#connections");
+  await expect(page.getByRole("heading", { name: "Catalog connections" })).toBeVisible();
+  await expect(page.getByText("publication-act", { exact: false })).toBeVisible();
+
+  await page.getByRole("button", { name: "Create snapshot" }).click();
+  await expect(page.getByText("Configuration snapshot created. Activate it when ready.")).toBeVisible();
+  await expect(page.getByText("publication-sta", { exact: false })).toBeVisible();
+
+  await page.getByRole("button", { name: "Activate" }).click();
+  await expect(page.getByText("Configuration snapshot activated for new data-plane requests.")).toBeVisible();
+  const activeRow = page.getByRole("row").filter({ hasText: "bbbbbbbbbbbb" });
+  await expect(activeRow).toContainText("Active");
+  await expect(activeRow).toContainText("Serving");
+  const previousRow = page.getByRole("row").filter({ hasText: "aaaaaaaaaaaa" });
+  await expect(previousRow).toContainText("Staged");
+  await expect(previousRow.getByRole("button", { name: "Activate" })).toBeVisible();
+  await expect(page.getByText("Serving", { exact: true })).toHaveCount(1);
+});
+
 test("mutation HTML challenges clear private workspace state", async ({ page }) => {
   await authenticatedApi(page);
   await page.goto("/#assets");
