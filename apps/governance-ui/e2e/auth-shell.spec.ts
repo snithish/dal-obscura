@@ -338,6 +338,22 @@ test("late policy restores cannot replace a newer local edit", async ({ page }) 
   await expect(page.getByText(/restored as draft revision/)).toHaveCount(0);
 });
 
+test("late policy reviews cannot authorize a newer draft", async ({ page }) => {
+  const deferredReview = deferredResponse();
+  await authenticatedApi(page, { deferredReview });
+  await page.goto("/#assets");
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Review for publish" }).click();
+  await deferredReview.started;
+  await page.getByRole("button", { name: "Add first rule" }).click();
+  await expect(page.getByText("Unsaved changes")).toBeVisible();
+
+  deferredReview.release();
+  await expect(page.getByText("Unsaved changes")).toBeVisible();
+  await expect(page.getByText("Server review is current for this saved draft revision. You can publish it now.")).toHaveCount(0);
+});
+
 test("reader deep links fail closed before admin settings requests", async ({ page }) => {
   const adminRequests: string[] = [];
   page.on("request", (request) => {
