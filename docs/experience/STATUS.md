@@ -1378,3 +1378,15 @@ Proof: the focused forced-colors check and the complete built browser suite
 `831c9be2 test(ui): cover authenticated forced colors`. R04/R06/R08 remain
 VERIFY pending manual forced-colors/keyboard/screen-reader review, owner
 approval, and live management authorization.
+
+## R04/R06 — ACTIVE: named scroll regions for data tables (2026-09-22)
+
+Named every production horizontally scrollable table wrapper in policy history,
+published history, workspace generations, discovered catalog tables, and
+immutable rule details. Assistive technology can now identify the bounded
+scrolling context instead of encountering an unnamed overflow container.
+
+Proof: the focused authenticated management contrast/axe check and TypeScript
+pass after the markup change. Atomic implementation commit: `79f090e3
+fix(ui): name scrollable data regions`. R04/R06 remain ACTIVE pending the full
+browser matrix, manual screen-reader review, and live workflow evidence.
