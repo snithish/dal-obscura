@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect } from "storybook/test";
+import { expect, userEvent } from "storybook/test";
 import type { Asset, AssetAccess, Mask, PolicyRule, SchemaNode, Session } from "../api";
 import { AssetWorkspace } from "./AssetWorkspace";
 
@@ -183,5 +183,22 @@ export const SchemaUnavailable: Story = {
     await expect(canvas.getByText("Authoritative schema unavailable")).toBeVisible();
     await expect(canvas.queryByRole("tree")).not.toBeInTheDocument();
     await expect(canvas.getByText("No authoritative fields available")).toBeVisible();
+  },
+};
+
+export const ClipboardFailure: Story = {
+  play: async ({ canvas }) => {
+    const clipboard = navigator.clipboard;
+    const originalWrite = clipboard?.writeText;
+    if (!clipboard || !originalWrite) throw new Error("Clipboard API is unavailable in the Storybook browser");
+    Object.defineProperty(clipboard, "writeText", { configurable: true, value: async () => { throw new Error("blocked"); } });
+    try {
+      await userEvent.click(canvas.getByRole("button", { name: "Copy review link" }));
+      await expect(canvas.getByRole("alert")).toHaveTextContent("Clipboard access is unavailable");
+      const link = canvas.getByLabelText("Review link") as HTMLInputElement;
+      await expect(link.value).toContain("draft-orders-4");
+    } finally {
+      Object.defineProperty(clipboard, "writeText", { configurable: true, value: originalWrite });
+    }
   },
 };
