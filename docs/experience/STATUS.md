@@ -544,6 +544,12 @@ the production shell's animation/transition durations. It reports 11 passing
 tests; R04 remains ACTIVE pending manual OS contrast/zoom review and owner
 visual approval.
 
+The signed-out browser journey now checks the real production shell at
+390×844, 768×1024, and 1440×900, plus a 200% page zoom. Login controls remain
+visible and inside the viewport at each size. The full built browser suite
+reports 12 passing tests; R04 remains ACTIVE pending manual visual, screen-reader,
+and authenticated workflow review.
+
 R05 workflow coverage also adds deterministic management loading and retry-error
 stories. They exercise the real `ManagementView` boundary, retain the retry
 callback, and keep server failure copy in an alert region. Storybook now reports
