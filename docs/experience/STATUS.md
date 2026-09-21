@@ -1256,3 +1256,18 @@ documentation change. Atomic implementation commit: `1c8800db docs(ui): align
 designbook network guidance`. R05 remains ACTIVE pending the contrast matrix,
 responsive visual review, manual keyboard/screen-reader/zoom checks, and owner
 approval.
+
+## R11 — VERIFY: local browser web-vitals baseline (2026-09-21)
+
+Added `measure:web-vitals`, a Playwright-backed command that measures LCP, CLS,
+and navigation timing against the built preview and fails when LCP is absent or
+CLS exceeds the E16 threshold. The local 1440×900 signed-out fixture reports
+LCP 100 ms, CLS 0.00094, and navigation 56 ms. These are repeatable local
+browser observations only; they do not qualify authenticated LCP, network
+latency, production capacity, or the complete E16/E17 release lane.
+
+Proof: `./node_modules/.bin/tsc -b --pretty false && node
+scripts/measure-web-vitals.mjs` passes against the built preview. Atomic
+implementation commit: `ae7eba5c test(ui): add web vitals measurement command`.
+R11 remains VERIFY pending authenticated and fixed-runner performance evidence,
+restore/provenance checks, and the remaining live gates.
