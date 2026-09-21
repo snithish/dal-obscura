@@ -8,7 +8,8 @@ planning-only statement above describes the original review deliverable.
 
 Component-library amendment: Mantine is the selected maintained MIT-licensed
 library. R01/R04/R05 and E08/E10 now require direct reuse, one shared theme and
-Storybook integration, with early CSP/size qualification. No library installed.
+Storybook integration, with early CSP/size qualification. Mantine shell/login
+foundation is installed and qualified; see the execution ledger for remaining work.
 
 Read [implementation review](REVIEW.md), [action plan](ACTION_PLAN.md),
 [local HTTPS/SSO design](LOCAL_ACCESS.md), [design system and Storybook](DESIGN_SYSTEM.md),

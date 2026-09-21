@@ -29,19 +29,34 @@ remain open; these focused checks do not close E01.
 
 ## Remaining packets
 
-R04: ACTIVE investigation of Mantine production-CSP slice.
+R04: ACTIVE; Mantine production-CSP foundation qualified below.
 R02/R03/R05/R07–R12: OPEN. No production readiness or live Cloudflare claim.
 
-### Dependency access blocker (2026-09-21)
+## R04/R06 — ACTIVE: Mantine shell and CSP foundation (2026-09-21)
 
-Official registry metadata confirms Mantine core/hooks 9.6.1 and React ^19.2.0
-peer requirements. Network installation could not complete: both system pnpm
-12.4.2 and bundled pnpm 11 requests failed; a direct Node 24 HTTPS request timed
-out, and the exact cached pnpm 12.3.4 install also stalled. curl reaches the same
-official registry. Failed/stalled task-owned processes were stopped. No Mantine
-dependency or unverified lockfile changes are committed. No TLS/CSP/security
-checks were bypassed. Resume with registry access restored for the pinned package
-manager, then perform R04's CSP/bundle slice before broad UI migration.
+Pinned MIT-licensed Mantine core/hooks 9.6.1 with compatible React peers. Added
+self-hosted IBM Plex Sans/Mono and a shared Mantine provider/theme. Login, shell,
+mobile navigation and command search now use real library components. Removed
+their replaced CSS and custom focus/theme management. Disabled navigation keeps
+explicit capability guards. Authentication and pickle behavior are unchanged.
 
-R04/R05 remain open; the existing production UI is still in place. No inference
-about Mantine CSP compatibility is possible from inspecting package source alone.
+NGINX generates a per-response style nonce, injects it into the shell and CSP,
+and prevents shell caching/304 reuse. Mantine and scroll-lock styles receive that
+nonce. Scripts remain self-only; style attributes remain forbidden. Built Vite
+preview uses the same CSP contract for browser regression checks.
+
+Proof: 8 browser tests pass against the actual NGINX 1.27.5 image, including
+wrong/missing nonce rejection, fresh nonces, keyboard focus, OS theme changes,
+narrow viewport and signed-out axe checks. API responses in these tests are
+synthetic: this is not SSO or authenticated workflow evidence. All 16 UI unit
+tests, TypeScript and 10 focused deployment/UI-shell Python tests pass. Production
+build: JS 165.60 kB gzip, CSS 39.59 kB gzip; WOFF2 fonts 85.73 kB. These meet size
+budgets only; no latency/LCP claim. Frozen offline install passes.
+
+Registry blocker resolved using a temporary loopback curl relay to the official
+npm registry, with TLS and package integrity checks retained. No relay URL is
+stored in the lockfile or runtime configuration.
+
+Remaining: convert feature controls and competing legacy CSS values, measure both
+themes across authenticated screens, finish workbench/query ownership, Storybook,
+and live identity/provider qualification. R04/R06 are not DONE.

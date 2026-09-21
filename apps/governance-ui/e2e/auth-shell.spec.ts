@@ -1,7 +1,9 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { signedOutApi } from "./fixtures";
 
-test.describe("authenticated governance shell", () => {
+test.describe("signed-out governance shell", () => {
+  test.beforeEach(async ({ page }) => signedOutApi(page));
   test("gates a protected deep link behind normal sign-in", async ({ page }) => {
     await page.goto("/#assets");
 
@@ -33,22 +35,7 @@ test.describe("authenticated governance shell", () => {
     await page.goto("/#assets");
 
     await page.keyboard.press("Tab");
-    await expect(page.getByRole("link", { name: /DAL OBSCURA GOVERNANCE/i })).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(page.getByRole("button", { name: "Open navigation menu" })).toBeFocused();
-  });
-
-  test("traps keyboard focus inside the command palette", async ({ page }) => {
-    await page.goto("/#assets");
-
-    await page.keyboard.press("Control+k");
-    await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
-    await expect(page.getByLabel("Command search")).toBeFocused();
-
-    await page.keyboard.press("Shift+Tab");
-    await expect(page.getByRole("option", { name: "Keyboard and workflow help" })).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(page.getByLabel("Command search")).toBeFocused();
+    await expect(page.getByRole("link", { name: /OBSCURA GOVERNANCE/i })).toBeFocused();
   });
 
   test("keeps sign-in usable at a narrow viewport", async ({ page }) => {

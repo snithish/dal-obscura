@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient } from "@tanstack/react-query";
+import { useMantineColorScheme } from "@mantine/core";
+import { AppProviders } from "./design/AppProviders";
 import type { ApiFailure, Asset, Mask, PolicyRule, Preview, Session, SessionOptions, UiAuthConfig } from "./api";
 import { controlPlane } from "./api";
 import { isCurrentEpoch } from "./lifecycle";
@@ -16,6 +18,7 @@ import { AssetWorkspace } from "./components/AssetWorkspace";
 import { ManagementView, type AuditFilters, type ManagementData } from "./components/ManagementViews";
 import { WorkspaceContent } from "./components/WorkspaceContent";
 import "./styles.css";
+import "./design/base.css";
 
 type Page = UiPage;
 type SaveState = "saved" | "saving" | "unsaved" | "failed";
@@ -24,17 +27,11 @@ type WorkspaceState = "loading" | "ready" | "unavailable";
 const newRule = (field: string, ordinal: number): PolicyRule => ({ ordinal, effect: "allow", principals: [], columns: field ? [field] : [], masks: {}, row_filter: null });
 
 function App() {
-  const [theme, setTheme] = useState<Theme>(() => {
-    try {
-      const value = window.localStorage.getItem("dal-obscura-theme");
-      return value === "light" || value === "dark" ? value : "system";
-    } catch {
-      return "system";
-    }
-  });
+  const { colorScheme, setColorScheme } = useMantineColorScheme();
+  const theme: Theme = colorScheme === "auto" ? "system" : colorScheme;
+  const setTheme = (next: Theme) => setColorScheme(next === "system" ? "auto" : next);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState("");
-  const paletteReturnFocus = useRef<HTMLElement | null>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const mobileNavTrigger = useRef<HTMLButtonElement | null>(null);
   const [page, setPage] = useState<Page>(() => pageFromHash(window.location.hash));
@@ -131,20 +128,9 @@ function App() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme === "system" ? "" : theme;
-    try {
-      if (theme === "system") window.localStorage.removeItem("dal-obscura-theme");
-      else window.localStorage.setItem("dal-obscura-theme", theme);
-    } catch {
-      // Theme preference is optional and never blocks the workspace.
-    }
-  }, [theme]);
-
-  useEffect(() => {
     const onShortcut = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        paletteReturnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         setPaletteOpen(true);
         setPaletteQuery("");
       } else if (event.key === "Escape") {
@@ -586,7 +572,6 @@ function App() {
 
   function closePalette() {
     setPaletteOpen(false);
-    window.requestAnimationFrame(() => paletteReturnFocus.current?.focus());
   }
 
   function restorePostLoginHash() {
@@ -932,7 +917,7 @@ function App() {
       onLogout={() => void logout()}
     >
       {content}
-      {paletteOpen && <CommandPalette query={paletteQuery} commands={paletteCommands} assets={paletteAssets} onQueryChange={setPaletteQuery} onCommand={runPaletteCommand} onAsset={openPaletteAsset} onClose={closePalette} />}
+      <CommandPalette opened={paletteOpen} query={paletteQuery} commands={paletteCommands} assets={paletteAssets} onQueryChange={setPaletteQuery} onCommand={runPaletteCommand} onAsset={openPaletteAsset} onClose={closePalette} />
     </AppShell>
   );
 }
@@ -940,4 +925,4 @@ function App() {
 
 
 function saveLabel(state: SaveState) { return ({ saved: "Saved draft", saving: "Saving draft", unsaved: "Unsaved changes", failed: "Save failed" })[state]; }
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(<AppProviders><App /></AppProviders>);

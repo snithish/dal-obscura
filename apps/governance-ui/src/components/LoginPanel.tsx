@@ -1,5 +1,6 @@
 import type { UiAuthConfig, SessionOptions } from "../api";
 import { controlPlane } from "../api";
+import { Alert, Button, Paper, Stack, Text, TextInput, Title } from "@mantine/core";
 
 export type LoginPanelProps = {
   showAuth?: boolean;
@@ -37,14 +38,15 @@ export function LoginPanel({
     onBootstrapLogin;
 
   return (
-    <section className={showAuth ? "coming-soon auth-panel" : "coming-soon"}>
-      <span className="eyebrow">{showAuth ? "WORKSPACE ACCESS" : "WORKSPACE"}</span>
-      <h2>{title}</h2>
-      <p>{message}</p>
+    <Paper component="section" className="login-panel" withBorder p="xl" radius="md">
+      <Stack gap="md">
+      <Text size="sm" fw={500} c="dimmed">{showAuth ? "Workspace access" : "Workspace"}</Text>
+      <Title order={2}>{title}</Title>
+      <Text c="dimmed">{message}</Text>
       {showAuth && authConfig?.authority && (
-        <button type="button" className="primary login-shortcut" onClick={controlPlane.startLogin}>
+        <Button type="button" onClick={controlPlane.startLogin}>
           Sign in with SSO
-        </button>
+        </Button>
       )}
       {showBootstrap && (
         <form
@@ -54,25 +56,23 @@ export function LoginPanel({
             onBootstrapLogin();
           }}
         >
-          <label>
-            Local control-plane token
-            <input
+            <TextInput
+              label="Local control-plane token"
               type="password"
               autoComplete="current-password"
               value={bootstrapToken ?? ""}
               onChange={(event) => onBootstrapToken(event.target.value)}
               placeholder="Paste the configured local token"
             />
-          </label>
-          <button className="secondary" type="submit" disabled={loggingIn}>
+          <Button type="submit" loading={loggingIn}>
             {loggingIn ? "Signing in…" : "Sign in locally"}
-          </button>
+          </Button>
         </form>
       )}
       {showAuth && authError && (
-        <p className="auth-error" role="alert" aria-live="assertive">
+        <Alert color="red" role="alert" aria-live="assertive">
           {authError}
-        </p>
+        </Alert>
       )}
       {showAuth && !hasLoginMethod && (
         <p className="help">
@@ -81,10 +81,11 @@ export function LoginPanel({
         </p>
       )}
       {retry && (
-        <button type="button" className="secondary" onClick={() => void retry()}>
+        <Button type="button" variant="default" onClick={() => void retry()}>
           Retry connection
-        </button>
+        </Button>
       )}
-    </section>
+      </Stack>
+    </Paper>
   );
 }

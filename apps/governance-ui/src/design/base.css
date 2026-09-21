@@ -1,0 +1,24 @@
+body { font-family: var(--mantine-font-family); font-size: 14px; line-height: 1.45; }
+h1, h2, h3 { font-family: var(--mantine-font-family); font-weight: 600; letter-spacing: normal; }
+h1 { font-size: 28px; line-height: 36px; }
+h2 { font-size: 20px; line-height: 28px; }
+code, pre, .mono { font-family: var(--mantine-font-family-monospace); }
+.login-panel { max-width: 600px; margin: 48px auto; background: var(--surface); border-color: var(--border); }
+.bootstrap-login { display: grid; gap: 16px; }
+.mantine-Input-input { border-color: var(--control-border); background: var(--surface); color: var(--text); }
+.mantine-Modal-content, .mantine-Modal-header { background: var(--surface); color: var(--text); }
+.mantine-Button-root[data-variant="filled"] { color: var(--primary-contrast); }
+.mantine-Combobox-option[data-combobox-selected] { background: var(--selection); color: var(--selection-text); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.workbench-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 24px; background: var(--surface); border-color: var(--border); }
+.workbench-logo { color: var(--text); font-weight: 600; text-decoration: none; letter-spacing: 1px; }
+.workbench-logo span { display: block; color: var(--text-secondary); font-size: 12px; letter-spacing: normal; }
+.workbench-principal { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workbench-theme { width: 148px; }
+.workbench-main { max-width: none; }
+.mantine-AppShell-navbar, .mantine-Drawer-content, .mantine-Drawer-header, .mantine-Combobox-dropdown { background: var(--surface); color: var(--text); border-color: var(--border); }
+.mantine-NavLink-root { border-radius: 6px; min-height: 44px; }
+.mantine-NavLink-root[data-disabled] { opacity: 1; color: var(--text-secondary); background: transparent; }
+@media (max-width: 48em) { .workbench-header { align-items: flex-start; flex-direction: column; padding: 12px 16px; gap: 8px; } .workbench-account { width: 100%; gap: 8px; } .workbench-theme { width: 136px; } .workbench-principal { max-width: 88px; } }
+@media (max-width: 760px) { .login-panel { margin: 24px 0; padding: 20px; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0s !important; transition-duration: 0s !important; } }

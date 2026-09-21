@@ -1,11 +1,9 @@
-import { useRef } from "react";
-import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+import { Combobox, Modal, Text, TextInput, useCombobox } from "@mantine/core";
 import type { Asset } from "../api";
-import styles from "./CommandPalette.module.css";
 
 export type PaletteCommand = "assets" | "changes" | "activity" | "connections" | "settings" | "help";
-
 export type CommandPaletteProps = {
+  opened: boolean;
   query: string;
   commands: PaletteCommand[];
   assets: Asset[];
@@ -15,84 +13,26 @@ export type CommandPaletteProps = {
   onClose: () => void;
 };
 
-export function CommandPalette({
-  query,
-  commands,
-  assets,
-  onQueryChange,
-  onCommand,
-  onAsset,
-  onClose,
-}: CommandPaletteProps) {
-  const paletteRef = useRef<HTMLElement | null>(null);
-  const normalizedQuery = query.toLowerCase();
-  const visibleCommands = commands.filter((command) => command.includes(normalizedQuery));
-  const hasSearchResult = visibleCommands.length > 0 || assets.length > 0;
-
-  function keepFocusInside(event: ReactKeyboardEvent<HTMLElement>) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onClose();
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const focusable = Array.from(
-      paletteRef.current?.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), input:not([disabled]), [href], select:not([disabled]), textarea:not([disabled])',
-      ) ?? [],
-    );
-    if (!focusable.length) return;
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
-
+export function CommandPalette(props: CommandPaletteProps) {
+  const store = useCombobox({ opened: props.opened });
+  const commands = props.commands.filter((command) => command.includes(props.query.toLowerCase()));
+  const options = [
+    ...commands.map((command) => ({ value: `command:${command}`, label: command === "help" ? "Keyboard and workflow help" : `Open ${command[0].toUpperCase()}${command.slice(1)}`, select: () => props.onCommand(command) })),
+    ...props.assets.map((asset) => ({ value: `asset:${asset.id}`, label: `${asset.name} · ${asset.catalog}`, select: () => props.onAsset(asset.id) })),
+  ];
   return (
-    <div className={styles.backdrop} role="presentation" onMouseDown={onClose}>
-      <section
-        ref={paletteRef}
-        className={styles.palette}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Command palette"
-        onMouseDown={(event) => event.stopPropagation()}
-        onKeyDown={keepFocusInside}
-      >
-        <input
-          autoFocus
-          value={query}
-          onChange={(event) => onQueryChange(event.target.value)}
-          placeholder="Jump to a destination or search an asset"
-          aria-label="Command search"
-        />
-        <div className={styles.options} role="listbox">
-          {visibleCommands.map((command) => (
-            <button className={styles.option} key={command} type="button" role="option" onClick={() => onCommand(command)}>
-              {command === "help" ? "Keyboard and workflow help" : `Open ${titleFor(command)}`}
-            </button>
-          ))}
-          {assets.map((asset) => (
-            <button className={styles.option} key={asset.id} type="button" role="option" onClick={() => onAsset(asset.id)}>
-              <strong>{asset.name}</strong>
-              <small>{asset.catalog} · {asset.backend}</small>
-            </button>
-          ))}
-          {query && !hasSearchResult && (
-            <p className="help">No authorized destination or asset matches that search.</p>
-          )}
-        </div>
-        <p className="help">Press Escape to close. Publishing, deletion, and revocation are never palette commands.</p>
-      </section>
-    </div>
+    <Modal opened={props.opened} onClose={props.onClose} title="Command palette" closeButtonProps={{ "aria-label": "Close command palette" }} centered size="lg">
+      <Combobox store={store} onOptionSubmit={(value) => options.find((option) => option.value === value)?.select()}>
+        <Combobox.EventsTarget withExpandedAttribute>
+          <TextInput data-autofocus role="combobox" aria-label="Command search" placeholder="Find an asset or destination"
+            value={props.query} onChange={(event) => { props.onQueryChange(event.currentTarget.value); store.resetSelectedOption(); }} />
+        </Combobox.EventsTarget>
+        <Combobox.Options aria-label="Destinations">
+          {options.map((option) => <Combobox.Option key={option.value} value={option.value}>{option.label}</Combobox.Option>)}
+          {!options.length && <Combobox.Empty>No authorized destination or asset matches that search.</Combobox.Empty>}
+        </Combobox.Options>
+      </Combobox>
+      <Text size="sm" c="dimmed" mt="md">Escape closes search. Publishing, deletion and revocation are never palette commands.</Text>
+    </Modal>
   );
-}
-
-function titleFor(command: Exclude<PaletteCommand, "help">): string {
-  return ({ assets: "Assets", changes: "Changes", activity: "Activity", connections: "Connections", settings: "Settings" })[command];
 }

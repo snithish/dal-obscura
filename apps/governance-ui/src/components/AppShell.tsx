@@ -1,11 +1,11 @@
 import type { ReactNode, RefObject } from "react";
+import { AppShell as MantineAppShell, Avatar, Badge, Button, Drawer, Group, NavLink, Select, Stack, Text, Title } from "@mantine/core";
 import type { Session } from "../api";
 import { Icon, type IconName } from "./Icon";
 
 export type ShellPage = "assets" | "changes" | "activity" | "connections" | "settings";
 export type ShellTheme = "system" | "light" | "dark";
 export type ShellWorkspaceState = "loading" | "ready" | "unavailable";
-
 export type AppShellProps = {
   page: ShellPage;
   session: Session | null;
@@ -23,140 +23,57 @@ export type AppShellProps = {
   onLogout: () => void;
   children: ReactNode;
 };
+const navigation: Array<{ page: ShellPage; label: string; icon: IconName; admin?: boolean }> = [
+  { page: "assets", label: "Assets", icon: "database" },
+  { page: "changes", label: "Changes", icon: "history" },
+  { page: "connections", label: "Connections", icon: "plug", admin: true },
+  { page: "activity", label: "Activity", icon: "activity" },
+  { page: "settings", label: "Settings", icon: "settings", admin: true },
+];
 
-const NAV_ITEMS: ShellPage[] = ["assets", "changes", "activity", "connections", "settings"];
-
-export function AppShell({
-  page,
-  session,
-  workspace,
-  assetName,
-  assetCatalog,
-  mobileNavOpen,
-  mobileNavTrigger,
-  theme,
-  logoutPending,
-  onNavigate,
-  onMobileNavOpen,
-  onMobileNavClose,
-  onThemeChange,
-  onLogout,
-  children,
-}: AppShellProps) {
-  const canManageWorkspace = Boolean(session?.capabilities.includes("workspace:admin"));
-
+export function AppShell(props: AppShellProps) {
+  const canAdmin = Boolean(props.session?.capabilities.includes("workspace:admin"));
+  const links = <nav aria-label="Primary navigation">
+    {navigation.map((item) => <NavLink component="button" key={item.page} label={item.label}
+      leftSection={<Icon name={item.icon} />} active={props.page === item.page}
+      aria-current={props.page === item.page ? "page" : undefined}
+      disabled={!props.session || (item.admin && !canAdmin)}
+      aria-disabled={!props.session || (item.admin && !canAdmin)}
+      tabIndex={!props.session || (item.admin && !canAdmin) ? -1 : 0}
+      title={!props.session ? "Sign in to open this view" : item.admin && !canAdmin ? "Platform administrator capability required" : undefined}
+      onClick={() => { if (props.session && (!item.admin || canAdmin)) { props.onNavigate(item.page); props.onMobileNavClose(); } }} />)}
+  </nav>;
   return (
-    <div className="app-shell">
-      {mobileNavOpen && (
-        <button type="button" className="mobile-nav-backdrop" aria-label="Close navigation menu" onClick={onMobileNavClose} />
-      )}
-      <aside
-        id="primary-navigation"
-        className={mobileNavOpen ? "sidebar open" : "sidebar"}
-        aria-label="Primary navigation"
-      >
-        <a
-          className="brand"
-          href="#assets"
-          onClick={(event) => {
-            event.preventDefault();
-            onNavigate("assets");
-          }}
-        >
-          DAL OBSCURA<span>GOVERNANCE</span>
-        </a>
-        <nav>
-          {NAV_ITEMS.map((item) => {
-            const requiresWorkspaceAdmin = item === "connections" || item === "settings";
-            const disabled = !session || (requiresWorkspaceAdmin && !canManageWorkspace);
-            const reason = !session
-              ? "Sign in to open this workspace view"
-              : requiresWorkspaceAdmin && !canManageWorkspace
-                ? "Platform administrator capability required"
-                : undefined;
-            const icon: IconName = item === "assets"
-              ? "database"
-              : item === "changes"
-                ? "history"
-                : item === "activity"
-                  ? "activity"
-                  : item === "connections"
-                    ? "plug"
-                    : "settings";
-            return (
-              <button type="button"
-                key={item}
-                className={page === item ? "nav-item active" : "nav-item"}
-                onClick={() => onNavigate(item)}
-                disabled={disabled}
-                title={reason}
-                aria-current={page === item ? "page" : undefined}
-              >
-                <Icon name={icon} />
-                <span>{item}</span>
-              </button>
-            );
-          })}
-        </nav>
-        <div className="sidebar-foot" role="status" aria-live="polite">
-          <span className={`status-dot ${workspace}`} /> Workspace: {workspace === "ready" ? "connected" : "unavailable"}
-          <br />
-          <small>
-            {workspaceLabel(workspace)}
-            {assetCatalog ? ` · catalog ${assetCatalog}` : ""}
-          </small>
-        </div>
-      </aside>
-      <main>
-        <header className="topbar">
-          <div className="topbar-title">
-            <button
-              ref={mobileNavTrigger}
-              className="mobile-menu-toggle"
-              type="button"
-              aria-label="Open navigation menu"
-              aria-expanded={mobileNavOpen}
-              aria-controls="primary-navigation"
-              onClick={onMobileNavOpen}
-            >
-              <Icon name="menu" />
-            </button>
-            <div>
-              <span className="eyebrow">{page === "assets" ? "ASSET WORKSPACE" : page.toUpperCase()}</span>
-              <h1>{page === "assets" ? assetName ?? "Assets" : titleFor(page)}</h1>
-            </div>
-          </div>
-          <div className="actor">
-            <span className="avatar">{session?.principal.slice(0, 1).toUpperCase() ?? "?"}</span>
-            <div>
-              <strong>{session?.principal ?? "Not signed in"}</strong>
-              <small>
-                {session?.platform_admin ? "Platform admin" : "Authenticated user"}
-                {session?.issuer ? ` · ${session.issuer}` : ""}
-              </small>
-            </div>
-            <label className="theme-control">
-              <span className="sr-only">Color theme</span>
-              <select aria-label="Color theme" value={theme} onChange={(event) => onThemeChange(event.target.value as ShellTheme)}>
-                <option value="system">System theme</option>
-                <option value="light">Light theme</option>
-                <option value="dark">Dark theme</option>
-              </select>
-            </label>
-            {session && <button type="button" className="text-button" onClick={onLogout}>Sign out</button>}
-            {logoutPending && <button type="button" className="text-button" onClick={onLogout}>Retry sign out</button>}
-          </div>
-        </header>
-        {children}
-      </main>
-    </div>
+    <MantineAppShell header={{ height: { base: 128, sm: 72 } }} navbar={{ width: 224, breakpoint: "sm", collapsed: { mobile: true } }} padding="lg">
+      <MantineAppShell.Header className="workbench-header">
+        <Group gap="sm" className="workbench-brand">
+          <Button ref={props.mobileNavTrigger} variant="subtle" hiddenFrom="sm" aria-label="Open navigation menu"
+            aria-expanded={props.mobileNavOpen} onClick={props.onMobileNavOpen}><Icon name="menu" /></Button>
+          <a href="#assets" onClick={(event) => { event.preventDefault(); props.onNavigate("assets"); }} className="workbench-logo">OBSCURA <span>Governance</span></a>
+        </Group>
+        <Group gap="sm" className="workbench-account">
+          <Avatar size="sm" aria-hidden="true">{props.session?.principal.slice(0, 1).toUpperCase() ?? "?"}</Avatar>
+          <Text size="sm" className="workbench-principal">{props.session?.principal ?? "Not signed in"}</Text>
+          <Select aria-label="Color theme" value={props.theme} allowDeselect={false}
+            data={[{ value: "system", label: "System theme" }, { value: "light", label: "Light theme" }, { value: "dark", label: "Dark theme" }]}
+            onChange={(value) => { if (value === "system" || value === "light" || value === "dark") props.onThemeChange(value); }} className="workbench-theme" />
+          {(props.session || props.logoutPending) && <Button variant="default" size="sm" onClick={props.onLogout}>{props.logoutPending ? "Retry sign out" : "Sign out"}</Button>}
+        </Group>
+      </MantineAppShell.Header>
+      <MantineAppShell.Navbar p="md">
+        <Stack justify="space-between" h="100%">
+          {links}
+          <Stack gap="xs">
+            <Badge variant="light" color={props.workspace === "ready" ? "green" : "gray"}>{props.workspace === "loading" ? "Checking access" : props.workspace === "ready" ? "Connected" : "Unavailable"}</Badge>
+            {props.assetCatalog && <Text size="sm" c="dimmed">{props.assetCatalog}</Text>}
+          </Stack>
+        </Stack>
+      </MantineAppShell.Navbar>
+      <Drawer opened={props.mobileNavOpen} onClose={props.onMobileNavClose} title="Navigation" closeButtonProps={{ "aria-label": "Close navigation" }} size="xs">{links}</Drawer>
+      <MantineAppShell.Main className="workbench-main">
+        <Title order={1}>{props.page === "assets" ? props.assetName ?? "Assets" : navigation.find((item) => item.page === props.page)?.label}</Title>
+        {props.children}
+      </MantineAppShell.Main>
+    </MantineAppShell>
   );
-}
-
-function titleFor(page: ShellPage): string {
-  return ({ assets: "Assets", changes: "Changes", activity: "Activity", connections: "Connections", settings: "Settings" })[page];
-}
-
-function workspaceLabel(state: ShellWorkspaceState): string {
-  return ({ loading: "Checking access", ready: "Connected", unavailable: "Unavailable" })[state];
 }
