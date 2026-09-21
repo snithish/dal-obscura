@@ -310,7 +310,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
   const isHtmlChallenge = response.redirected || contentType.includes("text/html") || response.url.includes("/auth/login");
   if (isHtmlChallenge) {
-    window.dispatchEvent(new Event("dal-obscura-auth-expired"));
+    window.dispatchEvent(new CustomEvent("dal-obscura-auth-expired", { detail: { code: "auth_challenge" } }));
     const failure = new Error("Authentication challenge returned instead of API JSON") as ApiFailure;
     failure.status = 401;
     failure.code = "auth_challenge";

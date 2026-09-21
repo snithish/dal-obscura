@@ -182,14 +182,17 @@ function App() {
   }, [asset?.id, assets, draftId, draftRevision, managementDirty, page, reviewOnly, saveState, session, sessionCacheKey]);
 
   useEffect(() => {
-    const handleAuthExpired = () => {
+    const handleAuthExpired = (event: Event) => {
+      const detail = (event as CustomEvent<{ code?: string }>).detail;
       loadEpoch.current += 1;
       inventoryEpoch.current += 1;
       managementEpoch.current += 1;
       workspaceAbortController.current?.abort();
       abortMutations();
       clearPrivateState();
-      setNotice("Your session expired or was revoked. Sign in again to continue.");
+      setNotice(detail?.code === "auth_challenge"
+        ? recoveryMessage(detail, "Your session expired or was revoked. Sign in again to continue.")
+        : "Your session expired or was revoked. Sign in again to continue.");
     };
     window.addEventListener("dal-obscura-auth-expired", handleAuthExpired);
     return () => window.removeEventListener("dal-obscura-auth-expired", handleAuthExpired);
@@ -420,7 +423,7 @@ function App() {
       if (epoch !== loadEpoch.current) return;
       setSessionOptions(options);
       setAuthConfig(options?.oidc ?? await controlPlane.getUiAuthConfig().catch(() => null));
-      setNotice("Workspace unavailable. Sign in or reconnect to the control plane; no demo data is shown automatically.");
+      setNotice(recoveryMessage(error, "Workspace unavailable. Sign in or reconnect to the control plane; no demo data is shown automatically."));
     }
   }
 

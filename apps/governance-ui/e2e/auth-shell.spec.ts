@@ -36,6 +36,7 @@ test.describe("signed-out governance shell", () => {
     await page.goto("/");
 
     await expect(page.getByRole("heading", { name: "Sign in to your workspace" })).toBeVisible();
+    await expect(page.getByText("The browser or edge session expired. Sign in again to continue.")).toBeVisible();
     await expect(page.getByText("Use demo persona")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "orders" })).toHaveCount(0);
     await expect(page.getByLabel("Find governed asset")).toHaveCount(0);
