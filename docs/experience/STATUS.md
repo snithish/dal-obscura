@@ -1852,3 +1852,16 @@ Proof: shell syntax and runner behavior matrix pass for valid configuration,
 four invalid host classes, weak secrets, and wrong certificate SAN; pre-commit
 checks pass. R03 remains VERIFY pending operator-managed named origin and live
 Cloudflare Access allow/deny evidence.
+
+## R11 — VERIFY: restore identity permission gate (2026-09-22)
+
+Restore now rejects group/world-readable age identity files before invoking
+decryption, while preserving explicit isolated-restore confirmation and access
+invalidation. Fixtures use owner-only identity modes; a regression proves age
+is not called for weak identities. Atomic implementation commit:
+`cd5dbd69 fix(recovery): protect age identities`.
+
+Proof: restore shell syntax, recovery integration lane (8 passed, 1 configured
+PostgreSQL drill skipped), production recovery contract tests, Ruff, and
+pre-commit checks pass. R11 remains VERIFY pending actual encrypted PostgreSQL
+RPO/RTO and release-candidate evidence.
