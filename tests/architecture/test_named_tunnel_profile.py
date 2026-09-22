@@ -131,6 +131,19 @@ def test_named_tunnel_runner_rejects_weak_secrets_and_wrong_origin_san(tmp_path:
         env=env,
     )
     assert valid.returncode == 0, valid.stderr
+    original_env = env_file.read_text(encoding="utf-8")
+    for invalid_host in ("192.0.2.1", "[::1]", "*.example.test", "bad_host.example"):
+        env_file.write_text(original_env.replace(host, invalid_host), encoding="utf-8")
+        invalid = subprocess.run(
+            ["sh", str(runner), "config"],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        assert invalid.returncode == 2
+        assert "stable DNS hostname" in invalid.stderr
+    env_file.write_text(original_env, encoding="utf-8")
 
     origin_key.chmod(0o644)
     weak = subprocess.run(

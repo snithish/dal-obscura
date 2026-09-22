@@ -51,7 +51,11 @@ validate_profile() {
   require_owner_only_secret "$ROOT/../local-secure/secrets/flight.key"
   host=$(profile_value DAL_OBSCURA_NAMED_HOST)
   case "$host" in
-    ''|localhost|127.*|*/*|*\ *|*\?*|*\**) echo "DAL_OBSCURA_NAMED_HOST must be a stable DNS hostname" >&2; exit 2 ;;
+    ''|localhost|127.*|*:*|*/*|*\ *|*\?*|*\**|*[!A-Za-z0-9.-]*|.*|*.|*..*) echo "DAL_OBSCURA_NAMED_HOST must be a stable DNS hostname" >&2; exit 2 ;;
+  esac
+  case "$host" in
+    *[!0-9.]*) ;;
+    *) echo "DAL_OBSCURA_NAMED_HOST must be a stable DNS hostname" >&2; exit 2 ;;
   esac
   callback=$(profile_value DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI)
   logout=$(profile_value DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI)
