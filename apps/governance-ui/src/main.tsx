@@ -167,10 +167,9 @@ function App() {
       const currentDraftRevision = reviewOnly ? draftRevision : undefined;
       const draftLocationChanged = location.draftId !== currentDraftId || location.draftRevision !== currentDraftRevision;
       if (next === "assets" && session && location.assetId && (location.assetId !== asset?.id || draftLocationChanged)) {
-        const target = assets.find((item) => item.id === location.assetId);
-        if (target && confirmDiscardUnsaved()) {
+        if (confirmDiscardUnsaved()) {
           setReviewOnly(Boolean(location.draftId));
-          void loadAsset(target.id, assets, undefined, location.draftId, sessionCacheKey, location.draftRevision);
+          void loadAsset(location.assetId, assets, undefined, location.draftId, sessionCacheKey, location.draftRevision);
         }
       }
     };
@@ -405,17 +404,17 @@ function App() {
       setAssets(loaded);
       setAssetCursor(loadedPage.next_cursor);
       setAssetHasMore(Boolean(loadedPage.next_cursor));
-      if (!loaded.length) {
+      const location = locationFromUrl(window.location.hash, window.location.search);
+      if (!loaded.length && !location.assetId) {
         setWorkspace("ready"); setNotice("No governed assets are available in this workspace.");
         restorePostLoginHash();
         return;
       }
-      const location = locationFromUrl(window.location.hash, window.location.search);
       const requestedAssetId = location.assetId;
       const requestedDraftId = location.draftId;
-      const selected = loaded.find((item) => item.id === requestedAssetId) ?? loaded[0];
+      const selectedId = requestedAssetId ?? loaded[0].id;
       setReviewOnly(Boolean(requestedDraftId));
-      await loadAsset(selected.id, loaded, epoch, requestedDraftId ?? undefined, loadedSessionScope, location.draftRevision);
+      await loadAsset(selectedId, loaded, epoch, requestedDraftId ?? undefined, loadedSessionScope, location.draftRevision);
       if (epoch !== loadEpoch.current) return;
       setWorkspace("ready");
       restorePostLoginHash();
@@ -637,6 +636,15 @@ function App() {
   ) {
     const epoch = inheritedEpoch ?? ++loadEpoch.current;
     await queryClient.cancelQueries({ queryKey: ["asset", inheritedSessionScope] });
+    if (epoch !== loadEpoch.current) return;
+    if (selectedDraftId && selectedDraftRevision === undefined) {
+      setAsset(null);
+      resetRuleHistory([]);
+      setDraftId(null);
+      setReviewToken(null);
+      setNotice("This review link is incomplete. Ask the author for an exact-revision review link.");
+      return;
+    }
     try {
       const assetKey = ["asset", inheritedSessionScope, assetId] as const;
       const [fullAsset, schema, history, grants, access] = await Promise.all([
@@ -676,7 +684,7 @@ function App() {
       setNotice(selectedDraftId ? `Loaded saved draft ${draft?.revision ?? 0} for read-only review.` : effectiveRules.length ? "Loaded your policy draft." : "No policy draft exists yet. Add a rule to begin authoring.");
     } catch (error) {
       if ((error instanceof DOMException && error.name === "AbortError") || (error instanceof Error && error.name === "CancelledError")) return;
-      if (inheritedEpoch !== undefined && epoch !== loadEpoch.current) return;
+      if (epoch !== loadEpoch.current) return;
       setNotice(recoveryMessage(error, "Could not load this asset and its access metadata. Your previous editor state remains unchanged."));
     }
   }
@@ -941,7 +949,7 @@ function App() {
   const accessView = <LoginPanel showAuth={workspace === "unavailable"} title={workspace === "loading" ? "Loading governed workspace" : "Sign in to your workspace"} message={workspace === "loading" ? "Checking your workspace access and available assets." : notice} retry={workspace === "unavailable" ? loadInitialWorkspace : undefined} authConfig={authConfig} sessionOptions={sessionOptions} bootstrapToken={bootstrapToken} onBootstrapToken={setBootstrapToken} onBootstrapLogin={() => void bootstrapLogin()} loggingIn={loggingIn} authError={authError} />;
   const managementView = page === "assets" ? null : <Suspense fallback={<section className="coming-soon" role="status"><h2>Loading management view</h2><p>Preparing the governed workspace controls.</p></section>}><ManagementView page={page} data={managementData} loading={managementLoading} error={managementError} onReload={() => void loadManagement(page)} onLoadMore={page === "changes" ? () => void loadMoreHistory() : page === "activity" ? () => void loadMoreAudit() : undefined} historyLoading={historyLoading} auditLoading={auditLoading} filters={auditFilters} onFiltersChange={updateAuditFilters} session={session} queryClient={queryClient} sessionScope={sessionCacheKey} onDirtyChange={setManagementDirty} /></Suspense>;
   const assetView = asset ? <Suspense fallback={<section className="coming-soon" role="status"><h2>Loading policy workspace</h2><p>Preparing the nested policy editor.</p></section>}><AssetWorkspace initialTab={locationFromUrl(window.location.hash, window.location.search).tab} initialVersion={locationFromUrl(window.location.hash, window.location.search).version} assets={assets} asset={asset} access={managementData.access} history={managementData.history ?? []} grants={managementData.grants ?? []} onAsset={(id) => { if (confirmDiscardUnsaved()) { setReviewOnly(false); void loadAsset(id); } }} assetSearch={assetSearch} assetHasMore={assetHasMore} assetInventoryLoading={assetInventoryLoading} onSearch={searchAssets} onLoadMore={() => void refreshAssetInventory(assetSearch, true)} rules={rules} activeRule={activeRule} activeRevision={draftRevision} selectedRule={selectedRule} onRule={setSelectedRule} onMoveRule={moveRule} selectedField={selectedField} onField={setSelectedField} selectedMask={selectedMask} effectiveFields={effectiveFields} saveState={saveState} notice={notice} fieldErrors={fieldErrors} onToggleField={toggleField} onMask={setMask} onUpdateRule={updateRule} onAddRule={addRule} onRemoveRule={removeRule} onDuplicateRule={duplicateRule} onUndo={undoRules} onRedo={redoRules} canUndo={rulesUndoStack.current.length > 0} canRedo={rulesRedoStack.current.length > 0} onSave={() => void saveDraft()} onPreview={() => void runPreview()} onReview={() => void requestReview()} previewPrincipal={previewPrincipal} previewGroups={previewGroups} previewClaims={previewClaims} onPreviewPrincipal={setPreviewPrincipal} onPreviewGroups={setPreviewGroups} onPreviewClaims={setPreviewClaims} onPublish={() => void publishAsset()} publishing={publishPending} onRestore={(version) => void restorePolicyVersion(version)} reviewToken={reviewToken ?? undefined} preview={preview} session={session} onReloadAccess={() => void loadAsset(asset.id, assets, undefined, reviewOnly ? draftId ?? undefined : undefined)} onDirtyChange={setManagementDirty} reviewOnly={reviewOnly} draftId={draftId} queryClient={queryClient} sessionScope={sessionCacheKey} /></Suspense> : undefined;
-  const content = <WorkspaceContent signedOut={signedOut} page={page} workspace={workspace} accessView={accessView} managementView={managementView} noAssetsView={<LoginPanel title="No governed assets" message={notice} />} assetView={assetView} />;
+  const content = <WorkspaceContent signedOut={signedOut} page={page} workspace={workspace} accessView={accessView} managementView={managementView} noAssetsView={<LoginPanel title={assets.length || locationFromUrl(window.location.hash, window.location.search).assetId ? "Asset unavailable" : "No governed assets"} message={notice} retry={loadInitialWorkspace} />} assetView={assetView} />;
 
   return (
     <AppShell

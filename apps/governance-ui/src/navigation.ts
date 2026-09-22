@@ -29,7 +29,7 @@ export function locationFromUrl(hash: string, search: string): UiLocation {
   const parsedDraftRevision = rawDraftRevision && /^\d+$/.test(rawDraftRevision) ? Number(rawDraftRevision) : undefined;
   if (assetId) location.assetId = assetId;
   if (draftId) location.draftId = draftId;
-  if (parsedDraftRevision !== undefined && parsedDraftRevision > 0) location.draftRevision = parsedDraftRevision;
+  if (parsedDraftRevision !== undefined && Number.isSafeInteger(parsedDraftRevision) && parsedDraftRevision >= 0) location.draftRevision = parsedDraftRevision;
   if (rawTab && assetTabs.includes(rawTab as AssetTab)) location.tab = rawTab as AssetTab;
   if (parsedVersion && parsedVersion > 0) location.version = parsedVersion;
   return location;

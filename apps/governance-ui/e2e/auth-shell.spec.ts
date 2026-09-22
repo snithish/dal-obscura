@@ -518,6 +518,27 @@ test("stale review links remain explicit and read-only", async ({ page }) => {
   await expect(page.getByLabel("Find governed asset")).toBeDisabled();
 });
 
+test("asset deep links never substitute the first inventory result", async ({ page }) => {
+  await authenticatedApi(page);
+  await page.goto("/?asset=00000000-0000-4000-8000-000000000099#assets");
+  await expect(page.getByRole("heading", { name: "Asset unavailable" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "orders" })).toHaveCount(0);
+});
+
+test("authorized deep links load independently of the first inventory page", async ({ page }) => {
+  await authenticatedApi(page);
+  await page.route("**/v1/assets/page**", (route) => route.fulfill({ json: { items: [], next_cursor: null } }));
+  await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+});
+
+test("review links without an exact revision cannot open a newer draft", async ({ page }) => {
+  await authenticatedApi(page, { allowPublish: true });
+  await page.goto("/?asset=00000000-0000-4000-8000-000000000001&draft=current-draft#assets");
+  await expect(page.getByText("This review link is incomplete. Ask the author for an exact-revision review link.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Publish reviewed/ })).toHaveCount(0);
+});
+
 test("late management responses cannot replace the current page", async ({ page }) => {
   const deferredAudit = deferredResponse();
   await authenticatedApi(page, { deferredAudit });

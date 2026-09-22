@@ -33,6 +33,14 @@ view. Mantine owns menu focus; its supported initial-focus setting avoids an
 invalid focus-placeholder ARIA child. Four shell stories, TypeScript, all 54
 built browser checks and the extended production-CSP search/menu check pass.
 
+Deep-link continuation: requested asset IDs now load through the authorized API
+without falling back to the first inventory item, including assets outside the
+first list page. Review links require an explicit safe integer revision (including
+zero); incomplete links cannot display or publish a newer draft. Asset failures
+have a retryable unavailable state, and stale load errors no longer overwrite a
+newer scope. Three new cases failed before these fixes; all five focused link/
+review cases, TypeScript and the UI unit suite pass.
+
 - **R01:** local toolchain, typing, route, plugin, and locked-build checks pass;
   clean-install/advisory and exact support inventory evidence remain open.
 - **R02:** local OIDC/CSRF/origin/proxy contracts and challenge recovery pass;
