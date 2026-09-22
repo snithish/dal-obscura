@@ -1733,9 +1733,9 @@ secret-reference handling, and backend callbacks remain unchanged. Atomic
 implementation commit: `f3286e45 refactor(ui): use Mantine connection actions`.
 
 Proof: TypeScript, Vite production build, UI budgets (170.50 KiB JS gzip,
-38.05 KiB CSS gzip, 83.72 KiB fonts), the temporary rendered-color inspection,
-46 Storybook interaction tests, and all 54 built browser tests pass. The browser
-matrix includes the light/dark management contrast gate and axe checks. R04/R08
+38.05 KiB CSS gzip, 83.72 KiB fonts), 46 Storybook interaction tests, and all
+54 built browser tests pass. The browser matrix includes the light/dark
+management contrast gate and axe checks. R04/R08
 remain VERIFY pending manual visual, keyboard, and screen-reader review, live
 catalog authorization, and production identity/provider evidence.
 
