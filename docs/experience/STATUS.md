@@ -1771,3 +1771,20 @@ journeys, keyboard order, contrast, forced-colors, and axe checks. R04/R07/R08
 remain VERIFY pending manual visual, keyboard, and screen-reader review, live
 author/reviewer/publisher and grant authorization, and production identity
 evidence.
+
+## R04/R07 — VERIFY: Mantine policy editor and history actions (2026-09-22)
+
+Migrated policy inventory pagination, review-link recovery, undo/redo, rule
+ordering, editor actions, and history restore/detail actions to Mantine
+`Button`. Custom tabs, virtual schema rows, and rule selection remain native
+domain controls because their keyboard and virtualization contracts are
+purpose-built and covered separately. Policy mutation guards, stale-review
+handling, and restore semantics remain unchanged. Atomic implementation
+commit: `2683aa21 refactor(ui): use Mantine editor actions`.
+
+Proof: TypeScript, Vite production build, UI budgets (170.55 KiB JS gzip,
+38.07 KiB CSS gzip, 83.72 KiB fonts), 46 Storybook interaction tests, and all
+54 built browser tests pass, including policy race, nested-tree, contrast,
+forced-colors, and axe checks. R04/R07 remain VERIFY pending manual visual,
+keyboard, and screen-reader review plus real author/reviewer/publisher
+qualification.
