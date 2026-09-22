@@ -13,6 +13,7 @@ and provide owner-readable files at these paths:
 
 - `secrets/origin.crt` and `secrets/origin.key`: certificate/key whose SAN
   contains the stable hostname;
+- `secrets/origin-ca.crt`: CA bundle that validates `origin.crt`;
 - `secrets/cloudflared.token`: narrowly scoped connector token.
 
 Set `DAL_OBSCURA_CLOUDFLARE_ACCESS_TEAM_NAME` and
@@ -24,8 +25,10 @@ the real allow/deny qualification.
 
 Keep `origin.key`, `cloudflared.token`, and the local Flight private key
 owner-only (`0400` or `0600`). The runner rejects weaker permissions and checks
-the origin certificate SAN against `DAL_OBSCURA_NAMED_HOST` before starting any
-service or connector.
+the origin certificate SAN and CA chain against `DAL_OBSCURA_NAMED_HOST` before
+starting any service or connector. Configure the remote tunnel origin with
+`originServerName=$DAL_OBSCURA_NAMED_HOST`, `caPool=/run/secrets/named-origin-ca.crt`,
+and TLS verification enabled; the profile never sets `noTLSVerify`.
 
 Create the DNS record, tunnel, Access application, default-deny policy, and
 exact Access audience through the separately approved Cloudflare change. This

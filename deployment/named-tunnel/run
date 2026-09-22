@@ -40,7 +40,7 @@ validate_profile() {
     echo "$PROFILE still contains REPLACE_WITH placeholders; configure every secret, hostname and image digest" >&2
     exit 2
   fi
-  for required in "$ROOT/secrets/origin.crt" "$ROOT/secrets/origin.key" "$ROOT/secrets/cloudflared.token" "$ROOT/../local-secure/secrets/flight.crt" "$ROOT/../local-secure/secrets/flight.key" "$ROOT/../local-secure/secrets/client-ca.crt"; do
+  for required in "$ROOT/secrets/origin.crt" "$ROOT/secrets/origin.key" "$ROOT/secrets/origin-ca.crt" "$ROOT/secrets/cloudflared.token" "$ROOT/../local-secure/secrets/flight.crt" "$ROOT/../local-secure/secrets/flight.key" "$ROOT/../local-secure/secrets/client-ca.crt"; do
     if [ ! -r "$required" ]; then
       echo "Missing readable named-tunnel secret or Flight TLS material: $required" >&2
       exit 2
@@ -68,6 +68,10 @@ validate_profile() {
   [ "$logout" = "https://$host" ] || { echo "OIDC post-logout origin must equal https://$host" >&2; exit 2; }
   [ "$cors" = "https://$host" ] || { echo "CORS origin must equal https://$host" >&2; exit 2; }
   validate_origin_certificate "$host"
+  if ! openssl verify -CAfile "$ROOT/secrets/origin-ca.crt" "$ROOT/secrets/origin.crt" >/dev/null 2>&1; then
+    echo "Origin certificate is not trusted by secrets/origin-ca.crt" >&2
+    exit 2
+  fi
   [ "$(profile_value DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED)" = "false" ] || { echo "Bootstrap login must be disabled for named mode" >&2; exit 2; }
 }
 

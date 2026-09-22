@@ -36,6 +36,8 @@ services:
     secrets:
       - source: cloudflared_token
         target: cloudflared_token
+      - source: named_origin_ca
+        target: named-origin-ca.crt
     read_only: true
     tmpfs:
       - /tmp
@@ -55,3 +57,5 @@ secrets:
     file: ${DAL_OBSCURA_NAMED_ORIGIN_KEY_SOURCE:?set DAL_OBSCURA_NAMED_ORIGIN_KEY_SOURCE}
   cloudflared_token:
     file: ${DAL_OBSCURA_CLOUDFLARED_TOKEN_SOURCE:?set DAL_OBSCURA_CLOUDFLARED_TOKEN_SOURCE}
+  named_origin_ca:
+    file: ${DAL_OBSCURA_NAMED_ORIGIN_CA_SOURCE:?set DAL_OBSCURA_NAMED_ORIGIN_CA_SOURCE}

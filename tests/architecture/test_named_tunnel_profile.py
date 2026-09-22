@@ -24,12 +24,14 @@ def test_named_tunnel_profile_keeps_connector_private_and_origin_bound() -> None
     )
     assert "ports:\n      - " not in compose
     assert "named_origin_cert" in compose and "named_origin_key" in compose
+    assert "named_origin_ca" in compose
     assert "DAL_OBSCURA_CLOUDFLARED_IMAGE=cloudflare/cloudflared@sha256:" in env
     assert "DAL_OBSCURA_CLOUDFLARE_ACCESS_TEAM_NAME=" in env
     assert "DAL_OBSCURA_CLOUDFLARE_ACCESS_AUD_TAG=" in env
     assert "DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED=false" in env
     assert "DAL_OBSCURA_UI_TLS_CERT_SOURCE=../local-secure/secrets/ui.crt" in env
     assert "DAL_OBSCURA_UI_TLS_KEY_SOURCE=../local-secure/secrets/ui.key" in env
+    assert "DAL_OBSCURA_NAMED_ORIGIN_CA_SOURCE=../named-tunnel/secrets/origin-ca.crt" in env
     assert "DAL_OBSCURA_SECRET_PROVIDER_CONFIG=" in env
     assert "https://{$DAL_OBSCURA_NAMED_HOST}:8443" in caddy
     assert "Create the DNS record, tunnel, Access application" in readme
@@ -54,6 +56,7 @@ def test_named_tunnel_runner_fails_closed_and_redacts_edge_claims() -> None:
     assert "Secret file must be owner-only" in source
     assert "validate_origin_certificate" in source
     assert "Origin certificate SAN does not match" in source
+    assert "Origin certificate is not trusted" in source
     assert "*\\?*|*\\**" in source
 
 
@@ -112,6 +115,7 @@ def test_named_tunnel_runner_rejects_weak_secrets_and_wrong_origin_san(tmp_path:
         return cert, key
 
     origin_cert, origin_key = certificate(named / "secrets", "origin")
+    (named / "secrets" / "origin-ca.crt").write_bytes(origin_cert.read_bytes())
     (named / "secrets" / "cloudflared.token").write_text("token\n", encoding="utf-8")
     (named / "secrets" / "cloudflared.token").chmod(0o600)
     for name in ("flight.crt", "client-ca.crt"):
