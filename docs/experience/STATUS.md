@@ -1904,3 +1904,16 @@ commit: `28c09753 fix(deployment): require declared Access audience`.
 Proof: shell syntax, runner behavior matrix, focused architecture tests, Ruff,
 and pre-commit checks pass. R03/E07 remain VERIFY until real Cloudflare Access
 assertion validation and allowed/denied browser traffic are observed.
+
+## R03 — VERIFY: named origin CA and SNI contract (2026-09-22)
+
+Named mode now mounts an explicit origin CA bundle into cloudflared and refuses
+startup unless the origin certificate both matches the configured DNS SAN and
+verifies against that CA. The runbook requires the remote origin configuration
+to use matching `originServerName` and `caPool` with TLS verification enabled;
+no `noTLSVerify` fallback was added. Atomic implementation commit:
+`6ab6d4a1 fix(deployment): verify named origin CA`.
+
+Proof: shell syntax, named-tunnel behavior matrix, focused architecture tests,
+Ruff, and pre-commit checks pass. R03/E07 remain VERIFY pending actual remote
+configuration and live TLS/Access allow/deny evidence.
