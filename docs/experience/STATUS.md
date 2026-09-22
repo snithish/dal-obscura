@@ -32,8 +32,8 @@ live local IdP or running production stack.
 - **R07–R08:** local policy, management, audit, settings, lifecycle, and nested
   schema journeys pass; real role-authorized backend journeys remain open.
 - **R09:** no live local-IdP qualification executed.
-- **R10:** local Python/DuckDB, JVM/Spark, and full test lanes pass; real provider
-  matrix, two-process PostgreSQL races, TLS/OIDC consumer proof remain open.
+- **R10:** local Python/DuckDB, JVM/Spark and PostgreSQL two-process revision races
+  pass; real provider matrix and TLS/OIDC consumer proof remain open.
 - **R11:** local budgets, CI contracts, encrypted-backup helpers, and failure
   guards pass; real encrypted PostgreSQL RPO/RTO and candidate dossier remain open.
 - **R12:** no owner visual approval, participant study, or independent security
@@ -41,6 +41,30 @@ live local IdP or running production stack.
 
 Treat this snapshot as routing guidance; detailed evidence and exact commits
 remain below. Do not relabel VERIFY or external prerequisites as DONE.
+
+## R10 — PostgreSQL process races and runtime creation conflict (2026-09-22)
+
+Replaced duplicated thread-based race cases with a spawn-based harness. Each
+worker creates its own SQLAlchemy engine and session, starts at a shared barrier,
+and reports its process identity and committed/conflict outcome. Parent waits are
+bounded and task-owned workers are terminated on failure. Five parameterized
+cases cover draft, grants, asset binding, runtime settings and auth providers;
+one case preserves independent per-author drafts. Existing CI runs this file.
+
+The real database run exposed two successful runtime creations using revision 0.
+Creation now stores revision 1 and rejects a nonzero expected revision for a
+missing row. Existing rows keep their stored revisions; callers must read the
+current revision before updates. Updated owning API assertions verify revision
+progression, stale creation rejection and no row created on that rejection.
+Ticket/pickle definitions and behavior are unchanged.
+
+Proof: six process cases pass on disposable loopback PostgreSQL 17.10, image
+ID 872a12eb3c5de110145da29dd03154f6de537bda7860a5731df9c02fad256459,
+with locked psycopg 3.3.4. Control-plane/API and Flight smoke regression suites,
+focused settings tests, Ruff and repository type checking pass. The database was
+task-owned, with no production data or existing database used. This closes the
+listed repository revision race cases, not live provider, encrypted recovery,
+HTTP multi-replica or release-candidate qualification.
 
 ## R06 — ACTIVE: exact identity cache isolation
 

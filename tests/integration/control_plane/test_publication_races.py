@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import multiprocessing
 import os
 from collections.abc import Iterator
-from concurrent.futures import ThreadPoolExecutor
-from threading import Barrier
+from multiprocessing.connection import Connection
+from multiprocessing.synchronize import Barrier
 from uuid import UUID, uuid4
 
 import pytest
@@ -81,194 +82,140 @@ def _provision_asset(engine: Engine) -> tuple[UUID, UUID, UUID]:
             store._session.close()
 
 
-def test_concurrent_draft_cas_allows_one_revision_zero_writer(postgres_engine: Engine) -> None:
-    _cell_id, _tenant_id, asset_id = _provision_asset(postgres_engine)
-    start_barrier = Barrier(2)
-
-    def save_draft(principal: str) -> dict[str, object] | Exception:
-        with Session(postgres_engine, future=True) as session:
-            store = PublicationStore(session)
+def _write_in_process(
+    database_url: str,
+    barrier: Barrier,
+    result_pipe: Connection,
+    method: str,
+    arguments: dict[str, object],
+) -> None:
+    # Spawned workers create their own pools; no inherited engine or Python lock.
+    engine = create_engine_from_url(database_url)
+    try:
+        with Session(engine, future=True) as session:
+            barrier.wait(timeout=15)
             try:
-                start_barrier.wait(timeout=10)
-                result = store.save_asset_policy_draft(
-                    asset_id=asset_id,
-                    author_principal=principal,
-                    expected_revision=0,
-                    rules=[
-                        {
-                            "ordinal": 10,
-                            "effect": "allow",
-                            "principals": [principal],
-                            "columns": ["id"],
-                        }
-                    ],
-                    content_hash=("a" if principal.endswith("a") else "b") * 64,
-                    base_policy_version=0,
-                )
+                result = getattr(PublicationStore(session), method)(**arguments)
                 session.commit()
-                return result
-            except Exception as exc:  # assert the exact conflict below
+                outcome = ("committed", result)
+            except PublicationConflictError:
                 session.rollback()
-                return exc
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        results = list(executor.map(save_draft, ("race-a", "race-b")))
-
-    successes = [result for result in results if isinstance(result, dict)]
-    conflicts = [result for result in results if isinstance(result, PublicationConflictError)]
-    assert len(successes) == 2, "each principal has an independent draft row"
-    assert not conflicts
-
-    same_draft_barrier = Barrier(2)
-
-    def save_same_draft(principal: str) -> dict[str, object] | Exception:
-        with Session(postgres_engine, future=True) as session:
-            store = PublicationStore(session)
-            try:
-                same_draft_barrier.wait(timeout=10)
-                result = store.save_asset_policy_draft(
-                    asset_id=asset_id,
-                    author_principal=principal,
-                    expected_revision=0,
-                    rules=[],
-                    content_hash="c" * 64,
-                    base_policy_version=0,
-                )
-                session.commit()
-                return result
-            except Exception as exc:
-                session.rollback()
-                return exc
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        results = list(executor.map(save_same_draft, ("race-c", "race-c")))
-
-    assert sum(isinstance(result, dict) for result in results) == 1
-    assert sum(isinstance(result, PublicationConflictError) for result in results) == 1
+                outcome = ("conflict", None)
+            result_pipe.send((os.getpid(), outcome))
+    finally:
+        result_pipe.close()
+        engine.dispose()
 
 
-def test_concurrent_grant_replacements_use_asset_revision_cas(postgres_engine: Engine) -> None:
-    _cell_id, _tenant_id, asset_id = _provision_asset(postgres_engine)
-    start_barrier = Barrier(2)
-
-    def replace_grants(principal: str) -> list[dict[str, str]] | Exception:
-        with Session(postgres_engine, future=True) as session:
-            store = PublicationStore(session)
-            try:
-                start_barrier.wait(timeout=10)
-                result = store.replace_asset_grants(
-                    asset_id=asset_id,
-                    expected_revision=0,
-                    grants=[{"principal": principal, "capability": "read"}],
-                )
-                session.commit()
-                return result
-            except Exception as exc:
-                session.rollback()
-                return exc
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        results = list(executor.map(replace_grants, ("user:grant-a", "user:grant-b")))
-
-    assert sum(isinstance(result, list) for result in results) == 1
-    assert sum(isinstance(result, PublicationConflictError) for result in results) == 1
-
-
-def test_concurrent_asset_binding_updates_use_revision_cas(postgres_engine: Engine) -> None:
-    _cell_id, tenant_id, asset_id = _provision_asset(postgres_engine)
-    start_barrier = Barrier(2)
-
-    def replace_binding(table_identifier: str) -> UUID | Exception:
-        with Session(postgres_engine, future=True) as session:
-            store = PublicationStore(session)
-            try:
-                start_barrier.wait(timeout=10)
-                result = store.upsert_asset(
-                    cell_id=_cell_id,
-                    tenant_id=tenant_id,
-                    catalog="analytics",
-                    target="default.users",
-                    backend="iceberg",
-                    table_identifier=table_identifier,
-                    options={},
-                    expected_revision=0,
-                )
-                session.commit()
-                return result
-            except Exception as exc:
-                session.rollback()
-                return exc
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        results = list(executor.map(replace_binding, ("default.users", "default.users_v2")))
-
-    assert sum(result == asset_id for result in results) == 1
-    assert sum(isinstance(result, PublicationConflictError) for result in results) == 1
-
-
-def test_concurrent_runtime_settings_updates_use_revision_cas(postgres_engine: Engine) -> None:
-    cell_id, _tenant_id, _asset_id = _provision_asset(postgres_engine)
-    start_barrier = Barrier(2)
-
-    def replace_runtime(ttl: int) -> None | Exception:
-        with Session(postgres_engine, future=True) as session:
-            store = PublicationStore(session)
-            try:
-                start_barrier.wait(timeout=10)
-                store.upsert_runtime_settings(
-                    cell_id=cell_id,
-                    ticket_ttl_seconds=ttl,
-                    max_tickets=64,
-                    max_ticket_exchanges=2,
-                    expected_revision=0,
-                )
-                session.commit()
-                return None
-            except Exception as exc:  # assert the exact conflict below
-                session.rollback()
-                return exc
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        results = list(executor.map(replace_runtime, (300, 600)))
-
-    assert sum(result is None for result in results) == 1
-    assert sum(isinstance(result, PublicationConflictError) for result in results) == 1
-
-
-def test_concurrent_auth_provider_replacements_use_revision_cas(postgres_engine: Engine) -> None:
-    cell_id, _tenant_id, _asset_id = _provision_asset(postgres_engine)
-    start_barrier = Barrier(2)
-
-    def replace_provider(issuer: str) -> None | Exception:
-        with Session(postgres_engine, future=True) as session:
-            store = PublicationStore(session)
-            try:
-                start_barrier.wait(timeout=10)
-                store.replace_auth_providers(
-                    cell_id=cell_id,
-                    providers=[
-                        {
-                            "ordinal": 1,
-                            "module": "oidc.test.Provider",
-                            "args": {"issuer": issuer},
-                            "enabled": True,
-                        }
-                    ],
-                    expected_revision=0,
-                )
-                session.commit()
-                return None
-            except Exception as exc:  # assert the exact conflict below
-                session.rollback()
-                return exc
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        results = list(
-            executor.map(
-                replace_provider,
-                ("https://issuer-a.example", "https://issuer-b.example"),
-            )
+def _race(engine: Engine, method: str, calls: list[dict[str, object]]) -> list[str]:
+    context = multiprocessing.get_context("spawn")
+    barrier = context.Barrier(2)
+    pipes = [context.Pipe(duplex=False) for _ in calls]
+    processes = [
+        context.Process(
+            target=_write_in_process,
+            args=(engine.url.render_as_string(hide_password=False), barrier, sender, method, args),
         )
+        for (_, sender), args in zip(pipes, calls, strict=True)
+    ]
+    try:
+        for process in processes:
+            process.start()
+        for _, sender in pipes:
+            sender.close()
+        results = []
+        for receiver, _ in pipes:
+            assert receiver.poll(25), "Database race worker timed out"
+            results.append(receiver.recv())
+        for process in processes:
+            process.join(timeout=5)
+            assert process.exitcode == 0, "Database race worker failed"
+        assert len({pid for pid, _ in results}) == 2
+        assert all(pid != os.getpid() for pid, _ in results)
+        return [outcome[0] for _, outcome in results]
+    finally:
+        for process in processes:
+            if process.is_alive():
+                process.terminate()
+                process.join(timeout=5)
+        for receiver, sender in pipes:
+            receiver.close()
+            sender.close()
 
-    assert sum(result is None for result in results) == 1
-    assert sum(isinstance(result, PublicationConflictError) for result in results) == 1
+
+@pytest.mark.parametrize(
+    "operation",
+    ["draft", "grants", "binding", "runtime", "providers"],
+)
+def test_two_process_revision_cas(postgres_engine: Engine, operation: str) -> None:
+    cell_id, tenant_id, asset_id = _provision_asset(postgres_engine)
+    methods = {
+        "draft": "save_asset_policy_draft",
+        "grants": "replace_asset_grants",
+        "binding": "upsert_asset",
+        "runtime": "upsert_runtime_settings",
+        "providers": "replace_auth_providers",
+    }
+    calls: list[dict[str, object]] = []
+    for index in range(2):
+        options: dict[str, object] = {}
+        if operation == "draft":
+            options = {
+                "asset_id": asset_id,
+                "author_principal": "same-author",
+                "rules": [],
+                "content_hash": str(index) * 64,
+                "base_policy_version": 0,
+            }
+        elif operation == "grants":
+            options = {
+                "asset_id": asset_id,
+                "grants": [{"principal": f"user:{index}", "capability": "read"}],
+            }
+        elif operation == "binding":
+            options = {
+                "cell_id": cell_id,
+                "tenant_id": tenant_id,
+                "catalog": "analytics",
+                "target": "default.users",
+                "backend": "iceberg",
+                "table_identifier": f"default.users_{index}",
+                "options": {},
+            }
+        elif operation == "runtime":
+            options = {
+                "cell_id": cell_id,
+                "ticket_ttl_seconds": 300 + index,
+                "max_tickets": 64,
+                "max_ticket_exchanges": 2,
+            }
+        else:
+            options = {
+                "cell_id": cell_id,
+                "providers": [
+                    {
+                        "ordinal": 1,
+                        "module": "oidc.test.Provider",
+                        "args": {"issuer": f"https://issuer-{index}.example"},
+                        "enabled": True,
+                    }
+                ],
+            }
+        calls.append({**options, "expected_revision": 0})
+    assert sorted(_race(postgres_engine, methods[operation], calls)) == ["committed", "conflict"]
+
+
+def test_two_process_drafts_are_independent_per_author(postgres_engine: Engine) -> None:
+    _, _, asset_id = _provision_asset(postgres_engine)
+    calls: list[dict[str, object]] = [
+        {
+            "asset_id": asset_id,
+            "author_principal": author,
+            "expected_revision": 0,
+            "rules": [],
+            "content_hash": "a" * 64,
+            "base_policy_version": 0,
+        }
+        for author in ("author-a", "author-b")
+    ]
+    assert _race(postgres_engine, "save_asset_policy_draft", calls) == ["committed", "committed"]

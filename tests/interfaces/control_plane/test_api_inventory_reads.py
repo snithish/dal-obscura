@@ -242,7 +242,7 @@ def test_reads_workspace_draft_resources_after_writes():
         "max_tickets": 64,
         "max_ticket_exchanges": 2,
         "path_rules": [],
-        "revision": 0,
+        "revision": 1,
     }
     assert catalogs[0]["name"] == "analytics"
     assert catalogs[0]["module"] == ICEBERG_CATALOG_MODULE

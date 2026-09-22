@@ -12,6 +12,18 @@ def test_workspace_runtime_settings_can_be_configured_without_tenant_or_cell_ids
     client = _client()
 
     get_before_setup = client.get("/v1/settings/runtime", headers=ADMIN_HEADERS)
+    stale_creation = client.put(
+        "/v1/settings/runtime",
+        json={
+            "ticket_ttl_seconds": 1200,
+            "max_tickets": 32,
+            "max_ticket_exchanges": 3,
+            "expected_revision": 7,
+        },
+        headers=ADMIN_HEADERS,
+    )
+    assert stale_creation.status_code == 409
+    assert client.get("/v1/settings/runtime", headers=ADMIN_HEADERS).json() is None
     put_response = client.put(
         "/v1/settings/runtime",
         json={
@@ -31,7 +43,7 @@ def test_workspace_runtime_settings_can_be_configured_without_tenant_or_cell_ids
         "max_tickets": 32,
         "max_ticket_exchanges": 3,
         "path_rules": [],
-        "revision": 0,
+        "revision": 1,
     }
     updated = client.put(
         "/v1/settings/runtime",
@@ -39,7 +51,7 @@ def test_workspace_runtime_settings_can_be_configured_without_tenant_or_cell_ids
             "ticket_ttl_seconds": 1800,
             "max_tickets": 32,
             "max_ticket_exchanges": 3,
-            "expected_revision": 0,
+            "expected_revision": 1,
         },
         headers=ADMIN_HEADERS,
     )
@@ -49,12 +61,12 @@ def test_workspace_runtime_settings_can_be_configured_without_tenant_or_cell_ids
             "ticket_ttl_seconds": 2400,
             "max_tickets": 32,
             "max_ticket_exchanges": 3,
-            "expected_revision": 0,
+            "expected_revision": 1,
         },
         headers=ADMIN_HEADERS,
     )
     assert updated.status_code == 200
-    assert updated.json()["revision"] == 1
+    assert updated.json()["revision"] == 2
     assert stale.status_code == 409
     assert stale.json()["error"]["code"] == "revision_conflict"
     assert stale.json()["error"]["request_id"]

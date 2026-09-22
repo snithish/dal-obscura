@@ -308,9 +308,15 @@ class PublicationStore:
             raise LookupError(f"No cell {cell_id}")
         existing = self._session.get(CellRuntimeSettingsRecord, cell_id)
         if existing is None:
+            if expected_revision not in (None, 0):
+                raise PublicationConflictError(
+                    "Runtime settings revision changed "
+                    f"(expected {expected_revision}, current 0); reread before writing."
+                )
             self._session.add(
                 CellRuntimeSettingsRecord(
                     cell_id=cell_id,
+                    revision=1,
                     ticket_ttl_seconds=ticket_ttl_seconds,
                     max_tickets=max_tickets,
                     max_ticket_exchanges=max_ticket_exchanges,
