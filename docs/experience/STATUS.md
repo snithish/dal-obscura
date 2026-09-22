@@ -1799,3 +1799,18 @@ Proof: TypeScript, Vite production build, UI budgets (170.55 KiB JS gzip,
 forced-colors, and axe checks. R04/R07 remain VERIFY pending manual visual,
 keyboard, and screen-reader review plus real author/reviewer/publisher
 qualification.
+
+## R03 — VERIFY: profile secret and origin validation (2026-09-22)
+
+Secure-local and named-tunnel runners now reject group/world-readable private
+keys and connector tokens before Compose starts. Named mode also rejects
+loopback, wildcard, malformed, or certificate-SAN-mismatched hostnames before
+starting the private stack or connector. Operator runbooks document the
+owner-only mode requirement and SAN check. Atomic implementation commit:
+`27e514e5 fix(deployment): enforce local secret and origin checks`.
+
+Proof: `sh -n` for both runners; behavioral runner test covering valid config,
+weak key permissions, and wrong origin SAN; focused named-tunnel, secure-local,
+production deployment, and local UI architecture tests (9 passed); targeted
+Ruff checks and `git diff --check` pass. R03 remains VERIFY pending actual
+operator-managed Cloudflare/Access setup and E07 live allow/deny evidence.
