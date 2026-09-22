@@ -1674,3 +1674,5 @@ interaction tests, the focused access-management journey, and all 54 built brows
 tests pass. R04/R08
 remain VERIFY pending manual visual, keyboard, and screen-reader review plus
 live management authorization evidence.
+
+Repository quality recheck after the complete control migration: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run ruff check .`, `uv run ty check`, and the non-heavy/non-integration/non-socket pytest lane all pass. This is local regression evidence only and does not close the live provider, backend, or production release gates.
