@@ -3,6 +3,33 @@
 Implementation authorized 2026-09-20. Plan: [R01–R12](ACTION_PLAN.md).
 No packet is DONE until all of its acceptance criteria pass.
 
+## Current packet snapshot — 2026-09-22
+
+- **R01:** local toolchain, typing, route, plugin, and locked-build checks pass;
+  clean-install/advisory and exact support inventory evidence remain open.
+- **R02:** local OIDC/CSRF/origin/proxy contracts and challenge recovery pass;
+  real IdP and named-origin SSO remain unverified.
+- **R03:** secure-local and named-tunnel runners fail closed on placeholders,
+  secret modes, DNS/SAN, callback, and declared Access inputs; external Access
+  assertion and allow/deny proof remain unverified.
+- **R04–R05:** Mantine foundation, production CSP, Storybook, network guard,
+  representative workflows, builds, and automated accessibility checks pass;
+  manual visual/keyboard/screen-reader/zoom and owner review remain open.
+- **R06:** local session/cache and deferred-response race coverage passes;
+  complete matrix and live identity qualification remain open.
+- **R07–R08:** local policy, management, audit, settings, lifecycle, and nested
+  schema journeys pass; real role-authorized backend journeys remain open.
+- **R09:** no live local-IdP or Cloudflare qualification executed.
+- **R10:** local Python/DuckDB, JVM/Spark, and full test lanes pass; real provider
+  matrix, two-process PostgreSQL races, TLS/OIDC consumer proof remain open.
+- **R11:** local budgets, CI contracts, encrypted-backup helpers, and failure
+  guards pass; real encrypted PostgreSQL RPO/RTO and candidate dossier remain open.
+- **R12:** no owner visual approval, participant study, or independent security
+  review recorded.
+
+Treat this snapshot as routing guidance; detailed evidence and exact commits
+remain below. Do not relabel VERIFY or external prerequisites as DONE.
+
 ## R06 — ACTIVE: exact identity cache isolation
 
 Replaced delimiter-concatenated issuer/subject cache scope with an unambiguous
