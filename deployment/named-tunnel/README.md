@@ -23,6 +23,12 @@ to be declared, but never creates or changes remote tunnel configuration;
 `./run doctor` still reports Access as unverified until an operator performs
 the real allow/deny qualification.
 
+Set `DAL_OBSCURA_CONTROL_PLANE_TRUSTED_PROXY_PEERS` to the exact UI proxy
+container IP or CIDR that reaches the control plane. Named mode refuses an
+empty value so forwarded client attribution cannot silently collapse into one
+shared rate-limit bucket. NGINX still overwrites `X-Forwarded-For`; never add
+an Internet-facing range.
+
 Keep `origin.key`, `cloudflared.token`, and the local Flight private key
 owner-only (`0400` or `0600`). The runner rejects weaker permissions and checks
 the origin certificate SAN and CA chain against `DAL_OBSCURA_NAMED_HOST` before
