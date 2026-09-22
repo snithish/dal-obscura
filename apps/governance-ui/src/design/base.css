@@ -8,6 +8,12 @@ code, pre, .mono { font-family: var(--mantine-font-family-monospace); }
 .mantine-Input-input { border-color: var(--control-border); background: var(--surface); color: var(--text); }
 .mantine-Modal-content, .mantine-Modal-header { background: var(--surface); color: var(--text); }
 .mantine-Button-root[data-variant="filled"] { color: var(--primary-contrast); }
+.mantine-Button-root[data-disabled], .mantine-Button-root:disabled { opacity: 1; }
+.mantine-Button-root[data-disabled][data-variant="default"], .mantine-Button-root:disabled[data-variant="default"] {
+  color: var(--text-secondary);
+  background: var(--surface-subtle);
+  border-color: var(--control-border);
+}
 .mantine-Combobox-option[data-combobox-selected] { background: var(--selection); color: var(--selection-text); }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .workbench-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 24px; background: var(--surface); border-color: var(--border); }
