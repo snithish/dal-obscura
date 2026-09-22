@@ -14,7 +14,7 @@ from dal_obscura.common.config_store.db import (
 from dal_obscura.control_plane.interfaces import api as api_module
 from dal_obscura.control_plane.interfaces.api import create_app
 from dal_obscura.control_plane.interfaces.routes import session as session_routes
-from dal_obscura.control_plane.interfaces.routes.session import _post_login_redirect
+from dal_obscura.control_plane.interfaces.routes.session import _oidc_endpoint, _post_login_redirect
 from dal_obscura.control_plane.interfaces.session_api import exchange_authorization_code
 
 
@@ -313,6 +313,38 @@ def test_login_redirect_rejects_external_or_ambiguous_destination(configured: st
 def test_login_redirect_rejects_malformed_callback_configuration(redirect_uri: str) -> None:
     with pytest.raises(HTTPException, match="UI redirect URI is invalid"):
         _post_login_redirect({}, redirect_uri)
+
+
+@pytest.mark.parametrize(
+    "authorization_endpoint",
+    [
+        "https://issuer.example/auth?next=https://attacker.example",
+        "https://user:pass@issuer.example/auth",
+        "https://issuer.example:99999/auth",
+        "file:///tmp/oidc-auth",
+        "https://issuer.example/auth#fragment",
+    ],
+)
+def test_oidc_authorization_endpoint_rejects_ambiguous_configuration(
+    authorization_endpoint: str,
+) -> None:
+    with pytest.raises(HTTPException, match="authorization_endpoint is invalid"):
+        _oidc_endpoint(
+            {"authorization_endpoint": authorization_endpoint},
+            "authorization_endpoint",
+            "/protocol/openid-connect/auth",
+        )
+
+
+def test_oidc_authorization_endpoint_resolves_valid_authority() -> None:
+    assert (
+        _oidc_endpoint(
+            {"authority": "https://issuer.example/realms/demo"},
+            "authorization_endpoint",
+            "/protocol/openid-connect/auth",
+        )
+        == "https://issuer.example/realms/demo/protocol/openid-connect/auth"
+    )
 
 
 def test_authorization_code_exchange_uses_canonical_token_endpoint(monkeypatch) -> None:

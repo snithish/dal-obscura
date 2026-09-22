@@ -301,10 +301,27 @@ def _required_config_value(config: dict[str, object], key: str) -> str:
 
 def _oidc_endpoint(config: dict[str, object], key: str, suffix: str) -> str:
     configured = str(config.get(key, "")).strip()
-    if configured:
-        return configured
-    authority = _required_config_value(config, "authority").rstrip("/")
-    return authority + suffix
+    endpoint = configured
+    if not endpoint:
+        authority = _required_config_value(config, "authority").rstrip("/")
+        endpoint = authority + suffix
+    try:
+        parsed = urlsplit(endpoint)
+        hostname = parsed.hostname
+        _ = parsed.port
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=f"OIDC {key} is invalid") from exc
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.netloc
+        or not hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise HTTPException(status_code=503, detail=f"OIDC {key} is invalid")
+    return endpoint
 
 
 def _code_challenge(verifier: str) -> str:
