@@ -1840,3 +1840,15 @@ endpoints keep existing realm paths. Atomic implementation commit:
 Proof: OIDC login, actor-auth, and production CLI auth tests pass (44 tests);
 targeted Ruff and repository pre-commit checks pass. R02 remains VERIFY pending
 real local-IdP and named-origin SSO qualification under E07.
+
+## R03 — VERIFY: named host DNS validation (2026-09-22)
+
+Named-tunnel startup now requires a DNS-style hostname, rejecting literal IPv4
+and IPv6 addresses, wildcard names, malformed labels, and invalid characters
+before callback or ingress checks. Atomic implementation commit:
+`2c3354df fix(deployment): require DNS named tunnel hosts`.
+
+Proof: shell syntax and runner behavior matrix pass for valid configuration,
+four invalid host classes, weak secrets, and wrong certificate SAN; pre-commit
+checks pass. R03 remains VERIFY pending operator-managed named origin and live
+Cloudflare Access allow/deny evidence.
