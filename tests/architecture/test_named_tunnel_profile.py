@@ -58,6 +58,7 @@ def test_named_tunnel_runner_fails_closed_and_redacts_edge_claims() -> None:
     assert "validate_origin_certificate" in source
     assert "Origin certificate SAN does not match" in source
     assert "Origin certificate is not trusted" in source
+    assert "services=$(compose ps" in source
     assert "*\\?*|*\\**" in source
 
 

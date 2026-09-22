@@ -89,6 +89,8 @@ doctor() {
   if openssl x509 -in "$ROOT/secrets/origin.crt" -checkhost "$host" -noout >/dev/null 2>&1; then
     san=validated
   fi
+  services=$(compose ps --format '{{.Service}}={{.State}}' 2>/dev/null || true)
+  [ -n "$services" ] || services=not-running
   connector_state=$(compose --profile connector ps --format '{{.Service}}={{.State}}' cloudflared 2>/dev/null || true)
   [ -n "$connector_state" ] || connector_state=not-running
   printf '%s\n' \
@@ -98,6 +100,7 @@ doctor() {
     'bootstrap=disabled' \
     "access_config=declared(team=$access_team,audience=$access_audience)" \
     "trusted_proxy=declared($trusted_proxy_peers)" \
+    "services=$services" \
     'flight_endpoint=loopback-only' \
     "origin_tls_san=$san" \
     "connector=$connector_state" \
