@@ -90,6 +90,7 @@ def test_recovery_scripts_require_encryption_and_isolated_restore_confirmation()
     assert "sha256sum --check" in restore
     assert "backup checksum verification failed" in restore
     assert "age identity is not readable" in restore
+    assert "Secret file must be owner-only" in restore
     assert "pg_restore --single-transaction" in restore
     assert "I_UNDERSTAND_ISOLATED_RESTORE" in restore
     assert "dal-obscura-maintenance invalidate-access" in restore

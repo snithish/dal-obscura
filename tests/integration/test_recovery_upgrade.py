@@ -158,6 +158,7 @@ def test_restore_helper_rejects_corrupt_checksum_before_provider_tools(tmp_path:
     backup.with_name(backup.name + ".sha256").write_text("0" * 64 + f"  {backup}\n")
     identity = tmp_path / "identity"
     identity.write_text("AGE-SECRET-KEY-1SYNTHETIC\n")
+    identity.chmod(0o600)
     script = Path(__file__).parents[2] / "scripts" / "restore_postgres.sh"
     result = subprocess.run(
         ["sh", str(script), str(backup)],
@@ -174,6 +175,42 @@ def test_restore_helper_rejects_corrupt_checksum_before_provider_tools(tmp_path:
     )
     assert result.returncode == 1
     assert "checksum verification failed" in result.stderr
+
+
+def test_restore_helper_rejects_world_readable_identity_before_decryption(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    marker = tmp_path / "decryption-started"
+    _fake_command(bin_dir, "age", 'touch "$DAL_OBSCURA_TEST_MARKER"; exit 0')
+    _fake_command(bin_dir, "pg_restore", "exit 99")
+    _fake_command(bin_dir, "dal-obscura-maintenance", "exit 99")
+    backup = tmp_path / "backup.age"
+    backup.write_bytes(b"synthetic-backup")
+    backup.with_name(backup.name + ".sha256").write_text(
+        f"{hashlib.sha256(backup.read_bytes()).hexdigest()}  {backup.name}\n"
+    )
+    identity = tmp_path / "identity"
+    identity.write_text("AGE-SECRET-KEY-1SYNTHETIC\n")
+    identity.chmod(0o644)
+    script = Path(__file__).parents[2] / "scripts" / "restore_postgres.sh"
+    result = subprocess.run(
+        ["sh", str(script), str(backup)],
+        env={
+            **os.environ,
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "DAL_OBSCURA_DATABASE_URL": "postgresql://synthetic",
+            "DAL_OBSCURA_AGE_IDENTITY": str(identity),
+            "DAL_OBSCURA_RESTORE_CONFIRM": "I_UNDERSTAND_ISOLATED_RESTORE",
+            "DAL_OBSCURA_TEST_MARKER": str(marker),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "owner-only" in result.stderr
+    assert not marker.exists()
 
 
 def test_restore_helper_verifies_relative_backup_from_checksum_directory(
@@ -195,6 +232,7 @@ def test_restore_helper_verifies_relative_backup_from_checksum_directory(
     )
     identity = tmp_path / "identity"
     identity.write_text("AGE-SECRET-KEY-1SYNTHETIC\n")
+    identity.chmod(0o600)
     script = Path(__file__).parents[2] / "scripts" / "restore_postgres.sh"
     result = subprocess.run(
         ["sh", str(script), "artifacts/backup.age"],
@@ -233,6 +271,7 @@ def test_restore_helper_cannot_validate_a_decoy_checksum_path(tmp_path: Path) ->
     )
     identity = tmp_path / "identity"
     identity.write_text("AGE-SECRET-KEY-1SYNTHETIC\n")
+    identity.chmod(0o600)
     script = Path(__file__).parents[2] / "scripts" / "restore_postgres.sh"
     result = subprocess.run(
         ["sh", str(script), "artifacts/backup.age"],

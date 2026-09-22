@@ -21,6 +21,19 @@ command -v dal-obscura-maintenance >/dev/null 2>&1 || {
   echo "dal-obscura-maintenance is required" >&2
   exit 2
 }
+
+require_owner_only_secret() {
+  path=$1
+  mode=$(stat -c '%a' "$path" 2>/dev/null || stat -f '%Lp' "$path" 2>/dev/null || true)
+  case "$mode" in
+    400|600) ;;
+    *)
+      echo "Secret file must be owner-only (mode 400 or 600): $path" >&2
+      exit 2
+      ;;
+  esac
+}
+
 backup=$1
 cell_id=${2:-}
 test -r "$backup" || { echo "backup is not readable: $backup" >&2; exit 2; }
@@ -49,6 +62,7 @@ test -r "$DAL_OBSCURA_AGE_IDENTITY" || {
   echo "age identity is not readable: $DAL_OBSCURA_AGE_IDENTITY" >&2
   exit 2
 }
+require_owner_only_secret "$DAL_OBSCURA_AGE_IDENTITY"
 umask 077
 temporary=$(mktemp "${TMPDIR:-/tmp}/dal-obscura-restore.XXXXXX")
 cleanup() { rm -f "$temporary"; }
