@@ -272,6 +272,17 @@ the Storybook browser suite reports 9 files and 22 tests. R08 remains ACTIVE:
 real settings/access/audit journeys and authorized backend effects still need
 qualification.
 
+## R05 — VERIFY: static designbook after Mantine action migrations (2026-09-22)
+
+The executable Storybook rebuild completes successfully after the management,
+connection, settings, policy, and access action migrations. It uses the same
+production theme, fonts, CSP nonce plumbing, and actual feature components;
+the large Storybook-only chunks remain isolated from the production bundle.
+
+Proof: `pnpm build-storybook` completes with Storybook 10.6.0 and Vite 7.3.6;
+the 46 Storybook interaction tests also pass. R05 remains VERIFY pending the
+manual designbook review, screen-reader review, and unexpected-network audit.
+
 ## R08 — ACTIVE: access and grant-management workflow coverage (2026-09-21)
 
 Added an executable `AssetWorkspace` access story using the real production
