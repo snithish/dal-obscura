@@ -1929,3 +1929,14 @@ Atomic implementation commit: `a323ff5c fix(deployment): require trusted UI prox
 Proof: shell syntax, named-tunnel behavior matrix, focused architecture tests,
 Ruff, and pre-commit checks pass. R03/E07 remain VERIFY pending live proxy
 attribution and allowed/denied SSO traffic evidence.
+
+## R03 — VERIFY: named doctor service readiness (2026-09-22)
+
+Named `doctor` now reports private Compose service states in addition to origin
+SAN, declared Access, trusted proxy, and connector state. Diagnostics remain
+redacted and never infer remote Access enforcement. Atomic implementation
+commit: `e224602c feat(deployment): report named service readiness`.
+
+Proof: shell syntax, named-tunnel behavior matrix, focused architecture tests,
+Ruff, and pre-commit checks pass. R03 remains VERIFY pending an actual
+operator-managed stack and live readiness/Access evidence.
