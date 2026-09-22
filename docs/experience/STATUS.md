@@ -1676,3 +1676,16 @@ remain VERIFY pending manual visual, keyboard, and screen-reader review plus
 live management authorization evidence.
 
 Repository quality recheck after the complete control migration: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run ruff check .`, `uv run ty check`, and the non-heavy/non-integration/non-socket pytest lane all pass. This is local regression evidence only and does not close the live provider, backend, or production release gates.
+
+## R10/R11 — VERIFY: full Python qualification under socket-permitted runner (2026-09-22)
+
+The complete `uv run pytest --maxfail=1 -q` suite passes when subprocess socket
+binding is permitted. The chunked Arrow Flight benchmark previously failed only
+inside the restricted shell because its fresh subprocess could not bind the
+ephemeral Flight port; the same test passes under the permitted runner. No
+benchmark skip or code-path fallback was added.
+
+Proof: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run pytest --maxfail=1 -q`
+exits successfully under the socket-permitted runner. This remains local
+qualification evidence and does not close E15's real provider matrix or E17's
+production recovery and candidate-integrity gates.
