@@ -1,5 +1,3 @@
-name: dal-obscura-keycloak-demo
-
 services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
@@ -101,6 +99,7 @@ services:
     depends_on:
       control-plane:
         condition: service_healthy
+        restart: true
     env_file:
       - .runtime/ui.env
     ports:

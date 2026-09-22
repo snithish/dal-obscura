@@ -7,6 +7,7 @@ def test_keycloak_demo_builds_the_governance_ui_and_proxies_api_same_origin() ->
     compose = (REPOSITORY_ROOT / "examples/demo/keycloak/compose.yaml").read_text()
     dockerfile = (REPOSITORY_ROOT / "ui/Dockerfile").read_text()
     nginx = (REPOSITORY_ROOT / "ui/nginx.conf").read_text()
+    resolver_script = (REPOSITORY_ROOT / "ui/resolve-upstream-dns.sh").read_text()
     package = (REPOSITORY_ROOT / "apps/governance-ui/package.json").read_text()
     dockerignore = (REPOSITORY_ROOT / ".dockerignore").read_text()
 
@@ -19,7 +20,14 @@ def test_keycloak_demo_builds_the_governance_ui_and_proxies_api_same_origin() ->
     assert "COPY --from=build /app/dist" in dockerfile
     assert "nginxinc/nginx-unprivileged:1.27-alpine" in dockerfile
     assert "location /v1/" in nginx
-    assert "proxy_pass http://control-plane:8820" in nginx
+    assert "resolver __OBSCURA_NGINX_RESOLVER__ valid=10s ipv6=off;" in nginx
+    assert nginx.count("proxy_pass $control_plane_upstream;") == 2
+    assert "ui/nginx.conf /etc/nginx/obscura/default.conf.template" in dockerfile
+    assert (
+        "ui/resolve-upstream-dns.sh /docker-entrypoint.d/40-resolve-upstream-dns.sh" in dockerfile
+    )
+    assert '"nameserver"' in resolver_script
+    assert "__OBSCURA_NGINX_RESOLVER__" in resolver_script
     assert "proxy_set_header X-Forwarded-For $remote_addr;" in nginx
     assert nginx.count("proxy_set_header X-Forwarded-Host $http_host;") == 2
     assert "proxy_add_x_forwarded_for" not in nginx
@@ -30,5 +38,6 @@ def test_keycloak_demo_builds_the_governance_ui_and_proxies_api_same_origin() ->
     assert "location = /index.html" in nginx
     assert "expires -1" in nginx
     assert "node_modules" in dockerignore
+    assert "**/node_modules" in dockerignore
     assert "apps/governance-ui/dist" in dockerignore
     assert ".pnpm-store" in dockerignore

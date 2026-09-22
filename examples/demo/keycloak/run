@@ -90,6 +90,7 @@ case "$action" in
     if [ -n "$previous_ui_origin" ] && [ "$previous_ui_origin" != "$current_ui_origin" ]; then
       compose up -d --force-recreate --wait keycloak
     fi
+    compose build control-plane-ui
     compose up -d --wait
     credentials
     ;;

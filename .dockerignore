@@ -7,8 +7,11 @@
 .vscode
 .venv
 node_modules
+**/node_modules
 .pnpm-store
+**/.pnpm-store
 apps/governance-ui/dist
+**/test-results
 __pycache__
 *.py[cod]
 .DS_Store
