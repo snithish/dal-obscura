@@ -1917,3 +1917,15 @@ no `noTLSVerify` fallback was added. Atomic implementation commit:
 Proof: shell syntax, named-tunnel behavior matrix, focused architecture tests,
 Ruff, and pre-commit checks pass. R03/E07 remain VERIFY pending actual remote
 configuration and live TLS/Access allow/deny evidence.
+
+## R03 — VERIFY: named trusted proxy declaration (2026-09-22)
+
+Named mode now refuses an empty control-plane trusted-proxy setting and reports
+the declared peer/CIDR in redacted diagnostics. This prevents a configured
+tunnel profile from silently grouping all clients under one rate-limit key;
+NGINX still overwrites forwarded metadata and the aggregate limiter remains.
+Atomic implementation commit: `a323ff5c fix(deployment): require trusted UI proxy`.
+
+Proof: shell syntax, named-tunnel behavior matrix, focused architecture tests,
+Ruff, and pre-commit checks pass. R03/E07 remain VERIFY pending live proxy
+attribution and allowed/denied SSO traffic evidence.
