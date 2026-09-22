@@ -1669,7 +1669,8 @@ Synchronous event capture also prevents deferred grant edits from reading a
 released browser event. Atomic implementation commit: `adbc42fe
 refactor(ui): migrate delegated access controls to Mantine`.
 
-Proof: TypeScript, Vite production build, 46 Storybook interaction tests, the
-focused access-management journey, and all 54 built browser tests pass. R04/R08
+Proof: TypeScript, Vite production build, static Storybook build, 46 Storybook
+interaction tests, the focused access-management journey, and all 54 built browser
+tests pass. R04/R08
 remain VERIFY pending manual visual, keyboard, and screen-reader review plus
 live management authorization evidence.
