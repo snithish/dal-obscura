@@ -33,6 +33,11 @@ compose() {
   DAL_OBSCURA_IMAGE="$DEMO_IMAGE" DAL_OBSCURA_DEMO_UI_PORT="$ui_port" docker compose -f "$COMPOSE_FILE" "$@"
 }
 
+configured_ui_origin() {
+  sed -n 's/^DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN=//p' \
+    "$ROOT/.runtime/control-plane.env" 2>/dev/null || true
+}
+
 build_image() {
   if [ -z "${DAL_OBSCURA_IMAGE:-}" ]; then
     docker build -t "$DEMO_IMAGE" "$ROOT/../../.."
@@ -78,8 +83,13 @@ shift || true
 
 case "$action" in
   up)
+    previous_ui_origin="$(configured_ui_origin)"
     prepare
     build_image
+    current_ui_origin="$(configured_ui_origin)"
+    if [ -n "$previous_ui_origin" ] && [ "$previous_ui_origin" != "$current_ui_origin" ]; then
+      compose up -d --force-recreate --wait keycloak
+    fi
     compose up -d --wait
     credentials
     ;;
