@@ -152,6 +152,20 @@ test("authenticated policy workspace stays within the page at supported sizes an
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
 });
 
+test("mobile policy panels switch explicitly without exposing publish outside review", async ({ page }) => {
+  await authenticatedApi(page, { allowPublish: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/#assets");
+  await expect(page.getByRole("heading", { name: "Fields & access" })).toBeVisible();
+  await page.getByRole("button", { name: "Select order_id" }).click();
+  await expect(page.getByRole("button", { name: "Add first rule" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Fields & access" })).not.toBeVisible();
+  await expect(page.getByRole("button", { name: /Publish reviewed/ })).toHaveCount(0);
+  await page.getByRole("tab", { name: "Review", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Review saved draft" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Publish reviewed deny-all" })).toBeDisabled();
+});
+
 test("nested schema tree virtualizes 10k fields and keeps keyboard movement responsive", async ({ page }) => {
   await authenticatedApi(page);
   const fields = Array.from({ length: 10_000 }, (_, index) => ({
@@ -441,6 +455,11 @@ test("publisher completes the saved draft review and publication journey", async
   await expect(page.getByText("Policy draft saved to the control plane.")).toBeVisible();
   await page.getByRole("button", { name: "Review for publish" }).click();
   await expect(page.getByText("Server review is current for this saved draft revision. You can publish it now.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Review saved draft" })).toBeVisible();
+  const review = page.getByRole("region", { name: "Semantic diff against policy version 1" });
+  await expect(review).toBeVisible();
+  await expect(review.getByText("Removed rules")).toBeVisible();
+  await expect(review.getByRole("cell", { name: "group:analysts" })).toBeVisible();
   await page.getByRole("button", { name: "Publish reviewed deny-all" }).click();
   await expect(page.getByText("Published the saved draft.")).toBeVisible();
 });
@@ -641,12 +660,12 @@ test("late policy version lookups cannot replace the selected revision", async (
   await deferredVersion.started;
   await page.getByRole("button", { name: "View details" }).nth(1).click();
   await expect(page.getByRole("heading", { name: "Version 2 details" })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "group:fresh" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "group:fresh", exact: true })).toBeVisible();
 
   deferredVersion.release();
   await expect(page.getByRole("heading", { name: "Version 2 details" })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "group:fresh" })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "group:stale" })).toHaveCount(0);
+  await expect(page.getByRole("cell", { name: "group:fresh", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "group:stale", exact: true })).toHaveCount(0);
 });
 
 test("late draft saves cannot clear a newer local edit", async ({ page }) => {
@@ -728,6 +747,7 @@ test("late publishes cannot commit a newer local draft", async ({ page }) => {
   await expect(page.getByText("Server review is current for this saved draft revision. You can publish it now.")).toBeVisible();
   await page.getByRole("button", { name: "Publish reviewed deny-all" }).click();
   await deferredPublish.started;
+  await page.getByRole("tab", { name: "Policy", exact: true }).click();
   await page.getByRole("button", { name: "Add first rule" }).click();
   await expect(page.getByRole("button", { name: "Save draft" })).toBeVisible();
   await expect(page.getByText("Unsaved changes")).toBeVisible();

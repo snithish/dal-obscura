@@ -323,6 +323,11 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; a
           rules: [{ ordinal: 10, effect: "allow", principals: [version === 1 ? "group:stale" : "group:fresh"], columns: ["order_id"], masks: {}, row_filter: null }],
         } });
       }
+      if (versionMatch) return route.fulfill({ json: {
+        asset_id: assetId,
+        policy_version: Number(versionMatch[1]),
+        rules: Number(versionMatch[1]) === 1 ? [{ ordinal: 10, effect: "allow", principals: ["group:analysts"], columns: ["order_id"], masks: {}, row_filter: null }] : [],
+      } });
       return route.fulfill({ json: detail });
     }
     return route.fulfill({ status: 404, json: { detail: "synthetic fixture route missing" } });

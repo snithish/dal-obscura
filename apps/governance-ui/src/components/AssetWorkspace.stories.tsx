@@ -245,7 +245,8 @@ export const SemanticHistoryDiff: Story = {
     await expect(canvas.getByRole("heading", { name: "Version 4 details" })).toBeVisible();
     await expect(canvas.getByRole("region", { name: "Semantic diff against policy version 4" })).toBeVisible();
     await expect(canvas.getByText("Changed rules")).toBeVisible();
-    await expect(within(canvas.getByRole("region", { name: "Semantic diff against policy version 4" })).getByText("1", { exact: true })).toBeVisible();
+    const summary = within(canvas.getByRole("region", { name: "Semantic diff against policy version 4" }));
+    await expect(summary.getByText("Changed rules").parentElement).toHaveTextContent("1");
   },
 };
 
@@ -295,21 +296,24 @@ export const DenyAllDraft: Story = {
     await expect(canvas.getByText("No draft rules")).toBeVisible();
     await expect(canvas.getByText(/This is an intentional deny-all policy/)).toBeVisible();
     await expect(canvas.getByRole("button", { name: "Save deny-all draft" })).toBeEnabled();
-    await expect(canvas.getByRole("button", { name: "Publish reviewed deny-all" })).toBeDisabled();
+    await expect(canvas.queryByRole("button", { name: "Publish reviewed deny-all" })).toBeNull();
     await expect(canvas.getByRole("button", { name: "Add first rule" })).toBeEnabled();
   },
 };
 
 export const ReviewOnlyPublisher: Story = {
   args: {
+    queryClient: historyQueryClient,
     reviewOnly: true,
     reviewToken: "review-token",
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("button", { name: "Save draft" })).toBeDisabled();
-    await expect(canvas.getByRole("button", { name: "Publish reviewed draft" })).toBeEnabled();
     await expect(canvas.getByLabelText("Find governed asset")).toBeDisabled();
-    await expect(canvas.getByRole("button", { name: "Review current" })).toBeEnabled();
+    await userEvent.click(canvas.getByRole("tab", { name: "Review" }));
+    await expect(canvas.getByRole("heading", { name: "Review saved draft" })).toBeVisible();
+    await expect(canvas.getByRole("region", { name: "Semantic diff against policy version 4" })).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "Publish reviewed draft" })).toBeEnabled();
   },
 };
 

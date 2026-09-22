@@ -1,5 +1,5 @@
 export type UiPage = "assets" | "changes" | "activity" | "connections" | "settings";
-export type AssetTab = "policy" | "tests" | "history" | "access" | "consumers";
+export type AssetTab = "policy" | "tests" | "review" | "history" | "access" | "consumers";
 export type UiLocation = {
   page: UiPage;
   assetId?: string;
@@ -10,7 +10,7 @@ export type UiLocation = {
 };
 
 const pages: readonly UiPage[] = ["assets", "changes", "activity", "connections", "settings"];
-const assetTabs: readonly AssetTab[] = ["policy", "tests", "history", "access", "consumers"];
+const assetTabs: readonly AssetTab[] = ["policy", "tests", "review", "history", "access", "consumers"];
 
 export function pageFromHash(hash: string): UiPage {
   const value = hash.replace(/^#/, "").split(/[?&]/, 1)[0] as UiPage;

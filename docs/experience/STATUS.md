@@ -2014,3 +2014,25 @@ commit: `e224602c feat(deployment): report named service readiness`.
 Proof: shell syntax, named-tunnel behavior matrix, focused architecture tests,
 Ruff, and pre-commit checks pass. R03 remains VERIFY pending an actual
 operator-managed stack and live readiness/Access evidence.
+
+## R04/R07 — VERIFY: dedicated policy review and mobile authoring (2026-09-22)
+
+Added a dedicated saved-draft review tab that loads the active immutable policy,
+shows field-level semantic changes for effect, principals, fields, masks, row
+filters, and conditions, and keeps publication controls inside that review.
+Publisher deep links move to review when exact-revision server review completes.
+The policy authoring view now uses an explicit mobile switch for schema, rules,
+and test results; selecting a nested field moves focus to its rule editor. Added
+denied-mobile, field-diff, and saved-draft-to-publish workflow assertions. Updated
+the async history test's exact row locator because diff rendering can contain
+the same principal in both summary and immutable-rule table.
+
+Proof on the pinned Node 24.19.0 runtime: TypeScript build, 21 UI unit tests,
+48 Storybook interactions, static Storybook build, all 58 production-artifact
+browser tests, and `git diff --check` pass. Production bundle budgets pass at
+186.41 KiB gzipped JS, 38.32 KiB CSS, and 83.72 KiB fonts. Vite reports a
+516 KiB uncompressed entry chunk; it remains under the enforced total gzip
+budget, but further route-level splitting may improve initial transfer. Browser
+API responses are synthetic. R04/R07 remain VERIFY pending manual visual,
+keyboard, and screen-reader review, owner approval, and real role-authorized
+author/reviewer/publisher and governed-read evidence.
