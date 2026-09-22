@@ -57,6 +57,10 @@ validate_profile() {
     *[!0-9.]*) ;;
     *) echo "DAL_OBSCURA_NAMED_HOST must be a stable DNS hostname" >&2; exit 2 ;;
   esac
+  access_team=$(profile_value DAL_OBSCURA_CLOUDFLARE_ACCESS_TEAM_NAME)
+  access_audience=$(profile_value DAL_OBSCURA_CLOUDFLARE_ACCESS_AUD_TAG)
+  [ -n "$access_team" ] || { echo "Cloudflare Access team name must be declared" >&2; exit 2; }
+  [ -n "$access_audience" ] || { echo "Cloudflare Access audience tag must be declared" >&2; exit 2; }
   callback=$(profile_value DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI)
   logout=$(profile_value DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI)
   cors=$(profile_value DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS)
@@ -72,6 +76,8 @@ doctor() {
   validate_profile
   compose config --quiet
   host=$(profile_value DAL_OBSCURA_NAMED_HOST)
+  access_team=$(profile_value DAL_OBSCURA_CLOUDFLARE_ACCESS_TEAM_NAME)
+  access_audience=$(profile_value DAL_OBSCURA_CLOUDFLARE_ACCESS_AUD_TAG)
   san=invalid
   if openssl x509 -in "$ROOT/secrets/origin.crt" -checkhost "$host" -noout >/dev/null 2>&1; then
     san=validated
@@ -83,6 +89,7 @@ doctor() {
     "public_origin=https://$host" \
     'callback=validated' \
     'bootstrap=disabled' \
+    "access_config=declared(team=$access_team,audience=$access_audience)" \
     'flight_endpoint=loopback-only' \
     "origin_tls_san=$san" \
     "connector=$connector_state" \

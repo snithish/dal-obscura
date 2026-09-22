@@ -15,6 +15,13 @@ and provide owner-readable files at these paths:
   contains the stable hostname;
 - `secrets/cloudflared.token`: narrowly scoped connector token.
 
+Set `DAL_OBSCURA_CLOUDFLARE_ACCESS_TEAM_NAME` and
+`DAL_OBSCURA_CLOUDFLARE_ACCESS_AUD_TAG` to the exact values configured on the
+remote tunnel's `originRequest.access` rule. The runner requires these values
+to be declared, but never creates or changes remote tunnel configuration;
+`./run doctor` still reports Access as unverified until an operator performs
+the real allow/deny qualification.
+
 Keep `origin.key`, `cloudflared.token`, and the local Flight private key
 owner-only (`0400` or `0600`). The runner rejects weaker permissions and checks
 the origin certificate SAN against `DAL_OBSCURA_NAMED_HOST` before starting any

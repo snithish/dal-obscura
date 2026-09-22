@@ -25,6 +25,8 @@ def test_named_tunnel_profile_keeps_connector_private_and_origin_bound() -> None
     assert "ports:\n      - " not in compose
     assert "named_origin_cert" in compose and "named_origin_key" in compose
     assert "DAL_OBSCURA_CLOUDFLARED_IMAGE=cloudflare/cloudflared@sha256:" in env
+    assert "DAL_OBSCURA_CLOUDFLARE_ACCESS_TEAM_NAME=" in env
+    assert "DAL_OBSCURA_CLOUDFLARE_ACCESS_AUD_TAG=" in env
     assert "DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED=false" in env
     assert "DAL_OBSCURA_UI_TLS_CERT_SOURCE=../local-secure/secrets/ui.crt" in env
     assert "DAL_OBSCURA_UI_TLS_KEY_SOURCE=../local-secure/secrets/ui.key" in env
@@ -69,6 +71,8 @@ def test_named_tunnel_runner_rejects_weak_secrets_and_wrong_origin_san(tmp_path:
         "\n".join(
             [
                 f"DAL_OBSCURA_NAMED_HOST={host}",
+                "DAL_OBSCURA_CLOUDFLARE_ACCESS_TEAM_NAME=team",
+                "DAL_OBSCURA_CLOUDFLARE_ACCESS_AUD_TAG=aud-tag",
                 f"DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI=https://{host}/auth/callback",
                 f"DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI=https://{host}",
                 f"DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS=https://{host}",
