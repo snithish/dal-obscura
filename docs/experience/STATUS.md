@@ -1689,3 +1689,21 @@ Proof: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache uv run pytest --maxfail=1 -q`
 exits successfully under the socket-permitted runner. This remains local
 qualification evidence and does not close E15's real provider matrix or E17's
 production recovery and candidate-integrity gates.
+
+## R10 — VERIFY: current Python and JVM consumer qualification (2026-09-22)
+
+The opt-in governed-read Python consumer lane passes under the socket-permitted
+runner. The full JVM reactor also passes: Java Flight client (7 tests), Spark 3
+datasource (29 tests), connector testkit (2 tests), and Spark integration (6
+tests). These runs exercise authenticated reads, nested/complex schemas,
+predicate pushdown, row filtering, and connector behavior against the local
+fixture service.
+
+Proof: `UV_CACHE_DIR=/tmp/dal-obscura-uv-cache
+DAL_OBSCURA_RUN_CONSUMER_TESTS=1 uv run pytest
+tests/consumers/test_governed_reads.py -q` and `mvn -f connectors/jvm/pom.xml
+verify` both exit successfully under the socket-permitted runner. The
+unprivileged Maven attempt failed only because its fixture subprocess could not
+bind a local port; no product fallback or test skip was introduced. This is
+local consumer compatibility evidence and does not close live OIDC/TLS,
+real-provider, or production recovery gates.
