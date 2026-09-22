@@ -1754,3 +1754,20 @@ Proof: TypeScript, Vite production build, UI budgets (170.50 KiB JS gzip,
 contrast, forced-colors, and axe checks. R04/R08 remain VERIFY pending manual
 visual, keyboard, and screen-reader review, live provider authorization, and
 production identity/provider evidence.
+
+## R04/R07/R08 — VERIFY: Mantine policy-test and access actions (2026-09-22)
+
+Migrated synthetic policy-test, condition-builder, consumer-copy, and delegated
+access actions to Mantine `Button`, retaining policy semantics, clipboard
+recovery, capability guards, and server-authoritative mutations. The virtual
+schema tree and custom tab/rule selectors remain domain-specific controls with
+their existing keyboard contracts. Atomic implementation commit: `874d4a3c
+refactor(ui): use Mantine policy actions`.
+
+Proof: TypeScript, Vite production build, UI budgets (170.55 KiB JS gzip,
+38.07 KiB CSS gzip, 83.72 KiB fonts), 46 Storybook interaction tests, and all
+54 built browser tests pass, including nested-tree performance, policy/access
+journeys, keyboard order, contrast, forced-colors, and axe checks. R04/R07/R08
+remain VERIFY pending manual visual, keyboard, and screen-reader review, live
+author/reviewer/publisher and grant authorization, and production identity
+evidence.
