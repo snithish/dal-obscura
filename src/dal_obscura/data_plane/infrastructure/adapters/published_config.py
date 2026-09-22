@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -720,13 +721,20 @@ def _schema_identities(schema: pa.Schema) -> dict[tuple[tuple[str, ...], str], s
 
 def _canonical_type_name(value: str) -> str:
     aliases = {
+        "large_string": "string",
+        "large_binary": "binary",
         "long": "int64",
         "integer": "int32",
         "float": "float32",
         "double": "double",
         "boolean": "bool",
     }
-    return aliases.get(value.strip().lower(), value.strip().lower())
+    normalized = value.strip().lower()
+    return re.sub(
+        r"\b(?:large_string|large_binary|long|integer|float|double|boolean)\b",
+        lambda match: aliases[match.group(0)],
+        normalized,
+    )
 
 
 def _tenant_id(principal: Principal) -> str:

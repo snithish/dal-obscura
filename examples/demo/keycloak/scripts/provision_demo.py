@@ -17,8 +17,8 @@ RUNTIME_DIR = DEMO_DIR / ".runtime"
 FIXTURE_FILE = DEMO_DIR / "fixtures" / "demo_fixture.json"
 DATA_PLANE_ENV = RUNTIME_DIR / "data-plane.env"
 CONTROL_PLANE_URL = os.environ.get("CONTROL_PLANE_URL", "http://control-plane:8820")
-ADMIN_TOKEN = os.environ["DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN"]
-DATABASE_URL = os.environ["DAL_OBSCURA_DATABASE_URL"]
+ADMIN_TOKEN = os.environ.get("DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN", "")
+DATABASE_URL = os.environ.get("DAL_OBSCURA_DATABASE_URL", "")
 ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )
@@ -32,6 +32,8 @@ DEMO_OIDC_ISSUER = os.environ.get(
 
 
 def main() -> None:
+    if not ADMIN_TOKEN or not DATABASE_URL:
+        raise RuntimeError("demo provisioning requires the control-plane token and database URL")
     fixture = _read_fixture()
     _wait_for_control_plane()
     cell_id = _provision_workspace(fixture)
@@ -265,19 +267,18 @@ def _promote_table(fixture: dict[str, Any], table_fixture: dict[str, Any]) -> tu
     asset_payload = cast(dict[str, Any], asset)
     asset_id = str(asset_payload["id"])
     revision = _asset_revision(asset_id)
+    live_schema = _request("GET", f"/v1/assets/{asset_id}/schema")
+    if not isinstance(live_schema, dict):
+        raise RuntimeError("asset schema returned an unexpected response")
+    schema_payload = cast(dict[str, Any], live_schema)
+    if schema_payload.get("stable_field_ids") is not True:
+        raise RuntimeError(f"{target} does not expose stable provider field IDs")
     _request(
         "PUT",
         f"/v1/assets/{asset_id}/schema-fields",
         {
             "expected_revision": revision,
-            "fields": [
-                {
-                    "name": field["name"],
-                    "type": field["type"],
-                    "nullable": not bool(field.get("required", False)),
-                }
-                for field in table_fixture["schema"]
-            ],
+            "fields": _flatten_schema_fields(schema_payload.get("fields")),
         },
     )
     revision = _asset_revision(asset_id)
@@ -308,6 +309,61 @@ def _promote_table(fixture: dict[str, Any], table_fixture: dict[str, Any]) -> tu
     if not isinstance(draft_payload.get("revision"), int):
         raise RuntimeError("policy draft save returned an unexpected response")
     return asset_id, draft_payload["id"], draft_payload["revision"]
+
+
+def _flatten_schema_fields(raw_fields: object) -> list[dict[str, Any]]:
+    """Convert the authoritative nested provider schema to admitted field records."""
+    if not isinstance(raw_fields, list):
+        raise RuntimeError("asset schema fields returned an unexpected response")
+    result: list[dict[str, Any]] = []
+    for field in raw_fields:
+        if not isinstance(field, dict):
+            raise RuntimeError("asset schema fields returned an unexpected response")
+        result.extend(_flatten_schema_field(cast(dict[str, Any], field)))
+    return result
+
+
+def _flatten_schema_field(node: dict[str, Any]) -> list[dict[str, Any]]:
+    name = node.get("name")
+    field_id = node.get("field_id")
+    if not isinstance(name, str) or not name or isinstance(field_id, bool):
+        raise RuntimeError("asset schema field is missing its stable identity")
+    if not isinstance(field_id, int) or field_id < 0:
+        raise RuntimeError("asset schema field has an invalid provider identity")
+    path = node.get("path")
+    if not isinstance(path, dict) or not isinstance(path.get("segments"), list):
+        raise RuntimeError("asset schema field has an invalid provider path")
+    field = {
+        "name": name,
+        "field_id": str(field_id),
+        "path": _schema_path_segments(path["segments"]),
+        "type": str(node.get("type", "string")),
+        "nullable": bool(node.get("nullable", True)),
+    }
+    children = node.get("children", [])
+    if not isinstance(children, list) or not all(isinstance(item, dict) for item in children):
+        raise RuntimeError("asset schema field children are malformed")
+    return [
+        field,
+        *(child_field for child in children for child_field in _flatten_schema_field(child)),
+    ]
+
+
+def _schema_path_segments(segments: list[object]) -> list[str]:
+    result: list[str] = []
+    collection_segments = {"list_element": "$element", "map_key": "$key", "map_value": "$value"}
+    for raw_segment in segments:
+        if not isinstance(raw_segment, dict):
+            raise RuntimeError("asset schema field path is malformed")
+        segment = cast(dict[str, Any], raw_segment)
+        kind = segment.get("kind")
+        if kind == "field" and isinstance(segment.get("name"), str):
+            result.append(segment["name"])
+        elif kind in collection_segments:
+            result.append(collection_segments[kind])
+        else:
+            raise RuntimeError("asset schema field path contains an unsupported segment")
+    return result
 
 
 def _asset_revision(asset_id: str) -> int:

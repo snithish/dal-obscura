@@ -149,6 +149,21 @@ def test_provision_enables_identity_provider_before_publishing_once(monkeypatch)
             return {"id": "asset-1"}
         if path == "/v1/assets/asset-1":
             return {"revision": 1}
+        if path == "/v1/assets/asset-1/schema":
+            return {
+                "stable_field_ids": True,
+                "fields": [
+                    {
+                        "field_id": 1,
+                        "name": "customer_id",
+                        "path": {
+                            "segments": [{"kind": "field", "name": "customer_id", "field_id": 1}]
+                        },
+                        "type": "long",
+                        "nullable": False,
+                    }
+                ],
+            }
         if path == "/v1/assets/asset-1/draft":
             return {"id": "draft-1", "revision": 4}
         return {}
@@ -165,8 +180,23 @@ def test_provision_enables_identity_provider_before_publishing_once(monkeypatch)
     publish_calls = [
         (i, call) for i, call in enumerate(calls) if call[1] == "/v1/assets/asset-1/policy-versions"
     ]
+    schema_fields_call = next(
+        call for call in calls if call[1] == "/v1/assets/asset-1/schema-fields"
+    )
     assert len(publish_calls) == 1
     assert provider_call < publish_calls[0][0]
+    assert schema_fields_call[2] == {
+        "expected_revision": 1,
+        "fields": [
+            {
+                "name": "customer_id",
+                "field_id": "1",
+                "path": ["customer_id"],
+                "type": "long",
+                "nullable": False,
+            }
+        ],
+    }
     assert publish_calls[0][1][2] == {"draft_id": "draft-1", "expected_draft_revision": 4}
 
 

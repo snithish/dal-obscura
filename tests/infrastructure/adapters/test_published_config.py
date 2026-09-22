@@ -630,7 +630,28 @@ def test_published_schema_admission_accepts_iceberg_numeric_metadata_and_aliases
                         "path": ["id"],
                         "type": "long",
                         "nullable": False,
-                    }
+                    },
+                    {
+                        "name": "email",
+                        "field_id": "iceberg:2",
+                        "path": ["email"],
+                        "type": "string",
+                        "nullable": True,
+                    },
+                    {
+                        "name": "profile",
+                        "field_id": "iceberg:3",
+                        "path": ["profile"],
+                        "type": "struct<name: string>",
+                        "nullable": True,
+                    },
+                    {
+                        "name": "name",
+                        "field_id": "iceberg:4",
+                        "path": ["profile", "name"],
+                        "type": "string",
+                        "nullable": True,
+                    },
                 ],
             }
         },
@@ -642,6 +663,20 @@ def test_published_schema_admission_accepts_iceberg_numeric_metadata_and_aliases
         pa.schema(
             [
                 pa.field("id", pa.int64(), metadata={b"PARQUET:field_id": b"1"}),
+                pa.field("email", pa.large_string(), metadata={b"PARQUET:field_id": b"2"}),
+                pa.field(
+                    "profile",
+                    pa.struct(
+                        [
+                            pa.field(
+                                "name",
+                                pa.large_string(),
+                                metadata={b"PARQUET:field_id": b"4"},
+                            )
+                        ]
+                    ),
+                    metadata={b"PARQUET:field_id": b"3"},
+                ),
             ]
         ),
     )

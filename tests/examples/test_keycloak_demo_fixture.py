@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from examples.demo.keycloak.scripts import prepare_demo, ui_smoke
+from examples.demo.keycloak.scripts import prepare_demo, provision_demo, ui_smoke
 
 
 def test_keycloak_demo_fixture_declares_catalog_backed_iceberg_tables():
@@ -20,6 +20,80 @@ def test_keycloak_demo_fixture_declares_catalog_backed_iceberg_tables():
     assert fixture["owners"] == ["group:asset-owners"]
     assert fixture["grants"] == [{"principal": "group:asset-owners", "capability": "publish"}]
     assert len(fixture["policies"]) == 3
+
+
+def test_provision_demo_preserves_nested_live_schema_identities():
+    fields = provision_demo._flatten_schema_fields(
+        [
+            {
+                "field_id": 10,
+                "name": "customer",
+                "path": {"segments": [{"kind": "field", "name": "customer", "field_id": 10}]},
+                "type": "struct<email: string>",
+                "nullable": False,
+                "kind": "struct",
+                "children": [
+                    {
+                        "field_id": 11,
+                        "name": "email",
+                        "path": {
+                            "segments": [
+                                {"kind": "field", "name": "customer", "field_id": 10},
+                                {"kind": "field", "name": "email", "field_id": 11},
+                            ]
+                        },
+                        "type": "string",
+                        "nullable": True,
+                        "kind": "scalar",
+                    }
+                ],
+            },
+            {
+                "field_id": 12,
+                "name": "tags",
+                "path": {"segments": [{"kind": "field", "name": "tags", "field_id": 12}]},
+                "type": "list<string>",
+                "nullable": True,
+                "kind": "list",
+                "children": [
+                    {
+                        "field_id": 13,
+                        "name": "element",
+                        "path": {
+                            "segments": [
+                                {"kind": "field", "name": "tags", "field_id": 12},
+                                {"kind": "list_element"},
+                            ]
+                        },
+                        "type": "string",
+                        "nullable": False,
+                        "kind": "scalar",
+                    }
+                ],
+            },
+        ]
+    )
+
+    assert [(field["field_id"], field["path"]) for field in fields] == [
+        ("10", ["customer"]),
+        ("11", ["customer", "email"]),
+        ("12", ["tags"]),
+        ("13", ["tags", "$element"]),
+    ]
+    assert fields[0]["nullable"] is False
+    assert fields[1]["nullable"] is True
+
+
+def test_provision_demo_rejects_schema_without_provider_field_ids():
+    with pytest.raises(RuntimeError, match="provider identity"):
+        provision_demo._flatten_schema_fields(
+            [
+                {
+                    "name": "customer_id",
+                    "path": {"segments": [{"kind": "field", "name": "customer_id"}]},
+                }
+            ]
+        )
 
 
 def test_ui_smoke_reads_bootstrap_token_from_keycloak_demo_runtime(tmp_path, monkeypatch):
@@ -60,6 +134,9 @@ def test_prepare_demo_writes_separate_ui_runtime_config(tmp_path, monkeypatch, u
     ui_client = next(
         client for client in realm["clients"] if client["clientId"] == "dal-obscura-ui"
     )
+    ui_groups_mapper = next(
+        mapper for mapper in ui_client["protocolMappers"] if mapper["name"] == "groups"
+    )
     ui_origin = f"http://127.0.0.1:{ui_port}"
 
     assert "DAL_OBSCURA_API_BASE_URL=http://127.0.0.1:8820" in ui_env
@@ -72,6 +149,13 @@ def test_prepare_demo_writes_separate_ui_runtime_config(tmp_path, monkeypatch, u
         f"DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI={ui_origin}"
         in control_plane_env
     )
+    assert (
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_TOKEN_ENDPOINT="
+        "http://keycloak:8080/realms/dal-obscura-demo/protocol/openid-connect/token"
+        in control_plane_env
+    )
     assert ui_client["redirectUris"] == [f"{ui_origin}/auth/callback"]
     assert ui_client["webOrigins"] == [ui_origin]
+    assert ui_groups_mapper["config"]["claim.name"] == "groups"
+    assert ui_groups_mapper["config"]["id.token.claim"] == "true"
     assert setup_marker.exists()
