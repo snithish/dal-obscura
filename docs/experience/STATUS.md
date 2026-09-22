@@ -1814,3 +1814,17 @@ weak key permissions, and wrong origin SAN; focused named-tunnel, secure-local,
 production deployment, and local UI architecture tests (9 passed); targeted
 Ruff checks and `git diff --check` pass. R03 remains VERIFY pending actual
 operator-managed Cloudflare/Access setup and E07 live allow/deny evidence.
+
+## R11 — VERIFY: fail-closed PostgreSQL backup staging (2026-09-22)
+
+Backup creation now writes and checks the PostgreSQL custom dump before sending
+it to age encryption. This removes portable `/bin/sh` pipeline error masking:
+failed `pg_dump` cannot become a non-empty encrypted artifact, and temporary
+dump material is cleaned on every exit. Atomic implementation commit:
+`8d1f66f2 fix(recovery): fail closed on dump errors`.
+
+Proof: backup shell syntax; recovery integration lane (7 passed, 1 configured
+PostgreSQL drill skipped); targeted production recovery contract tests and Ruff
+pass. Regression test proves failed dumps produce neither backup nor checksum.
+R11 remains VERIFY pending an actual encrypted PostgreSQL RPO/RTO drill and
+candidate release dossier.
