@@ -1828,3 +1828,15 @@ PostgreSQL drill skipped); targeted production recovery contract tests and Ruff
 pass. Regression test proves failed dumps produce neither backup nor checksum.
 R11 remains VERIFY pending an actual encrypted PostgreSQL RPO/RTO drill and
 candidate release dossier.
+
+## R02 — VERIFY: authorization endpoint fail-closed validation (2026-09-22)
+
+OIDC browser login now validates configured authorization endpoints at route
+boundary, rejecting credentials, query strings, fragments, invalid ports,
+non-HTTP schemes, and malformed hosts before browser redirect. Authority-derived
+endpoints keep existing realm paths. Atomic implementation commit:
+`bbe34225 fix(auth): validate authorization endpoint URLs`.
+
+Proof: OIDC login, actor-auth, and production CLI auth tests pass (44 tests);
+targeted Ruff and repository pre-commit checks pass. R02 remains VERIFY pending
+real local-IdP and named-origin SSO qualification under E07.
