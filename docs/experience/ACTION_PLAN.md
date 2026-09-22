@@ -60,36 +60,33 @@ ui/nginx.conf, existing secure-local/production profiles.
 **FR:** a canonical external origin drives callback/logout/CSRF/host checks.
 Implement an exact trusted-proxy contract and safe client attribution for login
 rate limiting. Normal local login uses existing OIDC, not bootstrap. Preserve
-app authorization independently of Access. Handle edge HTML/challenge expiry
+app authorization independently of upstream authentication. Handle edge HTML/challenge expiry
 without parsing it as API success or replaying mutations.
 
 **NFR:** no arbitrary forwarded-header trust, no disabled TLS verification,
-no bearer/session data in URLs/logs/browser storage. Local-only and tunnel modes
+no bearer/session data in URLs/logs/browser storage. Local and production deployments
 have identical app authority/session invariants. No new password database.
 
 **Proof:** parameterized origin/header/rate/cookie tests, existing session tests,
 real local-IdP journey in R09. Do not claim live SSO from mocked code exchange.
 **Done:** E02/E03 local contracts pass; exact upstream client support documented.
 
-## R03 — Add one optional named-tunnel development profile
+## R03 — Qualify the secure-local deployment profile
 
-**Dependencies:** R02. **Acceptance:** E04/E05/E06.
-**Files:** existing local launcher and deployment profiles; proposed cloudflared
-overlay/configuration and runbook, no runtime tunnel SDK dependency.
+**Dependencies:** R02. **Acceptance:** E04/E06; E05 retired by owner decision.
+**Files:** deployment/local-secure, deployment/production and existing profile tests.
 
-**FR:** implement the selected topology in LOCAL_ACCESS.md. Start/doctor/stop reuse
-existing setup; validate hostname, Access team/audience, OIDC callback, TLS CA/SNI
-and readiness before ingress. Connector validates Access assertions. Bind origin
-privately, require explicit profile selection and operator-provided credentials.
-Retain local-only HTTPS/OIDC mode and separate Flight endpoint.
+**FR:** run the production UI/API locally through HTTPS with configured OIDC.
+Validate exact callback, hostname, CA/SAN, owner-only secrets and readiness before
+startup. Keep browser HTTPS and Flight TLS endpoints separate and loopback-bound.
+Start is idempotent; stop preserves data and affects only owned services.
 
-**NFR:** idempotent process management, credentials in restricted secret files,
-redacted diagnostics, no automatic DNS/policy creation or reseeding, no public
-dev server/DB/Flight exposure. Stop preserves data and only stops owned processes.
+**NFR:** no tunnel connector, external edge account, public dev server, automatic
+DNS provisioning, bootstrap fallback, disabled TLS validation or extra state service.
+Doctor reports redacted local facts and never infers successful live authentication.
 
-**Proof:** configuration failure cases and loopback process lifecycle; E07 later
-executes authorized external setup. No fake “Access enforced” green check.
-**Done:** E04–E06 pass locally; external gate remains VERIFY until R09.
+**Proof:** existing profile failure/lifecycle cases and real local IdP journey E07.
+**Done:** E04/E06 pass; live identity evidence remains owned by R09.
 
 ## R04 — Implement the selected visual foundation
 
@@ -196,13 +193,13 @@ duplication of the backend permission matrix.
 and typed-value story cases. Preserve current unique negative API oracles.
 **Done:** E14 passes; all visible actions have a verified authorized backend effect.
 
-## R09 — Qualify real local and Cloudflare SSO experience
+## R09 — Qualify real local HTTPS and SSO experience
 
 **Dependencies:** R02/R03/R06. **Acceptance:** E07; inherited B08/B20.
-**Files:** existing browser harness, profile/runbook, tunnel configuration.
+**Files:** existing browser harness, secure-local profile/runbook.
 
-**FR:** execute clean local-only and named-mode setup; exact callback login,
-unauthorized edge denial, browser SSO reuse, app-role denial, logout, expiry,
+**FR:** execute clean secure-local setup; exact callback login,
+unauthorized-user denial, browser SSO reuse, app-role denial, logout, expiry,
 restart, network outage and recovery. Test foreign Host/forwarded headers and
 actual verified origin TLS. Preserve in-progress publication reconciliation.
 
@@ -210,7 +207,7 @@ actual verified origin TLS. Preserve in-progress publication reconciliation.
 fabricate credentials or approvals. Provider failure never enables a fallback
 token login. Keep Flight read proof on its supported local/private TLS route.
 
-**Proof:** real IdP and Access logs plus redacted app/browser evidence, from an
+**Proof:** real IdP logs plus redacted app/browser evidence, from an
 allowed and denied principal. Remote proof cannot be replaced by header mocks.
 **Done:** E07 passes or remains VERIFY with the exact missing external prerequisite.
 
@@ -254,7 +251,7 @@ silent skips, documents refer to supported commands/versions.
 users complete governed workflows, independent security review covers app and
 optional edge/proxy boundary. Fix and retest material findings.
 **NFR:** no invented scores or review signoff; contact participants only when
-authorized. A private local product must remain usable without Cloudflare.
+authorized. A private local product must remain usable without a tunnel or edge account.
 **Proof:** observed task success/timing, owner visual decision, security report
 and exact candidate/runbook. **Done:** all gates pass; otherwise release HOLD.
 

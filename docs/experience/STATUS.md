@@ -3,15 +3,27 @@
 Implementation authorized 2026-09-20. Plan: [R01–R12](ACTION_PLAN.md).
 No packet is DONE until all of its acceptance criteria pass.
 
+## Scope amendment — 2026-09-22
+
+Cloudflare Tunnel/Access support is removed at the owner's request. Historical
+entries below describe prior work, not current requirements. Named-tunnel files,
+owned tests and CI wiring are deleted; E05 is retired. R02/R03/R09 now target
+secure-local HTTPS/OIDC and production parity only. Local TLS, OIDC, proxy trust,
+role authorization and independent Flight TLS requirements are unchanged.
+
+Validation: secure-local shell syntax, 11 secure-local/CI contract tests and two
+production deployment contract tests pass; changed Python tests pass Ruff. No
+remote tunnel, DNS record or account was changed. These checks do not qualify a
+live local IdP or running production stack.
+
 ## Current packet snapshot — 2026-09-22
 
 - **R01:** local toolchain, typing, route, plugin, and locked-build checks pass;
   clean-install/advisory and exact support inventory evidence remain open.
 - **R02:** local OIDC/CSRF/origin/proxy contracts and challenge recovery pass;
-  real IdP and named-origin SSO remain unverified.
-- **R03:** secure-local and named-tunnel runners fail closed on placeholders,
-  secret modes, DNS/SAN, callback, and declared Access inputs; external Access
-  assertion and allow/deny proof remain unverified.
+  real IdP SSO remains unverified.
+- **R03:** secure-local profile retained; tunnel support removed by owner decision.
+  Local lifecycle and real OIDC qualification remain required.
 - **R04–R05:** Mantine foundation, production CSP, Storybook, network guard,
   representative workflows, builds, and automated accessibility checks pass;
   manual visual/keyboard/screen-reader/zoom and owner review remain open.
@@ -19,7 +31,7 @@ No packet is DONE until all of its acceptance criteria pass.
   complete matrix and live identity qualification remain open.
 - **R07–R08:** local policy, management, audit, settings, lifecycle, and nested
   schema journeys pass; real role-authorized backend journeys remain open.
-- **R09:** no live local-IdP or Cloudflare qualification executed.
+- **R09:** no live local-IdP qualification executed.
 - **R10:** local Python/DuckDB, JVM/Spark, and full test lanes pass; real provider
   matrix, two-process PostgreSQL races, TLS/OIDC consumer proof remain open.
 - **R11:** local budgets, CI contracts, encrypted-backup helpers, and failure

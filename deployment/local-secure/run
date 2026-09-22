@@ -102,9 +102,7 @@ doctor() {
     'flight_endpoint=loopback-only' \
     "ui_tls=$ui_tls_state" \
     "ui_tls_san=$ui_tls_san_state" \
-    "services=$service_state" \
-    'connector=not-configured' \
-    'cloudflare_access=not-verified (secure-local does not claim external edge protection)'
+    "services=$service_state"
 }
 
 init_tls() {

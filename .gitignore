@@ -155,7 +155,6 @@ celerybeat.pid
 .env
 .envrc
 deployment/local-secure/secrets/*
-deployment/named-tunnel/secrets/*
 deployment/production/secrets/*
 .venv
 env/

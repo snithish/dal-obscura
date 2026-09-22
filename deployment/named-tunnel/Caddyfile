@@ -1,4 +1,0 @@
-https://{$DAL_OBSCURA_NAMED_HOST}:8443 {
-    tls /run/secrets/named-origin.crt /run/secrets/named-origin.key
-    reverse_proxy ui:8080
-}

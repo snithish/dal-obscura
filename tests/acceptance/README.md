@@ -15,7 +15,8 @@ browser/consumer harnesses with the proposed tunnel overlay; E08–E12 proposed
 colocated Storybook stories and shared UI design sources; E13/E14 real policy/
 management browser journeys plus existing API suites; E15 integration/conformance/
 consumers/JVM; E16/E17 existing capacity/CI/recovery; E18 human candidate dossier.
-No executable Storybook, Cloudflare or acceptance test is added by this plan.
+See docs/experience/STATUS.md for executable Storybook and acceptance evidence.
+Tunnel support is outside the current scope.
 
 - **B01/B02, N01:** existing package/import/build CI and baseline report. Inventory
   resolved toolchains/collection/durations; no executable test of packet prose.

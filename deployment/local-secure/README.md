@@ -37,7 +37,6 @@ remain required evidence for paid-production acceptance.
 
 `./run doctor` validates the layered Compose configuration and reports only
 redacted local state: HTTPS origin/callback shape, bootstrap mode, browser OIDC
-configuration, TLS trust/SANs, and container state. It deliberately reports
-Cloudflare Access as unverified because this profile cannot prove an external
-edge policy. Live identity-provider, connector, consumer, recovery, and owner
-acceptance checks remain required for production.
+configuration, TLS trust/SANs, and container state. Live identity-provider,
+consumer, recovery, and owner acceptance checks remain required for production.
+No tunnel service or external edge account is required.

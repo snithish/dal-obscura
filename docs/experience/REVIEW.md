@@ -128,19 +128,12 @@ field IDs from array indices when the canonical schema is absent. R07 requires
 revision-bound links, truthful copy feedback and an unavailable-schema state.
 Never invent selectable identities to make a failed load look usable.
 
-### V06 — Cloudflare is not a drop-in identity or Flight transport (high integration priority)
+### V06 — Local HTTPS/OIDC and Flight transport
 
-`session_api.py::exchange_authorization_code` currently implements a public OIDC
-client with PKCE, not confidential-client secret authentication. The app's login
-rate key intentionally ignores forwarded headers; a tunnel puts many users behind
-one peer. Existing NGINX sets forwarded scheme from its local connection. R02
-must define trusted proxy/origin semantics instead of enabling arbitrary forwarded
-headers. R03 adds a supported named-tunnel profile; R09 proves it live.
-
-Quick Tunnel HTTPS does not itself configure application SSO. Cloudflare Access
-can protect the edge while the current app performs its own OIDC/session checks.
-Public tunnel hostname gRPC is unsupported, so Flight remains TLS local/private.
-Research and exact decisions are in [LOCAL_ACCESS.md](LOCAL_ACCESS.md).
+The owner removed tunnel integration on 2026-09-22. R02 retains trusted proxy,
+canonical origin and session requirements for the local and production gateways.
+R03 qualifies secure-local deployment; R09 proves real OIDC flows. Flight remains
+on its independent TLS endpoint. See [LOCAL_ACCESS.md](LOCAL_ACCESS.md).
 
 ## Review outcome
 

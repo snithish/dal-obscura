@@ -38,11 +38,6 @@ def test_ci_renders_each_deployment_profile_before_contracts() -> None:
     assert "name: Render deployment profiles" in workflow
     assert "docker compose --env-file deployment/production/.env.example" in workflow
     assert "docker compose --env-file deployment/local-secure/.env.example" in workflow
-    assert (
-        "docker compose --profile connector --env-file deployment/named-tunnel/.env.example"
-        in workflow
-    )
-    assert "-f deployment/named-tunnel/compose.yaml config --quiet" in workflow
 
 
 def test_ci_requires_locked_dependency_audit_before_image_promotion() -> None:

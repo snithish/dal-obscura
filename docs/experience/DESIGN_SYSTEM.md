@@ -174,7 +174,7 @@ explicit continuity checks; secrets never appear as normal text fields.
 **Activity/consume:** readable scoped timeline/table, real filters and pagination,
 redacted details and request IDs. Flight health and control-plane reachability are
 separate. Show exact consumer endpoint/version support and copy feedback; do not
-advertise the Cloudflare web hostname as a Flight endpoint.
+advertise the web hostname as a Flight endpoint.
 
 **Login/local setup:** normal SSO action, environment name, clear unavailable/
 expired/denied states and a compact diagnostic link. Do not show bootstrap tokens
