@@ -36,7 +36,7 @@
             "claim.name": "groups",
             "full.path": "false",
             "access.token.claim": "true",
-            "id.token.claim": "false",
+            "id.token.claim": "true",
             "userinfo.token.claim": "true"
           }
         }

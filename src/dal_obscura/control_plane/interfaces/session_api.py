@@ -9,8 +9,10 @@ Example:
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Callable, Mapping
 from typing import cast
+from urllib.error import HTTPError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, build_opener
 from urllib.request import Request as UrlRequest
@@ -22,6 +24,8 @@ from dal_obscura.data_plane.application.ports.identity import AuthenticationRequ
 from dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks import (
     OidcJwksIdentityProvider,
 )
+
+_logger = logging.getLogger(__name__)
 
 OidcActorResolver = Callable[[str], object]
 OidcNonceActorResolver = Callable[[str, str], object]
@@ -166,6 +170,36 @@ def exchange_authorization_code(
         with _open_token_endpoint(request) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except Exception as exc:
+        upstream_status: int | None = None
+        upstream_error: str | None = None
+        if isinstance(exc, HTTPError):
+            upstream_status = exc.code
+            try:
+                error_payload = json.loads(exc.read(4096).decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                error_payload = None
+            if isinstance(error_payload, Mapping):
+                candidate = error_payload.get("error")
+                if (
+                    isinstance(candidate, str)
+                    and candidate
+                    and len(candidate) <= 64
+                    and all(
+                        char.isascii() and (char.isalnum() or char in "_-") for char in candidate
+                    )
+                ):
+                    upstream_error = candidate
+        _logger.warning(
+            "oidc_code_exchange_rejected",
+            extra={
+                "upstream_status": upstream_status,
+                "upstream_error": upstream_error,
+                "exception_type": type(exc).__name__,
+                "authorization_code_length": len(code),
+                "authorization_code_segments": code.count(".") + 1,
+                "pkce_verifier_length": len(code_verifier),
+            },
+        )
         raise HTTPException(status_code=502, detail="OIDC code exchange failed") from exc
     if not isinstance(payload, Mapping):
         raise HTTPException(status_code=502, detail="OIDC token response was invalid")

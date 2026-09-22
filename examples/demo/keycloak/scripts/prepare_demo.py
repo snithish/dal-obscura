@@ -52,6 +52,9 @@ STATIC_VALUES = {
     "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN": "http://127.0.0.1:8821",
     "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": ("http://127.0.0.1:8821/auth/callback"),
     "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI": ("http://127.0.0.1:8821"),
+    "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_TOKEN_ENDPOINT": (
+        "http://keycloak:8080/realms/dal-obscura-demo/protocol/openid-connect/token"
+    ),
     "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_SCOPE": "openid profile",
     "DAL_OBSCURA_API_BASE_URL": "http://127.0.0.1:8820",
     "DAL_OBSCURA_LOCATION": "grpc://0.0.0.0:8815",
@@ -173,6 +176,7 @@ def _write_env_files(values: dict[str, str]) -> None:
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI",
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_TOKEN_ENDPOINT",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_SCOPE",
         ),
     )

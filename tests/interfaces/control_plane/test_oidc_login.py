@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from email.message import Message
+from io import BytesIO
+from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
@@ -383,6 +386,44 @@ def test_authorization_code_exchange_uses_canonical_token_endpoint(monkeypatch) 
     assert seen == {
         "url": "https://issuer.example/realms/demo/protocol/openid-connect/token",
     }
+
+
+def test_authorization_code_exchange_logs_safe_upstream_error_metadata(monkeypatch, caplog) -> None:
+    def reject_exchange(_request):
+        raise HTTPError(
+            "https://issuer.example/token",
+            400,
+            "Bad Request",
+            hdrs=Message(),
+            fp=BytesIO(b'{"error":"invalid_grant","error_description":"private upstream details"}'),
+        )
+
+    monkeypatch.setattr(
+        "dal_obscura.control_plane.interfaces.session_api._open_token_endpoint",
+        reject_exchange,
+    )
+
+    with pytest.raises(HTTPException, match="OIDC code exchange failed"):
+        exchange_authorization_code(
+            {
+                "token_endpoint": "https://issuer.example/token",
+                "client_id": "ui",
+                "redirect_uri": "https://gateway.example/callback",
+            },
+            "authorization-code-value",
+            "pkce-verifier-value",
+        )
+
+    record = next(
+        record for record in caplog.records if record.message == "oidc_code_exchange_rejected"
+    )
+    assert record.upstream_status == 400
+    assert record.upstream_error == "invalid_grant"
+    assert record.authorization_code_length == len("authorization-code-value")
+    assert record.pkce_verifier_length == len("pkce-verifier-value")
+    assert "private upstream details" not in caplog.text
+    assert "authorization-code-value" not in caplog.text
+    assert "pkce-verifier-value" not in caplog.text
 
 
 @pytest.mark.parametrize(

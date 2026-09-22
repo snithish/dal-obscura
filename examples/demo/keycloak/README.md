@@ -64,14 +64,11 @@ Swagger docs at `http://127.0.0.1:8820/docs`. Useful demo users:
   behavior.
 - `blocked-user`: denied by policy.
 
-Open the UI URL printed by `./run credentials` and use the **Platform owner** or
-**Data asset owner** shortcut to exercise the current authoring UI. This shortcut
-is a disposable demo password exchange: it places a Keycloak access token in an
-HttpOnly cookie and requires a CSRF header for cookie-authenticated mutations.
-This UI shortcut does not exercise the authorization-code/PKCE browser flow or
-the production session and revocation model. Use it only with this disposable
-demo. `./run token --as <user>` prints a CLI access token for debugging scripted
-reads.
+Open the UI URL printed by `./run credentials` and select **Sign in with SSO**.
+Keycloak handles the normal Authorization Code + PKCE flow. Sign in as
+`demo-admin` with the generated password from `./run credentials` to manage the
+workspace. `./run token --as <user>` prints a CLI access token for debugging
+scripted reads; it does not create a browser session.
 
 If port 8821 is already in use, start the demo on another loopback port. The
 runner writes that origin into its OIDC callback and Keycloak realm settings:
@@ -86,16 +83,39 @@ DAL_OBSCURA_DEMO_UI_PORT=8822 ./run up
 
 Use `./run token --as <user>` and the read checks below to exercise the governed Flight path.
 
-Verify the browser application after `./run up`:
+Verify the browser shell, session setup, authenticated inventory, CSRF-protected
+logout, and session revocation after `./run up`:
 
 ```bash
 ./run ui-smoke
 ```
 
-It checks the same-origin UI, security headers, the isolated demo login,
-asset-owner session, authenticated asset inventory, CSRF-protected logout, and
-post-logout rejection without printing any token or password. It is an HTTP
-smoke, not a browser or production-authentication acceptance test.
+This smoke uses the explicitly enabled local bootstrap endpoint. It does not
+verify OIDC or replace the normal **Sign in with SSO** browser flow.
+
+For the full browser flow, open the UI and:
+
+1. Select **Sign in with SSO** and confirm Keycloak shows the `dal-obscura-demo`
+   realm.
+2. Sign in as `demo-admin` using the generated password.
+3. Confirm the account menu shows `demo-admin` and the Assets view lists seeded
+   assets.
+4. Select **Sign out** and confirm the UI returns to the signed-out workspace.
+
+The full flow is also covered by an opt-in live browser test. With the demo
+running and UI dependencies installed, run:
+
+```bash
+DAL_OBSCURA_E2E_LIVE_OIDC=1 \
+DAL_OBSCURA_E2E_BASE_URL=http://127.0.0.1:8822 \
+pnpm --dir ../../../apps/governance-ui test:e2e -- e2e/live-oidc-demo.spec.ts
+```
+
+Adjust the base URL when using a different UI port. The test reads the generated
+`demo-admin` password from `.runtime/client.env` and reports only pass/fail.
+
+See [LOCAL_VALIDATION.md](LOCAL_VALIDATION.md) for the latest recorded run and
+any acceptance checks that remain pending.
 
 ## Read Checks
 
@@ -138,12 +158,8 @@ explicit migration service before the control plane starts.
 
 ## Security Notes
 
-This is a disposable local demo, not a supported secure-local or production
-deployment. Ports are loopback-bound, secrets are generated locally, and runtime
-files are gitignored. The browser shortcuts exchange credentials only at the
-control plane, and the client secret is not sent to JavaScript; however, the
-current cookie contains a raw provider access token and the API still uses coarse
-actor/platform-admin checks. Keycloak runs in development mode so the demo can
-start unattended. P02 and P03 must replace this path before it can claim OIDC
-authorization-code login, revocable opaque sessions, scoped administrative
-authorization, or security parity.
+This is a disposable local demo, not a production deployment. Ports are
+loopback-bound, secrets are generated locally, and runtime files are gitignored.
+Keycloak runs in development mode so the demo can start unattended. Use
+production-grade identity, database, TLS, secret-management, and authorization
+configuration before serving customer workloads.
