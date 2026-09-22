@@ -2051,3 +2051,16 @@ targeted Ruff checks, and Ruff format checks pass. A direct run of the bundled
 PyIceberg catalog reproduced the failing root call and confirmed its nested
 `retail.customer_revenue` table. R03/R08 still require the complete seeded
 startup and live identity/management qualification.
+
+## R03/R09 — FIX: seed OIDC before the first policy publication (2026-09-22)
+
+The demo table-promotion helper published its draft before the setup flow wrote
+the enabled Keycloak provider, then the caller attempted a second publication.
+Moved publication into the workspace orchestration after provider setup, and
+carry the exact returned draft ID/revision through the one publish request.
+Added a regression that checks ordering, exactly one publish, and the expected
+revision fields. The test failed before the fix with two publication calls.
+
+Proof: all eight demo-initialization tests, targeted Ruff, and `git diff --check`
+pass. Full container startup remains in progress; R03/R09 are not verified until
+the seeded UI, login and allowed/denied journeys work end to end.

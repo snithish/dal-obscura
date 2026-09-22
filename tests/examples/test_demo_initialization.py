@@ -114,6 +114,62 @@ def test_provision_reuses_complete_workspace_without_writes(monkeypatch) -> None
     ]
 
 
+def test_provision_enables_identity_provider_before_publishing_once(monkeypatch) -> None:
+    monkeypatch.setenv("DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN", "test-admin")
+    monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
+    module = _load_script("provision_demo")
+    fixture = {
+        "catalogs": [{"name": "retail_demo", "kind": "iceberg_sql"}],
+        "tables": [
+            {
+                "catalog": "retail_demo",
+                "target": "retail.customer_revenue",
+                "schema": [],
+            }
+        ],
+        "owners": ["group:asset-owners"],
+        "grants": [],
+        "policies": [],
+    }
+    calls: list[tuple[str, str, object]] = []
+
+    def request(method: str, path: str, body=None):
+        calls.append((method, path, body))
+        if path == "/v1/catalogs/retail_demo/tables":
+            return {
+                "tables": [
+                    {
+                        "target": "retail.customer_revenue",
+                        "backend": "iceberg",
+                        "table_identifier": "retail.customer_revenue",
+                    }
+                ]
+            }
+        if path == "/v1/assets/retail_demo/retail.customer_revenue":
+            return {"id": "asset-1"}
+        if path == "/v1/assets/asset-1":
+            return {"revision": 1}
+        if path == "/v1/assets/asset-1/draft":
+            return {"id": "draft-1", "revision": 4}
+        return {}
+
+    monkeypatch.setattr(module, "_workspace_state", lambda value: "empty")
+    monkeypatch.setattr(module, "_workspace_cell_id", lambda: "cell-1")
+    monkeypatch.setattr(module, "_request", request)
+
+    assert module._provision_workspace(fixture) == "cell-1"
+
+    provider_call = next(
+        i for i, call in enumerate(calls) if call[1] == "/v1/settings/auth-providers"
+    )
+    publish_calls = [
+        (i, call) for i, call in enumerate(calls) if call[1] == "/v1/assets/asset-1/policy-versions"
+    ]
+    assert len(publish_calls) == 1
+    assert provider_call < publish_calls[0][0]
+    assert publish_calls[0][1][2] == {"draft_id": "draft-1", "expected_draft_revision": 4}
+
+
 def test_provision_rejects_partial_workspace_before_mutation(monkeypatch) -> None:
     monkeypatch.setenv("DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN", "test-admin")
     monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")

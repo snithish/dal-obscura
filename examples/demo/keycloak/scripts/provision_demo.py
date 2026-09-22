@@ -93,9 +93,6 @@ def _provision_workspace(fixture: dict[str, Any]) -> str:
     )
     cell_id = _workspace_cell_id()
     _upsert_catalogs(fixture, warehouse_path)
-    asset_ids = []
-    for table_fixture in fixture["tables"]:
-        asset_ids.append(_promote_table(fixture, table_fixture))
     _request(
         "PUT",
         "/v1/settings/auth-providers",
@@ -119,8 +116,13 @@ def _provision_workspace(fixture: dict[str, Any]) -> str:
             ]
         },
     )
-    for asset_id in asset_ids:
-        _request("POST", f"/v1/assets/{asset_id}/policy-versions")
+    drafts = [_promote_table(fixture, table_fixture) for table_fixture in fixture["tables"]]
+    for asset_id, draft_id, draft_revision in drafts:
+        _request(
+            "POST",
+            f"/v1/assets/{asset_id}/policy-versions",
+            {"draft_id": draft_id, "expected_draft_revision": draft_revision},
+        )
     return cell_id
 
 
@@ -237,7 +239,7 @@ def _upsert_catalogs(fixture: dict[str, Any], warehouse_path: str) -> None:
         _request("PUT", f"/v1/catalogs/{catalog_name}", body)
 
 
-def _promote_table(fixture: dict[str, Any], table_fixture: dict[str, Any]) -> str:
+def _promote_table(fixture: dict[str, Any], table_fixture: dict[str, Any]) -> tuple[str, str, int]:
     catalog_name = str(table_fixture["catalog"])
     target = str(table_fixture["target"])
     discovered = _request("GET", f"/v1/catalogs/{catalog_name}/tables")
@@ -301,17 +303,11 @@ def _promote_table(fixture: dict[str, Any], table_fixture: dict[str, Any]) -> st
     if not isinstance(draft, dict):
         raise RuntimeError("policy draft save returned an unexpected response")
     draft_payload = cast(dict[str, Any], draft)
+    if not isinstance(draft_payload.get("id"), str) or not draft_payload["id"]:
+        raise RuntimeError("policy draft save returned an unexpected response")
     if not isinstance(draft_payload.get("revision"), int):
         raise RuntimeError("policy draft save returned an unexpected response")
-    _request(
-        "POST",
-        f"/v1/assets/{asset_id}/policy-versions",
-        {
-            "draft_id": draft_payload.get("id"),
-            "expected_draft_revision": draft_payload["revision"],
-        },
-    )
-    return asset_id
+    return asset_id, draft_payload["id"], draft_payload["revision"]
 
 
 def _asset_revision(asset_id: str) -> int:
