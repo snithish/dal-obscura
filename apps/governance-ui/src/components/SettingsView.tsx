@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Checkbox, TextInput } from "@mantine/core";
+import { Button, Checkbox, TextInput } from "@mantine/core";
 import type { QueryClient } from "@tanstack/react-query";
 import type { AuthProvider, RuntimeSettings, WorkspacePublication } from "../api";
 import { controlPlane } from "../api";
@@ -326,7 +326,7 @@ export function SettingsView({
           <h2>Runtime and identity</h2>
           <p className="muted">These controls affect ticket fan-out and authentication. Changes are server-validated and do not expose secrets.</p>
         </div>
-        <button type="button" className="secondary" onClick={reload}>Refresh</button>
+        <Button type="button" variant="default" className="secondary" onClick={reload}>Refresh</Button>
       </div>
       <div className="form-card">
         <h3>Runtime limits</h3>
@@ -341,11 +341,11 @@ export function SettingsView({
           <p className="help">Every metadata and data location must stay under one of these roots. Leave the list empty only for an explicitly local development profile.</p>
           <div className="path-rule-list">{pathRuleRoots.map((root, index) => <div className="path-rule-row" key={`${index}-${root}`}>
             <TextInput aria-label={`Storage path root ${index + 1}`} value={root} onChange={(event) => updatePathRule(index, event.currentTarget.value)} placeholder="s3://warehouse/curated" />
-            <button className="danger" type="button" onClick={() => { markDirty("runtime"); setPathRuleRoots((current) => current.filter((_, row) => row !== index)); }}>Remove</button>
+            <Button className="danger" variant="default" size="sm" type="button" onClick={() => { markDirty("runtime"); setPathRuleRoots((current) => current.filter((_, row) => row !== index)); }}>Remove</Button>
           </div>)}</div>
-          <button className="secondary" type="button" onClick={() => { markDirty("runtime"); setPathRuleRoots((current) => [...current, ""]); }}>Add storage root</button>
+          <Button className="secondary" variant="default" type="button" onClick={() => { markDirty("runtime"); setPathRuleRoots((current) => [...current, ""]); }}>Add storage root</Button>
         </fieldset>
-        <button type="button" className="primary" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save runtime settings"}</button>
+        <Button type="button" className="primary" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save runtime settings"}</Button>
         {message && <p className="notice" role="status">{message}</p>}
       </div>
       <div className="form-card">
@@ -354,7 +354,7 @@ export function SettingsView({
         <p className="help">{stagedCount ? `${stagedCount} staged generation${stagedCount === 1 ? " is" : "s are"} waiting for explicit administrator activation.` : "Save settings creates draft configuration; create and activate a snapshot from Connections when ready."}</p>
       </div>
       <div className="form-card">
-        <div className="form-card-head"><h3>Authentication providers</h3><button className="secondary" type="button" onClick={addProvider}>Add OIDC provider</button></div>
+        <div className="form-card-head"><h3>Authentication providers</h3><Button className="secondary" variant="default" type="button" onClick={addProvider}>Add OIDC provider</Button></div>
         <p className="help">The ordered provider chain is evaluated top to bottom. Secrets and static JWKS material are never editable in this browser.</p>
         {providerRows.length ? <div className="provider-editor-list">{providerRows.map((provider, index) => {
           const providerField = (key: string, label: string, options: { type?: string; placeholder?: string; help?: string } = {}) => {
@@ -375,7 +375,7 @@ export function SettingsView({
             </div>;
           };
           return <fieldset className="provider-editor" key={provider.id}>
-            <legend><span>{provider.module.split(".").at(-1) ?? provider.module}</span><small>Order {provider.ordinal}</small><span className="provider-order-actions"><button className="secondary" type="button" disabled={index === 0} onClick={() => moveProvider(index, -1)}>Move up</button><button className="secondary" type="button" disabled={index === providerRows.length - 1} onClick={() => moveProvider(index, 1)}>Move down</button><button className="danger" type="button" onClick={() => removeProvider(index)}>Remove</button></span></legend>
+            <legend><span>{provider.module.split(".").at(-1) ?? provider.module}</span><small>Order {provider.ordinal}</small><span className="provider-order-actions"><Button className="secondary" variant="default" size="sm" type="button" disabled={index === 0} onClick={() => moveProvider(index, -1)}>Move up</Button><Button className="secondary" variant="default" size="sm" type="button" disabled={index === providerRows.length - 1} onClick={() => moveProvider(index, 1)}>Move down</Button><Button className="danger" variant="default" size="sm" type="button" onClick={() => removeProvider(index)}>Remove</Button></span></legend>
             <Checkbox className="provider-enabled" checked={provider.enabled} onChange={(event) => updateProviderEnabled(index, event.currentTarget.checked)} label="Enabled" />
             <div className="form-grid">
               {providerField("issuer", "Issuer URL", { placeholder: "https://id.example.com/" })}
@@ -391,7 +391,7 @@ export function SettingsView({
             </div>
           </fieldset>;
         })}</div> : <p className="empty-result"><strong>No identity providers configured.</strong><br />Add the first OIDC provider through the control-plane bootstrap or API before publishing.</p>}
-        <button type="button" className="primary" disabled={saving || Object.keys(providerErrors).length > 0} onClick={() => void saveProviders()}>{saving ? "Saving…" : "Save identity providers"}</button>
+        <Button type="button" className="primary" disabled={saving || Object.keys(providerErrors).length > 0} onClick={() => void saveProviders()}>{saving ? "Saving…" : "Save identity providers"}</Button>
       </div>
     </section>
   );
