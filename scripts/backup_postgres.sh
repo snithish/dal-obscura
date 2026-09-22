@@ -23,12 +23,16 @@ parent=$(dirname -- "$output")
 mkdir -p "$parent"
 umask 077
 temporary=$(mktemp "${TMPDIR:-/tmp}/dal-obscura-backup.XXXXXX")
+dump_temporary=$(mktemp "${TMPDIR:-/tmp}/dal-obscura-backup-dump.XXXXXX")
 checksum_temporary=$(mktemp "${TMPDIR:-/tmp}/dal-obscura-backup-checksum.XXXXXX")
-cleanup() { rm -f "$temporary" "$checksum_temporary"; }
+cleanup() { rm -f "$temporary" "$dump_temporary" "$checksum_temporary"; }
 trap cleanup EXIT HUP INT TERM
 
 pg_dump --format=custom --no-owner --no-acl --dbname="$DAL_OBSCURA_DATABASE_URL" \
-  | age --encrypt --recipient "$DAL_OBSCURA_BACKUP_RECIPIENT" --output "$temporary"
+  > "$dump_temporary"
+test -s "$dump_temporary" || { echo "PostgreSQL dump is empty" >&2; exit 1; }
+age --encrypt --recipient "$DAL_OBSCURA_BACKUP_RECIPIENT" --output "$temporary" \
+  < "$dump_temporary"
 test -s "$temporary" || { echo "encrypted backup is empty" >&2; exit 1; }
 digest=$(sha256sum "$temporary" | awk '{print $1}')
 test -n "$digest" || { echo "could not compute backup checksum" >&2; exit 1; }

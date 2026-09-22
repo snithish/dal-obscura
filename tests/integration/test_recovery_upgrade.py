@@ -122,6 +122,31 @@ def test_backup_helper_writes_checksum_and_refuses_overwrite(tmp_path: Path) -> 
     assert "refusing to overwrite" in second.stderr
 
 
+def test_backup_helper_does_not_encrypt_a_failed_dump(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _fake_command(bin_dir, "pg_dump", "printf 'partial-dump'; exit 7")
+    _fake_command(bin_dir, "age", "cat >/dev/null; exit 0")
+    output = tmp_path / "backup.age"
+    script = Path(__file__).parents[2] / "scripts" / "backup_postgres.sh"
+    result = subprocess.run(
+        ["sh", str(script), str(output)],
+        env={
+            **os.environ,
+            "PATH": f"{bin_dir}:{os.environ['PATH']}",
+            "DAL_OBSCURA_DATABASE_URL": "postgresql://synthetic",
+            "DAL_OBSCURA_BACKUP_RECIPIENT": "age1synthetic",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 7
+    assert not output.exists()
+    assert not output.with_name(output.name + ".sha256").exists()
+
+
 def test_restore_helper_rejects_corrupt_checksum_before_provider_tools(tmp_path: Path) -> None:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
