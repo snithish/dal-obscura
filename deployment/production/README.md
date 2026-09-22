@@ -84,8 +84,9 @@ DAL_OBSCURA_BACKUP_RECIPIENT="age1..." \
 
 Restore only into an isolated PostgreSQL instance with ingress stopped. When a
 `OUTPUT.age.sha256` sidecar is present, the helper verifies it before decrypting;
-it then decrypts to a mode-`0600` temporary file and restores in one transaction,
-and revokes restored sessions, login transactions, and tickets before returning:
+the age identity file must be owner-only (`0400` or `0600`). It then decrypts to
+a mode-`0600` temporary file and restores in one transaction, and revokes
+restored sessions, login transactions, and tickets before returning:
 
 ```bash
 DAL_OBSCURA_DATABASE_URL="$ISOLATED_DATABASE_URL" \
