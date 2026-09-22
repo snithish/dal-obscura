@@ -1865,3 +1865,15 @@ Proof: restore shell syntax, recovery integration lane (8 passed, 1 configured
 PostgreSQL drill skipped), production recovery contract tests, Ruff, and
 pre-commit checks pass. R11 remains VERIFY pending actual encrypted PostgreSQL
 RPO/RTO and release-candidate evidence.
+
+## R03 — VERIFY: declared Cloudflare Access contract (2026-09-22)
+
+Named-tunnel profiles now require explicit Cloudflare Access team and audience
+values matching the operator-managed remote `originRequest.access` rule. Doctor
+surfaces only that values are declared and continues to report Access as
+unverified; no DNS, tunnel, or policy mutation was added. Atomic implementation
+commit: `28c09753 fix(deployment): require declared Access audience`.
+
+Proof: shell syntax, runner behavior matrix, focused architecture tests, Ruff,
+and pre-commit checks pass. R03/E07 remain VERIFY until real Cloudflare Access
+assertion validation and allowed/denied browser traffic are observed.
