@@ -71,6 +71,13 @@ test("built shell has a fresh style nonce and working library controls under CSP
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog", { name: "Command palette" })).toHaveCount(0);
   await expect(page.getByLabel("Local control-plane token")).toBeFocused();
+  await page.getByRole("button", { name: "Search workspace", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Command palette" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Search workspace", exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "Account menu" }).click();
+  await expect(page.getByRole("menu")).toBeVisible();
+  await page.keyboard.press("Escape");
   expect(violations).toEqual([]);
   await page.reload();
   expect(await page.locator('meta[name="csp-nonce"]').getAttribute("content")).not.toBe(firstNonce);

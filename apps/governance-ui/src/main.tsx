@@ -936,7 +936,7 @@ function App() {
 
   const signedOut = workspace === "unavailable" || (workspace === "loading" && !session);
   const canManageWorkspace = Boolean(session?.capabilities.includes("workspace:admin"));
-  const paletteCommands: PaletteCommand[] = ["assets", "changes", "activity", ...(canManageWorkspace ? ["connections", "settings"] as const : []), "help"];
+  const paletteCommands: PaletteCommand[] = ["assets", "activity", ...(canManageWorkspace ? ["connections", "settings"] as const : []), "help"];
   const paletteAssets = assets.filter((item) => `${item.catalog} ${item.name}`.toLowerCase().includes(paletteQuery.trim().toLowerCase())).slice(0, 8);
   const accessView = <LoginPanel showAuth={workspace === "unavailable"} title={workspace === "loading" ? "Loading governed workspace" : "Sign in to your workspace"} message={workspace === "loading" ? "Checking your workspace access and available assets." : notice} retry={workspace === "unavailable" ? loadInitialWorkspace : undefined} authConfig={authConfig} sessionOptions={sessionOptions} bootstrapToken={bootstrapToken} onBootstrapToken={setBootstrapToken} onBootstrapLogin={() => void bootstrapLogin()} loggingIn={loggingIn} authError={authError} />;
   const managementView = page === "assets" ? null : <Suspense fallback={<section className="coming-soon" role="status"><h2>Loading management view</h2><p>Preparing the governed workspace controls.</p></section>}><ManagementView page={page} data={managementData} loading={managementLoading} error={managementError} onReload={() => void loadManagement(page)} onLoadMore={page === "changes" ? () => void loadMoreHistory() : page === "activity" ? () => void loadMoreAudit() : undefined} historyLoading={historyLoading} auditLoading={auditLoading} filters={auditFilters} onFiltersChange={updateAuditFilters} session={session} queryClient={queryClient} sessionScope={sessionCacheKey} onDirtyChange={setManagementDirty} /></Suspense>;
@@ -959,6 +959,7 @@ function App() {
       onMobileNavClose={() => setMobileNavOpen(false)}
       onThemeChange={setTheme}
       onLogout={() => void logout()}
+      onSearch={() => { setPaletteQuery(""); setPaletteOpen(true); }}
     >
       {content}
       <CommandPalette opened={paletteOpen} query={paletteQuery} commands={paletteCommands} assets={paletteAssets} onQueryChange={setPaletteQuery} onCommand={runPaletteCommand} onAsset={openPaletteAsset} onClose={closePalette} />

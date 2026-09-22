@@ -125,7 +125,7 @@ test("authenticated mobile navigation respects capabilities and restores focus",
   await expect(openNavigation).toBeFocused();
 
   await openNavigation.click();
-  await page.getByRole("dialog", { name: "Navigation" }).getByRole("button", { name: "Activity" }).click();
+  await page.getByRole("dialog", { name: "Navigation" }).getByRole("button", { name: "Activity", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Activity", exact: true })).toBeVisible();
   await expect(page.getByRole("dialog", { name: "Navigation" })).toHaveCount(0);
 });
@@ -524,9 +524,9 @@ test("late management responses cannot replace the current page", async ({ page 
   await page.goto("/#activity");
   await deferredAudit.started;
 
-  await page.getByRole("button", { name: "Changes" }).click();
+  await page.getByRole("button", { name: "Published changes" }).click();
   await expect(page.getByRole("heading", { name: "Published policy history" })).toBeVisible();
-  await page.getByRole("button", { name: "Activity" }).click();
+  await page.getByRole("button", { name: "Activity", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Workspace status" })).toBeVisible();
   await expect(page.getByText("fresh-audit")).toBeVisible();
 
@@ -541,9 +541,9 @@ test("late history responses cannot replace the current changes page", async ({ 
   await page.goto("/#changes");
   await deferredHistory.started;
 
-  await page.getByRole("button", { name: "Activity" }).click();
+  await page.getByRole("button", { name: "Activity", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Workspace status" })).toBeVisible();
-  await page.getByRole("button", { name: "Changes" }).click();
+  await page.getByRole("button", { name: "Published changes" }).click();
   await expect(page.getByRole("heading", { name: "Published policy history" })).toBeVisible();
   await expect(page.getByText("fresh-history")).toBeVisible();
 
@@ -595,7 +595,7 @@ test("late asset lookup responses cannot replace the current inventory", async (
   await search.fill("stale");
   await deferredInventory.started;
 
-  await page.getByRole("button", { name: "Activity" }).click();
+  await page.getByRole("button", { name: "Activity", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Activity", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Assets" }).click();
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();

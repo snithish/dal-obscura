@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { Text, useMantineColorScheme } from "@mantine/core";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, userEvent } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 import { AppShell, type AppShellProps } from "./AppShell";
 
 function StatefulShell(args: AppShellProps) {
@@ -23,7 +23,7 @@ const meta = {
     mobileNavOpen: false, mobileNavTrigger: { current: null }, theme: "system",
     onMobileNavOpen: fn(), onMobileNavClose: fn(), onThemeChange: fn(),
     session: { principal: "alex@example.invalid", groups: [], platform_admin: false, capabilities: [] },
-    onNavigate: fn(), onLogout: fn(), children: <Text>Choose an asset to inspect its access policy.</Text>,
+    onNavigate: fn(), onLogout: fn(), onSearch: fn(), children: <Text>Choose an asset to inspect its access policy.</Text>,
   },
 } satisfies Meta<typeof AppShell>;
 export default meta;
@@ -43,3 +43,12 @@ export const Administrator: Story = {
   args: { session: { principal: "admin@example.invalid", groups: [], platform_admin: true, capabilities: ["workspace:admin"] } },
 };
 export const DarkReader: Story = { ...Reader, globals: { theme: "dark" } };
+
+export const DiscoverableHeader: Story = {
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("button", { name: "Search workspace" })).toBeVisible();
+    await userEvent.click(canvas.getByRole("button", { name: "Account menu" }));
+    await expect(await within(document.body).findByRole("menu")).toHaveTextContent("alex@example.invalid");
+    await expect(canvas.getByRole("navigation", { name: "Breadcrumbs" })).toBeVisible();
+  },
+};

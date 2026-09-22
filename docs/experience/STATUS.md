@@ -26,6 +26,13 @@ The owning reader story failed before the fix and passes afterward. TypeScript,
 13 asset-workspace stories and all 54 built-app browser checks pass. API fixtures
 remain synthetic; live backend and human review gates are not closed by this.
 
+Header/navigation continuation: visible command search, account menu, workspace
+address and breadcrumbs are implemented. Primary destinations are now Assets,
+Connections, Activity and Settings; published changes is a secondary Activity
+view. Mantine owns menu focus; its supported initial-focus setting avoids an
+invalid focus-placeholder ARIA child. Four shell stories, TypeScript, all 54
+built browser checks and the extended production-CSP search/menu check pass.
+
 - **R01:** local toolchain, typing, route, plugin, and locked-build checks pass;
   clean-install/advisory and exact support inventory evidence remain open.
 - **R02:** local OIDC/CSRF/origin/proxy contracts and challenge recovery pass;
