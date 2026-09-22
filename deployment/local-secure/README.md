@@ -23,6 +23,8 @@ cp .env.example .env
 Open `https://localhost:8443`. `./run init` creates a disposable local CA plus
 separate `localhost` certificates for the browser edge and Flight service; trust
 `secrets/ca.crt` in the test browser or client.
+Private keys remain owner-only (`0400` or `0600`); the runner rejects weaker
+permissions before Compose starts.
 The data plane is available only on loopback at `grpc+tls://localhost:8815` and
 requires a client certificate signed by that CA. The profile disables bootstrap
 login; sign in through the configured OIDC provider.

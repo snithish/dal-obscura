@@ -15,6 +15,11 @@ and provide owner-readable files at these paths:
   contains the stable hostname;
 - `secrets/cloudflared.token`: narrowly scoped connector token.
 
+Keep `origin.key`, `cloudflared.token`, and the local Flight private key
+owner-only (`0400` or `0600`). The runner rejects weaker permissions and checks
+the origin certificate SAN against `DAL_OBSCURA_NAMED_HOST` before starting any
+service or connector.
+
 Create the DNS record, tunnel, Access application, default-deny policy, and
 exact Access audience through the separately approved Cloudflare change. This
 profile never creates or modifies those resources and never treats a configured

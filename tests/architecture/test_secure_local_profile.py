@@ -27,6 +27,8 @@ def test_secure_local_profile_reuses_production_security_contract() -> None:
     assert "separate `localhost` certificates" in readme
     assert "REPLACE_WITH placeholders" in runner
     assert "Missing readable TLS material" in runner
+    assert "require_owner_only_secret" in runner
+    assert "Secret file must be owner-only" in runner
     assert "doctor) doctor" in runner
     assert "compose config --quiet" in runner
     assert "cloudflare_access=not-verified" in runner

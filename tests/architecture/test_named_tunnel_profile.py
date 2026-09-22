@@ -1,3 +1,4 @@
+import os
 import subprocess
 from pathlib import Path
 
@@ -47,6 +48,113 @@ def test_named_tunnel_runner_fails_closed_and_redacts_edge_claims() -> None:
     assert "compose up -d --wait" in source
     assert "compose --profile connector down" in source
     assert "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN" not in source
+    assert "require_owner_only_secret" in source
+    assert "Secret file must be owner-only" in source
+    assert "validate_origin_certificate" in source
+    assert "Origin certificate SAN does not match" in source
+    assert "*\\?*|*\\**" in source
+
+
+def test_named_tunnel_runner_rejects_weak_secrets_and_wrong_origin_san(tmp_path: Path) -> None:
+    named = tmp_path / "named-tunnel"
+    local = tmp_path / "local-secure"
+    (named / "secrets").mkdir(parents=True)
+    (local / "secrets").mkdir(parents=True)
+    runner = named / "run"
+    runner.write_text((PROFILE / "run").read_text(encoding="utf-8"), encoding="utf-8")
+    runner.chmod(0o755)
+    host = "obscura.example.test"
+    env_file = named / ".env"
+    env_file.write_text(
+        "\n".join(
+            [
+                f"DAL_OBSCURA_NAMED_HOST={host}",
+                f"DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI=https://{host}/auth/callback",
+                f"DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI=https://{host}",
+                f"DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS=https://{host}",
+                "DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED=false",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    def certificate(prefix: Path, name: str, cert_host: str = host) -> tuple[Path, Path]:
+        key = prefix / f"{name}.key"
+        cert = prefix / f"{name}.crt"
+        subprocess.run(
+            [
+                "openssl",
+                "req",
+                "-x509",
+                "-newkey",
+                "rsa:2048",
+                "-nodes",
+                "-days",
+                "1",
+                "-subj",
+                f"/CN={cert_host}",
+                "-addext",
+                f"subjectAltName=DNS:{cert_host}",
+                "-keyout",
+                str(key),
+                "-out",
+                str(cert),
+            ],
+            check=True,
+            capture_output=True,
+        )
+        key.chmod(0o600)
+        return cert, key
+
+    origin_cert, origin_key = certificate(named / "secrets", "origin")
+    (named / "secrets" / "cloudflared.token").write_text("token\n", encoding="utf-8")
+    (named / "secrets" / "cloudflared.token").chmod(0o600)
+    for name in ("flight.crt", "client-ca.crt"):
+        (local / "secrets" / name).write_text("certificate\n", encoding="utf-8")
+    flight_key = local / "secrets" / "flight.key"
+    flight_key.write_text("private\n", encoding="utf-8")
+    flight_key.chmod(0o600)
+
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    docker = fake_bin / "docker"
+    docker.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    docker.chmod(0o755)
+    env = {**os.environ, "PATH": f"{fake_bin}:{os.environ.get('PATH', '')}"}
+
+    valid = subprocess.run(
+        ["sh", str(runner), "config"],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert valid.returncode == 0, valid.stderr
+
+    origin_key.chmod(0o644)
+    weak = subprocess.run(
+        ["sh", str(runner), "config"],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert weak.returncode == 2
+    assert "owner-only" in weak.stderr
+    origin_key.chmod(0o600)
+
+    wrong_cert, _wrong_key = certificate(tmp_path, "wrong", "other.example.test")
+    origin_cert.write_bytes(wrong_cert.read_bytes())
+    wrong_san = subprocess.run(
+        ["sh", str(runner), "config"],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert wrong_san.returncode == 2
+    assert "Origin certificate SAN does not match" in wrong_san.stderr
 
 
 def test_deployment_secret_directories_are_ignored() -> None:

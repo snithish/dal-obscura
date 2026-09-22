@@ -10,6 +10,18 @@ compose() {
   docker compose --env-file "$PROFILE" -f "$PRODUCTION" -f "$OVERRIDE" "$@"
 }
 
+require_owner_only_secret() {
+  path=$1
+  mode=$(stat -c '%a' "$path" 2>/dev/null || stat -f '%Lp' "$path" 2>/dev/null || true)
+  case "$mode" in
+    400|600) ;;
+    *)
+      echo "Secret file must be owner-only (mode 400 or 600): $path" >&2
+      exit 2
+      ;;
+  esac
+}
+
 validate_profile() {
   if grep -Eq '^[A-Za-z_][A-Za-z0-9_]*=.*REPLACE_WITH' "$PROFILE"; then
     echo "$PROFILE still contains REPLACE_WITH placeholders; replace every secret and image digest before starting" >&2
@@ -21,6 +33,9 @@ validate_profile() {
       exit 2
     fi
   done
+  require_owner_only_secret "$ROOT/secrets/ca.key"
+  require_owner_only_secret "$ROOT/secrets/ui.key"
+  require_owner_only_secret "$ROOT/secrets/flight.key"
 }
 
 usage() {
