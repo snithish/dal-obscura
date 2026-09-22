@@ -1738,3 +1738,19 @@ Proof: TypeScript, Vite production build, UI budgets (170.50 KiB JS gzip,
 matrix includes the light/dark management contrast gate and axe checks. R04/R08
 remain VERIFY pending manual visual, keyboard, and screen-reader review, live
 catalog authorization, and production identity/provider evidence.
+
+## R04/R08 — VERIFY: Mantine settings actions (2026-09-22)
+
+Migrated runtime refresh/save, storage-root, OIDC-provider, ordering, and
+provider-removal actions to Mantine `Button`, retaining capability guards,
+validation errors, staged-publication semantics, and request reconciliation.
+Danger actions keep the existing semantic styling and no credential values are
+rendered. Atomic implementation commit: `e835c082 refactor(ui): use Mantine
+settings actions`.
+
+Proof: TypeScript, Vite production build, UI budgets (170.50 KiB JS gzip,
+38.07 KiB CSS gzip, 83.72 KiB fonts), 46 Storybook interaction tests, and all
+54 built browser tests pass, including the settings mutation, keyboard order,
+contrast, forced-colors, and axe checks. R04/R08 remain VERIFY pending manual
+visual, keyboard, and screen-reader review, live provider authorization, and
+production identity/provider evidence.
