@@ -1707,3 +1707,18 @@ unprivileged Maven attempt failed only because its fixture subprocess could not
 bind a local port; no product fallback or test skip was introduced. This is
 local consumer compatibility evidence and does not close live OIDC/TLS,
 real-provider, or production recovery gates.
+
+## R04/R08 — VERIFY: Mantine management actions (2026-09-22)
+
+Migrated management retry, refresh, filter, pagination, and error-recovery
+actions to Mantine `Button` while preserving the existing action classes,
+loading/disabled semantics, backend callbacks, and browser selectors. The
+management surface now uses the selected component library for both its typed
+controls and visible actions. Atomic implementation commit: `723de5fe
+refactor(ui): use Mantine management actions`.
+
+Proof: TypeScript, Vite production build, UI budgets (170.50 KiB JS gzip,
+38.04 KiB CSS gzip, 83.72 KiB fonts), 46 Storybook interaction tests, and all
+54 built browser tests pass. R04/R08 remain VERIFY pending manual visual,
+keyboard, and screen-reader review, live management authorization, and the
+production identity/provider gates.
