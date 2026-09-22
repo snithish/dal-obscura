@@ -289,6 +289,13 @@ def _list_tables(catalog: Any, namespace: Namespace) -> Iterable[object]:
         if namespace:
             raise
         return catalog.list_tables()
+    except ValueError as exc:
+        # PyIceberg SQL catalogs reject the root namespace instead of returning
+        # an empty result. Tables still appear under the namespaces discovered
+        # by _walk_namespaces; retain other provider errors.
+        if not namespace and str(exc) == "Empty namespace identifier":
+            return ()
+        raise
 
 
 def _namespace_tuple(namespace: object) -> Namespace:

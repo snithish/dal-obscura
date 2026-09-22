@@ -2036,3 +2036,18 @@ budget, but further route-level splitting may improve initial transfer. Browser
 API responses are synthetic. R04/R07 remain VERIFY pending manual visual,
 keyboard, and screen-reader review, owner approval, and real role-authorized
 author/reviewer/publisher and governed-read evidence.
+
+## R03/R08 — FIX: discover Iceberg tables with PyIceberg SQL catalogs (2026-09-22)
+
+The seeded local demo exposed a real discovery failure: PyIceberg's SQL catalog
+raises `ValueError("Empty namespace identifier")` when asked to list tables at
+the root namespace, even though its nested namespaces and tables are valid.
+Discovery now treats only that exact root-only response as empty and still
+propagates other provider errors. Added a regression case for the SQL catalog
+behavior while preserving the root-only adapter compatibility case.
+
+Proof: the new case failed before the fix; all 21 catalog-discovery tests,
+targeted Ruff checks, and Ruff format checks pass. A direct run of the bundled
+PyIceberg catalog reproduced the failing root call and confirmed its nested
+`retail.customer_revenue` table. R03/R08 still require the complete seeded
+startup and live identity/management qualification.

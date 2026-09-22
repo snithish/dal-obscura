@@ -90,6 +90,29 @@ def test_iceberg_discovery_preserves_root_only_list_tables_signature() -> None:
     ) == [{"backend": "iceberg", "name": "users", "table_identifier": "users"}]
 
 
+def test_iceberg_discovery_skips_pyiceberg_empty_root_namespace() -> None:
+    class SqlCatalog:
+        def list_namespaces(self, namespace=()):
+            return [("retail",)] if not namespace else []
+
+        def list_tables(self, namespace):
+            if not namespace:
+                raise ValueError("Empty namespace identifier")
+            return [("retail", "customer_revenue")]
+
+    assert discover_iceberg_tables(
+        "analytics",
+        {},
+        load_catalog_fn=lambda name, **options: SqlCatalog(),
+    ) == [
+        {
+            "backend": "iceberg",
+            "name": "retail.customer_revenue",
+            "table_identifier": "retail.customer_revenue",
+        }
+    ]
+
+
 def test_iceberg_discovery_does_not_hide_root_table_provider_errors() -> None:
     class FailingCatalog:
         def list_namespaces(self, namespace=()):
