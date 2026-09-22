@@ -42,6 +42,21 @@ live local IdP or running production stack.
 Treat this snapshot as routing guidance; detailed evidence and exact commits
 remain below. Do not relabel VERIFY or external prerequisites as DONE.
 
+## R11 — Remove plaintext dump after successful backup (2026-09-22)
+
+The backup helper disabled its cleanup trap on success while the temporary
+plaintext PostgreSQL dump still existed. Removed that trap cancellation so normal
+exit removes all temporary files after encrypted output and checksum publication.
+Extended the owning success/overwrite test with an isolated TMPDIR and an empty
+directory assertion; it failed before the fix with the leftover dump and passes
+afterward. No new runtime code, dependency or duplicate test was added.
+
+Proof: shell syntax, Ruff and 10 recovery/deployment checks pass; one opt-in
+PostgreSQL recovery drill skips because no disposable restore URL was supplied.
+These helper tests use synthetic provider commands and do not claim encrypted
+PostgreSQL restore or RPO/RTO qualification. Previously created temporary files
+are not searched or removed by this change.
+
 ## R10 — PostgreSQL process races and runtime creation conflict (2026-09-22)
 
 Replaced duplicated thread-based race cases with a spawn-based harness. Each

@@ -40,5 +40,4 @@ printf '%s  %s\n' "$digest" "$backup_name" > "$checksum_temporary"
 test -s "$checksum_temporary" || { echo "backup checksum is empty" >&2; exit 1; }
 mv -- "$temporary" "$output"
 mv -- "$checksum_temporary" "$checksum"
-trap - EXIT HUP INT TERM
 printf 'encrypted backup written: %s\nchecksum written: %s\n' "$output" "$checksum"

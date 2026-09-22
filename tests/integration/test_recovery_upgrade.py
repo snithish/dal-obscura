@@ -74,6 +74,8 @@ def _fake_command(directory: Path, name: str, body: str) -> None:
 
 
 def test_backup_helper_writes_checksum_and_refuses_overwrite(tmp_path: Path) -> None:
+    temporary_files = tmp_path / "temporary"
+    temporary_files.mkdir()
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     _fake_command(bin_dir, "pg_dump", "printf 'synthetic-backup'")
@@ -92,6 +94,7 @@ def test_backup_helper_writes_checksum_and_refuses_overwrite(tmp_path: Path) -> 
     script = Path(__file__).parents[2] / "scripts" / "backup_postgres.sh"
     environment = {
         **os.environ,
+        "TMPDIR": str(temporary_files),
         "PATH": f"{bin_dir}:{os.environ['PATH']}",
         "DAL_OBSCURA_DATABASE_URL": "postgresql://synthetic",
         "DAL_OBSCURA_BACKUP_RECIPIENT": "age1synthetic",
@@ -105,6 +108,7 @@ def test_backup_helper_writes_checksum_and_refuses_overwrite(tmp_path: Path) -> 
         check=False,
     )
     assert first.returncode == 0, first.stderr
+    assert list(temporary_files.iterdir()) == [], "Backup left temporary plaintext on disk"
     assert output.read_bytes() == b"synthetic-backup"
     checksum = output.with_name(output.name + ".sha256")
     assert checksum.read_text() == (
