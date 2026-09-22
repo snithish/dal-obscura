@@ -28,7 +28,9 @@ prepare() {
 }
 
 compose() {
-  DAL_OBSCURA_IMAGE="$DEMO_IMAGE" docker compose -f "$COMPOSE_FILE" "$@"
+  ui_port="${DAL_OBSCURA_DEMO_UI_PORT:-$(sed -n 's@^DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN=http://127.0.0.1:@@p' "$ROOT/.runtime/control-plane.env" 2>/dev/null)}"
+  ui_port="${ui_port:-8821}"
+  DAL_OBSCURA_IMAGE="$DEMO_IMAGE" DAL_OBSCURA_DEMO_UI_PORT="$ui_port" docker compose -f "$COMPOSE_FILE" "$@"
 }
 
 build_image() {
@@ -39,7 +41,8 @@ build_image() {
 
 credentials() {
   prepare >/dev/null
-  printf 'Control plane UI: http://127.0.0.1:8821\n'
+  ui_origin="$(sed -n 's/^DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN=//p' "$ROOT/.runtime/control-plane.env")"
+  printf 'Control plane UI: %s\n' "${ui_origin:-http://127.0.0.1:8821}"
   printf 'API docs:         http://127.0.0.1:8820/docs\n'
   printf 'Keycloak:         http://127.0.0.1:8080\n'
   printf 'Flight URI:       grpc+tcp://127.0.0.1:8815\n'

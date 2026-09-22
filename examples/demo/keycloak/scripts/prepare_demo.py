@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import secrets
 from pathlib import Path
 
@@ -73,7 +74,6 @@ STATIC_VALUES = {
 def main() -> None:
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     (RUNTIME_DIR / "keycloak").mkdir(parents=True, exist_ok=True)
-    (RUNTIME_DIR / "setup.done").unlink(missing_ok=True)
     values = _load_or_create_values()
     _write_env_files(values)
     _render_realm(values)
@@ -82,7 +82,15 @@ def main() -> None:
 
 def _load_or_create_values() -> dict[str, str]:
     existing = _read_all_env_files()
-    values = {**existing, **STATIC_VALUES}
+    ui_origin = f"http://127.0.0.1:{_demo_ui_port(existing)}"
+    values = {
+        **existing,
+        **STATIC_VALUES,
+        "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": ui_origin,
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN": ui_origin,
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": f"{ui_origin}/auth/callback",
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI": ui_origin,
+    }
     changed = False
     for key, prefix in SECRET_KEYS.items():
         if not values.get(key):
@@ -92,6 +100,19 @@ def _load_or_create_values() -> dict[str, str]:
     if changed:
         _write_env_files(values)
     return values
+
+
+def _demo_ui_port(existing: dict[str, str]) -> int:
+    configured = os.environ.get("DAL_OBSCURA_DEMO_UI_PORT")
+    if configured is None:
+        origin = existing.get("DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN", "")
+        configured = origin.removeprefix("http://127.0.0.1:") or "8821"
+    if not configured.isascii() or not configured.isdecimal():
+        raise ValueError("DAL_OBSCURA_DEMO_UI_PORT must be an integer from 1 through 65535")
+    port = int(configured)
+    if not 1 <= port <= 65535:
+        raise ValueError("DAL_OBSCURA_DEMO_UI_PORT must be an integer from 1 through 65535")
+    return port
 
 
 def _read_all_env_files() -> dict[str, str]:

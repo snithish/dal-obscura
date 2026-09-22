@@ -11,6 +11,7 @@ def test_keycloak_demo_builds_the_governance_ui_and_proxies_api_same_origin() ->
     dockerignore = (REPOSITORY_ROOT / ".dockerignore").read_text()
 
     assert "control-plane-ui:" in compose
+    assert "127.0.0.1:${DAL_OBSCURA_DEMO_UI_PORT:-8821}:8080" in compose
     assert "dockerfile: ui/Dockerfile" in compose
     assert "pnpm run build" in dockerfile
     assert '"packageManager": "pnpm@' in package
@@ -20,7 +21,7 @@ def test_keycloak_demo_builds_the_governance_ui_and_proxies_api_same_origin() ->
     assert "location /v1/" in nginx
     assert "proxy_pass http://control-plane:8820" in nginx
     assert "proxy_set_header X-Forwarded-For $remote_addr;" in nginx
-    assert "proxy_set_header X-Forwarded-Host $host;" in nginx
+    assert nginx.count("proxy_set_header X-Forwarded-Host $http_host;") == 2
     assert "proxy_add_x_forwarded_for" not in nginx
     assert "Content-Security-Policy" in nginx
     assert "location /assets/" in nginx

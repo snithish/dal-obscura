@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from examples.demo.keycloak.scripts import prepare_demo
+import pytest
+
+from examples.demo.keycloak.scripts import prepare_demo, ui_smoke
 
 
 def test_keycloak_demo_fixture_declares_catalog_backed_iceberg_tables():
@@ -20,7 +22,19 @@ def test_keycloak_demo_fixture_declares_catalog_backed_iceberg_tables():
     assert len(fixture["policies"]) == 3
 
 
-def test_prepare_demo_writes_separate_ui_runtime_config(tmp_path, monkeypatch):
+def test_ui_smoke_reads_bootstrap_token_from_keycloak_demo_runtime(tmp_path, monkeypatch):
+    monkeypatch.setattr(ui_smoke, "DEMO_DIR", tmp_path)
+    runtime_dir = tmp_path / ".runtime"
+    runtime_dir.mkdir()
+    (runtime_dir / "control-plane.env").write_text(
+        "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN=local-test-token\n", encoding="utf-8"
+    )
+
+    assert ui_smoke.control_plane_admin_token() == "local-test-token"
+
+
+@pytest.mark.parametrize("ui_port", ["8821", "8822"])
+def test_prepare_demo_writes_separate_ui_runtime_config(tmp_path, monkeypatch, ui_port):
     runtime_dir = tmp_path / ".runtime"
     realm_file = runtime_dir / "keycloak" / "realm.json"
 
@@ -33,6 +47,10 @@ def test_prepare_demo_writes_separate_ui_runtime_config(tmp_path, monkeypatch):
     monkeypatch.setattr(prepare_demo, "CLIENT_ENV", runtime_dir / "client.env")
     monkeypatch.setattr(prepare_demo, "SETUP_ENV", runtime_dir / "setup.env")
     monkeypatch.setattr(prepare_demo, "UI_ENV", runtime_dir / "ui.env")
+    monkeypatch.setenv("DAL_OBSCURA_DEMO_UI_PORT", ui_port)
+    runtime_dir.mkdir(parents=True)
+    setup_marker = runtime_dir / "setup.done"
+    setup_marker.write_text("", encoding="utf-8")
 
     prepare_demo.main()
 
@@ -42,11 +60,18 @@ def test_prepare_demo_writes_separate_ui_runtime_config(tmp_path, monkeypatch):
     ui_client = next(
         client for client in realm["clients"] if client["clientId"] == "dal-obscura-ui"
     )
+    ui_origin = f"http://127.0.0.1:{ui_port}"
 
     assert "DAL_OBSCURA_API_BASE_URL=http://127.0.0.1:8820" in ui_env
     assert (
-        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI=http://127.0.0.1:8821/auth/callback"
+        f"DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI={ui_origin}/auth/callback"
         in control_plane_env
     )
-    assert ui_client["redirectUris"] == ["http://127.0.0.1:8821/auth/callback"]
-    assert ui_client["webOrigins"] == ["http://127.0.0.1:8821"]
+    assert f"DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS={ui_origin}" in control_plane_env
+    assert (
+        f"DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI={ui_origin}"
+        in control_plane_env
+    )
+    assert ui_client["redirectUris"] == [f"{ui_origin}/auth/callback"]
+    assert ui_client["webOrigins"] == [ui_origin]
+    assert setup_marker.exists()

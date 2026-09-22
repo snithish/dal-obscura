@@ -104,7 +104,7 @@ services:
     env_file:
       - .runtime/ui.env
     ports:
-      - "127.0.0.1:8821:8080"
+      - "127.0.0.1:${DAL_OBSCURA_DEMO_UI_PORT:-8821}:8080"
 
   dal-obscura:
     image: ${DAL_OBSCURA_IMAGE:-ghcr.io/snithish/dal-obscura:latest}

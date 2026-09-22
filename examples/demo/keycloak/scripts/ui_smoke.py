@@ -2,12 +2,29 @@ from __future__ import annotations
 
 import http.cookiejar
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
 
-BASE_URL = "http://127.0.0.1:8821"
+DEMO_DIR = Path(__file__).resolve().parents[1]
+
+
+def _base_url() -> str:
+    port = os.environ.get("DAL_OBSCURA_DEMO_UI_PORT")
+    if port is None:
+        env_path = DEMO_DIR / ".runtime" / "control-plane.env"
+        if env_path.exists():
+            for line in env_path.read_text(encoding="utf-8").splitlines():
+                key, separator, value = line.partition("=")
+                if separator and key == "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN":
+                    return value
+        port = "8821"
+    return f"http://127.0.0.1:{port}"
+
+
+BASE_URL = _base_url()
 
 
 class SmokeFailure(RuntimeError):
@@ -62,7 +79,7 @@ def json_object(raw: bytes, label: str) -> dict[str, object]:
 
 def control_plane_admin_token() -> str:
     """Read local bootstrap secret without exposing it in smoke output."""
-    path = Path(__file__).resolve().parents[2] / ".runtime" / "control-plane.env"
+    path = DEMO_DIR / ".runtime" / "control-plane.env"
     if not path.exists():
         raise SmokeFailure(f"missing local control-plane environment: {path}")
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -110,7 +127,7 @@ def main() -> None:
     status, raw, _ = request(opener, "/v1/logout", method="POST", headers={"x-csrf-token": csrf})
     expect(
         status == 200 and json_object(raw, "logout") == {"authenticated": False},
-        "logout did not expire the browser session",
+        f"logout failed with status {status}: {raw.decode('utf-8', errors='replace')[:200]}",
     )
     status, _, _ = request(opener, "/v1/session")
     expect(status == 401, f"session remained authenticated after logout: {status}")

@@ -33,7 +33,8 @@ What happens:
 5. The control plane starts on `127.0.0.1:8820` with Postgres config storage,
    Keycloak token validation, and public UI authentication configuration.
    The governance UI is built from `apps/governance-ui`, served on
-   `127.0.0.1:8821`, and proxies `/v1` to the control plane on the same origin.
+   `127.0.0.1:8821` by default, and proxies `/v1` to the control plane on the
+   same origin. Set `DAL_OBSCURA_DEMO_UI_PORT` to choose another loopback port.
 6. The `setup` service creates the Iceberg table metadata and data files from `fixtures/demo_fixture.json`.
 7. The setup service waits for the control plane and provisions it through the
    HTTP API. It configures one Iceberg SQL catalog,
@@ -50,6 +51,9 @@ What happens:
 ./run credentials
 ```
 
+This prints generated passwords for the disposable local Keycloak users. Keep
+them on the local machine and use them only with this demo realm.
+
 The control-plane API remains on `http://127.0.0.1:8820`, with
 Swagger docs at `http://127.0.0.1:8820/docs`. Useful demo users:
 
@@ -60,13 +64,23 @@ Swagger docs at `http://127.0.0.1:8820/docs`. Useful demo users:
   behavior.
 - `blocked-user`: denied by policy.
 
-Open `http://127.0.0.1:8821` and use the **Platform owner** or **Data asset owner**
-shortcut to exercise the current authoring UI. This shortcut is a disposable demo
-password exchange: it places a Keycloak access token in an HttpOnly cookie and
-requires a CSRF header for cookie-authenticated mutations. It is not the
-authorization-code, PKCE, opaque-session, revocation, or local-security-parity
-flow required for the supported product; do not use it outside this demo. `./run
-token --as <user>` still prints a CLI access token for debugging scripted reads.
+Open the UI URL printed by `./run credentials` and use the **Platform owner** or
+**Data asset owner** shortcut to exercise the current authoring UI. This shortcut
+is a disposable demo password exchange: it places a Keycloak access token in an
+HttpOnly cookie and requires a CSRF header for cookie-authenticated mutations.
+This UI shortcut does not exercise the authorization-code/PKCE browser flow or
+the production session and revocation model. Use it only with this disposable
+demo. `./run token --as <user>` prints a CLI access token for debugging scripted
+reads.
+
+If port 8821 is already in use, start the demo on another loopback port. The
+runner writes that origin into its OIDC callback and Keycloak realm settings:
+
+```bash
+DAL_OBSCURA_DEMO_UI_PORT=8822 ./run up
+```
+
+`./run credentials` prints the configured UI URL, and `./run ui-smoke` uses it.
 
 ## Demo Flow
 
