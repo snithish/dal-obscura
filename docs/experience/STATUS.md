@@ -18,6 +18,14 @@ live local IdP or running production stack.
 
 ## Current packet snapshot — 2026-09-22
 
+UI continuation: replaced the selected-asset dropdown with a searchable,
+scrollable Mantine inventory table showing catalog/format, owners and publication
+state. Readers can browse without edit authority; pinned reviews remain locked.
+Asset tabs now use Mantine keyboard navigation and associated tab panels.
+The owning reader story failed before the fix and passes afterward. TypeScript,
+13 asset-workspace stories and all 54 built-app browser checks pass. API fixtures
+remain synthetic; live backend and human review gates are not closed by this.
+
 - **R01:** local toolchain, typing, route, plugin, and locked-build checks pass;
   clean-install/advisory and exact support inventory evidence remain open.
 - **R02:** local OIDC/CSRF/origin/proxy contracts and challenge recovery pass;

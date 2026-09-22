@@ -22,6 +22,13 @@ code, pre, .mono { font-family: var(--mantine-font-family-monospace); }
 .workbench-principal { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workbench-theme { width: 148px; }
 .workbench-main { max-width: none; }
+.asset-inventory { padding: 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.asset-inventory-table { overflow: auto; max-height: 280px; margin-top: 12px; }
+.asset-inventory-table table { min-width: 640px; }
+.asset-inventory-table tr[data-selected] { background: var(--selection); }
+.asset-inventory-table th { white-space: nowrap; }
+.asset-inventory-table td { overflow-wrap: anywhere; }
+.asset-tabs .mantine-Tabs-tab[data-active] { color: var(--selection-text); border-color: var(--primary); }
 .workbench-health { color: var(--text-secondary); background: var(--surface-subtle); }
 .workbench-health[data-ready] { color: var(--success); background: var(--success-surface); }
 .mantine-AppShell-navbar, .mantine-Drawer-content, .mantine-Drawer-header, .mantine-Combobox-dropdown { background: var(--surface); color: var(--text); border-color: var(--border); }

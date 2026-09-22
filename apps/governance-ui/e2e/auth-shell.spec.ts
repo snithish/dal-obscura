@@ -483,7 +483,7 @@ test("review-only publisher links preserve read-only authoring while permitting 
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001&draft=current-draft&draft_revision=0#assets");
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Save deny-all draft" })).toBeDisabled();
-  await expect(page.locator("#asset-select")).toBeDisabled();
+  await expect(page.getByRole("region", { name: "Governed assets table" }).getByRole("button")).toBeDisabled();
 
   await page.getByRole("button", { name: "Review for publish" }).click();
   await expect(page.getByText("Server review is current for this saved draft revision. You can publish it now.")).toBeVisible();
@@ -601,11 +601,11 @@ test("late asset lookup responses cannot replace the current inventory", async (
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
   await expect(search).toBeEnabled();
   await search.fill("fresh");
-  await expect(page.locator("#asset-select")).toContainText("demo / fresh-orders");
+  await expect(page.getByRole("region", { name: "Governed assets table" })).toContainText("fresh-orders");
 
   deferredInventory.release();
-  await expect(page.locator("#asset-select")).toContainText("demo / fresh-orders");
-  await expect(page.locator("#asset-select")).not.toContainText("demo / stale-orders");
+  await expect(page.getByRole("region", { name: "Governed assets table" })).toContainText("fresh-orders");
+  await expect(page.getByRole("region", { name: "Governed assets table" })).not.toContainText("stale-orders");
 });
 
 test("late policy version lookups cannot replace the selected revision", async ({ page }) => {

@@ -185,6 +185,19 @@ export const NestedPolicyDraft: Story = {
   },
 };
 
+export const ReaderInventoryAndKeyboardTabs: Story = {
+  args: { onAsset: fn(), access: undefined, session: { principal: "reader", groups: [], platform_admin: false, capabilities: [] } },
+  play: async ({ canvas, args }) => {
+    await expect(canvas.getByLabelText("Find governed asset")).toBeEnabled();
+    await userEvent.click(canvas.getByRole("button", { name: "orders" }));
+    await expect(args.onAsset).toHaveBeenCalledWith(asset.id);
+    canvas.getByRole("tab", { name: "Policy" }).focus();
+    await userEvent.keyboard("{ArrowRight}");
+    await expect(canvas.getByRole("tab", { name: "Tests" })).toHaveFocus();
+    await expect(canvas.getByRole("tabpanel")).toBeVisible();
+  },
+};
+
 export const DarkNestedPolicy: Story = {
   ...NestedPolicyDraft,
   globals: { theme: "dark" },
@@ -335,7 +348,7 @@ export const ConsumerCopyFailure: Story = {
     Object.defineProperty(clipboard, "writeText", { configurable: true, value: async () => { throw new Error("blocked"); } });
     try {
       await userEvent.click(canvas.getAllByRole("button", { name: "Copy" })[0]);
-      await expect(canvas.getAllByRole("status")[1]).toHaveTextContent("Clipboard access is unavailable");
+      await expect(canvas.getByText(/Clipboard access is unavailable/)).toBeVisible();
       await expect(canvas.getAllByRole("button", { name: "Retry copy" })[0]).toBeVisible();
       await expect(canvas.getAllByText(/DAL_OBSCURA_FLIGHT_URI/)[0]).toBeVisible();
     } finally {
