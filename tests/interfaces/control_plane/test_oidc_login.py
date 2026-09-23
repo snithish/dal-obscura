@@ -419,8 +419,7 @@ def test_authorization_code_exchange_logs_safe_upstream_error_metadata(monkeypat
     )
     assert record.upstream_status == 400
     assert record.upstream_error == "invalid_grant"
-    assert record.authorization_code_length == len("authorization-code-value")
-    assert record.pkce_verifier_length == len("pkce-verifier-value")
+    assert record.exception_type == "HTTPError"
     assert "private upstream details" not in caplog.text
     assert "authorization-code-value" not in caplog.text
     assert "pkce-verifier-value" not in caplog.text

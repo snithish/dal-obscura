@@ -195,9 +195,6 @@ def exchange_authorization_code(
                 "upstream_status": upstream_status,
                 "upstream_error": upstream_error,
                 "exception_type": type(exc).__name__,
-                "authorization_code_length": len(code),
-                "authorization_code_segments": code.count(".") + 1,
-                "pkce_verifier_length": len(code_verifier),
             },
         )
         raise HTTPException(status_code=502, detail="OIDC code exchange failed") from exc
