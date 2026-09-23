@@ -6,6 +6,15 @@ code, pre, .mono { font-family: var(--mantine-font-family-monospace); }
 .login-panel { max-width: 600px; margin: 48px auto; background: var(--surface); border-color: var(--border); }
 .bootstrap-login { display: grid; gap: 16px; }
 .mantine-Input-input { border-color: var(--control-border); background: var(--surface); color: var(--text); }
+.mantine-Input-input { box-sizing: border-box; min-width: 0; }
+.mantine-Button-root { box-sizing: border-box; height: auto; min-height: 36px; max-width: 100%; flex-shrink: 0; line-height: 1.25; }
+.mantine-Button-root.compact { min-height: 32px; }
+.mantine-Button-label { white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
+.mantine-Button-root.link-button { min-height: 24px; }
+.editor-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.editor-actions > .mantine-Button-root { flex: 0 1 auto; }
+.card-actions { align-items: center; }
+.card-actions > .mantine-Button-root { min-width: min-content; }
 .mantine-Modal-content, .mantine-Modal-header { background: var(--surface); color: var(--text); }
 .mantine-Button-root[data-variant="filled"] { color: var(--primary-contrast); }
 .mantine-Button-root[data-disabled], .mantine-Button-root:disabled { opacity: 1; }
@@ -26,16 +35,37 @@ code, pre, .mono { font-family: var(--mantine-font-family-monospace); }
 .workbench-main { max-width: none; }
 .asset-inventory { padding: 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
 .asset-inventory-table { overflow: auto; max-height: 280px; margin-top: 12px; }
-.asset-inventory-table table { min-width: 640px; }
+.asset-inventory-table table { min-width: 760px; }
 .asset-inventory-table tr[data-selected] { background: var(--selection); }
 .asset-inventory-table th { white-space: nowrap; }
 .asset-inventory-table td { overflow-wrap: anywhere; }
+.asset-inventory-table td:nth-child(1) { min-width: 160px; }
+.asset-inventory-table td:nth-child(2) { min-width: 130px; }
+.asset-inventory-table td:nth-child(3) { min-width: 240px; }
+.asset-inventory-table td:nth-child(4) { white-space: nowrap; }
+.asset-inventory-table td:nth-child(5) { min-width: 160px; }
 .asset-tabs .mantine-Tabs-tab[data-active] { color: var(--selection-text); border-color: var(--primary); }
 .policy-panel-switch { display: none; }
 .policy-review { margin-top: 24px; padding: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
 .policy-actions, .studio .editor-actions { position: sticky; bottom: 0; padding: 16px 0; background: var(--surface); z-index: 1; }
 .studio { overflow: clip; }
 .policy-diff td { overflow-wrap: anywhere; max-width: 360px; }
+.grant-row, .condition-row { min-width: 0; }
+.grant-row > *, .condition-row > * { min-width: 0; }
+.grant-row .mantine-NativeSelect-root, .condition-row .mantine-NativeSelect-root { width: 100%; }
+.grant-row .mantine-NativeSelect-input, .condition-row .mantine-NativeSelect-input { text-align: left; }
+.editor-actions > .mantine-Button-root { min-width: 0; }
+.provider-editor legend { flex-wrap: wrap; }
+@media (max-width: 760px) {
+  .workbench-account { flex-wrap: wrap; }
+  .asset-inventory > .mantine-Group-root { align-items: flex-start; flex-wrap: wrap; }
+  .editor-actions > .mantine-Button-root { flex: 1 1 9rem; }
+  .grant-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .grant-row > .mantine-Button-root { grid-column: 1 / -1; justify-self: start; }
+  .condition-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .condition-row > .mantine-Button-root { justify-self: start; }
+  .provider-order-actions { width: 100%; margin-left: 0; }
+}
 @media (max-width: 760px) {
   .policy-panel-switch { display: flex; margin-top: 16px; }
   .studio > section { display: none; }
