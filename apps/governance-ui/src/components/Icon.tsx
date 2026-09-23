@@ -1,6 +1,36 @@
 import type { SVGProps } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Activity, CircleAlert, CircleCheck, Database, History, LogOut, Menu, Plug, Search, Settings, ShieldCheck } from "lucide-react";
+import {
+  Activity,
+  ArrowDown,
+  ArrowUp,
+  Check,
+  ChevronDown,
+  CircleAlert,
+  CircleCheck,
+  ClipboardCheck,
+  Copy,
+  Database,
+  Filter,
+  History,
+  KeyRound,
+  LogIn,
+  LogOut,
+  Menu,
+  Pencil,
+  Play,
+  Plug,
+  Plus,
+  Redo2,
+  RefreshCw,
+  Save,
+  Search,
+  Settings,
+  ShieldCheck,
+  Trash2,
+  Undo2,
+  X,
+} from "lucide-react";
 
 export type IconName =
   | "activity"
@@ -13,7 +43,25 @@ export type IconName =
   | "log-out"
   | "circle-alert"
   | "circle-check"
-  | "menu";
+  | "menu"
+  | "arrow-down"
+  | "arrow-up"
+  | "check"
+  | "chevron-down"
+  | "clipboard-check"
+  | "copy"
+  | "filter"
+  | "key-round"
+  | "log-in"
+  | "pencil"
+  | "play"
+  | "plus"
+  | "redo"
+  | "refresh-cw"
+  | "save"
+  | "trash"
+  | "undo"
+  | "x";
 
 const icons: Record<IconName, LucideIcon> = {
   activity: Activity,
@@ -27,6 +75,24 @@ const icons: Record<IconName, LucideIcon> = {
   "circle-alert": CircleAlert,
   "circle-check": CircleCheck,
   menu: Menu,
+  "arrow-down": ArrowDown,
+  "arrow-up": ArrowUp,
+  check: Check,
+  "chevron-down": ChevronDown,
+  "clipboard-check": ClipboardCheck,
+  copy: Copy,
+  filter: Filter,
+  "key-round": KeyRound,
+  "log-in": LogIn,
+  pencil: Pencil,
+  play: Play,
+  plus: Plus,
+  redo: Redo2,
+  "refresh-cw": RefreshCw,
+  save: Save,
+  trash: Trash2,
+  undo: Undo2,
+  x: X,
 };
 
 export function Icon({ name, size = 18, ...props }: { name: IconName; size?: number } & Omit<SVGProps<SVGSVGElement>, "name">) {

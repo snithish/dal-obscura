@@ -6,6 +6,7 @@ import { controlPlane } from "../api";
 import { recoveryMessage } from "../recovery";
 import { isAbortError } from "../async";
 import { serializePathRules } from "../runtime_settings";
+import { Icon } from "./Icon";
 
 export type SettingsViewProps = {
   runtime?: RuntimeSettings | null;
@@ -322,7 +323,7 @@ export function SettingsView({
           <h2>Runtime and identity</h2>
           <p className="muted">These controls affect ticket fan-out and authentication. Changes are server-validated and do not expose secrets.</p>
         </div>
-        <Button type="button" variant="default" className="secondary" onClick={reload}>Refresh</Button>
+        <Button type="button" variant="default" className="secondary" onClick={reload} leftSection={<Icon name="refresh-cw" size={16} />}>Refresh</Button>
       </div>
       <div className="form-card">
         <h3>Runtime limits</h3>
@@ -337,15 +338,15 @@ export function SettingsView({
           <p className="help">Every metadata and data location must stay under one of these roots. Leave the list empty only for an explicitly local development profile.</p>
           <div className="path-rule-list">{pathRuleRoots.map((root, index) => <div className="path-rule-row" key={`${index}-${root}`}>
             <TextInput aria-label={`Storage path root ${index + 1}`} value={root} onChange={(event) => updatePathRule(index, event.currentTarget.value)} placeholder="s3://warehouse/curated" />
-            <Button className="danger" variant="default" size="sm" type="button" onClick={() => { markDirty("runtime"); setPathRuleRoots((current) => current.filter((_, row) => row !== index)); }}>Remove</Button>
+            <Button className="danger" variant="default" size="sm" type="button" onClick={() => { markDirty("runtime"); setPathRuleRoots((current) => current.filter((_, row) => row !== index)); }} leftSection={<Icon name="trash" size={15} />}>Remove</Button>
           </div>)}</div>
-          <Button className="secondary" variant="default" type="button" onClick={() => { markDirty("runtime"); setPathRuleRoots((current) => [...current, ""]); }}>Add storage root</Button>
+          <Button className="secondary" variant="default" type="button" onClick={() => { markDirty("runtime"); setPathRuleRoots((current) => [...current, ""]); }} leftSection={<Icon name="plus" size={16} />}>Add storage root</Button>
         </fieldset>
-        <Button type="button" className="primary" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save runtime settings"}</Button>
+        <Button type="button" className="primary" disabled={saving} onClick={() => void save()} leftSection={<Icon name="save" size={16} />}>{saving ? "Saving…" : "Save runtime settings"}</Button>
         {message && <p className="notice" role="status">{message}</p>}
       </div>
       <div className="form-card">
-        <div className="form-card-head"><h3>Authentication providers</h3><Button className="secondary" variant="default" type="button" onClick={addProvider}>Add OIDC provider</Button></div>
+        <div className="form-card-head"><h3>Authentication providers</h3><Button className="secondary" variant="default" type="button" onClick={addProvider} leftSection={<Icon name="plus" size={16} />}>Add OIDC provider</Button></div>
         <p className="help">The ordered provider chain is evaluated top to bottom. Secrets and static JWKS material are never editable in this browser.</p>
         {providerRows.length ? <div className="provider-editor-list">{providerRows.map((provider, index) => {
           const providerField = (key: string, label: string, options: { type?: string; placeholder?: string; help?: string } = {}) => {
@@ -366,7 +367,7 @@ export function SettingsView({
             </div>;
           };
           return <fieldset className="provider-editor" key={provider.id}>
-            <legend><span>{provider.module.split(".").at(-1) ?? provider.module}</span><small>Order {provider.ordinal}</small><span className="provider-order-actions"><Button className="secondary" variant="default" size="sm" type="button" disabled={index === 0} onClick={() => moveProvider(index, -1)}>Move up</Button><Button className="secondary" variant="default" size="sm" type="button" disabled={index === providerRows.length - 1} onClick={() => moveProvider(index, 1)}>Move down</Button><Button className="danger" variant="default" size="sm" type="button" onClick={() => removeProvider(index)}>Remove</Button></span></legend>
+            <legend><span>{provider.module.split(".").at(-1) ?? provider.module}</span><small>Order {provider.ordinal}</small><span className="provider-order-actions"><Button className="secondary" variant="default" size="sm" type="button" disabled={index === 0} onClick={() => moveProvider(index, -1)} leftSection={<Icon name="arrow-up" size={14} />}>Move up</Button><Button className="secondary" variant="default" size="sm" type="button" disabled={index === providerRows.length - 1} onClick={() => moveProvider(index, 1)} leftSection={<Icon name="arrow-down" size={14} />}>Move down</Button><Button className="danger" variant="default" size="sm" type="button" onClick={() => removeProvider(index)} leftSection={<Icon name="trash" size={14} />}>Remove</Button></span></legend>
             <Checkbox className="provider-enabled" checked={provider.enabled} onChange={(event) => updateProviderEnabled(index, event.currentTarget.checked)} label="Enabled" />
             <div className="form-grid">
               {providerField("issuer", "Issuer URL", { placeholder: "https://id.example.com/" })}
@@ -382,7 +383,7 @@ export function SettingsView({
             </div>
           </fieldset>;
         })}</div> : <p className="empty-result"><strong>No identity providers configured.</strong><br />Add the first OIDC provider through the control-plane bootstrap or API.</p>}
-        <Button type="button" className="primary" disabled={saving || Object.keys(providerErrors).length > 0} onClick={() => void saveProviders()}>{saving ? "Saving…" : "Save identity providers"}</Button>
+        <Button type="button" className="primary" disabled={saving || Object.keys(providerErrors).length > 0} onClick={() => void saveProviders()} leftSection={<Icon name="save" size={16} />}>{saving ? "Saving…" : "Save identity providers"}</Button>
       </div>
     </section>
   );

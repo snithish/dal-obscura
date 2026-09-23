@@ -68,7 +68,7 @@ export function AppShell(props: AppShellProps) {
           <Select aria-label="Color theme" value={props.theme} allowDeselect={false}
             data={[{ value: "system", label: "System theme" }, { value: "light", label: "Light theme" }, { value: "dark", label: "Dark theme" }]}
             onChange={(value) => { if (value === "system" || value === "light" || value === "dark") props.onThemeChange(value); }} className="workbench-theme" />
-          {(props.session || props.logoutPending) && <Button variant="default" size="sm" onClick={props.onLogout}>{props.logoutPending ? "Retry sign out" : "Sign out"}</Button>}
+          {(props.session || props.logoutPending) && <Button variant="default" size="sm" onClick={props.onLogout} leftSection={<Icon name="log-out" size={16} />}>{props.logoutPending ? "Retry sign out" : "Sign out"}</Button>}
         </Group>
       </MantineAppShell.Header>
       <MantineAppShell.Navbar p="md">

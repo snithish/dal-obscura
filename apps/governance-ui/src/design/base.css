@@ -45,6 +45,7 @@ code, pre, .mono { font-family: var(--mantine-font-family-monospace); }
 .asset-inventory-table td:nth-child(4) { white-space: nowrap; }
 .asset-inventory-table td:nth-child(5) { min-width: 160px; }
 .asset-tabs .mantine-Tabs-tab[data-active] { color: var(--selection-text); border-color: var(--primary); }
+.asset-tab-label { display: inline-flex; align-items: center; gap: 7px; }
 .policy-panel-switch { display: none; }
 .studio .editor-actions { position: sticky; bottom: 0; padding: 16px 0; background: var(--surface); z-index: 1; }
 .studio { overflow: clip; }

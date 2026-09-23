@@ -1,5 +1,6 @@
 import { Button, Group, Table, Text, TextInput } from "@mantine/core";
 import type { Asset } from "../api";
+import { Icon } from "./Icon";
 
 export type AssetInventoryProps = {
   assets: Asset[];
@@ -17,7 +18,8 @@ export function AssetInventory(props: AssetInventoryProps) {
     <Group justify="space-between" align="end">
       <TextInput label="Find governed asset" type="search" value={props.search}
         placeholder="Search catalog or asset"
-        onChange={(event) => props.onSearch(event.currentTarget.value)} />
+        onChange={(event) => props.onSearch(event.currentTarget.value)}
+        leftSection={<Icon name="search" size={15} />} />
       <Text size="sm" c="dimmed" role="status">{props.loading ? "Updating inventory…" : `${props.assets.length} assets loaded`}</Text>
     </Group>
     {props.assets.length ? <div className="asset-inventory-table" role="region" aria-label="Governed assets table" tabIndex={0}>
@@ -33,6 +35,6 @@ export function AssetInventory(props: AssetInventoryProps) {
         </Table.Tr>)}</Table.Tbody>
       </Table>
     </div> : <Text role="status">{props.search ? "No governed assets match this search. Clear the search to browse again." : "No governed assets are available to your account."}</Text>}
-    {props.hasMore && <Button variant="default" disabled={props.loading} onClick={props.onLoadMore}>Load more assets</Button>}
+    {props.hasMore && <Button variant="default" disabled={props.loading} onClick={props.onLoadMore} leftSection={<Icon name="chevron-down" size={16} />}>Load more assets</Button>}
   </section>;
 }

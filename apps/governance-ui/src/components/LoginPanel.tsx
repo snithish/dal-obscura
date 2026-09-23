@@ -1,6 +1,7 @@
 import type { UiAuthConfig, SessionOptions } from "../api";
 import { controlPlane } from "../api";
 import { Alert, Button, Paper, Stack, Text, TextInput, Title } from "@mantine/core";
+import { Icon } from "./Icon";
 
 export type LoginPanelProps = {
   showAuth?: boolean;
@@ -44,7 +45,7 @@ export function LoginPanel({
       <Title order={2}>{title}</Title>
       <Text c="dimmed">{message}</Text>
       {showAuth && authConfig?.authority && (
-        <Button type="button" onClick={controlPlane.startLogin}>
+        <Button type="button" onClick={controlPlane.startLogin} leftSection={<Icon name="log-in" size={16} />}>
           Sign in with SSO
         </Button>
       )}
@@ -64,7 +65,7 @@ export function LoginPanel({
               onChange={(event) => onBootstrapToken(event.target.value)}
               placeholder="Paste the configured local token"
             />
-          <Button type="submit" loading={loggingIn}>
+          <Button type="submit" loading={loggingIn} leftSection={<Icon name="key-round" size={16} />}>
             {loggingIn ? "Signing in…" : "Sign in locally"}
           </Button>
         </form>
@@ -81,7 +82,7 @@ export function LoginPanel({
         </p>
       )}
       {retry && (
-        <Button type="button" variant="default" onClick={() => void retry()}>
+        <Button type="button" variant="default" onClick={() => void retry()} leftSection={<Icon name="refresh-cw" size={16} />}>
           Retry connection
         </Button>
       )}
