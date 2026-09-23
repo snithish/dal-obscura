@@ -11,29 +11,14 @@ def test_keycloak_demo_builds_the_governance_ui_and_proxies_api_same_origin() ->
     package = (REPOSITORY_ROOT / "apps/governance-ui/package.json").read_text()
     dockerignore = (REPOSITORY_ROOT / ".dockerignore").read_text()
     runner = (REPOSITORY_ROOT / "examples/demo/keycloak/run").read_text()
-    caddyfile = (REPOSITORY_ROOT / "examples/demo/keycloak/Caddyfile").read_text()
 
     assert "control-plane-ui:" in compose
     assert "name: dal-obscura-keycloak-demo" in compose
-    assert "127.0.0.1:${DAL_OBSCURA_DEMO_CADDY_HTTP_PORT:-80}:80" in compose
-    assert "127.0.0.1:${DAL_OBSCURA_DEMO_CADDY_HTTPS_PORT:-443}:443" in compose
-    assert "caddy-data:/data" in compose
-    assert "keycloak.localhost" in caddyfile
-    assert "governance.localhost" in caddyfile
-    assert "api.localhost" in caddyfile
-    assert caddyfile.count("tls internal") == 3
-    assert "reverse_proxy keycloak:8080" in caddyfile
-    assert "reverse_proxy control-plane-ui:8080" in caddyfile
-    assert "reverse_proxy control-plane:8820" in caddyfile
-    assert "127.0.0.1:8081:8080" not in compose
-    assert "DAL_OBSCURA_DEMO_UI_PORT" not in compose
-    assert "127.0.0.1:8820:8820" not in compose
-    assert "127.0.0.1:5432:5432" not in compose
-    podman_pf = (REPOSITORY_ROOT / "examples/demo/keycloak/pf-anchor.conf").read_text()
-    assert "rdr pass on lo0 inet proto tcp" in podman_pf
-    assert "127.0.0.1 port 80 -> 127.0.0.1 port 18080" in podman_pf
-    assert "127.0.0.1 port 443 -> 127.0.0.1 port 18443" in podman_pf
-    assert "podman_loopback_ports.sh" in runner
+    assert "127.0.0.1:20080:8080" in compose
+    assert "127.0.0.1:25432:5432" in compose
+    assert "127.0.0.1:28820:8820" in compose
+    assert "127.0.0.1:${DAL_OBSCURA_DEMO_UI_PORT:-28821}:8080" in compose
+    assert "127.0.0.1:28115:8815" in compose
     assert "dockerfile: ui/Dockerfile" in compose
     assert "pnpm run build" in dockerfile
     assert '"packageManager": "pnpm@' in package

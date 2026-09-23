@@ -107,7 +107,8 @@ def test_ui_smoke_reads_bootstrap_token_from_keycloak_demo_runtime(tmp_path, mon
     assert ui_smoke.control_plane_admin_token() == "local-test-token"
 
 
-def test_prepare_demo_writes_https_runtime_config(tmp_path, monkeypatch):
+@pytest.mark.parametrize("ui_port", ["28821", "28822"])
+def test_prepare_demo_writes_separate_ui_runtime_config(tmp_path, monkeypatch, ui_port):
     runtime_dir = tmp_path / ".runtime"
     realm_file = runtime_dir / "keycloak" / "realm.json"
 
@@ -120,6 +121,7 @@ def test_prepare_demo_writes_https_runtime_config(tmp_path, monkeypatch):
     monkeypatch.setattr(prepare_demo, "CLIENT_ENV", runtime_dir / "client.env")
     monkeypatch.setattr(prepare_demo, "SETUP_ENV", runtime_dir / "setup.env")
     monkeypatch.setattr(prepare_demo, "UI_ENV", runtime_dir / "ui.env")
+    monkeypatch.setenv("DAL_OBSCURA_DEMO_UI_PORT", ui_port)
     runtime_dir.mkdir(parents=True)
     setup_marker = runtime_dir / "setup.done"
     setup_marker.write_text("", encoding="utf-8")
@@ -136,13 +138,21 @@ def test_prepare_demo_writes_https_runtime_config(tmp_path, monkeypatch):
     ui_groups_mapper = next(
         mapper for mapper in ui_client["protocolMappers"] if mapper["name"] == "groups"
     )
-    ui_origin = "https://governance.localhost"
-    issuer = "https://keycloak.localhost/realms/dal-obscura-demo"
+    ui_origin = f"http://127.0.0.1:{ui_port}"
 
-    assert "KC_HOSTNAME=https://keycloak.localhost" in keycloak_env
-    assert f"DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER={issuer}" in control_plane_env
-    assert f"DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER={issuer}" in control_plane_env
-    assert "DAL_OBSCURA_API_BASE_URL=https://api.localhost" in ui_env
+    assert "127.0.0.1:20080:8080" in Path("examples/demo/keycloak/compose.yaml").read_text(
+        encoding="utf-8"
+    )
+    assert "KC_HOSTNAME=http://127.0.0.1:20080" in keycloak_env
+    assert (
+        "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER=http://127.0.0.1:20080/realms/dal-obscura-demo"
+        in control_plane_env
+    )
+    assert (
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER=http://127.0.0.1:20080/realms/dal-obscura-demo"
+        in control_plane_env
+    )
+    assert "DAL_OBSCURA_API_BASE_URL=http://127.0.0.1:28820" in ui_env
     assert (
         f"DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI={ui_origin}/auth/callback"
         in control_plane_env

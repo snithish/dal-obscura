@@ -1,11 +1,16 @@
 # Local demo validation
 
-Validation run: 2026-09-22 (HTTP gateway before Caddy migration)
+Validation run: 2026-09-22
 
-The prior live validation below used the HTTP loopback gateway. The current
-demo uses Caddy HTTPS at `https://governance.localhost` and
-`https://keycloak.localhost`; rerun the live checks after trusting the local
-Caddy root certificate before treating the HTTPS migration as validated.
+Endpoint update: 2026-09-23. The local demo now uses loopback ports in the
+20000 range and no longer has a Caddy gateway. Runtime evidence below predates
+this endpoint update; repeat the live OIDC and stack-health checks for the new
+ports before treating them as validated.
+
+Start the demo with `./run up`. The management UI is served at
+`http://127.0.0.1:28821` by default (or the configured
+`DAL_OBSCURA_DEMO_UI_PORT`). Sign-in uses the configured Keycloak realm and the
+normal OIDC authorization-code flow with PKCE.
 
 ## Passed
 

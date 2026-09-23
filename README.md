@@ -46,9 +46,8 @@ and [implementation ledger](docs/plugin-platform/STATUS.md) for the evidence.
 ## Fast start
 
 The local Keycloak demo assembles IAM, Postgres, control plane, Iceberg, Flight,
-and the authenticated governance UI behind Caddy HTTPS. It is a disposable
-development profile; its local certificate authority and demo credentials do
-not satisfy production acceptance:
+and the authenticated governance UI. It is a disposable development profile;
+its HTTP Keycloak and demo credentials do not satisfy production acceptance:
 
 ```bash
 cd examples/demo/keycloak
@@ -56,12 +55,11 @@ cd examples/demo/keycloak
 ./run smoke
 ```
 
-Open the Flight data plane at `grpc://127.0.0.1:8815`.
+Open the Flight data plane at `grpc://127.0.0.1:28115`.
 
-Open the governance UI at `https://governance.localhost`. Export and trust the
-Caddy root certificate using the [demo instructions](examples/demo/keycloak/README.md#credentials)
-first. The normal page starts signed out. Choose **Sign in with SSO** when the
-demo OIDC settings are enabled, or use the local control-plane token form when the service is running with
+Open the governance UI at `http://127.0.0.1:28821`. The normal page starts signed
+out. Choose **Sign in with SSO** when the demo OIDC settings are enabled, or use
+the local control-plane token form when the service is running with
 `DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED=true`. The production profile
 disables bootstrap and requires OIDC.
 

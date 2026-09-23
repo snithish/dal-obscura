@@ -232,8 +232,8 @@ def test_demo_owner_keys_are_scoped_to_oidc_issuer(monkeypatch) -> None:
     module = _load_script("provision_demo")
 
     assert module._scoped_demo_owners(["group:asset-owners", "asset-owner"]) == [
-        "https://keycloak.localhost/realms/dal-obscura-demo|g|asset-owners",
-        "https://keycloak.localhost/realms/dal-obscura-demo|u|asset-owner",
+        "http://127.0.0.1:20080/realms/dal-obscura-demo|g|asset-owners",
+        "http://127.0.0.1:20080/realms/dal-obscura-demo|u|asset-owner",
     ]
     assert module._scoped_demo_owners(["https://issuer.example/realm|group:asset-owners"]) == [
         "https://issuer.example/realm|group:asset-owners"

@@ -25,12 +25,12 @@ function demoAdminPassword(): string {
 
 test("live local Keycloak sign-in, governed inventory, and sign-out", async ({ page }) => {
   test.skip(!enabled, "set DAL_OBSCURA_E2E_LIVE_OIDC=1 to run against the local demo");
-  const baseURL = process.env.DAL_OBSCURA_E2E_BASE_URL ?? "https://governance.localhost";
+  const baseURL = process.env.DAL_OBSCURA_E2E_BASE_URL ?? "http://127.0.0.1:28821";
   const origin = new URL(baseURL).origin;
 
   await page.goto("/");
   await page.getByRole("button", { name: "Sign in with SSO" }).click();
-  await expect(page).toHaveURL(/keycloak\.localhost\/realms\/dal-obscura-demo\/protocol\/openid-connect\/auth/);
+  await expect(page).toHaveURL(/127\.0\.0\.1:20080\/realms\/dal-obscura-demo\/protocol\/openid-connect\/auth/);
   await page.getByLabel("Username or email").fill("demo-admin");
   await page.getByRole("textbox", { name: "Password" }).fill(demoAdminPassword());
   await page.getByRole("button", { name: "Sign In" }).click();

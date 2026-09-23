@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import http.cookiejar
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -11,13 +12,16 @@ DEMO_DIR = Path(__file__).resolve().parents[1]
 
 
 def _base_url() -> str:
-    env_path = DEMO_DIR / ".runtime" / "control-plane.env"
-    if env_path.exists():
-        for line in env_path.read_text(encoding="utf-8").splitlines():
-            key, separator, value = line.partition("=")
-            if separator and key == "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN":
-                return value
-    return "https://governance.localhost"
+    port = os.environ.get("DAL_OBSCURA_DEMO_UI_PORT")
+    if port is None:
+        env_path = DEMO_DIR / ".runtime" / "control-plane.env"
+        if env_path.exists():
+            for line in env_path.read_text(encoding="utf-8").splitlines():
+                key, separator, value = line.partition("=")
+                if separator and key == "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN":
+                    return value
+        port = "28821"
+    return f"http://127.0.0.1:{port}"
 
 
 BASE_URL = _base_url()

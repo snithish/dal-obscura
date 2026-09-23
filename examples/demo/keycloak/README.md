@@ -12,8 +12,6 @@ changes survive container restarts.
 
 - Docker with Compose v2
 - Python 3 for the local `./run` helper
-- On macOS with Podman, administrator access for temporary loopback-only port
-  redirects (the helper asks during `./run up`)
 
 ## Start
 
@@ -29,17 +27,14 @@ What happens:
    `keycloak/realm.template.json`.
 2. `./run up` builds a local `dal-obscura-demo:local` image from this checkout,
    unless `DAL_OBSCURA_IMAGE` is set to a prebuilt image.
-3. Docker Compose starts Postgres and Keycloak on the private Compose network.
-   Caddy is the only HTTP gateway published to the host, bound to loopback on
-   ports 80 and 443. It routes `keycloak.localhost`, `governance.localhost`,
-   and `api.localhost` to their Compose services and issues local HTTPS
-   certificates.
+3. Docker Compose starts Postgres on `127.0.0.1:25432` and Keycloak on
+   `127.0.0.1:20080` (Keycloak still listens on port `8080` inside the container).
 4. The `migrate` service runs `dal-obscura-migrate upgrade` against Postgres.
-5. The control plane starts privately on the Compose network with Postgres config storage,
+5. The control plane starts on `127.0.0.1:28820` with Postgres config storage,
    Keycloak token validation, and public UI authentication configuration.
    The governance UI is built from `apps/governance-ui`, served on
-   `governance.localhost` through Caddy and proxies `/v1` to the control plane
-   on the same origin.
+   `127.0.0.1:28821` by default, and proxies `/v1` to the control plane on the
+   same origin. Set `DAL_OBSCURA_DEMO_UI_PORT` to choose another loopback port.
 6. The `setup` service creates the Iceberg table metadata and data files from `fixtures/demo_fixture.json`.
 7. The setup service waits for the control plane and provisions it through the
    HTTP API. It configures one Iceberg SQL catalog,
@@ -47,7 +42,7 @@ What happens:
    promotes them to governed assets.
 8. The setup service assigns `group:asset-owners`, saves the demo policies
    directly to each live asset, and configures OIDC/JWKS auth for the data plane.
-9. The Flight data plane starts on `127.0.0.1:8815`.
+9. The Flight data plane starts on `127.0.0.1:28115`.
 
 ## Credentials
 
@@ -58,8 +53,8 @@ What happens:
 This prints generated passwords for the disposable local Keycloak users. Keep
 them on the local machine and use them only with this demo realm.
 
-The control-plane API is reachable through Caddy at `https://api.localhost`,
-with Swagger docs at `https://api.localhost/docs`. Useful demo users:
+The control-plane API remains on `http://127.0.0.1:28820`, with
+Swagger docs at `http://127.0.0.1:28820/docs`. Useful demo users:
 
 - `demo-admin`: platform admin access.
 - `asset-owner`: can edit policies, filters, and masks for the demo asset.
@@ -73,36 +68,21 @@ Keycloak handles the normal Authorization Code + PKCE flow. Sign in as
 workspace. `./run token --as <user>` prints a CLI access token for debugging
 scripted reads; it does not create a browser session.
 
-The public OIDC issuer is
-`https://keycloak.localhost/realms/dal-obscura-demo`. Keycloak redirects the
-browser to `https://governance.localhost/auth/callback`. The runtime keeps
-container-to-container OIDC token and JWKS requests on Compose DNS at
-`keycloak:8080`; those addresses are not browser URLs.
+The public OIDC issuer uses `http://127.0.0.1:20080/realms/dal-obscura-demo`.
+Keycloak redirects the browser back to the UI callback at
+`http://127.0.0.1:28821/auth/callback` by default; if you change the UI port,
+`./run up` updates the registered callback to that UI origin.
 
-On macOS with Podman, the runner publishes Caddy on high loopback ports and
-uses a temporary PF anchor on `lo0` to redirect standard ports 80/443. It does
-not expose the gateway on network interfaces. `./run down` removes the redirect
-and its PF enable reference. The helper needs the stock `com.apple/*` redirect
-anchor; it fails closed if the machine has a custom PF ruleset without it.
-
-The first run creates a local Caddy certificate authority. Export its root
-certificate after startup:
+If port 28821 is already in use, start the demo on another loopback port from
+20000 through 29999. The
+runner writes that origin into its OIDC callback and Keycloak realm settings:
 
 ```bash
-./run certificate
+DAL_OBSCURA_DEMO_UI_PORT=28822 ./run up
 ```
 
-On macOS, trust it in the login keychain so browsers and local tools accept the
-demo HTTPS certificates:
-
-```bash
-security add-trusted-cert -r trustRoot \
-  -k "$HOME/Library/Keychains/login.keychain-db" .runtime/caddy-root.crt
-```
-
-`./run credentials` prints the portless UI and Keycloak URLs, and `./run
-ui-smoke` uses the configured UI origin. Ports 80 and 443 must be free. Set
-`DAL_OBSCURA_DEMO_PROJECT_NAME` to target another Compose project and its
+`./run credentials` prints the configured UI URL, and `./run ui-smoke` uses it.
+Set `DAL_OBSCURA_DEMO_PROJECT_NAME` to target another Compose project and its
 separate database volume. The default project name stays stable across runs.
 
 ## Demo Flow
@@ -133,12 +113,12 @@ running and UI dependencies installed, run:
 
 ```bash
 DAL_OBSCURA_E2E_LIVE_OIDC=1 \
-DAL_OBSCURA_E2E_BASE_URL=https://governance.localhost \
+DAL_OBSCURA_E2E_BASE_URL=http://127.0.0.1:8822 \
 pnpm --dir ../../../apps/governance-ui test:e2e -- e2e/live-oidc-demo.spec.ts
 ```
 
-The test reads the generated `demo-admin` password from `.runtime/client.env`
-and reports only pass/fail. Trust the Caddy root certificate before running it.
+Adjust the base URL when using a different UI port. The test reads the generated
+`demo-admin` password from `.runtime/client.env` and reports only pass/fail.
 
 See [LOCAL_VALIDATION.md](LOCAL_VALIDATION.md) for the latest recorded run and
 any acceptance checks that remain pending.

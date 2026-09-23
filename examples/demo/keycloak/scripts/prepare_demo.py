@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import secrets
 from pathlib import Path
 
@@ -32,12 +33,12 @@ SECRET_KEYS = {
 
 STATIC_VALUES = {
     "CONTROL_PLANE_URL": "http://control-plane:8820",
-    "KC_HOSTNAME": "https://keycloak.localhost",
+    "KC_HOSTNAME": "http://127.0.0.1:20080",
     "POSTGRES_USER": "dal_obscura",
     "POSTGRES_DB": "dal_obscura",
     "DAL_OBSCURA_CONTROL_PLANE_HOST": "0.0.0.0",
     "DAL_OBSCURA_CONTROL_PLANE_PORT": "8820",
-    "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER": ("https://keycloak.localhost/realms/dal-obscura-demo"),
+    "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER": ("http://127.0.0.1:20080/realms/dal-obscura-demo"),
     "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE": "dal-obscura",
     "DAL_OBSCURA_CONTROL_PLANE_OIDC_JWKS_URL": (
         "http://keycloak:8080/realms/dal-obscura-demo/protocol/openid-connect/certs"
@@ -45,21 +46,17 @@ STATIC_VALUES = {
     "DAL_OBSCURA_CONTROL_PLANE_OIDC_SUBJECT_CLAIM": "preferred_username",
     "DAL_OBSCURA_CONTROL_PLANE_OIDC_GROUP_CLAIMS": "groups",
     "DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP": "platform-admins",
-    "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": "https://governance.localhost",
-    "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": (
-        "https://keycloak.localhost/realms/dal-obscura-demo"
-    ),
+    "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": "http://127.0.0.1:28821",
+    "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": ("http://127.0.0.1:20080/realms/dal-obscura-demo"),
     "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "dal-obscura-ui",
-    "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN": "https://governance.localhost",
-    "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": (
-        "https://governance.localhost/auth/callback"
-    ),
-    "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI": ("https://governance.localhost"),
+    "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN": "http://127.0.0.1:28821",
+    "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": ("http://127.0.0.1:28821/auth/callback"),
+    "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI": ("http://127.0.0.1:28821"),
     "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_TOKEN_ENDPOINT": (
         "http://keycloak:8080/realms/dal-obscura-demo/protocol/openid-connect/token"
     ),
     "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_SCOPE": "openid profile",
-    "DAL_OBSCURA_API_BASE_URL": "https://api.localhost",
+    "DAL_OBSCURA_API_BASE_URL": "http://127.0.0.1:28820",
     "DAL_OBSCURA_LOCATION": "grpc://0.0.0.0:8815",
     "DAL_OBSCURA_DATA_PLANE_HEALTH_HOST": "0.0.0.0",
     "DAL_OBSCURA_DATA_PLANE_HEALTH_PORT": "8816",
@@ -88,9 +85,14 @@ def main() -> None:
 
 def _load_or_create_values() -> dict[str, str]:
     existing = _read_all_env_files()
+    ui_origin = f"http://127.0.0.1:{_demo_ui_port(existing)}"
     values = {
         **existing,
         **STATIC_VALUES,
+        "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": ui_origin,
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN": ui_origin,
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": f"{ui_origin}/auth/callback",
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI": ui_origin,
     }
     changed = False
     for key, prefix in SECRET_KEYS.items():
@@ -101,6 +103,19 @@ def _load_or_create_values() -> dict[str, str]:
     if changed:
         _write_env_files(values)
     return values
+
+
+def _demo_ui_port(existing: dict[str, str]) -> int:
+    configured = os.environ.get("DAL_OBSCURA_DEMO_UI_PORT")
+    if configured is None:
+        origin = existing.get("DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN", "")
+        configured = origin.removeprefix("http://127.0.0.1:") or "28821"
+    if not configured.isascii() or not configured.isdecimal():
+        raise ValueError("DAL_OBSCURA_DEMO_UI_PORT must be an integer from 1 through 65535")
+    port = int(configured)
+    if not 20000 <= port <= 29999:
+        raise ValueError("DAL_OBSCURA_DEMO_UI_PORT must be an integer from 20000 through 29999")
+    return port
 
 
 def _read_all_env_files() -> dict[str, str]:
