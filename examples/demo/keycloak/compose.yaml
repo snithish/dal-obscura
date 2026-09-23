@@ -11,8 +11,8 @@ services:
       control-plane:
         condition: service_healthy
     ports:
-      - "127.0.0.1:80:80"
-      - "127.0.0.1:443:443"
+      - "127.0.0.1:${DAL_OBSCURA_DEMO_CADDY_HTTP_PORT:-80}:80"
+      - "127.0.0.1:${DAL_OBSCURA_DEMO_CADDY_HTTPS_PORT:-443}:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

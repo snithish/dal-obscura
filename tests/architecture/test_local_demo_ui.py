@@ -15,8 +15,8 @@ def test_keycloak_demo_builds_the_governance_ui_and_proxies_api_same_origin() ->
 
     assert "control-plane-ui:" in compose
     assert "name: dal-obscura-keycloak-demo" in compose
-    assert '"127.0.0.1:80:80"' in compose
-    assert '"127.0.0.1:443:443"' in compose
+    assert "127.0.0.1:${DAL_OBSCURA_DEMO_CADDY_HTTP_PORT:-80}:80" in compose
+    assert "127.0.0.1:${DAL_OBSCURA_DEMO_CADDY_HTTPS_PORT:-443}:443" in compose
     assert "caddy-data:/data" in compose
     assert "keycloak.localhost" in caddyfile
     assert "governance.localhost" in caddyfile
@@ -29,6 +29,11 @@ def test_keycloak_demo_builds_the_governance_ui_and_proxies_api_same_origin() ->
     assert "DAL_OBSCURA_DEMO_UI_PORT" not in compose
     assert "127.0.0.1:8820:8820" not in compose
     assert "127.0.0.1:5432:5432" not in compose
+    podman_pf = (REPOSITORY_ROOT / "examples/demo/keycloak/pf-anchor.conf").read_text()
+    assert "rdr pass on lo0 inet proto tcp" in podman_pf
+    assert "127.0.0.1 port 80 -> 127.0.0.1 port 18080" in podman_pf
+    assert "127.0.0.1 port 443 -> 127.0.0.1 port 18443" in podman_pf
+    assert "podman_loopback_ports.sh" in runner
     assert "dockerfile: ui/Dockerfile" in compose
     assert "pnpm run build" in dockerfile
     assert '"packageManager": "pnpm@' in package

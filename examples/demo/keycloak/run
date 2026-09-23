@@ -11,6 +11,7 @@ Usage:
   ./run up
   ./run credentials
   ./run certificate
+  ./run podman-ports enable|disable
   ./run token --as <user>
   ./run read --as <user> [read-args...]
   ./run smoke
@@ -28,9 +29,25 @@ prepare() {
   python3 "$ROOT/scripts/prepare_demo.py"
 }
 
+is_podman_on_macos() {
+  [ "$(uname -s)" = Darwin ] || return 1
+  command -v podman >/dev/null 2>&1 || return 1
+  client_version="$(podman version --format '{{.Client.Version}}' 2>/dev/null || true)"
+  server_version="$(docker version --format '{{.Server.Version}}' 2>/dev/null || true)"
+  [ -n "$client_version" ] && [ "$client_version" = "$server_version" ]
+}
+
 compose() {
   project_name="${DAL_OBSCURA_DEMO_PROJECT_NAME:-dal-obscura-keycloak-demo}"
+  gateway_http_port=80
+  gateway_https_port=443
+  if is_podman_on_macos; then
+    gateway_http_port=18080
+    gateway_https_port=18443
+  fi
   DAL_OBSCURA_IMAGE="$DEMO_IMAGE" \
+    DAL_OBSCURA_DEMO_CADDY_HTTP_PORT="$gateway_http_port" \
+    DAL_OBSCURA_DEMO_CADDY_HTTPS_PORT="$gateway_https_port" \
     docker compose --project-name "$project_name" -f "$COMPOSE_FILE" "$@"
 }
 
@@ -89,6 +106,9 @@ case "$action" in
   up)
     prepare
     build_image
+    if is_podman_on_macos; then
+      sh "$ROOT/scripts/podman_loopback_ports.sh" enable
+    fi
     compose up -d --build --wait
     credentials
     ;;
@@ -115,10 +135,23 @@ case "$action" in
     ;;
   down)
     compose down
+    if is_podman_on_macos; then
+      sh "$ROOT/scripts/podman_loopback_ports.sh" disable
+    fi
     ;;
   reset)
     compose down --volumes --remove-orphans
+    if is_podman_on_macos; then
+      sh "$ROOT/scripts/podman_loopback_ports.sh" disable
+    fi
     rm -rf "$ROOT/.runtime"
+    ;;
+  podman-ports)
+    if ! is_podman_on_macos; then
+      echo "Podman loopback port forwarding is only for Podman on macOS" >&2
+      exit 2
+    fi
+    sh "$ROOT/scripts/podman_loopback_ports.sh" "${1:-}"
     ;;
   *)
     usage >&2

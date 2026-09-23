@@ -11,8 +11,9 @@ changes survive container restarts.
 ## Requirements
 
 - Docker with Compose v2
-- A container runtime allowed to publish loopback ports 80 and 443
 - Python 3 for the local `./run` helper
+- On macOS with Podman, administrator access for temporary loopback-only port
+  redirects (the helper asks during `./run up`)
 
 ## Start
 
@@ -77,6 +78,12 @@ The public OIDC issuer is
 browser to `https://governance.localhost/auth/callback`. The runtime keeps
 container-to-container OIDC token and JWKS requests on Compose DNS at
 `keycloak:8080`; those addresses are not browser URLs.
+
+On macOS with Podman, the runner publishes Caddy on high loopback ports and
+uses a temporary PF anchor on `lo0` to redirect standard ports 80/443. It does
+not expose the gateway on network interfaces. `./run down` removes the redirect
+and its PF enable reference. The helper needs the stock `com.apple/*` redirect
+anchor; it fails closed if the machine has a custom PF ruleset without it.
 
 The first run creates a local Caddy certificate authority. Export its root
 certificate after startup:
