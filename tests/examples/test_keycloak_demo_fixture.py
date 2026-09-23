@@ -128,6 +128,7 @@ def test_prepare_demo_writes_separate_ui_runtime_config(tmp_path, monkeypatch, u
 
     prepare_demo.main()
 
+    keycloak_env = (runtime_dir / "keycloak.env").read_text(encoding="utf-8")
     ui_env = (runtime_dir / "ui.env").read_text(encoding="utf-8")
     control_plane_env = (runtime_dir / "control-plane.env").read_text(encoding="utf-8")
     realm = json.loads(realm_file.read_text(encoding="utf-8"))
@@ -139,6 +140,18 @@ def test_prepare_demo_writes_separate_ui_runtime_config(tmp_path, monkeypatch, u
     )
     ui_origin = f"http://127.0.0.1:{ui_port}"
 
+    assert "127.0.0.1:8081:8080" in Path("examples/demo/keycloak/compose.yaml").read_text(
+        encoding="utf-8"
+    )
+    assert "KC_HOSTNAME=http://127.0.0.1:8081" in keycloak_env
+    assert (
+        "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER=http://127.0.0.1:8081/realms/dal-obscura-demo"
+        in control_plane_env
+    )
+    assert (
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER=http://127.0.0.1:8081/realms/dal-obscura-demo"
+        in control_plane_env
+    )
     assert "DAL_OBSCURA_API_BASE_URL=http://127.0.0.1:8820" in ui_env
     assert (
         f"DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI={ui_origin}/auth/callback"

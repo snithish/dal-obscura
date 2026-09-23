@@ -33,12 +33,12 @@ SECRET_KEYS = {
 
 STATIC_VALUES = {
     "CONTROL_PLANE_URL": "http://control-plane:8820",
-    "KC_HOSTNAME": "http://127.0.0.1:8080",
+    "KC_HOSTNAME": "http://127.0.0.1:8081",
     "POSTGRES_USER": "dal_obscura",
     "POSTGRES_DB": "dal_obscura",
     "DAL_OBSCURA_CONTROL_PLANE_HOST": "0.0.0.0",
     "DAL_OBSCURA_CONTROL_PLANE_PORT": "8820",
-    "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER": ("http://127.0.0.1:8080/realms/dal-obscura-demo"),
+    "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER": ("http://127.0.0.1:8081/realms/dal-obscura-demo"),
     "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE": "dal-obscura",
     "DAL_OBSCURA_CONTROL_PLANE_OIDC_JWKS_URL": (
         "http://keycloak:8080/realms/dal-obscura-demo/protocol/openid-connect/certs"
@@ -47,7 +47,7 @@ STATIC_VALUES = {
     "DAL_OBSCURA_CONTROL_PLANE_OIDC_GROUP_CLAIMS": "groups",
     "DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP": "platform-admins",
     "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": "http://127.0.0.1:8821",
-    "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": ("http://127.0.0.1:8080/realms/dal-obscura-demo"),
+    "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": ("http://127.0.0.1:8081/realms/dal-obscura-demo"),
     "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "dal-obscura-ui",
     "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN": "http://127.0.0.1:8821",
     "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": ("http://127.0.0.1:8821/auth/callback"),

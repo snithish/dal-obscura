@@ -28,7 +28,7 @@ What happens:
 2. `./run up` builds a local `dal-obscura-demo:local` image from this checkout,
    unless `DAL_OBSCURA_IMAGE` is set to a prebuilt image.
 3. Docker Compose starts Postgres on `127.0.0.1:5432` and Keycloak on
-   `127.0.0.1:8080`.
+   `127.0.0.1:8081` (Keycloak still listens on port `8080` inside the container).
 4. The `migrate` service runs `dal-obscura-migrate upgrade` against Postgres.
 5. The control plane starts on `127.0.0.1:8820` with Postgres config storage,
    Keycloak token validation, and public UI authentication configuration.
@@ -67,6 +67,11 @@ Keycloak handles the normal Authorization Code + PKCE flow. Sign in as
 `demo-admin` with the generated password from `./run credentials` to manage the
 workspace. `./run token --as <user>` prints a CLI access token for debugging
 scripted reads; it does not create a browser session.
+
+The public OIDC issuer uses `http://127.0.0.1:8081/realms/dal-obscura-demo`.
+Keycloak redirects the browser back to the UI callback at
+`http://127.0.0.1:8821/auth/callback` by default; if you change the UI port,
+`./run up` updates the registered callback to that UI origin.
 
 If port 8821 is already in use, start the demo on another loopback port. The
 runner writes that origin into its OIDC callback and Keycloak realm settings:
