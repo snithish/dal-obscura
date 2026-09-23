@@ -1,16 +1,11 @@
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
-from sqlalchemy import select
 
 from dal_obscura.common.config_store.db import (
     create_engine_from_url,
     migrate_config_store,
     session_factory,
-)
-from dal_obscura.common.config_store.orm import (
-    ActivePublicationRecord,
-    PublishedAssetRecord,
 )
 from dal_obscura.control_plane.interfaces.api import create_app
 
@@ -29,19 +24,7 @@ def _client() -> TestClient:
     return TestClient(create_app(session_factory(engine), admin_token="test-admin"))
 
 
-def _active_policy_versions(factory) -> dict[tuple[str, str], int]:
-    with factory() as session:
-        active = session.scalar(select(ActivePublicationRecord))
-        assert active is not None
-        records = session.scalars(
-            select(PublishedAssetRecord).where(
-                PublishedAssetRecord.publication_id == active.publication_id
-            )
-        )
-        return {(record.catalog, record.target): record.policy_version for record in records}
-
-
-def _provision_draft(client: TestClient) -> dict[str, str]:
+def _provision_asset(client: TestClient) -> dict[str, str]:
     client.put(
         "/v1/settings/runtime",
         json={
@@ -64,11 +47,10 @@ def _provision_draft(client: TestClient) -> dict[str, str]:
         json={"backend": "iceberg", "table_identifier": "prod.users", "options": {"snapshot": 1}},
         headers=ADMIN_HEADERS,
     ).json()
-    draft = client.get(f"/v1/assets/{asset['id']}/draft", headers=ADMIN_HEADERS).json()
-    client.put(
-        f"/v1/assets/{asset['id']}/draft",
+    saved = client.put(
+        f"/v1/assets/{asset['id']}/policy",
         json={
-            "expected_revision": draft["revision"],
+            "expected_revision": 0,
             "rules": [
                 {
                     "ordinal": 10,
@@ -83,6 +65,7 @@ def _provision_draft(client: TestClient) -> dict[str, str]:
         },
         headers=ADMIN_HEADERS,
     )
+    assert saved.status_code == 200, saved.text
     client.put(
         "/v1/settings/auth-providers",
         json={
@@ -100,19 +83,19 @@ def _provision_draft(client: TestClient) -> dict[str, str]:
     return asset
 
 
-def save_policy_draft(
+def replace_live_policy(
     client: TestClient,
     asset_id: str,
     rules: list[dict[str, object]],
     headers: dict[str, str] = ADMIN_HEADERS,
 ):
-    """Replace the revisioned policy draft used by public API tests."""
+    """Replace the asset's live policy using its current optimistic revision."""
 
-    current = client.get(f"/v1/assets/{asset_id}/draft", headers=headers)
+    current = client.get(f"/v1/assets/{asset_id}", headers=ADMIN_HEADERS)
     assert current.status_code == 200, current.text
     return client.put(
-        f"/v1/assets/{asset_id}/draft",
-        json={"expected_revision": current.json()["revision"], "rules": rules},
+        f"/v1/assets/{asset_id}/policy",
+        json={"expected_revision": current.json()["policy_revision"], "rules": rules},
         headers=headers,
     )
 

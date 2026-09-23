@@ -30,6 +30,9 @@ from dal_obscura.control_plane.interfaces.routes import (
     assets as asset_routes,
 )
 from dal_obscura.control_plane.interfaces.routes import (
+    audit as audit_routes,
+)
+from dal_obscura.control_plane.interfaces.routes import (
     catalogs as catalog_routes,
 )
 from dal_obscura.control_plane.interfaces.routes import (
@@ -198,8 +201,6 @@ def create_app(  # noqa: C901
     session_idle_ttl_seconds: int = 1_800,
     oidc_nonce_actor_resolver: OidcNonceActorResolver | None = None,
     authorization_code_exchange: AuthorizationCodeExchange | None = None,
-    require_review: bool = False,
-    review_secret: str | None = None,
     catalog_egress_allowlist: tuple[str, ...] = (),
     bootstrap_enabled: bool | None = None,
     max_request_bytes: int = 1_048_576,
@@ -385,13 +386,8 @@ def create_app(  # noqa: C901
         ui_auth_config=ui_auth_config,
         session_ttl_seconds=session_ttl_seconds,
         session_idle_ttl_seconds=session_idle_ttl_seconds,
-        require_review=require_review,
-        # Local callers may continue to use the test/admin secret. Production
-        # wiring supplies a separate review key so compromising one boundary
-        # does not automatically forge review evidence.
-        review_secret=(review_secret or (admin_token if require_review else "")),
         catalog_egress_allowlist=catalog_egress_allowlist,
-        bootstrap_enabled=(not require_review if bootstrap_enabled is None else bootstrap_enabled),
+        bootstrap_enabled=True if bootstrap_enabled is None else bootstrap_enabled,
         allowed_origins=cors_origins,
         oidc_nonce_actor_resolver=oidc_nonce_actor_resolver,
         login_rate_limit_attempts=login_rate_limit_attempts,
@@ -412,6 +408,7 @@ def create_app(  # noqa: C901
         workspace_routes.router,
         catalog_routes.router,
         policy_routes.router,
+        audit_routes.router,
         asset_routes.router,
         settings_routes.router,
         plugin_routes.router,

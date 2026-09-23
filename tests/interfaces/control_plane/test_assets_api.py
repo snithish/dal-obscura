@@ -5,13 +5,13 @@ from tests.interfaces.control_plane.workspace_helpers import (
     ICEBERG_CATALOG_MODULE,
     _client,
     _keys_recursive,
-    _provision_draft,
+    _provision_asset,
 )
 
 
 def test_asset_access_reports_effective_capabilities_and_reasons():
     client = _client()
-    asset = _provision_draft(client)
+    asset = _provision_asset(client)
     admin = client.get(f"/v1/assets/{asset['id']}/access", headers=ADMIN_HEADERS)
     assert admin.status_code == 200
     assert admin.json()["principal"] == "platform:admin"
@@ -60,42 +60,13 @@ def test_workspace_asset_upsert_uses_default_workspace_context():
             "owner_count": 0,
             "owners": [],
             "policy_status": "missing",
-            "draft_status": "draft",
-            "active_policy_version": None,
-            "last_published_at": None,
+            "policy_revision": 0,
         }
     ]
     assert detail["options"] == {"snapshot": 7}
     assert detail["policy_rules"] == []
     assert "tenant" not in _keys_recursive({"assets": assets, "detail": detail})
     assert "cell" not in _keys_recursive({"assets": assets, "detail": detail})
-
-
-def test_workspace_asset_inventory_reports_active_publication_metadata():
-    client = _client()
-    asset = _provision_draft(client)
-    assert (
-        client.put(
-            f"/v1/assets/{asset['id']}/owners",
-            json={"owners": ["platform:admin"], "expected_revision": 0},
-            headers=ADMIN_HEADERS,
-        ).status_code
-        == 200
-    )
-
-    publication = client.post("/v1/workspace/publications", headers=ADMIN_HEADERS)
-    assert publication.status_code == 200, publication.json()
-    activated = client.post(
-        f"/v1/workspace/publications/{publication.json()['publication_id']}/activate",
-        json={"expected_publication_id": None},
-        headers=ADMIN_HEADERS,
-    )
-    assert activated.status_code == 200, activated.json()
-
-    item = client.get("/v1/assets", headers=ADMIN_HEADERS).json()[0]
-    assert item["policy_status"] == "configured"
-    assert item["active_policy_version"] > 0
-    assert item["last_published_at"]
 
 
 def test_workspace_asset_requires_physical_iceberg_identifier():
@@ -112,7 +83,7 @@ def test_workspace_asset_requires_physical_iceberg_identifier():
 
 def test_asset_cannot_remove_its_last_owner_without_reassignment():
     client = _client()
-    asset = _provision_draft(client)
+    asset = _provision_asset(client)
     assigned = client.put(
         f"/v1/assets/{asset['id']}/owners",
         json={"owners": ["user:owner@example.com"], "expected_revision": 0},
@@ -256,7 +227,7 @@ def test_schema_fields_preserve_literal_dotted_and_nested_paths():
     ]
 
 
-def test_workspace_policy_draft_can_be_replaced_from_asset_detail():
+def test_workspace_policy_can_be_replaced_directly_from_asset_detail():
     client = _client()
     client.put(
         "/v1/catalogs/analytics",
@@ -272,11 +243,10 @@ def test_workspace_policy_draft_can_be_replaced_from_asset_detail():
         headers=ADMIN_HEADERS,
     ).json()
 
-    current = client.get(f"/v1/assets/{asset['id']}/draft", headers=ADMIN_HEADERS)
     response = client.put(
-        f"/v1/assets/{asset['id']}/draft",
+        f"/v1/assets/{asset['id']}/policy",
         json={
-            "expected_revision": current.json()["revision"],
+            "expected_revision": 0,
             "rules": [
                 {
                     "ordinal": 1,
@@ -295,8 +265,13 @@ def test_workspace_policy_draft_can_be_replaced_from_asset_detail():
 
     assert response.status_code == 200
     assert detail["policy_status"] == "configured"
-    draft = client.get(f"/v1/assets/{asset['id']}/draft", headers=ADMIN_HEADERS).json()
-    assert draft["rules"] == [
+    assert [
+        {
+            key: rule[key]
+            for key in ("ordinal", "effect", "principals", "when", "columns", "masks", "row_filter")
+        }
+        for rule in detail["policy_rules"]
+    ] == [
         {
             "ordinal": 1,
             "effect": "allow",
@@ -412,7 +387,7 @@ def test_existing_asset_metadata_update_requires_revision_precondition():
 
 def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
     client = _client()
-    asset = _provision_draft(client)
+    asset = _provision_asset(client)
 
     summary = client.get("/v1/workspace/summary", headers=ADMIN_HEADERS).json()
     catalogs = client.get("/v1/catalogs", headers=ADMIN_HEADERS).json()
@@ -424,7 +399,6 @@ def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
         "asset_count": 1,
         "unowned_asset_count": 1,
         "missing_policy_count": 0,
-        "draft_change_count": 1,
         "runtime_configured": True,
         "enabled_auth_provider_count": 1,
     }
@@ -451,9 +425,7 @@ def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
             "owner_count": 0,
             "owners": [],
             "policy_status": "configured",
-            "draft_status": "draft",
-            "active_policy_version": None,
-            "last_published_at": None,
+            "policy_revision": 1,
         }
     ]
     assert asset_detail == {
@@ -461,15 +433,32 @@ def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
         "revision": 0,
         "options": {"snapshot": 1},
         "schema_fields": [],
-        "policy_rules": [],
+        "policy_rules": asset_detail["policy_rules"],
     }
+    assert [
+        {
+            key: rule[key]
+            for key in ("ordinal", "effect", "principals", "when", "columns", "masks", "row_filter")
+        }
+        for rule in asset_detail["policy_rules"]
+    ] == [
+        {
+            "ordinal": 10,
+            "effect": "allow",
+            "principals": ["user1"],
+            "when": {"tenant": "default"},
+            "columns": ["id", "email"],
+            "masks": {"email": {"type": "email"}},
+            "row_filter": "region = 'us'",
+        }
+    ]
     assert "tenant" not in _keys_recursive(summary | {"catalogs": catalogs, "assets": assets})
     assert "cell" not in _keys_recursive(summary | {"catalogs": catalogs, "assets": assets})
 
 
 def test_asset_metadata_precondition_rejects_stale_writer() -> None:
     client = _client()
-    asset = _provision_draft(client)
+    asset = _provision_asset(client)
     current = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
 
     first = client.put(
@@ -590,7 +579,7 @@ def test_asset_binding_precondition_rejects_nonzero_revision_on_create() -> None
 
 def test_asset_grant_precondition_rejects_stale_writer() -> None:
     client = _client()
-    asset = _provision_draft(client)
+    asset = _provision_asset(client)
     current = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
 
     first = client.put(
@@ -613,7 +602,7 @@ def test_asset_grant_precondition_rejects_stale_writer() -> None:
 
 def test_asset_grant_update_requires_revision_precondition() -> None:
     client = _client()
-    asset = _provision_draft(client)
+    asset = _provision_asset(client)
     missing = client.put(
         f"/v1/assets/{asset['id']}/grants",
         json={"grants": [{"principal": "analyst", "capability": "read"}]},

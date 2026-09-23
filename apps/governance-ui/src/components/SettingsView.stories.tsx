@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent } from "storybook/test";
-import type { AuthProvider, RuntimeSettings, WorkspacePublication } from "../api";
+import type { AuthProvider, RuntimeSettings } from "../api";
 import { SettingsView } from "./SettingsView";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -32,17 +32,6 @@ const providers: AuthProvider[] = [{
   revision: 3,
 }];
 
-const publications: WorkspacePublication[] = [{
-  id: "generation-0004",
-  schema_version: 1,
-  status: "active",
-  manifest_hash: "b".repeat(64),
-  active: true,
-  asset_count: 18,
-  catalog_count: 1,
-  created_at: "2026-09-21T08:00:00Z",
-}];
-
 const meta = {
   title: "Workflows/Runtime and identity settings",
   component: SettingsView,
@@ -51,7 +40,6 @@ const meta = {
     runtime,
     providers,
     providerRevision: 3,
-    publications,
     onReload: () => undefined,
     queryClient,
     sessionScope: "storybook|admin",
@@ -73,12 +61,12 @@ export const ConfiguredWorkspace: Story = {
     await expect(canvas.getByLabelText("Ticket TTL (seconds)")).toHaveValue(900);
     await expect(canvas.getByRole("heading", { name: "Authentication providers" })).toBeVisible();
     await expect(canvas.getByDisplayValue("https://idp.example")).toBeVisible();
-    await expect(canvas.getByText("generation-0")).toBeVisible();
+    await expect(canvas.getByText("Values are loaded from the control plane. Saving updates live configuration.")).toBeVisible();
   },
 };
 
 export const NoProvidersConfigured: Story = {
-  args: { runtime: null, providers: [], providerRevision: undefined, publications: [] },
+  args: { runtime: null, providers: [], providerRevision: undefined },
   play: async ({ canvas }) => {
     await expect(canvas.getByText("No identity providers configured.")).toBeVisible();
     await expect(canvas.getByRole("button", { name: "Add OIDC provider" })).toBeVisible();

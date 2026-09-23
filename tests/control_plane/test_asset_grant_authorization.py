@@ -25,7 +25,7 @@ def test_grant_mutation_locks_before_authorization_and_write() -> None:
 
     assert result == {"asset_id": str(asset_id), "grants": []}
     assert service.method_calls == [
-        ("lock_asset_for_publication", (asset_id,), {}),
+        ("lock_asset_for_update", (asset_id,), {}),
         ("ensure_asset_capability", (asset_id, actor, "grant"), {}),
         (
             "replace_asset_grants",

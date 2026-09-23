@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, userEvent } from "storybook/test";
-import type { Catalog, PluginDescriptor, PluginPair, PluginState, WorkspacePublication } from "../api";
+import type { Catalog, PluginDescriptor, PluginPair, PluginState } from "../api";
 import { ConnectionsView } from "./ConnectionsView";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -72,28 +72,16 @@ const pluginPairs: PluginPair[] = [{
   status: "admitted",
 }];
 
-const publications: WorkspacePublication[] = [{
-  id: "generation-0004",
-  schema_version: 1,
-  status: "active",
-  manifest_hash: "a".repeat(64),
-  active: true,
-  asset_count: 18,
-  catalog_count: 1,
-  created_at: "2026-09-21T08:00:00Z",
-}];
-
 const meta = {
   title: "Workflows/Connections management",
   component: ConnectionsView,
   tags: ["autodocs"],
   args: {
     catalogs,
-    publications,
     plugins: [catalogPlugin],
     pluginStates,
     pluginPairs,
-    canActivate: true,
+    canManagePlugins: true,
     onReload: () => undefined,
     queryClient,
     sessionScope: "storybook|admin",
@@ -101,7 +89,7 @@ const meta = {
   parameters: {
     docs: {
       description: {
-        component: "Production connections management with admitted plugin descriptors, lifecycle state, and an active configuration generation. Fixtures contain no credentials and actions that would mutate the control plane are not invoked by the story.",
+        component: "Production connections management with admitted plugin descriptors and lifecycle state. Fixtures contain no credentials and actions that would mutate the control plane are not invoked by the story.",
       },
     },
   },
@@ -113,7 +101,6 @@ export const AdminWorkspace: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("heading", { name: "Catalog connections" })).toBeVisible();
     await expect(canvas.getByText("Iceberg REST catalog")).toBeVisible();
-    await expect(canvas.getByText("generation-0")).toBeVisible();
     await expect(canvas.getByRole("button", { name: "Save connection" })).toBeVisible();
   },
 };
@@ -127,7 +114,7 @@ export const DiagnosticFailure: Story = {
 };
 
 export const EmptyState: Story = {
-  args: { catalogs: [], publications: [], plugins: [], pluginStates: [], pluginPairs: [], canActivate: false },
+  args: { catalogs: [], plugins: [], pluginStates: [], pluginPairs: [], canManagePlugins: false },
   play: async ({ canvas }) => {
     await expect(canvas.getByText("No catalogs configured")).toBeVisible();
     await expect(canvas.getByText("Connect an admitted catalog adapter to begin asset onboarding.")).toBeVisible();
@@ -192,7 +179,7 @@ export const InvalidTypedValue: Story = {
 };
 
 export const ReadOnlyPluginLifecycle: Story = {
-  args: { canActivate: false },
+  args: { canManagePlugins: false },
   play: async ({ canvas }) => {
     const lifecycle = canvas.getByLabelText("Lifecycle for Iceberg REST catalog");
     await expect(lifecycle).toBeDisabled();

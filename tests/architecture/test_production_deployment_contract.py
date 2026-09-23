@@ -41,8 +41,7 @@ def test_production_reference_contains_immutable_and_private_topology() -> None:
     assert 'user: "10001:10001"' in compose
     assert 'memory: "2G"' in compose
     assert "DAL_OBSCURA_CONTROL_PLANE_PROFILE=production" in env_example
-    assert "DAL_OBSCURA_CONTROL_PLANE_REVIEW_SECRET=" in env_example
-    assert "DAL_OBSCURA_CONTROL_PLANE_REVIEW_SECRET" in compose
+    assert "DAL_OBSCURA_CONTROL_PLANE_REVIEW_SECRET" not in env_example + compose
     assert "DAL_OBSCURA_TLS_VERIFY_CLIENT=true" in env_example
     assert "DAL_OBSCURA_POSTGRES_IMAGE=postgres@sha256:" in env_example
     assert "DAL_OBSCURA_MIGRATION_DATABASE_URL" in compose
@@ -73,7 +72,7 @@ def test_production_reference_contains_immutable_and_private_topology() -> None:
     assert "GRANT SELECT ON TABLES TO dal_obscura_reader" in role_init
     assert "Routine restart" in readme
     assert "does not seed" in readme
-    assert "republish" in readme
+    assert "unsupported and cannot be upgraded" in readme
 
 
 def test_recovery_scripts_require_encryption_and_isolated_restore_confirmation() -> None:

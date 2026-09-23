@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from uuid import uuid4
+from dataclasses import replace
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import select
@@ -32,6 +33,7 @@ def _create_cell(session_maker: sessionmaker[Session], cell_id) -> None:
 
 def _payload(ticket_id: str, *, expires_at: int = 2000) -> TicketPayload:
     return TicketPayload(
+        asset_id="00000000-0000-4000-8000-000000000001",
         ticket_id=ticket_id,
         catalog="analytics",
         target="default.users",
@@ -76,6 +78,32 @@ def test_ticket_store_persists_many_tickets_in_one_transaction():
 
     assert store.load("00000000-0000-0000-0000-000000000001").exchange_count == 0
     assert store.load("00000000-0000-0000-0000-000000000002").exchange_count == 0
+
+
+def test_ticket_store_rejects_load_and_exchange_after_owner_revocation():
+    session_maker = _session_maker()
+    cell_id = uuid4()
+    asset_id = uuid4()
+    _create_cell(session_maker, cell_id)
+    store = SqlAlchemyTicketStore(session_maker, cell_id=cell_id)
+    ticket_id = "00000000-0000-0000-0000-000000000003"
+    payload = replace(_payload(ticket_id), asset_id=str(asset_id))
+    store.store(payload, max_exchanges=1)
+
+    with session_maker() as session:
+        record = session.scalar(
+            select(DataPlaneTicketRecord).where(DataPlaneTicketRecord.ticket_id == UUID(ticket_id))
+        )
+        assert record is not None
+        record.revoked_at = record.created_at
+        session.commit()
+
+    with pytest.raises(LookupError):
+        store.load(ticket_id)
+    with pytest.raises(PermissionError, match="revoked"):
+        store.reserve_exchange(ticket_id, now=1000)
+    with pytest.raises(PermissionError, match="revoked"):
+        store.ensure_active(ticket_id)
 
 
 def test_ticket_store_lookup_is_scoped_to_cell():

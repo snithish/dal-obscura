@@ -162,7 +162,7 @@ class AuthenticationMutationResponse(BaseModel):
 class AssetCapabilityResponse(BaseModel):
     """One server-resolved capability and its explainable reasons."""
 
-    capability: Literal["read", "edit", "publish", "grant"]
+    capability: Literal["read", "edit", "grant"]
     allowed: bool
     reasons: list[str]
 
@@ -195,7 +195,7 @@ class AssetGrantResponse(BaseModel):
     """One explicit delegated asset capability."""
 
     principal: str
-    capability: Literal["read", "edit", "publish", "grant"]
+    capability: Literal["read", "edit", "grant"]
 
 
 class AssetGrantsResponse(BaseModel):
@@ -223,9 +223,7 @@ class AssetInventoryResponse(BaseModel):
     owner_count: int
     owners: list[str]
     policy_status: str
-    draft_status: str
-    active_policy_version: int | None = None
-    last_published_at: str | None = None
+    policy_revision: int
 
 
 class AssetInventoryPageResponse(BaseModel):
@@ -245,11 +243,9 @@ class AssetDetailResponse(BaseModel):
     table_identifier: str
     owners: list[str]
     policy_status: str
-    draft_status: str
     owner_count: int
-    active_policy_version: int | None = None
-    last_published_at: str | None = None
     revision: int
+    policy_revision: int
     options: dict[str, Any]
     schema_fields: list[dict[str, Any]]
     policy_rules: list[dict[str, Any]]
@@ -373,18 +369,14 @@ class WorkspaceSummaryResponse(BaseModel):
     asset_count: int
     unowned_asset_count: int
     missing_policy_count: int
-    draft_change_count: int
     runtime_configured: bool
     enabled_auth_provider_count: int
 
 
 class WorkspaceGenerationResponse(BaseModel):
-    """Active immutable generation summary."""
+    """Monotonic revision of canonical workspace configuration."""
 
-    cell_id: str
-    publication_id: str
-    manifest_hash: str
-    status: str
+    config_revision: str
 
 
 class DataPlaneObservationResponse(BaseModel):
@@ -402,34 +394,6 @@ class WorkspaceObservationsResponse(BaseModel):
     source: str
     generation: WorkspaceGenerationResponse | None = None
     data_plane: DataPlaneObservationResponse
-
-
-class WorkspacePublicationResponse(BaseModel):
-    """Immutable workspace publication listing row."""
-
-    id: str
-    schema_version: int
-    status: str
-    manifest_hash: str
-    active: bool
-    asset_count: int
-    catalog_count: int
-    created_at: str
-
-
-class WorkspacePublicationCreateResponse(BaseModel):
-    """Created staged publication summary."""
-
-    publication_id: str
-    asset_count: int
-    catalog_count: int
-    manifest_hash: str
-
-
-class PublicationActivationResponse(BaseModel):
-    """Activation result bound to one immutable generation."""
-
-    publication_id: str
 
 
 class AuditEventResponse(BaseModel):
@@ -453,54 +417,6 @@ class AuditEventPageResponse(BaseModel):
     next_cursor: str | None = None
 
 
-class PolicyVersionResponse(BaseModel):
-    """Immutable published policy history row."""
-
-    asset_id: str
-    asset_name: str
-    catalog: str
-    target: str
-    policy_version: int
-    active: bool
-    created_at: str
-
-
-class PolicyVersionPageResponse(BaseModel):
-    """Keyset-paginated immutable policy history."""
-
-    items: list[PolicyVersionResponse]
-    next_cursor: str | None = None
-
-
-class PolicyVersionDetailResponse(BaseModel):
-    """Published policy body without compiled catalog configuration."""
-
-    asset_id: str
-    policy_version: int
-    rules: list[dict[str, Any]]
-
-
-class PolicyVersionCreateResponse(BaseModel):
-    """Result of publishing one asset policy version."""
-
-    asset_id: str
-    policy_version: int
-
-
-class PolicyDraftResponse(BaseModel):
-    """Revisioned policy draft returned to editors and reviewers."""
-
-    id: str | None = None
-    asset_id: str
-    author_principal: str
-    revision: int
-    base_policy_version: int
-    rules: list[dict[str, Any]]
-    content_hash: str
-    created_at: str | None = None
-    updated_at: str | None = None
-
-
 class PolicyEvaluationResponse(BaseModel):
     """Bounded server-side policy evaluation evidence."""
 
@@ -512,28 +428,11 @@ class PolicyEvaluationResponse(BaseModel):
     input_rows: int
     output_rows: int
     schema_text: str = Field(alias="schema")
+    policy_revision: int
     rows: list[dict[str, Any]]
     evidence: dict[str, Any]
 
     model_config = ConfigDict(populate_by_name=True)
-
-
-class PolicyReviewResponse(PolicyEvaluationResponse):
-    """Evaluation evidence plus optional server review authority."""
-
-    review_token: str | None = None
-    review_expires_at: int | None = None
-    review_draft_id: str | None = None
-    review_draft_author: str | None = None
-    reviewer: str | None = None
-
-
-class PolicyOperationResponse(BaseModel):
-    """Caller-scoped idempotent publication operation."""
-
-    id: str
-    status: str
-    result: PolicyVersionCreateResponse
 
 
 class AuthProviderResponse(BaseModel):
@@ -589,39 +488,28 @@ class AssetRequest(StrictModel):
     expected_revision: int | None = Field(default=None, ge=0)
 
 
-class PolicyDraftRequest(StrictModel):
-    """Revision-preconditioned policy draft replacement."""
+class PolicyRulesRequest(StrictModel):
+    """Optimistic direct policy replacement."""
 
     expected_revision: int = Field(ge=0)
     rules: list[dict[str, Any]] = Field(max_length=100)
+    revoke_existing_tokens: bool = False
 
 
-class PolicyVersionPublishRequest(StrictModel):
-    """Optional generation preconditions for publishing one asset draft."""
-
-    draft_id: UUID | None = None
-    expected_draft_revision: int | None = Field(default=None, ge=0)
-    expected_publication_id: UUID | None = None
-    review_token: str | None = Field(default=None, min_length=16, max_length=4096)
+class PolicyMutationResponse(BaseModel):
+    asset_id: str
+    policy_revision: int
+    revoked_token_count: int
 
 
-class PolicyRestoreRequest(StrictModel):
-    """Revision-preconditioned request to restore immutable policy history."""
-
-    expected_revision: int = Field(ge=0)
-
-
-class PublicationActivationRequest(StrictModel):
-    """Optional active-generation precondition for workspace activation."""
-
-    expected_publication_id: UUID | None = None
+class AssetTokenRevocationResponse(BaseModel):
+    asset_id: str
+    revoked_token_count: int
 
 
 class PolicyEvaluationRequest(StrictModel):
     """Bounded synthetic rows for server-side DuckDB policy evaluation."""
 
-    draft_id: UUID | None = None
-    draft_revision: int | None = Field(default=None, ge=0)
     principal: str = Field(min_length=1)
     groups: list[str] = Field(default_factory=list, max_length=64)
     claims: dict[str, object] = Field(default_factory=dict)
@@ -649,7 +537,7 @@ class AssetGrantRequest(StrictModel):
     """Single explicit asset capability assignment."""
 
     principal: str = Field(min_length=1)
-    capability: Literal["read", "edit", "publish", "grant"]
+    capability: Literal["read", "edit", "grant"]
 
 
 class AssetGrantsRequest(StrictModel):

@@ -21,7 +21,7 @@ class RuntimeStore(Protocol):
 
     Example:
         ```python
-        payload = published_runtime_readiness(store)
+        payload = live_runtime_readiness(store)
         ```
     """
 
@@ -61,12 +61,12 @@ def create_health_app(*, readiness: Callable[[], HealthPayload]) -> FastAPI:
     return app
 
 
-def published_runtime_readiness(store: RuntimeStore) -> dict[str, object]:
-    """Checks whether published runtime state is sufficient to admit traffic.
+def live_runtime_readiness(store: RuntimeStore) -> dict[str, object]:
+    """Checks whether live runtime state is sufficient to admit traffic.
 
     Example:
         ```python
-        readiness = published_runtime_readiness(store)
+        readiness = live_runtime_readiness(store)
         assert readiness["status"] in {"ready", "not_ready"}
         ```
     """
@@ -75,19 +75,19 @@ def published_runtime_readiness(store: RuntimeStore) -> dict[str, object]:
     try:
         runtime = store.get_runtime()
     except Exception:
-        LOGGER.warning("published_runtime_readiness_failed")
+        LOGGER.warning("live_runtime_readiness_failed")
         return {
             "status": "not_ready",
             "checks": {
-                "active_publication": "failed",
+                "configuration_revision": "failed",
                 "runtime": "failed",
                 "auth_chain": "unknown",
             },
-            "reason": "published runtime unavailable",
+            "reason": "live runtime unavailable",
         }
 
-    publication_id = getattr(runtime, "publication_id", None)
-    checks["active_publication"] = "ok" if publication_id else "missing"
+    config_revision = getattr(runtime, "config_revision", None)
+    checks["configuration_revision"] = "ok" if config_revision else "missing"
     ticket = getattr(runtime, "ticket", {})
     checks["runtime"] = (
         "ok" if isinstance(ticket, Mapping) and ticket else "missing_ticket_settings"
@@ -99,8 +99,8 @@ def published_runtime_readiness(store: RuntimeStore) -> dict[str, object]:
 
     status = "ready" if all(value == "ok" for value in checks.values()) else "not_ready"
     payload: dict[str, object] = {"status": status, "checks": checks}
-    if publication_id:
-        payload["publication_id"] = str(publication_id)
+    if config_revision:
+        payload["config_revision"] = str(config_revision)
     return payload
 
 

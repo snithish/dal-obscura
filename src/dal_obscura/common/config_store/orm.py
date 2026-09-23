@@ -1,11 +1,7 @@
-"""SQLAlchemy ORM records for the control-plane configuration store.
+"""SQLAlchemy ORM records for the live control-plane configuration store.
 
-Example:
-    ```python
-    from dal_obscura.common.config_store.orm import Base
-
-    Base.metadata.create_all(engine)
-    ```
+Service databases are created by the packaged Alembic baseline. ``Base.metadata``
+is used by migration-drift checks and repository tooling, not service startup.
 """
 
 from __future__ import annotations
@@ -61,6 +57,7 @@ class CellRecord(Base):
     region: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="active")
     auth_provider_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    configuration_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -75,7 +72,7 @@ class CellTenantRecord(Base):
 
 
 class CellRuntimeSettingsRecord(Base):
-    """Draft runtime settings for a data-plane cell."""
+    """Live runtime settings for a data-plane cell."""
 
     __tablename__ = "cell_runtime_settings"
 
@@ -90,7 +87,7 @@ class CellRuntimeSettingsRecord(Base):
 
 
 class CatalogRecord(Base):
-    """Draft catalog configuration row."""
+    """Live catalog configuration row."""
 
     __tablename__ = "catalogs"
     __table_args__ = (
@@ -104,13 +101,12 @@ class CatalogRecord(Base):
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     module: Mapped[str] = mapped_column(Text, nullable=False)
     options_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    # Monotonic generation for provider configuration changes. Published
-    # reviews bind to this value so a catalog edit cannot reuse old evidence.
+    # Monotonic generation for provider configuration changes.
     revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class AssetRecord(Base):
-    """Draft asset configuration row."""
+    """Live asset configuration and policy row."""
 
     __tablename__ = "assets"
     __table_args__ = (
@@ -130,6 +126,7 @@ class AssetRecord(Base):
     # Monotonic generation for binding and access metadata mutations.  It is
     # used as an optimistic-concurrency precondition at the HTTP boundary.
     revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    policy_revision: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
 
 
 class AssetOwnerRecord(Base):
@@ -177,7 +174,7 @@ class AssetSchemaFieldRecord(Base):
 
 
 class PolicyRuleRecord(Base):
-    """Policy rule row attached to an asset draft."""
+    """Policy rule row attached to a live asset."""
 
     __tablename__ = "policy_rules"
     __table_args__ = (UniqueConstraint("asset_id", "ordinal"),)
@@ -194,7 +191,7 @@ class PolicyRuleRecord(Base):
 
 
 class AuthProviderRecord(Base):
-    """Draft authentication provider row for a cell."""
+    """Authentication provider row for a data-plane cell."""
 
     __tablename__ = "auth_providers"
     __table_args__ = (UniqueConstraint("cell_id", "ordinal"),)
@@ -277,27 +274,6 @@ class LoginRateLimitRecord(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class AssetPolicyDraftRecord(Base):
-    """Revisioned personal policy draft for one asset."""
-
-    __tablename__ = "asset_policy_drafts"
-    __table_args__ = (
-        UniqueConstraint("asset_id", "author_principal"),
-        Index("ix_asset_policy_drafts_author", "author_principal"),
-    )
-
-    id: Mapped[UUID] = mapped_column(primary_key=True)
-    asset_id: Mapped[UUID] = mapped_column(ForeignKey("assets.id"), nullable=False)
-    author_principal: Mapped[str] = mapped_column(Text, nullable=False)
-    revision: Mapped[int] = mapped_column(Integer, nullable=False)
-    base_policy_version: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
-    rules_json: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
-    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    discarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-
-
 class AuditEventRecord(Base):
     """Append-only safe attribution for control-plane mutations and outcomes."""
 
@@ -325,121 +301,6 @@ class AuditEventRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class PublicationOperationRecord(Base):
-    """Idempotent result for one asset publication request."""
-
-    __tablename__ = "publication_operations"
-    __table_args__ = (
-        UniqueConstraint("asset_id", "actor_principal", "idempotency_key"),
-        Index("ix_publication_operations_created", "created_at"),
-    )
-
-    id: Mapped[UUID] = mapped_column(primary_key=True)
-    cell_id: Mapped[UUID] = mapped_column(ForeignKey("cells.id"), nullable=False)
-    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), nullable=False)
-    asset_id: Mapped[UUID] = mapped_column(ForeignKey("assets.id"), nullable=False)
-    actor_principal: Mapped[str] = mapped_column(Text, nullable=False)
-    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
-    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    status: Mapped[str] = mapped_column(String(24), nullable=False)
-    result_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-
-
-class ConfigPublicationRecord(Base):
-    """Immutable publication manifest row."""
-
-    __tablename__ = "config_publications"
-
-    id: Mapped[UUID] = mapped_column(primary_key=True)
-    cell_id: Mapped[UUID] = mapped_column(ForeignKey("cells.id"), nullable=False, index=True)
-    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    status: Mapped[str] = mapped_column(String(24), nullable=False, default="published")
-    manifest_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-
-
-class ActivePublicationRecord(Base):
-    """Pointer to the currently active publication for a cell."""
-
-    __tablename__ = "active_publications"
-
-    cell_id: Mapped[UUID] = mapped_column(ForeignKey("cells.id"), primary_key=True)
-    publication_id: Mapped[UUID] = mapped_column(
-        ForeignKey("config_publications.id"),
-        nullable=False,
-    )
-    activated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-
-
-class PublishedCellRuntimeRecord(Base):
-    """Runtime settings captured inside an immutable publication."""
-
-    __tablename__ = "published_cell_runtime"
-
-    publication_id: Mapped[UUID] = mapped_column(
-        ForeignKey("config_publications.id"),
-        primary_key=True,
-    )
-    auth_chain_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    ticket_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    path_rules_json: Mapped[list[dict[str, Any]]] = mapped_column(
-        JSON, nullable=False, default=list
-    )
-
-
-class PublishedCatalogRecord(Base):
-    """Catalog configuration captured inside an immutable publication."""
-
-    __tablename__ = "published_catalogs"
-
-    publication_id: Mapped[UUID] = mapped_column(
-        ForeignKey("config_publications.id"),
-        primary_key=True,
-    )
-    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), primary_key=True)
-    catalog: Mapped[str] = mapped_column(String(160), primary_key=True)
-    plugin_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    plugin_revision: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    config_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
-
-
-class PublishedAssetRecord(Base):
-    """Asset policy and backend configuration captured inside a publication."""
-
-    __tablename__ = "published_assets"
-
-    publication_id: Mapped[UUID] = mapped_column(
-        ForeignKey("config_publications.id"),
-        primary_key=True,
-    )
-    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), primary_key=True)
-    catalog: Mapped[str] = mapped_column(String(160), primary_key=True)
-    target: Mapped[str] = mapped_column(Text, primary_key=True)
-    backend: Mapped[str] = mapped_column(String(48), nullable=False)
-    catalog_plugin_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    format_plugin_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    plugin_revision: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    compiled_config_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
-    policy_version: Mapped[int] = mapped_column(BigInteger, nullable=False)
-
-
-class ActivePublishedAssetRecord(Base):
-    """Pointer to the active published version for one asset."""
-
-    __tablename__ = "active_published_assets"
-    __table_args__ = (Index("ix_active_published_assets_publication", "publication_id"),)
-
-    cell_id: Mapped[UUID] = mapped_column(ForeignKey("cells.id"), primary_key=True)
-    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), primary_key=True)
-    catalog: Mapped[str] = mapped_column(String(160), primary_key=True)
-    target: Mapped[str] = mapped_column(Text, primary_key=True)
-    publication_id: Mapped[UUID] = mapped_column(
-        ForeignKey("config_publications.id"),
-        nullable=False,
-    )
-
-
 class DataPlaneTicketRecord(Base):
     """Durable ticket exchange row used by data-plane ticket stores."""
 
@@ -447,11 +308,13 @@ class DataPlaneTicketRecord(Base):
     __table_args__ = (
         Index("ix_data_plane_tickets_cell_ticket", "cell_id", "ticket_id"),
         Index("ix_data_plane_tickets_cell_expires", "cell_id", "expires_at"),
+        Index("ix_data_plane_tickets_cell_asset_expires", "cell_id", "asset_id", "expires_at"),
     )
 
     ticket_id: Mapped[UUID] = mapped_column(primary_key=True)
     cell_id: Mapped[UUID] = mapped_column(ForeignKey("cells.id"), nullable=False)
     tenant_id: Mapped[str] = mapped_column(Text, nullable=False)
+    asset_id: Mapped[UUID] = mapped_column(nullable=False)
     catalog: Mapped[str | None] = mapped_column(Text, nullable=True)
     target: Mapped[str] = mapped_column(Text, nullable=False)
     principal_id: Mapped[str] = mapped_column(Text, nullable=False)
@@ -466,3 +329,4 @@ class DataPlaneTicketRecord(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -12,18 +12,15 @@ from dal_obscura.control_plane.application import (
     asset_service,
     audit_service,
     catalog_service,
-    draft_service,
     evaluation_service,
     policy_service,
-    policy_version_service,
-    review_service,
     schema_service,
     workspace_service,
 )
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control_plane.infrastructure.catalog_discovery import discover_catalog_tables
-from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
+from dal_obscura.control_plane.infrastructure.repositories import ConfigStore
 from dal_obscura.data_plane.infrastructure.adapters.secret_providers import SecretProvider
 
 
@@ -34,15 +31,11 @@ class ProvisioningService:
         self,
         session: Session,
         *,
-        review_secret: str = "",
-        require_review: bool = False,
         catalog_egress_allowlist: tuple[str, ...] = (),
         plugin_registry: PluginRegistry | None = None,
         secret_provider: SecretProvider | None = None,
     ) -> None:
-        self._store = PublicationStore(session)
-        self._review_secret = review_secret
-        self._require_review = require_review
+        self._store = ConfigStore(session)
         self._catalog_egress_allowlist = catalog_egress_allowlist
         self._plugin_registry = plugin_registry
         self._secret_provider = secret_provider
@@ -134,15 +127,6 @@ class ProvisioningService:
     def list_auth_providers(self, cell_id: UUID) -> list[dict[str, object]]:
         return self._store.list_auth_providers(cell_id)
 
-    def get_cell_draft(self, cell_id: UUID) -> dict[str, object]:
-        return self._store.get_cell_draft(cell_id)
-
-    def list_publications(self, cell_id: UUID) -> list[dict[str, object]]:
-        return self._store.list_publications(cell_id)
-
-    def get_active_publication_summary(self, cell_id: UUID) -> dict[str, str]:
-        return self._store.get_active_publication_summary(cell_id)
-
     def get_workspace_summary(
         self,
         actor: ControlPlaneActor | None = None,
@@ -160,23 +144,6 @@ class ProvisioningService:
 
     def list_workspace_auth_providers(self) -> list[dict[str, object]]:
         return workspace_service.list_workspace_auth_providers(self._store)
-
-    def list_workspace_publications(self) -> list[dict[str, object]]:
-        return policy_version_service.list_workspace_publications(self._store)
-
-    def list_policy_version_history_page(
-        self,
-        *,
-        actor: ControlPlaneActor,
-        limit: int,
-        cursor: str | None = None,
-    ) -> dict[str, object]:
-        return policy_version_service.list_policy_version_history_page(
-            self._store,
-            actor=actor,
-            limit=limit,
-            cursor=cursor,
-        )
 
     def list_audit_events_page(
         self,
@@ -206,48 +173,6 @@ class ProvisioningService:
             created_before=created_before,
             limit=limit,
             cursor=cursor,
-        )
-
-    def list_asset_policy_version_history(
-        self,
-        asset_id: UUID,
-        *,
-        actor: ControlPlaneActor,
-    ) -> list[dict[str, object]]:
-        return policy_version_service.list_asset_policy_version_history(
-            self._store,
-            asset_id,
-            actor=actor,
-        )
-
-    def get_asset_policy_version(
-        self,
-        asset_id: UUID,
-        policy_version: int,
-        *,
-        actor: ControlPlaneActor,
-    ) -> dict[str, object]:
-        return policy_version_service.get_asset_policy_version(
-            self._store,
-            asset_id,
-            policy_version,
-            actor=actor,
-        )
-
-    def restore_policy_version(
-        self,
-        asset_id: UUID,
-        policy_version: int,
-        *,
-        actor: ControlPlaneActor,
-        expected_revision: int,
-    ) -> dict[str, object]:
-        return draft_service.restore_policy_version(
-            self._store,
-            asset_id,
-            actor,
-            policy_version=policy_version,
-            expected_revision=expected_revision,
         )
 
     def list_workspace_catalogs(self) -> list[dict[str, object]]:
@@ -336,77 +261,6 @@ class ProvisioningService:
             egress_allowlist=self._catalog_egress_allowlist,
             plugin_registry=self._plugin_registry,
             secret_provider=self._secret_provider,
-        )
-
-    def get_workspace_draft(self) -> dict[str, object]:
-        return workspace_service.get_workspace_draft(self._store)
-
-    def create_workspace_publication(
-        self,
-        actor: ControlPlaneActor | None = None,
-    ) -> dict[str, object]:
-        return policy_version_service.create_workspace_publication(
-            self._store,
-            self.create_publication,
-            actor_principal="system" if actor is None else actor.identity_key(),
-            plugin_registry=self._plugin_registry,
-        )
-
-    def create_asset_policy_version(
-        self,
-        asset_id: UUID,
-        *,
-        actor: ControlPlaneActor,
-        expected_draft_revision: int | None = None,
-        expected_publication_id: UUID | None = None,
-        review_token: str | None = None,
-        idempotency_key: str | None = None,
-        draft_id: UUID | None = None,
-    ) -> dict[str, object]:
-        return policy_version_service.create_asset_policy_version(
-            self._store,
-            asset_id,
-            actor=actor,
-            create_publication=self.create_publication,
-            activate_publication=self.activate_publication,
-            plugin_registry=self._plugin_registry,
-            expected_draft_revision=expected_draft_revision,
-            expected_publication_id=expected_publication_id,
-            review_token=review_token,
-            catalog_egress_allowlist=self._catalog_egress_allowlist,
-            idempotency_key=idempotency_key,
-            require_review=self._require_review,
-            review_secret=self._review_secret,
-            draft_id=draft_id,
-        )
-
-    def get_publication_operation(
-        self,
-        asset_id: UUID,
-        idempotency_key: str,
-        *,
-        actor: ControlPlaneActor,
-    ) -> dict[str, object]:
-        return policy_version_service.get_publication_operation(
-            self._store,
-            asset_id,
-            idempotency_key,
-            actor=actor,
-        )
-
-    def activate_workspace_publication(
-        self,
-        publication_id: UUID,
-        *,
-        expected_publication_id: UUID | None = None,
-        actor: ControlPlaneActor | None = None,
-    ) -> dict[str, str]:
-        return workspace_service.activate_workspace_publication(
-            self._store,
-            self.activate_publication,
-            publication_id,
-            expected_publication_id=expected_publication_id,
-            actor_principal="system" if actor is None else actor.identity_key(),
         )
 
     def assign_tenant(self, cell_id: UUID, tenant_id: UUID, shard_key: str) -> None:
@@ -532,13 +386,25 @@ class ProvisioningService:
         rules: list[dict[str, Any]],
         *,
         actor: ControlPlaneActor,
-    ) -> None:
-        policy_service.replace_policy_rules(
+        expected_revision: int | None = None,
+        revoke_existing_tokens: bool = False,
+    ) -> dict[str, int]:
+        return policy_service.replace_policy_rules(
             self._store,
             asset_id,
             rules,
             actor=actor,
+            expected_revision=expected_revision,
+            revoke_existing_tokens=revoke_existing_tokens,
         )
+
+    def revoke_asset_tickets(
+        self,
+        asset_id: UUID,
+        *,
+        actor: ControlPlaneActor,
+    ) -> dict[str, int]:
+        return policy_service.revoke_asset_tickets(self._store, asset_id, actor=actor)
 
     def replace_asset_owners(
         self,
@@ -558,7 +424,7 @@ class ProvisioningService:
     def list_asset_grants(self, asset_id: UUID) -> list[dict[str, str]]:
         return asset_service.list_asset_grants(self._store, asset_id)
 
-    def lock_asset_for_publication(self, asset_id: UUID) -> None:
+    def lock_asset_for_update(self, asset_id: UUID) -> None:
         """Locks an asset before authorization that participates in a mutation.
 
         Grant-manager authorization must observe the same asset generation that
@@ -566,31 +432,7 @@ class ProvisioningService:
         the application service keeps that ordering out of the route adapter.
         """
 
-        self._store.lock_asset_for_publication(asset_id)
-
-    def get_policy_draft(self, asset_id: UUID, actor: ControlPlaneActor) -> dict[str, object]:
-        return draft_service.get_policy_draft(self._store, asset_id, actor)
-
-    def get_policy_draft_by_id(
-        self, asset_id: UUID, draft_id: UUID, actor: ControlPlaneActor
-    ) -> dict[str, object]:
-        return draft_service.get_policy_draft_by_id(self._store, asset_id, draft_id, actor)
-
-    def save_policy_draft(
-        self,
-        asset_id: UUID,
-        actor: ControlPlaneActor,
-        *,
-        expected_revision: int,
-        rules: list[dict[str, Any]],
-    ) -> dict[str, object]:
-        return draft_service.save_policy_draft(
-            self._store,
-            asset_id,
-            actor,
-            expected_revision=expected_revision,
-            rules=rules,
-        )
+        self._store.lock_asset_for_update(asset_id)
 
     def replace_asset_grants(
         self,
@@ -637,7 +479,6 @@ class ProvisioningService:
         claims: dict[str, object],
         actor: ControlPlaneActor | None = None,
         requested_columns: list[str] | None = None,
-        draft_id: UUID | None = None,
     ) -> dict[str, object]:
         return policy_service.preview_asset_policy(
             self._store,
@@ -647,7 +488,6 @@ class ProvisioningService:
             claims=claims,
             actor=actor,
             requested_columns=requested_columns,
-            draft_id=draft_id,
         )
 
     def evaluate_asset_policy(
@@ -659,8 +499,6 @@ class ProvisioningService:
         groups: list[str],
         claims: dict[str, object],
         rows: list[dict[str, object]] | None,
-        draft_id: UUID | None = None,
-        draft_revision: int | None = None,
     ) -> dict[str, object]:
         return evaluation_service.evaluate_asset_policy(
             self._store,
@@ -673,49 +511,7 @@ class ProvisioningService:
             egress_allowlist=self._catalog_egress_allowlist,
             plugin_registry=self._plugin_registry,
             secret_provider=self._secret_provider,
-            draft_id=draft_id,
-            draft_revision=draft_revision,
         )
-
-    def review_asset_policy(
-        self,
-        asset_id: UUID,
-        actor: ControlPlaneActor,
-        *,
-        principal: str,
-        groups: list[str],
-        claims: dict[str, object],
-        rows: list[dict[str, object]] | None,
-        draft_id: UUID | None = None,
-        draft_revision: int | None = None,
-    ) -> dict[str, object]:
-        evaluation = evaluation_service.evaluate_asset_policy(
-            self._store,
-            asset_id,
-            actor,
-            principal=principal,
-            groups=groups,
-            claims=claims,
-            rows=rows,
-            egress_allowlist=self._catalog_egress_allowlist,
-            plugin_registry=self._plugin_registry,
-            secret_provider=self._secret_provider,
-            draft_id=draft_id,
-            draft_revision=draft_revision,
-        )
-        try:
-            return review_service.issue_review_token(
-                self._store,
-                asset_id,
-                actor,
-                evaluation,
-                secret=self._review_secret,
-                require_saved_draft=self._require_review,
-                egress_allowlist=self._catalog_egress_allowlist,
-                draft_id=draft_id,
-            )
-        except AuthorizationFailure:
-            return evaluation
 
     def replace_auth_providers(self, cell_id: UUID, providers: list[dict[str, Any]]) -> None:
         self._store.replace_auth_providers(cell_id=cell_id, providers=providers)
@@ -736,41 +532,8 @@ class ProvisioningService:
     def workspace_auth_provider_revision(self) -> int:
         return workspace_service.workspace_auth_provider_revision(self._store)
 
-    def create_publication(
-        self,
-        cell_id: UUID,
-        *,
-        plugin_registry: PluginRegistry | None = None,
-    ) -> dict[str, object]:
-        return policy_version_service.create_publication(
-            self._store,
-            cell_id,
-            plugin_registry=self._plugin_registry if plugin_registry is None else plugin_registry,
-        )
-
-    def activate_publication(
-        self,
-        cell_id: UUID,
-        publication_id: UUID,
-        *,
-        expected_publication_id: UUID | None = None,
-        actor_principal: str = "system",
-        audit_workspace: bool = False,
-    ) -> dict[str, str]:
-        return policy_version_service.activate_publication(
-            self._store,
-            cell_id,
-            publication_id,
-            expected_publication_id=expected_publication_id,
-            actor_principal=actor_principal,
-            audit_workspace=audit_workspace,
-        )
-
     def _required_workspace_context(self):
         return workspace_service.required_workspace_context(self._store)
 
     def _ensure_policy_editor(self, asset_id: UUID, actor: ControlPlaneActor) -> None:
         policy_service.ensure_policy_editor(self._store, asset_id, actor)
-
-    def _validate_publish_readiness(self, draft) -> None:
-        policy_version_service._validate_publish_readiness(self._store, draft)

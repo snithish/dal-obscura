@@ -30,6 +30,7 @@ from dal_obscura.control_plane.interfaces.routes.schemas import (
     AssetSchemaFieldsRequest,
     AssetSchemaFieldsResponse,
     AssetSchemaResponse,
+    AssetTokenRevocationResponse,
 )
 
 
@@ -91,6 +92,19 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
     ) -> AssetSchemaResponse:
         return deps.with_service(lambda service: service.get_asset_schema(asset_id, actor))
+
+    @api.post(
+        "/v1/assets/{asset_id}/tickets/revoke",
+        response_model=AssetTokenRevocationResponse,
+    )
+    def revoke_asset_tickets(
+        asset_id: UUID,
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> AssetTokenRevocationResponse:
+        result = deps.with_service(
+            lambda service: service.revoke_asset_tickets(asset_id, actor=actor)
+        )
+        return AssetTokenRevocationResponse(asset_id=str(asset_id), **result)
 
     @api.put("/v1/assets/{asset_id}/owners", response_model=AssetOwnersResponse)
     def replace_asset_owners(
@@ -188,7 +202,7 @@ def _replace_authorized_asset_grants(
     # Lock before reading delegated authority or the current grant set.  The
     # replacement service takes the same lock before writing, so authorization
     # and the CAS mutation share one asset generation.
-    service.lock_asset_for_publication(asset_id)
+    service.lock_asset_for_update(asset_id)
     _ensure_grant_manager(service, asset_id, actor)
     grants = [item.model_dump() for item in request.grants]
     if not actor.platform_admin:

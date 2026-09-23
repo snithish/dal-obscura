@@ -9,11 +9,11 @@ from dal_obscura.common.config_store.orm import (
     AuditEventRecord,
     CatalogRecord,
 )
-from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
+from dal_obscura.control_plane.infrastructure.repositories import ConfigStore
 
 
 def test_scoped_audit_visibility_enforces_cell_and_tenant_context(db_session) -> None:
-    store = PublicationStore(db_session)
+    store = ConfigStore(db_session)
     cell_id = uuid4()
     visible_tenant_id = uuid4()
     hidden_tenant_id = uuid4()

@@ -54,10 +54,10 @@ plain command once they understand the pattern.
 Most examples have the same three service roles:
 
 1. `setup` creates a SQLite-backed Iceberg catalog, provisions the control-plane
-   API into `control-plane.db`, publishes the config snapshot, and writes
+   API into `control-plane.db` with live catalog, asset, policy, and OIDC state, and writes
    data-plane environment settings into a Docker volume.
-2. `dal-obscura` starts the real Flight service from the published GHCR image
-   and reads that published state.
+2. `dal-obscura` starts the real Flight service from the GHCR image and reads
+   the live configuration.
 3. `client` obtains or presents the selected credential, performs a startup
    read, marks itself healthy, and then stays available for interactive reads.
 
@@ -82,7 +82,7 @@ docker compose down --volumes
 docker compose up -d --wait
 ```
 
-The setup container rebuilds the local catalog and republishes control-plane
+The setup container rebuilds the local catalog and recreates control-plane
 state on every fresh start.
 
 If you change helper image dependencies or Dockerfile instructions, rebuild the

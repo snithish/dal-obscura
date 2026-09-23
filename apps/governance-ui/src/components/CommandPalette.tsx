@@ -1,7 +1,7 @@
 import { Combobox, Modal, Text, TextInput, useCombobox } from "@mantine/core";
 import type { Asset } from "../api";
 
-export type PaletteCommand = "assets" | "changes" | "activity" | "connections" | "settings" | "help";
+export type PaletteCommand = "assets" | "activity" | "connections" | "settings" | "help";
 export type CommandPaletteProps = {
   opened: boolean;
   query: string;
@@ -37,7 +37,7 @@ export function CommandPalette(props: CommandPaletteProps) {
           {!options.length && <Combobox.Empty>No authorized destination or asset matches that search.</Combobox.Empty>}
         </Combobox.Options>
       </Combobox>
-      <Text size="sm" c="dimmed" mt="md">Escape closes search. Publishing, deletion and revocation are never palette commands.</Text>
+      <Text size="sm" c="dimmed" mt="md">Escape closes search. Destructive actions stay in their asset controls.</Text>
     </Modal>
   );
 }

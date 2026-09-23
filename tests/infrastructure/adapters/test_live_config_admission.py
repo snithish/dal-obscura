@@ -9,6 +9,7 @@ import pyarrow as pa
 import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from dal_obscura.common.access_control.models import Principal
 from dal_obscura.common.config_store.db import (
@@ -17,30 +18,33 @@ from dal_obscura.common.config_store.db import (
     session_factory,
 )
 from dal_obscura.common.config_store.orm import (
-    PublishedAssetRecord,
-    PublishedCatalogRecord,
-    PublishedCellRuntimeRecord,
+    AssetRecord,
+    CatalogRecord,
+    CellRecord,
+    CellRuntimeSettingsRecord,
+    CellTenantRecord,
+    PolicyRuleRecord,
+    TenantRecord,
 )
-from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
-from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
-from dal_obscura.data_plane.infrastructure.adapters.published_config import (
+from dal_obscura.data_plane.infrastructure.adapters.live_config import (
     CatalogRegistry,
-    PublishedAsset,
-    PublishedCatalog,
-    PublishedConfigAuthorizer,
-    PublishedConfigCatalogRegistry,
-    PublishedConfigStore,
+    LiveAsset,
+    LiveCatalog,
+    LiveConfigAuthorizer,
+    LiveConfigCatalogRegistry,
+    LiveConfigStore,
     _catalog_config_for_asset,
     _schema_identities,
     _validate_schema_admission,
 )
+from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 
 ICEBERG_CATALOG_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
 )
 
 
-def test_published_registry_close_attempts_all_cached_generations_when_one_fails() -> None:
+def test_catalog_registry_close_attempts_all_cached_instances_when_one_fails() -> None:
     closed: list[str] = []
 
     class FakeRegistry:
@@ -52,7 +56,7 @@ def test_published_registry_close_attempts_all_cached_generations_when_one_fails
             if self.name == "first":
                 raise RuntimeError("first generation close failed")
 
-    registry = PublishedConfigCatalogRegistry(cast(PublishedConfigStore, object()))
+    registry = LiveConfigCatalogRegistry(cast(LiveConfigStore, object()))
     registry._registry_cache = cast(
         dict[tuple[UUID, UUID, str, str], CatalogRegistry],
         {
@@ -77,11 +81,11 @@ def db_session() -> Iterator[Session]:
         yield session
 
 
-def test_published_authorizer_resolves_policy_from_active_asset(db_session: Session):
+def test_live_authorizer_resolves_policy_from_active_asset(db_session: Session):
     cell_id = uuid4()
     tenant_id = uuid4()
-    _publish_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
-    authorizer = PublishedConfigAuthorizer(PublishedConfigStore(db_session, cell_id=cell_id))
+    _seed_live_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
+    authorizer = LiveConfigAuthorizer(LiveConfigStore(db_session, cell_id=cell_id))
 
     decision = authorizer.authorize(
         principal=Principal(id="user1", groups=[], attributes={"tenant_id": str(tenant_id)}),
@@ -96,11 +100,11 @@ def test_published_authorizer_resolves_policy_from_active_asset(db_session: Sess
     assert decision.policy_version != 123
 
 
-def test_published_authorizer_accepts_tenant_slug_attribute(db_session: Session):
+def test_live_authorizer_accepts_tenant_slug_attribute(db_session: Session):
     cell_id = uuid4()
     tenant_id = uuid4()
-    _publish_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
-    authorizer = PublishedConfigAuthorizer(PublishedConfigStore(db_session, cell_id=cell_id))
+    _seed_live_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
+    authorizer = LiveConfigAuthorizer(LiveConfigStore(db_session, cell_id=cell_id))
 
     decision = authorizer.authorize(
         principal=Principal(id="user1", groups=[], attributes={"tenant_id": f"tenant-{tenant_id}"}),
@@ -113,11 +117,11 @@ def test_published_authorizer_accepts_tenant_slug_attribute(db_session: Session)
     assert decision.policy_version != 123
 
 
-def test_published_store_loads_asset_and_catalog_from_one_generation(db_session: Session):
+def test_live_store_loads_asset_and_catalog_from_one_generation(db_session: Session):
     cell_id = uuid4()
     tenant_id = uuid4()
-    _publish_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
-    store = PublishedConfigStore(db_session, cell_id=cell_id)
+    _seed_live_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
+    store = LiveConfigStore(db_session, cell_id=cell_id)
 
     asset, catalog = store.get_asset_and_catalog(
         tenant_id=str(tenant_id),
@@ -125,13 +129,13 @@ def test_published_store_loads_asset_and_catalog_from_one_generation(db_session:
         target="default.users",
     )
 
-    assert asset.publication_id == catalog.publication_id
+    assert asset.config_revision == catalog.config_revision
     assert asset.catalog == catalog.catalog == "analytics"
 
 
-def test_published_config_rejects_tampered_plugin_binding():
-    asset = PublishedAsset(
-        publication_id=uuid4(),
+def test_live_config_rejects_tampered_plugin_binding():
+    asset = LiveAsset(
+        config_revision=uuid4(),
         tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
@@ -142,8 +146,8 @@ def test_published_config_rejects_tampered_plugin_binding():
         },
         policy_version=1,
     )
-    catalog = PublishedCatalog(
-        publication_id=asset.publication_id,
+    catalog = LiveCatalog(
+        config_revision=asset.config_revision,
         tenant_id=asset.tenant_id,
         catalog="analytics",
         config={"type": "iceberg", "options": {}},
@@ -153,9 +157,9 @@ def test_published_config_rejects_tampered_plugin_binding():
         _catalog_config_for_asset(catalog, asset)
 
 
-def test_published_config_rejects_legacy_catalog_module_shape():
-    asset = PublishedAsset(
-        publication_id=uuid4(),
+def test_live_config_rejects_legacy_catalog_module_shape():
+    asset = LiveAsset(
+        config_revision=uuid4(),
         tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
@@ -166,8 +170,8 @@ def test_published_config_rejects_legacy_catalog_module_shape():
         },
         policy_version=1,
     )
-    catalog = PublishedCatalog(
-        publication_id=asset.publication_id,
+    catalog = LiveCatalog(
+        config_revision=asset.config_revision,
         tenant_id=asset.tenant_id,
         catalog="analytics",
         config={"module": ICEBERG_CATALOG_MODULE, "options": {}},
@@ -177,9 +181,9 @@ def test_published_config_rejects_legacy_catalog_module_shape():
         _catalog_config_for_asset(catalog, asset)
 
 
-def test_published_config_passes_runtime_path_enforcer_to_catalog():
-    asset = PublishedAsset(
-        publication_id=uuid4(),
+def test_live_config_passes_runtime_path_enforcer_to_catalog():
+    asset = LiveAsset(
+        config_revision=uuid4(),
         tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
@@ -190,8 +194,8 @@ def test_published_config_passes_runtime_path_enforcer_to_catalog():
         },
         policy_version=1,
     )
-    catalog = PublishedCatalog(
-        publication_id=asset.publication_id,
+    catalog = LiveCatalog(
+        config_revision=asset.config_revision,
         tenant_id=asset.tenant_id,
         catalog="analytics",
         config={"type": "iceberg", "options": {}},
@@ -211,9 +215,9 @@ class _AdmittedPluginSnapshot:
         return {key: object() for key in self._keys}
 
 
-def test_published_config_requires_both_plugin_identities_in_admitted_snapshot():
-    asset = PublishedAsset(
-        publication_id=uuid4(),
+def test_live_config_requires_both_plugin_identities_in_admitted_snapshot():
+    asset = LiveAsset(
+        config_revision=uuid4(),
         tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
@@ -227,8 +231,8 @@ def test_published_config_requires_both_plugin_identities_in_admitted_snapshot()
         },
         policy_version=1,
     )
-    catalog = PublishedCatalog(
-        publication_id=asset.publication_id,
+    catalog = LiveCatalog(
+        config_revision=asset.config_revision,
         tenant_id=asset.tenant_id,
         catalog="analytics",
         config={"type": "iceberg", "options": {}},
@@ -269,9 +273,9 @@ def test_published_config_requires_both_plugin_identities_in_admitted_snapshot()
         )
 
 
-def test_published_config_preserves_external_plugin_identity():
-    asset = PublishedAsset(
-        publication_id=uuid4(),
+def test_live_config_preserves_external_plugin_identity():
+    asset = LiveAsset(
+        config_revision=uuid4(),
         tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
@@ -282,8 +286,8 @@ def test_published_config_preserves_external_plugin_identity():
         },
         policy_version=1,
     )
-    catalog = PublishedCatalog(
-        publication_id=asset.publication_id,
+    catalog = LiveCatalog(
+        config_revision=asset.config_revision,
         tenant_id=asset.tenant_id,
         catalog="analytics",
         config={
@@ -303,9 +307,9 @@ def test_published_config_preserves_external_plugin_identity():
     assert resolved.options == {"root": "/srv/data"}
 
 
-def test_published_config_preserves_catalog_plugin_revision():
-    asset = PublishedAsset(
-        publication_id=uuid4(),
+def test_live_config_preserves_catalog_plugin_revision():
+    asset = LiveAsset(
+        config_revision=uuid4(),
         tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
@@ -316,8 +320,8 @@ def test_published_config_preserves_catalog_plugin_revision():
         },
         policy_version=1,
     )
-    catalog = PublishedCatalog(
-        publication_id=asset.publication_id,
+    catalog = LiveCatalog(
+        config_revision=asset.config_revision,
         tenant_id=asset.tenant_id,
         catalog="analytics",
         config={"type": "iceberg", "options": {"root": "/srv/data"}},
@@ -357,8 +361,8 @@ def test_schema_without_provider_ids_uses_schema_scoped_nested_synthetic_ids():
             for (path, field_id), field_type in identities.items()
         ]
     }
-    asset = PublishedAsset(
-        publication_id=uuid4(),
+    asset = LiveAsset(
+        config_revision=uuid4(),
         tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
@@ -376,15 +380,15 @@ def test_schema_without_provider_ids_uses_schema_scoped_nested_synthetic_ids():
             pa.field("labels", pa.map_(pa.string(), pa.string())),
         ]
     )
-    with pytest.raises(ValueError, match="review again"):
+    with pytest.raises(ValueError, match="schema admission"):
         _validate_schema_admission(asset, changed)
 
 
-def test_schema_admission_rejects_unstable_live_schema_for_stable_publication():
+def test_schema_admission_rejects_unstable_live_schema_for_stable_ids():
     schema = pa.schema([pa.field("email", pa.string())])
     field_id = "iceberg:1"
-    asset = PublishedAsset(
-        publication_id=uuid4(),
+    asset = LiveAsset(
+        config_revision=uuid4(),
         tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
@@ -403,8 +407,8 @@ def test_schema_admission_rejects_unstable_live_schema_for_stable_publication():
 
 
 def test_legacy_wildcard_policy_requires_schema_admission():
-    asset = PublishedAsset(
-        publication_id=uuid4(),
+    asset = LiveAsset(
+        config_revision=uuid4(),
         tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
@@ -418,8 +422,8 @@ def test_legacy_wildcard_policy_requires_schema_admission():
 
 
 def test_legacy_parent_policy_requires_schema_admission():
-    asset = PublishedAsset(
-        publication_id=uuid4(),
+    asset = LiveAsset(
+        config_revision=uuid4(),
         tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
@@ -433,14 +437,14 @@ def test_legacy_parent_policy_requires_schema_admission():
         _validate_schema_admission(asset, schema)
 
 
-def test_published_store_fails_closed_by_default_after_transient_failure(
+def test_live_store_fails_closed_by_default_after_transient_failure(
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
 ):
     cell_id = uuid4()
     tenant_id = uuid4()
-    _publish_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
-    config_store = PublishedConfigStore(db_session, cell_id=cell_id)
+    _seed_live_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
+    config_store = LiveConfigStore(db_session, cell_id=cell_id)
 
     config_store.get_asset(
         tenant_id=str(tenant_id),
@@ -462,57 +466,40 @@ def test_published_store_fails_closed_by_default_after_transient_failure(
         )
 
 
-def test_published_store_rejects_assets_removed_by_new_generation(
-    db_session: Session,
-):
+def test_live_store_rejects_directly_removed_assets_and_flushes_cache(db_session: Session):
     cell_id = uuid4()
     tenant_id = uuid4()
-    _publish_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
-    config_store = PublishedConfigStore(db_session, cell_id=cell_id)
+    _seed_live_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
+    config_store = LiveConfigStore(db_session, cell_id=cell_id)
+    config_store.get_asset(tenant_id=str(tenant_id), catalog="analytics", target="default.users")
 
-    config_store.get_asset(
-        tenant_id=str(tenant_id),
-        catalog="analytics",
-        target="default.users",
-    )
-    removed_asset_publication_id = uuid4()
-    store = PublicationStore(db_session)
-    store.insert_publication(
-        cell_id=cell_id,
-        publication_id=removed_asset_publication_id,
-        manifest_hash="c" * 64,
-    )
-    db_session.add(
-        PublishedCellRuntimeRecord(
-            publication_id=removed_asset_publication_id,
-            auth_chain_json={"providers": []},
-            ticket_json={},
-            path_rules_json=[],
-        )
-    )
-    store.activate_publication(cell_id=cell_id, publication_id=removed_asset_publication_id)
+    asset = db_session.scalar(select(AssetRecord).where(AssetRecord.target == "default.users"))
+    assert asset is not None
+    db_session.delete(asset)
+    cell = db_session.get(CellRecord, cell_id)
+    assert cell is not None
+    cell.configuration_revision += 1
     db_session.commit()
 
-    with pytest.raises(LookupError, match="No published asset"):
+    with pytest.raises(LookupError, match="No live asset"):
         config_store.get_asset(
-            tenant_id=str(tenant_id),
-            catalog="analytics",
-            target="default.users",
+            tenant_id=str(tenant_id), catalog="analytics", target="default.users"
         )
     assert config_store._asset_cache == {}
 
 
-def test_published_authorizer_rejects_corrupt_mask_instead_of_dropping_it(
+def test_live_authorizer_rejects_corrupt_mask_instead_of_dropping_it(
     db_session: Session,
 ):
     cell_id = uuid4()
     tenant_id = uuid4()
-    _publish_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
-    record = db_session.scalar(select(PublishedAssetRecord))
+    _seed_live_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
+    record = db_session.scalar(select(PolicyRuleRecord))
     assert record is not None
-    record.compiled_config_json["policy"]["rules"][0]["masks"] = {"email": {}}
+    record.masks_json["email"] = {}
+    flag_modified(record, "masks_json")
     db_session.commit()
-    authorizer = PublishedConfigAuthorizer(PublishedConfigStore(db_session, cell_id=cell_id))
+    authorizer = LiveConfigAuthorizer(LiveConfigStore(db_session, cell_id=cell_id))
 
     with pytest.raises(ValueError, match=r"mask\.type"):
         authorizer.authorize(
@@ -523,9 +510,9 @@ def test_published_authorizer_rejects_corrupt_mask_instead_of_dropping_it(
         )
 
 
-def test_published_schema_admission_rejects_rebound_or_added_field():
-    asset = PublishedAsset(
-        publication_id=uuid4(),
+def test_live_schema_admission_rejects_rebound_or_added_field():
+    asset = LiveAsset(
+        config_revision=uuid4(),
         tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
@@ -568,9 +555,9 @@ def test_published_schema_admission_rejects_rebound_or_added_field():
         _validate_schema_admission(asset, schema)
 
 
-def test_published_schema_admission_requires_reapproval_for_renamed_field():
-    asset = PublishedAsset(
-        publication_id=uuid4(),
+def test_live_schema_admission_requires_refresh_after_renamed_field():
+    asset = LiveAsset(
+        config_revision=uuid4(),
         tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
@@ -613,9 +600,9 @@ def test_published_schema_admission_requires_reapproval_for_renamed_field():
         _validate_schema_admission(asset, schema)
 
 
-def test_published_schema_admission_accepts_iceberg_numeric_metadata_and_aliases():
-    asset = PublishedAsset(
-        publication_id=uuid4(),
+def test_live_schema_admission_accepts_iceberg_numeric_metadata_and_aliases():
+    asset = LiveAsset(
+        config_revision=uuid4(),
         tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
@@ -700,9 +687,9 @@ def test_schema_identity_rejects_unbounded_or_malformed_provider_ids(metadata: d
     assert field_id.startswith("synthetic:")
 
 
-def test_published_schema_admission_tracks_collection_element_and_map_value_paths():
-    asset = PublishedAsset(
-        publication_id=uuid4(),
+def test_live_schema_admission_tracks_collection_element_and_map_value_paths():
+    asset = LiveAsset(
+        config_revision=uuid4(),
         tenant_id=uuid4(),
         catalog="analytics",
         target="default.nested",
@@ -781,9 +768,9 @@ def test_published_schema_admission_tracks_collection_element_and_map_value_path
     _validate_schema_admission(asset, schema)
 
 
-def test_published_schema_admission_rejects_collection_identity_drift():
-    asset = PublishedAsset(
-        publication_id=uuid4(),
+def test_live_schema_admission_rejects_collection_identity_drift():
+    asset = LiveAsset(
+        config_revision=uuid4(),
         tenant_id=uuid4(),
         catalog="analytics",
         target="default.nested",
@@ -824,9 +811,9 @@ def test_published_schema_admission_rejects_collection_identity_drift():
         _validate_schema_admission(asset, schema)
 
 
-def test_published_schema_admission_rejects_duplicate_live_field_ids():
-    asset = PublishedAsset(
-        publication_id=uuid4(),
+def test_live_schema_admission_rejects_duplicate_live_field_ids():
+    asset = LiveAsset(
+        config_revision=uuid4(),
         tenant_id=uuid4(),
         catalog="analytics",
         target="default.duplicate",
@@ -858,7 +845,7 @@ def test_published_schema_admission_rejects_duplicate_live_field_ids():
         _validate_schema_admission(asset, schema)
 
 
-def test_published_schema_admission_rejects_tampered_admission_digest():
+def test_live_schema_admission_rejects_tampered_admission_digest():
     fields = [
         {
             "name": "id",
@@ -868,8 +855,8 @@ def test_published_schema_admission_rejects_tampered_admission_digest():
             "nullable": False,
         }
     ]
-    asset = PublishedAsset(
-        publication_id=uuid4(),
+    asset = LiveAsset(
+        config_revision=uuid4(),
         tenant_id=uuid4(),
         catalog="analytics",
         target="default.tampered",
@@ -885,7 +872,7 @@ def test_published_schema_admission_rejects_tampered_admission_digest():
         )
 
 
-def _publish_asset(
+def _seed_live_asset(
     session: Session,
     *,
     cell_id,
@@ -897,124 +884,75 @@ def _publish_asset(
     catalog_options: dict[str, object] | None = None,
     target_options: dict[str, object] | None = None,
 ) -> None:
-    publication_id = uuid4()
-    store = PublicationStore(session)
-    store.create_cell(cell_id=cell_id, name=f"cell-{cell_id}", region="local")
-    store.create_tenant(
-        tenant_id=tenant_id,
-        slug=f"tenant-{tenant_id}",
-        display_name="Default",
+    catalog_id = uuid4()
+    asset_id = uuid4()
+    session.add_all(
+        [
+            CellRecord(id=cell_id, name=f"cell-{cell_id}", region="local"),
+            TenantRecord(id=tenant_id, slug=f"tenant-{tenant_id}", display_name="Default"),
+            CellTenantRecord(cell_id=cell_id, tenant_id=tenant_id, shard_key="default"),
+            CellRuntimeSettingsRecord(
+                cell_id=cell_id,
+                ticket_ttl_seconds=300,
+                max_tickets=32,
+                max_ticket_exchanges=1,
+                revision=0,
+                path_rules_json=[],
+            ),
+            CatalogRecord(
+                id=catalog_id,
+                cell_id=cell_id,
+                tenant_id=tenant_id,
+                name="analytics",
+                module=catalog_module,
+                options_json=dict(catalog_options or {}),
+                revision=0,
+            ),
+            AssetRecord(
+                id=asset_id,
+                cell_id=cell_id,
+                tenant_id=tenant_id,
+                catalog_id=catalog_id,
+                target="default.users",
+                backend=backend,
+                table_identifier=table,
+                options_json=dict(target_options or {}),
+                revision=0,
+                policy_revision=policy_version,
+            ),
+            PolicyRuleRecord(
+                id=uuid4(),
+                asset_id=asset_id,
+                ordinal=10,
+                effect="allow",
+                principals_json=["user1"],
+                when_json={},
+                columns_json=["id", "email"],
+                masks_json={"email": {"type": "email"}},
+                row_filter_sql="region = 'us'",
+            ),
+        ]
     )
-    store.assign_tenant_to_cell(cell_id=cell_id, tenant_id=tenant_id, shard_key="default")
-    store.insert_publication(
-        cell_id=cell_id,
-        publication_id=publication_id,
-        manifest_hash="b" * 64,
-    )
-    session.add(
-        PublishedCellRuntimeRecord(
-            publication_id=publication_id,
-            auth_chain_json={"providers": []},
-            ticket_json={},
-            path_rules_json=[],
-        )
-    )
-    session.add(
-        PublishedCatalogRecord(
-            publication_id=publication_id,
-            tenant_id=tenant_id,
-            catalog="analytics",
-            config_json={
-                "module": catalog_module,
-                "options": dict(catalog_options or {}),
-            },
-        )
-    )
-    store.insert_published_asset(
-        publication_id=publication_id,
-        tenant_id=tenant_id,
-        catalog="analytics",
-        target="default.users",
-        backend=backend,
-        compiled_config={
-            "catalog": {
-                "module": ICEBERG_CATALOG_MODULE,
-                "options": {},
-            },
-            "target": {
-                "backend": backend,
-                "table": table,
-                "options": dict(target_options or {}),
-            },
-            "policy": {
-                "rules": [
-                    {
-                        "principals": ["user1"],
-                        "columns": ["id", "email"],
-                        "effect": "allow",
-                        "when": {},
-                        "masks": {"email": {"type": "email"}},
-                        "row_filter": "region = 'us'",
-                    }
-                ]
-            },
-        },
-        policy_version=policy_version,
-    )
-    store.activate_publication(cell_id=cell_id, publication_id=publication_id)
     session.commit()
 
 
-def test_published_authorizer_changes_effective_version_for_new_generation(db_session: Session):
+def test_live_authorizer_changes_effective_version_after_policy_edit(db_session: Session):
     cell_id = uuid4()
     tenant_id = uuid4()
-    _publish_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
-    authorizer = PublishedConfigAuthorizer(PublishedConfigStore(db_session, cell_id=cell_id))
-    principal = Principal(id="user1", groups=[], attributes={"tenant_id": str(tenant_id)})
-    initial_version = authorizer.authorize(
-        principal=principal,
-        target="default.users",
-        catalog="analytics",
-        requested_columns=["id"],
-    ).policy_version
-    asset = db_session.scalar(select(PublishedAssetRecord))
-    catalog = db_session.scalar(select(PublishedCatalogRecord))
-    runtime = db_session.scalar(select(PublishedCellRuntimeRecord))
-    assert asset is not None and catalog is not None and runtime is not None
+    _seed_live_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
+    authorizer = LiveConfigAuthorizer(LiveConfigStore(db_session, cell_id=cell_id))
+    initial_version = authorizer.current_policy_version(
+        "default.users", "analytics", tenant_id=str(tenant_id)
+    )
+    asset = db_session.scalar(select(AssetRecord).where(AssetRecord.target == "default.users"))
+    rule = db_session.scalar(select(PolicyRuleRecord))
+    assert asset is not None and rule is not None
 
-    new_publication_id = uuid4()
-    store = PublicationStore(db_session)
-    store.insert_publication(
-        cell_id=cell_id,
-        publication_id=new_publication_id,
-        manifest_hash="d" * 64,
-    )
-    db_session.add(
-        PublishedCellRuntimeRecord(
-            publication_id=new_publication_id,
-            auth_chain_json=dict(runtime.auth_chain_json),
-            ticket_json=dict(runtime.ticket_json),
-            path_rules_json=list(runtime.path_rules_json),
-        )
-    )
-    db_session.add(
-        PublishedCatalogRecord(
-            publication_id=new_publication_id,
-            tenant_id=tenant_id,
-            catalog=catalog.catalog,
-            config_json=dict(catalog.config_json),
-        )
-    )
-    store.insert_published_asset(
-        publication_id=new_publication_id,
-        tenant_id=tenant_id,
-        catalog=asset.catalog,
-        target=asset.target,
-        backend=asset.backend,
-        compiled_config=dict(asset.compiled_config_json),
-        policy_version=asset.policy_version,
-    )
-    store.activate_publication(cell_id=cell_id, publication_id=new_publication_id)
+    rule.columns_json = ["email"]
+    asset.policy_revision += 1
+    cell = db_session.get(CellRecord, cell_id)
+    assert cell is not None
+    cell.configuration_revision += 1
     db_session.commit()
 
     current_version = authorizer.current_policy_version(

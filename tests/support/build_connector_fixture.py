@@ -618,11 +618,6 @@ def _provision_control_plane(
                 }
             ],
         )
-        publication = service.create_publication(cell_id=cell_id)
-        service.activate_publication(
-            cell_id=cell_id,
-            publication_id=UUID(str(publication["publication_id"])),
-        )
         session.commit()
 
     return database_url, cell["id"], tenant["id"]

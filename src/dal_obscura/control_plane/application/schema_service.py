@@ -37,7 +37,7 @@ from dal_obscura.control_plane.application.catalog_service import (
 )
 from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.application.policy_service import ensure_asset_capability
-from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
+from dal_obscura.control_plane.infrastructure.repositories import ConfigStore
 from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
     EnvSecretProvider,
     SecretProvider,
@@ -51,7 +51,7 @@ ICEBERG_CATALOG_MODULE = (
 
 
 def get_asset_schema(
-    store: PublicationStore,
+    store: ConfigStore,
     asset_id: UUID,
     actor: ControlPlaneActor,
     *,
@@ -96,7 +96,7 @@ def get_asset_schema(
 
 
 def load_asset_iceberg_schema(
-    store: PublicationStore,
+    store: ConfigStore,
     asset_id: UUID,
     actor: ControlPlaneActor,
     *,
@@ -353,7 +353,7 @@ def schema_fingerprint(schema: object) -> str:
     """Returns a stable digest for an authoritative Iceberg or Arrow schema.
 
     Iceberg schemas are normalized through their Arrow representation so API,
-    evaluation, and review use one encoding.  Field and collection IDs are
+    evaluation, and schema admission use one encoding. Field and collection IDs are
     carried in Arrow metadata and included in the canonical bytes; ``repr`` is
     intentionally never used as schema identity.
     """

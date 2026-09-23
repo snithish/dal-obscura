@@ -673,10 +673,10 @@ def test_descriptor_authorization_field_is_not_accepted(tmp_path):
         server.get_flight_info(DummyContext(headers=[]), descriptor)
 
 
-def test_do_get_rejects_ticket_after_policy_version_changes(tmp_path):
+def test_do_get_keeps_captured_policy_after_policy_change(tmp_path):
     del tmp_path
     schema = id_region_schema()
-    batch = id_region_batch([1], ["us"])
+    batch = id_region_batch([1, 2], ["us", "eu"])
     table_format = StubTableFormat(
         catalog_name="analytics",
         table_name="test.table",
@@ -702,17 +702,17 @@ def test_do_get_rejects_ticket_after_policy_version_changes(tmp_path):
             "columns": ["id", "region"],
         }
     )
-    plan_context = DummyContext(headers=[authorization_header("user1")])
-    info = server.get_flight_info(plan_context, descriptor)
-    ticket = info.endpoints[0].ticket
+    with running_flight_client(server) as client:
+        options = flight_call_options("user1")
+        info = client.get_flight_info(descriptor, options=options)
 
-    authorizer.rules = [allow_rule(["id", "region"])]
-    do_get_context = DummyContext(headers=[authorization_header("user1")])
-    server.do_get(do_get_context, ticket)
+        authorizer.rules = [allow_rule(["id", "region"], row_filter="region = 'us'")]
+        captured = client.do_get(info.endpoints[0].ticket, options=options).read_all()
+        assert captured.column("region").to_pylist() == ["us", "eu"]
 
-    authorizer.rules = [allow_rule(["id", "region"], row_filter="region = 'us'")]
-    with pytest.raises(flight.FlightUnauthorizedError):
-        server.do_get(do_get_context, ticket)
+        updated_info = client.get_flight_info(descriptor, options=options)
+        updated = client.do_get(updated_info.endpoints[0].ticket, options=options).read_all()
+        assert updated.column("region").to_pylist() == ["us"]
 
 
 def test_do_get_requires_authorization_header(tmp_path):

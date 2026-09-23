@@ -123,41 +123,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/assets/{asset_id}/draft": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Policy Draft */
-        get: operations["get_policy_draft_v1_assets__asset_id__draft_get"];
-        /** Save Policy Draft */
-        put: operations["save_policy_draft_v1_assets__asset_id__draft_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/assets/{asset_id}/draft/{draft_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Policy Draft By Id */
-        get: operations["get_policy_draft_by_id_v1_assets__asset_id__draft__draft_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/assets/{asset_id}/grants": {
         parameters: {
             query?: never;
@@ -193,6 +158,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/assets/{asset_id}/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace Asset Policy */
+        put: operations["replace_asset_policy_v1_assets__asset_id__policy_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/assets/{asset_id}/policy-evaluate": {
         parameters: {
             query?: never;
@@ -204,92 +186,6 @@ export interface paths {
         put?: never;
         /** Evaluate Asset Policy */
         post: operations["evaluate_asset_policy_v1_assets__asset_id__policy_evaluate_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/assets/{asset_id}/policy-operations/{idempotency_key}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Policy Operation */
-        get: operations["get_policy_operation_v1_assets__asset_id__policy_operations__idempotency_key__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/assets/{asset_id}/policy-review": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Review Asset Policy */
-        post: operations["review_asset_policy_v1_assets__asset_id__policy_review_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/assets/{asset_id}/policy-versions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Asset Policy Version History */
-        get: operations["list_asset_policy_version_history_v1_assets__asset_id__policy_versions_get"];
-        put?: never;
-        /** Create Asset Policy Version */
-        post: operations["create_asset_policy_version_v1_assets__asset_id__policy_versions_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/assets/{asset_id}/policy-versions/{policy_version}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Asset Policy Version */
-        get: operations["get_asset_policy_version_v1_assets__asset_id__policy_versions__policy_version__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/assets/{asset_id}/policy-versions/{policy_version}/restore": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Restore Policy Version */
-        post: operations["restore_policy_version_v1_assets__asset_id__policy_versions__policy_version__restore_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -324,6 +220,23 @@ export interface paths {
         /** Replace Asset Schema Fields */
         put: operations["replace_asset_schema_fields_v1_assets__asset_id__schema_fields_put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/assets/{asset_id}/tickets/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke Asset Tickets */
+        post: operations["revoke_asset_tickets_v1_assets__asset_id__tickets_revoke_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -503,23 +416,6 @@ export interface paths {
         patch: operations["set_plugin_lifecycle_v1_plugins__kind___plugin_id__lifecycle_patch"];
         trace?: never;
     };
-    "/v1/policy-versions/page": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Policy Version History Page */
-        get: operations["list_policy_version_history_page_v1_policy_versions_page_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/session": {
         parameters: {
             query?: never;
@@ -672,41 +568,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/workspace/publications": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Workspace Publications */
-        get: operations["list_workspace_publications_v1_workspace_publications_get"];
-        put?: never;
-        /** Create Workspace Publication */
-        post: operations["create_workspace_publication_v1_workspace_publications_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/workspace/publications/{publication_id}/activate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Activate Workspace Publication */
-        post: operations["activate_workspace_publication_v1_workspace_publications__publication_id__activate_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/workspace/summary": {
         parameters: {
             query?: never;
@@ -753,7 +614,7 @@ export interface components {
              * Capability
              * @enum {string}
              */
-            capability: "read" | "edit" | "publish" | "grant";
+            capability: "read" | "edit" | "grant";
             /** Reasons */
             reasons: string[];
         };
@@ -762,18 +623,12 @@ export interface components {
          * @description Full governed asset record used by the policy editor.
          */
         AssetDetailResponse: {
-            /** Active Policy Version */
-            active_policy_version?: number | null;
             /** Backend */
             backend: string;
             /** Catalog */
             catalog: string;
-            /** Draft Status */
-            draft_status: string;
             /** Id */
             id: string;
-            /** Last Published At */
-            last_published_at?: string | null;
             /** Name */
             name: string;
             /** Options */
@@ -784,6 +639,8 @@ export interface components {
             owner_count: number;
             /** Owners */
             owners: string[];
+            /** Policy Revision */
+            policy_revision: number;
             /** Policy Rules */
             policy_rules: {
                 [key: string]: unknown;
@@ -808,7 +665,7 @@ export interface components {
              * Capability
              * @enum {string}
              */
-            capability: "read" | "edit" | "publish" | "grant";
+            capability: "read" | "edit" | "grant";
             /** Principal */
             principal: string;
         };
@@ -821,7 +678,7 @@ export interface components {
              * Capability
              * @enum {string}
              */
-            capability: "read" | "edit" | "publish" | "grant";
+            capability: "read" | "edit" | "grant";
             /** Principal */
             principal: string;
         };
@@ -860,27 +717,23 @@ export interface components {
          * @description Bounded workspace inventory row with authoritative serving state.
          */
         AssetInventoryResponse: {
-            /** Active Policy Version */
-            active_policy_version?: number | null;
             /** Backend */
             backend: string;
             /** Catalog */
             catalog: string;
-            /** Draft Status */
-            draft_status: string;
             /**
              * Id
              * Format: uuid
              */
             id: string;
-            /** Last Published At */
-            last_published_at?: string | null;
             /** Name */
             name: string;
             /** Owner Count */
             owner_count: number;
             /** Owners */
             owners: string[];
+            /** Policy Revision */
+            policy_revision: number;
             /** Policy Status */
             policy_status: string;
             /** Table Identifier */
@@ -1024,6 +877,13 @@ export interface components {
             supported_masks: ("null" | "redact" | "hash" | "email" | "keep_last" | "default")[];
             /** Target */
             target: string;
+        };
+        /** AssetTokenRevocationResponse */
+        AssetTokenRevocationResponse: {
+            /** Asset Id */
+            asset_id: string;
+            /** Revoked Token Count */
+            revoked_token_count: number;
         };
         /**
          * AuditEventPageResponse
@@ -1325,44 +1185,6 @@ export interface components {
             status: "enabled" | "not_installed" | "incompatible";
         };
         /**
-         * PolicyDraftRequest
-         * @description Revision-preconditioned policy draft replacement.
-         */
-        PolicyDraftRequest: {
-            /** Expected Revision */
-            expected_revision: number;
-            /** Rules */
-            rules: {
-                [key: string]: unknown;
-            }[];
-        };
-        /**
-         * PolicyDraftResponse
-         * @description Revisioned policy draft returned to editors and reviewers.
-         */
-        PolicyDraftResponse: {
-            /** Asset Id */
-            asset_id: string;
-            /** Author Principal */
-            author_principal: string;
-            /** Base Policy Version */
-            base_policy_version: number;
-            /** Content Hash */
-            content_hash: string;
-            /** Created At */
-            created_at?: string | null;
-            /** Id */
-            id?: string | null;
-            /** Revision */
-            revision: number;
-            /** Rules */
-            rules: {
-                [key: string]: unknown;
-            }[];
-            /** Updated At */
-            updated_at?: string | null;
-        };
-        /**
          * PolicyEvaluationRequest
          * @description Bounded synthetic rows for server-side DuckDB policy evaluation.
          */
@@ -1373,10 +1195,6 @@ export interface components {
             };
             /** Columns */
             columns?: string[];
-            /** Draft Id */
-            draft_id?: string | null;
-            /** Draft Revision */
-            draft_revision?: number | null;
             /** Groups */
             groups?: string[];
             /** Principal */
@@ -1410,6 +1228,8 @@ export interface components {
             }[];
             /** Output Rows */
             output_rows: number;
+            /** Policy Revision */
+            policy_revision: number;
             /** Row Filter */
             row_filter?: string | null;
             /** Rows */
@@ -1424,156 +1244,31 @@ export interface components {
              */
             status: "completed";
         };
-        /**
-         * PolicyOperationResponse
-         * @description Caller-scoped idempotent publication operation.
-         */
-        PolicyOperationResponse: {
-            /** Id */
-            id: string;
-            result: components["schemas"]["PolicyVersionCreateResponse"];
-            /** Status */
-            status: string;
+        /** PolicyMutationResponse */
+        PolicyMutationResponse: {
+            /** Asset Id */
+            asset_id: string;
+            /** Policy Revision */
+            policy_revision: number;
+            /** Revoked Token Count */
+            revoked_token_count: number;
         };
         /**
-         * PolicyRestoreRequest
-         * @description Revision-preconditioned request to restore immutable policy history.
+         * PolicyRulesRequest
+         * @description Optimistic direct policy replacement.
          */
-        PolicyRestoreRequest: {
+        PolicyRulesRequest: {
             /** Expected Revision */
             expected_revision: number;
-        };
-        /**
-         * PolicyReviewResponse
-         * @description Evaluation evidence plus optional server review authority.
-         */
-        PolicyReviewResponse: {
-            /** Allowed Columns */
-            allowed_columns: string[];
             /**
-             * Decision
-             * @enum {string}
+             * Revoke Existing Tokens
+             * @default false
              */
-            decision: "allow" | "deny";
-            /** Evidence */
-            evidence: {
-                [key: string]: unknown;
-            };
-            /** Input Rows */
-            input_rows: number;
-            /** Masks */
-            masks: {
-                [key: string]: unknown;
-            }[];
-            /** Output Rows */
-            output_rows: number;
-            /** Review Draft Author */
-            review_draft_author?: string | null;
-            /** Review Draft Id */
-            review_draft_id?: string | null;
-            /** Review Expires At */
-            review_expires_at?: number | null;
-            /** Review Token */
-            review_token?: string | null;
-            /** Reviewer */
-            reviewer?: string | null;
-            /** Row Filter */
-            row_filter?: string | null;
-            /** Rows */
-            rows: {
-                [key: string]: unknown;
-            }[];
-            /** Schema */
-            schema: string;
-            /**
-             * Status
-             * @constant
-             */
-            status: "completed";
-        };
-        /**
-         * PolicyVersionCreateResponse
-         * @description Result of publishing one asset policy version.
-         */
-        PolicyVersionCreateResponse: {
-            /** Asset Id */
-            asset_id: string;
-            /** Policy Version */
-            policy_version: number;
-        };
-        /**
-         * PolicyVersionDetailResponse
-         * @description Published policy body without compiled catalog configuration.
-         */
-        PolicyVersionDetailResponse: {
-            /** Asset Id */
-            asset_id: string;
-            /** Policy Version */
-            policy_version: number;
+            revoke_existing_tokens: boolean;
             /** Rules */
             rules: {
                 [key: string]: unknown;
             }[];
-        };
-        /**
-         * PolicyVersionPageResponse
-         * @description Keyset-paginated immutable policy history.
-         */
-        PolicyVersionPageResponse: {
-            /** Items */
-            items: components["schemas"]["PolicyVersionResponse"][];
-            /** Next Cursor */
-            next_cursor?: string | null;
-        };
-        /**
-         * PolicyVersionPublishRequest
-         * @description Optional generation preconditions for publishing one asset draft.
-         */
-        PolicyVersionPublishRequest: {
-            /** Draft Id */
-            draft_id?: string | null;
-            /** Expected Draft Revision */
-            expected_draft_revision?: number | null;
-            /** Expected Publication Id */
-            expected_publication_id?: string | null;
-            /** Review Token */
-            review_token?: string | null;
-        };
-        /**
-         * PolicyVersionResponse
-         * @description Immutable published policy history row.
-         */
-        PolicyVersionResponse: {
-            /** Active */
-            active: boolean;
-            /** Asset Id */
-            asset_id: string;
-            /** Asset Name */
-            asset_name: string;
-            /** Catalog */
-            catalog: string;
-            /** Created At */
-            created_at: string;
-            /** Policy Version */
-            policy_version: number;
-            /** Target */
-            target: string;
-        };
-        /**
-         * PublicationActivationRequest
-         * @description Optional active-generation precondition for workspace activation.
-         */
-        PublicationActivationRequest: {
-            /** Expected Publication Id */
-            expected_publication_id?: string | null;
-        };
-        /**
-         * PublicationActivationResponse
-         * @description Activation result bound to one immutable generation.
-         */
-        PublicationActivationResponse: {
-            /** Publication Id */
-            publication_id: string;
         };
         /**
          * RuntimeSettingsRequest
@@ -1676,17 +1371,11 @@ export interface components {
         };
         /**
          * WorkspaceGenerationResponse
-         * @description Active immutable generation summary.
+         * @description Monotonic revision of canonical workspace configuration.
          */
         WorkspaceGenerationResponse: {
-            /** Cell Id */
-            cell_id: string;
-            /** Manifest Hash */
-            manifest_hash: string;
-            /** Publication Id */
-            publication_id: string;
-            /** Status */
-            status: string;
+            /** Config Revision */
+            config_revision: string;
         };
         /**
          * WorkspaceObservationsResponse
@@ -1703,42 +1392,6 @@ export interface components {
             source: string;
         };
         /**
-         * WorkspacePublicationCreateResponse
-         * @description Created staged publication summary.
-         */
-        WorkspacePublicationCreateResponse: {
-            /** Asset Count */
-            asset_count: number;
-            /** Catalog Count */
-            catalog_count: number;
-            /** Manifest Hash */
-            manifest_hash: string;
-            /** Publication Id */
-            publication_id: string;
-        };
-        /**
-         * WorkspacePublicationResponse
-         * @description Immutable workspace publication listing row.
-         */
-        WorkspacePublicationResponse: {
-            /** Active */
-            active: boolean;
-            /** Asset Count */
-            asset_count: number;
-            /** Catalog Count */
-            catalog_count: number;
-            /** Created At */
-            created_at: string;
-            /** Id */
-            id: string;
-            /** Manifest Hash */
-            manifest_hash: string;
-            /** Schema Version */
-            schema_version: number;
-            /** Status */
-            status: string;
-        };
-        /**
          * WorkspaceSummaryResponse
          * @description Permission-scoped workspace counts.
          */
@@ -1747,8 +1400,6 @@ export interface components {
             asset_count: number;
             /** Catalog Count */
             catalog_count: number;
-            /** Draft Change Count */
-            draft_change_count: number;
             /** Enabled Auth Provider Count */
             enabled_auth_provider_count: number;
             /** Missing Policy Count */
@@ -1976,125 +1627,6 @@ export interface operations {
             };
         };
     };
-    get_policy_draft_v1_assets__asset_id__draft_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string;
-            };
-            path: {
-                asset_id: string;
-            };
-            cookie?: {
-                "__Host-dal_obscura_csrf"?: string | null;
-                "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PolicyDraftResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    save_policy_draft_v1_assets__asset_id__draft_put: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string;
-            };
-            path: {
-                asset_id: string;
-            };
-            cookie?: {
-                "__Host-dal_obscura_csrf"?: string | null;
-                "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PolicyDraftRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PolicyDraftResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_policy_draft_by_id_v1_assets__asset_id__draft__draft_id__get: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string;
-            };
-            path: {
-                asset_id: string;
-                draft_id: string;
-            };
-            cookie?: {
-                "__Host-dal_obscura_csrf"?: string | null;
-                "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PolicyDraftResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_asset_grants_v1_assets__asset_id__grants_get: {
         parameters: {
             query?: never;
@@ -2217,6 +1749,48 @@ export interface operations {
             };
         };
     };
+    replace_asset_policy_v1_assets__asset_id__policy_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string;
+            };
+            path: {
+                asset_id: string;
+            };
+            cookie?: {
+                "__Host-dal_obscura_csrf"?: string | null;
+                "__Host-dal_obscura_session"?: string | null;
+                dal_obscura_csrf?: string | null;
+                dal_obscura_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyRulesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyMutationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     evaluate_asset_policy_v1_assets__asset_id__policy_evaluate_post: {
         parameters: {
             query?: never;
@@ -2246,250 +1820,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PolicyEvaluationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_policy_operation_v1_assets__asset_id__policy_operations__idempotency_key__get: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string;
-            };
-            path: {
-                asset_id: string;
-                idempotency_key: string;
-            };
-            cookie?: {
-                "__Host-dal_obscura_csrf"?: string | null;
-                "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PolicyOperationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    review_asset_policy_v1_assets__asset_id__policy_review_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string;
-            };
-            path: {
-                asset_id: string;
-            };
-            cookie?: {
-                "__Host-dal_obscura_csrf"?: string | null;
-                "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PolicyEvaluationRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PolicyReviewResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_asset_policy_version_history_v1_assets__asset_id__policy_versions_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string;
-            };
-            path: {
-                asset_id: string;
-            };
-            cookie?: {
-                "__Host-dal_obscura_csrf"?: string | null;
-                "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PolicyVersionResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_asset_policy_version_v1_assets__asset_id__policy_versions_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string;
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                asset_id: string;
-            };
-            cookie?: {
-                "__Host-dal_obscura_csrf"?: string | null;
-                "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
-            };
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["PolicyVersionPublishRequest"] | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PolicyVersionCreateResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_asset_policy_version_v1_assets__asset_id__policy_versions__policy_version__get: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string;
-            };
-            path: {
-                asset_id: string;
-                policy_version: number;
-            };
-            cookie?: {
-                "__Host-dal_obscura_csrf"?: string | null;
-                "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PolicyVersionDetailResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    restore_policy_version_v1_assets__asset_id__policy_versions__policy_version__restore_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string;
-            };
-            path: {
-                asset_id: string;
-                policy_version: number;
-            };
-            cookie?: {
-                "__Host-dal_obscura_csrf"?: string | null;
-                "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PolicyRestoreRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PolicyDraftResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2570,6 +1900,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssetSchemaFieldsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_asset_tickets_v1_assets__asset_id__tickets_revoke_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string;
+            };
+            path: {
+                asset_id: string;
+            };
+            cookie?: {
+                "__Host-dal_obscura_csrf"?: string | null;
+                "__Host-dal_obscura_session"?: string | null;
+                dal_obscura_csrf?: string | null;
+                dal_obscura_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetTokenRevocationResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2976,45 +2344,6 @@ export interface operations {
             };
         };
     };
-    list_policy_version_history_page_v1_policy_versions_page_get: {
-        parameters: {
-            query?: {
-                cursor?: string | null;
-                limit?: number;
-            };
-            header?: {
-                authorization?: string;
-            };
-            path?: never;
-            cookie?: {
-                "__Host-dal_obscura_csrf"?: string | null;
-                "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PolicyVersionPageResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_session_v1_session_get: {
         parameters: {
             query?: never;
@@ -3333,120 +2662,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkspaceObservationsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_workspace_publications_v1_workspace_publications_get: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string;
-            };
-            path?: never;
-            cookie?: {
-                "__Host-dal_obscura_csrf"?: string | null;
-                "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspacePublicationResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_workspace_publication_v1_workspace_publications_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string;
-            };
-            path?: never;
-            cookie?: {
-                "__Host-dal_obscura_csrf"?: string | null;
-                "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkspacePublicationCreateResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    activate_workspace_publication_v1_workspace_publications__publication_id__activate_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                authorization?: string;
-            };
-            path: {
-                publication_id: string;
-            };
-            cookie?: {
-                "__Host-dal_obscura_csrf"?: string | null;
-                "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
-            };
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["PublicationActivationRequest"] | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PublicationActivationResponse"];
                 };
             };
             /** @description Validation Error */

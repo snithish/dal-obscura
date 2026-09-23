@@ -10,11 +10,11 @@ This directory contains the reusable pieces that keep the public example
   `ghcr.io/snithish/dal-obscura:latest`, and adds only example-only helper
   dependencies.
 - `scripts/build_runtime.py`: creates the sample Iceberg table, provisions auth
-  providers and policy through the control-plane API, publishes the data-plane
-  snapshot, and writes `/workspace/runtime/data-plane.env`.
+  providers and policy directly through the control-plane API, then writes
+  `/workspace/runtime/data-plane.env`.
 - `scripts/setup_runtime.sh`: shared setup entrypoint. Examples can pass one or
   more local setup scripts before `build_runtime.py` runs.
-- `scripts/start_data_plane.sh`: starts `dal-obscura` from the published runtime
+- `scripts/start_data_plane.sh`: starts `dal-obscura` from the configured runtime
   env and optionally reads TLS certificate/key/CA files from file-path env vars.
 - `scripts/run_client_session.sh`: sources the runtime env and starts the demo
   client session.
@@ -24,5 +24,5 @@ This directory contains the reusable pieces that keep the public example
 ## Reading Order
 
 For a new user, read an example directory first, then come here only when you
-want to understand how the sample table and published config are created. The
+want to understand how the sample table and live config are created. The
 scripts are shared implementation support, not the main teaching surface.

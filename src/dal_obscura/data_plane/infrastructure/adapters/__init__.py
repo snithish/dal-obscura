@@ -10,11 +10,11 @@ from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
 from dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks import (
     OidcJwksIdentityProvider,
 )
-from dal_obscura.data_plane.infrastructure.adapters.published_config import (
-    PublishedConfigAuthorizer,
-    PublishedConfigCatalogRegistry,
-    PublishedConfigStore,
-    PublishedRuntime,
+from dal_obscura.data_plane.infrastructure.adapters.live_config import (
+    LiveConfigAuthorizer,
+    LiveConfigCatalogRegistry,
+    LiveConfigStore,
+    LiveRuntime,
 )
 from dal_obscura.data_plane.infrastructure.adapters.runtime_config import (
     DataPlaneRuntimeConfig,
@@ -44,11 +44,11 @@ __all__ = [
     "EnvSecretProvider",
     "HmacTicketCodecAdapter",
     "IcebergTableFormat",
+    "LiveConfigAuthorizer",
+    "LiveConfigCatalogRegistry",
+    "LiveConfigStore",
+    "LiveRuntime",
     "OidcJwksIdentityProvider",
-    "PublishedConfigAuthorizer",
-    "PublishedConfigCatalogRegistry",
-    "PublishedConfigStore",
-    "PublishedRuntime",
     "SecretProvider",
     "SecretProviderConfig",
     "SecretProviderContext",

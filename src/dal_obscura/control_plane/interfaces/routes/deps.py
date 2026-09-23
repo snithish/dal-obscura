@@ -28,7 +28,7 @@ from dal_obscura.common.plugin_api.registry import PluginRegistry
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.errors import (
     AuthorizationFailure,
-    PublicationConflictError,
+    ConfigurationConflictError,
     RevisionPreconditionRequired,
     ValidationFailure,
 )
@@ -73,8 +73,6 @@ class ControlPlaneDeps:
     allowed_origins: tuple[str, ...] = ()
     oidc_nonce_actor_resolver: OidcNonceActorResolver | None = None
     authorization_code_exchange: AuthorizationCodeExchange | None = None
-    require_review: bool = False
-    review_secret: str = ""
     catalog_egress_allowlist: tuple[str, ...] = ()
     bootstrap_enabled: bool = True
     login_rate_limit_attempts: int = 20
@@ -359,8 +357,6 @@ class ControlPlaneDeps:
         with self.session_maker() as session:
             service = ProvisioningService(
                 session,
-                review_secret=self.review_secret,
-                require_review=self.require_review,
                 catalog_egress_allowlist=self.catalog_egress_allowlist,
                 plugin_registry=self.plugin_registry,
                 secret_provider=self.secret_provider,
@@ -375,7 +371,7 @@ class ControlPlaneDeps:
             except AuthorizationFailure as exc:
                 session.rollback()
                 raise HTTPException(status_code=403, detail=str(exc)) from exc
-            except PublicationConflictError as exc:
+            except ConfigurationConflictError as exc:
                 session.rollback()
                 raise HTTPException(
                     status_code=428 if isinstance(exc, RevisionPreconditionRequired) else 409,

@@ -9,16 +9,13 @@ from datetime import datetime
 from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import String, and_, delete, exists, func, or_, select, tuple_, update
+from sqlalchemy import String, and_, exists, func, or_, select, tuple_, update
 from sqlalchemy import cast as sql_cast
 from sqlalchemy.orm import Session
 
 from dal_obscura.common.config_store.orm import (
-    ActivePublicationRecord,
-    ActivePublishedAssetRecord,
     AssetGrantRecord,
     AssetOwnerRecord,
-    AssetPolicyDraftRecord,
     AssetRecord,
     AssetSchemaFieldRecord,
     AuditEventRecord,
@@ -27,66 +24,17 @@ from dal_obscura.common.config_store.orm import (
     CellRecord,
     CellRuntimeSettingsRecord,
     CellTenantRecord,
-    ConfigPublicationRecord,
+    DataPlaneTicketRecord,
     PolicyRuleRecord,
-    PublicationOperationRecord,
-    PublishedAssetRecord,
-    PublishedCatalogRecord,
-    PublishedCellRuntimeRecord,
     TenantRecord,
     utcnow,
 )
 from dal_obscura.common.schema_identity import canonical_provider_field_id
 from dal_obscura.control_plane.application.errors import (
-    PublicationConflictError,
+    ConfigurationConflictError,
     RevisionPreconditionRequired,
 )
-from dal_obscura.control_plane.domain.models import (
-    AssetDraft,
-    AuthProviderDraft,
-    CatalogDraft,
-    CellRuntimeDraft,
-    CompiledAsset,
-    CompiledCatalog,
-    CompiledPublication,
-    CompiledRuntime,
-    PolicyRuleDraft,
-    PublishDraft,
-)
 from dal_obscura.control_plane.infrastructure.request_context import current_request_id
-
-
-@dataclass(frozen=True)
-class ActivePublication:
-    """Active publication pointer for one data-plane cell.
-
-    Example:
-        ```python
-        active = store.active_publication(cell_id)
-        ```
-    """
-
-    cell_id: UUID
-    publication_id: UUID
-
-
-@dataclass(frozen=True)
-class PublishedAsset:
-    """Published asset view returned by repository read paths.
-
-    Example:
-        ```python
-        asset = store.published_asset(publication_id, tenant_id, "analytics", "orders")
-        ```
-    """
-
-    publication_id: UUID
-    tenant_id: UUID
-    catalog: str
-    target: str
-    backend: str
-    compiled_config: dict[str, Any]
-    policy_version: int
 
 
 @dataclass(frozen=True)
@@ -118,14 +66,6 @@ class AssetPage:
 
 
 @dataclass(frozen=True)
-class PolicyHistoryPage:
-    """Cursor-paginated immutable policy history."""
-
-    items: list[dict[str, object]]
-    next_cursor: str | None
-
-
-@dataclass(frozen=True)
 class AuditEventPage:
     """Cursor-paginated audit events."""
 
@@ -133,13 +73,13 @@ class AuditEventPage:
     next_cursor: str | None
 
 
-class PublicationStore:
-    """Repository for draft configuration, publication, and activation records.
+class ConfigStore:
+    """Repository for canonical live configuration and audit records.
 
     Example:
         ```python
         with Session(engine) as session:
-            store = PublicationStore(session)
+            store = ConfigStore(session)
             context = store.ensure_default_workspace_context()
         ```
     """
@@ -156,6 +96,12 @@ class PublicationStore:
             TenantRecord(id=tenant_id, slug=slug, display_name=display_name, status="active")
         )
         self._session.flush()
+
+    def get_configuration_revision(self, cell_id: UUID) -> int:
+        cell = self._session.get(CellRecord, cell_id)
+        if cell is None:
+            raise LookupError(f"No cell {cell_id}")
+        return cell.configuration_revision
 
     def list_tenants(self) -> list[dict[str, str]]:
         return [
@@ -254,43 +200,12 @@ class PublicationStore:
         self._session.flush()
         return WorkspaceContext(cell_id=cell_id, tenant_id=tenant_id)
 
-    def ensure_publication_context(self, *, cell_id: UUID, tenant_id: UUID) -> None:
-        """Creates the manifest-selected cell and tenant when publishing the first generation."""
-
-        if self._session.get(CellRecord, cell_id) is None:
-            self._session.add(
-                CellRecord(
-                    id=cell_id,
-                    name=f"operator-{cell_id}",
-                    region="operator",
-                    status="active",
-                )
-            )
-        if self._session.get(TenantRecord, tenant_id) is None:
-            self._session.add(
-                TenantRecord(
-                    id=tenant_id,
-                    slug=f"operator-{tenant_id}",
-                    display_name="Operator-managed tenant",
-                    status="active",
-                )
-            )
-        self._session.flush()
-        assignment = self._session.get(
-            CellTenantRecord,
-            {"cell_id": cell_id, "tenant_id": tenant_id},
-        )
-        if assignment is None:
-            self._session.add(
-                CellTenantRecord(cell_id=cell_id, tenant_id=tenant_id, shard_key="operator")
-            )
-        self._session.flush()
-
     def assign_tenant_to_cell(self, *, cell_id: UUID, tenant_id: UUID, shard_key: str) -> None:
         self._session.add(
             CellTenantRecord(cell_id=cell_id, tenant_id=tenant_id, shard_key=shard_key)
         )
         self._session.flush()
+        self._bump_configuration_revision(cell_id)
 
     def upsert_runtime_settings(
         self,
@@ -302,14 +217,14 @@ class PublicationStore:
         path_rules: list[dict[str, Any]] | None = None,
         expected_revision: int | None = None,
     ) -> None:
-        self.lock_cell_for_publication(cell_id)
+        self.lock_cell_for_update(cell_id)
         cell = self._session.get(CellRecord, cell_id)
         if cell is None:
             raise LookupError(f"No cell {cell_id}")
         existing = self._session.get(CellRuntimeSettingsRecord, cell_id)
         if existing is None:
             if expected_revision not in (None, 0):
-                raise PublicationConflictError(
+                raise ConfigurationConflictError(
                     "Runtime settings revision changed "
                     f"(expected {expected_revision}, current 0); reread before writing."
                 )
@@ -330,7 +245,7 @@ class PublicationStore:
                     f"(current {existing.revision}); reread before writing."
                 )
             if existing.revision != expected_revision:
-                raise PublicationConflictError(
+                raise ConfigurationConflictError(
                     "Runtime settings revision changed "
                     f"(expected {expected_revision}, current {existing.revision}); "
                     "reread before writing."
@@ -348,6 +263,7 @@ class PublicationStore:
             if changed:
                 existing.revision += 1
         self._session.flush()
+        self._bump_configuration_revision(cell_id)
 
     def upsert_catalog(
         self,
@@ -359,7 +275,7 @@ class PublicationStore:
         options: dict[str, Any],
         expected_revision: int | None = None,
     ) -> UUID:
-        self.lock_cell_for_publication(cell_id)
+        self.lock_cell_for_update(cell_id)
         existing = self._session.scalar(
             select(CatalogRecord)
             .where(
@@ -371,7 +287,7 @@ class PublicationStore:
         )
         if existing is None:
             if expected_revision not in (None, 0):
-                raise PublicationConflictError(
+                raise ConfigurationConflictError(
                     "Catalog revision changed (expected "
                     f"{expected_revision}, current 0); reread before writing."
                 )
@@ -393,7 +309,7 @@ class PublicationStore:
                     f"(current {existing.revision}); reread before writing."
                 )
             if existing.revision != expected_revision:
-                raise PublicationConflictError(
+                raise ConfigurationConflictError(
                     "Catalog revision changed (expected "
                     f"{expected_revision}, current {existing.revision}); reread before writing."
                 )
@@ -403,6 +319,7 @@ class PublicationStore:
                 existing.options_json = options
                 existing.revision += 1
         self._session.flush()
+        self._bump_configuration_revision(cell_id)
         return catalog_id
 
     def upsert_asset(
@@ -451,12 +368,25 @@ class PublicationStore:
             existing.options_json = options
             existing.revision += 1
         self._session.flush()
+        self._bump_configuration_revision(cell_id)
         return asset_id
 
-    def replace_policy_rules(self, *, asset_id: UUID, rules: list[dict[str, Any]]) -> None:
+    def replace_policy_rules(
+        self,
+        *,
+        asset_id: UUID,
+        rules: list[dict[str, Any]],
+        expected_revision: int,
+    ) -> int:
         asset = self._locked_asset(asset_id)
         if asset is None:
             raise LookupError(f"No asset {asset_id}")
+        if asset.policy_revision != expected_revision:
+            raise ConfigurationConflictError(
+                "Policy revision changed "
+                f"(expected {expected_revision}, current {asset.policy_revision}); "
+                "reread before writing."
+            )
         normalized_rules = [_normalize_policy_rule(raw) for raw in rules]
         for record in self._session.scalars(
             select(PolicyRuleRecord).where(PolicyRuleRecord.asset_id == asset_id)
@@ -478,6 +408,26 @@ class PublicationStore:
                 )
             )
         self._session.flush()
+        asset.policy_revision += 1
+        self._session.flush()
+        self._bump_configuration_revision(asset.cell_id)
+        return asset.policy_revision
+
+    def revoke_asset_tickets(self, *, asset_id: UUID) -> int:
+        """Revokes every unexpired token issued for an asset in this cell."""
+
+        asset = self._locked_asset(asset_id)
+        if asset is None:
+            raise LookupError(f"No asset {asset_id}")
+        result = self._session.execute(
+            update(DataPlaneTicketRecord)
+            .where(DataPlaneTicketRecord.cell_id == asset.cell_id)
+            .where(DataPlaneTicketRecord.revoked_at.is_(None))
+            .where(DataPlaneTicketRecord.expires_at >= int(utcnow().timestamp()))
+            .where(DataPlaneTicketRecord.asset_id == asset_id)
+            .values(revoked_at=utcnow())
+        )
+        return int(getattr(result, "rowcount", 0) or 0)
 
     def replace_asset_owners(
         self,
@@ -508,6 +458,7 @@ class PublicationStore:
         self._session.flush()
         asset.revision += 1
         self._session.flush()
+        self._bump_configuration_revision(asset.cell_id)
         return normalized
 
     def replace_asset_schema_fields(
@@ -543,6 +494,7 @@ class PublicationStore:
         self._session.flush()
         asset.revision += 1
         self._session.flush()
+        self._bump_configuration_revision(asset.cell_id)
         return normalized
 
     def replace_auth_providers(
@@ -552,7 +504,7 @@ class PublicationStore:
         providers: list[dict[str, Any]],
         expected_revision: int | None = None,
     ) -> None:
-        self.lock_cell_for_publication(cell_id)
+        self.lock_cell_for_update(cell_id)
         cell = self._session.get(CellRecord, cell_id)
         if cell is None:
             raise LookupError(f"No cell {cell_id}")
@@ -568,7 +520,7 @@ class PublicationStore:
                 f"(current {current_revision}); reread before writing."
             )
         if (existing or current_revision > 0) and expected_revision != current_revision:
-            raise PublicationConflictError(
+            raise ConfigurationConflictError(
                 "Authentication provider revision changed "
                 f"(expected {expected_revision}, current {current_revision}); "
                 "reread before writing."
@@ -595,84 +547,24 @@ class PublicationStore:
         self._session.flush()
         cell.auth_provider_revision = new_revision
         self._session.flush()
+        self._bump_configuration_revision(cell_id)
 
     def get_auth_provider_revision(self, cell_id: UUID) -> int:
         cell = self._session.get(CellRecord, cell_id)
         return 0 if cell is None else cell.auth_provider_revision
 
-    def insert_publication(
-        self, *, cell_id: UUID, publication_id: UUID, manifest_hash: str
-    ) -> None:
-        self._session.add(
-            ConfigPublicationRecord(
-                id=publication_id,
-                cell_id=cell_id,
-                schema_version=1,
-                status="published",
-                manifest_hash=manifest_hash,
-            )
-        )
-        self._session.flush()
-
-    def activate_publication(self, *, cell_id: UUID, publication_id: UUID) -> None:
-        publication = self._session.get(ConfigPublicationRecord, publication_id)
-        if publication is None or publication.cell_id != cell_id:
-            raise LookupError(f"No publication {publication_id} for cell {cell_id}")
-        self.lock_cell_for_publication(cell_id)
-        existing = self._session.get(ActivePublicationRecord, cell_id)
-        if existing is None:
-            self._session.add(
-                ActivePublicationRecord(cell_id=cell_id, publication_id=publication_id)
-            )
-        else:
-            existing.publication_id = publication_id
-        self._replace_active_assets(cell_id=cell_id, publication_id=publication_id)
-        self._session.flush()
-
-    def activate_publication_if_current(
-        self,
-        *,
-        cell_id: UUID,
-        publication_id: UUID,
-        expected_publication_id: UUID,
-    ) -> None:
-        """Atomically activates a publication only when the expected generation remains active."""
-
-        publication = self._session.get(ConfigPublicationRecord, publication_id)
-        if publication is None or publication.cell_id != cell_id:
-            raise LookupError(f"No publication {publication_id} for cell {cell_id}")
-        self.lock_cell_for_publication(cell_id)
+    def _bump_configuration_revision(self, cell_id: UUID) -> None:
         result = self._session.execute(
-            update(ActivePublicationRecord)
-            .where(
-                ActivePublicationRecord.cell_id == cell_id,
-                ActivePublicationRecord.publication_id == expected_publication_id,
+            update(CellRecord)
+            .where(CellRecord.id == cell_id)
+            .values(
+                configuration_revision=CellRecord.configuration_revision + 1,
             )
-            .values(publication_id=publication_id)
         )
-        if getattr(result, "rowcount", None) != 1:
-            raise PublicationConflictError(
-                "active generation changed; reread status before publishing"
-            )
-        self._replace_active_assets(cell_id=cell_id, publication_id=publication_id)
-        self._session.flush()
+        if int(getattr(result, "rowcount", 0) or 0) != 1:
+            raise LookupError(f"No cell {cell_id}")
 
-    def activate_initial_publication(self, *, cell_id: UUID, publication_id: UUID) -> None:
-        """Activates the first publication only when no generation is active."""
-
-        publication = self._session.get(ConfigPublicationRecord, publication_id)
-        if publication is None or publication.cell_id != cell_id:
-            raise LookupError(f"No publication {publication_id} for cell {cell_id}")
-        self.lock_cell_for_publication(cell_id)
-        if self._session.get(ActivePublicationRecord, cell_id) is not None:
-            raise PublicationConflictError(
-                "active generation already exists; reread status before publishing"
-            )
-        self._session.add(ActivePublicationRecord(cell_id=cell_id, publication_id=publication_id))
-        self._replace_active_assets(cell_id=cell_id, publication_id=publication_id)
-        self._session.flush()
-
-    def lock_cell_for_publication(self, cell_id: UUID) -> None:
+    def lock_cell_for_update(self, cell_id: UUID) -> None:
         """Locks the cell row after the asset lock and before pointer mutation."""
 
         record = self._session.scalar(
@@ -680,123 +572,6 @@ class PublicationStore:
         )
         if record is None:
             raise LookupError(f"No cell {cell_id}")
-
-    def _replace_active_assets(self, *, cell_id: UUID, publication_id: UUID) -> None:
-        self._session.execute(
-            delete(ActivePublishedAssetRecord).where(ActivePublishedAssetRecord.cell_id == cell_id)
-        )
-        for asset in self._session.scalars(
-            select(PublishedAssetRecord).where(
-                PublishedAssetRecord.publication_id == publication_id
-            )
-        ):
-            self.activate_published_asset(
-                cell_id=cell_id,
-                tenant_id=asset.tenant_id,
-                catalog=asset.catalog,
-                target=asset.target,
-                publication_id=publication_id,
-            )
-
-    def activate_published_asset(
-        self,
-        *,
-        cell_id: UUID,
-        tenant_id: UUID,
-        catalog: str,
-        target: str,
-        publication_id: UUID,
-    ) -> None:
-        existing = self._session.get(
-            ActivePublishedAssetRecord,
-            {
-                "cell_id": cell_id,
-                "tenant_id": tenant_id,
-                "catalog": catalog,
-                "target": target,
-            },
-        )
-        if existing is None:
-            self._session.add(
-                ActivePublishedAssetRecord(
-                    cell_id=cell_id,
-                    tenant_id=tenant_id,
-                    catalog=catalog,
-                    target=target,
-                    publication_id=publication_id,
-                )
-            )
-        else:
-            existing.publication_id = publication_id
-
-    def get_active_publication(self, cell_id: UUID) -> ActivePublication:
-        record = self._session.get(ActivePublicationRecord, cell_id)
-        if record is None:
-            raise LookupError(f"No active publication for cell {cell_id}")
-        return ActivePublication(cell_id=record.cell_id, publication_id=record.publication_id)
-
-    def insert_published_asset(
-        self,
-        *,
-        publication_id: UUID,
-        tenant_id: UUID,
-        catalog: str,
-        target: str,
-        backend: str,
-        compiled_config: dict[str, Any],
-        policy_version: int,
-    ) -> None:
-        self._session.add(
-            PublishedAssetRecord(
-                publication_id=publication_id,
-                tenant_id=tenant_id,
-                catalog=catalog,
-                target=target,
-                backend=backend,
-                catalog_plugin_id=_catalog_plugin_id(compiled_config),
-                format_plugin_id=_format_plugin_id(compiled_config, backend),
-                plugin_revision=_plugin_revision(compiled_config),
-                compiled_config_json=compiled_config,
-                policy_version=policy_version,
-            )
-        )
-        self._session.flush()
-
-    def get_published_asset(
-        self,
-        *,
-        publication_id: UUID,
-        tenant_id: UUID,
-        catalog: str,
-        target: str,
-    ) -> PublishedAsset:
-        record = self._session.scalar(
-            select(PublishedAssetRecord).where(
-                PublishedAssetRecord.publication_id == publication_id,
-                PublishedAssetRecord.tenant_id == tenant_id,
-                PublishedAssetRecord.catalog == catalog,
-                PublishedAssetRecord.target == target,
-            )
-        )
-        if record is None:
-            raise LookupError(f"No published asset for {catalog}/{target}")
-        compiled_config = dict(record.compiled_config_json)
-        plugin_binding = dict(cast(dict[str, object], compiled_config.get("plugins", {})))
-        if record.catalog_plugin_id is not None:
-            plugin_binding.setdefault("catalog", record.catalog_plugin_id)
-        if record.format_plugin_id is not None:
-            plugin_binding.setdefault("table_format", record.format_plugin_id)
-        if plugin_binding:
-            compiled_config["plugins"] = plugin_binding
-        return PublishedAsset(
-            publication_id=record.publication_id,
-            tenant_id=record.tenant_id,
-            catalog=record.catalog,
-            target=record.target,
-            backend=record.backend,
-            compiled_config=compiled_config,
-            policy_version=record.policy_version,
-        )
 
     def get_cell(self, cell_id: UUID) -> dict[str, str]:
         record = self._session.get(CellRecord, cell_id)
@@ -1019,13 +794,14 @@ class PublicationStore:
         return {
             **self._workspace_asset_row(record, catalog),
             "revision": record.revision,
+            "policy_revision": record.policy_revision,
             "options": dict(record.options_json),
             "schema_fields": self.list_asset_schema_fields(asset_id),
             "policy_rules": self.list_policy_rules(asset_id),
         }
 
-    def lock_asset_for_publication(self, asset_id: UUID) -> None:
-        """Locks one asset row for the duration of a publication transaction."""
+    def lock_asset_for_update(self, asset_id: UUID) -> None:
+        """Serializes live asset mutations for the duration of the transaction."""
 
         record = self._session.scalar(
             select(AssetRecord).where(AssetRecord.id == asset_id).with_for_update()
@@ -1146,125 +922,6 @@ class PublicationStore:
             )
         ]
 
-    def get_asset_policy_draft(
-        self,
-        *,
-        asset_id: UUID,
-        author_principal: str,
-    ) -> dict[str, object] | None:
-        record = self._session.scalar(
-            select(AssetPolicyDraftRecord).where(
-                AssetPolicyDraftRecord.asset_id == asset_id,
-                AssetPolicyDraftRecord.author_principal == author_principal,
-                AssetPolicyDraftRecord.discarded_at.is_(None),
-            )
-        )
-        if record is None:
-            return None
-        return {
-            "id": str(record.id),
-            "asset_id": str(record.asset_id),
-            "author_principal": record.author_principal,
-            "revision": record.revision,
-            "base_policy_version": record.base_policy_version,
-            "rules": [dict(rule) for rule in record.rules_json],
-            "content_hash": record.content_hash,
-            "created_at": _isoformat(record.created_at),
-            "updated_at": _isoformat(record.updated_at),
-        }
-
-    def get_asset_policy_draft_by_id(
-        self, *, asset_id: UUID, draft_id: UUID
-    ) -> dict[str, object] | None:
-        """Load one saved draft only when it belongs to the requested asset."""
-
-        record = self._session.scalar(
-            select(AssetPolicyDraftRecord).where(
-                AssetPolicyDraftRecord.id == draft_id,
-                AssetPolicyDraftRecord.asset_id == asset_id,
-                AssetPolicyDraftRecord.discarded_at.is_(None),
-            )
-        )
-        if record is None:
-            return None
-        return {
-            "id": str(record.id),
-            "asset_id": str(record.asset_id),
-            "author_principal": record.author_principal,
-            "revision": record.revision,
-            "base_policy_version": record.base_policy_version,
-            "rules": [dict(rule) for rule in record.rules_json],
-            "content_hash": record.content_hash,
-            "created_at": _isoformat(record.created_at),
-            "updated_at": _isoformat(record.updated_at),
-        }
-
-    def save_asset_policy_draft(
-        self,
-        *,
-        asset_id: UUID,
-        author_principal: str,
-        expected_revision: int,
-        rules: list[dict[str, object]],
-        content_hash: str,
-        base_policy_version: int,
-    ) -> dict[str, object]:
-        # Draft content participates in review validity and publication. Lock
-        # the asset before reading the draft so a concurrent grant, owner,
-        # schema, or binding mutation cannot race this compare-and-swap.
-        if self._locked_asset(asset_id) is None:
-            raise LookupError(f"No asset {asset_id}")
-        record = self._session.scalar(
-            select(AssetPolicyDraftRecord)
-            .where(
-                AssetPolicyDraftRecord.asset_id == asset_id,
-                AssetPolicyDraftRecord.author_principal == author_principal,
-                AssetPolicyDraftRecord.discarded_at.is_(None),
-            )
-            .with_for_update()
-        )
-        current_revision = 0 if record is None else record.revision
-        if current_revision != expected_revision:
-            raise PublicationConflictError(
-                "Policy draft revision changed "
-                f"(expected {expected_revision}, current {current_revision})."
-            )
-        now = utcnow()
-        if record is None:
-            record = AssetPolicyDraftRecord(
-                id=uuid4(),
-                asset_id=asset_id,
-                author_principal=author_principal,
-                revision=1,
-                base_policy_version=base_policy_version,
-                rules_json=[dict(rule) for rule in rules],
-                content_hash=content_hash,
-                created_at=now,
-                updated_at=now,
-            )
-            self._session.add(record)
-        else:
-            record.revision += 1
-            # The revision remains the same draft identity, but restoring
-            # history must advance its base policy generation so subsequent
-            # review/publication checks describe the content now displayed.
-            record.base_policy_version = base_policy_version
-            record.rules_json = [dict(rule) for rule in rules]
-            record.content_hash = content_hash
-            record.updated_at = now
-        self._session.flush()
-        return {
-            "id": str(record.id),
-            "asset_id": str(record.asset_id),
-            "author_principal": record.author_principal,
-            "revision": record.revision,
-            "base_policy_version": record.base_policy_version,
-            "rules": [dict(rule) for rule in record.rules_json],
-            "content_hash": record.content_hash,
-            "created_at": _isoformat(record.created_at),
-            "updated_at": _isoformat(record.updated_at),
-        }
-
     def list_auth_providers(self, cell_id: UUID) -> list[dict[str, object]]:
         return [
             {
@@ -1282,258 +939,6 @@ class PublicationStore:
                 .order_by(AuthProviderRecord.ordinal)
             )
         ]
-
-    def get_cell_draft(self, cell_id: UUID) -> dict[str, object]:
-        cell = self.get_cell(cell_id)
-        assignments = [
-            item for item in self.list_cell_tenant_assignments() if item["cell_id"] == str(cell_id)
-        ]
-        assets = []
-        for asset in self.list_assets(cell_id):
-            rules = self.list_policy_rules(UUID(str(asset["id"])))
-            assets.append({**asset, "policy_rules": rules})
-        return {
-            "cell": cell,
-            "assignments": assignments,
-            "runtime_settings": self.get_runtime_settings(cell_id),
-            "catalogs": self.list_catalogs(cell_id),
-            "assets": assets,
-            "auth_providers": self.list_auth_providers(cell_id),
-        }
-
-    def list_publications(self, cell_id: UUID) -> list[dict[str, object]]:
-        active = self._session.get(ActivePublicationRecord, cell_id)
-        active_publication_id = active.publication_id if active is not None else None
-        records = list(
-            self._session.scalars(
-                select(ConfigPublicationRecord)
-                .where(ConfigPublicationRecord.cell_id == cell_id)
-                .order_by(ConfigPublicationRecord.created_at)
-            )
-        )
-        publication_ids = [record.id for record in records]
-        if not publication_ids:
-            return []
-        asset_counts: dict[UUID, int] = {
-            publication_id: int(count)
-            for publication_id, count in self._session.execute(
-                select(PublishedAssetRecord.publication_id, func.count())
-                .where(PublishedAssetRecord.publication_id.in_(publication_ids))
-                .group_by(PublishedAssetRecord.publication_id)
-            ).all()
-        }
-        catalog_counts: dict[UUID, int] = {
-            publication_id: int(count)
-            for publication_id, count in self._session.execute(
-                select(PublishedCatalogRecord.publication_id, func.count())
-                .where(PublishedCatalogRecord.publication_id.in_(publication_ids))
-                .group_by(PublishedCatalogRecord.publication_id)
-            ).all()
-        }
-        return [
-            {
-                "id": str(record.id),
-                "cell_id": str(record.cell_id),
-                "schema_version": record.schema_version,
-                "status": record.status,
-                "manifest_hash": record.manifest_hash,
-                "active": record.id == active_publication_id,
-                "asset_count": int(asset_counts.get(record.id, 0)),
-                "catalog_count": int(catalog_counts.get(record.id, 0)),
-                "created_at": _isoformat(record.created_at),
-            }
-            for record in records
-        ]
-
-    def list_policy_version_history(self, context: WorkspaceContext) -> list[dict[str, object]]:
-        active = self._session.get(ActivePublicationRecord, context.cell_id)
-        active_publication_id = active.publication_id if active is not None else None
-        rows = self._session.execute(
-            select(
-                PublishedAssetRecord,
-                ConfigPublicationRecord,
-                AssetRecord,
-            )
-            .join(
-                ConfigPublicationRecord,
-                ConfigPublicationRecord.id == PublishedAssetRecord.publication_id,
-            )
-            .join(
-                CatalogRecord,
-                CatalogRecord.cell_id == ConfigPublicationRecord.cell_id,
-            )
-            .join(
-                AssetRecord,
-                AssetRecord.catalog_id == CatalogRecord.id,
-            )
-            .where(
-                ConfigPublicationRecord.cell_id == context.cell_id,
-                PublishedAssetRecord.tenant_id == context.tenant_id,
-                CatalogRecord.tenant_id == context.tenant_id,
-                CatalogRecord.name == PublishedAssetRecord.catalog,
-                AssetRecord.tenant_id == context.tenant_id,
-                AssetRecord.target == PublishedAssetRecord.target,
-            )
-            .order_by(ConfigPublicationRecord.created_at, PublishedAssetRecord.target)
-        )
-        return [
-            {
-                "asset_id": str(asset.id),
-                "asset_name": asset.target,
-                "catalog": published.catalog,
-                "target": published.target,
-                "policy_version": published.policy_version,
-                "active": published.publication_id == active_publication_id,
-                "created_at": _isoformat(publication.created_at),
-            }
-            for published, publication, asset in rows
-        ]
-
-    def list_policy_version_history_page(
-        self,
-        context: WorkspaceContext,
-        *,
-        limit: int,
-        cursor: str | None = None,
-        principals: set[str] | None = None,
-    ) -> PolicyHistoryPage:
-        """Returns bounded immutable history ordered by publication time."""
-
-        if limit <= 0:
-            raise ValueError("Policy history page limit must be positive")
-        query = (
-            select(PublishedAssetRecord, ConfigPublicationRecord, AssetRecord)
-            .join(
-                ConfigPublicationRecord,
-                ConfigPublicationRecord.id == PublishedAssetRecord.publication_id,
-            )
-            .join(
-                CatalogRecord,
-                CatalogRecord.cell_id == ConfigPublicationRecord.cell_id,
-            )
-            .join(AssetRecord, AssetRecord.catalog_id == CatalogRecord.id)
-            .where(
-                ConfigPublicationRecord.cell_id == context.cell_id,
-                PublishedAssetRecord.tenant_id == context.tenant_id,
-                CatalogRecord.tenant_id == context.tenant_id,
-                CatalogRecord.name == PublishedAssetRecord.catalog,
-                AssetRecord.tenant_id == context.tenant_id,
-                AssetRecord.target == PublishedAssetRecord.target,
-            )
-        )
-        if principals is not None:
-            if not principals:
-                return PolicyHistoryPage(items=[], next_cursor=None)
-            query = (
-                query.outerjoin(AssetOwnerRecord, AssetOwnerRecord.asset_id == AssetRecord.id)
-                .outerjoin(AssetGrantRecord, AssetGrantRecord.asset_id == AssetRecord.id)
-                .where(
-                    or_(
-                        AssetOwnerRecord.principal.in_(principals),
-                        and_(
-                            AssetGrantRecord.principal.in_(principals),
-                            AssetGrantRecord.capability == "read",
-                        ),
-                    )
-                )
-                .distinct()
-            )
-        if cursor:
-            created_at, target, asset_id, policy_version = _decode_policy_history_cursor(cursor)
-            query = query.where(
-                or_(
-                    ConfigPublicationRecord.created_at > created_at,
-                    and_(
-                        ConfigPublicationRecord.created_at == created_at,
-                        AssetRecord.target > target,
-                    ),
-                    and_(
-                        ConfigPublicationRecord.created_at == created_at,
-                        AssetRecord.target == target,
-                        AssetRecord.id > asset_id,
-                    ),
-                    and_(
-                        ConfigPublicationRecord.created_at == created_at,
-                        AssetRecord.target == target,
-                        AssetRecord.id == asset_id,
-                        PublishedAssetRecord.policy_version > policy_version,
-                    ),
-                )
-            )
-        rows = list(
-            self._session.execute(
-                query.order_by(
-                    ConfigPublicationRecord.created_at,
-                    AssetRecord.target,
-                    AssetRecord.id,
-                    PublishedAssetRecord.policy_version,
-                ).limit(limit + 1)
-            )
-        )
-        next_cursor = None
-        if len(rows) > limit:
-            rows = rows[:limit]
-            published, publication, asset = rows[-1]
-            next_cursor = _encode_policy_history_cursor(
-                created_at=publication.created_at,
-                target=asset.target,
-                asset_id=asset.id,
-                policy_version=published.policy_version,
-            )
-        active = self._session.get(ActivePublicationRecord, context.cell_id)
-        active_publication_id = active.publication_id if active is not None else None
-        items = [
-            {
-                "asset_id": str(asset.id),
-                "asset_name": asset.target,
-                "catalog": published.catalog,
-                "target": published.target,
-                "policy_version": published.policy_version,
-                "active": published.publication_id == active_publication_id,
-                "created_at": _isoformat(publication.created_at),
-            }
-            for published, publication, asset in rows
-        ]
-        return PolicyHistoryPage(items=items, next_cursor=next_cursor)
-
-    def get_published_asset_policy(
-        self,
-        *,
-        asset_id: UUID,
-        policy_version: int,
-    ) -> dict[str, object]:
-        """Returns the immutable policy body for one asset version."""
-
-        asset = self._session.get(AssetRecord, asset_id)
-        if asset is None:
-            raise LookupError(f"No asset {asset_id}")
-        catalog = self._session.get(CatalogRecord, asset.catalog_id)
-        if catalog is None:
-            raise LookupError(f"No catalog {asset.catalog_id}")
-        record = self._session.scalar(
-            select(PublishedAssetRecord)
-            .join(
-                ConfigPublicationRecord,
-                ConfigPublicationRecord.id == PublishedAssetRecord.publication_id,
-            )
-            .where(
-                PublishedAssetRecord.tenant_id == asset.tenant_id,
-                PublishedAssetRecord.catalog == catalog.name,
-                PublishedAssetRecord.target == asset.target,
-                PublishedAssetRecord.policy_version == policy_version,
-            )
-            .order_by(ConfigPublicationRecord.created_at.desc())
-        )
-        if record is None:
-            raise LookupError(f"No published policy version {policy_version} for asset {asset_id}")
-        config = cast(dict[str, object], record.compiled_config_json)
-        policy = cast(dict[str, object], config.get("policy", {}))
-        return {
-            "asset_id": str(asset_id),
-            "policy_version": record.policy_version,
-            "rules": cast(list[dict[str, object]], policy.get("rules", [])),
-            "compiled_config": config,
-        }
 
     def record_asset_audit_event(
         self,
@@ -1709,64 +1114,6 @@ class PublicationStore:
             next_cursor=next_cursor,
         )
 
-    def get_publication_operation(
-        self,
-        *,
-        asset_id: UUID,
-        actor_principal: str,
-        idempotency_key: str,
-    ) -> dict[str, object] | None:
-        record = self._session.scalar(
-            select(PublicationOperationRecord).where(
-                PublicationOperationRecord.asset_id == asset_id,
-                PublicationOperationRecord.actor_principal == actor_principal,
-                PublicationOperationRecord.idempotency_key == idempotency_key,
-            )
-        )
-        if record is None:
-            return None
-        return {
-            "id": str(record.id),
-            "request_hash": record.request_hash,
-            "status": record.status,
-            "result": dict(record.result_json),
-        }
-
-    def save_publication_operation(
-        self,
-        *,
-        asset_id: UUID,
-        actor_principal: str,
-        idempotency_key: str,
-        request_hash: str,
-        result: dict[str, object],
-        status: str = "committed",
-    ) -> dict[str, object]:
-        # Operation rows are part of the asset publication transaction. Keep
-        # direct repository callers on the same lock order as publication so a
-        # duplicate idempotency key cannot race an activation or revocation.
-        self.lock_asset_for_publication(asset_id)
-        context = self.get_asset_workspace_context(asset_id)
-        record = PublicationOperationRecord(
-            id=uuid4(),
-            cell_id=context.cell_id,
-            tenant_id=context.tenant_id,
-            asset_id=asset_id,
-            actor_principal=actor_principal,
-            idempotency_key=idempotency_key,
-            request_hash=request_hash,
-            status=status,
-            result_json=dict(result),
-        )
-        self._session.add(record)
-        self._session.flush()
-        return {
-            "id": str(record.id),
-            "request_hash": record.request_hash,
-            "status": record.status,
-            "result": dict(record.result_json),
-        }
-
     def get_workspace_summary(self, context: WorkspaceContext | None) -> dict[str, object]:
         if context is None:
             return _empty_workspace_summary()
@@ -1781,342 +1128,9 @@ class PublicationStore:
             "asset_count": len(assets),
             "unowned_asset_count": sum(1 for asset in assets if asset["owner_count"] == 0),
             "missing_policy_count": missing_policy_count,
-            "draft_change_count": len(assets),
             "runtime_configured": self.get_runtime_settings(context.cell_id) is not None,
             "enabled_auth_provider_count": enabled_auth_provider_count,
         }
-
-    def get_workspace_draft(self, context: WorkspaceContext) -> dict[str, object]:
-        catalogs = self.list_workspace_catalogs(context)
-        assets = self.list_workspace_assets(context)
-        return {
-            "catalog_count": len(catalogs),
-            "asset_count": len(assets),
-            "catalogs": catalogs,
-            "assets": assets,
-        }
-
-    def get_active_publication_summary(self, cell_id: UUID) -> dict[str, str]:
-        active = self._session.get(ActivePublicationRecord, cell_id)
-        if active is None:
-            raise LookupError(f"No active publication for cell {cell_id}")
-        publication = self._session.get(ConfigPublicationRecord, active.publication_id)
-        if publication is None:
-            raise LookupError(f"No publication {active.publication_id}")
-        return {
-            "cell_id": str(active.cell_id),
-            "publication_id": str(active.publication_id),
-            "manifest_hash": publication.manifest_hash,
-            "status": publication.status,
-        }
-
-    def load_publish_draft(self, cell_id: UUID) -> PublishDraft:
-        runtime_record = self._session.get(CellRuntimeSettingsRecord, cell_id)
-        if runtime_record is None:
-            raise LookupError(f"No runtime settings for cell {cell_id}")
-
-        tenants = [
-            item.tenant_id
-            for item in self._session.scalars(
-                select(CellTenantRecord).where(CellTenantRecord.cell_id == cell_id)
-            )
-        ]
-        auth_providers = [
-            AuthProviderDraft(
-                ordinal=item.ordinal,
-                module=item.module,
-                args=dict(item.args_json),
-                enabled=item.enabled,
-            )
-            for item in self._session.scalars(
-                select(AuthProviderRecord)
-                .where(AuthProviderRecord.cell_id == cell_id)
-                .order_by(AuthProviderRecord.ordinal)
-            )
-        ]
-        catalog_records = list(
-            self._session.scalars(select(CatalogRecord).where(CatalogRecord.cell_id == cell_id))
-        )
-        catalog_by_id = {item.id: item for item in catalog_records}
-        catalogs = [
-            CatalogDraft(
-                id=item.id,
-                cell_id=item.cell_id,
-                tenant_id=item.tenant_id,
-                name=item.name,
-                module=item.module,
-                options=dict(item.options_json),
-                revision=item.revision,
-            )
-            for item in catalog_records
-        ]
-        assets = []
-        for asset in self._session.scalars(
-            select(AssetRecord).where(AssetRecord.cell_id == cell_id)
-        ):
-            catalog = catalog_by_id[asset.catalog_id]
-            persisted_rules = [
-                PolicyRuleDraft(
-                    ordinal=rule.ordinal,
-                    effect=_normalize_policy_rule_effect(rule.effect),
-                    principals=list(rule.principals_json),
-                    when=cast(dict[str, str | list[str]], dict(rule.when_json)),
-                    columns=list(rule.columns_json),
-                    masks=dict(rule.masks_json),
-                    row_filter=rule.row_filter_sql,
-                )
-                for rule in self._session.scalars(
-                    select(PolicyRuleRecord)
-                    .where(PolicyRuleRecord.asset_id == asset.id)
-                    .order_by(PolicyRuleRecord.ordinal)
-                )
-            ]
-            latest_draft = self._session.scalar(
-                select(AssetPolicyDraftRecord)
-                .where(
-                    AssetPolicyDraftRecord.asset_id == asset.id,
-                    AssetPolicyDraftRecord.discarded_at.is_(None),
-                )
-                .order_by(
-                    AssetPolicyDraftRecord.updated_at.desc(),
-                    AssetPolicyDraftRecord.id.desc(),
-                )
-            )
-            rules = (
-                [
-                    PolicyRuleDraft(
-                        ordinal=int(raw.get("ordinal", 0)),
-                        effect="allow",
-                        principals=[str(item) for item in raw.get("principals", [])],
-                        when=cast(dict[str, str | list[str]], dict(raw.get("when", {}))),
-                        columns=[str(item) for item in raw.get("columns", [])],
-                        masks=dict(raw.get("masks", {})),
-                        row_filter=cast(str | None, raw.get("row_filter")),
-                    )
-                    for raw in latest_draft.rules_json
-                ]
-                if latest_draft is not None
-                else persisted_rules
-            )
-            assets.append(
-                AssetDraft(
-                    id=asset.id,
-                    cell_id=asset.cell_id,
-                    tenant_id=asset.tenant_id,
-                    catalog_id=asset.catalog_id,
-                    catalog_name=catalog.name,
-                    target=asset.target,
-                    backend=asset.backend,
-                    table_identifier=asset.table_identifier,
-                    options=dict(asset.options_json),
-                    rules=rules,
-                    schema_fields=self.list_asset_schema_fields(asset.id),
-                )
-            )
-
-        return PublishDraft(
-            cell_id=cell_id,
-            tenants=tenants,
-            runtime=CellRuntimeDraft(
-                ticket_ttl_seconds=runtime_record.ticket_ttl_seconds,
-                max_tickets=runtime_record.max_tickets,
-                max_ticket_exchanges=runtime_record.max_ticket_exchanges,
-                path_rules=[dict(rule) for rule in runtime_record.path_rules_json],
-            ),
-            auth_providers=auth_providers,
-            catalogs=catalogs,
-            assets=assets,
-        )
-
-    def load_asset_publish_draft(
-        self,
-        asset_id: UUID,
-        *,
-        author_principal: str | None = None,
-        draft_id: UUID | None = None,
-    ) -> tuple[AssetDraft, CatalogDraft]:
-        asset = self._session.get(AssetRecord, asset_id)
-        if asset is None:
-            raise LookupError(f"No asset {asset_id}")
-        catalog = self._session.get(CatalogRecord, asset.catalog_id)
-        if catalog is None:
-            raise LookupError(f"No catalog {asset.catalog_id}")
-        catalog_draft = CatalogDraft(
-            id=catalog.id,
-            cell_id=catalog.cell_id,
-            tenant_id=catalog.tenant_id,
-            name=catalog.name,
-            module=catalog.module,
-            options=dict(catalog.options_json),
-            revision=catalog.revision,
-        )
-        rules = [
-            PolicyRuleDraft(
-                ordinal=rule.ordinal,
-                effect=_normalize_policy_rule_effect(rule.effect),
-                principals=list(rule.principals_json),
-                when=cast(dict[str, str | list[str]], dict(rule.when_json)),
-                columns=list(rule.columns_json),
-                masks=dict(rule.masks_json),
-                row_filter=rule.row_filter_sql,
-            )
-            for rule in self._session.scalars(
-                select(PolicyRuleRecord)
-                .where(PolicyRuleRecord.asset_id == asset.id)
-                .order_by(PolicyRuleRecord.ordinal)
-            )
-        ]
-        selected_draft = None
-        if draft_id is not None:
-            selected_draft = self._session.scalar(
-                select(AssetPolicyDraftRecord).where(
-                    AssetPolicyDraftRecord.id == draft_id,
-                    AssetPolicyDraftRecord.asset_id == asset_id,
-                    AssetPolicyDraftRecord.discarded_at.is_(None),
-                )
-            )
-            if selected_draft is None:
-                raise LookupError(f"No draft {draft_id} for asset {asset_id}")
-        elif author_principal is not None:
-            selected_draft = self._session.scalar(
-                select(AssetPolicyDraftRecord).where(
-                    AssetPolicyDraftRecord.asset_id == asset_id,
-                    AssetPolicyDraftRecord.author_principal == author_principal,
-                    AssetPolicyDraftRecord.discarded_at.is_(None),
-                )
-            )
-        if selected_draft is not None:
-            rules = [
-                PolicyRuleDraft(
-                    ordinal=int(raw.get("ordinal", 0)),
-                    effect="allow",
-                    principals=[str(item) for item in raw.get("principals", [])],
-                    when=cast(dict[str, str | list[str]], dict(raw.get("when", {}))),
-                    columns=[str(item) for item in raw.get("columns", [])],
-                    masks=dict(raw.get("masks", {})),
-                    row_filter=cast(str | None, raw.get("row_filter")),
-                )
-                for raw in selected_draft.rules_json
-            ]
-        return (
-            AssetDraft(
-                id=asset.id,
-                cell_id=asset.cell_id,
-                tenant_id=asset.tenant_id,
-                catalog_id=asset.catalog_id,
-                catalog_name=catalog.name,
-                target=asset.target,
-                backend=asset.backend,
-                table_identifier=asset.table_identifier,
-                options=dict(asset.options_json),
-                rules=rules,
-                schema_fields=self.list_asset_schema_fields(asset.id),
-            ),
-            catalog_draft,
-        )
-
-    def load_active_compiled_publication_config(self, cell_id: UUID) -> CompiledPublication:
-        active = self._session.get(ActivePublicationRecord, cell_id)
-        if active is None:
-            raise LookupError(f"No active publication for cell {cell_id}")
-        publication = self._session.get(ConfigPublicationRecord, active.publication_id)
-        if publication is None:
-            raise LookupError(f"No publication {active.publication_id}")
-        runtime = self._session.get(PublishedCellRuntimeRecord, active.publication_id)
-        if runtime is None:
-            raise LookupError(f"No published runtime for publication {active.publication_id}")
-        catalogs = [
-            CompiledCatalog(
-                tenant_id=record.tenant_id,
-                catalog=record.catalog,
-                config=dict(record.config_json),
-            )
-            for record in self._session.scalars(
-                select(PublishedCatalogRecord).where(
-                    PublishedCatalogRecord.publication_id == active.publication_id
-                )
-            )
-        ]
-        assets: list[CompiledAsset] = []
-        for active_asset in self._session.scalars(
-            select(ActivePublishedAssetRecord).where(ActivePublishedAssetRecord.cell_id == cell_id)
-        ):
-            record = self._session.get(
-                PublishedAssetRecord,
-                {
-                    "publication_id": active_asset.publication_id,
-                    "tenant_id": active_asset.tenant_id,
-                    "catalog": active_asset.catalog,
-                    "target": active_asset.target,
-                },
-            )
-            if record is None:
-                raise LookupError(
-                    f"No published asset {active_asset.catalog}/{active_asset.target}"
-                )
-            assets.append(
-                CompiledAsset(
-                    tenant_id=record.tenant_id,
-                    catalog=record.catalog,
-                    target=record.target,
-                    backend=record.backend,
-                    compiled_config=dict(record.compiled_config_json),
-                    policy_version=record.policy_version,
-                )
-            )
-        return CompiledPublication(
-            cell_id=cell_id,
-            runtime=CompiledRuntime(
-                auth_chain=dict(runtime.auth_chain_json),
-                ticket=dict(runtime.ticket_json),
-                path_rules=[dict(rule) for rule in runtime.path_rules_json],
-            ),
-            catalogs=catalogs,
-            assets=assets,
-            manifest_hash=publication.manifest_hash,
-        )
-
-    def insert_compiled_publication(
-        self,
-        *,
-        publication_id: UUID,
-        compiled: CompiledPublication,
-    ) -> None:
-        self.insert_publication(
-            cell_id=compiled.cell_id,
-            publication_id=publication_id,
-            manifest_hash=compiled.manifest_hash,
-        )
-        self._session.add(
-            PublishedCellRuntimeRecord(
-                publication_id=publication_id,
-                auth_chain_json=compiled.runtime.auth_chain,
-                ticket_json=compiled.runtime.ticket,
-                path_rules_json=[dict(rule) for rule in compiled.runtime.path_rules],
-            )
-        )
-        for catalog in compiled.catalogs:
-            self._session.add(
-                PublishedCatalogRecord(
-                    publication_id=publication_id,
-                    tenant_id=catalog.tenant_id,
-                    catalog=catalog.catalog,
-                    plugin_id=_catalog_plugin_id(catalog.config),
-                    plugin_revision=_plugin_revision(catalog.config),
-                    config_json=catalog.config,
-                )
-            )
-        for asset in compiled.assets:
-            self.insert_published_asset(
-                publication_id=publication_id,
-                tenant_id=asset.tenant_id,
-                catalog=asset.catalog,
-                target=asset.target,
-                backend=asset.backend,
-                compiled_config=asset.compiled_config,
-                policy_version=asset.policy_version,
-            )
-        self._session.flush()
 
     def _catalog_by_name(self, *, cell_id: UUID, tenant_id: UUID, name: str) -> CatalogRecord:
         catalog = self._session.scalar(
@@ -2169,61 +1183,10 @@ class PublicationStore:
                 .group_by(PolicyRuleRecord.asset_id)
             )
         }
-        for asset_id, rules_json in self._session.execute(
-            select(AssetPolicyDraftRecord.asset_id, AssetPolicyDraftRecord.rules_json).where(
-                AssetPolicyDraftRecord.asset_id.in_(asset_ids),
-                AssetPolicyDraftRecord.discarded_at.is_(None),
-            )
-        ):
-            if isinstance(rules_json, list) and rules_json:
-                assets_with_rules.add(asset_id)
-        # Resolve serving metadata in bounded batch queries. Inventory must show
-        # the active immutable publication, never infer state from mutable drafts.
-        active_by_key: dict[tuple[UUID, str, str], UUID] = {}
-        cell_ids = {record.cell_id for record in records}
-        tenant_ids = {record.tenant_id for record in records}
-        if cell_ids and tenant_ids:
-            for active in self._session.scalars(
-                select(ActivePublishedAssetRecord).where(
-                    ActivePublishedAssetRecord.cell_id.in_(cell_ids),
-                    ActivePublishedAssetRecord.tenant_id.in_(tenant_ids),
-                )
-            ):
-                active_by_key[(active.tenant_id, active.catalog, active.target)] = (
-                    active.publication_id
-                )
-        publication_ids = set(active_by_key.values())
-        publication_by_id = (
-            {
-                record.id: record
-                for record in self._session.scalars(
-                    select(ConfigPublicationRecord).where(
-                        ConfigPublicationRecord.id.in_(publication_ids)
-                    )
-                )
-            }
-            if publication_ids
-            else {}
-        )
-        published_by_key: dict[tuple[UUID, str, str], PublishedAssetRecord] = {}
-        if publication_ids:
-            for published in self._session.scalars(
-                select(PublishedAssetRecord).where(
-                    PublishedAssetRecord.publication_id.in_(publication_ids),
-                    PublishedAssetRecord.tenant_id.in_(tenant_ids),
-                )
-            ):
-                key = (published.tenant_id, published.catalog, published.target)
-                if active_by_key.get(key) == published.publication_id:
-                    published_by_key[key] = published
         rows = []
         for record in records:
             catalog = catalog_by_id[record.catalog_id]
             owners = owners_by_asset.get(record.id, [])
-            key = (record.tenant_id, catalog.name, record.target)
-            active_publication_id = active_by_key.get(key)
-            published = published_by_key.get(key)
-            publication = publication_by_id.get(active_publication_id)
             rows.append(
                 {
                     "id": str(record.id),
@@ -2234,11 +1197,7 @@ class PublicationStore:
                     "owner_count": len(owners),
                     "owners": owners,
                     "policy_status": "configured" if record.id in assets_with_rules else "missing",
-                    "draft_status": "draft",
-                    "active_policy_version": published.policy_version if published else None,
-                    "last_published_at": (
-                        _isoformat(publication.created_at) if publication is not None else None
-                    ),
+                    "policy_revision": record.policy_revision,
                 }
             )
         return rows
@@ -2253,7 +1212,7 @@ def _assert_asset_revision(asset: AssetRecord, expected_revision: int | None) ->
             f"(current {asset.revision}); reread before writing."
         )
     if asset.revision != expected_revision:
-        raise PublicationConflictError(
+        raise ConfigurationConflictError(
             "Asset revision changed "
             f"(expected {expected_revision}, current {asset.revision}); reread before writing."
         )
@@ -2263,7 +1222,7 @@ def _assert_new_asset_revision(expected_revision: int | None) -> None:
     """Treat creation as a compare-and-set against the implicit revision zero."""
 
     if expected_revision is not None and expected_revision != 0:
-        raise PublicationConflictError(
+        raise ConfigurationConflictError(
             "Asset revision changed "
             f"(expected {expected_revision}, current 0); reread before writing."
         )
@@ -2287,41 +1246,6 @@ def _decode_asset_cursor(value: str, *, expected_search: str = "") -> tuple[str,
         return str(data["target"]), UUID(str(data["id"]))
     except Exception as exc:
         raise ValueError("Invalid asset cursor") from exc
-
-
-def _encode_policy_history_cursor(
-    *,
-    created_at: datetime,
-    target: str,
-    asset_id: UUID,
-    policy_version: int,
-) -> str:
-    raw = json.dumps(
-        {
-            "created_at": _isoformat(created_at),
-            "target": target,
-            "asset_id": str(asset_id),
-            "policy_version": policy_version,
-        },
-        separators=(",", ":"),
-    )
-    return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
-
-
-def _decode_policy_history_cursor(value: str) -> tuple[datetime, str, UUID, int]:
-    try:
-        padded = value + "=" * (-len(value) % 4)
-        raw = base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
-        data = json.loads(raw)
-        created_at = datetime.fromisoformat(str(data["created_at"]).replace("Z", "+00:00"))
-        return (
-            created_at,
-            str(data["target"]),
-            UUID(str(data["asset_id"])),
-            int(data["policy_version"]),
-        )
-    except Exception as exc:
-        raise ValueError("Invalid policy history cursor") from exc
 
 
 def _encode_audit_cursor(created_at: datetime, event_id: UUID) -> str:
@@ -2357,7 +1281,6 @@ def _empty_workspace_summary() -> dict[str, object]:
         "asset_count": 0,
         "unowned_asset_count": 0,
         "missing_policy_count": 0,
-        "draft_change_count": 0,
         "runtime_configured": False,
         "enabled_auth_provider_count": 0,
     }
@@ -2416,54 +1339,11 @@ _ICEBERG_CATALOG_MODULE = (
 )
 
 
-def _catalog_plugin_id(config: Mapping[str, Any]) -> str | None:
-    # Published catalog rows carry the selected public plugin identity
-    # explicitly.  This is the canonical source for external catalogs; the
-    # legacy module checks below remain only for offline conversion of older
-    # Iceberg records.
-    explicit = config.get("plugin_id")
-    if isinstance(explicit, str) and explicit:
-        return explicit
-    raw_plugins = config.get("plugins")
-    if isinstance(raw_plugins, Mapping):
-        value = raw_plugins.get("catalog")
-        if value == _ICEBERG_CATALOG_MODULE or value == "iceberg.sql":
-            return "iceberg.sql"
-    catalog_config = config.get("catalog")
-    raw_module = (
-        catalog_config.get("module")
-        if isinstance(catalog_config, Mapping)
-        else config.get("module")
-    )
-    if raw_module == _ICEBERG_CATALOG_MODULE:
-        return "iceberg.sql"
-    return None
-
-
-def _format_plugin_id(config: Mapping[str, Any], backend: str) -> str | None:
-    raw_plugins = config.get("plugins")
-    if isinstance(raw_plugins, Mapping):
-        value = raw_plugins.get("table_format")
-        if isinstance(value, str) and value == "iceberg":
-            return value
-    return "iceberg" if backend == "iceberg" else None
-
-
-def _plugin_revision(config: Mapping[str, Any]) -> int | None:
-    raw_plugins = config.get("plugins")
-    if not isinstance(raw_plugins, Mapping):
-        return None
-    value = raw_plugins.get("revision")
-    if isinstance(value, int) and value >= 0:
-        return value
-    return None
-
-
 def _normalize_schema_fields(fields: list[dict[str, Any]]) -> list[dict[str, object]]:
     """Normalize schema identities without coercing unsafe caller values.
 
-    These values are persisted into immutable review evidence and later used
-    for schema-drift checks.  Accept only bounded printable strings so direct
+    These values are persisted as asset schema admission metadata and later used
+    for schema-drift checks. Accept only bounded printable strings so direct
     service callers cannot bypass the HTTP model's limits.
     """
 

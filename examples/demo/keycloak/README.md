@@ -6,7 +6,7 @@ built for sales walkthroughs and hands-on trials on a laptop.
 
 Generated secrets and table files stay under this directory in `.runtime/`.
 Control-plane state is stored in the Compose `postgres-data` volume so policy
-changes and publications survive container restarts.
+changes survive container restarts.
 
 ## Requirements
 
@@ -40,9 +40,8 @@ What happens:
    HTTP API. It configures one Iceberg SQL catalog,
    calls catalog discovery, confirms the demo table are discovered, then
    promotes them to governed assets.
-8. The setup service assigns `group:asset-owners`, installs the demo policies,
-   configures OIDC/JWKS auth for the data plane, and publishes the first active
-   policy version.
+8. The setup service assigns `group:asset-owners`, saves the demo policies
+   directly to each live asset, and configures OIDC/JWKS auth for the data plane.
 9. The Flight data plane starts on `127.0.0.1:8815`.
 
 ## Credentials
@@ -58,8 +57,7 @@ The control-plane API remains on `http://127.0.0.1:8820`, with
 Swagger docs at `http://127.0.0.1:8820/docs`. Useful demo users:
 
 - `demo-admin`: platform admin access.
-- `asset-owner`: can edit owners, policies, filters, masks, and publish policy
-  versions for the demo asset.
+- `asset-owner`: can edit policies, filters, and masks for the demo asset.
 - `us-analyst`, `eu-analyst`, `data-steward`: read-path personas for policy
   behavior.
 - `blocked-user`: denied by policy.

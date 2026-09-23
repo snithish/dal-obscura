@@ -1,177 +1,117 @@
 # Quickstart
 
-This guide gets you to a working dal-obscura environment first, then shows the
-manual service shape used in real deployments.
+Start with the authenticated local demo, then use the manual service steps for a
+deployment you configure yourself.
 
-## Contents
+## Run the local demo
 
-- [Run The Local Demo](#run-the-local-demo)
-- [What Starts](#what-starts)
-- [Verify The Environment](#verify-the-environment)
-- [Publish With The Operator CLI](#publish-with-the-operator-cli)
-- [Stop Or Reset](#stop-or-reset)
-- [Manual Service Shape](#manual-service-shape)
-- [Next Reads](#next-reads)
-
-## Run The Local Demo
-
-Prerequisites:
-
-- Docker with Compose v2.
-- Python 3 for the local `./run` helper.
-
-Start the complete local environment:
+Prerequisites: Docker with Compose v2 and Python 3.
 
 ```bash
 cd examples/demo/keycloak
 ./run up
+./run credentials
 ```
 
-The demo builds from the current checkout unless `DAL_OBSCURA_IMAGE` points at a
-prebuilt image.
+The demo starts Keycloak, PostgreSQL, the authenticated control-plane UI, a
+seeded Iceberg catalog and governed assets, and the Arrow Flight data plane.
+Open the UI URL printed by `./run credentials`, choose **Sign in with SSO**, and
+sign in as `demo-admin` with the generated password. The `asset-owner` account
+can edit policy for the demo asset. Reader personas are
+`us-analyst`, `eu-analyst`, `data-steward`, and `blocked-user`.
 
-## What Starts
-
-```mermaid
-flowchart LR
-    cli["Operator CLI"] --> db[("Postgres")]
-    cli --> catalog["Iceberg catalog"]
-    client["Flight client"] --> dp["Data plane :8815"]
-    dp --> db
-    dp --> keycloak
-    dp --> storage["Demo table files"]
-```
-
-The demo provisions:
-
-1. Keycloak realm and demo users.
-2. Postgres-backed config store.
-3. Operator CLI and published configuration store.
-4. Iceberg demo table.
-5. Published Iceberg asset, policies, masks, and row filters.
-7. Arrow Flight data plane.
-
-Open:
-
-- Keycloak: `http://127.0.0.1:8080`
-- Flight data plane: `grpc://127.0.0.1:8815`
-
-## Verify The Environment
-
-Run the smoke checks:
+Run the end-to-end seeded read checks:
 
 ```bash
 ./run smoke
-```
-
-Run individual read checks:
-
-```bash
 ./run read --as us-analyst
 ./run read --as eu-analyst
 ./run read --as data-steward
 ./run read --as blocked-user
 ```
 
-Expected behavior:
-
-- `us-analyst` reads US rows with masked email values.
-- `eu-analyst` reads EU rows with masked email values.
-- `data-steward` reads all rows with clear email values.
-- `blocked-user` is denied by policy.
-
-## Publish With The Operator CLI
-
-Use a versioned manifest from an administrative host. The CLI has no
-reader-facing authoring endpoint:
+The local demo preserves its PostgreSQL volume and generated files across
+restarts. If you already have state from an earlier checkout, reset the
+disposable demo before its first start with the new schema:
 
 ```bash
-uv run dal-obscura-admin validate examples/manifests/iceberg-gateway.json
-uv run dal-obscura-admin preview examples/manifests/iceberg-gateway.json \
-  --personas examples/manifests/personas.json
-uv run dal-obscura-admin publish examples/manifests/iceberg-gateway.json \
-  --database-url "$DAL_OBSCURA_DATABASE_URL" --expected-generation none
-uv run dal-obscura-admin status --database-url "$DAL_OBSCURA_DATABASE_URL"
+./run reset
+./run up
 ```
 
-## Stop Or Reset
+`reset` deletes the local demo's generated files and database volume.
 
-Stop containers but keep generated files and Postgres volume:
+## Start services manually
+
+The supported config-store migration history is one clean baseline for live
+catalogs, assets, policy, tickets, sessions, and audit records. This is a
+breaking schema reset: databases stamped with the previous migration history
+are unsupported. For a disposable environment, create a new empty database.
+
+Install the server, SQLite driver, and UI dependencies:
+
+```bash
+uv sync --dev --extra server --extra sqlite
+pnpm --dir apps/governance-ui install --frozen-lockfile
+```
+
+For a local authoring-only run, configure a fresh SQLite database and apply the
+baseline explicitly:
+
+```bash
+mkdir -p runtime
+export DAL_OBSCURA_DATABASE_URL='sqlite+pysqlite:///runtime/control-plane.db'
+uv run dal-obscura-migrate upgrade
+uv run dal-obscura-migrate check
+```
+
+In the first terminal, start the authenticated local control plane:
+
+```bash
+export DAL_OBSCURA_CONTROL_PLANE_PORT=8821
+export DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN="$(openssl rand -hex 32)"
+printf 'Bootstrap token: %s\n' "$DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN"
+uv run dal-obscura-control-plane
+```
+
+In a second terminal, start the UI:
+
+```bash
+pnpm --dir apps/governance-ui dev
+```
+
+Open `http://localhost:5173` and use the local bootstrap token printed from the
+first terminal to sign in. Register a catalog, discover and govern an asset,
+and save its live policy in the UI. This local profile exercises authenticated
+sessions; use the Keycloak demo above when you want to exercise the full SSO and
+Flight read path.
+
+Asset owners can choose to revoke all existing asset tickets during a policy
+save or use the separate revoke action. Without revocation, tickets retain
+their captured permissions until expiry. For a service with actual governed
+reads, PostgreSQL, OIDC, TLS, and production network controls, follow the
+[production reference](../deployment/production/README.md).
+
+The UI development server proxies API and authentication requests to the local
+control plane on port `8821`.
+
+## Stop the local demo
+
+Stop containers while preserving demo data:
 
 ```bash
 ./run down
 ```
 
-Delete containers, generated files, and demo database state:
+Delete demo containers, generated files, and database state:
 
 ```bash
 ./run reset
 ```
 
-## Manual Service Shape
+## Next reads
 
-Use this section when you want to understand the production-shaped runtime
-instead of the all-in-one demo.
-
-### Install
-
-```bash
-uv sync --dev --extra server --extra postgres
-uv run dal-obscura --help
-uv run dal-obscura-admin --help
-uv run dal-obscura-migrate --help
-```
-
-SQLite works for short-lived local development:
-
-```bash
-uv sync --dev --extra server --extra sqlite
-export DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:///runtime/control-plane.db
-```
-
-Use Postgres for shared environments or state that must survive restarts
-reliably.
-
-### Initialize A Publication
-
-```bash
-export DAL_OBSCURA_DATABASE_URL=postgresql+psycopg://dal_obscura:dal_obscura@127.0.0.1:5432/dal_obscura
-uv run dal-obscura-migrate upgrade
-uv run dal-obscura-migrate check
-uv run dal-obscura-admin status
-```
-
-### Configure The Service
-
-Configure at least:
-
-1. OIDC/JWKS reader identity.
-2. Iceberg catalog connection.
-3. Governed asset and policy.
-4. Runtime ticket settings.
-
-Use the operator CLI manifest. It defines the qualified catalog/table-format and OIDC runtime,
-catalogs, assets, policies, and settings.
-
-### Start A Data Plane
-
-```bash
-export DAL_OBSCURA_DATABASE_URL=postgresql+psycopg://dal_obscura:dal_obscura@127.0.0.1:5432/dal_obscura
-uv run dal-obscura-migrate check
-export DAL_OBSCURA_CELL_ID=00000000-0000-0000-0000-000000000001
-export DAL_OBSCURA_LOCATION=grpc://127.0.0.1:8815
-export DAL_OBSCURA_TICKET_SECRET=replace-with-a-secret
-uv run dal-obscura
-```
-
-The data plane reads published configuration from the config database,
-authenticates each request, mints opaque tickets during planning, and verifies
-the active policy version again during streaming.
-
-## Next Reads
-
-- [Concepts](concepts.md): understand assets, policies, tickets, and read flow.
-- [Policy Authoring](policy-authoring.md): define grants, filters, and masks.
-- [Operators](operators.md): prepare a shared or persistent environment.
-- [Security](security.md): review identity providers, tickets, and secret
-  handling.
+- [Concepts](concepts.md): assets, policies, tickets, and request flow.
+- [Policy authoring](policy-authoring.md): nested grants, filters, and masks.
+- [Operators](operators.md): service setup and operational requirements.
+- [Security](security.md): identity, ticket, and secret boundaries.

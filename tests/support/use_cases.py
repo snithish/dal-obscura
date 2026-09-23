@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import pickle
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import pyarrow as pa
 
@@ -139,9 +139,15 @@ class FakeIdentity:
 
 
 class FakeAuthorizer:
-    def __init__(self, decision: AccessDecision | None, current_version: int | None = None) -> None:
+    def __init__(
+        self,
+        decision: AccessDecision | None,
+        current_version: int | None = None,
+        asset_id: str | None = "00000000-0000-4000-8000-000000000001",
+    ) -> None:
         self._decision = decision
         self._current_version = current_version
+        self._asset_id = asset_id
         self.last_requested_columns: list[str] | None = None
         self.last_current_version_tenant_id: str | None = None
 
@@ -150,7 +156,9 @@ class FakeAuthorizer:
         self.last_requested_columns = list(requested_columns)
         if self._decision is None:
             raise PermissionError("Unauthorized")
-        return self._decision
+        if self._decision.asset_id is not None:
+            return self._decision
+        return replace(self._decision, asset_id=self._asset_id)
 
     def current_policy_version(self, target, catalog, *, tenant_id):
         del target, catalog
@@ -181,6 +189,7 @@ class FakeMasking:
 class FakeTicketCodec:
     def __init__(self, payload: TicketPayload | None = None) -> None:
         self._payload = payload or TicketPayload(
+            asset_id="00000000-0000-4000-8000-000000000001",
             catalog="catalog1",
             target="users",
             tenant_id="default",
@@ -208,6 +217,7 @@ class FakeTicketStore:
         self.records: dict[str, StoredTicket] = {}
         self.cleanup_calls: list[int] = []
         self.reserve_calls: list[str] = []
+        self.revoked: set[str] = set()
         self.fail_store = False
 
     def store(self, payload: TicketPayload, *, max_exchanges: int) -> None:
@@ -240,6 +250,7 @@ class FakeTicketStore:
     def reserve_exchange(self, ticket_id: str, *, now: int) -> StoredTicket:
         del now
         self.reserve_calls.append(ticket_id)
+        self.ensure_active(ticket_id)
         stored = self.load(ticket_id)
         if stored.exchange_count >= stored.max_exchanges:
             raise PermissionError("Ticket expired or exhausted")
@@ -252,6 +263,10 @@ class FakeTicketStore:
         )
         self.records[ticket_id] = updated
         return updated
+
+    def ensure_active(self, ticket_id: str) -> None:
+        if ticket_id in self.revoked or ticket_id not in self.records:
+            raise PermissionError("Ticket is revoked or unavailable")
 
     def cleanup_expired_and_exhausted(self, *, now: int) -> int:
         self.cleanup_calls.append(now)

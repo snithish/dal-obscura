@@ -22,11 +22,11 @@ def _client() -> TestClient:
     return TestClient(create_app(session_factory(engine), admin_token="test-admin"))
 
 
-def _save_policy_draft(client: TestClient, asset_id: str, rules: list[dict]) -> None:
-    draft = client.get(f"/v1/assets/{asset_id}/draft", headers=ADMIN_HEADERS).json()
+def _replace_live_policy(client: TestClient, asset_id: str, rules: list[dict]) -> None:
+    asset = client.get(f"/v1/assets/{asset_id}", headers=ADMIN_HEADERS).json()
     response = client.put(
-        f"/v1/assets/{asset_id}/draft",
-        json={"expected_revision": draft["revision"], "rules": rules},
+        f"/v1/assets/{asset_id}/policy",
+        json={"expected_revision": asset["policy_revision"], "rules": rules},
         headers=ADMIN_HEADERS,
     )
     assert response.status_code == 200, response.text
@@ -40,7 +40,7 @@ def test_inventory_reads_require_admin_token():
     assert client.get("/v1/assets").status_code == 401
     assert client.get("/v1/settings/runtime").status_code == 401
     assert client.get("/v1/settings/auth-providers").status_code == 401
-    assert client.get("/v1/policy-versions/page").status_code == 401
+    assert client.get("/v1/policy-versions/page").status_code == 404
 
 
 def test_control_plane_healthz_is_public():
@@ -164,7 +164,7 @@ DEFAULT_AUTH_MODULE = (
 )
 
 
-def _provision_draft(client: TestClient) -> dict[str, str]:
+def _provision_asset(client: TestClient) -> dict[str, str]:
     client.put(
         "/v1/settings/runtime",
         json={
@@ -187,7 +187,7 @@ def _provision_draft(client: TestClient) -> dict[str, str]:
         json={"backend": "iceberg", "table_identifier": "prod.users", "options": {"snapshot": 1}},
         headers=ADMIN_HEADERS,
     ).json()
-    _save_policy_draft(
+    _replace_live_policy(
         client,
         asset["id"],
         [
@@ -224,9 +224,9 @@ def _provision_draft(client: TestClient) -> dict[str, str]:
     return asset
 
 
-def test_reads_workspace_draft_resources_after_writes():
+def test_reads_live_workspace_resources_after_writes():
     client = _client()
-    asset = _provision_draft(client)
+    asset = _provision_asset(client)
 
     runtime = client.get(
         "/v1/settings/runtime",
@@ -234,7 +234,7 @@ def test_reads_workspace_draft_resources_after_writes():
     ).json()
     catalogs = client.get("/v1/catalogs", headers=ADMIN_HEADERS).json()
     assets = client.get("/v1/assets", headers=ADMIN_HEADERS).json()
-    rules = client.get(f"/v1/assets/{asset['id']}/draft", headers=ADMIN_HEADERS).json()["rules"]
+    rules = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()["policy_rules"]
     auth = client.get("/v1/settings/auth-providers", headers=ADMIN_HEADERS).json()
 
     assert runtime == {
@@ -253,7 +253,13 @@ def test_reads_workspace_draft_resources_after_writes():
     assert assets[0]["name"] == "default.users"
     assert assets[0]["owner_count"] == 1
     assert assets[0]["policy_status"] == "configured"
-    assert rules == [
+    assert [
+        {
+            key: rule[key]
+            for key in ("ordinal", "effect", "principals", "when", "columns", "masks", "row_filter")
+        }
+        for rule in rules
+    ] == [
         {
             "ordinal": 10,
             "effect": "allow",
@@ -278,46 +284,14 @@ def test_reads_workspace_draft_resources_after_writes():
     assert len(assets) == 1
 
 
-def test_cell_draft_route_is_not_public_workspace_api():
+def test_retired_draft_and_publication_routes_are_absent():
     client = _client()
 
-    response = client.get(
+    for path in (
         "/v1/cells/00000000-0000-0000-0000-000000000001/draft",
-        headers=ADMIN_HEADERS,
-    )
-
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Not Found"
-
-
-def test_reads_policy_versions_without_public_publication_fields():
-    client = _client()
-    asset = _provision_draft(client)
-
-    created = client.post(
-        f"/v1/assets/{asset['id']}/policy-versions",
-        headers=ADMIN_HEADERS,
-    ).json()
-    versions = client.get(
+        "/v1/assets/00000000-0000-0000-0000-000000000000/draft",
         "/v1/policy-versions/page",
-        headers=ADMIN_HEADERS,
-    ).json()
-
-    assert versions["items"] == [
-        {
-            "asset_id": asset["id"],
-            "asset_name": "default.users",
-            "catalog": "analytics",
-            "target": "default.users",
-            "policy_version": created["policy_version"],
-            "active": True,
-            "created_at": versions["items"][0]["created_at"],
-        }
-    ]
-
-    summary = client.get("/v1/workspace/summary", headers=ADMIN_HEADERS).json()
-
-    assert "active_publication" not in summary
-    assert "publication_id" not in created
-    assert "manifest_hash" not in created
-    assert versions["items"][0]["active"] is True
+        "/v1/workspace/publications",
+    ):
+        expected = 405 if path.startswith("/v1/assets/") and path.endswith("/draft") else 404
+        assert client.get(path, headers=ADMIN_HEADERS).status_code == expected

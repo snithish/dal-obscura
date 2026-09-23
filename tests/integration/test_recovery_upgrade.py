@@ -33,11 +33,11 @@ from dal_obscura.data_plane.infrastructure.adapters.ticket_store_sqlalchemy impo
 
 pytestmark = pytest.mark.integration
 
-_FIXTURE = Path(__file__).parents[1] / "acceptance" / "fixtures" / "ticket_payload_v1.json"
+_FIXTURE = Path(__file__).parents[1] / "acceptance" / "fixtures" / "ticket_payload_v2.json"
 
 
-def test_trusted_ticket_fixture_survives_bounded_key_rotation() -> None:
-    """Old trusted ticket payloads remain verifiable during planned overlap."""
+def test_asset_bound_ticket_survives_bounded_key_rotation() -> None:
+    """Current asset-bound ticket payload remains verifiable during key overlap."""
 
     payload = TicketPayload.from_dict(json.loads(_FIXTURE.read_text()))
     old = HmacTicketCodecAdapter("o" * 32)
@@ -324,6 +324,7 @@ def test_postgres_restore_invalidation_removes_replayable_access(
     ticket_id = str(uuid4())
     SqlAlchemyTicketStore(postgres_sessions, cell_id=cell_id).store(
         TicketPayload(
+            asset_id="00000000-0000-4000-8000-000000000001",
             ticket_id=ticket_id,
             catalog="recovery",
             target="default.table",

@@ -206,8 +206,8 @@ def _health_payload(
         logger.warning("flight_health_check_not_ready", extra={"health": observed})
         raise flight.FlightUnavailableError("Data plane is not ready")
     payload["checks"] = observed.get("checks", {})
-    if observed.get("publication_id"):
-        payload["publication_id"] = observed["publication_id"]
+    if observed.get("config_revision"):
+        payload["config_revision"] = observed["config_revision"]
     if metrics is not None:
         snapshot = metrics.snapshot()
         if snapshot:

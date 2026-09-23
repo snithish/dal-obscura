@@ -73,12 +73,37 @@ def test_plan_access_resolves_catalog_with_tenant_from_principal_attributes():
     assert ticket_codec.signed_payloads[0].tenant_id == "tenant-a"
 
 
+def test_plan_access_rejects_authorization_without_asset_identity():
+    _, decision, table_format = _build_use_case_dependencies()
+    ticket_store = FakeTicketStore()
+    use_case = PlanAccessUseCase(
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
+        authorizer=FakeAuthorizer(decision=decision, asset_id=None),
+        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        masking=FakeMasking(),
+        ticket_codec=FakeTicketCodec(),
+        ticket_store=ticket_store,
+        ticket_ttl_seconds=300,
+        max_tickets=1,
+        max_ticket_exchanges=1,
+    )
+
+    with pytest.raises(PermissionError, match="governed asset identity"):
+        use_case.execute(
+            PlanRequest(catalog="catalog1", target="users", columns=["id"]),
+            AUTHORIZATION_HEADER,
+        )
+
+    assert ticket_store.stored == []
+
+
 def test_plan_access_auth_failure():
     _schema, decision, table_format = _build_use_case_dependencies()
     catalog_registry = FakeCatalogRegistry(table_format)
     authorizer = FakeAuthorizer(decision=decision)
     ticket_codec = FakeTicketCodec(
         TicketPayload(
+            asset_id="00000000-0000-4000-8000-000000000001",
             catalog="catalog1",
             target="users",
             columns=["id", "region"],
@@ -113,6 +138,7 @@ def test_plan_access_authz_failure():
     catalog_registry = FakeCatalogRegistry(table_format)
     ticket_codec = FakeTicketCodec(
         TicketPayload(
+            asset_id="00000000-0000-4000-8000-000000000001",
             catalog="catalog1",
             target="users",
             columns=["id", "region"],
@@ -148,6 +174,7 @@ def test_plan_access_expands_wildcard_columns():
     authorizer = FakeAuthorizer(decision=decision)
     ticket_codec = FakeTicketCodec(
         TicketPayload(
+            asset_id="00000000-0000-4000-8000-000000000001",
             catalog="catalog1",
             target="users",
             columns=["id", "region"],
@@ -255,6 +282,7 @@ def test_plan_access_accepts_nested_requested_columns():
     authorizer = FakeAuthorizer(decision=decision)
     ticket_codec = FakeTicketCodec(
         TicketPayload(
+            asset_id="00000000-0000-4000-8000-000000000001",
             catalog="catalog1",
             target="users",
             columns=["user.address.zip"],
@@ -448,6 +476,7 @@ def test_plan_access_rejects_unknown_requested_columns():
         masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(
             TicketPayload(
+                asset_id="00000000-0000-4000-8000-000000000001",
                 catalog="catalog1",
                 target="users",
                 columns=["id"],
@@ -491,6 +520,7 @@ def test_plan_access_includes_hidden_row_filter_dependency_columns_in_execution_
     authorizer = FakeAuthorizer(decision=decision)
     ticket_codec = FakeTicketCodec(
         TicketPayload(
+            asset_id="00000000-0000-4000-8000-000000000001",
             catalog="catalog1",
             target="users",
             columns=["id"],
@@ -550,6 +580,7 @@ def test_plan_access_rejects_requested_row_filter_for_masked_column():
         masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(
             TicketPayload(
+                asset_id="00000000-0000-4000-8000-000000000001",
                 catalog="catalog1",
                 target="users",
                 columns=["id"],
@@ -659,6 +690,7 @@ def test_plan_access_rejects_requested_row_filter_for_non_visible_column():
         masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(
             TicketPayload(
+                asset_id="00000000-0000-4000-8000-000000000001",
                 catalog="catalog1",
                 target="users",
                 columns=["id"],
@@ -714,6 +746,7 @@ def test_plan_access_allows_requested_row_filter_on_visible_unmasked_hidden_depe
         masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(
             TicketPayload(
+                asset_id="00000000-0000-4000-8000-000000000001",
                 catalog="catalog1",
                 target="users",
                 columns=["id"],
@@ -762,6 +795,7 @@ def test_plan_access_combines_policy_and_requested_row_filters_before_ticketing(
     )
     ticket_codec = FakeTicketCodec(
         TicketPayload(
+            asset_id="00000000-0000-4000-8000-000000000001",
             catalog="catalog1",
             target="users",
             columns=["id"],
@@ -879,6 +913,7 @@ def test_plan_access_revalidates_requested_row_filter_against_base_schema():
         masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(
             TicketPayload(
+                asset_id="00000000-0000-4000-8000-000000000001",
                 catalog="catalog1",
                 target="users",
                 columns=["id"],
@@ -936,6 +971,7 @@ def test_plan_access_rejects_explicit_denied_column_request():
         masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(
             TicketPayload(
+                asset_id="00000000-0000-4000-8000-000000000001",
                 catalog="catalog1",
                 target="users",
                 columns=["id"],

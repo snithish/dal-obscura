@@ -47,9 +47,7 @@ function App() {
   const rulesRef = useRef<PolicyRule[]>([]);
   const rulesUndoStack = useRef<PolicyRule[][]>([]);
   const rulesRedoStack = useRef<PolicyRule[][]>([]);
-  const [draftRevision, setDraftRevision] = useState(0);
-  const [draftId, setDraftId] = useState<string | null>(null);
-  const [reviewOnly, setReviewOnly] = useState(false);
+  const [policyRevision, setPolicyRevision] = useState(0);
   const [selectedRule, setSelectedRule] = useState(0);
   const [selectedField, setSelectedField] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("saved");
@@ -57,7 +55,6 @@ function App() {
   const [previewPrincipal, setPreviewPrincipal] = useState("analyst.alex");
   const [previewGroups, setPreviewGroups] = useState("us-analysts");
   const [previewClaims, setPreviewClaims] = useState("{}");
-  const [reviewToken, setReviewToken] = useState<string | null>(null);
   const [notice, setNotice] = useState("Loading workspace…");
   const [fieldErrors, setFieldErrors] = useState<Array<{ field: string; message: string; type: string }>>([]);
   const [session, setSession] = useState<Session | null>(null);
@@ -71,22 +68,16 @@ function App() {
   const [managementData, setManagementData] = useState<ManagementData>({});
   const [managementLoading, setManagementLoading] = useState(false);
   const [managementError, setManagementError] = useState("");
-  const [historyLoading, setHistoryLoading] = useState(false);
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditFilters, setAuditFilters] = useState<AuditFilters>({});
   const [managementDirty, setManagementDirty] = useState(false);
-  const [publishPending, setPublishPending] = useState(false);
-  const saveDraftPending = useRef(false);
-  const publishPendingRef = useRef(false);
+  const savePolicyPending = useRef(false);
   const previewPendingRef = useRef(false);
-  const reviewPendingRef = useRef(false);
-  const restorePendingRef = useRef(false);
   const loadEpoch = useRef(0);
-  const draftEditEpoch = useRef(0);
+  const policyEditEpoch = useRef(0);
   const inventoryEpoch = useRef(0);
   const searchTimer = useRef<number | undefined>(undefined);
   const managementEpoch = useRef(0);
-  const historyLoadingRef = useRef(false);
   const auditLoadingRef = useRef(false);
   const workspaceAbortController = useRef<AbortController | null>(null);
   const mutationControllers = useRef<Set<AbortController>>(new Set());
@@ -163,13 +154,9 @@ function App() {
         return;
       }
       setPage(next);
-      const currentDraftId = reviewOnly ? draftId : undefined;
-      const currentDraftRevision = reviewOnly ? draftRevision : undefined;
-      const draftLocationChanged = location.draftId !== currentDraftId || location.draftRevision !== currentDraftRevision;
-      if (next === "assets" && session && location.assetId && (location.assetId !== asset?.id || draftLocationChanged)) {
+      if (next === "assets" && session && location.assetId && location.assetId !== asset?.id) {
         if (confirmDiscardUnsaved()) {
-          setReviewOnly(Boolean(location.draftId));
-          void loadAsset(location.assetId, assets, undefined, location.draftId, sessionCacheKey, location.draftRevision);
+          void loadAsset(location.assetId, assets, undefined, sessionCacheKey);
         }
       }
     };
@@ -179,7 +166,7 @@ function App() {
       window.removeEventListener("hashchange", syncBrowserLocation);
       window.removeEventListener("popstate", syncBrowserLocation);
     };
-  }, [asset?.id, assets, draftId, draftRevision, managementDirty, page, reviewOnly, saveState, session, sessionCacheKey]);
+  }, [asset?.id, assets, managementDirty, page, saveState, session, sessionCacheKey]);
 
   useEffect(() => {
     const handleAuthExpired = (event: Event) => {
@@ -237,23 +224,12 @@ function App() {
     setManagementError("");
     try {
       let next: ManagementData = {};
-      if (destination === "changes") {
-        const pageResult = await queryClient.fetchQuery({
-          queryKey: ["management", sessionCacheKey, "changes", "history", 50],
-          queryFn: ({ signal }) => controlPlane.listHistoryPage({ limit: 50, signal }),
-        });
-        next = { history: pageResult.items, historyNextCursor: pageResult.next_cursor };
-      }
       if (destination === "activity") {
         const filtersKey = JSON.stringify(auditFilters);
-        const [audit, history, summary, observations] = await Promise.all([
+        const [audit, summary, observations] = await Promise.all([
           queryClient.fetchQuery({
             queryKey: ["management", sessionCacheKey, "activity", "audit", filtersKey, 50],
             queryFn: ({ signal }) => controlPlane.listAuditEventsPage({ limit: 50, ...auditFilters, signal }),
-          }),
-          queryClient.fetchQuery({
-            queryKey: ["management", sessionCacheKey, "activity", "history", 50],
-            queryFn: ({ signal }) => controlPlane.listHistoryPage({ limit: 50, signal }).then((page) => page.items),
           }),
           queryClient.fetchQuery({
             queryKey: ["management", sessionCacheKey, "activity", "summary"],
@@ -264,10 +240,10 @@ function App() {
             queryFn: ({ signal }) => controlPlane.getObservations(signal),
           }),
         ]);
-        next = { history, events: audit.items, eventsNextCursor: audit.next_cursor, summary, observations };
+        next = { events: audit.items, eventsNextCursor: audit.next_cursor, summary, observations };
       }
       if (destination === "connections") {
-        const [pluginData, catalogs, publications] = await Promise.all([
+        const [pluginData, catalogs] = await Promise.all([
           queryClient.fetchQuery({
             queryKey: ["management", sessionCacheKey, "connections", "plugins"],
             queryFn: ({ signal }) => controlPlane.listPlugins(signal),
@@ -276,17 +252,11 @@ function App() {
             queryKey: ["management", sessionCacheKey, "connections", "catalogs"],
             queryFn: ({ signal }) => controlPlane.listCatalogs(signal),
           }),
-          session?.platform_admin
-            ? queryClient.fetchQuery({
-                queryKey: ["management", sessionCacheKey, "connections", "publications"],
-                queryFn: ({ signal }) => controlPlane.listWorkspacePublications(signal),
-              })
-            : Promise.resolve([]),
         ]);
-        next = { catalogs, publications, plugins: pluginData.plugins, pluginStates: pluginData.states, pluginPairs: pluginData.pairs };
+        next = { catalogs, plugins: pluginData.plugins, pluginStates: pluginData.states, pluginPairs: pluginData.pairs };
       }
       if (destination === "settings") {
-        const [runtime, providers, revision, publications] = await Promise.all([
+        const [runtime, providers, revision] = await Promise.all([
           queryClient.fetchQuery({
             queryKey: ["management", sessionCacheKey, "settings", "runtime"],
             queryFn: ({ signal }) => controlPlane.getRuntimeSettings(signal),
@@ -299,14 +269,8 @@ function App() {
             queryKey: ["management", sessionCacheKey, "settings", "provider-revision"],
             queryFn: ({ signal }) => controlPlane.getAuthProviderRevision(signal),
           }),
-          session?.platform_admin
-            ? queryClient.fetchQuery({
-                queryKey: ["management", sessionCacheKey, "settings", "publications"],
-                queryFn: ({ signal }) => controlPlane.listWorkspacePublications(signal),
-              })
-            : Promise.resolve([]),
         ]);
-        next = { runtime, providers, providerRevision: revision.revision, publications };
+        next = { runtime, providers, providerRevision: revision.revision };
       }
       if (!isCurrentEpoch(epoch, managementEpoch.current)) return;
       // Keep asset-scoped access metadata while a management route is active.
@@ -321,29 +285,6 @@ function App() {
       setManagementError(recoveryMessage(failure, "This management view could not be loaded. The server may be unavailable or the session may have expired."));
     } finally {
       if (epoch === managementEpoch.current) setManagementLoading(false);
-    }
-  }
-
-  async function loadMoreHistory() {
-    const cursor = managementData.historyNextCursor;
-    if (!cursor || historyLoading || historyLoadingRef.current) return;
-    historyLoadingRef.current = true;
-    const scope = managementEpoch.current;
-    setHistoryLoading(true);
-    try {
-      const pageResult = await queryClient.fetchQuery({
-        queryKey: ["management", sessionCacheKey, "changes", "history", 50, cursor],
-        queryFn: ({ signal }) => controlPlane.listHistoryPage({ limit: 50, cursor, signal }),
-      });
-      if (!isCurrentEpoch(scope, managementEpoch.current)) return;
-      setManagementData((current) => ({ ...current, history: [...(current.history ?? []), ...pageResult.items], historyNextCursor: pageResult.next_cursor }));
-    } catch (error) {
-      if ((error instanceof DOMException && error.name === "AbortError") || (error instanceof Error && error.name === "CancelledError")) return;
-      if (!isCurrentEpoch(scope, managementEpoch.current)) return;
-      setNotice(recoveryMessage(error, "More history could not be loaded. The entries already visible remain available."));
-    } finally {
-      historyLoadingRef.current = false;
-      if (scope === managementEpoch.current) setHistoryLoading(false);
     }
   }
 
@@ -411,10 +352,8 @@ function App() {
         return;
       }
       const requestedAssetId = location.assetId;
-      const requestedDraftId = location.draftId;
       const selectedId = requestedAssetId ?? loaded[0].id;
-      setReviewOnly(Boolean(requestedDraftId));
-      await loadAsset(selectedId, loaded, epoch, requestedDraftId ?? undefined, loadedSessionScope, location.draftRevision);
+      await loadAsset(selectedId, loaded, epoch, loadedSessionScope);
       if (epoch !== loadEpoch.current) return;
       setWorkspace("ready");
       restorePostLoginHash();
@@ -551,12 +490,11 @@ function App() {
     void queryClient.cancelQueries();
     queryClient.clear();
     previousSessionCacheKey.current = "anonymous";
-    draftEditEpoch.current += 1;
+    policyEditEpoch.current += 1;
     setSession(null); setAsset(null); setAssets([]); resetRuleHistory([]); setPreview(null);
     setManagementData({}); setAssetCursor(null); setAssetHasMore(false); setAssetSearch("");
     setManagementDirty(false);
-      setDraftRevision(0); setDraftId(null); setReviewToken(null); setSaveState("saved");
-    setPublishPending(false);
+    setPolicyRevision(0); setSaveState("saved");
     setWorkspace("unavailable");
     void controlPlane.getSessionOptions().then((options) => {
       setSessionOptions(options);
@@ -581,7 +519,7 @@ function App() {
   function runPaletteCommand(command: Page | "help") {
     closePalette();
     if (command === "help") {
-      setNotice("Use the navigation destinations to inspect governed assets, author policies, and review staged changes.");
+      setNotice("Use navigation to inspect governed assets, author policies, and audit activity.");
       return;
     }
     navigateTo(command);
@@ -592,7 +530,6 @@ function App() {
     if (!confirmDiscardUnsaved()) return;
     const target = assets.find((item) => item.id === assetId);
     if (!target) return;
-    setReviewOnly(false);
     if (page !== "assets") window.location.hash = "assets";
     void loadAsset(target.id, assets);
   }
@@ -630,58 +567,27 @@ function App() {
     assetId: string,
     knownAssets = assets,
     inheritedEpoch?: number,
-    selectedDraftId?: string,
     inheritedSessionScope = sessionCacheKey,
-    selectedDraftRevision?: number,
   ) {
     const epoch = inheritedEpoch ?? ++loadEpoch.current;
     await queryClient.cancelQueries({ queryKey: ["asset", inheritedSessionScope] });
     if (epoch !== loadEpoch.current) return;
-    if (selectedDraftId && selectedDraftRevision === undefined) {
-      setAsset(null);
-      resetRuleHistory([]);
-      setDraftId(null);
-      setReviewToken(null);
-      setNotice("This review link is incomplete. Ask the author for an exact-revision review link.");
-      return;
-    }
     try {
       const assetKey = ["asset", inheritedSessionScope, assetId] as const;
-      const [fullAsset, schema, history, grants, access] = await Promise.all([
+      const [fullAsset, schema, grants, access] = await Promise.all([
         queryClient.fetchQuery({ queryKey: [...assetKey, "detail"], queryFn: ({ signal }) => controlPlane.getAsset(assetId, signal) }),
         queryClient.fetchQuery({ queryKey: [...assetKey, "schema"], queryFn: ({ signal }) => controlPlane.getSchema(assetId, signal) }),
-        queryClient.fetchQuery({ queryKey: [...assetKey, "history"], queryFn: ({ signal }) => controlPlane.listAssetHistory(assetId, signal) }),
         queryClient.fetchQuery({ queryKey: [...assetKey, "grants"], queryFn: ({ signal }) => controlPlane.listGrants(assetId, signal) }),
         queryClient.fetchQuery({ queryKey: [...assetKey, "access"], queryFn: ({ signal }) => controlPlane.getAssetAccess(assetId, signal) }),
       ]);
       if (epoch !== loadEpoch.current) return;
-      const draft = await queryClient.fetchQuery({
-        queryKey: [...assetKey, "draft", selectedDraftId ?? "current"],
-        queryFn: ({ signal }) => controlPlane.getDraft(assetId, selectedDraftId, signal),
-      });
-      if (epoch !== loadEpoch.current) return;
       const hydratedAsset: Asset = { ...fullAsset, schema };
-      if (selectedDraftId && selectedDraftRevision !== undefined && draft?.revision !== selectedDraftRevision) {
-        setManagementData((current) => ({ ...current, history, grants, access }));
-        setAssets(knownAssets);
-        setAsset(hydratedAsset);
-        resetRuleHistory([]);
-        setDraftRevision(draft?.revision ?? 0);
-        setDraftId(null);
-        setSelectedRule(0);
-        setReviewToken(null);
-        setSelectedField("");
-        setPreview(null);
-        setSaveState("saved");
-        setNotice(`This review link is stale: it requested draft revision ${selectedDraftRevision}, but the saved draft is now revision ${draft?.revision ?? 0}. Refresh the link before reviewing.`);
-        return;
-      }
-      const effectiveRules = draft?.rules ?? [];
-      setManagementData((current) => ({ ...current, history, grants, access }));
-      setAssets(knownAssets); setAsset(hydratedAsset); resetRuleHistory(effectiveRules); setDraftRevision(draft?.revision ?? 0); setDraftId(draft?.id ?? null); setSelectedRule(0); setReviewToken(null);
-      draftEditEpoch.current += 1;
+      const effectiveRules = fullAsset.policy_rules ?? [];
+      setManagementData((current) => ({ ...current, grants, access }));
+      setAssets(knownAssets); setAsset(hydratedAsset); resetRuleHistory(effectiveRules); setPolicyRevision(fullAsset.policy_revision ?? 0); setSelectedRule(0);
+      policyEditEpoch.current += 1;
       setSelectedField(schema.fields[0]?.human_path ?? hydratedAsset.schema_fields[0]?.name ?? ""); setPreview(null); setSaveState("saved");
-      setNotice(selectedDraftId ? `Loaded saved draft ${draft?.revision ?? 0} for read-only review.` : effectiveRules.length ? "Loaded your policy draft." : "No policy draft exists yet. Add a rule to begin authoring.");
+      setNotice(effectiveRules.length ? "Loaded the current live policy." : "No policy rules are configured. The asset denies access until rules are added.");
     } catch (error) {
       if ((error instanceof DOMException && error.name === "AbortError") || (error instanceof Error && error.name === "CancelledError")) return;
       if (epoch !== loadEpoch.current) return;
@@ -711,30 +617,30 @@ function App() {
     if (!previous) return;
     rulesRedoStack.current.push(rulesRef.current);
     replaceRules(previous, false);
-    draftEditEpoch.current += 1;
-    setSaveState("unsaved"); setPreview(null); setReviewToken(null);
-    setNotice("Undid the last local policy edit. Save the draft to persist this version.");
+    policyEditEpoch.current += 1;
+    setSaveState("unsaved"); setPreview(null);
+    setNotice("Undid the last local policy edit. Save the policy to persist this version.");
   }
   function redoRules() {
     const next = rulesRedoStack.current.pop();
     if (!next) return;
     rulesUndoStack.current.push(rulesRef.current);
     replaceRules(next, false);
-    draftEditEpoch.current += 1;
-    setSaveState("unsaved"); setPreview(null); setReviewToken(null);
-    setNotice("Reapplied the local policy edit. Save the draft to persist this version.");
+    policyEditEpoch.current += 1;
+    setSaveState("unsaved"); setPreview(null);
+    setNotice("Reapplied the local policy edit. Save the policy to persist this version.");
   }
   function updateRule(change: (rule: PolicyRule) => PolicyRule) {
     if (!activeRule) return;
     replaceRules(rulesRef.current.map((rule, index) => index === selectedRule ? change(rule) : rule));
-    draftEditEpoch.current += 1;
-    setSaveState("unsaved"); setPreview(null); setReviewToken(null); setNotice("Draft changed. Run a policy test before review.");
+    policyEditEpoch.current += 1;
+    setSaveState("unsaved"); setPreview(null); setNotice("Policy changed. Save the live policy before running a policy test.");
   }
   function addRule() {
     const ordinal = Math.max(0, ...rules.map((rule) => rule.ordinal)) + 10;
     replaceRules([...rulesRef.current, newRule(selectedField, ordinal)]);
-    draftEditEpoch.current += 1;
-    setSelectedRule(rules.length); setSaveState("unsaved"); setPreview(null); setReviewToken(null);
+    policyEditEpoch.current += 1;
+    setSelectedRule(rules.length); setSaveState("unsaved"); setPreview(null);
     setNotice("New rule added locally. Add at least one principal before saving.");
   }
   function duplicateRule(index: number) {
@@ -750,16 +656,16 @@ function App() {
       when: source.when ? { ...source.when } : undefined,
     };
     replaceRules([...rulesRef.current, duplicate]);
-    draftEditEpoch.current += 1;
-    setSelectedRule(rulesRef.current.length - 1); setSaveState("unsaved"); setPreview(null); setReviewToken(null);
-    setNotice("Rule duplicated locally. Review its principals and fields before saving.");
+    policyEditEpoch.current += 1;
+    setSelectedRule(rulesRef.current.length - 1); setSaveState("unsaved"); setPreview(null);
+    setNotice("Rule duplicated locally. Check its principals and fields before saving.");
   }
   function removeRule() {
     if (!activeRule) return;
     replaceRules(rulesRef.current.filter((_, index) => index !== selectedRule));
-    draftEditEpoch.current += 1;
-    setSelectedRule(Math.max(0, selectedRule - 1)); setSaveState("unsaved"); setPreview(null); setReviewToken(null);
-    setNotice("Rule removed locally. Save the draft to persist the change.");
+    policyEditEpoch.current += 1;
+    setSelectedRule(Math.max(0, selectedRule - 1)); setSaveState("unsaved"); setPreview(null);
+    setNotice("Rule removed locally. Save policy to apply the change.");
   }
   function moveRule(index: number, direction: -1 | 1) {
     const nextIndex = index + direction;
@@ -767,9 +673,9 @@ function App() {
     const next = [...rulesRef.current];
     [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
     replaceRules(next.map((rule, index) => ({ ...rule, ordinal: (index + 1) * 10 })));
-    draftEditEpoch.current += 1;
-    setSelectedRule(nextIndex); setSaveState("unsaved"); setPreview(null); setReviewToken(null);
-    setNotice("Rule order changed locally. Save the draft to persist precedence.");
+    policyEditEpoch.current += 1;
+    setSelectedRule(nextIndex); setSaveState("unsaved"); setPreview(null);
+    setNotice("Rule order changed locally. Save the policy to persist precedence.");
   }
   function toggleField(name: string) {
     updateRule((rule) => ({ ...rule, columns: rule.columns.includes(name) ? rule.columns.filter((column) => column !== name) : [...rule.columns, name] }));
@@ -781,51 +687,52 @@ function App() {
       return { ...rule, masks };
     });
   }
-  async function saveDraft() {
-    if (!asset || saveDraftPending.current) return;
-    saveDraftPending.current = true;
+  async function savePolicy(revokeExistingTokens = false) {
+    if (!asset || savePolicyPending.current) return;
+    savePolicyPending.current = true;
     const assetId = asset.id;
-    const editEpoch = draftEditEpoch.current;
-    const revision = draftRevision;
-    const draftIdentity = draftId;
+    const editEpoch = policyEditEpoch.current;
+    const revision = policyRevision;
     const loadScope = loadEpoch.current;
     setSaveState("saving");
     const controller = beginMutation();
     try {
-      const saved = await controlPlane.saveDraft(assetId, revision, rules, controller.signal);
-      if (loadScope !== loadEpoch.current || editEpoch !== draftEditEpoch.current || draftIdentity !== draftId) {
+      const saved = await controlPlane.replaceAssetPolicy(assetId, revision, rules, revokeExistingTokens, controller.signal);
+      if (loadScope !== loadEpoch.current || editEpoch !== policyEditEpoch.current) {
         if (loadScope === loadEpoch.current) setSaveState("unsaved");
         return;
       }
-      setDraftRevision(saved.revision);
-      setDraftId(saved.id);
-      if (loadScope !== loadEpoch.current || editEpoch !== draftEditEpoch.current || draftIdentity !== draftId) {
+      setPolicyRevision(saved.policy_revision);
+      if (loadScope !== loadEpoch.current || editEpoch !== policyEditEpoch.current) {
         if (loadScope === loadEpoch.current) setSaveState("unsaved");
         return;
       }
-      setSaveState("saved"); setReviewToken(null); setNotice("Policy draft saved to the control plane.");
+      setSaveState("saved");
+      setNotice(revokeExistingTokens
+        ? `Live policy saved; revoked ${saved.revoked_token_count} active token(s).`
+        : "Live policy saved. Existing tokens remain valid until expiry unless an owner revokes them.");
       setFieldErrors([]);
       invalidateAssetQueries(assetId);
     } catch (error) {
       if (isAbortError(error)) return;
-      if (loadScope !== loadEpoch.current || editEpoch !== draftEditEpoch.current || draftIdentity !== draftId) return;
-      setSaveState("failed"); setFieldErrors((error as { fieldErrors?: Array<{ field: string; message: string; type: string }> }).fieldErrors ?? []); setNotice(recoveryMessage(error, "Save failed. The unsaved draft remains in this browser."));
+      if (loadScope !== loadEpoch.current || editEpoch !== policyEditEpoch.current) return;
+      setSaveState("failed"); setFieldErrors((error as { fieldErrors?: Array<{ field: string; message: string; type: string }> }).fieldErrors ?? []); setNotice(recoveryMessage(error, "Save failed. Your unsaved changes remain in this browser."));
     } finally {
       finishMutation(controller);
-      saveDraftPending.current = false;
+      savePolicyPending.current = false;
     }
   }
   async function runPreview() {
     if (!asset) return;
     if (saveState !== "saved") {
-      setNotice("Save the draft before running a server-side policy test.");
+      setNotice("Save the live policy before running a server-side policy test.");
       return;
     }
     if (previewPendingRef.current) return;
     previewPendingRef.current = true;
     const loadScope = loadEpoch.current;
-    const editScope = draftEditEpoch.current;
-    const draftIdentity = { id: draftId, revision: draftRevision };
+    const editScope = policyEditEpoch.current;
+    const revision = policyRevision;
     const controller = beginMutation();
     try {
       let claims: Record<string, unknown> = {};
@@ -834,111 +741,30 @@ function App() {
         if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") throw new Error("Claims must be a JSON object");
         claims = parsed as Record<string, unknown>;
       }
-      const result: Preview = await controlPlane.evaluate(asset.id, { principal: previewPrincipal.trim(), groups: previewGroups.split(",").map((value) => value.trim()).filter(Boolean), claims, draft_id: draftId ?? undefined, draft_revision: draftRevision }, controller.signal);
-      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
-      setPreview(result); setReviewToken(null); setNotice(`Server-side evaluation completed: ${result.decision === "allow" ? "allowed" : "denied"}.`);
+      const result: Preview = await controlPlane.evaluate(asset.id, { principal: previewPrincipal.trim(), groups: previewGroups.split(",").map((value) => value.trim()).filter(Boolean), claims }, controller.signal);
+      if (loadScope !== loadEpoch.current || editScope !== policyEditEpoch.current || revision !== policyRevision) return;
+      setPreview(result); setNotice(`Server-side evaluation completed: ${result.decision === "allow" ? "allowed" : "denied"}.`);
     } catch (error) {
       if (isAbortError(error)) return;
-      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
-      setPreview(null); setReviewToken(null); setNotice(recoveryMessage(error, "Policy test could not run. This draft is not validated."));
+      if (loadScope !== loadEpoch.current || editScope !== policyEditEpoch.current || revision !== policyRevision) return;
+      setPreview(null); setNotice(recoveryMessage(error, "Policy test could not run."));
     } finally {
       finishMutation(controller);
       previewPendingRef.current = false;
     }
   }
 
-  async function requestReview() {
-    if (!asset || saveState !== "saved" || publishPending || reviewPendingRef.current) return;
-    reviewPendingRef.current = true;
-    const loadScope = loadEpoch.current;
-    const editScope = draftEditEpoch.current;
-    const draftIdentity = { id: draftId, revision: draftRevision };
+  async function revokeAssetTokens() {
+    if (!asset || !window.confirm("Revoke every active token issued for this asset? Existing readers will be denied on their next token exchange.")) return;
     const controller = beginMutation();
     try {
-      const claims = JSON.parse(previewClaims || "{}") as Record<string, object>;
-      if (!claims || Array.isArray(claims) || typeof claims !== "object") throw new Error("Claims must be a JSON object");
-      const result = await controlPlane.review(asset.id, { principal: previewPrincipal.trim(), groups: previewGroups.split(",").map((value) => value.trim()).filter(Boolean), claims, draft_id: draftId ?? undefined, draft_revision: draftRevision }, controller.signal);
-      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
-      setPreview(result); setReviewToken(result.review_token ?? null); setNotice("Server review is current for this saved draft revision. You can publish it now.");
-    } catch (error) {
-      if (isAbortError(error)) return;
-      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
-      setReviewToken(null); setNotice(recoveryMessage(error, "Review was rejected. Run a successful test against the saved draft and resolve any policy or schema errors."));
-    } finally {
-      finishMutation(controller);
-      reviewPendingRef.current = false;
-    }
-  }
-
-  async function publishAsset() {
-    if (!asset || !reviewToken || publishPending || publishPendingRef.current) return;
-    publishPendingRef.current = true;
-    const loadScope = loadEpoch.current;
-    const editScope = draftEditEpoch.current;
-    const draftIdentity = { id: draftId, revision: draftRevision };
-    const idempotencyKey = crypto.randomUUID();
-    setPublishPending(true);
-    const controller = beginMutation();
-    try {
-      await controlPlane.publishAsset(asset.id, draftRevision, reviewToken, idempotencyKey, draftId ?? undefined, controller.signal);
-      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
-      setReviewToken(null);
-      setNotice("Published the saved draft.");
-      invalidateAssetQueries(asset.id);
-      void refreshAssetInventory(assetSearch);
-    } catch (error) {
-      if (isAbortError(error)) return;
-      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
-      try {
-        const operation = await controlPlane.getPublicationOperation(asset.id, idempotencyKey, controller.signal);
-        if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
-        if (operation.status === "committed") {
-          setReviewToken(null);
-          setNotice(`Publish committed as policy version ${operation.result.policy_version}.`);
-          invalidateAssetQueries(asset.id);
-          void refreshAssetInventory(assetSearch);
-        } else {
-          setNotice("Publish outcome is still pending. Refresh Activity before retrying.");
-        }
-      } catch (error) {
-        if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
-        setNotice(recoveryMessage(error, "Publish failed. Review the saved draft and active generation."));
-      }
-    } finally {
-      finishMutation(controller);
-      publishPendingRef.current = false;
-      if (loadScope === loadEpoch.current) {
-        setPublishPending(false);
-      }
-    }
-  }
-
-  async function restorePolicyVersion(policyVersion: number) {
-    if (!asset) return;
-    if (restorePendingRef.current) return;
-    if (saveState === "unsaved" && !window.confirm("You have unsaved policy changes. Restore this published version over them?")) return;
-    restorePendingRef.current = true;
-    const loadScope = loadEpoch.current;
-    const editScope = draftEditEpoch.current;
-    const draftIdentity = { id: draftId, revision: draftRevision };
-    const controller = beginMutation();
-    try {
-      const restored = await controlPlane.restorePolicyVersion(asset.id, policyVersion, draftRevision, controller.signal);
-      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
-      draftEditEpoch.current += 1;
-      replaceRules(restored.rules);
-      setDraftRevision(restored.revision);
-      setSaveState("saved");
-      setPreview(null); setReviewToken(null);
-      setNotice(`Version ${policyVersion} restored as draft revision ${restored.revision}. Review and publish it when ready.`);
+      const result = await controlPlane.revokeAssetTokens(asset.id, controller.signal);
+      setNotice(`Revoked ${result.revoked_token_count} active token(s).`);
       invalidateAssetQueries(asset.id);
     } catch (error) {
-      if (isAbortError(error)) return;
-      if (loadScope !== loadEpoch.current || editScope !== draftEditEpoch.current || draftIdentity.id !== draftId || draftIdentity.revision !== draftRevision) return;
-      setNotice(recoveryMessage(error, "Restore failed. The draft may have changed; reload the asset before trying again."));
+      if (!isAbortError(error)) setNotice(recoveryMessage(error, "Could not revoke this asset's tokens."));
     } finally {
       finishMutation(controller);
-      restorePendingRef.current = false;
     }
   }
 
@@ -947,8 +773,8 @@ function App() {
   const paletteCommands: PaletteCommand[] = ["assets", "activity", ...(canManageWorkspace ? ["connections", "settings"] as const : []), "help"];
   const paletteAssets = assets.filter((item) => `${item.catalog} ${item.name}`.toLowerCase().includes(paletteQuery.trim().toLowerCase())).slice(0, 8);
   const accessView = <LoginPanel showAuth={workspace === "unavailable"} title={workspace === "loading" ? "Loading governed workspace" : "Sign in to your workspace"} message={workspace === "loading" ? "Checking your workspace access and available assets." : notice} retry={workspace === "unavailable" ? loadInitialWorkspace : undefined} authConfig={authConfig} sessionOptions={sessionOptions} bootstrapToken={bootstrapToken} onBootstrapToken={setBootstrapToken} onBootstrapLogin={() => void bootstrapLogin()} loggingIn={loggingIn} authError={authError} />;
-  const managementView = page === "assets" ? null : <Suspense fallback={<section className="coming-soon" role="status"><h2>Loading management view</h2><p>Preparing the governed workspace controls.</p></section>}><ManagementView page={page} data={managementData} loading={managementLoading} error={managementError} onReload={() => void loadManagement(page)} onLoadMore={page === "changes" ? () => void loadMoreHistory() : page === "activity" ? () => void loadMoreAudit() : undefined} historyLoading={historyLoading} auditLoading={auditLoading} filters={auditFilters} onFiltersChange={updateAuditFilters} session={session} queryClient={queryClient} sessionScope={sessionCacheKey} onDirtyChange={setManagementDirty} /></Suspense>;
-  const assetView = asset ? <Suspense fallback={<section className="coming-soon" role="status"><h2>Loading policy workspace</h2><p>Preparing the nested policy editor.</p></section>}><AssetWorkspace initialTab={locationFromUrl(window.location.hash, window.location.search).tab} initialVersion={locationFromUrl(window.location.hash, window.location.search).version} assets={assets} asset={asset} access={managementData.access} history={managementData.history ?? []} grants={managementData.grants ?? []} onAsset={(id) => { if (confirmDiscardUnsaved()) { setReviewOnly(false); void loadAsset(id); } }} assetSearch={assetSearch} assetHasMore={assetHasMore} assetInventoryLoading={assetInventoryLoading} onSearch={searchAssets} onLoadMore={() => void refreshAssetInventory(assetSearch, true)} rules={rules} activeRule={activeRule} activeRevision={draftRevision} selectedRule={selectedRule} onRule={setSelectedRule} onMoveRule={moveRule} selectedField={selectedField} onField={setSelectedField} selectedMask={selectedMask} effectiveFields={effectiveFields} saveState={saveState} notice={notice} fieldErrors={fieldErrors} onToggleField={toggleField} onMask={setMask} onUpdateRule={updateRule} onAddRule={addRule} onRemoveRule={removeRule} onDuplicateRule={duplicateRule} onUndo={undoRules} onRedo={redoRules} canUndo={rulesUndoStack.current.length > 0} canRedo={rulesRedoStack.current.length > 0} onSave={() => void saveDraft()} onPreview={() => void runPreview()} onReview={() => void requestReview()} previewPrincipal={previewPrincipal} previewGroups={previewGroups} previewClaims={previewClaims} onPreviewPrincipal={setPreviewPrincipal} onPreviewGroups={setPreviewGroups} onPreviewClaims={setPreviewClaims} onPublish={() => void publishAsset()} publishing={publishPending} onRestore={(version) => void restorePolicyVersion(version)} reviewToken={reviewToken ?? undefined} preview={preview} session={session} onReloadAccess={() => void loadAsset(asset.id, assets, undefined, reviewOnly ? draftId ?? undefined : undefined)} onDirtyChange={setManagementDirty} reviewOnly={reviewOnly} draftId={draftId} queryClient={queryClient} sessionScope={sessionCacheKey} /></Suspense> : undefined;
+  const managementView = page === "assets" ? null : <Suspense fallback={<section className="coming-soon" role="status"><h2>Loading management view</h2><p>Preparing the governed workspace controls.</p></section>}><ManagementView page={page} data={managementData} loading={managementLoading} error={managementError} onReload={() => void loadManagement(page)} onLoadMore={page === "activity" ? () => void loadMoreAudit() : undefined} auditLoading={auditLoading} filters={auditFilters} onFiltersChange={updateAuditFilters} session={session} queryClient={queryClient} sessionScope={sessionCacheKey} onDirtyChange={setManagementDirty} /></Suspense>;
+  const assetView = asset ? <Suspense fallback={<section className="coming-soon" role="status"><h2>Loading policy workspace</h2><p>Preparing the nested policy editor.</p></section>}><AssetWorkspace initialTab={locationFromUrl(window.location.hash, window.location.search).tab} assets={assets} asset={asset} access={managementData.access} grants={managementData.grants ?? []} onAsset={(id) => { if (confirmDiscardUnsaved()) { void loadAsset(id); } }} assetSearch={assetSearch} assetHasMore={assetHasMore} assetInventoryLoading={assetInventoryLoading} onSearch={searchAssets} onLoadMore={() => void refreshAssetInventory(assetSearch, true)} rules={rules} activeRule={activeRule} activeRevision={policyRevision} selectedRule={selectedRule} onRule={setSelectedRule} onMoveRule={moveRule} selectedField={selectedField} onField={setSelectedField} selectedMask={selectedMask} effectiveFields={effectiveFields} saveState={saveState} notice={notice} fieldErrors={fieldErrors} onToggleField={toggleField} onMask={setMask} onUpdateRule={updateRule} onAddRule={addRule} onRemoveRule={removeRule} onDuplicateRule={duplicateRule} onUndo={undoRules} onRedo={redoRules} canUndo={rulesUndoStack.current.length > 0} canRedo={rulesRedoStack.current.length > 0} onSave={(revokeExistingTokens) => void savePolicy(revokeExistingTokens)} onPreview={() => void runPreview()} previewPrincipal={previewPrincipal} previewGroups={previewGroups} previewClaims={previewClaims} onPreviewPrincipal={setPreviewPrincipal} onPreviewGroups={setPreviewGroups} onPreviewClaims={setPreviewClaims} preview={preview} session={session} onReloadAccess={() => void loadAsset(asset.id, assets)} onRevokeTokens={() => void revokeAssetTokens()} onDirtyChange={setManagementDirty} queryClient={queryClient} sessionScope={sessionCacheKey} /></Suspense> : undefined;
   const content = <WorkspaceContent signedOut={signedOut} page={page} workspace={workspace} accessView={accessView} managementView={managementView} noAssetsView={<LoginPanel title={assets.length || locationFromUrl(window.location.hash, window.location.search).assetId ? "Asset unavailable" : "No governed assets"} message={notice} retry={loadInitialWorkspace} />} assetView={assetView} />;
 
   return (
@@ -977,5 +803,4 @@ function App() {
 
 
 
-function saveLabel(state: SaveState) { return ({ saved: "Saved draft", saving: "Saving draft", unsaved: "Unsaved changes", failed: "Save failed" })[state]; }
 createRoot(document.getElementById("root")!).render(<AppProviders><App /></AppProviders>);

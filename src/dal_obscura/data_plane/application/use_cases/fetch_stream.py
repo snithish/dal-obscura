@@ -10,7 +10,7 @@ from typing import cast
 import pyarrow as pa
 
 from dal_obscura.common.access_control.filters import RowFilter, deserialize_row_filter
-from dal_obscura.common.access_control.models import AccessDecision, MaskRule, Principal
+from dal_obscura.common.access_control.models import MaskRule, Principal
 from dal_obscura.common.table_format.ports import ScanTask
 from dal_obscura.common.ticket_delivery.models import (
     TicketPayload,
@@ -125,16 +125,7 @@ def fetch_read(
     ):
         raise PermissionError("Unauthorized")
 
-    current_policy_version = flow.authorizer.current_policy_version(
-        payload.target,
-        payload.catalog,
-        tenant_id=tenant_id,
-    )
-    if current_policy_version != payload.policy_version:
-        raise PermissionError("stale policy version")
-
     scan = _decode_scan(payload.scan, fallback_authorization_columns=payload.columns)
-    _require_current_authorization(flow, principal, payload, scan)
 
     now = flow.now()
     try:
@@ -163,13 +154,10 @@ def fetch_read(
         stream_deadline_at=flow.now() + flow.max_stream_seconds,
         now=flow.now,
     )
-    result_batches = _guard_stream_policy_version(
+    result_batches = _guard_stream_ticket_revocation(
         result_batches,
-        authorizer=flow.authorizer,
-        target=payload.target,
-        catalog=payload.catalog,
-        tenant_id=tenant_id,
-        expected_policy_version=payload.policy_version,
+        ticket_store=flow.ticket_store,
+        ticket_id=client_payload.ticket_id,
     )
     result_batches = _close_stream_on_termination(result_batches)
 
@@ -208,30 +196,16 @@ def _guard_stream_expiry(
         _close_iterable(batches)
 
 
-def _guard_stream_policy_version(
+def _guard_stream_ticket_revocation(
     batches: Iterable[pa.RecordBatch],
     *,
-    authorizer: AuthorizationPort,
-    target: str,
-    catalog: str | None,
-    tenant_id: str,
-    expected_policy_version: int | None,
+    ticket_store: TicketStorePort,
+    ticket_id: str,
 ) -> Iterator[pa.RecordBatch]:
-    """Stops a stream before output when its active publication changes.
-
-    The authorizer's effective policy version includes the immutable active
-    publication ID. Checking it for each yielded batch makes a newly activated
-    generation take effect before subsequent Flight output is handed over.
-    """
+    """Stops a stream before output if an owner revoked its ticket."""
     try:
         for batch in batches:
-            current_policy_version = authorizer.current_policy_version(
-                target,
-                catalog,
-                tenant_id=tenant_id,
-            )
-            if current_policy_version != expected_policy_version:
-                raise PermissionError("stale policy version")
+            ticket_store.ensure_active(ticket_id)
             yield batch
     finally:
         _close_iterable(batches)
@@ -252,33 +226,6 @@ def _close_iterable(value: object) -> None:
         close()
 
 
-def _require_current_authorization(
-    flow: AccessFlow,
-    principal: Principal,
-    payload: TicketPayload,
-    scan: DecodedScan,
-) -> None:
-    """Ensure the caller still has the grant used when the ticket was issued."""
-    # Payload data is server-stored and HMAC-bound, but identity group and
-    # attribute membership can change without changing the policy document.
-    decision = flow.authorizer.authorize(
-        principal,
-        payload.target,
-        payload.catalog,
-        scan.authorization_columns,
-    )
-    if (
-        decision.policy_version != payload.policy_version
-        or not set(payload.columns).issubset(decision.allowed_columns)
-        or decision.masks != scan.masks
-        or (
-            payload.decision_digest
-            and not hmac.compare_digest(payload.decision_digest, _decision_digest(decision))
-        )
-    ):
-        raise PermissionError("Unauthorized")
-
-
 def _require_ticket_identity(principal: Principal, payload: TicketPayload) -> None:
     """Reject tickets whose authenticated issuer or subject no longer matches."""
     if principal.id != payload.principal_id or principal.issuer != payload.issuer:
@@ -293,20 +240,6 @@ def _identity_context_digest(principal: Principal, tenant_id: str) -> str:
             "tenant_id": tenant_id,
             "groups": sorted(set(principal.groups)),
             "attributes": dict(sorted(principal.attributes.items())),
-        }
-    )
-
-
-def _decision_digest(decision: AccessDecision) -> str:
-    return canonical_context_digest(
-        {
-            "allowed_columns": sorted(decision.allowed_columns),
-            "masks": {
-                path: {"type": mask.type, "value": mask.value}
-                for path, mask in sorted(decision.masks.items())
-            },
-            "policy_version": decision.policy_version,
-            "row_filter": decision.row_filter,
         }
     )
 

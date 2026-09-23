@@ -23,7 +23,7 @@ from dal_obscura.common.access_control.models import (
 
 @dataclass(frozen=True)
 class CompiledMaskRule:
-    """Compiled mask rule stored in published asset policy JSON.
+    """Compiled mask rule stored in live asset policy JSON.
 
     Example:
         ```python
@@ -54,7 +54,7 @@ class CompiledMaskRule:
 
 @dataclass(frozen=True)
 class CompiledPolicyRule:
-    """Compiled access rule stored in published asset policy JSON.
+    """Compiled access rule stored in live asset policy JSON.
 
     Example:
         ```python

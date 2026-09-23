@@ -22,10 +22,9 @@ ICEBERG_CATALOG_MODULE = (
 class ProvisionedConfig:
     cell_id: UUID
     tenant_id: UUID
-    publication_id: UUID
 
 
-def provision_default_published_asset(
+def provision_default_live_asset(
     *,
     db_session: Session,
     catalog_name: str,
@@ -37,7 +36,7 @@ def provision_default_published_asset(
 ) -> ProvisionedConfig:
     engine = db_session.get_bind()
     if not isinstance(engine, Engine):
-        raise TypeError("provision_default_published_asset requires an Engine-bound session")
+        raise TypeError("provision_default_live_asset requires an Engine-bound session")
     app = create_app(session_factory(engine), admin_token="test-admin")
     client = TestClient(app)
     headers = {"authorization": "Bearer test-admin"}
@@ -74,11 +73,10 @@ def provision_default_published_asset(
             headers=headers,
         )
     )
-    draft = _checked_json(client.get(f"/v1/assets/{asset['id']}/draft", headers=headers))
     _checked_json(
         client.put(
-            f"/v1/assets/{asset['id']}/draft",
-            json={"expected_revision": draft["revision"], "rules": policy_rules},
+            f"/v1/assets/{asset['id']}/policy",
+            json={"expected_revision": 0, "rules": policy_rules},
             headers=headers,
         )
     )
@@ -89,13 +87,6 @@ def provision_default_published_asset(
             headers=headers,
         )
     )
-    publication = _checked_json(client.post("/v1/publications", headers=headers))
-    _checked_json(
-        client.post(
-            f"/v1/publications/{publication['publication_id']}/activate",
-            headers=headers,
-        )
-    )
     assignment = db_session.scalar(select(CellTenantRecord))
     if assignment is None:
         raise LookupError("workspace bootstrap did not create tenant/cell assignment")
@@ -103,7 +94,6 @@ def provision_default_published_asset(
     return ProvisionedConfig(
         cell_id=assignment.cell_id,
         tenant_id=assignment.tenant_id,
-        publication_id=UUID(str(publication["publication_id"])),
     )
 
 

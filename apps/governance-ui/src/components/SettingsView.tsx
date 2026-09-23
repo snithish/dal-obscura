@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, Checkbox, TextInput } from "@mantine/core";
 import type { QueryClient } from "@tanstack/react-query";
-import type { AuthProvider, RuntimeSettings, WorkspacePublication } from "../api";
+import type { AuthProvider, RuntimeSettings } from "../api";
 import { controlPlane } from "../api";
 import { recoveryMessage } from "../recovery";
 import { isAbortError } from "../async";
@@ -11,7 +11,6 @@ export type SettingsViewProps = {
   runtime?: RuntimeSettings | null;
   providers: AuthProvider[];
   providerRevision?: number;
-  publications: WorkspacePublication[];
   onReload: () => void;
   onDirtyChange?: (dirty: boolean) => void;
   queryClient: QueryClient;
@@ -42,7 +41,6 @@ export function SettingsView({
   runtime,
   providers,
   providerRevision,
-  publications,
   onReload,
   onDirtyChange,
   queryClient,
@@ -140,7 +138,7 @@ export function SettingsView({
       if (controller.signal.aborted || operationEpoch !== runtimeEditEpoch.current) return;
       setRuntimeDirty(false);
       void queryClient.invalidateQueries({ queryKey: ["management", sessionScope, "settings"] });
-      setMessage("Runtime settings saved as draft configuration. Publish to make worker behavior change.");
+      setMessage("Runtime settings saved to live configuration.");
       onReload();
     } catch (error) {
       if (!isAbortError(error)) setMessage(recoveryMessage(error, "Settings update was rejected; the previous values remain active."));
@@ -154,7 +152,7 @@ export function SettingsView({
       return;
     }
     if (!providerRows.some((provider) => provider.enabled) && !window.confirm(
-      "No identity provider will remain enabled. Stage this lockout configuration anyway?",
+      "No identity provider will remain enabled. Save this lockout configuration anyway?",
     )) {
       setMessage("Identity provider changes were not saved. Keep at least one provider enabled unless lockout is intentional.");
       return;
@@ -177,7 +175,7 @@ export function SettingsView({
       if (controller.signal.aborted || operationEpoch !== providerEditEpoch.current) return;
       setProvidersDirty(false);
       void queryClient.invalidateQueries({ queryKey: ["management", sessionScope, "settings"] });
-      setMessage("Identity provider settings saved as draft configuration. Publish a snapshot to activate them.");
+      setMessage("Identity provider settings saved to live configuration. Restart data-plane workers to reload their provider chain.");
       onReload();
     } catch (error) {
       if (!isAbortError(error)) setMessage(recoveryMessage(error, "Identity provider update was rejected; the serving provider chain remains unchanged."));
@@ -273,7 +271,7 @@ export function SettingsView({
     markDirty("providers");
     const ordinal = providerRows.reduce((highest, provider) => Math.max(highest, provider.ordinal), 0) + 1;
     setProviderRows((current) => [...current, {
-      id: `draft-${Date.now()}-${ordinal}`,
+      id: `unsaved-${Date.now()}-${ordinal}`,
       ordinal,
       module: OIDC_IDENTITY_MODULE,
       args: {
@@ -288,7 +286,7 @@ export function SettingsView({
       enabled: true,
       revision: providerRevision ?? 0,
     }]);
-    setMessage("New OIDC provider staged. Enter an issuer URL before saving.");
+    setMessage("New OIDC provider added. Enter an issuer URL before saving.");
   }
 
   function removeProvider(index: number) {
@@ -316,8 +314,6 @@ export function SettingsView({
     setPathRuleRoots((current) => current.map((root, row) => row === index ? value : root));
   }
 
-  const active = publications.find((publication) => publication.active);
-  const stagedCount = publications.filter((publication) => !publication.active).length;
   return (
     <section className="management-view">
       <div className="management-head">
@@ -330,7 +326,7 @@ export function SettingsView({
       </div>
       <div className="form-card">
         <h3>Runtime limits</h3>
-        <p className="help">{runtime ? "Serving values are loaded from the control plane. Saving creates a staged configuration." : "No runtime settings are configured yet. Enter values to create the first staged configuration."}</p>
+        <p className="help">{runtime ? "Values are loaded from the control plane. Saving updates live configuration." : "No runtime settings are configured yet. Enter values to create the initial configuration."}</p>
         <div className="form-grid three">
           <TextInput label="Ticket TTL (seconds)" type="number" min={1} value={form.ticket_ttl_seconds || ""} placeholder="900" onChange={(event) => { markDirty("runtime"); setForm({ ...form, ticket_ttl_seconds: Number(event.currentTarget.value) }); }} />
           <TextInput label="Max tickets" type="number" min={1} value={form.max_tickets || ""} placeholder="64" onChange={(event) => { markDirty("runtime"); setForm({ ...form, max_tickets: Number(event.currentTarget.value) }); }} />
@@ -347,11 +343,6 @@ export function SettingsView({
         </fieldset>
         <Button type="button" className="primary" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save runtime settings"}</Button>
         {message && <p className="notice" role="status">{message}</p>}
-      </div>
-      <div className="form-card">
-        <h3>Configuration state</h3>
-        {active ? <p><span className="status-dot ready" /> Serving generation <code>{active.id.slice(0, 12)}</code> · {active.asset_count} assets · {active.catalog_count} catalogs</p> : <p><span className="status-dot unavailable" /> No generation is serving yet.</p>}
-        <p className="help">{stagedCount ? `${stagedCount} staged generation${stagedCount === 1 ? " is" : "s are"} waiting for explicit administrator activation.` : "Save settings creates draft configuration; create and activate a snapshot from Connections when ready."}</p>
       </div>
       <div className="form-card">
         <div className="form-card-head"><h3>Authentication providers</h3><Button className="secondary" variant="default" type="button" onClick={addProvider}>Add OIDC provider</Button></div>
@@ -390,7 +381,7 @@ export function SettingsView({
               {providerField("max_jwks_keys", "Maximum JWKS keys", { type: "number", placeholder: "256" })}
             </div>
           </fieldset>;
-        })}</div> : <p className="empty-result"><strong>No identity providers configured.</strong><br />Add the first OIDC provider through the control-plane bootstrap or API before publishing.</p>}
+        })}</div> : <p className="empty-result"><strong>No identity providers configured.</strong><br />Add the first OIDC provider through the control-plane bootstrap or API.</p>}
         <Button type="button" className="primary" disabled={saving || Object.keys(providerErrors).length > 0} onClick={() => void saveProviders()}>{saving ? "Saving…" : "Save identity providers"}</Button>
       </div>
     </section>

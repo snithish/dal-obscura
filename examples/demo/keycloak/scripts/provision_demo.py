@@ -10,7 +10,7 @@ from urllib.request import Request, urlopen
 
 from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
 from dal_obscura.common.identity import encode_federated_group, encode_federated_identity
-from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
+from dal_obscura.control_plane.infrastructure.repositories import ConfigStore
 
 DEMO_DIR = Path(os.environ.get("DEMO_DIR", "/workspace/demo"))
 RUNTIME_DIR = DEMO_DIR / ".runtime"
@@ -72,7 +72,7 @@ def _workspace_cell_id() -> str:
     engine = create_engine_from_url(DATABASE_URL)
     session_maker = session_factory(engine)
     with session_maker() as session:
-        context = PublicationStore(session).get_default_workspace_context()
+        context = ConfigStore(session).get_default_workspace_context()
         if context is None:
             raise RuntimeError("workspace provisioning did not create a runtime context")
         return str(context.cell_id)
@@ -118,13 +118,8 @@ def _provision_workspace(fixture: dict[str, Any]) -> str:
             ]
         },
     )
-    drafts = [_promote_table(fixture, table_fixture) for table_fixture in fixture["tables"]]
-    for asset_id, draft_id, draft_revision in drafts:
-        _request(
-            "POST",
-            f"/v1/assets/{asset_id}/policy-versions",
-            {"draft_id": draft_id, "expected_draft_revision": draft_revision},
-        )
+    for table_fixture in fixture["tables"]:
+        _configure_table_policy(fixture, table_fixture)
     return cell_id
 
 
@@ -132,7 +127,7 @@ def _workspace_state(fixture: dict[str, Any]) -> str:
     """Classify the workspace before any mutating setup request.
 
     A fresh database is safe to initialize.  A fully provisioned database is
-    safe to reuse after checking the expected demo assets and publications.
+    safe to reuse after checking the expected demo assets and their live policies.
     Any other state is ambiguous, so setup fails instead of overwriting
     customer-authored configuration.  Operators can use the explicit reset
     workflow when they really intend to destroy the demo state.
@@ -159,12 +154,7 @@ def _workspace_state(fixture: dict[str, Any]) -> str:
         )
 
     assets_response = _request("GET", "/v1/assets")
-    history_response = _request("GET", "/v1/policy-versions/page?limit=200")
     assets = _as_list(assets_response, "assets")
-    if not isinstance(history_response, dict):
-        raise RuntimeError("policy version history returned an unexpected response")
-    history_payload = cast(dict[str, Any], history_response)
-    history = _as_list(history_payload.get("items"), "policy version history")
     asset_by_target = {
         (str(asset.get("catalog")), str(asset.get("target"))): asset for asset in assets
     }
@@ -172,13 +162,12 @@ def _workspace_state(fixture: dict[str, Any]) -> str:
         (str(table["catalog"]), str(table["target"])) for table in fixture["tables"]
     }
     expected_assets = [asset_by_target.get(target) for target in expected_targets]
-    published_asset_ids = {str(item.get("asset_id")) for item in history}
     complete = _summary_meets_expected_counts(
         summary_payload,
         expected_catalog_count=len(fixture["catalogs"]),
         expected_asset_count=len(expected_targets),
     ) and all(
-        asset is not None and str(asset.get("id")) in published_asset_ids
+        asset is not None and asset.get("policy_status") == "configured"
         for asset in expected_assets
     )
     if complete:
@@ -241,7 +230,7 @@ def _upsert_catalogs(fixture: dict[str, Any], warehouse_path: str) -> None:
         _request("PUT", f"/v1/catalogs/{catalog_name}", body)
 
 
-def _promote_table(fixture: dict[str, Any], table_fixture: dict[str, Any]) -> tuple[str, str, int]:
+def _configure_table_policy(fixture: dict[str, Any], table_fixture: dict[str, Any]) -> str:
     catalog_name = str(table_fixture["catalog"])
     target = str(table_fixture["target"])
     discovered = _request("GET", f"/v1/catalogs/{catalog_name}/tables")
@@ -287,28 +276,18 @@ def _promote_table(fixture: dict[str, Any], table_fixture: dict[str, Any]) -> tu
         f"/v1/assets/{asset_id}/owners",
         {"owners": _scoped_demo_owners(fixture["owners"]), "expected_revision": revision},
     )
-    revision = _asset_revision(asset_id)
+    detail_response = _request("GET", f"/v1/assets/{asset_id}")
+    if not isinstance(detail_response, dict):
+        raise RuntimeError("asset policy revision returned an unexpected response")
+    detail = cast(dict[str, Any], detail_response)
+    if not isinstance(detail.get("policy_revision"), int):
+        raise RuntimeError("asset policy revision returned an unexpected response")
     _request(
         "PUT",
-        f"/v1/assets/{asset_id}/grants",
-        {
-            "grants": _scoped_demo_grants(fixture.get("grants", [])),
-            "expected_revision": revision,
-        },
+        f"/v1/assets/{asset_id}/policy",
+        {"expected_revision": detail["policy_revision"], "rules": fixture["policies"]},
     )
-    draft = _request(
-        "PUT",
-        f"/v1/assets/{asset_id}/draft",
-        {"expected_revision": 0, "rules": fixture["policies"]},
-    )
-    if not isinstance(draft, dict):
-        raise RuntimeError("policy draft save returned an unexpected response")
-    draft_payload = cast(dict[str, Any], draft)
-    if not isinstance(draft_payload.get("id"), str) or not draft_payload["id"]:
-        raise RuntimeError("policy draft save returned an unexpected response")
-    if not isinstance(draft_payload.get("revision"), int):
-        raise RuntimeError("policy draft save returned an unexpected response")
-    return asset_id, draft_payload["id"], draft_payload["revision"]
+    return asset_id
 
 
 def _flatten_schema_fields(raw_fields: object) -> list[dict[str, Any]]:
@@ -382,7 +361,7 @@ def _scoped_demo_owners(raw_owners: object) -> list[str]:
     Fixture policy principals intentionally stay unscoped because they are
     evaluated by the data-plane identity provider.  Control-plane ownership
     is persisted with the issuer prefix so a same-named identity from another
-    provider cannot gain edit or publish access.
+    provider cannot gain edit or grant-management access.
     """
 
     if not isinstance(raw_owners, list):
@@ -401,37 +380,6 @@ def _scoped_demo_owners(raw_owners: object) -> list[str]:
     if not owners:
         raise ValueError("demo fixture must define at least one owner")
     return owners
-
-
-def _scoped_demo_grants(raw_grants: object) -> list[dict[str, str]]:
-    """Scope fixture capability grants to the demo OIDC issuer."""
-
-    if not isinstance(raw_grants, list):
-        raise ValueError("demo fixture grants must be a list")
-    grants: list[dict[str, str]] = []
-    for raw_grant in raw_grants:
-        if not isinstance(raw_grant, dict):
-            raise ValueError("demo fixture grants must contain objects")
-        grant = cast(dict[str, object], raw_grant)
-        principal = str(grant.get("principal", "")).strip()
-        capability = str(grant.get("capability", "")).strip()
-        if not principal or not capability:
-            raise ValueError("demo fixture grants require principal and capability")
-        grants.append(
-            {
-                "principal": (
-                    principal
-                    if "|" in principal
-                    else (
-                        encode_federated_group(DEMO_OIDC_ISSUER.rstrip("/"), principal[6:])
-                        if principal.startswith("group:")
-                        else encode_federated_identity(DEMO_OIDC_ISSUER.rstrip("/"), principal)
-                    )
-                ),
-                "capability": capability,
-            }
-        )
-    return grants
 
 
 def _request(method: str, path: str, body: object | None = None) -> object:

@@ -35,10 +35,10 @@ from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
 )
-from dal_obscura.data_plane.infrastructure.adapters.published_config import (
-    PublishedConfigAuthorizer,
-    PublishedConfigCatalogRegistry,
-    PublishedConfigStore,
+from dal_obscura.data_plane.infrastructure.adapters.live_config import (
+    LiveConfigAuthorizer,
+    LiveConfigCatalogRegistry,
+    LiveConfigStore,
 )
 from dal_obscura.data_plane.infrastructure.adapters.ticket_hmac import HmacTicketCodecAdapter
 from dal_obscura.data_plane.interfaces.flight.server import DataAccessFlightService
@@ -161,6 +161,7 @@ class InMemoryPolicyAuthorizer:
             masks=masks,
             row_filter=row_filter,
             policy_version=dataset_version(dataset),
+            asset_id="00000000-0000-4000-8000-000000000001",
         )
 
     def current_policy_version(
@@ -256,18 +257,18 @@ def build_flight_service(
     max_tickets: int = 1,
     max_ticket_exchanges: int = 1,
 ) -> DataAccessFlightService:
-    published_config_requested = db_session is not None or cell_id is not None
-    if published_config_requested and (db_session is None or cell_id is None):
-        raise ValueError("Provide both db_session and cell_id for published config")
-    if published_config_requested and (table_format is not None or catalog_registry is not None):
-        raise ValueError("Published config tests must not provide table_format or catalog_registry")
-    if not published_config_requested and (table_format is None) == (catalog_registry is None):
+    live_config_requested = db_session is not None or cell_id is not None
+    if live_config_requested and (db_session is None or cell_id is None):
+        raise ValueError("Provide both db_session and cell_id for live config")
+    if live_config_requested and (table_format is not None or catalog_registry is not None):
+        raise ValueError("Live config tests must not provide table_format or catalog_registry")
+    if not live_config_requested and (table_format is None) == (catalog_registry is None):
         raise ValueError("Provide exactly one of table_format or catalog_registry")
 
-    if published_config_requested:
-        config_store = PublishedConfigStore(cast(Session, db_session), cell_id=cast(UUID, cell_id))
-        resolved_registry = PublishedConfigCatalogRegistry(config_store)
-        resolved_authorizer = PublishedConfigAuthorizer(config_store)
+    if live_config_requested:
+        config_store = LiveConfigStore(cast(Session, db_session), cell_id=cast(UUID, cell_id))
+        resolved_registry = LiveConfigCatalogRegistry(config_store)
+        resolved_authorizer = LiveConfigAuthorizer(config_store)
     else:
         resolved_registry = catalog_registry
         if table_format is not None:

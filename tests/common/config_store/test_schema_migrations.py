@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -12,8 +11,9 @@ from dal_obscura.common.config_store.db import (
     create_engine_from_url,
     migrate_config_store,
 )
+from dal_obscura.common.config_store.orm import Base
 
-MIGRATION_FILE = (
+MIGRATIONS_DIR = (
     Path(__file__).parents[3]
     / "src"
     / "dal_obscura"
@@ -21,16 +21,24 @@ MIGRATION_FILE = (
     / "config_store"
     / "migrations"
     / "versions"
-    / "20260626_0001_initial_config_store.py"
 )
+MIGRATION_FILE = MIGRATIONS_DIR / "20260923_0001_live_configuration.py"
+REVISION = "20260923_0001"
 
 
-def test_initial_config_store_revision_uses_frozen_ddl() -> None:
+def test_history_is_a_single_frozen_baseline() -> None:
     migration_source = MIGRATION_FILE.read_text()
+    revisions = {path.name for path in MIGRATIONS_DIR.glob("*.py")} - {"__init__.py"}
 
+    assert revisions == {MIGRATION_FILE.name}
+    assert f'revision = "{REVISION}"' in migration_source
+    assert "down_revision = None" in migration_source
     assert "common.config_store.orm" not in migration_source
     assert ".metadata.create_all" not in migration_source
     assert ".metadata.drop_all" not in migration_source
+    assert "asset_policy_drafts" not in migration_source
+    assert "config_publications" not in migration_source
+    assert "published_assets" not in migration_source
 
 
 def test_check_config_store_schema_fails_without_mutating_empty_database() -> None:
@@ -42,137 +50,58 @@ def test_check_config_store_schema_fails_without_mutating_empty_database() -> No
     assert inspect(engine).get_table_names() == []
 
 
-def test_migrate_config_store_creates_current_schema_from_empty_database() -> None:
+def test_baseline_creates_only_the_current_live_schema() -> None:
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
 
     migrate_config_store(engine)
 
+    tables = set(inspect(engine).get_table_names())
+    assert tables == set(Base.metadata.tables) | {"alembic_version"}
+    assert not {
+        "asset_policy_drafts",
+        "publication_operations",
+        "config_publications",
+        "active_publications",
+        "published_cell_runtime",
+        "published_catalogs",
+        "published_assets",
+    }.intersection(tables)
+
     inspector = inspect(engine)
-    assert "alembic_version" in inspector.get_table_names()
-    assert "data_plane_tickets" in inspector.get_table_names()
-    runtime_columns = {column["name"] for column in inspector.get_columns("cell_runtime_settings")}
-    assert "max_ticket_exchanges" in runtime_columns
-    catalog_columns = {column["name"] for column in inspector.get_columns("catalogs")}
-    assert "revision" in catalog_columns
+    assert {column["name"] for column in inspector.get_columns("data_plane_tickets")} >= {
+        "asset_id",
+        "revoked_at",
+    }
+    assert "revision" in {column["name"] for column in inspector.get_columns("catalogs")}
+    assert "policy_revision" in {column["name"] for column in inspector.get_columns("assets")}
+    with engine.connect() as connection:
+        version = connection.scalar(text("SELECT version_num FROM alembic_version"))
+    assert version == REVISION
 
 
-def test_check_config_store_schema_passes_after_explicit_migration() -> None:
+def test_migration_and_schema_check_are_idempotent() -> None:
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+
+    migrate_config_store(engine)
     migrate_config_store(engine)
 
     check_config_store_schema(engine)
-
-
-def test_migrate_config_store_is_idempotent() -> None:
-    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
-
-    migrate_config_store(engine)
-    migrate_config_store(engine)
-
     with engine.connect() as connection:
         version = connection.scalar(text("SELECT version_num FROM alembic_version"))
+    assert version == REVISION
 
-    assert version == "20260913_0018"
 
+def test_explicit_downgrade_drops_the_config_store() -> None:
+    from alembic import command
 
-def test_migrate_config_store_upgrades_legacy_runtime_settings_column() -> None:
+    from dal_obscura.common.config_store.db import _alembic_config
+
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
-    with engine.begin() as connection:
-        connection.execute(text("CREATE TABLE tenants (id CHAR(32) PRIMARY KEY)"))
-        connection.execute(
-            text(
-                "CREATE TABLE cells ("
-                "id CHAR(32) PRIMARY KEY, "
-                "name VARCHAR(120) NOT NULL, "
-                "region VARCHAR(64) NOT NULL, "
-                "status VARCHAR(24) NOT NULL"
-                ")"
-            )
-        )
-        connection.execute(
-            text(
-                "CREATE TABLE cell_runtime_settings ("
-                "cell_id CHAR(32) PRIMARY KEY, "
-                "ticket_ttl_seconds INTEGER NOT NULL, "
-                "max_tickets INTEGER NOT NULL, "
-                "path_rules_json JSON NOT NULL"
-                ")"
-            )
-        )
-        connection.execute(
-            text(
-                "INSERT INTO cell_runtime_settings "
-                "(cell_id, ticket_ttl_seconds, max_tickets, path_rules_json) "
-                "VALUES ('00000000000000000000000000000001', 900, 64, '[]')"
-            )
-        )
-
     migrate_config_store(engine)
+    config = _alembic_config(engine)
 
-    inspector = inspect(engine)
-    runtime_columns = {column["name"] for column in inspector.get_columns("cell_runtime_settings")}
-    assert "max_ticket_exchanges" in runtime_columns
-    with engine.connect() as connection:
-        value = connection.scalar(text("SELECT max_ticket_exchanges FROM cell_runtime_settings"))
-    assert value == 1
-
-
-def test_schema_identity_migration_backfills_legacy_rows() -> None:
-    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
-    migrate_config_store(engine, "20260912_0010")
-    tenant = "00000000-0000-0000-0000-000000000001"
-    cell = "00000000-0000-0000-0000-000000000002"
-    catalog = "00000000-0000-0000-0000-000000000003"
-    asset = "00000000-0000-0000-0000-000000000004"
-    field = "00000000-0000-0000-0000-000000000005"
     with engine.begin() as connection:
-        connection.execute(
-            text(
-                "INSERT INTO tenants (id, slug, display_name, status) "
-                "VALUES (:id, 'tenant', 'Tenant', 'active')"
-            ),
-            {"id": tenant},
-        )
-        connection.execute(
-            text(
-                "INSERT INTO cells (id, name, region, status) "
-                "VALUES (:id, 'cell', 'local', 'active')"
-            ),
-            {"id": cell},
-        )
-        connection.execute(
-            text(
-                "INSERT INTO catalogs (id, cell_id, tenant_id, name, module, options_json) "
-                "VALUES (:id, :cell, :tenant, 'analytics', 'IcebergCatalog', '{}')"
-            ),
-            {"id": catalog, "cell": cell, "tenant": tenant},
-        )
-        connection.execute(
-            text(
-                "INSERT INTO assets (id, cell_id, tenant_id, catalog_id, target, backend, "
-                "table_identifier, options_json) VALUES (:id, :cell, :tenant, :catalog, "
-                "'users', 'iceberg', 'prod.users', '{}')"
-            ),
-            {"id": asset, "cell": cell, "tenant": tenant, "catalog": catalog},
-        )
-        connection.execute(
-            text(
-                "INSERT INTO asset_schema_fields (id, asset_id, ordinal, name, type, nullable) "
-                "VALUES (:id, :asset, 1, 'profile.email', 'string', 1)"
-            ),
-            {"id": field, "asset": asset},
-        )
+        config.attributes["connection"] = connection
+        command.downgrade(config, "base")
 
-    migrate_config_store(engine)
-
-    with engine.connect() as connection:
-        row = (
-            connection.execute(
-                text("SELECT field_id, path_json FROM asset_schema_fields WHERE id = :id"),
-                {"id": field},
-            )
-            .mappings()
-            .one()
-        )
-    assert json.loads(row["path_json"]) == ["profile.email"]
-    assert str(row["field_id"]).startswith("legacy:")
+    assert set(inspect(engine).get_table_names()) == {"alembic_version"}

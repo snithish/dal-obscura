@@ -1,22 +1,21 @@
 from __future__ import annotations
 
 from tests.interfaces.control_plane.test_actor_auth import _bearer, _client
-from tests.interfaces.control_plane.workspace_helpers import ADMIN_HEADERS, _provision_draft
+from tests.interfaces.control_plane.workspace_helpers import ADMIN_HEADERS, _provision_asset
 
 
 def test_audit_events_are_transactional_redacted_and_scoped() -> None:
     client = _client()
-    asset = _provision_draft(client)
+    asset = _provision_asset(client)
     client.put(
         f"/v1/assets/{asset['id']}/owners",
         json={"owners": ["asset-owner"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
-    current_draft = client.get(f"/v1/assets/{asset['id']}/draft", headers=ADMIN_HEADERS).json()
     saved_response = client.put(
-        f"/v1/assets/{asset['id']}/draft",
+        f"/v1/assets/{asset['id']}/policy",
         json={
-            "expected_revision": current_draft["revision"],
+            "expected_revision": 1,
             "rules": [
                 {
                     "ordinal": 10,
@@ -30,29 +29,22 @@ def test_audit_events_are_transactional_redacted_and_scoped() -> None:
         },
         headers=ADMIN_HEADERS,
     )
-    saved = saved_response.json()
-    client.post(
-        f"/v1/assets/{asset['id']}/policy-versions",
-        json={"expected_draft_revision": saved["revision"]},
-        headers=ADMIN_HEADERS,
-    )
+    assert saved_response.status_code == 200, saved_response.text
 
     events = client.get("/v1/audit/events/page", headers=ADMIN_HEADERS)
     assert events.status_code == 200
     payload = events.json()["items"]
-    assert [event["action"] for event in payload[:2]] == [
-        "policy.publication.activate",
-        "policy.draft.save",
-    ]
-    assert all(event["resource_id"] == asset["id"] for event in payload[:2])
-    assert all("rules" not in event["details"] for event in payload[:2])
-    assert payload[1]["correlation_id"] == saved_response.headers["x-request-id"]
+    assert "asset.policy.replace" in [event["action"] for event in payload]
+    policy_event = next(event for event in payload if event["action"] == "asset.policy.replace")
+    assert policy_event["resource_id"] == asset["id"]
+    assert "rules" not in policy_event["details"]
+    assert policy_event["correlation_id"] == saved_response.headers["x-request-id"]
 
     owner_events = client.get("/v1/audit/events/page", headers=_bearer("owner-token"))
     outsider_events = client.get("/v1/audit/events/page", headers=_bearer("outsider-token"))
     assert owner_events.status_code == 200
     owner_actions = [event["action"] for event in owner_events.json()["items"]]
-    assert len(owner_actions) == 4
+    assert len(owner_actions) == 3
     assert "asset.owners.replace" in owner_actions
     assert outsider_events.status_code == 200
     assert outsider_events.json()["items"] == []
@@ -70,7 +62,7 @@ def test_audit_limit_is_bounded() -> None:
 
 def test_audit_page_uses_keyset_cursor_and_preserves_scope() -> None:
     client = _client()
-    asset = _provision_draft(client)
+    asset = _provision_asset(client)
     client.put(
         f"/v1/assets/{asset['id']}/owners",
         json={"owners": ["asset-owner"], "expected_revision": 0},
@@ -109,7 +101,7 @@ def test_audit_page_uses_keyset_cursor_and_preserves_scope() -> None:
 
 def test_audit_page_filters_before_pagination() -> None:
     client = _client()
-    _provision_draft(client)
+    _provision_asset(client)
     response = client.get(
         "/v1/audit/events/page?action=workspace.runtime.update&resource_type=workspace&limit=1",
         headers=ADMIN_HEADERS,

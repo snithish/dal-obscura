@@ -1,5 +1,11 @@
 # Plugin platform: historical implementation handoff
 
+**Owner decision 2026-09-23:** This handoff's policy draft/review/publication
+workflows and upgrade/backfill assumptions are superseded. Follow the [live
+configuration decision](../decisions/2026-09-live-configuration.md) for current
+product and migration semantics. Plugin admission, the authenticated UI,
+authorization, nested schemas, supported consumers, and pickle boundaries remain.
+
 **Superseded 2026-09-20.** Start with the [current review and R01–R12 plan](../experience/README.md).
 Completed N work is reconciled there. This page and the N queue below are retained
 for historical context, not current execution. Existing B/G guarantees still apply.

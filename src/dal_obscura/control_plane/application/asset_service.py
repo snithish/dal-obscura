@@ -19,13 +19,13 @@ from dal_obscura.control_plane.application.catalog_service import (
 )
 from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control_plane.application.policy_service import ensure_asset_capability
-from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
+from dal_obscura.control_plane.infrastructure.repositories import ConfigStore
 
-_ASSET_CAPABILITIES = ("read", "edit", "publish", "grant")
+_ASSET_CAPABILITIES = ("read", "edit", "grant")
 
 
 def list_workspace_assets(
-    store: PublicationStore,
+    store: ConfigStore,
     actor: ControlPlaneActor | None = None,
 ) -> list[dict[str, object]]:
     """Lists governed assets in the default workspace.
@@ -45,7 +45,7 @@ def list_workspace_assets(
 
 
 def list_workspace_assets_page(
-    store: PublicationStore,
+    store: ConfigStore,
     actor: ControlPlaneActor,
     *,
     limit: int,
@@ -72,7 +72,7 @@ def list_workspace_assets_page(
 
 
 def get_workspace_asset(
-    store: PublicationStore,
+    store: ConfigStore,
     asset_id: UUID,
     actor: ControlPlaneActor | None = None,
 ) -> dict[str, object]:
@@ -91,7 +91,7 @@ def get_workspace_asset(
 
 
 def get_asset_access(
-    store: PublicationStore,
+    store: ConfigStore,
     asset_id: UUID,
     actor: ControlPlaneActor,
 ) -> dict[str, object]:
@@ -132,7 +132,7 @@ def get_asset_access(
 
 
 def upsert_workspace_asset(
-    store: PublicationStore,
+    store: ConfigStore,
     catalog: str,
     target: str,
     backend: str,
@@ -187,7 +187,7 @@ def upsert_workspace_asset(
 
 
 def replace_asset_owners(
-    store: PublicationStore,
+    store: ConfigStore,
     asset_id: UUID,
     owners: list[str],
     expected_revision: int | None = None,
@@ -203,8 +203,8 @@ def replace_asset_owners(
 
     if actor is not None and not actor.platform_admin:
         raise AuthorizationFailure("Only platform admins may replace asset owners.")
-    # Owner changes affect review validity and must serialize with publication.
-    store.lock_asset_for_publication(asset_id)
+    # Serialize owner changes with access grants and policy updates.
+    store.lock_asset_for_update(asset_id)
     existing_owners = store.list_asset_owners(asset_id)
     normalized = [owner.strip() for owner in owners if owner.strip()]
     if existing_owners and not normalized:
@@ -230,23 +230,22 @@ def replace_asset_owners(
     return normalized
 
 
-def list_asset_grants(store: PublicationStore, asset_id: UUID) -> list[dict[str, str]]:
+def list_asset_grants(store: ConfigStore, asset_id: UUID) -> list[dict[str, str]]:
     return store.list_asset_grants(asset_id)
 
 
 def replace_asset_grants(
-    store: PublicationStore,
+    store: ConfigStore,
     asset_id: UUID,
     grants: list[dict[str, str]],
     expected_revision: int | None = None,
     actor: ControlPlaneActor | None = None,
 ) -> list[dict[str, str]]:
-    allowed = {"read", "edit", "publish", "grant"}
+    allowed = {"read", "edit", "grant"}
     if any(str(grant.get("capability")) not in allowed for grant in grants):
         raise ValidationFailure("Unsupported asset capability")
-    # Grants affect who may publish or review the asset.  Use the same row lock
-    # as draft and policy mutations so revocation ordered before activation wins.
-    store.lock_asset_for_publication(asset_id)
+    # Serialize grant authorization and replacement against concurrent changes.
+    store.lock_asset_for_update(asset_id)
     if actor is not None:
         ensure_asset_capability(store, asset_id, actor, "grant")
     if expected_revision is None:
@@ -268,7 +267,7 @@ def replace_asset_grants(
 
 
 def replace_asset_schema_fields(
-    store: PublicationStore,
+    store: ConfigStore,
     asset_id: UUID,
     fields: list[dict[str, Any]],
     expected_revision: int | None = None,
@@ -281,9 +280,8 @@ def replace_asset_schema_fields(
         ```
     """
 
-    # Admitted schema metadata participates in review identity and cannot race
-    # a publication candidate.
-    store.lock_asset_for_publication(asset_id)
+    # Serialize schema replacement against concurrent asset updates.
+    store.lock_asset_for_update(asset_id)
     try:
         if expected_revision is None:
             return store.replace_asset_schema_fields(asset_id=asset_id, fields=fields)
@@ -298,7 +296,7 @@ def replace_asset_schema_fields(
         raise ValidationFailure(str(exc)) from exc
 
 
-def _required_workspace_context(store: PublicationStore):
+def _required_workspace_context(store: ConfigStore):
     context = store.get_default_workspace_context()
     if context is None:
         raise LookupError("No workspace has been configured")

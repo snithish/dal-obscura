@@ -1,10 +1,13 @@
 # dal-obscura Documentation
 
 dal-obscura is a governed analytical data access layer. It exposes Arrow Flight
-reads, applies policy-based row filters and masks, and uses an operator CLI to
-manage immutable publication generations.
+reads, applies policy-based row filters and masks, and uses an authenticated
+control plane to manage live catalogs, assets, and policies.
 
 Use this page as the map. The docs are grouped by what you are trying to do.
+For direct policy editing, ticket revocation, and the intentional database
+reset, follow the [live-configuration decision](decisions/2026-09-live-configuration.md)
+when older planning material conflicts with the current product.
 
 ## Contents
 
@@ -29,13 +32,13 @@ Use this page as the map. The docs are grouped by what you are trying to do.
 ### Try The Service
 
 - [Quickstart](quickstart.md): run the local demo, verify governed Flight reads,
-  and learn the manifest/CLI service shape.
+  and learn the live configuration service shape.
 - [Local Keycloak Demo](../examples/demo/keycloak/README.md): complete laptop
   environment with Keycloak, Postgres, Iceberg, and Flight reads.
 
 ### Understand The Model
 
-- [Concepts](concepts.md): catalogs, assets, owners, policy versions, tickets,
+- [Concepts](concepts.md): catalogs, assets, owners, policy revisions, tickets,
   and the control-plane/data-plane split.
 - [Security](security.md): identity providers, ticket lifecycle, secret
   handling, and fail-closed behavior.
@@ -51,8 +54,8 @@ Use this page as the map. The docs are grouped by what you are trying to do.
 
 ### Govern Data
 
-- [Policy Authoring](policy-authoring.md): grant rules, row filters, masks,
-  preview, and asset-scoped policy-version publishing.
+- [Policy Authoring](policy-authoring.md): direct live edits, grant rules, row
+  filters, masks, synthetic policy tests, and owner-managed ticket revocation.
 
 ### Integrate Clients
 
@@ -64,9 +67,9 @@ Use this page as the map. The docs are grouped by what you are trying to do.
 
 ### Build And Contribute
 
-- [Plugin Platform Review and Handoff](plugin-platform/README.md): current implementation gaps, secure catalog/format plugin architecture, ordered implementation packets, and strict acceptance gates. Planning only; production release remains on hold.
+- [Plugin Platform Review and Handoff](plugin-platform/README.md): historical plugin-platform implementation planning; its policy publication tasks are superseded by the live-configuration decision.
 
-- [New UI/UX Plan](ui-v2/README.md): fresh policy authoring and management experience, implementation packages, and acceptance gates. Proposed, not shipped.
+- [New UI/UX Plan](ui-v2/README.md): historical UI planning and acceptance gates. The authenticated authoring UI remains required; workflow requirements that depend on policy drafts or publishing are superseded.
 
 - [Development](development.md): repo layout, common checks, test guidance, and
   release-oriented checklist.
@@ -92,10 +95,8 @@ after you have at least one governed asset and one allowed read persona.
 ```mermaid
 flowchart LR
     catalog["Catalog discovery"] --> asset["Governed asset"]
-    asset --> policy["Manifest policy"]
-    policy --> version["Published generation"]
-    version --> publish["Compare-and-swap publish"]
-    publish --> read["Governed Flight reads"]
+    asset --> policy["Live asset policy"]
+    policy --> read["Governed Flight reads"]
 ```
 
 The public product model is asset-first. Internal runtime details such as

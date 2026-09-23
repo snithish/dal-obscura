@@ -1,8 +1,10 @@
 # Security Guide
 
-dal-obscura authenticates every read, authorizes against the active asset policy
-version, and enforces row filters and masks inside the data plane before Arrow
-batches leave the service.
+dal-obscura authenticates every read and enforces row filters and masks inside
+the data plane before Arrow batches leave the service. Asset policy edits write
+directly to live configuration. Tickets issued before an edit retain the
+permissions captured at planning until expiry unless the asset owner revokes
+them.
 
 ## Contents
 
@@ -12,7 +14,7 @@ batches leave the service.
 - [Ticket Lifecycle](#ticket-lifecycle)
 - [Policy Enforcement](#policy-enforcement)
 - [Secret Handling](#secret-handling)
-- [Operator publication](#operator-publication)
+- [Live Configuration And Ticket Revocation](#live-configuration-and-ticket-revocation)
 - [Operator Checklist](#operator-checklist)
 
 ## Security Model
@@ -20,7 +22,7 @@ batches leave the service.
 ```mermaid
 flowchart TD
     request["Client request"] --> auth["Authenticate"]
-    auth --> policy["Authorize active policy version"]
+    auth --> policy["Authorize current live asset policy"]
     policy --> ticket["Mint or verify opaque ticket"]
     ticket --> execute["Execute trusted scan task"]
     execute --> transform["Apply DuckDB row filters and masks"]
@@ -36,7 +38,7 @@ stream data.
 | --- | --- |
 | Client request | Treat descriptor and ticket inputs as untrusted until parsed and verified. |
 | Ticket payload | Client receives an opaque reference, not an editable scan plan. |
-| Config database | Stores policy versions, active state, and trusted internal scan payloads. |
+| Config database | Stores live policy revisions and trusted internal scan payloads. |
 | Secret values | Stay in runtime secret providers, not in config records. |
 
 Tickets persist trusted internal Python scan tasks server-side. That DB payload
@@ -69,13 +71,13 @@ sequenceDiagram
     Flight-->>Client: Return opaque signed ticket reference
     Client->>Flight: do_get(ticket)
     Flight->>Store: Load scan payload by reference
-    Flight->>Flight: Verify signature, expiry, principal, exchanges, policy version
+    Flight->>Flight: Verify signature, expiry, principal, exchanges, revocation state
     Flight-->>Client: Stream governed data
 ```
 
-The data plane verifies ticket expiry, principal, exchange count, and active
-policy version before streaming. Stale policy tickets are rejected rather than
-silently accepted.
+The data plane verifies ticket expiry, principal, exchange count, and explicit
+revocation state before streaming. It does not silently rewrite a ticket's
+captured permissions after a policy edit.
 
 ## Policy Enforcement
 
@@ -105,10 +107,24 @@ The supported environment provider accepts a `scope_grants` object in
 Production startup requires this grant map in both planes; a matching reference
 scope alone cannot authorize an environment lookup.
 
-## Operator publication
+## Live Configuration And Ticket Revocation
 
-Run the operator CLI on an administrative host to validate, preview, publish,
-and inspect manifests. Reader-facing services do not expose policy authoring.
+An authorized owner saves a policy directly to its asset using the current
+`policy_revision`. The control plane validates the complete replacement and
+updates it transactionally; stale revisions fail with a conflict. There is no
+workspace bundle or separate review/publish stage.
+
+Existing tickets retain their original authorized columns, row filter, and
+masks until their normal expiry. This supports predictable in-flight access
+through routine policy edits, but owners must revoke tickets when a change must
+take effect immediately. The asset Access view can revoke every active ticket,
+and the policy editor offers the same revocation as part of a save. The API
+records the operation and returns the number of tickets revoked.
+
+Treat ticket revocation as an access-control action: it can interrupt readers
+using the asset. Use the explicit owner action for urgent invalidation; for a
+routine policy change, leave revocation off unless the existing authorization
+must stop immediately.
 
 ## Operator Checklist
 
@@ -116,5 +132,7 @@ and inspect manifests. Reader-facing services do not expose policy authoring.
 - Use the supported OIDC/JWKS provider.
 - Bind local examples to `127.0.0.1`.
 - Rotate ticket and IAM secrets through the runtime secret provider.
+- Decide whether each policy edit must revoke existing asset tickets; otherwise
+  they remain usable until expiry.
 - Test one allowed persona and one denied persona before exposing an
   environment.

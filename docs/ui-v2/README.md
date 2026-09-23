@@ -1,5 +1,7 @@
 # A new governance workspace
 
+**Superseded for implementation by the [2026-09 live-configuration decision](../decisions/2026-09-live-configuration.md).** The product keeps its authenticated policy-authoring UI but has removed draft/review/publication, workspace bundles, and their packaging. This document is retained as historical UI research; do not use its publication workflows or schema-upgrade requirements as current acceptance criteria.
+
 **Current work, 2026-09-13:** use the [N01–N16 handoff](../plugin-platform/README.md)
 and [replacement UX contract](../plugin-platform/UX_REQUIREMENTS.md). This folder
 preserves earlier design/evidence; it is not a second implementation queue.

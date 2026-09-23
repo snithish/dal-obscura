@@ -26,6 +26,7 @@ def _payload(
         "masks": {},
     }
     return TicketPayload(
+        asset_id="00000000-0000-4000-8000-000000000001",
         ticket_id=ticket_id,
         catalog=catalog,
         target=target,

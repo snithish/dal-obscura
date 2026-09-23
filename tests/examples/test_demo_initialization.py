@@ -94,9 +94,13 @@ def test_provision_reuses_complete_workspace_without_writes(monkeypatch) -> None
             "enabled_auth_provider_count": 1,
         },
         "/v1/assets": [
-            {"id": "asset-1", "catalog": "retail_demo", "target": "retail.customer_revenue"}
+            {
+                "id": "asset-1",
+                "catalog": "retail_demo",
+                "target": "retail.customer_revenue",
+                "policy_status": "configured",
+            }
         ],
-        "/v1/policy-versions/page?limit=200": {"items": [{"asset_id": "asset-1"}]},
     }
 
     def request(method: str, path: str, body=None):
@@ -110,11 +114,10 @@ def test_provision_reuses_complete_workspace_without_writes(monkeypatch) -> None
     assert calls == [
         ("GET", "/v1/workspace/summary"),
         ("GET", "/v1/assets"),
-        ("GET", "/v1/policy-versions/page?limit=200"),
     ]
 
 
-def test_provision_enables_identity_provider_before_publishing_once(monkeypatch) -> None:
+def test_provision_enables_identity_provider_before_saving_live_policy(monkeypatch) -> None:
     monkeypatch.setenv("DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN", "test-admin")
     monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
     module = _load_script("provision_demo")
@@ -148,7 +151,7 @@ def test_provision_enables_identity_provider_before_publishing_once(monkeypatch)
         if path == "/v1/assets/retail_demo/retail.customer_revenue":
             return {"id": "asset-1"}
         if path == "/v1/assets/asset-1":
-            return {"revision": 1}
+            return {"revision": 1, "policy_revision": 0}
         if path == "/v1/assets/asset-1/schema":
             return {
                 "stable_field_ids": True,
@@ -164,8 +167,6 @@ def test_provision_enables_identity_provider_before_publishing_once(monkeypatch)
                     }
                 ],
             }
-        if path == "/v1/assets/asset-1/draft":
-            return {"id": "draft-1", "revision": 4}
         return {}
 
     monkeypatch.setattr(module, "_workspace_state", lambda value: "empty")
@@ -177,14 +178,14 @@ def test_provision_enables_identity_provider_before_publishing_once(monkeypatch)
     provider_call = next(
         i for i, call in enumerate(calls) if call[1] == "/v1/settings/auth-providers"
     )
-    publish_calls = [
-        (i, call) for i, call in enumerate(calls) if call[1] == "/v1/assets/asset-1/policy-versions"
+    policy_calls = [
+        (i, call) for i, call in enumerate(calls) if call[1] == "/v1/assets/asset-1/policy"
     ]
     schema_fields_call = next(
         call for call in calls if call[1] == "/v1/assets/asset-1/schema-fields"
     )
-    assert len(publish_calls) == 1
-    assert provider_call < publish_calls[0][0]
+    assert len(policy_calls) == 1
+    assert provider_call < policy_calls[0][0]
     assert schema_fields_call[2] == {
         "expected_revision": 1,
         "fields": [
@@ -197,7 +198,7 @@ def test_provision_enables_identity_provider_before_publishing_once(monkeypatch)
             }
         ],
     }
-    assert publish_calls[0][1][2] == {"draft_id": "draft-1", "expected_draft_revision": 4}
+    assert policy_calls[0][1][2] == {"expected_revision": 0, "rules": []}
 
 
 def test_provision_rejects_partial_workspace_before_mutation(monkeypatch) -> None:
@@ -246,18 +247,3 @@ def test_demo_owner_keys_require_an_owner(monkeypatch) -> None:
 
     with pytest.raises(ValueError, match="at least one owner"):
         module._scoped_demo_owners([])
-
-
-def test_demo_grant_keys_are_scoped_to_oidc_issuer(monkeypatch) -> None:
-    monkeypatch.setenv("DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN", "test-admin")
-    monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
-    module = _load_script("provision_demo")
-
-    assert module._scoped_demo_grants(
-        [{"principal": "group:asset-owners", "capability": "publish"}]
-    ) == [
-        {
-            "principal": "http://127.0.0.1:8080/realms/dal-obscura-demo|g|asset-owners",
-            "capability": "publish",
-        }
-    ]

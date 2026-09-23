@@ -1,7 +1,7 @@
 """Explicit plugin admission lifecycle transitions.
 
-Lifecycle state is process-local control metadata.  It never changes the
-immutable plugin lock or historical publication records.
+Lifecycle state is process-local control metadata. It never changes the
+immutable plugin lock or the persisted live configuration.
 """
 
 from __future__ import annotations

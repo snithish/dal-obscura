@@ -19,10 +19,10 @@
   },
   "fixtures": [
     {
-      "id": "ticket-json-v1",
+      "id": "ticket-json-v2",
       "kind": "ticket_payload",
       "format": "canonical-json",
-      "path": "tests/acceptance/fixtures/ticket_payload_v1.json",
+      "path": "tests/acceptance/fixtures/ticket_payload_v2.json",
       "mutable": false
     },
     {

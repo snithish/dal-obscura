@@ -29,7 +29,7 @@ class PathRule:
 
 
 class PathRuleEnforcer:
-    """Checks storage paths against published allowed storage roots.
+    """Checks storage paths against configured allowed storage roots.
 
     Example:
         ```python

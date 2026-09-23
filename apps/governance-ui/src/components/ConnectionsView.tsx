@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, NativeSelect, TextInput } from "@mantine/core";
 import type { QueryClient } from "@tanstack/react-query";
-import type { Catalog, CatalogDiagnostic, PluginDescriptor, PluginPair, PluginState, WorkspacePublication } from "../api";
+import type { Catalog, CatalogDiagnostic, PluginDescriptor, PluginPair, PluginState } from "../api";
 import { controlPlane } from "../api";
 import { preserveSecretReference } from "../connection_options";
 import { recoveryMessage } from "../recovery";
@@ -78,18 +78,17 @@ function formConfigForCatalog(catalog: Catalog, plugin: PluginDescriptor | undef
 
 export type ConnectionsViewProps = {
   catalogs: Catalog[];
-  publications: WorkspacePublication[];
   plugins: PluginDescriptor[];
   pluginStates: PluginState[];
   pluginPairs: PluginPair[];
-  canActivate: boolean;
+  canManagePlugins: boolean;
   onReload: () => void;
   onDirtyChange?: (dirty: boolean) => void;
   queryClient: QueryClient;
   sessionScope: string;
 };
 
-export function ConnectionsView({ catalogs, publications, plugins, pluginStates, pluginPairs, canActivate, onReload, onDirtyChange, queryClient, sessionScope }: ConnectionsViewProps) {
+export function ConnectionsView({ catalogs, plugins, pluginStates, pluginPairs, canManagePlugins, onReload, onDirtyChange, queryClient, sessionScope }: ConnectionsViewProps) {
   const [name, setName] = useState("");
   const [editingCatalog, setEditingCatalog] = useState<Catalog | null>(null);
   const catalogPlugins = plugins.filter((plugin) => plugin.kind === "catalog");
@@ -106,7 +105,6 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
   const [selectedFormatId, setSelectedFormatId] = useState("");
   const [diagnostics, setDiagnostics] = useState<Record<string, CatalogDiagnostic>>({});
   const [diagnosing, setDiagnosing] = useState("");
-  const [publishing, setPublishing] = useState(false);
   const [governBusy, setGovernBusy] = useState<string | null>(null);
   const [connectionDirty, setConnectionDirty] = useState(false);
   const [lifecycleDirty, setLifecycleDirty] = useState(false);
@@ -120,7 +118,6 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
   const mutationControllers = useRef<Set<AbortController>>(new Set());
   const savingRef = useRef(false);
   const governBusyRef = useRef<Set<string>>(new Set());
-  const publishingRef = useRef(false);
   const lifecycleBusyRef = useRef<Set<string>>(new Set());
   useEffect(() => () => {
     discoveryEpoch.current += 1;
@@ -131,7 +128,6 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
     catalogStateEpoch.current += 1;
   }, [catalogs, pluginPairs]);
   useEffect(() => {
-    setPublishing(false);
     setLifecycleBusy(null);
     setConnectionDirty(false);
     setLifecycleDirty(false);
@@ -328,33 +324,6 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
       setGovernBusy((current) => current === operationKey ? null : current);
     }
   }
-  async function createPublication() {
-    if (!canActivate || publishing || publishingRef.current) return;
-    publishingRef.current = true;
-    setPublishing(true);
-    const controller = beginMutation();
-    try {
-      await controlPlane.createWorkspacePublication(controller.signal);
-      if (controller.signal.aborted) return;
-      void queryClient.invalidateQueries({ queryKey: ["management", sessionScope] }); setMessage("Configuration snapshot created. Activate it when ready."); onReload();
-    } catch (error) {
-      if (!isAbortError(error)) setMessage(recoveryMessage(error, "Snapshot could not be created; resolve readiness errors before retrying."));
-    } finally { finishMutation(controller); publishingRef.current = false; if (!controller.signal.aborted) setPublishing(false); }
-  }
-  async function activatePublication(id: string) {
-    if (!canActivate || publishing || publishingRef.current) return;
-    publishingRef.current = true;
-    setPublishing(true);
-    const current = publications.find((publication) => publication.active)?.id;
-    const controller = beginMutation();
-    try {
-      await controlPlane.activateWorkspacePublication(id, current, controller.signal);
-      if (controller.signal.aborted) return;
-      void queryClient.invalidateQueries({ queryKey: ["management", sessionScope] }); setMessage("Configuration snapshot activated for new data-plane requests."); onReload();
-    } catch (error) {
-      if (!isAbortError(error)) setMessage(recoveryMessage(error, "Activation was rejected; the current generation remains active. Refresh before retrying."));
-    } finally { finishMutation(controller); publishingRef.current = false; if (!controller.signal.aborted) setPublishing(false); }
-  }
   async function updatePluginLifecycle(plugin: PluginDescriptor) {
     const key = `${plugin.kind}:${plugin.plugin_id}`;
     const target = lifecycleTargets[key];
@@ -385,7 +354,7 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
     const state = pluginStates.find((item) => item.kind === plugin.kind && item.plugin_id === plugin.plugin_id);
     const lifecycle = state?.lifecycle ?? "enabled";
     const target = lifecycleTargets[key] ?? lifecycle;
-    return <article className="plugin-card" key={key}><div><strong>{plugin.display_name}</strong><small>{plugin.kind === "catalog" ? "Catalog" : "Table format"} · {plugin.plugin_id} · v{plugin.version} · {lifecycle}</small></div><div className="capability-list">{plugin.capabilities.map((capability) => <span className="pill" key={capability}>{capability.replaceAll("_", " ")}</span>)}</div><div className="card-actions"><NativeSelect id={`lifecycle-${key}`} label={`Lifecycle for ${plugin.display_name}`} value={target} disabled={!canActivate} onChange={(event) => { const value = event.currentTarget.value as PluginState["lifecycle"]; markDirty("lifecycle"); setLifecycleTargets((current) => ({ ...current, [key]: value })); }} data={lifecycleTransitions[lifecycle].map((option) => ({ value: option, label: option[0].toUpperCase() + option.slice(1) }))} /><Button type="button" variant="default" size="sm" className="secondary compact" disabled={!canActivate || lifecycleBusy === key || target === lifecycle} onClick={() => void updatePluginLifecycle(plugin)}>{lifecycleBusy === key ? "Applying…" : "Apply"}</Button></div></article>;
+    return <article className="plugin-card" key={key}><div><strong>{plugin.display_name}</strong><small>{plugin.kind === "catalog" ? "Catalog" : "Table format"} · {plugin.plugin_id} · v{plugin.version} · {lifecycle}</small></div><div className="capability-list">{plugin.capabilities.map((capability) => <span className="pill" key={capability}>{capability.replaceAll("_", " ")}</span>)}</div><div className="card-actions"><NativeSelect id={`lifecycle-${key}`} label={`Lifecycle for ${plugin.display_name}`} value={target} disabled={!canManagePlugins} onChange={(event) => { const value = event.currentTarget.value as PluginState["lifecycle"]; markDirty("lifecycle"); setLifecycleTargets((current) => ({ ...current, [key]: value })); }} data={lifecycleTransitions[lifecycle].map((option) => ({ value: option, label: option[0].toUpperCase() + option.slice(1) }))} /><Button type="button" variant="default" size="sm" className="secondary compact" disabled={!canManagePlugins || lifecycleBusy === key || target === lifecycle} onClick={() => void updatePluginLifecycle(plugin)}>{lifecycleBusy === key ? "Applying…" : "Apply"}</Button></div></article>;
   })}</div></div>;
   const discoveredChoices = pluginPairs.filter((pair) => pair.catalog_plugin_id === catalogs.find((item) => item.name === discoveredCatalog)?.plugin_id && pair.status === "admitted");
   const renderField = (field: PluginConfigField) => {
@@ -399,7 +368,7 @@ export function ConnectionsView({ catalogs, publications, plugins, pluginStates,
         : <TextInput label={label} value={value} onChange={(event) => update(event.currentTarget.value)} placeholder={field.name === "uri" ? "https://catalog.example" : field.name === "password" ? "prod/catalog/password" : undefined} type={field.secret ? "password" : field.type === "integer" || field.type === "number" ? "number" : "text"} />;
     return <div key={field.name}>{control}</div>;
   };
-  return <section className="management-view"><div className="management-head"><div><span className="eyebrow">CONNECTIONS</span><h2>Catalog connections</h2><p className="muted">Choose from adapters admitted by the control plane. Credentials stay in server configuration and are never rendered.</p></div><Button type="button" variant="default" className="secondary" onClick={reload}>Refresh</Button></div>{pluginStates.length > 0 && <p className="help">Adapter status: {pluginStates.map((state) => state.plugin_id + " " + (state.lifecycle ?? state.status)).join(", ")}</p>}{pluginCards}<div className="form-card"><div className="management-head"><div><h3>{editingCatalog ? `Edit ${editingCatalog.name}` : "Add catalog"}</h3><p className="help">{editingCatalog ? "Safe values are prefilled. Secret references remain deployment-managed." : "Create a catalog draft using an admitted adapter."}</p></div>{editingCatalog && <Button type="button" variant="default" size="sm" className="secondary compact" onClick={cancelEdit}>Cancel edit</Button>}</div><div className="form-grid"><TextInput label="Name" value={name} disabled={Boolean(editingCatalog)} onChange={(event) => { markDirty("connection"); setName(event.currentTarget.value); }} placeholder="analytics" />{catalogPlugins.length > 1 && <NativeSelect label="Catalog adapter" value={pluginId} onChange={(event) => { markDirty("connection"); setPluginId(event.currentTarget.value); }} data={catalogPlugins.map((plugin) => ({ value: plugin.plugin_id, label: plugin.display_name || plugin.plugin_id }))} />}{effectiveFields.map(renderField)}</div><p className="help connection-note">Use a URI without userinfo or query credentials. The password field is a name resolved by the deployment secret provider; never paste a password or token here.</p><Button type="button" className="primary" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : editingCatalog ? "Save catalog changes" : "Save connection"}</Button>{message && <p className="notice">{message}</p>}</div>{canActivate && <div className="form-card"><div className="management-head"><div><h3>Configuration generations</h3><p className="help">Catalog, runtime, identity, and asset drafts become data-plane state only after an explicit snapshot activation.</p></div><Button type="button" className="primary" disabled={publishing} onClick={() => void createPublication()}>{publishing ? "Working…" : "Create snapshot"}</Button></div>{publications.length ? <div className="table-wrap" role="region" aria-label="Workspace configuration generations table"><table><thead><tr><th>Generation</th><th>State</th><th>Impact</th><th>Manifest</th><th>Created</th><th>Action</th></tr></thead><tbody>{publications.map((publication) => <tr key={publication.id}><td><code>{publication.id.slice(0, 12)}</code></td><td>{publication.active ? "Active" : "Staged"}</td><td>{publication.asset_count} assets · {publication.catalog_count} catalogs</td><td><code>{publication.manifest_hash.slice(0, 12)}</code></td><td>{new Date(publication.created_at).toLocaleString()}</td><td>{publication.active ? <span className="pill">Serving</span> : <Button type="button" variant="default" size="sm" className="secondary compact" disabled={publishing} onClick={() => void activatePublication(publication.id)}>Activate</Button>}</td></tr>)}</tbody></table></div> : <p className="muted">No staged generations exist yet.</p>}</div>}{discoveredChoices.length > 1 && <div className="form-card"><h3>Select table format</h3><p className="help">This catalog advertises multiple output formats. Choose one before governing a discovered table.</p><NativeSelect aria-label="Selected table format" value={selectedFormatId} onChange={(event) => { markDirty("connection"); setSelectedFormatId(event.currentTarget.value); }} data={[{ value: "", label: "Choose a format…" }, ...discoveredChoices.map((pair) => ({ value: pair.format_plugin_id, label: `${pair.format_plugin_id} · handle v${pair.handle_versions.join(", ")}` }))]} /></div>}{catalogs.length ? <div className="card-list">{catalogs.map((catalog) => { const diagnostic = diagnostics[catalog.name]; return <article className="management-card" key={catalog.id}><div><h3>{catalog.name}</h3><p className="muted">{catalogDisplayName(catalog)}</p><p className="diagnostic"><span className="pill pill-muted">{catalog.status ?? "unknown"}</span> · {catalog.governed_asset_count ?? 0} governed assets</p>{diagnostic && <p className={diagnostic.status === "ready" ? "diagnostic ready" : "diagnostic unavailable"} role="status">{diagnostic.message}{diagnostic.table_count !== undefined ? ` · ${diagnostic.table_count} tables` : ""}</p>}</div><div className="card-actions"><Button type="button" variant="default" className="secondary" onClick={() => beginEdit(catalog)}>Edit</Button><Button type="button" variant="default" className="secondary" disabled={diagnosing === catalog.name} onClick={() => void diagnose(catalog.name)}>{diagnosing === catalog.name ? "Checking…" : "Check connection"}</Button><Button type="button" variant="default" className="secondary" onClick={() => void discover(catalog.name)}>Discover tables</Button></div></article>; })}</div> : <div className="empty-result"><strong>No catalogs configured</strong><p>Connect an admitted catalog adapter to begin asset onboarding.</p></div>}{tables.length > 0 && <div className="table-wrap" role="region" aria-label="Discovered catalog tables table"><table><thead><tr><th>Table</th><th>Backend</th><th>Governed</th><th>Action</th></tr></thead><tbody>{tables.map((table, index) => <tr key={discoveredTableIdentifier(table) || String(index)}><td>{String(table.name ?? "Unknown")}</td><td>{String(table.backend ?? "Unknown")}</td><td>{table.governed ? "Yes" : "No"}</td><td>{table.governed ? <span className="pill">Registered</span> : <Button type="button" variant="default" size="sm" className="secondary compact" disabled={governBusy !== null} onClick={() => void govern(discoveredCatalog, table)}>{governBusy ? "Governing…" : "Govern table"}</Button>}</td></tr>)}</tbody></table></div>}</section>;
+  return <section className="management-view"><div className="management-head"><div><span className="eyebrow">CONNECTIONS</span><h2>Catalog connections</h2><p className="muted">Choose from adapters admitted by the control plane. Credentials stay in server configuration and are never rendered.</p></div><Button type="button" variant="default" className="secondary" onClick={reload}>Refresh</Button></div>{pluginStates.length > 0 && <p className="help">Adapter status: {pluginStates.map((state) => state.plugin_id + " " + (state.lifecycle ?? state.status)).join(", ")}</p>}{pluginCards}<div className="form-card"><div className="management-head"><div><h3>{editingCatalog ? `Edit ${editingCatalog.name}` : "Add catalog"}</h3><p className="help">{editingCatalog ? "Safe values are prefilled. Secret references remain deployment-managed." : "Create a catalog configuration using an admitted adapter."}</p></div>{editingCatalog && <Button type="button" variant="default" size="sm" className="secondary compact" onClick={cancelEdit}>Cancel edit</Button>}</div><div className="form-grid"><TextInput label="Name" value={name} disabled={Boolean(editingCatalog)} onChange={(event) => { markDirty("connection"); setName(event.currentTarget.value); }} placeholder="analytics" />{catalogPlugins.length > 1 && <NativeSelect label="Catalog adapter" value={pluginId} onChange={(event) => { markDirty("connection"); setPluginId(event.currentTarget.value); }} data={catalogPlugins.map((plugin) => ({ value: plugin.plugin_id, label: plugin.display_name || plugin.plugin_id }))} />}{effectiveFields.map(renderField)}</div><p className="help connection-note">Use a URI without userinfo or query credentials. The password field is a name resolved by the deployment secret provider; never paste a password or token here.</p><Button type="button" className="primary" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : editingCatalog ? "Save catalog changes" : "Save connection"}</Button>{message && <p className="notice">{message}</p>}</div>{discoveredChoices.length > 1 && <div className="form-card"><h3>Select table format</h3><p className="help">This catalog advertises multiple output formats. Choose one before governing a discovered table.</p><NativeSelect aria-label="Selected table format" value={selectedFormatId} onChange={(event) => { markDirty("connection"); setSelectedFormatId(event.currentTarget.value); }} data={[{ value: "", label: "Choose a format…" }, ...discoveredChoices.map((pair) => ({ value: pair.format_plugin_id, label: `${pair.format_plugin_id} · handle v${pair.handle_versions.join(", ")}` }))]} /></div>}{catalogs.length ? <div className="card-list">{catalogs.map((catalog) => { const diagnostic = diagnostics[catalog.name]; return <article className="management-card" key={catalog.id}><div><h3>{catalog.name}</h3><p className="muted">{catalogDisplayName(catalog)}</p><p className="diagnostic"><span className="pill pill-muted">{catalog.status ?? "unknown"}</span> · {catalog.governed_asset_count ?? 0} governed assets</p>{diagnostic && <p className={diagnostic.status === "ready" ? "diagnostic ready" : "diagnostic unavailable"} role="status">{diagnostic.message}{diagnostic.table_count !== undefined ? ` · ${diagnostic.table_count} tables` : ""}</p>}</div><div className="card-actions"><Button type="button" variant="default" className="secondary" onClick={() => beginEdit(catalog)}>Edit</Button><Button type="button" variant="default" className="secondary" disabled={diagnosing === catalog.name} onClick={() => void diagnose(catalog.name)}>{diagnosing === catalog.name ? "Checking…" : "Check connection"}</Button><Button type="button" variant="default" className="secondary" onClick={() => void discover(catalog.name)}>Discover tables</Button></div></article>; })}</div> : <div className="empty-result"><strong>No catalogs configured</strong><p>Connect an admitted catalog adapter to begin asset onboarding.</p></div>}{tables.length > 0 && <div className="table-wrap" role="region" aria-label="Discovered catalog tables table"><table><thead><tr><th>Table</th><th>Backend</th><th>Governed</th><th>Action</th></tr></thead><tbody>{tables.map((table, index) => <tr key={discoveredTableIdentifier(table) || String(index)}><td>{String(table.name ?? "Unknown")}</td><td>{String(table.backend ?? "Unknown")}</td><td>{table.governed ? "Yes" : "No"}</td><td>{table.governed ? <span className="pill">Registered</span> : <Button type="button" variant="default" size="sm" className="secondary compact" disabled={governBusy !== null} onClick={() => void govern(discoveredCatalog, table)}>{governBusy ? "Governing…" : "Govern table"}</Button>}</td></tr>)}</tbody></table></div>}</section>;
 }
 
 

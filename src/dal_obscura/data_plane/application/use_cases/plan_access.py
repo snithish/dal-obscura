@@ -142,6 +142,9 @@ def plan_read(
         catalog=request.catalog,
         requested_columns=authorization_columns,
     )
+    asset_id = decision.asset_id
+    if asset_id is None:
+        raise PermissionError("Authorization did not resolve a governed asset identity")
 
     visible_columns = _visible_columns(
         requested_columns, decision, wildcard_requested=request.columns == ["*"]
@@ -194,6 +197,7 @@ def plan_read(
             issuer=principal.issuer,
             identity_context=_identity_context_digest(principal, tenant_id),
             decision_digest=_decision_digest(decision),
+            asset_id=asset_id,
         )
         payloads.append(payload)
     flow.ticket_store.store_many(payloads, max_exchanges=flow.max_ticket_exchanges)

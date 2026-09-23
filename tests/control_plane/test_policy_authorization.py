@@ -90,7 +90,7 @@ def test_federated_asset_owner_is_scoped_to_issuer(db_session):
         )
 
 
-def test_asset_owner_does_not_receive_publish_or_grant_implicitly(db_session):
+def test_asset_owner_does_not_receive_grant_capability_implicitly(db_session):
     service, asset_id = _workspace_asset(db_session)
     service.replace_asset_owners(asset_id, ["user:alice@example.com"], expected_revision=0)
     owner = ControlPlaneActor(
@@ -99,8 +99,6 @@ def test_asset_owner_does_not_receive_publish_or_grant_implicitly(db_session):
         platform_admin=False,
     )
 
-    with pytest.raises(AuthorizationFailure, match="lacks asset capability 'publish'"):
-        service.ensure_asset_capability(asset_id, owner, "publish")
     with pytest.raises(AuthorizationFailure, match="lacks asset capability 'grant'"):
         service.ensure_asset_capability(asset_id, owner, "grant")
 

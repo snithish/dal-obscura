@@ -23,13 +23,13 @@ from dal_obscura.common.access_control.models import (
 )
 from dal_obscura.common.access_control.policy_resolution import resolve_access
 from dal_obscura.control_plane.application.access import ControlPlaneActor
-from dal_obscura.control_plane.application.compiler import validate_policy_rule_payloads
 from dal_obscura.control_plane.application.errors import AuthorizationFailure
-from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
+from dal_obscura.control_plane.application.policy_compiler import compile_policy_rule_payloads
+from dal_obscura.control_plane.infrastructure.repositories import ConfigStore
 
 
 def list_policy_rules(
-    store: PublicationStore,
+    store: ConfigStore,
     asset_id: UUID,
     *,
     actor: ControlPlaneActor | None = None,
@@ -48,12 +48,14 @@ def list_policy_rules(
 
 
 def replace_policy_rules(
-    store: PublicationStore,
+    store: ConfigStore,
     asset_id: UUID,
     rules: list[dict[str, Any]],
     *,
     actor: ControlPlaneActor,
-) -> None:
+    expected_revision: int | None = None,
+    revoke_existing_tokens: bool = False,
+) -> dict[str, int]:
     """Validates and replaces policy rules for one asset.
 
     Example:
@@ -62,17 +64,54 @@ def replace_policy_rules(
         ```
     """
 
-    validate_policy_rule_payloads(rules)
-    # Serialize legacy shared-rule edits with publication verification.  This
-    # prevents a request already waiting on the asset lock from racing a review
-    # candidate at the activation boundary.
-    store.lock_asset_for_publication(asset_id)
+    store.lock_asset_for_update(asset_id)
     ensure_asset_capability(store, asset_id, actor, "edit")
-    store.replace_policy_rules(asset_id=asset_id, rules=rules)
+    schema_fields = store.list_asset_schema_fields(asset_id)
+    compiled_rules = compile_policy_rule_payloads(rules, schema_fields)
+    if expected_revision is None:
+        current_revision = store.get_workspace_asset(asset_id)["policy_revision"]
+        if not isinstance(current_revision, int):
+            raise RuntimeError("Asset policy revision is unavailable")
+        expected_revision = current_revision
+    if revoke_existing_tokens:
+        ensure_asset_owner(store, asset_id, actor)
+    revision = store.replace_policy_rules(
+        asset_id=asset_id,
+        rules=compiled_rules,
+        expected_revision=expected_revision,
+    )
+    revoked_count = store.revoke_asset_tickets(asset_id=asset_id) if revoke_existing_tokens else 0
+    store.record_asset_audit_event(
+        asset_id=asset_id,
+        actor_principal=actor.identity_key(),
+        action="asset.policy.replace",
+        details={"policy_revision": revision, "revoked_token_count": revoked_count},
+    )
+    return {"policy_revision": revision, "revoked_token_count": revoked_count}
+
+
+def revoke_asset_tickets(
+    store: ConfigStore,
+    asset_id: UUID,
+    *,
+    actor: ControlPlaneActor,
+) -> dict[str, int]:
+    """Revokes all unexpired asset tokens; only owners and platform admins may do so."""
+
+    store.lock_asset_for_update(asset_id)
+    ensure_asset_owner(store, asset_id, actor)
+    revoked_count = store.revoke_asset_tickets(asset_id=asset_id)
+    store.record_asset_audit_event(
+        asset_id=asset_id,
+        actor_principal=actor.identity_key(),
+        action="asset.tokens.revoke",
+        details={"revoked_token_count": revoked_count},
+    )
+    return {"revoked_token_count": revoked_count}
 
 
 def preview_asset_policy(
-    store: PublicationStore,
+    store: ConfigStore,
     asset_id: UUID,
     *,
     principal: str,
@@ -81,9 +120,8 @@ def preview_asset_policy(
     actor: ControlPlaneActor | None = None,
     requested_columns: list[str] | None = None,
     include_mask_values: bool = False,
-    draft_id: UUID | None = None,
 ) -> dict[str, object]:
-    """Evaluates draft policy rules for a preview principal.
+    """Evaluates current live policy rules for a preview principal.
 
     Example:
         ```python
@@ -101,19 +139,6 @@ def preview_asset_policy(
         ensure_asset_capability(store, asset_id, actor, "read")
     asset = store.get_workspace_asset(asset_id)
     raw_rules = store.list_policy_rules(asset_id)
-    if actor is not None:
-        draft = (
-            store.get_asset_policy_draft_by_id(asset_id=asset_id, draft_id=draft_id)
-            if draft_id is not None
-            else store.get_asset_policy_draft(
-                asset_id=asset_id,
-                author_principal=actor.identity_key(),
-            )
-        )
-        if draft is not None:
-            raw_rules = cast(list[dict[str, object]], draft["rules"])
-        elif draft_id is not None:
-            raise LookupError("Policy draft not found")
     compiled = _compiled_policy_from_response(asset, raw_rules)
     policy = compiled.to_policy()
     rules = policy.datasets[0].rules
@@ -160,7 +185,7 @@ def preview_asset_policy(
 
 
 def ensure_policy_editor(
-    store: PublicationStore,
+    store: ConfigStore,
     asset_id: UUID,
     actor: ControlPlaneActor,
 ) -> None:
@@ -176,7 +201,7 @@ def ensure_policy_editor(
 
 
 def ensure_asset_reader(
-    store: PublicationStore,
+    store: ConfigStore,
     asset_id: UUID,
     actor: ControlPlaneActor,
 ) -> None:
@@ -186,7 +211,7 @@ def ensure_asset_reader(
 
 
 def ensure_asset_capability(
-    store: PublicationStore,
+    store: ConfigStore,
     asset_id: UUID,
     actor: ControlPlaneActor,
     capability: str,
@@ -208,6 +233,20 @@ def ensure_asset_capability(
         "Only platform admins or asset owners with the required capability may access this asset; "
         f"the authenticated actor lacks asset capability {capability!r}."
     )
+
+
+def ensure_asset_owner(
+    store: ConfigStore,
+    asset_id: UUID,
+    actor: ControlPlaneActor,
+) -> None:
+    """Requires explicit asset ownership or platform-admin authority."""
+
+    if actor.platform_admin:
+        return
+    if set(store.list_asset_owners(asset_id)).intersection(actor.owner_principals()):
+        return
+    raise AuthorizationFailure("Only platform admins or asset owners may revoke asset tokens.")
 
 
 def _compiled_policy_from_response(

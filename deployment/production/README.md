@@ -8,6 +8,11 @@ ingress. Replace every image tag with a verified immutable digest.
 
 ## Install and start
 
+This release starts from a clean config-store baseline. Databases stamped with
+the earlier multi-revision schema are unsupported and cannot be upgraded by
+this release. Create an empty database for a new installation; do not point the
+migration job at an existing deployment database.
+
 1. Provision separate PostgreSQL roles for migrations, control-plane writes,
    and data-plane ticket/runtime reads. Grant schema-change rights only to the
    migration role; the application roles must not be interchangeable. Copy
@@ -20,8 +25,8 @@ ingress. Replace every image tag with a verified immutable digest.
    ingress, and redirect configuration. The control-plane production profile
    rejects non-TLS OIDC and browser redirect settings, weak bootstrap tokens,
    missing audiences, missing catalog egress policy, and demo login shortcuts.
-   Set `DAL_OBSCURA_CELL_ID` to the UUID selected for the published data-plane
-   cell and keep `DAL_OBSCURA_DATA_PLANE_PROFILE=production`; the data plane
+   Set `DAL_OBSCURA_CELL_ID` to the UUID selected for the data-plane cell and
+   keep `DAL_OBSCURA_DATA_PLANE_PROFILE=production`; the data plane
    rejects an insecure Flight location, weak ticket secret, or non-PostgreSQL
    control-plane store.
    If external catalog or format wheels are installed, mount one immutable
@@ -44,15 +49,15 @@ ingress. Replace every image tag with a verified immutable digest.
    Flight read through the TLS ingress before opening customer traffic.
 
 Routine restart is `docker compose --env-file .env restart`; it does not seed,
-reset, republish, or migrate state. Back up PostgreSQL and the referenced IdP,
+reset, change live configuration, or migrate state. Back up PostgreSQL and the referenced IdP,
 secret, key, and certificate configuration before upgrades. A failed migration
 or readiness check keeps ingress closed until the operator resolves it.
 
 ## Restore and emergency access invalidation
 
-Restore PostgreSQL into an isolated environment, run the packaged migrations and
-verify the schema before exposing any listener. Reconcile the active publication,
-cell UUID, IdP configuration, secret references, and key versions. Before opening
+Restore a backup from this schema version into an isolated environment and
+verify the schema before exposing any listener. Reconcile live catalog and asset
+configuration, cell UUID, IdP configuration, secret references, and key versions. Before opening
 ingress, invalidate credentials and durable replay artifacts in the restored
 database:
 
@@ -95,7 +100,7 @@ DAL_OBSCURA_RESTORE_CONFIRM=I_UNDERSTAND_ISOLATED_RESTORE \
   ../../scripts/restore_postgres.sh /secure/backup/candidate.dump.age "$DAL_OBSCURA_CELL_ID"
 ```
 
-Reconcile IdP settings, plugin locks, secret references, active generations, and
+Reconcile IdP settings, plugin locks, secret references, live policies, and
 Iceberg metadata retention before opening ingress. Measure backup age (RPO) and
 restore duration (RTO) during the required recovery drill; the scripts alone do
 not constitute recovery acceptance.
@@ -116,7 +121,7 @@ keep the newer key in the previous-key list for the same bounded window.
 - PostgreSQL is internal-only. Give migration jobs schema-change rights, the
   control plane normal application rights, and Flight workers only the narrow
   ticket-store rights they require. Do not allow customer clients to write
-  trusted ticket or publication rows.
+  trusted ticket or live-configuration rows.
 - Compose injects only the variables each role needs: PostgreSQL receives its
   database bootstrap values, migrations receive only the database URL, the
   control plane receives browser/admin OIDC settings, and Flight workers

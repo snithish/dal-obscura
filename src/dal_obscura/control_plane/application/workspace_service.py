@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, cast
-from uuid import UUID
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.auth_provider_validation import (
@@ -18,11 +17,11 @@ from dal_obscura.control_plane.application.auth_provider_validation import (
     validate_auth_provider_payloads,
 )
 from dal_obscura.control_plane.application.errors import ValidationFailure
-from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
+from dal_obscura.control_plane.infrastructure.repositories import ConfigStore
 from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 
 
-def required_workspace_context(store: PublicationStore):
+def required_workspace_context(store: ConfigStore):
     """Returns the default workspace context or raises when none exists.
 
     Example:
@@ -38,7 +37,7 @@ def required_workspace_context(store: PublicationStore):
 
 
 def get_workspace_summary(
-    store: PublicationStore,
+    store: ConfigStore,
     actor: ControlPlaneActor | None = None,
 ) -> dict[str, object]:
     """Returns a summary of the current workspace.
@@ -60,13 +59,12 @@ def get_workspace_summary(
         "asset_count": len(assets),
         "unowned_asset_count": sum(1 for asset in assets if asset["owner_count"] == 0),
         "missing_policy_count": sum(1 for asset in assets if asset["policy_status"] == "missing"),
-        "draft_change_count": len(assets),
         "runtime_configured": False,
         "enabled_auth_provider_count": 0,
     }
 
 
-def get_workspace_runtime_settings(store: PublicationStore) -> dict[str, object] | None:
+def get_workspace_runtime_settings(store: ConfigStore) -> dict[str, object] | None:
     """Returns runtime ticket settings for the workspace when configured.
 
     Example:
@@ -93,14 +91,14 @@ def get_workspace_runtime_settings(store: PublicationStore) -> dict[str, object]
 
 
 def get_workspace_observations(
-    store: PublicationStore,
+    store: ConfigStore,
     actor: ControlPlaneActor,
 ) -> dict[str, object]:
     """Returns bounded control-plane observations for the current workspace.
 
     This endpoint deliberately reports what the control-plane database knows;
-    it never presents a publication record as proof that a Flight worker is
-    healthy or serving that generation.
+    it never presents a configuration revision as proof that a Flight worker
+    is healthy or has reloaded changed startup settings.
     """
 
     observed_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -127,7 +125,7 @@ def get_workspace_observations(
                 "data_plane": {"status": "unobserved", "reason": "no_visible_assets"},
             }
     try:
-        generation: dict[str, str] | None = store.get_active_publication_summary(context.cell_id)
+        generation = {"config_revision": str(store.get_configuration_revision(context.cell_id))}
     except LookupError:
         generation = None
     return {
@@ -142,20 +140,7 @@ def get_workspace_observations(
     }
 
 
-def get_workspace_draft(store: PublicationStore) -> dict[str, object]:
-    """Returns the draft publication state for the workspace.
-
-    Example:
-        ```python
-        draft = get_workspace_draft(store)
-        ```
-    """
-
-    context = required_workspace_context(store)
-    return store.get_workspace_draft(context)
-
-
-def list_workspace_auth_providers(store: PublicationStore) -> list[dict[str, object]]:
+def list_workspace_auth_providers(store: ConfigStore) -> list[dict[str, object]]:
     """Lists configured authentication providers for the workspace.
 
     Example:
@@ -170,13 +155,13 @@ def list_workspace_auth_providers(store: PublicationStore) -> list[dict[str, obj
     return [redact_auth_provider(item) for item in store.list_auth_providers(context.cell_id)]
 
 
-def workspace_auth_provider_revision(store: PublicationStore) -> int:
+def workspace_auth_provider_revision(store: ConfigStore) -> int:
     context = store.get_default_workspace_context()
     return 0 if context is None else store.get_auth_provider_revision(context.cell_id)
 
 
 def replace_workspace_auth_providers(
-    store: PublicationStore,
+    store: ConfigStore,
     providers: list[dict[str, Any]],
     *,
     expected_revision: int | None = None,
@@ -211,7 +196,7 @@ def replace_workspace_auth_providers(
 
 
 def upsert_workspace_runtime_settings(
-    store: PublicationStore,
+    store: ConfigStore,
     ttl: int,
     max_tickets: int,
     max_ticket_exchanges: int,
@@ -282,30 +267,3 @@ def upsert_workspace_runtime_settings(
         "path_rules": list(path_rules),
         "revision": settings["revision"],
     }
-
-
-def activate_workspace_publication(
-    store: PublicationStore,
-    activate_publication,
-    publication_id: UUID,
-    *,
-    expected_publication_id: UUID | None = None,
-    actor_principal: str = "system",
-) -> dict[str, str]:
-    """Activates an existing publication for the workspace.
-
-    Example:
-        ```python
-        result = activate_workspace_publication(store, activate_publication, publication_id)
-        ```
-    """
-
-    context = required_workspace_context(store)
-    activated = activate_publication(
-        cell_id=context.cell_id,
-        publication_id=publication_id,
-        expected_publication_id=expected_publication_id,
-        actor_principal=actor_principal,
-        audit_workspace=True,
-    )
-    return {"publication_id": activated["publication_id"]}

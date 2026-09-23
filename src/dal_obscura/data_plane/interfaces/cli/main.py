@@ -31,13 +31,13 @@ from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
 from dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks import (
     OidcJwksIdentityProvider,
 )
-from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
-from dal_obscura.data_plane.infrastructure.adapters.published_config import (
-    PublishedConfigAuthorizer,
-    PublishedConfigCatalogRegistry,
-    PublishedConfigStore,
-    PublishedRuntime,
+from dal_obscura.data_plane.infrastructure.adapters.live_config import (
+    LiveConfigAuthorizer,
+    LiveConfigCatalogRegistry,
+    LiveConfigStore,
+    LiveRuntime,
 )
+from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 from dal_obscura.data_plane.infrastructure.adapters.runtime_config import (
     DataPlaneRuntimeConfig,
     load_data_plane_runtime_config,
@@ -53,7 +53,7 @@ from dal_obscura.data_plane.infrastructure.adapters.ticket_store_sqlalchemy impo
     SqlAlchemyTicketStore,
 )
 from dal_obscura.data_plane.interfaces.flight.server import DataAccessFlightService
-from dal_obscura.data_plane.interfaces.health import create_health_app, published_runtime_readiness
+from dal_obscura.data_plane.interfaces.health import create_health_app, live_runtime_readiness
 from dal_obscura.logging_config import LoggingConfig, setup_logging
 
 LOGGER = logging.getLogger(__name__)
@@ -64,7 +64,7 @@ _OIDC_IDENTITY_PROVIDER = (
 
 
 def main() -> None:
-    """CLI entry point that wires the data plane from published control-plane state."""
+    """CLI entry point that wires the data plane from live control-plane state."""
     if any(argument in {"-h", "--help"} for argument in sys.argv[1:]):
         print(_HELP_TEXT)
         return
@@ -76,11 +76,11 @@ def main() -> None:
     check_config_store_schema(engine)
     session_maker = session_factory(engine)
     _start_health_server(session_maker, runtime_config)
-    config_store = PublishedConfigStore(
+    config_store = LiveConfigStore(
         session_maker,
         cell_id=runtime_config.cell_id,
     )
-    published_runtime = config_store.get_runtime()
+    live_runtime = config_store.get_runtime()
     secret_provider = load_secret_provider(
         runtime_config.secret_provider,
         context=SecretProviderContext(
@@ -89,8 +89,8 @@ def main() -> None:
         ),
     )
 
-    identity = _identity_from_runtime(published_runtime, secret_provider=secret_provider)
-    authorizer = PublishedConfigAuthorizer(config_store)
+    identity = _identity_from_runtime(live_runtime, secret_provider=secret_provider)
+    authorizer = LiveConfigAuthorizer(config_store)
     plugin_registry = create_builtin_plugin_registry(
         allowlist=(
             load_plugin_lock_file(runtime_config.plugin_lock_file)
@@ -98,11 +98,11 @@ def main() -> None:
             else None
         )
     )
-    catalog_registry = PublishedConfigCatalogRegistry(
+    catalog_registry = LiveConfigCatalogRegistry(
         config_store,
         secret_provider=secret_provider,
         plugin_registry=plugin_registry,
-        path_enforcer=PathRuleEnforcer(published_runtime.path_rules),
+        path_enforcer=PathRuleEnforcer(live_runtime.path_rules),
     )
     masking = DefaultMaskingAdapter()
     row_transform = DuckDBRowTransformAdapter(
@@ -118,7 +118,7 @@ def main() -> None:
     )
     ticket_store = SqlAlchemyTicketStore(session_maker, cell_id=runtime_config.cell_id)
     _start_ticket_cleanup(ticket_store, runtime_config.ticket_cleanup_interval_seconds)
-    ticket_settings = published_runtime.ticket
+    ticket_settings = live_runtime.ticket
     access_flow = AccessFlow(
         identity=identity,
         authorizer=authorizer,
@@ -150,19 +150,19 @@ def main() -> None:
         ),
         verify_client=runtime_config.tls_verify_client,
         root_certificates=_tls_root_certificates(runtime_config.tls_client_ca),
-        health_check=lambda: _published_runtime_readiness(session_maker, runtime_config),
+        health_check=lambda: _live_runtime_readiness(session_maker, runtime_config),
     )
     server.serve()
 
 
 _HELP_TEXT = """dal-obscura — governed Arrow Flight data plane
 
-Starts the data plane from an already migrated and published control-plane
-database. Configuration is read from DAL_OBSCURA_* environment variables.
+Starts the data plane from an already migrated database with live control-plane
+configuration. Runtime settings are read from DAL_OBSCURA_* environment variables.
 
 Required variables:
   DAL_OBSCURA_DATABASE_URL   PostgreSQL (production) or SQLite (local) URL
-  DAL_OBSCURA_CELL_ID        Published cell UUID
+  DAL_OBSCURA_CELL_ID        Configured cell UUID
   DAL_OBSCURA_TICKET_SECRET  HMAC ticket secret
 
 Common variables:
@@ -175,19 +175,19 @@ Use dal-obscura-migrate to initialize the schema before starting the service.
 
 
 def _identity_from_runtime(
-    runtime: PublishedRuntime,
+    runtime: LiveRuntime,
     *,
     secret_provider: SecretProvider,
 ) -> IdentityPort:
     providers_raw = _provider_records(runtime.auth_chain.get("providers", []))
     if not providers_raw:
-        raise ValueError("Published runtime auth_chain must define at least one provider")
+        raise ValueError("Live runtime auth_chain must define at least one provider")
 
     enabled = [provider for provider in providers_raw if bool(provider.get("enabled", True))]
     if not enabled:
-        raise ValueError("Published runtime auth_chain has no enabled providers")
+        raise ValueError("Live runtime auth_chain has no enabled providers")
     if len(enabled) != 1:
-        raise ValueError("Published runtime must define exactly one enabled OIDC provider")
+        raise ValueError("Live runtime must define exactly one enabled OIDC provider")
     return _load_identity_provider(enabled[0], secret_provider=secret_provider)
 
 
@@ -200,7 +200,7 @@ def _start_health_server(
     health_socket = _bind_health_socket(runtime_config.health_host, runtime_config.health_port)
 
     def readiness() -> dict[str, object]:
-        return _published_runtime_readiness(session_maker, runtime_config)
+        return _live_runtime_readiness(session_maker, runtime_config)
 
     app = create_health_app(readiness=readiness)
     config = uvicorn.Config(
@@ -243,16 +243,16 @@ def _start_ticket_cleanup(ticket_store: SqlAlchemyTicketStore, interval_seconds:
     ).start()
 
 
-def _published_runtime_readiness(
+def _live_runtime_readiness(
     session_maker: sessionmaker[Session],
     runtime_config: DataPlaneRuntimeConfig,
 ) -> dict[str, object]:
     with session_maker() as health_session:
-        store = PublishedConfigStore(
+        store = LiveConfigStore(
             health_session,
             cell_id=runtime_config.cell_id,
         )
-        return published_runtime_readiness(store)
+        return live_runtime_readiness(store)
 
 
 def _bind_health_socket(host: str, port: int) -> socket.socket:

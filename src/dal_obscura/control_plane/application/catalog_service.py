@@ -26,7 +26,7 @@ from dal_obscura.control_plane.infrastructure.catalog_discovery import (
     discover_catalog_tables,
     discover_public_catalog_tables,
 )
-from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
+from dal_obscura.control_plane.infrastructure.repositories import ConfigStore
 from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
     EnvSecretProvider,
     SecretProvider,
@@ -76,7 +76,7 @@ def _admit_session_discovery(session_key: str | None):
 
 
 def list_workspace_catalogs(
-    store: PublicationStore,
+    store: ConfigStore,
     *,
     plugin_registry: PluginRegistry | None = None,
 ) -> list[dict[str, object]]:
@@ -109,7 +109,7 @@ def list_workspace_catalogs(
 
 
 def discover_workspace_catalog_tables(
-    store: PublicationStore,
+    store: ConfigStore,
     name: str,
     *,
     discover: CatalogDiscoverer = discover_catalog_tables,
@@ -180,7 +180,7 @@ def discover_workspace_catalog_tables(
 
 
 def diagnose_workspace_catalog(
-    store: PublicationStore,
+    store: ConfigStore,
     name: str,
     *,
     discover: CatalogDiscoverer = discover_catalog_tables,
@@ -244,7 +244,7 @@ def diagnose_workspace_catalog(
 
 
 def upsert_workspace_catalog(
-    store: PublicationStore,
+    store: ConfigStore,
     name: str,
     module: str,
     options: dict[str, Any],
@@ -316,7 +316,7 @@ def validate_admitted_catalog_options(
     validate_descriptor_options(descriptor, options)
 
 
-def _required_workspace_context(store: PublicationStore):
+def _required_workspace_context(store: ConfigStore):
     context = store.get_default_workspace_context()
     if context is None:
         raise LookupError("No workspace has been configured")

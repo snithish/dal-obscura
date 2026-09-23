@@ -42,18 +42,18 @@ def test_x00_manifest_binds_preserved_pickle_symbols_and_synthetic_fixtures() ->
         assert _resolve_symbol(symbol) is not None
 
     fixtures = {fixture["id"]: fixture for fixture in manifest["fixtures"]}
-    assert fixtures["ticket-json-v1"]["mutable"] is False
+    assert fixtures["ticket-json-v2"]["mutable"] is False
     assert fixtures["ticket-pickle-boundary-v1"]["mutable"] is False
-    assert (FIXTURE_DIR / "ticket_payload_v1.json").exists()
+    assert (FIXTURE_DIR / "ticket_payload_v2.json").exists()
 
 
-def test_x00_canonical_ticket_fixture_has_stable_bytes_and_digest() -> None:
-    raw = json.loads((FIXTURE_DIR / "ticket_payload_v1.json").read_text())
+def test_x00_asset_bound_ticket_fixture_has_stable_bytes_and_digest() -> None:
+    raw = json.loads((FIXTURE_DIR / "ticket_payload_v2.json").read_text())
     payload = TicketPayload.from_dict(raw)
 
     canonical = canonical_ticket_payload_bytes(payload)
     round_trip = TicketPayload.from_dict(json.loads(json.dumps(raw)))
     assert canonical == canonical_ticket_payload_bytes(round_trip)
     assert hashlib.sha256(canonical).hexdigest() == (
-        "c2511c569e0e35fe0fa6db06af7e786ba0049e5cd8407b67116b33032dbab605"
+        "ae6df0e232455405090336f4a006aa040b41ab956fc8faa5079c1cd5b36ddcf4"
     )

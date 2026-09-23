@@ -7,7 +7,7 @@ This example starts a real Keycloak container and runs `dal-obscura` with
 
 - `keycloak`: imports the `dal-obscura` realm from `keycloak/realm.json`.
 - `setup`: creates the table, provisions the OIDC provider and policy through
-  the control-plane API, then publishes the data-plane snapshot.
+  the control-plane API as live configuration.
 - `dal-obscura`: validates bearer tokens against Keycloak issuer, audience, and
   JWKS.
 - `client`: obtains a real access token from Keycloak with the password grant,

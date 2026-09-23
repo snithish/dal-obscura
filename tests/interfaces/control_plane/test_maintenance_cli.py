@@ -50,6 +50,7 @@ def test_invalidate_access_revokes_sessions_and_replayable_artifacts(tmp_path):
     ticket_id = "00000000-0000-0000-0000-000000000001"
     SqlAlchemyTicketStore(session_maker, cell_id=cell_id).store(
         TicketPayload(
+            asset_id="00000000-0000-4000-8000-000000000001",
             ticket_id=ticket_id,
             catalog="analytics",
             target="default.users",

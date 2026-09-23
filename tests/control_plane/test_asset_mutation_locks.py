@@ -20,7 +20,7 @@ def test_owner_replacement_locks_before_read_and_write() -> None:
     ) == ["user:owner"]
 
     assert store.method_calls[:3] == [
-        ("lock_asset_for_publication", (asset_id,), {}),
+        ("lock_asset_for_update", (asset_id,), {}),
         ("list_asset_owners", (asset_id,), {}),
         (
             "replace_asset_owners",
@@ -38,7 +38,7 @@ def test_grant_replacement_locks_before_write() -> None:
     assert asset_service.replace_asset_grants(store, asset_id, [], expected_revision=0) == []
 
     assert store.method_calls == [
-        ("lock_asset_for_publication", (asset_id,), {}),
+        ("lock_asset_for_update", (asset_id,), {}),
         (
             "replace_asset_grants",
             (),
@@ -55,7 +55,7 @@ def test_schema_admission_replacement_locks_before_write() -> None:
     assert asset_service.replace_asset_schema_fields(store, asset_id, [], expected_revision=0) == []
 
     assert store.method_calls == [
-        ("lock_asset_for_publication", (asset_id,), {}),
+        ("lock_asset_for_update", (asset_id,), {}),
         (
             "replace_asset_schema_fields",
             (),

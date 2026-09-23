@@ -91,6 +91,7 @@ class AccessDecision:
     masks: dict[str, MaskRule]
     row_filter: str | None
     policy_version: int
+    asset_id: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "allowed_columns", list(self.allowed_columns))

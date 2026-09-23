@@ -365,11 +365,6 @@ def control_plane_setup(
                 }
             ],
         )
-        publication = service.create_publication(cell_id=cell_id)
-        service.activate_publication(
-            cell_id=cell_id,
-            publication_id=UUID(str(publication["publication_id"])),
-        )
         session.commit()
 
     return {

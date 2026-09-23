@@ -1,5 +1,5 @@
 services:
-  # Builds the disposable catalog and publishes the example control-plane state.
+  # Builds the disposable catalog and writes example live control-plane state.
   setup:
     build:
       context: ../..
@@ -18,7 +18,7 @@ services:
       timeout: 3s
       retries: 60
 
-  # Runs the real Flight data plane from the published runtime volume.
+  # Runs the real Flight data plane from the configured runtime volume.
   dal-obscura:
     image: ${DAL_OBSCURA_IMAGE:-ghcr.io/snithish/dal-obscura:latest}
     depends_on:

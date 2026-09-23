@@ -8,11 +8,11 @@ from uuid import UUID
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.application.policy_service import ensure_asset_capability
-from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
+from dal_obscura.control_plane.infrastructure.repositories import ConfigStore
 
 
 def list_audit_events_page(
-    store: PublicationStore,
+    store: ConfigStore,
     *,
     actor: ControlPlaneActor,
     asset_id: UUID | None = None,

@@ -11,7 +11,7 @@ flowchart LR
     schema --> iam["IAM ready"]
     iam --> cp["Control plane healthy"]
     cp --> catalog["Catalog discovery succeeds"]
-    catalog --> policy["Policy version active"]
+    catalog --> policy["Live policy configured"]
     policy --> dp["Data plane healthy"]
     dp --> read["Persona reads verified"]
 ```
@@ -25,7 +25,7 @@ Checklist:
 - UI loads and can authenticate an administrative user.
 - Catalog discovery finds the expected tables.
 - Governed assets have owners.
-- At least one policy version is active per governed asset.
+- Each governed asset has a validated live policy; an empty policy intentionally denies all access.
 - Data plane Arrow Flight `healthz` action returns ok.
 - One allowed read and one denied read behave as expected.
 
@@ -56,8 +56,8 @@ sequenceDiagram
 ## Full Environment Reset
 
 Only reset persistent state when you intentionally want to remove catalog
-configuration, assets, owners, policy versions, internal active-policy records,
-and tickets.
+configuration, assets, owners, live policy rules, sessions, audit events, and
+tickets.
 
 Recommended order:
 
@@ -69,7 +69,7 @@ Recommended order:
 6. Run `dal-obscura-migrate check`.
 7. Re-run provisioning.
 8. Re-run catalog discovery.
-9. Re-publish policy versions.
+9. Recreate each asset's owners and live policy through the control plane.
 10. Verify read personas.
 
 ## Fast Triage
@@ -79,8 +79,8 @@ Recommended order:
 | UI cannot sign in | IAM provider, redirect URI, browser client configuration. |
 | Catalog table missing | Catalog credentials, namespace, warehouse path, discovery logs. |
 | Asset owner cannot edit | Owner list includes the user's principal or group. |
-| Read denied unexpectedly | Principal identity, groups, active policy version, row filters. |
-| Policy change not visible | Confirm a new asset-scoped policy version was published. |
+| Read denied unexpectedly | Principal identity, groups, current live policy, row filters. |
+| Policy change not visible | Confirm the live policy saved at the expected revision. |
 | Reads fail after restart | Database URL, ticket secret, IAM metadata, catalog credentials. |
 | Services fail before startup | Run `dal-obscura-migrate check`; upgrade the config-store schema if needed. |
 | State disappeared | Confirm Postgres volume/database was not reset. |

@@ -1,11 +1,12 @@
 {
+  "asset_id": "00000000-0000-4000-8000-000000000001",
   "catalog": "analytics",
   "columns": ["id", "profile.email"],
   "decision_digest": "",
   "expires_at": 1900000000,
   "identity_context": "",
   "issuer": "https://issuer.example.test",
-  "nonce": "fixture-nonce-v1",
+  "nonce": "fixture-nonce-v2",
   "policy_version": 7,
   "principal_id": "user:fixture-reader",
   "scan": {
@@ -16,5 +17,5 @@
   },
   "target": "default.users",
   "tenant_id": "tenant-a",
-  "ticket_id": "fixture-ticket-v1"
+  "ticket_id": "fixture-ticket-v2"
 }

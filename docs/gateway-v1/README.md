@@ -1,5 +1,11 @@
 # Governed Iceberg gateway: implementation and validation plan
 
+> **Historical plan, superseded by the live-configuration decision.** Its policy
+> drafts, review/publish flow, workspace bundle, operator manifest, and
+> publication-generation requirements are retired. Current behavior and reset
+> requirements are documented in the [decision](../decisions/2026-09-live-configuration.md)
+> and [operator guides](../operators.md).
+
 Status: planning only. No implementation is authorized by this document alone to skip the test-review gate. Prepared 2026-09-09 and revised to reflect the owner's correction: full nested-schema/governance capabilities in the pilot, focused on one Iceberg backend and consumers including DuckDB, Spark and other Arrow frameworks. Do not revive the superseded primitive-only, two-mask or Python-only scope.
 
 Read in order:

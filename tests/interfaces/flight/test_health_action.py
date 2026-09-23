@@ -16,12 +16,12 @@ def test_health_payload_without_probe_preserves_process_liveness_contract():
     }
 
 
-def test_health_payload_includes_published_runtime_checks():
+def test_health_payload_includes_runtime_config_checks():
     payload = _health_payload(
         lambda: {
             "status": "ready",
-            "checks": {"active_publication": "ok"},
-            "publication_id": "pub-1",
+            "checks": {"configuration_revision": "ok"},
+            "config_revision": "pub-1",
         },
         logging.getLogger("test"),
     )
@@ -29,8 +29,8 @@ def test_health_payload_includes_published_runtime_checks():
     assert payload == {
         "status": "ok",
         "service": "data-plane",
-        "checks": {"active_publication": "ok"},
-        "publication_id": "pub-1",
+        "checks": {"configuration_revision": "ok"},
+        "config_revision": "pub-1",
     }
 
 

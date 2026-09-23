@@ -14,6 +14,7 @@ def _scan_payload():
 
 def _ticket_payload() -> TicketPayload:
     return TicketPayload(
+        asset_id="00000000-0000-4000-8000-000000000001",
         ticket_id="00000000-0000-0000-0000-000000000001",
         catalog="catalog1",
         target="catalog.db.table",
@@ -50,6 +51,7 @@ def test_ticket_verify_rejects_noncanonical_base64_even_with_valid_signature():
 
 def test_ticket_key_rotation_accepts_previous_keys_but_signs_with_current_key():
     payload = TicketPayload(
+        asset_id="00000000-0000-4000-8000-000000000001",
         ticket_id="00000000-0000-0000-0000-000000000001",
         catalog="catalog1",
         target="catalog.db.table",
@@ -80,6 +82,7 @@ def test_ticket_key_rotation_rejects_duplicate_keys():
 def test_signed_ticket_is_opaque_and_does_not_embed_scan_payload():
     codec = HmacTicketCodecAdapter("secret")
     payload = TicketPayload(
+        asset_id="00000000-0000-4000-8000-000000000001",
         ticket_id="00000000-0000-0000-0000-000000000001",
         catalog="analytics",
         target="default.users",
@@ -115,6 +118,7 @@ def test_signed_ticket_is_opaque_and_does_not_embed_scan_payload():
 def test_ticket_expiry():
     codec = HmacTicketCodecAdapter("secret")
     payload = TicketPayload(
+        asset_id="00000000-0000-4000-8000-000000000001",
         ticket_id="00000000-0000-0000-0000-000000000001",
         target="t",
         columns=[],
@@ -132,6 +136,7 @@ def test_ticket_expiry():
 def test_ticket_rejects_expiry_at_current_second(monkeypatch):
     codec = HmacTicketCodecAdapter("secret")
     payload = TicketPayload(
+        asset_id="00000000-0000-4000-8000-000000000001",
         ticket_id="00000000-0000-0000-0000-000000000001",
         target="t",
         columns=[],
@@ -163,6 +168,7 @@ def test_ticket_rejects_boolean_expiry_even_with_valid_signature():
 def test_ticket_rejects_tampered_signature():
     codec = HmacTicketCodecAdapter("secret")
     payload = TicketPayload(
+        asset_id="00000000-0000-4000-8000-000000000001",
         ticket_id="00000000-0000-0000-0000-000000000001",
         target="t",
         columns=["id"],

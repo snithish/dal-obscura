@@ -31,7 +31,7 @@ const meta = {
   args: {
     opened: true,
     query: "",
-    commands: ["assets", "changes", "activity", "connections", "settings", "help"],
+    commands: ["assets", "activity", "connections", "settings", "help"],
     assets,
     onQueryChange: fn(),
     onCommand: fn(),

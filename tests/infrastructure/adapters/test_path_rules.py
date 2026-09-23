@@ -33,7 +33,7 @@ def test_path_rule_enforcer_rejects_glob_rules_and_wildcard_roots():
         PathRuleEnforcer([{"root": "s3://warehouse/*"}])
 
 
-def test_path_rule_enforcer_is_disabled_when_no_roots_are_published():
+def test_path_rule_enforcer_is_disabled_when_no_roots_are_configured():
     enforcer = PathRuleEnforcer([])
 
     assert enforcer.enabled is False

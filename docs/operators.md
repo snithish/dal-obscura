@@ -11,7 +11,6 @@ For incident-style steps, use the [Operator Runbook](operators-runbook.md).
 - [Components](#components)
 - [Required Decisions](#required-decisions)
 - [Common Environment Variables](#common-environment-variables)
-- [Identity-Key Migration](#identity-key-migration)
 - [Startup Order](#startup-order)
 - [Health And Readiness](#health-and-readiness)
 - [Operational Risks](#operational-risks)
@@ -20,10 +19,9 @@ For incident-style steps, use the [Operator Runbook](operators-runbook.md).
 
 ```mermaid
 flowchart TB
-    operator["Operator host"] --> cli["Operator CLI"]
+    owner["Asset owner"] --> cp["Authenticated control plane"]
     clients["Flight clients"] --> flight_ingress["Flight ingress"]
 
-    cli --> cp["Publication repository"]
     flight_ingress --> dp["Data plane"]
 
     cp --> db[("Postgres config database")]
@@ -37,23 +35,29 @@ flowchart TB
     dp --> secrets
 ```
 
-Use Postgres for persistent control-plane state. Data planes remain stateless
-with respect to table data and read published configuration from the configured
-repository.
+Use Postgres for persistent control-plane state. The control plane writes
+validated live configuration. Data planes read canonical catalog, asset, and
+policy records while planning new requests and remain stateless with respect to
+table data.
+
+This release has a single initial migration for the live schema. It is not an
+upgrade path from earlier config-store revisions; start with an empty database.
 
 ## Components
 
 | Component | Purpose |
 | --- | --- |
-| Operator CLI | Validates, previews, publishes, and reports immutable runtime generations. |
+| Control plane | Authenticated UI and API for live configuration, policy tests, and ticket revocation. |
 | Data plane | Arrow Flight reads, authentication, ticket verification, policy enforcement. |
-| Postgres | Persistent configuration, policy versions, active policy set, and ticket state. |
+| Postgres | Persistent live configuration revisions and ticket state. |
 | IAM provider | One configured OIDC/JWKS provider for reader authentication. |
 | Catalog | Discovers tables and resolves governed targets. |
 | Warehouse | Stores table metadata and data files. |
 
-Publications are immutable manifest generations. Tenant and cell records are
-runtime partitioning details.
+Policy writes validate a complete replacement and check the asset's expected
+revision before commit. There is no workspace bundle or separate review/publish
+stage. Issued tickets keep their captured access until expiry unless the owner
+revokes them.
 
 ## Required Decisions
 
@@ -62,8 +66,8 @@ runtime partitioning details.
 | Config database | Use Postgres for shared and restart-stable environments. |
 | IAM | Use OIDC/JWKS when possible. |
 | Secrets | Store references in config; keep secret values in the runtime secret provider. |
-| Publishing | Keep policy versions asset-scoped. |
-| Catalogs | Resolve governed tables through catalogs; do not publish standalone file paths. |
+| Policy changes | Write directly with an expected revision; decide whether to revoke existing asset tickets. |
+| Catalogs | Resolve governed tables through catalogs; avoid standalone file paths. |
 | UI exposure | Put the UI behind the same IAM posture as the API. |
 | Config-store outage | Fail closed; restore the config store before serving new requests. |
 
@@ -114,53 +118,6 @@ before any factory import.
 
 See [Security](security.md) and the runnable [OIDC example](../examples/auth/keycloak-oidc/README.md).
 
-## Identity-Key Migration
-
-Federated owner, grant, draft, audit, and session records use the exact OIDC
-issuer together with an escaped principal value. Existing databases created
-before that encoding was introduced must be converted explicitly during a
-maintenance window. The service does not perform a runtime fallback.
-
-Preview the conversion against the same database used by the control plane:
-
-```sh
-DAL_OBSCURA_DATABASE_URL='postgresql+psycopg://...' \
-  uv run dal-obscura-migrate identity-keys
-```
-
-Proceed only when the JSON report has `safe_to_apply: true` and both
-`unresolved` and `ambiguous` are empty. Stop and obtain operator reapproval for
-any value in either list. Apply the reviewed conversion in one transaction:
-
-```sh
-DAL_OBSCURA_DATABASE_URL='postgresql+psycopg://...' \
-  uv run dal-obscura-migrate identity-keys --apply --maintenance-mode
-```
-
-Take a database backup first, stop or drain control-plane writers, and run the
-preview again after the write lock is in place. The command changes only text
-and JSON identity fields; it does not delete customer data and does not read or
-rewrite the protected pickle ticket payload boundary. A failed apply rolls back
-the transaction. `--maintenance-mode` is a required explicit acknowledgement;
-the migration command cannot infer whether another process is still admitting
-or writing requests. Run `dal-obscura-migrate check` before restarting services.
-
-The same cutover rule applies to the published plugin-binding migration. Preview
-known records, stop or drain writers, then apply the reviewed report with the
-required acknowledgement:
-
-```sh
-DAL_OBSCURA_DATABASE_URL='postgresql+psycopg://...' \
-  uv run dal-obscura-migrate plugin-bindings
-
-DAL_OBSCURA_DATABASE_URL='postgresql+psycopg://...' \
-  uv run dal-obscura-migrate plugin-bindings --apply --maintenance-mode
-```
-
-Unknown records remain unchanged and the apply is idempotent. The command only
-rewrites the known Iceberg binding shape; it never imports a module named by a
-record and never touches the protected pickle ticket payload.
-
 ## Startup Order
 
 ```mermaid
@@ -168,15 +125,15 @@ sequenceDiagram
     participant Ops
     participant DB as "Postgres"
     participant IAM
-    participant CLI as "Operator CLI"
+    participant CP as "Control plane"
     participant DP as "Data plane"
+    participant Owner as "Asset owner"
 
     Ops->>DB: Start database
     Ops->>DB: Run dal-obscura-migrate upgrade
     Ops->>DB: Run dal-obscura-migrate check
     Ops->>IAM: Start or configure IAM
-    Ops->>CLI: Validate and preview a versioned manifest
-    Ops->>CLI: Publish with the expected active generation
+    Owner->>CP: Save live asset and policy configuration
     Ops->>DP: Start data plane
     Ops->>DP: Verify allowed and denied reads
 ```
@@ -188,14 +145,14 @@ Services never run config-store migrations automatically at startup.
 The data plane can expose an optional HTTP health app:
 
 - `GET /healthz`: health app liveness.
-- `GET /readyz`: published runtime readiness. The check is ready only after the
-  active publication, runtime settings, and at least one enabled auth provider
-  can be loaded.
+- `GET /readyz`: runtime readiness. The check is ready only after live
+  configuration, runtime settings, and at least one enabled auth provider can
+  be loaded.
 
 Operational verification should also include:
 
-- `dal-obscura-admin status` reports the expected active generation.
-- At least one manifest asset has an active policy.
+- The authenticated workspace shows the expected live catalogs and assets.
+- Each governed asset has a configured live policy and assigned owner.
 - One allowed read and one denied read behave as expected.
 
 ## Operational Risks
@@ -203,8 +160,9 @@ Operational verification should also include:
 - Wrong IAM claims can make valid users appear unauthorized.
 - Secret values should not be written into catalog, auth-provider, or policy
   records.
-- Policy changes affect reads after a policy version is submitted; test with
-  real personas before exposing the environment.
+- New reads use the current saved policy. Existing tickets keep their captured
+  permissions until expiry unless the asset owner revokes them. Confirm the
+  revocation choice for high-impact changes.
 - SQLite state is easy to lose; use Postgres for anything shared.
 - Internal cell identifiers should not become user-facing concepts.
-- Data planes fail closed when they cannot read active published configuration.
+- Data planes fail closed when they cannot read live configuration.

@@ -133,13 +133,11 @@ test("authenticated management screens keep rendered text and controls readable 
     admin: true,
     configuredSettings: true,
     configuredConnections: true,
-    configuredPublications: true,
     configuredLifecycle: true,
     configuredAudit: true,
   });
   const screens = [
     ["#activity", "Workspace status"],
-    ["#changes", "Published policy history"],
     ["#connections", "Catalog connections"],
     ["#settings", "Runtime and identity"],
   ] as const;
@@ -180,7 +178,6 @@ test("forced-colors mode keeps authenticated workflows discoverable", async ({ p
     admin: true,
     configuredSettings: true,
     configuredConnections: true,
-    configuredPublications: true,
     configuredLifecycle: true,
     configuredAudit: true,
   });
@@ -256,9 +253,6 @@ test("late pre-logout asset responses cannot repopulate a reauthenticated worksp
     owner_count: 1,
     owners: ["alice"],
     policy_status: "configured",
-    draft_status: "published",
-    active_policy_version: 1,
-    last_published_at: "2026-09-21T00:00:00Z",
   });
   const detail = (id: string, name: string) => ({
     ...inventory(id, name),
@@ -277,7 +271,6 @@ test("late pre-logout asset responses cannot repopulate a reauthenticated worksp
     supported_masks: ["null", "redact", "hash", "email", "keep_last", "default"],
     fields: [{ field_id: 1, name: "order_id", human_path: "order_id", type: "string", nullable: false, kind: "scalar", path: { version: 1, segments: [{ kind: "field", name: "order_id", field_id: 1 }] } }],
   });
-  const draft = (id: string) => ({ id: null, asset_id: id, author_principal: "alice", revision: 0, base_policy_version: 1, rules: [], content_hash: "" });
   let sessionCalls = 0;
   let staleSchemaRelease: (() => void) | undefined;
   let staleSchemaStarted: Promise<void> | undefined;
@@ -304,9 +297,7 @@ test("late pre-logout asset responses cannot repopulate a reauthenticated worksp
       }
       if (suffix === "schema") return route.fulfill({ json: schema(id, name) });
       if (suffix === "grants") return route.fulfill({ json: [] });
-      if (suffix === "access") return route.fulfill({ json: { asset_id: id, principal: "alice", issuer: null, capabilities: [{ capability: "read", allowed: true, reasons: ["owner"] }, { capability: "edit", allowed: id === assetA, reasons: id === assetA ? ["owner"] : [] }, { capability: "publish", allowed: false, reasons: [] }, { capability: "grant", allowed: false, reasons: [] }] } });
-      if (suffix === "draft") return route.fulfill({ json: draft(id) });
-      if (suffix === "policy-versions") return route.fulfill({ json: [] });
+      if (suffix === "access") return route.fulfill({ json: { asset_id: id, principal: "alice", issuer: null, capabilities: [{ capability: "read", allowed: true, reasons: ["Asset owner"] }, { capability: "edit", allowed: id === assetA, reasons: id === assetA ? ["Asset owner"] : [] }, { capability: "grant", allowed: false, reasons: [] }] } });
       return route.fulfill({ json: detail(id, name) });
     }
     if (path === "/v1/session/options") return route.fulfill({ json: { bootstrap_enabled: true, oidc: null } });

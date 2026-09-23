@@ -14,7 +14,7 @@ from dal_obscura.data_plane.interfaces.cli.main import _start_health_server
 from dal_obscura.data_plane.interfaces.flight.server import _health_payload
 from dal_obscura.data_plane.interfaces.health import (
     create_health_app,
-    published_runtime_readiness,
+    live_runtime_readiness,
 )
 
 pytestmark = pytest.mark.socket
@@ -66,16 +66,16 @@ def test_flight_health_logs_do_not_include_provider_exception_details(caplog):
 
 
 def test_data_plane_runtime_readiness_requires_active_auth_chain():
-    readiness = published_runtime_readiness(_RuntimeStore(auth_chain={"providers": []}))
+    readiness = live_runtime_readiness(_RuntimeStore(auth_chain={"providers": []}))
     checks = cast(dict[str, str], readiness["checks"])
 
     assert readiness["status"] == "not_ready"
-    assert checks["active_publication"] == "ok"
+    assert checks["configuration_revision"] == "ok"
     assert checks["auth_chain"] == "missing_enabled_provider"
 
 
 def test_data_plane_runtime_readiness_requires_ticket_settings():
-    readiness = published_runtime_readiness(
+    readiness = live_runtime_readiness(
         _RuntimeStore(auth_chain={"providers": [{"module": "auth.Provider"}]}, ticket={})
     )
     checks = cast(dict[str, str], readiness["checks"])
@@ -117,20 +117,20 @@ class _RuntimeStore:
 
     def get_runtime(self) -> _Runtime:
         return _Runtime(
-            publication_id="publication-1",
+            config_revision="live-config-1",
             auth_chain=self._auth_chain,
             ticket=self._ticket,
         )
 
 
-def test_published_runtime_readiness_redacts_store_exceptions():
+def test_live_runtime_readiness_redacts_store_exceptions():
     class BrokenStore:
         def get_runtime(self) -> object:
             raise RuntimeError("postgres://user:secret@db.internal/path")
 
-    readiness = published_runtime_readiness(BrokenStore())
+    readiness = live_runtime_readiness(BrokenStore())
 
-    assert readiness["reason"] == "published runtime unavailable"
+    assert readiness["reason"] == "live runtime unavailable"
     assert "secret" not in str(readiness)
 
 
@@ -138,10 +138,10 @@ class _Runtime:
     def __init__(
         self,
         *,
-        publication_id: str,
+        config_revision: str,
         auth_chain: dict[str, object],
         ticket: dict[str, object],
     ) -> None:
-        self.publication_id = publication_id
+        self.config_revision = config_revision
         self.auth_chain = auth_chain
         self.ticket = ticket

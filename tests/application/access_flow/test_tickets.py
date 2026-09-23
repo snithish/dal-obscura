@@ -47,10 +47,31 @@ def test_ticket_payload_from_dict_keeps_string_full_row_filter():
             "issuer": "",
             "identity_context": "",
             "decision_digest": "",
+            "asset_id": "00000000-0000-4000-8000-000000000001",
         }
     )
 
     assert payload.scan["full_row_filter"] == "LOWER(region) = 'us'"
+    assert payload.asset_id == "00000000-0000-4000-8000-000000000001"
+
+
+def test_ticket_payload_from_dict_requires_governed_asset_identity():
+    with pytest.raises(ValueError, match="asset_id"):
+        TicketPayload.from_dict(
+            {
+                "target": "users",
+                "columns": ["id"],
+                "scan": {"read_payload": "payload", "full_row_filter": None, "masks": {}},
+                "policy_version": 100,
+                "principal_id": "user1",
+                "expires_at": 9999999999,
+                "nonce": "abc",
+                "tenant_id": "default",
+                "issuer": "",
+                "identity_context": "",
+                "decision_digest": "",
+            }
+        )
 
 
 def test_ticket_payload_from_dict_rejects_non_string_full_row_filter():
@@ -69,6 +90,7 @@ def test_ticket_payload_from_dict_rejects_non_string_full_row_filter():
                 "principal_id": "user1",
                 "expires_at": 9999999999,
                 "nonce": "abc",
+                "asset_id": "00000000-0000-4000-8000-000000000001",
             }
         )
 
@@ -94,6 +116,7 @@ def test_ticket_payload_from_dict_rejects_malformed_or_unknown_fields(field, val
         "nonce": "abc",
         "tenant_id": "default",
         "issuer": "https://issuer.example",
+        "asset_id": "00000000-0000-4000-8000-000000000001",
     }
     raw[field] = value
 
@@ -101,9 +124,10 @@ def test_ticket_payload_from_dict_rejects_malformed_or_unknown_fields(field, val
         TicketPayload.from_dict(raw)
 
 
-def test_fetch_stream_rejects_stale_policy_version_before_decoding(monkeypatch):
+def test_fetch_stream_keeps_captured_authorization_after_policy_change():
     schema, _, table_format = _build_use_case_dependencies()
     payload = TicketPayload(
+        asset_id="00000000-0000-4000-8000-000000000001",
         ticket_id="00000000-0000-0000-0000-000000000001",
         catalog="analytics",
         target="default.users",
@@ -121,7 +145,6 @@ def test_fetch_stream_rejects_stale_policy_version_before_decoding(monkeypatch):
     )
     authorizer = FakeAuthorizer(decision=None, current_version=101)
     ticket_store = _ticket_store_with(payload)
-    monkeypatch.setattr(pickle, "loads", lambda _: pytest.fail("pickle.loads was reached"))
     use_case = FetchStreamUseCase(
         identity=FakeIdentity(
             principal=Principal(id="user1", groups=[], attributes={"tenant_id": "tenant-a"})
@@ -134,16 +157,17 @@ def test_fetch_stream_rejects_stale_policy_version_before_decoding(monkeypatch):
         now=lambda: 1000,
     )
 
-    with pytest.raises(PermissionError, match="stale policy version"):
-        use_case.execute("ticket", AUTHORIZATION_HEADER)
+    result = use_case.execute("ticket", AUTHORIZATION_HEADER)
 
-    assert authorizer.last_current_version_tenant_id == "tenant-a"
-    assert ticket_store.reserve_calls == []
+    assert result.columns == ["id"]
+    assert authorizer.last_current_version_tenant_id is None
+    assert ticket_store.reserve_calls == [payload.ticket_id]
 
 
 def test_fetch_stream_rejects_legacy_ticket_without_ticket_id_before_decoding(monkeypatch):
     schema, _, table_format = _build_use_case_dependencies()
     payload = TicketPayload(
+        asset_id="00000000-0000-4000-8000-000000000001",
         catalog="analytics",
         target="default.users",
         tenant_id="tenant-a",
@@ -189,6 +213,7 @@ def test_fetch_stream_rejects_legacy_ticket_without_ticket_id_before_decoding(mo
 def test_fetch_stream_rejects_missing_db_ticket_before_decoding(monkeypatch):
     schema, _, table_format = _build_use_case_dependencies()
     payload = TicketPayload(
+        asset_id="00000000-0000-4000-8000-000000000001",
         ticket_id="00000000-0000-0000-0000-000000000001",
         catalog="analytics",
         target="default.users",
@@ -236,6 +261,7 @@ def test_fetch_stream_rejects_hash_mismatch_before_reserving_or_decoding(monkeyp
     schema, _, table_format = _build_use_case_dependencies()
     ticket_id = "00000000-0000-0000-0000-000000000001"
     signed_payload = TicketPayload(
+        asset_id="00000000-0000-4000-8000-000000000001",
         ticket_id=ticket_id,
         catalog="analytics",
         target="default.users",
@@ -282,6 +308,7 @@ def test_fetch_stream_reserves_exchange_before_scan_execution():
     schema, _, table_format = _build_use_case_dependencies()
     ticket_id = "00000000-0000-0000-0000-000000000001"
     payload = TicketPayload(
+        asset_id="00000000-0000-4000-8000-000000000001",
         ticket_id=ticket_id,
         catalog="analytics",
         target="default.users",
@@ -387,9 +414,10 @@ def test_plan_access_does_not_sign_ticket_when_persistence_fails():
     assert ticket_codec.signed_payloads == []
 
 
-def test_fetch_stream_rejects_ticket_policy_version_after_policy_changes():
+def test_fetch_stream_does_not_recheck_policy_version_before_fetch():
     schema, decision, table_format = _build_use_case_dependencies()
     payload = TicketPayload(
+        asset_id="00000000-0000-4000-8000-000000000001",
         ticket_id="00000000-0000-0000-0000-000000000001",
         catalog="catalog1",
         target="users",
@@ -414,8 +442,8 @@ def test_fetch_stream_rejects_ticket_policy_version_after_policy_changes():
         ticket_store=ticket_store,
     )
 
-    with pytest.raises(PermissionError, match="stale policy version"):
-        use_case.execute("token", AUTHORIZATION_HEADER)
+    result = use_case.execute("token", AUTHORIZATION_HEADER)
+    assert result.columns == ["id", "region"]
 
 
 def test_fetch_stream_rejects_invalid_scan_payloads():
@@ -457,6 +485,7 @@ def test_fetch_stream_rejects_invalid_scan_payloads():
 
     for index, (scan, error_match) in enumerate(cases, start=1):
         payload = TicketPayload(
+            asset_id="00000000-0000-4000-8000-000000000001",
             ticket_id=f"00000000-0000-0000-0000-{index:012d}",
             catalog="catalog1",
             target="users",
@@ -483,6 +512,7 @@ def test_fetch_stream_rejects_invalid_scan_payloads():
 
 def test_fetch_stream_rejects_legacy_partition_payload():
     payload = TicketPayload(
+        asset_id="00000000-0000-4000-8000-000000000001",
         ticket_id="00000000-0000-0000-0000-000000000001",
         catalog="catalog1",
         target="users",

@@ -13,9 +13,9 @@ from sqlalchemy import select
 
 from dal_obscura.common.config_store.db import create_engine_from_url, session_factory
 from dal_obscura.common.config_store.orm import (
-    ActivePublicationRecord,
+    AssetRecord,
+    CatalogRecord,
     PolicyRuleRecord,
-    PublishedAssetRecord,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -177,24 +177,26 @@ def test_build_connector_fixture_emits_exact_heavyweight_metadata(tmp_path: Path
     }
 
 
-def test_build_connector_fixture_publishes_expected_policy_and_runtime(tmp_path: Path):
+def test_build_connector_fixture_provisions_live_policy_and_runtime(tmp_path: Path):
     metadata = _run_fixture_builder(tmp_path)
     table = _load_sorted_projection(tmp_path, metadata, ["id", "region", "email"])
 
     engine = create_engine_from_url(cast(str, metadata["database_url"]))
     with session_factory(engine)() as session:
-        active = session.get(ActivePublicationRecord, UUID(cast(str, metadata["cell_id"])))
-        assert active is not None
-        published = session.scalar(
-            select(PublishedAssetRecord).where(
-                PublishedAssetRecord.publication_id == active.publication_id,
-                PublishedAssetRecord.catalog == metadata["catalog"],
-                PublishedAssetRecord.target == metadata["target"],
+        asset = session.scalar(
+            select(AssetRecord)
+            .join(CatalogRecord, CatalogRecord.id == AssetRecord.catalog_id)
+            .where(
+                CatalogRecord.name == metadata["catalog"],
+                AssetRecord.target == metadata["target"],
             )
         )
-        assert published is not None
-        target_config = published.compiled_config_json["target"]
-        rules = published.compiled_config_json["policy"]["rules"]
+        assert asset is not None
+        target_config = {
+            "backend": asset.backend,
+            "table": asset.table_identifier,
+            "options": asset.options_json,
+        }
         authoring_rules = session.scalars(
             select(PolicyRuleRecord).order_by(PolicyRuleRecord.ordinal)
         ).all()
@@ -204,23 +206,25 @@ def test_build_connector_fixture_publishes_expected_policy_and_runtime(tmp_path:
         "table": "default.complex_users",
         "options": {},
     }
-    assert len(rules) >= 2
     assert [rule.ordinal for rule in authoring_rules] == [10, 20]
 
-    mask_types = {mask["type"] for rule in rules for mask in rule.get("masks", {}).values()}
+    mask_types = {
+        cast(dict[str, str], mask)["type"]
+        for rule in authoring_rules
+        for mask in rule.masks_json.values()
+    }
     assert mask_types == {"null", "redact", "hash", "default", "email", "keep_last"}
 
     expected = metadata["expected"]
     assert expected["catalog"] == metadata["catalog"]
     assert expected["target"] == metadata["target"]
-    spark_user_rule = rules[0]
-    assert spark_user_rule["row_filter"] == expected["policy_row_filter"]
-    assert spark_user_rule["masks"]["notes"]["value"] == expected["sample_values"]["redacted_note"]
+    spark_user_rule = authoring_rules[0]
+    masks = cast(dict[str, dict[str, object]], spark_user_rule.masks_json)
+    assert spark_user_rule.row_filter_sql == expected["policy_row_filter"]
+    assert masks["notes"]["value"] == expected["sample_values"]["redacted_note"]
+    assert masks["status"]["value"] == expected["sample_values"]["default_status"]
     assert (
-        spark_user_rule["masks"]["status"]["value"] == expected["sample_values"]["default_status"]
-    )
-    assert (
-        spark_user_rule["masks"]["user.preferences.theme"]["value"]
+        masks["user.preferences.theme"]["value"]
         == expected["sample_values"]["masked_preference_theme"]
     )
     first_two_rows = cast(list[dict[str, Any]], table.slice(0, 2).to_pylist())

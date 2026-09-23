@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,6 +15,7 @@ from dal_obscura.common.config_store.db import (
     migrate_config_store,
     session_factory,
 )
+from dal_obscura.common.config_store.orm import AssetRecord, DataPlaneTicketRecord
 from dal_obscura.control_plane.interfaces import api as api_module
 from dal_obscura.control_plane.interfaces.api import create_app, create_oidc_actor_resolver
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
@@ -44,31 +46,33 @@ def _actor_for_token(token: str) -> DemoToken:
         return DemoToken("demo-admin", ("platform-admins",))
     if token == "editor-token":
         return DemoToken("editor")
-    if token == "publisher-token":
-        return DemoToken("publisher")
     raise PermissionError("bad token")
 
 
 def _client(*, secure: bool = False) -> TestClient:
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
     migrate_config_store(engine)
+    app = create_app(
+        session_factory(engine),
+        admin_token="test-admin",
+        oidc_actor_resolver=_actor_for_token,
+        oidc_admin_group="platform-admins",
+    )
+    app.state.test_session_factory = session_factory(engine)
     return TestClient(
-        create_app(
-            session_factory(engine),
-            admin_token="test-admin",
-            oidc_actor_resolver=_actor_for_token,
-            oidc_admin_group="platform-admins",
-        ),
+        app,
         base_url="https://testserver" if secure else "http://testserver",
     )
 
 
-def _save_policy_draft(client: TestClient, asset_id: UUID, rules: list[dict], headers) -> Response:
-    current = client.get(f"/v1/assets/{asset_id}/draft", headers=headers)
+def _replace_live_policy(
+    client: TestClient, asset_id: UUID, rules: list[dict], headers
+) -> Response:
+    current = client.get(f"/v1/assets/{asset_id}", headers=headers)
     assert current.status_code == 200, current.text
     return client.put(
-        f"/v1/assets/{asset_id}/draft",
-        json={"expected_revision": current.json()["revision"], "rules": rules},
+        f"/v1/assets/{asset_id}/policy",
+        json={"expected_revision": current.json()["policy_revision"], "rules": rules},
         headers=headers,
     )
 
@@ -119,6 +123,37 @@ def _bearer(token: str) -> dict[str, str]:
     return {"authorization": f"Bearer {token}"}
 
 
+def _create_ticket_for_asset(client: TestClient, asset_id: UUID) -> UUID:
+    ticket_id = uuid4()
+    session_factory_for_test = _test_session_factory(client)
+    with session_factory_for_test() as session:
+        asset = session.get(AssetRecord, asset_id)
+        assert asset is not None
+        session.add(
+            DataPlaneTicketRecord(
+                ticket_id=ticket_id,
+                cell_id=asset.cell_id,
+                tenant_id=str(asset.tenant_id),
+                asset_id=asset_id,
+                catalog="analytics",
+                target=asset.target,
+                principal_id="user1",
+                policy_version=asset.policy_revision,
+                expires_at=4_000_000_000,
+                max_exchanges=1,
+                exchange_count=0,
+                payload_hash="a" * 64,
+                payload_json={},
+            )
+        )
+        session.commit()
+    return ticket_id
+
+
+def _test_session_factory(client: TestClient) -> Any:
+    return cast(Any, client.app).state.test_session_factory
+
+
 def test_ui_auth_config_returns_public_oidc_browser_config_without_secret():
     client = _client_with_ui_auth_config()
 
@@ -144,12 +179,12 @@ def test_cookie_session_requires_csrf_header_for_mutations():
     )
     session = client.get("/v1/session", headers={"cookie": cookie_header})
     rejected = client.put(
-        "/v1/assets/00000000-0000-0000-0000-000000000000/draft",
+        "/v1/assets/00000000-0000-0000-0000-000000000000/policy",
         json={"expected_revision": 0, "rules": []},
         headers={"cookie": cookie_header},
     )
     csrf = client.put(
-        "/v1/assets/00000000-0000-0000-0000-000000000000/draft",
+        "/v1/assets/00000000-0000-0000-0000-000000000000/policy",
         json={"expected_revision": 0, "rules": []},
         headers={"cookie": cookie_header, "x-csrf-token": login.cookies["dal_obscura_csrf"]},
     )
@@ -561,97 +596,133 @@ def test_asset_owner_can_replace_policy_rules_through_api():
     assert {item["capability"]: item["allowed"] for item in access.json()["capabilities"]} == {
         "read": True,
         "edit": True,
-        "publish": False,
         "grant": False,
     }
 
-    response = _save_policy_draft(
+    response = _replace_live_policy(
         client, asset, [_allow_rule(row_filter="region = 'us'")], _bearer("owner-token")
     )
 
     assert response.status_code == 200
-    rules = client.get(f"/v1/assets/{asset}/draft", headers=_bearer("owner-token")).json()["rules"]
-    assert rules[0]["row_filter"] == "region = 'us'"
+    detail = client.get(f"/v1/assets/{asset}", headers=_bearer("owner-token")).json()
+    assert detail["policy_rules"][0]["row_filter"] == "region = 'us'"
 
 
-def test_group_owner_can_publish_policy_version_through_api():
-    client = _client()
-    asset = _provision_owned_asset(client)
-    grant = client.put(
-        f"/v1/assets/{asset}/grants",
-        json={
-            "grants": [{"principal": "group:asset-owners", "capability": "publish"}],
-            "expected_revision": 1,
-        },
-        headers=ADMIN_HEADERS,
-    )
-    _save_policy_draft(
-        client, asset, [_allow_rule(row_filter="region = 'eu'")], _bearer("owner-token")
-    )
-
-    response = client.post(
-        f"/v1/assets/{asset}/policy-versions",
-        headers=_bearer("owner-token"),
-    )
-
-    assert grant.status_code == 200
-    assert response.status_code == 200
-    assert UUID(response.json()["asset_id"]) == asset
-    assert response.json()["policy_version"] > 0
-
-
-def test_publish_uses_saved_draft_and_rejects_stale_draft_revision():
+def test_asset_owner_can_replace_live_policy_with_revision_precondition():
     client = _client()
     asset = _provision_owned_asset(client)
     owner = _bearer("owner-token")
-    grant = client.put(
-        f"/v1/assets/{asset}/grants",
-        json={
-            "grants": [{"principal": "group:asset-owners", "capability": "publish"}],
-            "expected_revision": 1,
-        },
-        headers=ADMIN_HEADERS,
-    )
 
-    saved = client.put(
-        f"/v1/assets/{asset}/draft",
-        json={"expected_revision": 0, "rules": [_allow_rule(row_filter="region = 'eu'")]},
-        headers=owner,
-    )
-    published = client.post(
-        f"/v1/assets/{asset}/policy-versions",
-        json={"expected_draft_revision": 1},
-        headers=owner,
-    )
-    stale = client.post(
-        f"/v1/assets/{asset}/policy-versions",
-        json={"expected_draft_revision": 0},
+    response = client.put(
+        f"/v1/assets/{asset}/policy",
+        json={"expected_revision": 1, "rules": [_allow_rule(row_filter="region = 'us'")]},
         headers=owner,
     )
 
-    assert saved.status_code == 200
-    assert grant.status_code == 200
-    assert published.status_code == 200
-    assert published.json()["policy_version"] != 0
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "asset_id": str(asset),
+        "policy_revision": 2,
+        "revoked_token_count": 0,
+    }
+    detail = client.get(f"/v1/assets/{asset}", headers=owner)
+    assert detail.status_code == 200
+    assert detail.json()["policy_revision"] == 2
+    assert detail.json()["policy_rules"][0]["row_filter"] == "region = 'us'"
+
+    stale = client.put(
+        f"/v1/assets/{asset}/policy",
+        json={"expected_revision": 0, "rules": []},
+        headers=owner,
+    )
     assert stale.status_code == 409
 
 
-def test_non_owner_cannot_change_policy_rules_or_publish_policy_version():
+def test_only_asset_owner_or_platform_admin_can_revoke_asset_tokens():
+    client = _client()
+    asset = _provision_owned_asset(client)
+    other_asset = _provision_owned_asset(client, target="default.audit")
+    ticket_ids = [_create_ticket_for_asset(client, asset) for _ in range(2)]
+    other_ticket_id = _create_ticket_for_asset(client, other_asset)
+
+    denied = client.post(f"/v1/assets/{asset}/tickets/revoke", headers=_bearer("outsider-token"))
+    owner = client.post(f"/v1/assets/{asset}/tickets/revoke", headers=_bearer("owner-token"))
+
+    assert denied.status_code == 403
+    assert owner.status_code == 200, owner.text
+    assert owner.json() == {"asset_id": str(asset), "revoked_token_count": 2}
+    with _test_session_factory(client)() as session:
+        revoked_tickets = [
+            session.get(DataPlaneTicketRecord, ticket_id) for ticket_id in ticket_ids
+        ]
+        other_ticket = session.get(DataPlaneTicketRecord, other_ticket_id)
+        assert all(
+            ticket is not None and ticket.revoked_at is not None for ticket in revoked_tickets
+        )
+        assert other_ticket is not None and other_ticket.revoked_at is None
+
+
+def test_asset_policy_change_preserves_tickets_unless_owner_requests_revocation():
+    client = _client()
+    asset = _provision_owned_asset(client)
+    ticket_id = _create_ticket_for_asset(client, asset)
+    owner = _bearer("owner-token")
+
+    changed = client.put(
+        f"/v1/assets/{asset}/policy",
+        json={"expected_revision": 1, "rules": [_allow_rule(row_filter="region = 'us'")]},
+        headers=owner,
+    )
+    with _test_session_factory(client)() as session:
+        ticket = session.get(DataPlaneTicketRecord, ticket_id)
+        assert ticket is not None and ticket.revoked_at is None
+
+    changed_and_revoked = client.put(
+        f"/v1/assets/{asset}/policy",
+        json={
+            "expected_revision": 2,
+            "rules": [_allow_rule(row_filter="region = 'eu'")],
+            "revoke_existing_tokens": True,
+        },
+        headers=owner,
+    )
+
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["revoked_token_count"] == 0
+    assert changed_and_revoked.status_code == 200, changed_and_revoked.text
+    assert changed_and_revoked.json()["revoked_token_count"] == 1
+    with _test_session_factory(client)() as session:
+        ticket = session.get(DataPlaneTicketRecord, ticket_id)
+        assert ticket is not None and ticket.revoked_at is not None
+
+
+def test_non_owner_cannot_change_live_policy():
     client = _client()
     asset = _provision_owned_asset(client)
 
     replace = client.put(
-        f"/v1/assets/{asset}/draft",
+        f"/v1/assets/{asset}/policy",
         json={"expected_revision": 0, "rules": [_allow_rule(row_filter="region = 'us'")]},
-        headers=_bearer("outsider-token"),
-    )
-    publish = client.post(
-        f"/v1/assets/{asset}/policy-versions",
         headers=_bearer("outsider-token"),
     )
 
     assert replace.status_code == 403
-    assert publish.status_code == 403
+
+
+def test_policy_edit_authorizes_before_validating_submitted_rules():
+    client = _client()
+    asset = _provision_owned_asset(client)
+
+    response = client.put(
+        f"/v1/assets/{asset}/policy",
+        json={
+            "expected_revision": 1,
+            "rules": [_allow_rule(row_filter="region =")],
+        },
+        headers=_bearer("outsider-token"),
+    )
+
+    assert response.status_code == 403
 
 
 def test_non_owner_cannot_read_asset_policy_or_preview():
@@ -660,7 +731,7 @@ def test_non_owner_cannot_read_asset_policy_or_preview():
 
     inventory = client.get("/v1/assets", headers=_bearer("outsider-token"))
     detail = client.get(f"/v1/assets/{asset}", headers=_bearer("outsider-token"))
-    rules = client.get(f"/v1/assets/{asset}/draft", headers=_bearer("outsider-token"))
+    rules = client.get(f"/v1/assets/{asset}", headers=_bearer("outsider-token"))
     preview = client.post(
         f"/v1/assets/{asset}/policy-evaluate",
         json={"principal": "analyst", "groups": [], "claims": {}},
@@ -689,21 +760,6 @@ def test_workspace_summary_is_scoped_to_visible_assets():
     assert owner.json()["enabled_auth_provider_count"] == 0
 
 
-def test_policy_history_is_scoped_to_owned_assets():
-    client = _client()
-    asset = _provision_owned_asset(client)
-    _save_policy_draft(client, asset, [_allow_rule(row_filter=None)], ADMIN_HEADERS)
-    client.post(f"/v1/assets/{asset}/policy-versions", headers=ADMIN_HEADERS)
-
-    outsider = client.get("/v1/policy-versions/page", headers=_bearer("outsider-token"))
-    owner = client.get("/v1/policy-versions/page", headers=_bearer("owner-token"))
-
-    assert outsider.status_code == 200
-    assert outsider.json()["items"] == []
-    assert owner.status_code == 200
-    assert owner.json()["items"][0]["asset_id"] == str(asset)
-
-
 def test_non_admin_cannot_read_catalog_or_auth_settings():
     client = _client()
 
@@ -716,7 +772,7 @@ def test_non_admin_cannot_read_catalog_or_auth_settings():
     assert providers.status_code == 403
 
 
-def test_asset_owner_can_delegate_read_without_edit_or_publish():
+def test_asset_owner_can_delegate_read_without_edit_or_grant():
     client = _client()
     asset = _provision_owned_asset(client)
     grant = client.put(
@@ -738,10 +794,13 @@ def test_asset_owner_can_delegate_read_without_edit_or_publish():
 
     inventory = client.get("/v1/assets", headers=_bearer("outsider-token"))
     detail = client.get(f"/v1/assets/{asset}", headers=_bearer("outsider-token"))
-    rules = client.get(f"/v1/assets/{asset}/draft", headers=_bearer("outsider-token"))
+    rules = client.get(f"/v1/assets/{asset}", headers=_bearer("outsider-token"))
     replace = client.put(
-        f"/v1/assets/{asset}/draft",
-        json={"expected_revision": 0, "rules": [_allow_rule(row_filter=None)]},
+        f"/v1/assets/{asset}/policy",
+        json={
+            "expected_revision": detail.json()["policy_revision"],
+            "rules": [_allow_rule(row_filter=None)],
+        },
         headers=_bearer("outsider-token"),
     )
 
@@ -820,11 +879,11 @@ def test_grant_manager_cannot_self_escalate_but_can_delegate_held_authority():
     assert delegation.status_code == 200
 
 
-def test_policy_save_rejects_invalid_row_filter_before_publish():
+def test_policy_save_rejects_invalid_row_filter_before_commit():
     client = _client()
     asset = _provision_owned_asset(client)
 
-    response = _save_policy_draft(
+    response = _replace_live_policy(
         client, asset, [_allow_rule(row_filter="region =")], _bearer("owner-token")
     )
 
@@ -832,14 +891,14 @@ def test_policy_save_rejects_invalid_row_filter_before_publish():
     assert "Invalid row_filter SQL" in response.json()["detail"]
 
 
-def test_policy_save_rejects_deny_rule_with_mask_before_publish():
+def test_policy_save_rejects_deny_rule_with_mask_before_commit():
     client = _client()
     asset = _provision_owned_asset(client)
     rule = _allow_rule(row_filter=None)
     rule["effect"] = "deny"
     rule["masks"] = {"email": {"type": "email"}}
 
-    response = _save_policy_draft(client, asset, [rule], _bearer("owner-token"))
+    response = _replace_live_policy(client, asset, [rule], _bearer("owner-token"))
 
     assert response.status_code == 400
     assert "Policy rules are explicit grants" in response.json()["detail"]
@@ -854,7 +913,7 @@ def test_platform_admin_can_assign_owner_and_bootstrap_policy():
         json={"owners": ["group:asset-owners"], "expected_revision": 0},
         headers=_bearer("admin-oidc-token"),
     )
-    policy = _save_policy_draft(
+    policy = _replace_live_policy(
         client, asset, [_allow_rule(row_filter=None)], _bearer("admin-oidc-token")
     )
 
@@ -863,8 +922,8 @@ def test_platform_admin_can_assign_owner_and_bootstrap_policy():
     assert policy.status_code == 200
 
 
-def _provision_owned_asset(client: TestClient) -> UUID:
-    asset = _provision_asset_without_owner(client)
+def _provision_owned_asset(client: TestClient, *, target: str = "default.users") -> UUID:
+    asset = _provision_asset_without_owner(client, target=target)
     response = client.put(
         f"/v1/assets/{asset}/owners",
         json={"owners": ["group:asset-owners"], "expected_revision": 0},
@@ -874,7 +933,7 @@ def _provision_owned_asset(client: TestClient) -> UUID:
     return asset
 
 
-def _provision_asset_without_owner(client: TestClient) -> UUID:
+def _provision_asset_without_owner(client: TestClient, *, target: str = "default.users") -> UUID:
     client.put(
         "/v1/settings/runtime",
         json={
@@ -893,8 +952,8 @@ def _provision_asset_without_owner(client: TestClient) -> UUID:
         headers=ADMIN_HEADERS,
     )
     asset = client.put(
-        "/v1/assets/analytics/default.users",
-        json={"backend": "iceberg", "table_identifier": "default.users", "options": {}},
+        f"/v1/assets/analytics/{target}",
+        json={"backend": "iceberg", "table_identifier": target, "options": {}},
         headers=ADMIN_HEADERS,
     ).json()
     client.put(
@@ -920,7 +979,7 @@ def _provision_asset_without_owner(client: TestClient) -> UUID:
         },
         headers=ADMIN_HEADERS,
     )
-    _save_policy_draft(client, asset["id"], [_allow_rule(row_filter=None)], ADMIN_HEADERS)
+    _replace_live_policy(client, asset["id"], [_allow_rule(row_filter=None)], ADMIN_HEADERS)
     return UUID(asset["id"])
 
 

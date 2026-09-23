@@ -69,6 +69,7 @@ class HmacTicketCodecAdapter:
             if not isinstance(nonce, str) or not nonce:
                 raise PermissionError("Invalid ticket payload")
             return TicketPayload(
+                asset_id="00000000-0000-4000-8000-000000000001",
                 ticket_id=ticket_id,
                 target="",
                 columns=[],

@@ -122,27 +122,6 @@ def test_control_plane_cli_passes_configured_secret_provider(monkeypatch, tmp_pa
     assert provider.get_secret("catalog-password") == "value"
 
 
-def test_control_plane_cli_passes_dedicated_review_secret(monkeypatch, tmp_path) -> None:
-    database_url = f"sqlite+pysqlite:///{tmp_path / 'control-plane.db'}"
-    migrate_config_store(create_engine_from_url(database_url))
-    captured: dict[str, object] = {}
-    environment = {
-        "DAL_OBSCURA_DATABASE_URL": database_url,
-        "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "test-admin",
-        "DAL_OBSCURA_CONTROL_PLANE_REVIEW_SECRET": "review-secret",
-    }
-
-    monkeypatch.setattr(
-        control_plane_cli,
-        "create_app",
-        lambda *args, **kwargs: captured.update(kwargs) or FastAPI(),
-    )
-    monkeypatch.setattr(control_plane_cli.uvicorn, "run", lambda app, **kwargs: None)
-
-    assert control_plane_cli.run(environment) == 0
-    assert captured["review_secret"] == "review-secret"
-
-
 @pytest.mark.parametrize(
     ("environment", "message"),
     [
@@ -279,34 +258,12 @@ def test_control_plane_cli_rejects_enabled_static_bootstrap_in_production(capsys
     assert "bootstrap admin access" in capsys.readouterr().err
 
 
-def test_control_plane_cli_requires_separate_review_secret_in_production(capsys):
-    result = control_plane_cli.run(
-        {
-            "DAL_OBSCURA_CONTROL_PLANE_PROFILE": "production",
-            "DAL_OBSCURA_DATABASE_URL": "postgresql+psycopg://user:pass@db.example/control_plane",
-            "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "x" * 40,
-            "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER": "https://issuer.example",
-            "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE": "dal-obscura-admin",
-            "DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP": "platform-admins",
-            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": "https://issuer.example",
-            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "dal-obscura-ui",
-            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": "https://console.example/auth/callback",
-            "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": "https://console.example",
-            "DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST": "catalog.example",
-        }
-    )
-
-    assert result == 1
-    assert "REVIEW_SECRET" in capsys.readouterr().err
-
-
 def test_control_plane_cli_requires_production_admin_group(capsys):
     result = control_plane_cli.run(
         {
             "DAL_OBSCURA_CONTROL_PLANE_PROFILE": "production",
             "DAL_OBSCURA_DATABASE_URL": "postgresql+psycopg://user:pass@db.example/control_plane",
             "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "x" * 40,
-            "DAL_OBSCURA_CONTROL_PLANE_REVIEW_SECRET": "r" * 40,
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER": "https://issuer.example",
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE": "dal-obscura-admin",
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": "https://issuer.example",
@@ -328,7 +285,6 @@ def test_control_plane_cli_requires_oidc_redirect_origins_in_cors(capsys):
             "DAL_OBSCURA_CONTROL_PLANE_PROFILE": "production",
             "DAL_OBSCURA_DATABASE_URL": "postgresql+psycopg://user:pass@db.example/control_plane",
             "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN": "x" * 40,
-            "DAL_OBSCURA_CONTROL_PLANE_REVIEW_SECRET": "r" * 40,
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER": "https://issuer.example",
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE": "dal-obscura-admin",
             "DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP": "platform-admins",

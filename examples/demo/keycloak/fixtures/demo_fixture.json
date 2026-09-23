@@ -76,12 +76,6 @@
   "owners": [
     "group:asset-owners"
   ],
-  "grants": [
-    {
-      "principal": "group:asset-owners",
-      "capability": "publish"
-    }
-  ],
   "policies": [
     {
       "ordinal": 10,

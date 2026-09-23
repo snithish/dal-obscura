@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
-import type { Asset, AssetAccess, Mask, PolicyRule, PolicyVersionDetail, SchemaNode, Session } from "../api";
+import type { Asset, AssetAccess, Mask, PolicyRule, SchemaNode, Session } from "../api";
 import { AssetWorkspace } from "./AssetWorkspace";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -61,8 +61,6 @@ const asset: Asset = {
   ],
   schema,
   policy_status: "configured",
-  draft_status: "draft",
-  active_policy_version: 4,
 };
 
 const rule: PolicyRule = {
@@ -75,14 +73,6 @@ const rule: PolicyRule = {
   when: { tenant: "analytics" },
 };
 
-const publishedDetail: PolicyVersionDetail = {
-  asset_id: asset.id,
-  policy_version: 4,
-  rules: [{ ...rule, columns: ["region"], masks: {}, row_filter: null }],
-};
-const historyQueryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
-historyQueryClient.setQueryData(["asset", "storybook|admin", asset.id, "version", 4], publishedDetail);
-
 const access: AssetAccess = {
   asset_id: asset.id,
   principal: "user:admin@example.com",
@@ -90,7 +80,6 @@ const access: AssetAccess = {
   capabilities: [
     { capability: "read", allowed: true, reasons: ["platform administrator"] },
     { capability: "edit", allowed: true, reasons: ["asset owner"] },
-    { capability: "publish", allowed: true, reasons: ["platform administrator"] },
     { capability: "grant", allowed: true, reasons: ["platform administrator"] },
   ],
 };
@@ -99,7 +88,7 @@ const session: Session = {
   principal: "user:admin@example.com",
   groups: ["analysts", "data-platform"],
   platform_admin: true,
-  capabilities: ["manage_assets", "publish"],
+  capabilities: ["manage_assets"],
   issuer: "https://idp.example",
 };
 
@@ -114,7 +103,6 @@ const meta = {
     assets: [asset],
     asset,
     access,
-    history: [],
     grants: [],
     onAsset: noop,
     assetSearch: "",
@@ -133,7 +121,7 @@ const meta = {
     selectedMask: { type: "email" } as Mask,
     effectiveFields: new Set(["customer.email", "region"]),
     saveState: "saved" as const,
-    notice: "Draft policy loaded from the active workspace.",
+    notice: "Current live policy loaded from the workspace.",
     onToggleField: noop,
     onMask: noop,
     onUpdateRule: noop,
@@ -146,28 +134,23 @@ const meta = {
     canRedo: false,
     onSave: noop,
     onPreview: noop,
-    onReview: noop,
     previewPrincipal: "user:analyst@example.com",
     previewGroups: "analysts",
     previewClaims: '{"tenant":"analytics"}',
     onPreviewPrincipal: noop,
     onPreviewGroups: noop,
     onPreviewClaims: noop,
-    onPublish: noop,
-    publishing: false,
-    onRestore: noop,
     preview: null,
     session,
     onReloadAccess: noop,
-    reviewOnly: false,
-    draftId: "draft-orders-4",
+    onRevokeTokens: noop,
     queryClient,
     sessionScope: "storybook|admin",
   },
   parameters: {
     docs: {
       description: {
-        component: "The production policy workspace with a nested struct schema, field-level access, DuckDB row filtering, masking, a reviewable draft, and an immutable-history semantic diff. The diff compares saved rules by ordinal while normalizing set-like fields; it does not evaluate policy or replace server review. It uses only deterministic fixtures; version loading is seeded and mutations stay out of Storybook.",
+        component: "The production policy workspace with a nested struct schema, field-level access, DuckDB row filtering, masking, a direct live policy editing with token revocation. It uses deterministic fixtures; mutations stay out of Storybook.",
       },
     },
   },
@@ -175,13 +158,13 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const NestedPolicyDraft: Story = {
+export const NestedLivePolicy: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("heading", { name: "Fields & access" })).toBeVisible();
     await expect(canvas.getByRole("button", { name: "Select customer.email" })).toBeVisible();
     await expect(canvas.getByLabelText("DuckDB row restriction")).toHaveValue("region = 'EU'");
     await expect(canvas.getByLabelText("Mask for customer.email")).toHaveValue("email");
-    await expect(canvas.getByRole("button", { name: "Save draft" })).toBeEnabled();
+    await expect(canvas.getByRole("button", { name: "Save policy" })).toBeEnabled();
   },
 };
 
@@ -199,12 +182,12 @@ export const ReaderInventoryAndKeyboardTabs: Story = {
 };
 
 export const DarkNestedPolicy: Story = {
-  ...NestedPolicyDraft,
+  ...NestedLivePolicy,
   globals: { theme: "dark" },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("heading", { name: "Fields & access" })).toBeVisible();
     await expect(canvas.getByRole("button", { name: "Select customer.email" })).toBeVisible();
-    await expect(canvas.getByRole("button", { name: "Save draft" })).toBeEnabled();
+    await expect(canvas.getByRole("button", { name: "Save policy" })).toBeEnabled();
   },
 };
 
@@ -234,36 +217,6 @@ export const PreventLastOwnerRemoval: Story = {
   },
 };
 
-export const SemanticHistoryDiff: Story = {
-  args: {
-    initialTab: "history",
-    initialVersion: 4,
-    queryClient: historyQueryClient,
-    history: [{ asset_id: asset.id, asset_name: asset.name, catalog: asset.catalog, target: asset.table_identifier, policy_version: 4, active: true, created_at: "2026-09-21T08:00:00Z" }],
-  },
-  play: async ({ canvas }) => {
-    await expect(canvas.getByRole("heading", { name: "Version 4 details" })).toBeVisible();
-    await expect(canvas.getByRole("region", { name: "Semantic diff against policy version 4" })).toBeVisible();
-    await expect(canvas.getByText("Changed rules")).toBeVisible();
-    const summary = within(canvas.getByRole("region", { name: "Semantic diff against policy version 4" }));
-    await expect(summary.getByText("Changed rules").parentElement).toHaveTextContent("1");
-  },
-};
-
-export const RestorePublishedVersion: Story = {
-  args: {
-    initialTab: "history",
-    initialVersion: 4,
-    queryClient: historyQueryClient,
-    onRestore: fn(),
-    history: [{ asset_id: asset.id, asset_name: asset.name, catalog: asset.catalog, target: asset.table_identifier, policy_version: 4, active: true, created_at: "2026-09-21T08:00:00Z" }],
-  },
-  play: async ({ canvas, args }) => {
-    await userEvent.click(canvas.getByRole("button", { name: "Restore to draft" }));
-    await expect(args.onRestore).toHaveBeenCalledWith(4);
-  },
-};
-
 export const DelegatedGrantActor: Story = {
   args: {
     initialTab: "access",
@@ -283,63 +236,12 @@ export const DelegatedGrantActor: Story = {
   },
 };
 
-export const DenyAllDraft: Story = {
-  args: {
-    rules: [],
-    activeRule: undefined,
-    selectedField: "",
-    selectedMask: undefined,
-    effectiveFields: new Set(),
-    reviewToken: undefined,
-  },
-  play: async ({ canvas }) => {
-    await expect(canvas.getByText("No draft rules")).toBeVisible();
-    await expect(canvas.getByText(/This is an intentional deny-all policy/)).toBeVisible();
-    await expect(canvas.getByRole("button", { name: "Save deny-all draft" })).toBeEnabled();
-    await expect(canvas.queryByRole("button", { name: "Publish reviewed deny-all" })).toBeNull();
-    await expect(canvas.getByRole("button", { name: "Add first rule" })).toBeEnabled();
-  },
-};
-
-export const ReviewOnlyPublisher: Story = {
-  args: {
-    queryClient: historyQueryClient,
-    reviewOnly: true,
-    reviewToken: "review-token",
-  },
-  play: async ({ canvas }) => {
-    await expect(canvas.getByRole("button", { name: "Save draft" })).toBeDisabled();
-    await expect(canvas.getByLabelText("Find governed asset")).toBeDisabled();
-    await userEvent.click(canvas.getByRole("tab", { name: "Review" }));
-    await expect(canvas.getByRole("heading", { name: "Review saved draft" })).toBeVisible();
-    await expect(canvas.getByRole("region", { name: "Semantic diff against policy version 4" })).toBeVisible();
-    await expect(canvas.getByRole("button", { name: "Publish reviewed draft" })).toBeEnabled();
-  },
-};
-
 export const SchemaUnavailable: Story = {
   args: { asset: { ...asset, schema: undefined }, selectedField: "", rules: [], activeRule: undefined, selectedMask: undefined },
   play: async ({ canvas }) => {
     await expect(canvas.getByText("Authoritative schema unavailable")).toBeVisible();
     await expect(canvas.queryByRole("tree")).not.toBeInTheDocument();
     await expect(canvas.getByText("No authoritative fields available")).toBeVisible();
-  },
-};
-
-export const ClipboardFailure: Story = {
-  play: async ({ canvas }) => {
-    const clipboard = navigator.clipboard;
-    const originalWrite = clipboard?.writeText;
-    if (!clipboard || !originalWrite) throw new Error("Clipboard API is unavailable in the Storybook browser");
-    Object.defineProperty(clipboard, "writeText", { configurable: true, value: async () => { throw new Error("blocked"); } });
-    try {
-      await userEvent.click(canvas.getByRole("button", { name: "Copy review link" }));
-      await expect(canvas.getByRole("alert")).toHaveTextContent("Clipboard access is unavailable");
-      const link = canvas.getByLabelText("Review link") as HTMLInputElement;
-      await expect(link.value).toContain("draft-orders-4");
-    } finally {
-      Object.defineProperty(clipboard, "writeText", { configurable: true, value: originalWrite });
-    }
   },
 };
 

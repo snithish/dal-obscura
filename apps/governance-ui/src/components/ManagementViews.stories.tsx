@@ -20,7 +20,6 @@ const summary: WorkspaceSummary = {
   asset_count: 18,
   unowned_asset_count: 0,
   missing_policy_count: 2,
-  draft_change_count: 3,
   runtime_configured: true,
   enabled_auth_provider_count: 1,
 };
@@ -29,29 +28,19 @@ const observations: WorkspaceObservations = {
   available: true,
   observed_at: "2026-09-21T08:00:00Z",
   source: "control-plane",
-  generation: { cell_id: "cell-4", publication_id: "generation-0004", manifest_hash: "a".repeat(64), status: "active" },
+  generation: { config_revision: "a".repeat(64) },
   data_plane: { status: "ready", reason: "active generation is serving" },
 };
 
 const events: AuditEvent[] = [{
   id: "audit-1",
   actor: "user:admin@example.com",
-  action: "policy.draft.save",
+  action: "asset.policy.replace",
   resource_type: "asset",
   resource_id: "asset-orders",
   outcome: "success",
   details: {},
   correlation_id: "req-17",
-  created_at: "2026-09-21T08:00:00Z",
-}];
-
-const history: NonNullable<ManagementData["history"]> = [{
-  asset_id: "asset-orders",
-  asset_name: "orders",
-  catalog: "analytics",
-  target: "orders",
-  policy_version: 4,
-  active: true,
   created_at: "2026-09-21T08:00:00Z",
 }];
 
@@ -88,7 +77,7 @@ export const ConnectedActivity: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("heading", { name: "Workspace status" })).toBeVisible();
     await expect(canvas.getByText("Control plane connected")).toBeVisible();
-    await expect(canvas.getByText("policy.draft.save")).toBeVisible();
+    await expect(canvas.getByText("asset.policy.replace")).toBeVisible();
     await expect(canvas.getByRole("button", { name: "Apply filters" })).toBeVisible();
   },
 };
@@ -114,7 +103,7 @@ export const RefreshFailureRetainsState: Story = {
   args: { error: "The control plane is temporarily unavailable.", data, page: "activity", onReload: fn() },
   play: async ({ canvas, args }) => {
     await expect(canvas.getByRole("heading", { name: "Workspace status" })).toBeVisible();
-    await expect(canvas.getByText("policy.draft.save")).toBeVisible();
+    await expect(canvas.getByText("asset.policy.replace")).toBeVisible();
     await expect(canvas.getByRole("alert")).toHaveTextContent("Workspace refresh failed");
     await userEvent.click(canvas.getByRole("button", { name: "Retry refresh" }));
     await expect(args.onReload).toHaveBeenCalledOnce();
@@ -139,26 +128,10 @@ export const FilteredAuditPagination: Story = {
     await userEvent.type(canvas.getByPlaceholderText("platform:admin"), "user:admin@example.com");
     await expect(canvas.getByRole("option", { name: "Catalog" })).toBeVisible();
     await expect(canvas.getByRole("option", { name: "Plugin" })).toBeVisible();
-    await expect(canvas.getByRole("option", { name: "Publication" })).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "Apply filters" }));
     await expect(args.onFiltersChange).toHaveBeenCalledWith({ actor: "user:admin@example.com" });
     await expect(canvas.getByRole("button", { name: "Load more activity" })).toBeVisible();
     await userEvent.click(canvas.getByRole("button", { name: "Load more activity" }));
-    await expect(args.onLoadMore).toHaveBeenCalledTimes(1);
-  },
-};
-
-export const PublishedHistoryPagination: Story = {
-  args: {
-    page: "changes",
-    data: { history, historyNextCursor: "history-cursor-2" },
-    onLoadMore: fn(),
-  },
-  play: async ({ canvas, args }) => {
-    await expect(canvas.getByRole("heading", { name: "Published policy history" })).toBeVisible();
-    await expect(canvas.getByText("orders")).toBeVisible();
-    await expect(canvas.getByText("Active")).toBeVisible();
-    await userEvent.click(canvas.getByRole("button", { name: "Load more history" }));
     await expect(args.onLoadMore).toHaveBeenCalledTimes(1);
   },
 };

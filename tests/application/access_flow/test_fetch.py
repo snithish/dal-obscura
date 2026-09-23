@@ -34,9 +34,10 @@ from tests.support.use_cases import (
 )
 
 
-def test_fetch_stream_accepts_matching_current_policy_version():
+def test_fetch_stream_does_not_recheck_policy_version():
     schema, _, table_format = _build_use_case_dependencies()
     payload = TicketPayload(
+        asset_id="00000000-0000-4000-8000-000000000001",
         ticket_id="00000000-0000-0000-0000-000000000001",
         catalog="analytics",
         target="default.users",
@@ -76,7 +77,7 @@ def test_fetch_stream_accepts_matching_current_policy_version():
     result = use_case.execute("ticket", AUTHORIZATION_HEADER)
 
     assert result.target == "default.users"
-    assert authorizer.last_current_version_tenant_id == "tenant-a"
+    assert authorizer.last_current_version_tenant_id is None
 
 
 def test_fetch_stream_reapplies_fully_pushed_row_filter_after_backend_execution():
@@ -181,6 +182,7 @@ def test_fetch_stream_reapplies_full_policy_and_requested_filter_after_partial_p
 def test_fetch_stream_principal_mismatch():
     schema, decision, table_format = _build_use_case_dependencies()
     payload = TicketPayload(
+        asset_id="00000000-0000-4000-8000-000000000001",
         ticket_id="00000000-0000-0000-0000-000000000001",
         catalog="catalog1",
         target="users",
@@ -260,6 +262,7 @@ def test_fetch_stream_rejects_ticket_when_granting_group_is_removed():
 def test_fetch_stream_rejects_matching_subject_from_another_issuer():
     schema, decision, table_format = _build_use_case_dependencies()
     payload = TicketPayload(
+        asset_id="00000000-0000-4000-8000-000000000001",
         ticket_id="00000000-0000-0000-0000-000000000001",
         catalog="catalog1",
         target="users",
@@ -312,6 +315,7 @@ def test_fetch_stream_stops_before_emitting_batches_after_identity_expiry():
         ),
     )
     payload = TicketPayload(
+        asset_id="00000000-0000-4000-8000-000000000001",
         ticket_id="00000000-0000-0000-0000-000000000001",
         catalog="catalog1",
         target="users",
@@ -358,7 +362,7 @@ def test_fetch_stream_stops_before_emitting_batches_after_identity_expiry():
         next(batches)
 
 
-def test_fetch_stream_stops_before_emitting_after_publication_version_changes():
+def test_fetch_stream_keeps_captured_policy_after_policy_version_changes():
     schema = pa.schema([pa.field("id", pa.int64())])
     table_format = PretendPushdownTableFormat(
         catalog_name="catalog1",
@@ -371,6 +375,7 @@ def test_fetch_stream_stops_before_emitting_after_publication_version_changes():
         ),
     )
     payload = TicketPayload(
+        asset_id="00000000-0000-4000-8000-000000000001",
         ticket_id="00000000-0000-0000-0000-000000000001",
         catalog="catalog1",
         target="users",
@@ -407,7 +412,60 @@ def test_fetch_stream_stops_before_emitting_after_publication_version_changes():
     assert next(batches).column("id").to_pylist() == [1]
     authorizer._current_version = 101
 
-    with pytest.raises(PermissionError, match="stale policy version"):
+    assert next(batches).column("id").to_pylist() == [2]
+
+
+def test_fetch_stream_stops_after_ticket_is_revoked_between_batches():
+    schema = pa.schema([pa.field("id", pa.int64())])
+    table_format = PretendPushdownTableFormat(
+        catalog_name="catalog1",
+        table_name="users",
+        format="test",
+        schema=schema,
+        batches=(
+            pa.record_batch([pa.array([1])], schema=schema),
+            pa.record_batch([pa.array([2])], schema=schema),
+        ),
+    )
+    payload = TicketPayload(
+        asset_id="00000000-0000-4000-8000-000000000001",
+        ticket_id="00000000-0000-0000-0000-000000000002",
+        catalog="catalog1",
+        target="users",
+        tenant_id="tenant-a",
+        columns=["id"],
+        scan={
+            "read_payload": encode_scan_task(table_format, schema),
+            "full_row_filter": None,
+            "masks": {},
+        },
+        policy_version=100,
+        principal_id="user1",
+        expires_at=9999999999,
+        nonce="nonce",
+    )
+    ticket_store = _ticket_store_with(payload)
+    use_case = FetchStreamUseCase(
+        identity=FakeIdentity(
+            principal=Principal(id="user1", groups=[], attributes={"tenant_id": "tenant-a"})
+        ),
+        authorizer=FakeAuthorizer(
+            decision=AccessDecision(
+                allowed_columns=["id"], masks={}, row_filter=None, policy_version=100
+            ),
+            current_version=100,
+        ),
+        masking=FakeMasking(),
+        row_transform=FakeRowTransform(),
+        ticket_codec=FakeTicketCodec(payload),
+        ticket_store=ticket_store,
+    )
+
+    batches = iter(use_case.execute("ticket", AUTHORIZATION_HEADER).result_batches)
+    assert next(batches).column("id").to_pylist() == [1]
+    assert payload.ticket_id is not None
+    ticket_store.revoked.add(payload.ticket_id)
+    with pytest.raises(PermissionError, match="revoked"):
         next(batches)
 
 

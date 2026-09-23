@@ -1,5 +1,12 @@
 # Current review and execution handoff — 2026-09-20
 
+**Owner decision 2026-09-23:** This R01–R12 plan is superseded where it requires
+policy drafts, reviews, publication, workspace bundles, or their packaging. The
+authenticated authoring UI, security boundaries, direct live policy editing,
+explicit owner ticket revocation, plugin architecture, and consumer goals remain.
+Use the [live-configuration decision](../decisions/2026-09-live-configuration.md)
+and current [product guides](../README.md) for the implementation contract.
+
 Source baseline: `eed277728a856801af7ef794d73d99f0b28c42ea`.
 **Planning only. No application implementation, tunnel exposure, account changes or application test runs.**
 Paid-production release remains HOLD. Implementation is now authorized; see

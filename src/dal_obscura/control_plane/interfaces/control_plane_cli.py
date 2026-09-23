@@ -95,9 +95,6 @@ def run(environment: Mapping[str, str] | None = None, argv: Sequence[str] | None
                 "DAL_OBSCURA_CONTROL_PLANE_SESSION_IDLE_TTL_SECONDS",
             ),
             oidc_nonce_actor_resolver=_ui_nonce_resolver(values),
-            require_review=values.get("DAL_OBSCURA_CONTROL_PLANE_PROFILE", "local").strip().lower()
-            == "production",
-            review_secret=_optional(values, "DAL_OBSCURA_CONTROL_PLANE_REVIEW_SECRET"),
             catalog_egress_allowlist=_csv(
                 values.get("DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST", "")
             ),
@@ -320,12 +317,6 @@ def _validate_profile(  # noqa: C901
         )
     ):
         raise ValueError("Demo login shortcuts are forbidden in production")
-    review_secret = _optional(values, "DAL_OBSCURA_CONTROL_PLANE_REVIEW_SECRET")
-    if review_secret is None or len(review_secret) < 32:
-        raise ValueError(
-            "DAL_OBSCURA_CONTROL_PLANE_REVIEW_SECRET must contain at least 32 "
-            "characters in production"
-        )
     post_logout_redirect_uri = _optional(
         values,
         "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI",

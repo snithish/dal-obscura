@@ -55,6 +55,7 @@ class TicketPayload:
             expires_at=1_900_000_000,
             nonce="nonce",
             tenant_id="default",
+            asset_id="00000000-0000-4000-8000-000000000001",
         )
         ```
     """
@@ -66,6 +67,7 @@ class TicketPayload:
     principal_id: str
     expires_at: int
     nonce: str
+    asset_id: str
     tenant_id: str = "default"
     issuer: str = ""
     identity_context: str = ""
@@ -87,6 +89,7 @@ class TicketPayload:
             "issuer": self.issuer,
             "identity_context": self.identity_context,
             "decision_digest": self.decision_digest,
+            "asset_id": self.asset_id,
         }
         if self.catalog is not None:
             payload["catalog"] = self.catalog
@@ -117,6 +120,7 @@ class TicketPayload:
                 "decision_digest",
                 "catalog",
                 "ticket_id",
+                "asset_id",
             },
         )
         return cls(
@@ -133,6 +137,7 @@ class TicketPayload:
             decision_digest=_required_string(payload, "decision_digest", allow_empty=True),
             catalog=_optional_string(payload, "catalog"),
             ticket_id=_optional_string(payload, "ticket_id"),
+            asset_id=_required_string(payload, "asset_id"),
         )
 
 

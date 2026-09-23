@@ -49,7 +49,7 @@ _REDACTED_ARGUMENTS = frozenset(
 
 
 def validate_auth_provider_payloads(providers: list[dict[str, Any]]) -> None:
-    """Validates the OIDC provider chain before it is persisted or published."""
+    """Validates the OIDC provider chain before saving live configuration."""
 
     if len(providers) > 16:
         raise ValidationFailure("Authentication provider chain exceeds 16 entries")

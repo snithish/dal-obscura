@@ -152,18 +152,50 @@ test("authenticated policy workspace stays within the page at supported sizes an
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
 });
 
-test("mobile policy panels switch explicitly without exposing publish outside review", async ({ page }) => {
-  await authenticatedApi(page, { allowPublish: true });
-  await page.setViewportSize({ width: 390, height: 844 });
+test("asset owner chooses whether live policy changes revoke tokens", async ({ page }) => {
+  const assetId = "00000000-0000-4000-8000-000000000001";
+  await authenticatedApi(page, { initialPolicyRules: [{
+    ordinal: 10,
+    effect: "allow",
+    principals: ["group:analysts"],
+    when: { region: "eu" },
+    columns: ["order_id"],
+    masks: { order_id: { type: "hash" } },
+    row_filter: "region = 'eu'",
+  }] });
   await page.goto("/#assets");
-  await expect(page.getByRole("heading", { name: "Fields & access" })).toBeVisible();
-  await page.getByRole("button", { name: "Select order_id" }).click();
-  await expect(page.getByRole("button", { name: "Add first rule" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Fields & access" })).not.toBeVisible();
-  await expect(page.getByRole("button", { name: /Publish reviewed/ })).toHaveCount(0);
-  await page.getByRole("tab", { name: "Review", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Review saved draft" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Publish reviewed deny-all" })).toBeDisabled();
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  await expect(page.getByText("Live policy revision 1")).toBeVisible();
+  await expect(page.getByText("Loaded the current live policy.")).toBeVisible();
+
+  const revokeOnSave = page.getByLabel("Revoke existing tokens after saving");
+  await expect(revokeOnSave).toBeVisible();
+  await expect(revokeOnSave).not.toBeChecked();
+  const preserveRequest = page.waitForRequest((request) => request.method() === "PUT" && request.url().endsWith(`/v1/assets/${assetId}/policy`));
+  await page.getByRole("button", { name: "Save policy" }).click();
+  expect((await preserveRequest).postDataJSON()).toMatchObject({
+    expected_revision: 1,
+    revoke_existing_tokens: false,
+    rules: [{ effect: "allow", principals: ["group:analysts"], masks: { order_id: { type: "hash" } }, row_filter: "region = 'eu'" }],
+  });
+  await expect(page.getByText("Live policy saved. Existing tokens remain valid until expiry unless an owner revokes them.")).toBeVisible();
+
+  await revokeOnSave.check();
+  const revokeRequest = page.waitForRequest((request) => request.method() === "PUT" && request.url().endsWith(`/v1/assets/${assetId}/policy`));
+  await page.getByRole("button", { name: "Save policy" }).click();
+  expect((await revokeRequest).postDataJSON()).toMatchObject({
+    expected_revision: 2,
+    revoke_existing_tokens: true,
+    rules: [{ effect: "allow", principals: ["group:analysts"], masks: { order_id: { type: "hash" } }, row_filter: "region = 'eu'" }],
+  });
+  await expect(page.getByText("Live policy saved; revoked 2 active token(s)." )).toBeVisible();
+
+  await page.getByRole("tab", { name: "Access" }).click();
+  page.once("dialog", (dialog) => dialog.accept());
+  const allTokensRequest = page.waitForRequest((request) => request.method() === "POST" && request.url().endsWith(`/v1/assets/${assetId}/tickets/revoke`));
+  await page.getByRole("button", { name: "Revoke all active tokens" }).click();
+  await allTokensRequest;
+  await expect(page.getByText("Revoked 2 active token(s)." )).toBeVisible();
 });
 
 test("nested schema tree virtualizes 10k fields and keeps keyboard movement responsive", async ({ page }) => {
@@ -235,13 +267,11 @@ test("administrator management screens stay within the page at supported sizes",
     admin: true,
     configuredSettings: true,
     configuredConnections: true,
-    configuredPublications: true,
     configuredLifecycle: true,
     configuredAudit: true,
   });
   const screens = [
     ["#activity", "Workspace status"],
-    ["#changes", "Published policy history"],
     ["#connections", "Catalog connections"],
     ["#settings", "Runtime and identity"],
   ] as const;
@@ -275,7 +305,7 @@ test("administrator management forms keep predictable keyboard order", async ({ 
   await authenticatedApi(page, { admin: true, configuredSettings: true, configuredAudit: true });
   await page.goto("/#activity");
   const actor = page.getByPlaceholder("platform:admin");
-  const action = page.getByPlaceholder("policy.draft.save");
+  const action = page.getByPlaceholder("asset.policy.replace");
   const requestId = page.getByPlaceholder("Correlation ID");
   await actor.focus();
   await expect(actor).toBeFocused();
@@ -333,7 +363,7 @@ test("administrator access management submits owner and grant changes", async ({
 
   await page.getByLabel("Owner principals").fill("alex@example.invalid, steward@example.invalid");
   await page.getByRole("button", { name: "Save owners" }).click();
-  await expect(page.getByText("Owners updated. Existing drafts and publications are unchanged.")).toBeVisible();
+  await expect(page.getByText("Owners updated.")).toBeVisible();
 
   await page.getByRole("button", { name: "Add capability" }).click();
   await page.getByLabel("Grant principal 1").fill("group:data-stewards");
@@ -349,7 +379,7 @@ test("administrator settings submits staged runtime changes", async ({ page }) =
 
   await page.getByLabel("Ticket TTL (seconds)").fill("30");
   await page.getByRole("button", { name: "Save runtime settings" }).click();
-  await expect(page.getByText("Runtime settings saved as draft configuration. Publish to make worker behavior change.")).toBeVisible();
+  await expect(page.getByText("Runtime settings saved to live configuration.")).toBeVisible();
 });
 
 test("administrator catalogs save, diagnose, and discover through admitted plugins", async ({ page }) => {
@@ -401,27 +431,6 @@ test("management refresh failure preserves the loaded connections view", async (
   await expect(page.getByRole("button", { name: "Retry refresh" })).toBeVisible();
 });
 
-test("administrator publication lifecycle creates and activates a workspace snapshot", async ({ page }) => {
-  await authenticatedApi(page, { admin: true, configuredConnections: true, configuredPublications: true });
-  await page.goto("/#connections");
-  await expect(page.getByRole("heading", { name: "Catalog connections" })).toBeVisible();
-  await expect(page.getByText("publication-act", { exact: false })).toBeVisible();
-
-  await page.getByRole("button", { name: "Create snapshot" }).click();
-  await expect(page.getByText("Configuration snapshot created. Activate it when ready.")).toBeVisible();
-  await expect(page.getByText("publication-sta", { exact: false })).toBeVisible();
-
-  await page.getByRole("button", { name: "Activate" }).click();
-  await expect(page.getByText("Configuration snapshot activated for new data-plane requests.")).toBeVisible();
-  const activeRow = page.getByRole("row").filter({ hasText: "bbbbbbbbbbbb" });
-  await expect(activeRow).toContainText("Active");
-  await expect(activeRow).toContainText("Serving");
-  const previousRow = page.getByRole("row").filter({ hasText: "aaaaaaaaaaaa" });
-  await expect(previousRow).toContainText("Staged");
-  await expect(previousRow.getByRole("button", { name: "Activate" })).toBeVisible();
-  await expect(page.getByText("Serving", { exact: true })).toHaveCount(1);
-});
-
 test("administrator plugin lifecycle applies disable and retire transitions", async ({ page }) => {
   await authenticatedApi(page, { admin: true, configuredConnections: true, configuredLifecycle: true });
   await page.goto("/#connections");
@@ -446,35 +455,17 @@ test("administrator plugin lifecycle applies disable and retire transitions", as
   await expect(page.getByText("Synthetic Iceberg lifecycle is now removed.")).toBeVisible();
 });
 
-test("publisher completes the saved draft review and publication journey", async ({ page }) => {
-  await authenticatedApi(page, { allowPublish: true });
-  await page.goto("/#assets");
-  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
-
-  await page.getByRole("button", { name: "Save deny-all draft" }).click();
-  await expect(page.getByText("Policy draft saved to the control plane.")).toBeVisible();
-  await page.getByRole("button", { name: "Review for publish" }).click();
-  await expect(page.getByText("Server review is current for this saved draft revision. You can publish it now.")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Review saved draft" })).toBeVisible();
-  const review = page.getByRole("region", { name: "Semantic diff against policy version 1" });
-  await expect(review).toBeVisible();
-  await expect(review.getByText("Removed rules")).toBeVisible();
-  await expect(review.getByRole("cell", { name: "group:analysts" })).toBeVisible();
-  await page.getByRole("button", { name: "Publish reviewed deny-all" }).click();
-  await expect(page.getByText("Published the saved draft.")).toBeVisible();
-});
-
 test("administrator activity filters and paginates the permitted audit records", async ({ page }) => {
   await authenticatedApi(page, { admin: true, configuredAudit: true });
   await page.goto("/#activity");
   await expect(page.getByRole("heading", { name: "Workspace status" })).toBeVisible();
-  await page.getByLabel("Action").fill("policy.draft.save");
+  await page.getByLabel("Action").fill("asset.policy.replace");
   await page.getByRole("button", { name: "Apply filters" }).click();
-  await expect(page.getByText("policy.draft.save")).toBeVisible();
-  await expect(page.getByText("policy.publish")).toHaveCount(0);
+  await expect(page.getByText("asset.policy.replace")).toBeVisible();
+  await expect(page.getByText("asset.tokens.revoke")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Load more activity" }).click();
-  await expect(page.getByText("policy.publish")).toBeVisible();
+  await expect(page.getByText("asset.tokens.revoke")).toBeVisible();
 });
 
 test("late catalog discovery cannot replace the current table inventory", async ({ page }) => {
@@ -497,44 +488,21 @@ test("late catalog discovery cannot replace the current table inventory", async 
   await expect(page.getByRole("cell", { name: "stale-orders" })).toHaveCount(0);
 });
 
-test("review-only publisher links preserve read-only authoring while permitting publish", async ({ page }) => {
-  await authenticatedApi(page, { allowPublish: true });
-  await page.goto("/?asset=00000000-0000-4000-8000-000000000001&draft=current-draft&draft_revision=0#assets");
-  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Save deny-all draft" })).toBeDisabled();
-  await expect(page.getByRole("region", { name: "Governed assets table" }).getByRole("button")).toBeDisabled();
-
-  await page.getByRole("button", { name: "Review for publish" }).click();
-  await expect(page.getByText("Server review is current for this saved draft revision. You can publish it now.")).toBeVisible();
-  await page.getByRole("button", { name: "Publish reviewed deny-all" }).click();
-  await expect(page.getByText("Published the saved draft.")).toBeVisible();
-});
-
 test("mutation HTML challenges clear private workspace state", async ({ page }) => {
   await authenticatedApi(page);
   await page.goto("/#assets");
 
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
-  await page.route("**/v1/assets/**/draft", async (route) => route.fulfill({
+  await page.route("**/v1/assets/**/policy", async (route) => route.fulfill({
     status: 200,
     headers: { "content-type": "text/html" },
     body: "<html><title>Sign in</title></html>",
   }));
-  await page.getByRole("button", { name: "Save deny-all draft" }).click();
+  await page.getByRole("button", { name: "Save deny-all policy" }).click();
   await expect(page.getByRole("heading", { name: "Sign in to your workspace" })).toBeVisible();
   await expect(page.getByText("The browser or edge session expired. Sign in again to continue.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "orders" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Save deny-all draft" })).toHaveCount(0);
-});
-
-test("stale review links remain explicit and read-only", async ({ page }) => {
-  await authenticatedApi(page);
-  await page.goto("/?asset=00000000-0000-4000-8000-000000000001&draft=old-draft&draft_revision=2#assets");
-
-  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
-  await expect(page.getByText(/This review link is stale: it requested draft revision 2/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Save deny-all draft" })).toBeDisabled();
-  await expect(page.getByLabel("Find governed asset")).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Save deny-all policy" })).toHaveCount(0);
 });
 
 test("asset deep links never substitute the first inventory result", async ({ page }) => {
@@ -551,21 +519,14 @@ test("authorized deep links load independently of the first inventory page", asy
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
 });
 
-test("review links without an exact revision cannot open a newer draft", async ({ page }) => {
-  await authenticatedApi(page, { allowPublish: true });
-  await page.goto("/?asset=00000000-0000-4000-8000-000000000001&draft=current-draft#assets");
-  await expect(page.getByText("This review link is incomplete. Ask the author for an exact-revision review link.")).toBeVisible();
-  await expect(page.getByRole("button", { name: /Publish reviewed/ })).toHaveCount(0);
-});
-
 test("late management responses cannot replace the current page", async ({ page }) => {
   const deferredAudit = deferredResponse();
   await authenticatedApi(page, { deferredAudit });
   await page.goto("/#activity");
   await deferredAudit.started;
 
-  await page.getByRole("button", { name: "Published changes" }).click();
-  await expect(page.getByRole("heading", { name: "Published policy history" })).toBeVisible();
+  await page.getByRole("button", { name: "Assets", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
   await page.getByRole("button", { name: "Activity", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Workspace status" })).toBeVisible();
   await expect(page.getByText("fresh-audit")).toBeVisible();
@@ -573,23 +534,6 @@ test("late management responses cannot replace the current page", async ({ page 
   deferredAudit.release();
   await expect(page.getByText("fresh-audit")).toBeVisible();
   await expect(page.getByText("stale-audit")).toHaveCount(0);
-});
-
-test("late history responses cannot replace the current changes page", async ({ page }) => {
-  const deferredHistory = deferredResponse();
-  await authenticatedApi(page, { deferredHistory });
-  await page.goto("/#changes");
-  await deferredHistory.started;
-
-  await page.getByRole("button", { name: "Activity", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Workspace status" })).toBeVisible();
-  await page.getByRole("button", { name: "Published changes" }).click();
-  await expect(page.getByRole("heading", { name: "Published policy history" })).toBeVisible();
-  await expect(page.getByText("fresh-history")).toBeVisible();
-
-  deferredHistory.release();
-  await expect(page.getByText("fresh-history")).toBeVisible();
-  await expect(page.getByText("stale-history")).toHaveCount(0);
 });
 
 test("late settings responses cannot replace the current administrator page", async ({ page }) => {
@@ -648,44 +592,24 @@ test("late asset lookup responses cannot replace the current inventory", async (
   await expect(page.getByRole("region", { name: "Governed assets table" })).not.toContainText("stale-orders");
 });
 
-test("late policy version lookups cannot replace the selected revision", async ({ page }) => {
-  const deferredVersion = deferredResponse();
-  await authenticatedApi(page, { deferredVersion });
-  await page.goto("/#assets");
-  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
-  await page.getByRole("tab", { name: "History" }).click();
-  await expect(page.getByRole("heading", { name: "Published policy revisions" })).toBeVisible();
-
-  await page.getByRole("button", { name: "View details" }).nth(0).click();
-  await deferredVersion.started;
-  await page.getByRole("button", { name: "View details" }).nth(1).click();
-  await expect(page.getByRole("heading", { name: "Version 2 details" })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "group:fresh", exact: true })).toBeVisible();
-
-  deferredVersion.release();
-  await expect(page.getByRole("heading", { name: "Version 2 details" })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "group:fresh", exact: true })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "group:stale", exact: true })).toHaveCount(0);
-});
-
-test("late draft saves cannot clear a newer local edit", async ({ page }) => {
+test("late live policy saves cannot clear a newer local edit", async ({ page }) => {
   const deferredSave = deferredResponse();
   await authenticatedApi(page, { deferredSave });
   await page.goto("/#assets");
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Save deny-all draft" }).click();
+  await page.getByRole("button", { name: "Save deny-all policy" }).click();
   await deferredSave.started;
   await page.getByRole("button", { name: "Add first rule" }).click();
-  await expect(page.getByRole("button", { name: "Save draft" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save policy" })).toBeVisible();
   await expect(page.getByText("Unsaved changes")).toBeVisible();
 
   deferredSave.release();
   await expect(page.getByText("Unsaved changes")).toBeVisible();
-  await expect(page.getByText("Policy draft saved to the control plane.")).toHaveCount(0);
+  await expect(page.getByText("Live policy saved.")).toHaveCount(0);
 });
 
-test("late policy evaluations cannot replace a newer draft preview", async ({ page }) => {
+test("late policy evaluations cannot replace a newer unsaved edit", async ({ page }) => {
   const deferredEvaluate = deferredResponse();
   await authenticatedApi(page, { deferredEvaluate });
   await page.goto("/#assets");
@@ -699,62 +623,6 @@ test("late policy evaluations cannot replace a newer draft preview", async ({ pa
   deferredEvaluate.release();
   await expect(page.getByText("Unsaved changes")).toBeVisible();
   await expect(page.getByText("Server-side evaluation completed: denied.")).toHaveCount(0);
-});
-
-test("late policy restores cannot replace a newer local edit", async ({ page }) => {
-  const deferredRestore = deferredResponse();
-  await authenticatedApi(page, { deferredRestore });
-  await page.goto("/#assets");
-  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
-  await page.getByRole("tab", { name: "History" }).click();
-  await expect(page.getByRole("heading", { name: "Published policy revisions" })).toBeVisible();
-
-  await page.getByRole("button", { name: "Restore to draft" }).nth(0).click();
-  await deferredRestore.started;
-  await page.getByRole("tab", { name: "Policy" }).click();
-  await page.getByRole("button", { name: "Add first rule" }).click();
-  await expect(page.getByRole("button", { name: "Save draft" })).toBeVisible();
-  await expect(page.getByText("Unsaved changes")).toBeVisible();
-
-  deferredRestore.release();
-  await expect(page.getByText("Unsaved changes")).toBeVisible();
-  await expect(page.getByText(/restored as draft revision/)).toHaveCount(0);
-});
-
-test("late policy reviews cannot authorize a newer draft", async ({ page }) => {
-  const deferredReview = deferredResponse();
-  await authenticatedApi(page, { deferredReview });
-  await page.goto("/#assets");
-  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
-
-  await page.getByRole("button", { name: "Review for publish" }).click();
-  await deferredReview.started;
-  await page.getByRole("button", { name: "Add first rule" }).click();
-  await expect(page.getByText("Unsaved changes")).toBeVisible();
-
-  deferredReview.release();
-  await expect(page.getByText("Unsaved changes")).toBeVisible();
-  await expect(page.getByText("Server review is current for this saved draft revision. You can publish it now.")).toHaveCount(0);
-});
-
-test("late publishes cannot commit a newer local draft", async ({ page }) => {
-  const deferredPublish = deferredResponse();
-  await authenticatedApi(page, { allowPublish: true, deferredPublish });
-  await page.goto("/#assets");
-  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
-
-  await page.getByRole("button", { name: "Review for publish" }).click();
-  await expect(page.getByText("Server review is current for this saved draft revision. You can publish it now.")).toBeVisible();
-  await page.getByRole("button", { name: "Publish reviewed deny-all" }).click();
-  await deferredPublish.started;
-  await page.getByRole("tab", { name: "Policy", exact: true }).click();
-  await page.getByRole("button", { name: "Add first rule" }).click();
-  await expect(page.getByRole("button", { name: "Save draft" })).toBeVisible();
-  await expect(page.getByText("Unsaved changes")).toBeVisible();
-
-  deferredPublish.release();
-  await expect(page.getByText("Unsaved changes")).toBeVisible();
-  await expect(page.getByText("Published the saved draft.")).toHaveCount(0);
 });
 
 test("reader deep links fail closed before admin settings requests", async ({ page }) => {
@@ -775,7 +643,7 @@ test("reader deep links fail closed before connection management requests", asyn
   const adminRequests: string[] = [];
   page.on("request", (request) => {
     const path = new URL(request.url()).pathname;
-    if (path.startsWith("/v1/settings/") || path.startsWith("/v1/catalogs") || path.startsWith("/v1/plugins") || path.startsWith("/v1/workspace/publications")) {
+    if (path.startsWith("/v1/settings/") || path.startsWith("/v1/catalogs") || path.startsWith("/v1/plugins")) {
       adminRequests.push(path);
     }
   });

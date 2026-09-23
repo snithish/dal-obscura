@@ -3,7 +3,7 @@ import { AppShell as MantineAppShell, Avatar, Badge, Breadcrumbs, Button, Drawer
 import type { Session } from "../api";
 import { Icon, type IconName } from "./Icon";
 
-export type ShellPage = "assets" | "changes" | "activity" | "connections" | "settings";
+export type ShellPage = "assets" | "activity" | "connections" | "settings";
 export type ShellTheme = "system" | "light" | "dark";
 export type ShellWorkspaceState = "loading" | "ready" | "unavailable";
 export type AppShellProps = {
@@ -35,7 +35,7 @@ export function AppShell(props: AppShellProps) {
   const canAdmin = Boolean(props.session?.capabilities.includes("workspace:admin"));
   const links = <nav aria-label="Primary navigation">
     {navigation.map((item) => <NavLink component="button" key={item.page} label={item.label}
-      leftSection={<Icon name={item.icon} />} active={props.page === item.page || (item.page === "activity" && props.page === "changes")}
+      leftSection={<Icon name={item.icon} />} active={props.page === item.page}
       aria-current={props.page === item.page ? "page" : undefined}
       disabled={!props.session || (item.admin && !canAdmin)}
       aria-disabled={!props.session || (item.admin && !canAdmin)}
@@ -85,14 +85,10 @@ export function AppShell(props: AppShellProps) {
         <nav aria-label="Breadcrumbs"><Breadcrumbs>
           <a href="#assets" onClick={(event) => { event.preventDefault(); props.onNavigate("assets"); }}>Workspace</a>
           {props.page === "assets" && props.assetCatalog && <Text size="sm">{props.assetCatalog}</Text>}
-          <Text size="sm" aria-current="page">{props.page === "assets" ? props.assetName ?? "Assets" : props.page === "changes" ? "Published changes" : navigation.find((item) => item.page === props.page)?.label}</Text>
+          <Text size="sm" aria-current="page">{props.page === "assets" ? props.assetName ?? "Assets" : navigation.find((item) => item.page === props.page)?.label}</Text>
         </Breadcrumbs></nav>
         <Text size="sm" c="dimmed" className="workbench-origin">Workspace address: {window.location.host}</Text>
-        <Title order={1}>{props.page === "assets" ? props.assetName ?? "Assets" : props.page === "changes" ? "Published changes" : navigation.find((item) => item.page === props.page)?.label}</Title>
-        {(props.page === "activity" || props.page === "changes") && <Group component="nav" aria-label="Activity views" my="md">
-          <Button variant={props.page === "activity" ? "light" : "default"} onClick={() => props.onNavigate("activity")}>Audit activity</Button>
-          <Button variant={props.page === "changes" ? "light" : "default"} onClick={() => props.onNavigate("changes")}>Published changes</Button>
-        </Group>}
+        <Title order={1}>{props.page === "assets" ? props.assetName ?? "Assets" : navigation.find((item) => item.page === props.page)?.label}</Title>
         {props.children}
       </MantineAppShell.Main>
     </MantineAppShell>

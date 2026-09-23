@@ -43,7 +43,7 @@ class SqlAlchemyTicketStore:
 
     def load(self, ticket_id: str) -> StoredTicket:
         with self._session_maker() as session:
-            record = self._record(session, ticket_id)
+            record = self._record(session, ticket_id, require_active=True)
             return _stored_ticket(record)
 
     def reserve_exchange(self, ticket_id: str, *, now: int) -> StoredTicket:
@@ -55,6 +55,7 @@ class SqlAlchemyTicketStore:
                     update(DataPlaneTicketRecord)
                     .where(DataPlaneTicketRecord.cell_id == self._cell_id)
                     .where(DataPlaneTicketRecord.ticket_id == ticket_uuid)
+                    .where(DataPlaneTicketRecord.revoked_at.is_(None))
                     .where(DataPlaneTicketRecord.expires_at >= now)
                     .where(
                         DataPlaneTicketRecord.exchange_count < DataPlaneTicketRecord.max_exchanges
@@ -67,11 +68,24 @@ class SqlAlchemyTicketStore:
             )
             if result.rowcount != 1:
                 session.rollback()
-                raise PermissionError("Ticket expired or exhausted")
+                raise PermissionError("Ticket is revoked, expired, or exhausted")
             record = self._record(session, ticket_id)
             stored = _stored_ticket(record)
             session.commit()
             return stored
+
+    def ensure_active(self, ticket_id: str) -> None:
+        """Fails closed when a ticket is absent or has been revoked."""
+
+        with self._session_maker() as session:
+            active_id = session.scalar(
+                select(DataPlaneTicketRecord.ticket_id)
+                .where(DataPlaneTicketRecord.cell_id == self._cell_id)
+                .where(DataPlaneTicketRecord.ticket_id == _ticket_uuid(ticket_id))
+                .where(DataPlaneTicketRecord.revoked_at.is_(None))
+            )
+            if active_id is None:
+                raise PermissionError("Ticket is revoked or unavailable")
 
     def cleanup_expired_and_exhausted(self, *, now: int) -> int:
         with self._session_maker() as session:
@@ -92,12 +106,21 @@ class SqlAlchemyTicketStore:
             session.commit()
             return int(result.rowcount or 0)
 
-    def _record(self, session: Session, ticket_id: str) -> DataPlaneTicketRecord:
-        record = session.scalar(
+    def _record(
+        self,
+        session: Session,
+        ticket_id: str,
+        *,
+        require_active: bool = False,
+    ) -> DataPlaneTicketRecord:
+        query = (
             select(DataPlaneTicketRecord)
             .where(DataPlaneTicketRecord.cell_id == self._cell_id)
             .where(DataPlaneTicketRecord.ticket_id == _ticket_uuid(ticket_id))
         )
+        if require_active:
+            query = query.where(DataPlaneTicketRecord.revoked_at.is_(None))
+        record = session.scalar(query)
         if record is None:
             raise LookupError("Ticket not found")
         return record
@@ -126,6 +149,7 @@ def _ticket_record(
         ticket_id=_ticket_uuid(payload.ticket_id),
         cell_id=cell_id,
         tenant_id=payload.tenant_id,
+        asset_id=_asset_uuid(payload.asset_id),
         catalog=payload.catalog,
         target=payload.target,
         principal_id=payload.principal_id,
@@ -136,6 +160,13 @@ def _ticket_record(
         payload_hash=ticket_payload_hash(payload),
         payload_json=payload.to_dict(),
     )
+
+
+def _asset_uuid(value: str) -> UUID:
+    try:
+        return UUID(value)
+    except ValueError as exc:
+        raise ValueError("Ticket asset_id must be a UUID") from exc
 
 
 def _ticket_uuid(ticket_id: str) -> UUID:

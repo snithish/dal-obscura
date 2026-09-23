@@ -1,5 +1,9 @@
 # Governed Iceberg gateway status ledger
 
+> **Historical progress record.** Its publication-generation, draft/review,
+> and bundle requirements were superseded by the [live-configuration decision](../decisions/2026-09-live-configuration.md).
+> Do not use its packet states as the current implementation checklist.
+
 Updated: 2026-09-12. This ledger follows the ordered work packages in
 [WORK_PACKAGES.md](WORK_PACKAGES.md). A committed partial fix does not mark a
 package complete unless its stated evidence exists.

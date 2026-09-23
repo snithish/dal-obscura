@@ -26,7 +26,7 @@ def test_data_plane_imports_are_public() -> None:
     modules = [
         "dal_obscura.data_plane.application.ports.identity",
         "dal_obscura.data_plane.application.use_cases.plan_access",
-        "dal_obscura.data_plane.infrastructure.adapters.published_config",
+        "dal_obscura.data_plane.infrastructure.adapters.live_config",
         "dal_obscura.data_plane.infrastructure.table_formats.iceberg",
         "dal_obscura.data_plane.interfaces.flight.server",
         "dal_obscura.data_plane.interfaces.cli",
@@ -53,5 +53,13 @@ def test_console_scripts_target_plane_specific_entry_points() -> None:
     pyproject = Path("pyproject.toml").read_text()
 
     assert 'dal-obscura = "dal_obscura.data_plane.interfaces.cli:main"' in pyproject
-    assert 'dal-obscura-admin = "dal_obscura.control_plane.interfaces.admin_cli:main"' in pyproject
+    assert (
+        'dal-obscura-control-plane = "dal_obscura.control_plane.interfaces.control_plane_cli:main"'
+        in pyproject
+    )
     assert 'dal-obscura-migrate = "dal_obscura.common.config_store.cli:main"' in pyproject
+    assert (
+        'dal-obscura-maintenance = "dal_obscura.control_plane.interfaces.maintenance_cli:main"'
+        in pyproject
+    )
+    assert "dal-obscura-admin =" not in pyproject

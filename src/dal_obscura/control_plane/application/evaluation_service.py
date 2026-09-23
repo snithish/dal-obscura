@@ -24,11 +24,9 @@ from dal_obscura.common.query_planning.field_paths import (
 from dal_obscura.control_plane.application import policy_service, schema_service
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.errors import (
-    PublicationConflictError,
-    RevisionPreconditionRequired,
     ValidationFailure,
 )
-from dal_obscura.control_plane.infrastructure.repositories import PublicationStore
+from dal_obscura.control_plane.infrastructure.repositories import ConfigStore
 from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
     DuckDBRowTransformAdapter,
@@ -41,7 +39,7 @@ EVALUATOR_VERSION = "duckdb-synthetic-v1"
 
 
 def evaluate_asset_policy(
-    store: PublicationStore,
+    store: ConfigStore,
     asset_id: UUID,
     actor: ControlPlaneActor,
     *,
@@ -52,10 +50,8 @@ def evaluate_asset_policy(
     egress_allowlist: tuple[str, ...] = (),
     plugin_registry: Any | None = None,
     secret_provider: SecretProvider | None = None,
-    draft_id: UUID | None = None,
-    draft_revision: int | None = None,
 ) -> dict[str, object]:
-    """Evaluates a policy over bounded synthetic rows and returns evidence."""
+    """Evaluates the current live policy over bounded synthetic rows."""
 
     _validate_synthetic_rows(rows)
     supplied_row_count = 0 if rows is None else len(rows)
@@ -78,28 +74,12 @@ def evaluate_asset_policy(
         actor=actor,
         requested_columns=requested_columns,
         include_mask_values=True,
-        draft_id=draft_id,
     )
-    draft = (
-        store.get_asset_policy_draft_by_id(asset_id=asset_id, draft_id=draft_id)
-        if draft_id is not None
-        else store.get_asset_policy_draft(asset_id=asset_id, author_principal=actor.identity_key())
-    )
-    if draft_id is not None and draft is None:
-        raise ValidationFailure("Policy draft not found")
-    revision = 0 if draft is None else int(cast(int | str, draft["revision"]))
-    if draft_id is not None and draft_revision is None:
-        raise RevisionPreconditionRequired(
-            "Referenced policy draft revision is required; reread the draft before evaluating."
-        )
-    if draft_revision is not None and revision != draft_revision:
-        raise PublicationConflictError(
-            "Policy draft revision changed; reread the draft before evaluating."
-        )
     schema_digest = schema_service.schema_fingerprint(arrow_schema)
     evidence = {
-        "draft_revision": revision,
-        "draft_content_hash": None if draft is None else draft["content_hash"],
+        "policy_revision": int(
+            cast(int | str, store.get_workspace_asset(asset_id)["policy_revision"])
+        ),
         "schema_fingerprint": schema_digest,
         "persona_fingerprint": _fingerprint(
             json.dumps(
@@ -113,6 +93,7 @@ def evaluate_asset_policy(
     if preview["decision"] != "allow":
         return {
             "status": "completed",
+            "policy_revision": evidence["policy_revision"],
             "decision": "deny",
             "allowed_columns": [],
             "masks": [],
@@ -173,6 +154,7 @@ def evaluate_asset_policy(
     )
     return {
         "status": "completed",
+        "policy_revision": evidence["policy_revision"],
         "decision": "allow",
         "allowed_columns": preview["visible_columns"],
         "masks": preview["masks"],

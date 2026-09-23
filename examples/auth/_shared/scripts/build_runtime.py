@@ -299,7 +299,6 @@ def _provision_control_plane(
         },
     )
     policies = {policy["target"]: policy["rules"] for policy in _read_policies(fixture, tables)}
-    first_asset_id: str | None = None
     for table in tables:
         target = str(table["target"])
         asset = _request(
@@ -309,7 +308,6 @@ def _provision_control_plane(
             headers,
             {"backend": "iceberg", "table_identifier": target, "options": {}},
         )
-        first_asset_id = first_asset_id or str(asset["id"])
         _request(
             client,
             "put",
@@ -317,12 +315,17 @@ def _provision_control_plane(
             headers,
             {"owners": ["user:owner@example.com"]},
         )
+        current_asset = _request(client, "get", f"/v1/assets/{asset['id']}", headers)
         _request(
             client,
             "put",
-            f"/v1/assets/{asset['id']}/policy-rules",
+            f"/v1/assets/{asset['id']}/policy",
             headers,
-            {"rules": _compiled_policy_rules(policies[target])},
+            {
+                "expected_revision": current_asset["policy_revision"],
+                "rules": _compiled_policy_rules(policies[target]),
+                "revoke_existing_tokens": False,
+            },
         )
     _request(
         client,
@@ -331,9 +334,8 @@ def _provision_control_plane(
         headers,
         {"providers": _auth_providers(auth_flow)},
     )
-    if first_asset_id is None:
+    if not tables:
         raise ValueError("Fixture must define at least one asset")
-    _request(client, "post", f"/v1/assets/{first_asset_id}/policy-versions", headers)
     with factory() as session:
         return str(session.scalar(select(CellRecord.id).order_by(CellRecord.name)))
 
