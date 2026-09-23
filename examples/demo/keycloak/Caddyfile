@@ -1,0 +1,14 @@
+keycloak.localhost {
+	tls internal
+	reverse_proxy keycloak:8080
+}
+
+governance.localhost {
+	tls internal
+	reverse_proxy control-plane-ui:8080
+}
+
+api.localhost {
+	tls internal
+	reverse_proxy control-plane:8820
+}

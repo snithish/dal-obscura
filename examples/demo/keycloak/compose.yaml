@@ -1,6 +1,29 @@
 name: dal-obscura-keycloak-demo
 
 services:
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      control-plane-ui:
+        condition: service_started
+      control-plane:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:80:80"
+      - "127.0.0.1:443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-check-certificate -q --spider https://governance.localhost/ || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
     env_file:
@@ -11,10 +34,9 @@ services:
       - start-dev
       - --import-realm
       - --http-port=8080
-      - --hostname-strict=false
+      - --http-enabled=true
+      - --proxy-headers=xforwarded
       - --health-enabled=true
-    ports:
-      - "127.0.0.1:8081:8080"
     volumes:
       - ./.runtime/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
     healthcheck:
@@ -28,8 +50,6 @@ services:
     image: postgres:17-alpine
     env_file:
       - .runtime/postgres.env
-    ports:
-      - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -83,8 +103,6 @@ services:
         condition: service_completed_successfully
     env_file:
       - .runtime/control-plane.env
-    ports:
-      - "127.0.0.1:8820:8820"
     volumes:
       - .:/workspace/demo:rw
     command: ["control-plane"]
@@ -104,8 +122,6 @@ services:
         restart: true
     env_file:
       - .runtime/ui.env
-    ports:
-      - "127.0.0.1:${DAL_OBSCURA_DEMO_UI_PORT:-8821}:8080"
 
   dal-obscura:
     image: ${DAL_OBSCURA_IMAGE:-ghcr.io/snithish/dal-obscura:latest}
@@ -150,4 +166,6 @@ services:
     command: ["tail", "-f", "/dev/null"]
 
 volumes:
+  caddy-data:
+  caddy-config:
   postgres-data:

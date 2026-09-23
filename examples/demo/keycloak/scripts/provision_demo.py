@@ -27,7 +27,7 @@ OIDC_AUTH_MODULE = (
 )
 DEMO_OIDC_ISSUER = os.environ.get(
     "DEMO_OIDC_ISSUER",
-    "http://127.0.0.1:8081/realms/dal-obscura-demo",
+    "https://keycloak.localhost/realms/dal-obscura-demo",
 )
 
 

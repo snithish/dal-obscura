@@ -11,10 +11,24 @@ def test_keycloak_demo_builds_the_governance_ui_and_proxies_api_same_origin() ->
     package = (REPOSITORY_ROOT / "apps/governance-ui/package.json").read_text()
     dockerignore = (REPOSITORY_ROOT / ".dockerignore").read_text()
     runner = (REPOSITORY_ROOT / "examples/demo/keycloak/run").read_text()
+    caddyfile = (REPOSITORY_ROOT / "examples/demo/keycloak/Caddyfile").read_text()
 
     assert "control-plane-ui:" in compose
     assert "name: dal-obscura-keycloak-demo" in compose
-    assert "127.0.0.1:${DAL_OBSCURA_DEMO_UI_PORT:-8821}:8080" in compose
+    assert '"127.0.0.1:80:80"' in compose
+    assert '"127.0.0.1:443:443"' in compose
+    assert "caddy-data:/data" in compose
+    assert "keycloak.localhost" in caddyfile
+    assert "governance.localhost" in caddyfile
+    assert "api.localhost" in caddyfile
+    assert caddyfile.count("tls internal") == 3
+    assert "reverse_proxy keycloak:8080" in caddyfile
+    assert "reverse_proxy control-plane-ui:8080" in caddyfile
+    assert "reverse_proxy control-plane:8820" in caddyfile
+    assert "127.0.0.1:8081:8080" not in compose
+    assert "DAL_OBSCURA_DEMO_UI_PORT" not in compose
+    assert "127.0.0.1:8820:8820" not in compose
+    assert "127.0.0.1:5432:5432" not in compose
     assert "dockerfile: ui/Dockerfile" in compose
     assert "pnpm run build" in dockerfile
     assert '"packageManager": "pnpm@' in package
