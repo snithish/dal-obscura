@@ -78,6 +78,8 @@ DAL_OBSCURA_DEMO_UI_PORT=8822 ./run up
 ```
 
 `./run credentials` prints the configured UI URL, and `./run ui-smoke` uses it.
+Set `DAL_OBSCURA_DEMO_PROJECT_NAME` to target another Compose project and its
+separate database volume. The default project name stays stable across runs.
 
 ## Demo Flow
 

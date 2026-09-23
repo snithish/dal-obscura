@@ -28,9 +28,11 @@ prepare() {
 }
 
 compose() {
+  project_name="${DAL_OBSCURA_DEMO_PROJECT_NAME:-dal-obscura-keycloak-demo}"
   ui_port="${DAL_OBSCURA_DEMO_UI_PORT:-$(sed -n 's@^DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN=http://127.0.0.1:@@p' "$ROOT/.runtime/control-plane.env" 2>/dev/null)}"
   ui_port="${ui_port:-8821}"
-  DAL_OBSCURA_IMAGE="$DEMO_IMAGE" DAL_OBSCURA_DEMO_UI_PORT="$ui_port" docker compose -f "$COMPOSE_FILE" "$@"
+  DAL_OBSCURA_IMAGE="$DEMO_IMAGE" DAL_OBSCURA_DEMO_UI_PORT="$ui_port" \
+    docker compose --project-name "$project_name" -f "$COMPOSE_FILE" "$@"
 }
 
 configured_ui_origin() {
@@ -90,8 +92,7 @@ case "$action" in
     if [ -n "$previous_ui_origin" ] && [ "$previous_ui_origin" != "$current_ui_origin" ]; then
       compose up -d --force-recreate --wait keycloak
     fi
-    compose build control-plane-ui
-    compose up -d --wait
+    compose up -d --build --wait
     credentials
     ;;
   credentials)

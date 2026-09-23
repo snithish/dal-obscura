@@ -10,8 +10,10 @@ def test_keycloak_demo_builds_the_governance_ui_and_proxies_api_same_origin() ->
     resolver_script = (REPOSITORY_ROOT / "ui/resolve-upstream-dns.sh").read_text()
     package = (REPOSITORY_ROOT / "apps/governance-ui/package.json").read_text()
     dockerignore = (REPOSITORY_ROOT / ".dockerignore").read_text()
+    runner = (REPOSITORY_ROOT / "examples/demo/keycloak/run").read_text()
 
     assert "control-plane-ui:" in compose
+    assert "name: dal-obscura-keycloak-demo" in compose
     assert "127.0.0.1:${DAL_OBSCURA_DEMO_UI_PORT:-8821}:8080" in compose
     assert "dockerfile: ui/Dockerfile" in compose
     assert "pnpm run build" in dockerfile
@@ -41,3 +43,6 @@ def test_keycloak_demo_builds_the_governance_ui_and_proxies_api_same_origin() ->
     assert "**/node_modules" in dockerignore
     assert "apps/governance-ui/dist" in dockerignore
     assert ".pnpm-store" in dockerignore
+    assert "DAL_OBSCURA_DEMO_PROJECT_NAME:-dal-obscura-keycloak-demo" in runner
+    assert 'docker compose --project-name "$project_name"' in runner
+    assert "compose up -d --build --wait" in runner
