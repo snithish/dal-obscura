@@ -8,6 +8,25 @@ import pytest
 from examples.demo.keycloak.scripts import prepare_demo, provision_demo, ui_smoke
 
 
+@pytest.mark.parametrize(
+    ("existing_origin", "expected_port"),
+    [
+        ("https://governance.localhost", 28821),
+        ("http://127.0.0.1:8821", 28821),
+        ("http://127.0.0.1:28822", 28822),
+    ],
+)
+def test_prepare_demo_uses_high_port_after_legacy_runtime(
+    monkeypatch, existing_origin, expected_port
+):
+    monkeypatch.delenv("DAL_OBSCURA_DEMO_UI_PORT", raising=False)
+
+    assert (
+        prepare_demo._demo_ui_port({"DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN": existing_origin})
+        == expected_port
+    )
+
+
 def test_keycloak_demo_fixture_declares_catalog_backed_iceberg_tables():
     fixture = json.loads(
         Path("examples/demo/keycloak/fixtures/demo_fixture.json").read_text(encoding="utf-8")

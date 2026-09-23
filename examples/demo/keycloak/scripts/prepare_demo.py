@@ -109,9 +109,16 @@ def _demo_ui_port(existing: dict[str, str]) -> int:
     configured = os.environ.get("DAL_OBSCURA_DEMO_UI_PORT")
     if configured is None:
         origin = existing.get("DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN", "")
-        configured = origin.removeprefix("http://127.0.0.1:") or "28821"
+        prefix = "http://127.0.0.1:"
+        existing_port = origin.removeprefix(prefix) if origin.startswith(prefix) else ""
+        if not existing_port.isascii() or not existing_port.isdecimal():
+            existing_port = ""
+        if existing_port and 20000 <= int(existing_port) <= 29999:
+            configured = existing_port
+        else:
+            configured = "28821"
     if not configured.isascii() or not configured.isdecimal():
-        raise ValueError("DAL_OBSCURA_DEMO_UI_PORT must be an integer from 1 through 65535")
+        raise ValueError("DAL_OBSCURA_DEMO_UI_PORT must be an integer from 20000 through 29999")
     port = int(configured)
     if not 20000 <= port <= 29999:
         raise ValueError("DAL_OBSCURA_DEMO_UI_PORT must be an integer from 20000 through 29999")
