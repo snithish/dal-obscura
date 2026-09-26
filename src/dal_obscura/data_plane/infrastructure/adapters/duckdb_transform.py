@@ -245,13 +245,8 @@ def _quote_identifier(identifier: str) -> str:
 
 
 def _path_segments(path: str) -> tuple[FieldPathSegment, ...]:
-    """Parses canonical paths while retaining legacy special-character field names."""
-    try:
-        return parse_field_path(path).segments
-    except ValueError:
-        if "." not in path:
-            return (FieldSegment(path),)
-        raise
+    """Parses the canonical field-path syntax."""
+    return parse_field_path(path).segments
 
 
 def _path_field_names(path: str) -> tuple[str, ...]:
@@ -267,15 +262,6 @@ def _path_field_names(path: str) -> tuple[str, ...]:
         else:
             tokens.append("$value")
     return tuple(tokens)
-
-
-def _top_level_path(source: str, field_name: str) -> str:
-    """Keeps legacy unquoted special-character top-level names compatible."""
-    try:
-        parse_field_path(source)
-    except ValueError:
-        return source
-    return _field_path((field_name,))
 
 
 def _field_path(parts: Iterable[str]) -> str:
@@ -366,7 +352,7 @@ def _build_projection(columns: Iterable[str]) -> list[tuple[str, ProjectionTree 
 
     for column in columns:
         top_level, *nested = _path_field_names(column)
-        top_level_path = _top_level_path(column, top_level)
+        top_level_path = _field_path((top_level,))
         if top_level_path not in by_top_level:
             tree: ProjectionTree | None = {} if nested else None
             by_top_level[top_level_path] = tree

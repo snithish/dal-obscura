@@ -55,7 +55,7 @@ def test_duckdb_transform_quotes_projection_identifiers_with_special_characters(
 
     query = duckdb_transform._build_query(
         schema,
-        ["id + 1", 'bad"name', "x; SELECT 1"],
+        ['["id + 1"]', '["bad\\"name"]', '["x; SELECT 1"]'],
         None,
         {},
         DefaultMaskingAdapter(),
@@ -78,7 +78,7 @@ def test_duckdb_transform_executes_projection_for_quoted_identifier():
     result_batches = list(
         adapter.apply_filters_and_masks_stream(
             [input_batch],
-            ["x; SELECT 1"],
+            ['["x; SELECT 1"]'],
             None,
             {},
         )
@@ -94,8 +94,8 @@ def test_duckdb_transform_quotes_masked_column_identifiers():
 
     selection = DefaultMaskingAdapter().apply(
         schema,
-        ['bad"name'],
-        {'bad"name': MaskRule(type="hash")},
+        ['["bad\\"name"]'],
+        {'["bad\\"name"]': MaskRule(type="hash")},
     )
 
     assert selection.select_list == ['sha256(CAST("bad""name" AS VARCHAR)) AS "bad""name"']
