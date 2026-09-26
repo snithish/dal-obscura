@@ -7,6 +7,8 @@ from threading import BoundedSemaphore
 from time import monotonic
 from typing import Any, cast
 
+from dal_obscura_plugin_api import DiscoveryPage, TableIdentifier
+
 ICEBERG_CATALOG_ID = "iceberg.sql"
 
 CatalogTable = dict[str, object]
@@ -66,7 +68,7 @@ def discover_public_catalog_tables(
         factory = plugin_registry.load("catalog", plugin_id)
         if not callable(factory):
             raise ValueError("Admitted catalog factory is invalid")
-        from dal_obscura_plugin_api import CatalogConfig, ExecutionContext, TableIdentifier
+        from dal_obscura_plugin_api import CatalogConfig, ExecutionContext
 
         context = ExecutionContext(
             deadline=datetime.now(timezone.utc) + timedelta(seconds=DEFAULT_DEADLINE_SECONDS),
@@ -145,15 +147,15 @@ def _validate_public_catalog_lifecycle(
             raise ValueError("Catalog plugin returned an invalid namespace")
 
 
-def _public_page_entries(page: object) -> tuple[object, ...] | list[object]:
-    if not hasattr(page, "entries") or not hasattr(page, "continuation"):
+def _public_page_entries(page: object) -> tuple[TableIdentifier, ...]:
+    if not isinstance(page, DiscoveryPage):
         raise ValueError("Catalog plugin returned an invalid discovery page")
     entries = page.entries
-    if not isinstance(entries, (tuple, list)):
+    if not isinstance(entries, tuple):
         raise ValueError("Catalog plugin returned an invalid discovery page")
     if len(entries) > DEFAULT_MAX_PAGE_ENTRIES:
         raise ValueError("Catalog plugin returned too many page entries")
-    return cast(tuple[object, ...] | list[object], entries)
+    return entries
 
 
 def discover_iceberg_tables(

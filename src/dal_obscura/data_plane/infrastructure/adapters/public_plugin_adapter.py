@@ -25,6 +25,7 @@ from dal_obscura_plugin_api import (
     CatalogPlugin as PublicCatalogPlugin,
 )
 from dal_obscura_plugin_api import (
+    DiscoveryPage,
     ExecutionContext,
     SchemaDescriptor,
     TableFormatPlugin,
@@ -361,15 +362,15 @@ def _identifier_name(identifier: TableIdentifier) -> str:
     return ".".join((*identifier.namespace, identifier.name))
 
 
-def _validated_page_entries(page: object) -> tuple[object, ...] | list[object]:
-    if not hasattr(page, "entries") or not hasattr(page, "continuation"):
+def _validated_page_entries(page: object) -> tuple[TableIdentifier, ...]:
+    if not isinstance(page, DiscoveryPage):
         raise ValueError("Public catalog returned an invalid discovery page")
     entries = page.entries
-    if not isinstance(entries, (tuple, list)):
+    if not isinstance(entries, tuple):
         raise ValueError("Public catalog returned an invalid discovery page")
     if len(entries) > MAX_PLUGIN_DISCOVERY_PAGE_ENTRIES:
         raise ValueError("Public catalog returned too many page entries")
-    return cast(tuple[object, ...] | list[object], entries)
+    return entries
 
 
 def _ensure_context_active(context: ExecutionContext) -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import cast
 
 import pyarrow as pa
 import pytest
@@ -147,6 +148,10 @@ def test_plugin_contract_value_objects_validate_generation_and_schema_identity()
         )
     with pytest.raises(ValueError, match="printable"):
         DiscoveryPage((), continuation="bad\ncontinuation")
+    with pytest.raises(ValueError, match="bounded printable"):
+        DiscoveryPage((), continuation=cast(str, []))
+    with pytest.raises(ValueError, match="entries must be a tuple"):
+        DiscoveryPage(cast(tuple[TableIdentifier, ...], []), continuation=None)
 
     with pytest.raises(ValueError, match="SHA-256"):
         SchemaDescriptor(schema_version=1, fingerprint="bad", arrow_schema=pa.schema([]))

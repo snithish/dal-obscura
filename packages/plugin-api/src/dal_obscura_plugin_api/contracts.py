@@ -144,12 +144,15 @@ class DiscoveryPage:
     continuation: str | None = None
 
     def __post_init__(self) -> None:
+        if not isinstance(self.entries, tuple):
+            raise ValueError("Discovery page entries must be a tuple")
         if len(self.entries) > _MAX_DISCOVERY_PAGE_ENTRIES:
             raise ValueError("Discovery page contains too many entries")
         if any(not isinstance(entry, TableIdentifier) for entry in self.entries):
             raise ValueError("Discovery page entries must be table identifiers")
         if self.continuation is not None and (
-            not self.continuation
+            not isinstance(self.continuation, str)
+            or not self.continuation
             or len(self.continuation) > _MAX_CONTINUATION_LENGTH
             or any(ord(char) < 0x20 or ord(char) == 0x7F for char in self.continuation)
         ):

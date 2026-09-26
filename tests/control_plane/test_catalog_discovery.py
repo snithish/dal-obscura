@@ -11,6 +11,13 @@ from dal_obscura.control_plane.infrastructure.catalog_discovery import (
 )
 
 
+def _unchecked_discovery_page(entries: object, continuation: object) -> DiscoveryPage:
+    page = object.__new__(DiscoveryPage)
+    object.__setattr__(page, "entries", entries)
+    object.__setattr__(page, "continuation", continuation)
+    return page
+
+
 class FakeIcebergCatalog:
     def list_namespaces(self, namespace=()):
         if namespace == ():
@@ -349,7 +356,7 @@ def test_public_catalog_discovery_rejects_forged_table_identifiers() -> None:
 
         def list_tables(self, context, *, continuation=None, limit):
             del context, continuation, limit
-            return type("Page", (), {"entries": (ForgedIdentifier(),), "continuation": None})()
+            return _unchecked_discovery_page((ForgedIdentifier(),), None)
 
         def close(self):
             return None
@@ -380,11 +387,7 @@ def test_public_catalog_discovery_rejects_oversized_page() -> None:
         def list_tables(self, context, *, continuation=None, limit):
             del context, continuation, limit
             entries = [TableIdentifier(namespace=("default",), name=str(i)) for i in range(501)]
-            return type(
-                "Page",
-                (),
-                {"entries": entries, "continuation": None},
-            )()
+            return _unchecked_discovery_page(tuple(entries), None)
 
         def close(self):
             return None

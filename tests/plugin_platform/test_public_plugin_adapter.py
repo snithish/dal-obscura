@@ -29,6 +29,13 @@ from dal_obscura.data_plane.infrastructure.adapters.public_plugin_adapter import
 )
 
 
+def _unchecked_discovery_page(entries: object, continuation: object) -> DiscoveryPage:
+    page = object.__new__(DiscoveryPage)
+    object.__setattr__(page, "entries", entries)
+    object.__setattr__(page, "continuation", continuation)
+    return page
+
+
 def _fixture(tmp_path: Path) -> tuple[Path, pa.Table]:
     root = tmp_path / "dataset"
     root.mkdir()
@@ -542,7 +549,7 @@ def test_public_catalog_adapter_rejects_malformed_continuation(malformed_token) 
 
         def list_tables(self, context, *, continuation=None, limit):
             del context, continuation, limit
-            return type("Page", (), {"entries": (identifier,), "continuation": malformed_token})()
+            return _unchecked_discovery_page((identifier,), malformed_token)
 
         def resolve_table(self, value, context):
             del value, context
@@ -576,7 +583,7 @@ def test_public_catalog_adapter_rejects_oversized_page() -> None:
         def list_tables(self, context, *, continuation=None, limit):
             del context, continuation, limit
             entries = tuple(identifier for _ in range(501))
-            return type("Page", (), {"entries": entries, "continuation": None})()
+            return _unchecked_discovery_page(entries, None)
 
         def resolve_table(self, value, context):
             del value, context
