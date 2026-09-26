@@ -986,3 +986,18 @@ def test_live_authorizer_changes_effective_version_after_policy_edit(db_session:
         "default.users", "analytics", tenant_id=str(tenant_id)
     )
     assert current_version != initial_version
+
+
+@pytest.mark.parametrize("attributes", [{}, {"tenant": "default"}])
+def test_live_authorizer_requires_canonical_tenant_id_claim(
+    db_session: Session, attributes: dict[str, str]
+) -> None:
+    authorizer = LiveConfigAuthorizer(LiveConfigStore(db_session, cell_id=uuid4()))
+
+    with pytest.raises(PermissionError, match="tenant_id"):
+        authorizer.authorize(
+            Principal(id="user1", groups=[], attributes=attributes),
+            target="default.users",
+            catalog="analytics",
+            requested_columns=["id"],
+        )

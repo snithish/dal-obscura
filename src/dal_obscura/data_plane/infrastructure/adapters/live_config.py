@@ -844,9 +844,10 @@ def _canonical_type_name(value: str) -> str:
 
 
 def _tenant_id(principal: Principal) -> str:
-    return str(
-        principal.attributes.get("tenant_id") or principal.attributes.get("tenant") or "default"
-    )
+    tenant_id = principal.attributes.get("tenant_id")
+    if not isinstance(tenant_id, str) or not tenant_id.strip():
+        raise PermissionError("Principal is missing the required tenant_id attribute")
+    return tenant_id.strip()
 
 
 def _mapping(value: object) -> dict[str, Any]:
