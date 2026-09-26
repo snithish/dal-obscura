@@ -468,6 +468,22 @@ test("administrator activity filters and paginates the permitted audit records",
   await expect(page.getByText("asset.tokens.revoke")).toBeVisible();
 });
 
+test.describe("audit date filters in a non-UTC timezone", () => {
+  test.use({ timezoneId: "Europe/Amsterdam" });
+
+  test("keeps the selected local time visible after applying filters", async ({ page }) => {
+    await authenticatedApi(page);
+    await page.goto("/#activity");
+    await expect(page.getByRole("heading", { name: "Workspace status" })).toBeVisible();
+
+    const createdAfter = page.getByLabel("Created after");
+    await createdAfter.fill("2026-09-26T10:45");
+    await page.getByRole("button", { name: "Apply filters" }).click();
+
+    await expect(createdAfter).toHaveValue("2026-09-26T10:45");
+  });
+});
+
 test("late catalog discovery cannot replace the current table inventory", async ({ page }) => {
   const deferredDiscovery = deferredResponse();
   await authenticatedApi(page, { admin: true, configuredConnections: true, deferredDiscovery });

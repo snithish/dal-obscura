@@ -209,7 +209,7 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; c
         return route.fulfill({ json: { asset_id: assetId, grants: payload.grants ?? [] } });
       }
       if (suffix === "grants") return route.fulfill({ json: [] });
-      if (suffix === "access") return route.fulfill({ json: { asset_id: assetId, principal: identity.principal, issuer: null, capabilities: [
+      if (suffix === "access") return route.fulfill({ json: { asset_id: assetId, principal: identity.principal, issuer: null, can_revoke_tokens: true, capabilities: [
         { capability: "read", allowed: true, reasons: ["owner"] },
         { capability: "edit", allowed: true, reasons: ["Asset owner"] },
         { capability: "grant", allowed: false, reasons: [] },

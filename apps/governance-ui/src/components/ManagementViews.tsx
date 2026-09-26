@@ -10,6 +10,14 @@ import { SettingsView } from "./SettingsView";
 export type AuditFilters = { actor?: string; action?: string; resourceType?: string; outcome?: string; correlationId?: string; createdAfter?: string; createdBefore?: string };
 export type ManagementData = { events?: AuditEvent[]; eventsNextCursor?: string | null; catalogs?: Catalog[]; runtime?: RuntimeSettings | null; providers?: AuthProvider[]; providerRevision?: number; summary?: WorkspaceSummary; observations?: WorkspaceObservations; grants?: AssetGrant[]; access?: AssetAccess; plugins?: PluginDescriptor[]; pluginStates?: PluginState[]; pluginPairs?: PluginPair[] };
 
+function localDateTimeValue(value?: string): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 function hasLoadedManagementData(page: Exclude<UiPage, "assets">, data: ManagementData): boolean {
   if (page === "activity") return "events" in data || "summary" in data || "observations" in data;
   if (page === "connections") return "catalogs" in data || "plugins" in data || "pluginStates" in data;
@@ -46,8 +54,8 @@ function ActivityView({ events, nextCursor, onLoadMore, loading, filters, onFilt
         <TextInput label="Request ID" value={draftFilters.correlationId ?? ""} onChange={(event) => setFilter("correlationId", event.currentTarget.value)} placeholder="Correlation ID" />
         <NativeSelect label="Resource type" value={draftFilters.resourceType ?? ""} onChange={(event) => setFilter("resourceType", event.currentTarget.value)} data={[{ value: "", label: "All resources" }, { value: "asset", label: "Asset" }, { value: "catalog", label: "Catalog" }, { value: "plugin", label: "Plugin" }, { value: "workspace", label: "Workspace" }]} />
         <NativeSelect label="Outcome" value={draftFilters.outcome ?? ""} onChange={(event) => setFilter("outcome", event.currentTarget.value)} data={[{ value: "", label: "All outcomes" }, { value: "success", label: "Success" }, { value: "failure", label: "Failure" }]} />
-        <TextInput label="Created after" type="datetime-local" value={draftFilters.createdAfter?.slice(0, 16) ?? ""} onChange={(event) => setFilter("createdAfter", event.currentTarget.value ? new Date(event.currentTarget.value).toISOString() : "")} />
-        <TextInput label="Created before" type="datetime-local" value={draftFilters.createdBefore?.slice(0, 16) ?? ""} onChange={(event) => setFilter("createdBefore", event.currentTarget.value ? new Date(event.currentTarget.value).toISOString() : "")} />
+        <TextInput label="Created after" type="datetime-local" value={localDateTimeValue(draftFilters.createdAfter)} onChange={(event) => setFilter("createdAfter", event.currentTarget.value ? new Date(event.currentTarget.value).toISOString() : "")} />
+        <TextInput label="Created before" type="datetime-local" value={localDateTimeValue(draftFilters.createdBefore)} onChange={(event) => setFilter("createdBefore", event.currentTarget.value ? new Date(event.currentTarget.value).toISOString() : "")} />
       </div>
       <div className="editor-actions"><Button type="button" variant="default" className="secondary" onClick={clearFilters} leftSection={<Icon name="x" size={16} />}>Clear</Button><Button type="button" className="primary" onClick={applyFilters} leftSection={<Icon name="filter" size={16} />}>Apply filters</Button></div>
     </div>

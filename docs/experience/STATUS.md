@@ -2082,3 +2082,20 @@ permission; checks ran on host Node 26.8.2/pnpm 12.4.2 rather than the declared
 Node 24/pnpm 12.3.4 pair, so they do not close R01's support contract. Real
 role-authorized browser flows and manual visual/accessibility review remain open.
 No authentication or pickle behavior changed.
+
+## R08 — VERIFY: preserve local time in audit date filters (2026-09-26)
+
+Audit filter inputs now format their stored UTC timestamps in the browser's
+local timezone when repopulating `datetime-local` controls. Previously, applying
+a filter in Europe/Amsterdam changed a selected 10:45 value to 08:45. Added a
+production-artifact browser regression configured for Europe/Amsterdam; it
+failed with the shifted value before the fix and passes afterward. Updated the
+shared authenticated API fixture to include the explicit token-revocation
+permission contract added in the preceding slice.
+
+Proof: all 39 authenticated shell browser tests and all 45 Storybook behavior
+tests pass; TypeScript, generated API-type freshness, UI budgets, and
+`git diff --check` pass. Browser checks use host Node 26.8.2/pnpm 12.4.2, outside
+the declared support pair. A build warning remains for the 514 KiB uncompressed
+entry chunk; total gzip remains within the enforced 200 KiB budget. R08 remains
+VERIFY pending live backend authorization and manual visual/accessibility review.
