@@ -1333,11 +1333,6 @@ def _preserve_redacted_args(
     return result
 
 
-_ICEBERG_CATALOG_MODULE = (
-    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
-)
-
-
 def _normalize_schema_fields(fields: list[dict[str, Any]]) -> list[dict[str, object]]:
     """Normalize schema identities without coercing unsafe caller values.
 

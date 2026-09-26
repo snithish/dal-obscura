@@ -272,7 +272,7 @@ class LiveConfigStore:
             "target": target,
             "rules": policy_rules,
         }
-        catalog_plugin_id = _catalog_module_plugin_id(catalog_record.module)
+        catalog_plugin_id = catalog_record.module
         compiled_config: dict[str, Any] = {
             "catalog": {
                 "type": "iceberg" if catalog_plugin_id == "iceberg.sql" else "plugin",
@@ -358,16 +358,12 @@ class LiveConfigStore:
                 tenant_id=record.tenant_id,
                 catalog=record.name,
                 config={
-                    "type": (
-                        "iceberg"
-                        if _catalog_module_plugin_id(record.module) == "iceberg.sql"
-                        else "plugin"
-                    ),
-                    "plugin_id": _catalog_module_plugin_id(record.module),
+                    "type": ("iceberg" if record.module == "iceberg.sql" else "plugin"),
+                    "plugin_id": record.module,
                     "options": dict(record.options_json),
                     "revision": record.revision,
                 },
-                plugin_id=_catalog_module_plugin_id(record.module),
+                plugin_id=record.module,
                 plugin_revision=record.revision,
             )
             for record in records
@@ -627,7 +623,7 @@ def _policy_from_asset(asset: LiveAsset) -> Policy:
 def _catalog_config_from_live_catalog(
     catalog: LiveCatalog,
     *,
-    plugin_id: str = "iceberg.sql",
+    plugin_id: str,
     path_enforcer: PathRuleEnforcer | None = None,
 ) -> CatalogConfig:
     config = _mapping(catalog.config)
@@ -684,17 +680,6 @@ def _catalog_config_for_asset(
     return config
 
 
-_ICEBERG_CATALOG_MODULE = (
-    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
-)
-
-
-def _catalog_module_plugin_id(module: str) -> str:
-    if module == _ICEBERG_CATALOG_MODULE:
-        return "iceberg.sql"
-    return module
-
-
 def _validate_plugin_binding(
     asset: LiveAsset,
     *,
@@ -707,8 +692,6 @@ def _validate_plugin_binding(
         raise ValueError("Live plugin binding is missing")
     catalog_plugin = raw_plugins.get("catalog")
     format_plugin = raw_plugins.get("table_format")
-    if catalog_plugin == _ICEBERG_CATALOG_MODULE:
-        raise ValueError("Live plugin binding uses a retired module identity")
     if not isinstance(catalog_plugin, str) or not isinstance(format_plugin, str):
         raise ValueError("Live plugin binding is unsupported")
     if catalog_plugin == "iceberg.sql" and format_plugin != "iceberg":

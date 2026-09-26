@@ -37,6 +37,7 @@ from dal_obscura.control_plane.application.catalog_service import (
 )
 from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.application.policy_service import ensure_asset_capability
+from dal_obscura.control_plane.infrastructure.catalog_discovery import ICEBERG_CATALOG_ID
 from dal_obscura.control_plane.infrastructure.repositories import ConfigStore
 from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
     EnvSecretProvider,
@@ -45,9 +46,6 @@ from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
 )
 
 CatalogLoader = Callable[..., Any]
-ICEBERG_CATALOG_MODULE = (
-    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
-)
 
 
 def get_asset_schema(
@@ -118,7 +116,7 @@ def load_asset_iceberg_schema(
     )
     options = cast(dict[str, Any], catalog["options"])
     validate_admitted_catalog_options(
-        str(catalog.get("module", ICEBERG_CATALOG_MODULE)),
+        str(catalog["module"]),
         options,
         plugin_registry,
     )
@@ -131,7 +129,7 @@ def load_asset_iceberg_schema(
             expected_scope=f"catalog:{catalog['name']}",
         ),
     )
-    if plugin_registry is not None and str(catalog["module"]) != ICEBERG_CATALOG_MODULE:
+    if str(catalog["module"]) != ICEBERG_CATALOG_ID:
         return _load_public_plugin_schema(
             asset=asset,
             catalog=catalog,

@@ -17,7 +17,7 @@ from tests.support.flight import (
     running_flight_client,
 )
 from tests.support.iceberg import create_iceberg_table
-from tests.support.iceberg_flight import ICEBERG_CATALOG_MODULE, service_config_from_raw
+from tests.support.iceberg_flight import service_config_from_raw
 from tests.support.policy import allow_rule
 
 pytestmark = pytest.mark.heavy
@@ -51,7 +51,7 @@ def test_flight_plan_and_get_with_iceberg_multi_catalog(tmp_path):
         service_config={
             "catalogs": {
                 "ice_one": {
-                    "module": ICEBERG_CATALOG_MODULE,
+                    "type": "iceberg",
                     "options": {
                         "type": "sql",
                         "uri": f"sqlite:///{tmp_path / 'ice_one.db'}",
@@ -59,7 +59,7 @@ def test_flight_plan_and_get_with_iceberg_multi_catalog(tmp_path):
                     },
                 },
                 "ice_two": {
-                    "module": ICEBERG_CATALOG_MODULE,
+                    "type": "iceberg",
                     "options": {
                         "type": "sql",
                         "uri": f"sqlite:///{tmp_path / 'ice_two.db'}",
@@ -140,7 +140,7 @@ def test_flight_plan_and_get_with_iceberg_requested_row_filter_on_unprojected_co
         service_config={
             "catalogs": {
                 "ice_one": {
-                    "module": ICEBERG_CATALOG_MODULE,
+                    "type": "iceberg",
                     "options": {
                         "type": "sql",
                         "uri": f"sqlite:///{tmp_path / 'ice_one.db'}",
@@ -204,7 +204,7 @@ def test_flight_plan_rejects_direct_target_without_catalog(tmp_path):
         service_config={
             "catalogs": {
                 "ice_one": {
-                    "module": ICEBERG_CATALOG_MODULE,
+                    "type": "iceberg",
                     "options": {
                         "type": "sql",
                         "uri": f"sqlite:///{tmp_path / 'ice_one.db'}",
@@ -268,7 +268,7 @@ def test_flight_plan_and_get_with_iceberg_multi_file_large(tmp_path):
         service_config={
             "catalogs": {
                 "ice_one": {
-                    "module": ICEBERG_CATALOG_MODULE,
+                    "type": "iceberg",
                     "options": {
                         "type": "sql",
                         "uri": f"sqlite:///{tmp_path / 'ice_one.db'}",

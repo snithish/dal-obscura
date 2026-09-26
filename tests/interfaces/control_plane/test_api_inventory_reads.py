@@ -156,9 +156,7 @@ def test_control_plane_rejects_oversized_chunked_body_without_content_length():
     assert b"Request body too large" in sent[1]["body"]
 
 
-ICEBERG_CATALOG_MODULE = (
-    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
-)
+ICEBERG_CATALOG_ID = "iceberg.sql"
 DEFAULT_AUTH_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider"
 )
@@ -177,7 +175,7 @@ def _provision_asset(client: TestClient) -> dict[str, str]:
     client.put(
         "/v1/catalogs/analytics",
         json={
-            "module": ICEBERG_CATALOG_MODULE,
+            "module": ICEBERG_CATALOG_ID,
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
         },
         headers=ADMIN_HEADERS,
@@ -245,7 +243,7 @@ def test_reads_live_workspace_resources_after_writes():
         "revision": 1,
     }
     assert catalogs[0]["name"] == "analytics"
-    assert catalogs[0]["module"] == ICEBERG_CATALOG_MODULE
+    assert catalogs[0]["module"] == ICEBERG_CATALOG_ID
     assert catalogs[0]["plugin_id"] == "iceberg.sql"
     assert catalogs[0]["options"] == {"type": "sql", "uri": "sqlite:///catalog.db"}
     assert assets[0]["id"] == asset["id"]

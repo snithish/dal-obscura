@@ -14,11 +14,11 @@ from uuid import UUID
 from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.catalog_service import (
-    ICEBERG_CATALOG_MODULE,
     validate_descriptor_options,
 )
 from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control_plane.application.policy_service import ensure_asset_capability
+from dal_obscura.control_plane.infrastructure.catalog_discovery import ICEBERG_CATALOG_ID
 from dal_obscura.control_plane.infrastructure.repositories import ConfigStore
 
 _ASSET_CAPABILITIES = ("read", "edit", "grant")
@@ -154,7 +154,7 @@ def upsert_workspace_asset(
     context = _required_workspace_context(store)
     catalog_record = store.get_workspace_catalog(context, catalog)
     catalog_module = str(catalog_record["module"])
-    if backend != "iceberg" or catalog_module != ICEBERG_CATALOG_MODULE:
+    if backend != "iceberg" or catalog_module != ICEBERG_CATALOG_ID:
         if plugin_registry is None:
             raise ValidationFailure("Plugin pair is not admitted")
         # Plugin admission is frozen at startup; never discover or import

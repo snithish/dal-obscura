@@ -13,9 +13,7 @@ from dal_obscura.common.config_store.db import session_factory
 from dal_obscura.common.config_store.orm import CellTenantRecord
 from dal_obscura.control_plane.interfaces.api import create_app
 
-ICEBERG_CATALOG_MODULE = (
-    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
-)
+ICEBERG_CATALOG_ID = "iceberg.sql"
 
 
 @dataclass(frozen=True)
@@ -56,7 +54,7 @@ def provision_default_live_asset(
         client.put(
             f"/v1/catalogs/{catalog_name}",
             json={
-                "module": ICEBERG_CATALOG_MODULE,
+                "module": ICEBERG_CATALOG_ID,
                 "options": catalog_options,
             },
             headers=headers,

@@ -39,9 +39,7 @@ from dal_obscura.data_plane.infrastructure.adapters.live_config import (
 )
 from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 
-ICEBERG_CATALOG_MODULE = (
-    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
-)
+ICEBERG_CATALOG_ID = "iceberg.sql"
 
 
 def test_catalog_registry_close_attempts_all_cached_instances_when_one_fails() -> None:
@@ -153,7 +151,7 @@ def test_live_config_rejects_tampered_plugin_binding():
         config={"type": "iceberg", "options": {}},
     )
 
-    with pytest.raises(ValueError, match="plugin binding is unsupported"):
+    with pytest.raises(ValueError, match="unsupported without an admitted registry"):
         _catalog_config_for_asset(catalog, asset)
 
 
@@ -174,7 +172,7 @@ def test_live_config_rejects_legacy_catalog_module_shape():
         config_revision=asset.config_revision,
         tenant_id=asset.tenant_id,
         catalog="analytics",
-        config={"module": ICEBERG_CATALOG_MODULE, "options": {}},
+        config={"module": ICEBERG_CATALOG_ID, "options": {}},
     )
 
     with pytest.raises(ValueError, match="retired module identity"):
@@ -259,10 +257,15 @@ def test_live_config_requires_both_plugin_identities_in_admitted_snapshot():
         asset,
         compiled_config={
             **asset.compiled_config,
-            "plugins": {"catalog": ICEBERG_CATALOG_MODULE, "table_format": "iceberg"},
+            "plugins": {
+                "catalog": (
+                    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
+                ),
+                "table_format": "iceberg",
+            },
         },
     )
-    with pytest.raises(ValueError, match="retired module identity"):
+    with pytest.raises(ValueError, match="plugin binding is not admitted"):
         _catalog_config_for_asset(
             catalog,
             retired,
@@ -880,7 +883,7 @@ def _seed_live_asset(
     policy_version: int,
     backend: str = "iceberg",
     table: str = "prod.users",
-    catalog_module: str = ICEBERG_CATALOG_MODULE,
+    catalog_module: str = ICEBERG_CATALOG_ID,
     catalog_options: dict[str, object] | None = None,
     target_options: dict[str, object] | None = None,
 ) -> None:

@@ -10,9 +10,7 @@ from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
 )
 from tests.support.iceberg import iceberg_sql_catalog_options
 
-ICEBERG_CATALOG_MODULE = (
-    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
-)
+ICEBERG_CATALOG_ID = "iceberg.sql"
 
 
 def iceberg_catalog_config(
@@ -50,10 +48,7 @@ def _dict(raw: object) -> dict[str, object]:
 
 
 def _catalog_type(raw_config: dict[str, Any]) -> CatalogType:
-    raw_type = raw_config.get("type")
-    if raw_type is not None:
-        return str(raw_type)
-    module = str(raw_config.get("module", ""))
-    if module == ICEBERG_CATALOG_MODULE:
-        return "iceberg"
-    raise ValueError(f"Unsupported catalog module: {module}")
+    raw_type = raw_config["type"]
+    if raw_type != "iceberg":
+        raise ValueError(f"Unsupported catalog type: {raw_type}")
+    return "iceberg"

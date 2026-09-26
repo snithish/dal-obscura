@@ -69,6 +69,7 @@ class _FakeStore:
         assert name == "analytics"
         return {
             "name": "analytics",
+            "module": "iceberg.sql",
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
         }
 
@@ -455,6 +456,7 @@ def test_schema_loading_enforces_catalog_egress_before_provider_call(
         "get_workspace_catalog",
         lambda context, name: {
             "name": name,
+            "module": "iceberg.sql",
             "options": {"uri": "https://blocked.example/catalog"},
         },
     )
@@ -487,6 +489,7 @@ def test_schema_loading_resolves_secret_references_before_provider_call(
         "get_workspace_catalog",
         lambda context, name: {
             "name": name,
+            "module": "iceberg.sql",
             "options": {
                 "uri": "https://catalog.example/api",
                 "token": {"secret": "CATALOG_TOKEN", "scope": "catalog:analytics"},

@@ -22,7 +22,7 @@ from dal_obscura_plugin_api import PluginDescriptor
 from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.control_plane.application.errors import ValidationFailure
 from dal_obscura.control_plane.infrastructure.catalog_discovery import (
-    ICEBERG_CATALOG_MODULE,
+    ICEBERG_CATALOG_ID,
     discover_catalog_tables,
     discover_public_catalog_tables,
 )
@@ -98,11 +98,9 @@ def list_workspace_catalogs(
     # snapshot and fail closed when startup did not admit the plugin.
     admitted = plugin_registry.admitted()
     for catalog in catalogs:
-        module = str(catalog.get("module", ""))
-        if module == ICEBERG_CATALOG_MODULE:
-            catalog["plugin_id"] = "iceberg.sql"
-        elif ("catalog", module) in admitted:
-            catalog["plugin_id"] = module
+        plugin_id = str(catalog.get("module", ""))
+        if ("catalog", plugin_id) in admitted:
+            catalog["plugin_id"] = plugin_id
         else:
             catalog["plugin_id"] = None
     return catalogs
@@ -138,7 +136,7 @@ def discover_workspace_catalog_tables(
     )
     try:
         with _admit_session_discovery(session_key):
-            if plugin_registry is not None and str(catalog["module"]) != ICEBERG_CATALOG_MODULE:
+            if str(catalog["module"]) != ICEBERG_CATALOG_ID:
                 tables = discover_public_catalog_tables(
                     str(catalog["name"]),
                     str(catalog["module"]),
@@ -212,7 +210,7 @@ def diagnose_workspace_catalog(
                     revision=_catalog_revision(catalog),
                     plugin_registry=plugin_registry,
                 )
-                if plugin_registry is not None and str(catalog["module"]) != ICEBERG_CATALOG_MODULE
+                if str(catalog["module"]) != ICEBERG_CATALOG_ID
                 else discover(
                     str(catalog["name"]),
                     str(catalog["module"]),
@@ -262,7 +260,7 @@ def upsert_workspace_catalog(
         ```
     """
 
-    if module != "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog":
+    if module != ICEBERG_CATALOG_ID:
         if plugin_registry is None:
             raise ValidationFailure("Catalog plugin is not admitted")
         admitted = plugin_registry.admitted()
@@ -305,7 +303,7 @@ def validate_admitted_catalog_options(
     contract and is validated by ``validate_catalog_options``.
     """
 
-    if module == ICEBERG_CATALOG_MODULE:
+    if module == ICEBERG_CATALOG_ID:
         return
     if plugin_registry is None:
         raise ValidationFailure("Catalog plugin is not admitted")

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from tests.interfaces.control_plane.workspace_helpers import (
     ADMIN_HEADERS,
-    ICEBERG_CATALOG_MODULE,
+    ICEBERG_CATALOG_ID,
     _client,
     _keys_recursive,
     _provision_asset,
@@ -27,7 +27,7 @@ def test_workspace_asset_upsert_uses_default_workspace_context():
     client.put(
         "/v1/catalogs/analytics",
         json={
-            "module": ICEBERG_CATALOG_MODULE,
+            "module": ICEBERG_CATALOG_ID,
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
         },
         headers=ADMIN_HEADERS,
@@ -107,7 +107,7 @@ def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail():
     client.put(
         "/v1/catalogs/analytics",
         json={
-            "module": ICEBERG_CATALOG_MODULE,
+            "module": ICEBERG_CATALOG_ID,
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
         },
         headers=ADMIN_HEADERS,
@@ -227,7 +227,7 @@ def test_schema_fields_preserve_literal_dotted_and_nested_paths():
     client.put(
         "/v1/catalogs/analytics",
         json={
-            "module": ICEBERG_CATALOG_MODULE,
+            "module": ICEBERG_CATALOG_ID,
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
         },
         headers=ADMIN_HEADERS,
@@ -274,7 +274,7 @@ def test_workspace_policy_can_be_replaced_directly_from_asset_detail():
     client.put(
         "/v1/catalogs/analytics",
         json={
-            "module": ICEBERG_CATALOG_MODULE,
+            "module": ICEBERG_CATALOG_ID,
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
         },
         headers=ADMIN_HEADERS,
@@ -331,7 +331,7 @@ def test_retired_asset_policy_preview_route_does_not_dispatch():
     client.put(
         "/v1/catalogs/analytics",
         json={
-            "module": ICEBERG_CATALOG_MODULE,
+            "module": ICEBERG_CATALOG_ID,
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
         },
         headers=ADMIN_HEADERS,
@@ -358,7 +358,7 @@ def test_workspace_asset_owners_can_be_replaced_from_asset_detail():
     client.put(
         "/v1/catalogs/analytics",
         json={
-            "module": ICEBERG_CATALOG_MODULE,
+            "module": ICEBERG_CATALOG_ID,
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
         },
         headers=ADMIN_HEADERS,
@@ -406,7 +406,7 @@ def test_existing_asset_metadata_update_requires_revision_precondition():
     client.put(
         "/v1/catalogs/analytics",
         json={
-            "module": ICEBERG_CATALOG_MODULE,
+            "module": ICEBERG_CATALOG_ID,
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
         },
         headers=ADMIN_HEADERS,
@@ -448,7 +448,7 @@ def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
         {
             "id": catalogs[0]["id"],
             "name": "analytics",
-            "module": ICEBERG_CATALOG_MODULE,
+            "module": ICEBERG_CATALOG_ID,
             "plugin_id": "iceberg.sql",
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
             "status": "configured",
@@ -524,7 +524,7 @@ def test_asset_binding_precondition_rejects_stale_update() -> None:
     client.put(
         "/v1/catalogs/analytics",
         json={
-            "module": ICEBERG_CATALOG_MODULE,
+            "module": ICEBERG_CATALOG_ID,
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
         },
         headers=ADMIN_HEADERS,
@@ -568,7 +568,7 @@ def test_asset_binding_update_requires_revision_precondition() -> None:
     client.put(
         "/v1/catalogs/analytics",
         json={
-            "module": ICEBERG_CATALOG_MODULE,
+            "module": ICEBERG_CATALOG_ID,
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
         },
         headers=ADMIN_HEADERS,
@@ -597,7 +597,7 @@ def test_asset_binding_precondition_rejects_nonzero_revision_on_create() -> None
     client.put(
         "/v1/catalogs/analytics",
         json={
-            "module": ICEBERG_CATALOG_MODULE,
+            "module": ICEBERG_CATALOG_ID,
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
         },
         headers=ADMIN_HEADERS,
@@ -661,7 +661,7 @@ def test_workspace_asset_page_is_bounded_searchable_and_cursor_paginated():
     client.put(
         "/v1/catalogs/analytics",
         json={
-            "module": ICEBERG_CATALOG_MODULE,
+            "module": ICEBERG_CATALOG_ID,
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
         },
         headers=ADMIN_HEADERS,

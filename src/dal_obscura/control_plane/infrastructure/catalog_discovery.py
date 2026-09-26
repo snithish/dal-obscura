@@ -7,9 +7,7 @@ from threading import BoundedSemaphore
 from time import monotonic
 from typing import Any, cast
 
-ICEBERG_CATALOG_MODULE = (
-    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
-)
+ICEBERG_CATALOG_ID = "iceberg.sql"
 
 CatalogTable = dict[str, object]
 LoadCatalogFn = Any
@@ -24,7 +22,7 @@ _DISCOVERY_SLOTS = BoundedSemaphore(DEFAULT_MAX_ACTIVE_DISCOVERIES)
 
 def discover_catalog_tables(
     catalog_name: str,
-    module: str,
+    catalog_plugin_id: str,
     options: dict[str, Any],
 ) -> list[CatalogTable]:
     """Lists tables for a configured catalog.
@@ -38,7 +36,7 @@ def discover_catalog_tables(
     # Keep the public discoverer bounded before materializing provider results.
     # The older registry path collected a complete listing and capped it only
     # afterwards, allowing an untrusted catalog to consume arbitrary memory.
-    if module == ICEBERG_CATALOG_MODULE:
+    if catalog_plugin_id == ICEBERG_CATALOG_ID:
         return discover_iceberg_tables(
             catalog_name,
             dict(options),
@@ -46,7 +44,7 @@ def discover_catalog_tables(
             max_namespaces=DEFAULT_MAX_NAMESPACES,
             deadline_at=monotonic() + DEFAULT_DEADLINE_SECONDS,
         )
-    raise ValueError(f"Unsupported catalog module: {module}")
+    raise ValueError(f"Unsupported catalog plugin: {catalog_plugin_id}")
 
 
 def discover_public_catalog_tables(

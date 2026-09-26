@@ -8,9 +8,7 @@ from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.errors import AuthorizationFailure
 from dal_obscura.control_plane.application.provisioning import ProvisioningService
 
-ICEBERG_CATALOG_MODULE = (
-    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
-)
+ICEBERG_CATALOG_ID = "iceberg.sql"
 
 
 def test_asset_owner_can_replace_policy_rules(db_session):
@@ -181,7 +179,7 @@ def _workspace_asset(db_session) -> tuple[ProvisioningService, UUID]:
     service = ProvisioningService(db_session)
     service.upsert_workspace_catalog(
         name="analytics",
-        module=ICEBERG_CATALOG_MODULE,
+        module=ICEBERG_CATALOG_ID,
         options={"type": "sql", "uri": "sqlite:///catalog.db"},
     )
     asset = service.upsert_workspace_asset(

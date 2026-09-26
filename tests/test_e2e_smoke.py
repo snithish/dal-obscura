@@ -252,7 +252,7 @@ def control_plane_setup(
             cell_id=cell_id,
             tenant_id=tenant_id,
             name="e2e_catalog",
-            module="dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog",
+            module="iceberg.sql",
             options={
                 "type": "sql",
                 "uri": catalog_uri,

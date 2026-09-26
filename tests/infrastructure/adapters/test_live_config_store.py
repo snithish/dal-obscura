@@ -26,9 +26,7 @@ from dal_obscura.data_plane.infrastructure.adapters.live_config import (
     LiveConfigStore,
 )
 
-ICEBERG_CATALOG_MODULE = (
-    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
-)
+ICEBERG_CATALOG_ID = "iceberg.sql"
 
 
 @pytest.fixture
@@ -128,7 +126,7 @@ def _seed_live_config(session: Session):
                 cell_id=cell_id,
                 tenant_id=tenant_id,
                 name="analytics",
-                module=ICEBERG_CATALOG_MODULE,
+                module=ICEBERG_CATALOG_ID,
                 options_json={"type": "sql", "uri": "sqlite:///catalog.db"},
                 revision=3,
             ),

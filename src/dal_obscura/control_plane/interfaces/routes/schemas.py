@@ -456,14 +456,14 @@ class CatalogRequest(StrictModel):
 
     Example:
         ```python
-        CatalogRequest(module="iceberg", options={"uri": "sqlite:///catalog.db"})
+        CatalogRequest(module="iceberg.sql", options={"uri": "sqlite:///catalog.db"})
         ```
     """
 
     module: str = Field(
         min_length=1,
         max_length=256,
-        pattern=r"^[a-z][a-z0-9_.-]{0,63}$|^dal_obscura\.[A-Za-z0-9_.-]{1,255}$",
+        pattern=r"^[a-z][a-z0-9_.-]{0,63}$",
     )
     options: dict[str, Any] = Field(default_factory=dict)
     expected_revision: int | None = Field(default=None, ge=0)

@@ -546,7 +546,7 @@ def _provision_control_plane(
             cell_id=cell_id,
             tenant_id=tenant_id,
             name=CATALOG_NAME,
-            module="dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog",
+            module="iceberg.sql",
             options={
                 "type": "sql",
                 "uri": f"sqlite:///{output_dir / f'{CATALOG_NAME}.db'}",

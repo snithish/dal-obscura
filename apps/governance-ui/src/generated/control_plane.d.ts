@@ -1430,7 +1430,7 @@ export interface operations {
             header?: never;
             path?: never;
             cookie?: {
-                dal_obscura_auth_state?: string | null;
+                "__Host-dal_obscura_auth_state"?: string | null;
             };
         };
         requestBody?: never;
@@ -1527,8 +1527,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody?: never;
@@ -1565,8 +1563,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody?: never;
@@ -1603,8 +1599,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody?: never;
@@ -1641,8 +1635,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody?: never;
@@ -1679,8 +1671,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody: {
@@ -1721,8 +1711,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody: {
@@ -1763,8 +1751,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody: {
@@ -1805,8 +1791,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody: {
@@ -1847,8 +1831,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody?: never;
@@ -1885,8 +1867,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody: {
@@ -1927,8 +1907,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody?: never;
@@ -1966,8 +1944,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody: {
@@ -2010,8 +1986,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody?: never;
@@ -2057,8 +2031,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody?: never;
@@ -2093,8 +2065,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody?: never;
@@ -2131,8 +2101,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody?: never;
@@ -2169,8 +2137,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody?: never;
@@ -2207,8 +2173,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody?: never;
@@ -2241,8 +2205,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody?: never;
@@ -2277,8 +2239,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody?: never;
@@ -2316,8 +2276,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody: {
@@ -2356,8 +2314,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody?: never;
@@ -2443,8 +2399,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody?: never;
@@ -2479,8 +2433,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody: {
@@ -2519,8 +2471,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody?: never;
@@ -2555,8 +2505,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody?: never;
@@ -2591,8 +2539,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody: {
@@ -2651,8 +2597,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody?: never;
@@ -2687,8 +2631,6 @@ export interface operations {
             cookie?: {
                 "__Host-dal_obscura_csrf"?: string | null;
                 "__Host-dal_obscura_session"?: string | null;
-                dal_obscura_csrf?: string | null;
-                dal_obscura_session?: string | null;
             };
         };
         requestBody?: never;

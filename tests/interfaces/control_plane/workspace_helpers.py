@@ -11,9 +11,7 @@ from dal_obscura.control_plane.interfaces.api import create_app
 from dal_obscura.data_plane.infrastructure.adapters.secret_providers import SecretProvider
 
 ADMIN_HEADERS = {"authorization": "Bearer test-admin"}
-ICEBERG_CATALOG_MODULE = (
-    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
-)
+ICEBERG_CATALOG_ID = "iceberg.sql"
 DEFAULT_AUTH_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider"
 )
@@ -44,7 +42,7 @@ def _provision_asset(client: TestClient) -> dict[str, str]:
     client.put(
         "/v1/catalogs/analytics",
         json={
-            "module": ICEBERG_CATALOG_MODULE,
+            "module": ICEBERG_CATALOG_ID,
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
         },
         headers=ADMIN_HEADERS,

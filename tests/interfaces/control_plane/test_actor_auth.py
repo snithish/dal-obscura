@@ -21,9 +21,7 @@ from dal_obscura.control_plane.interfaces.api import create_app, create_oidc_act
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
 
 ADMIN_HEADERS = {"authorization": "Bearer test-admin"}
-ICEBERG_CATALOG_MODULE = (
-    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
-)
+ICEBERG_CATALOG_ID = "iceberg.sql"
 OIDC_AUTH_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider"
 )
@@ -954,7 +952,7 @@ def _provision_asset_without_owner(client: TestClient, *, target: str = "default
     client.put(
         "/v1/catalogs/analytics",
         json={
-            "module": ICEBERG_CATALOG_MODULE,
+            "module": ICEBERG_CATALOG_ID,
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
         },
         headers=ADMIN_HEADERS,
