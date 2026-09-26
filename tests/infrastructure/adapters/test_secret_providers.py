@@ -19,7 +19,7 @@ from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
 def test_env_secret_provider_reads_configured_prefix(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("DAL_OBSCURA_SECRET_JWT", "jwt-secret")
 
-    provider = EnvSecretProvider(config={"prefix": "DAL_OBSCURA_SECRET_"}, secrets={})
+    provider = EnvSecretProvider(config={"prefix": "DAL_OBSCURA_SECRET_"})
 
     assert provider.get_secret("JWT") == "jwt-secret"
 
@@ -61,6 +61,11 @@ def test_load_secret_provider_from_environment_rejects_dynamic_module():
         load_secret_provider_from_environment(
             {"DAL_OBSCURA_SECRET_PROVIDER_MODULE": "untrusted.module.Provider"}
         )
+
+
+def test_load_secret_provider_from_environment_rejects_retired_secret_payload():
+    with pytest.raises(ValueError, match="SECRET_PROVIDER_SECRETS is unsupported"):
+        load_secret_provider_from_environment({"DAL_OBSCURA_SECRET_PROVIDER_SECRETS": "{}"})
 
 
 def test_load_secret_provider_from_environment_requires_production_grants():

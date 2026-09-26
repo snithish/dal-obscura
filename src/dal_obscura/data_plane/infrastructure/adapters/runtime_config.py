@@ -204,13 +204,14 @@ def _memory_limit_env() -> str:
 
 
 def _secret_provider_config() -> SecretProviderConfig:
+    if "DAL_OBSCURA_SECRET_PROVIDER_SECRETS" in os.environ:
+        raise ValueError("DAL_OBSCURA_SECRET_PROVIDER_SECRETS is unsupported")
     module = os.getenv("DAL_OBSCURA_SECRET_PROVIDER_MODULE", ENV_SECRET_PROVIDER_MODULE).strip()
     if module != ENV_SECRET_PROVIDER_MODULE:
         raise ValueError("DAL_OBSCURA_SECRET_PROVIDER_MODULE is unsupported")
     return SecretProviderConfig(
         module=module,
         config=_json_object_env("DAL_OBSCURA_SECRET_PROVIDER_CONFIG"),
-        secrets=_json_object_env("DAL_OBSCURA_SECRET_PROVIDER_SECRETS"),
     )
 
 

@@ -137,12 +137,18 @@ def test_runtime_config_rejects_module_based_secret_provider(monkeypatch: pytest
         "tests.support.secret_provider_fakes.FakeSecretProvider",
     )
     monkeypatch.setenv("DAL_OBSCURA_SECRET_PROVIDER_CONFIG", '{"prefix":"local"}')
-    monkeypatch.setenv(
-        "DAL_OBSCURA_SECRET_PROVIDER_SECRETS",
-        '{"token":{"env":"DAL_OBSCURA_PROVIDER_TOKEN"}}',
-    )
 
     with pytest.raises(ValueError, match="SECRET_PROVIDER_MODULE is unsupported"):
+        load_data_plane_runtime_config()
+
+
+def test_runtime_config_rejects_retired_secret_payload(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
+    monkeypatch.setenv("DAL_OBSCURA_CELL_ID", "00000000-0000-0000-0000-000000000001")
+    monkeypatch.setenv("DAL_OBSCURA_TICKET_SECRET", "ticket-secret")
+    monkeypatch.setenv("DAL_OBSCURA_SECRET_PROVIDER_SECRETS", "{}")
+
+    with pytest.raises(ValueError, match="SECRET_PROVIDER_SECRETS is unsupported"):
         load_data_plane_runtime_config()
 
 
