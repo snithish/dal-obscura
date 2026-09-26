@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -890,8 +889,8 @@ class ConfigStore:
         return [
             {
                 "name": record.name,
-                "field_id": record.field_id or _legacy_field_id(record.name),
-                "path": list(record.path_json) if record.path_json else [record.name],
+                "field_id": record.field_id,
+                "path": list(record.path_json),
                 "type": record.type,
                 "nullable": record.nullable,
             }
@@ -1351,17 +1350,15 @@ def _normalize_schema_fields(fields: list[dict[str, Any]]) -> list[dict[str, obj
     seen_paths: set[tuple[str, ...]] = set()
     seen_ids: set[str] = set()
     for field in fields:
-        raw_name = field.get("name", "")
+        raw_name = field.get("name")
         if not isinstance(raw_name, str):
             raise ValueError("Schema field name must be text")
         name = raw_name.strip()
         if not name:
-            continue
+            raise ValueError("Schema field name must be non-empty")
         _validate_schema_text(name, "Schema field name", max_length=256)
         raw_path = field.get("path")
-        if raw_path is None:
-            path = [name]
-        elif (
+        if (
             not isinstance(raw_path, list)
             or not raw_path
             or any(
@@ -1373,21 +1370,19 @@ def _normalize_schema_fields(fields: list[dict[str, Any]]) -> list[dict[str, obj
             )
         ):
             raise ValueError("Schema field path must contain bounded printable text segments")
-        else:
-            path = [segment.strip() for segment in raw_path]
+        path = [segment.strip() for segment in raw_path]
         path_key = tuple(path)
         if path_key in seen_paths:
             raise ValueError("Schema field paths must be unique")
         raw_field_id = field.get("field_id")
-        if raw_field_id is None:
-            field_id = _legacy_field_id(json.dumps(path, separators=(",", ":")))
-        else:
-            if not isinstance(raw_field_id, str):
-                raise ValueError("Schema field id must be text")
-            field_id = raw_field_id.strip()
-            _validate_schema_text(field_id, "Schema field id", max_length=128)
-            if not field_id.startswith(("synthetic:", "legacy:")):
-                field_id = canonical_provider_field_id(field_id)
+        if not isinstance(raw_field_id, str):
+            raise ValueError("Schema field id must be text")
+        field_id = raw_field_id.strip()
+        _validate_schema_text(field_id, "Schema field id", max_length=128)
+        if field_id.startswith("legacy:"):
+            raise ValueError("Legacy schema field ids are unsupported")
+        if not field_id.startswith("synthetic:"):
+            field_id = canonical_provider_field_id(field_id)
         if not field_id:
             raise ValueError("Schema field id must be non-empty")
         if field_id in seen_ids:
@@ -1411,10 +1406,6 @@ def _validate_schema_text(value: str, label: str, *, max_length: int) -> None:
         raise ValueError(f"{label} must contain 1-{max_length} characters")
     if any(ord(char) < 0x20 or ord(char) == 0x7F for char in value):
         raise ValueError(f"{label} must contain printable text")
-
-
-def _legacy_field_id(value: str) -> str:
-    return "legacy:" + hashlib.sha256(value.encode("utf-8")).hexdigest()[:32]
 
 
 def _normalize_policy_rule(raw: dict[str, Any]) -> dict[str, Any]:

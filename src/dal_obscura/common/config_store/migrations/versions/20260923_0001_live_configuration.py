@@ -326,8 +326,8 @@ def upgrade() -> None:
         sa.Column("asset_id", sa.Uuid(), nullable=False),
         sa.Column("ordinal", sa.Integer(), nullable=False),
         sa.Column("name", sa.Text(), nullable=False),
-        sa.Column("field_id", sa.String(length=128), nullable=True),
-        sa.Column("path_json", sa.JSON(), nullable=True),
+        sa.Column("field_id", sa.String(length=128), nullable=False),
+        sa.Column("path_json", sa.JSON(), nullable=False),
         sa.Column("type", sa.String(length=120), nullable=False),
         sa.Column("nullable", sa.Boolean(), nullable=False),
         sa.ForeignKeyConstraint(

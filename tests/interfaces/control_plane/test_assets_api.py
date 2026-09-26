@@ -118,12 +118,37 @@ def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail():
         headers=ADMIN_HEADERS,
     ).json()
 
+    legacy_response = client.put(
+        f"/v1/assets/{asset['id']}/schema-fields",
+        json={"fields": [{"name": "id", "type": "long"}], "expected_revision": 0},
+        headers=ADMIN_HEADERS,
+    )
+    missing_id_response = client.put(
+        f"/v1/assets/{asset['id']}/schema-fields",
+        json={
+            "fields": [{"name": "id", "path": ["id"], "type": "long"}],
+            "expected_revision": 0,
+        },
+        headers=ADMIN_HEADERS,
+    )
     response = client.put(
         f"/v1/assets/{asset['id']}/schema-fields",
         json={
             "fields": [
-                {"name": "id", "type": "long", "nullable": False},
-                {"name": "email", "type": "string", "nullable": True},
+                {
+                    "name": "id",
+                    "field_id": "id",
+                    "path": ["id"],
+                    "type": "long",
+                    "nullable": False,
+                },
+                {
+                    "name": "email",
+                    "field_id": "email",
+                    "path": ["email"],
+                    "type": "string",
+                    "nullable": True,
+                },
             ],
             "expected_revision": 0,
         },
@@ -133,8 +158,20 @@ def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail():
         f"/v1/assets/{asset['id']}/schema-fields",
         json={
             "fields": [
-                {"name": "id", "type": "long", "nullable": False},
-                {"name": "email", "type": "string", "nullable": False},
+                {
+                    "name": "id",
+                    "field_id": "id",
+                    "path": ["id"],
+                    "type": "long",
+                    "nullable": False,
+                },
+                {
+                    "name": "email",
+                    "field_id": "email",
+                    "path": ["email"],
+                    "type": "string",
+                    "nullable": False,
+                },
             ],
             "expected_revision": 1,
         },
@@ -142,20 +179,24 @@ def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail():
     )
     detail = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
 
+    assert legacy_response.status_code == 400
+    assert "field path" in legacy_response.json()["detail"].lower()
+    assert missing_id_response.status_code == 400
+    assert "field id" in missing_id_response.json()["detail"].lower()
     assert response.status_code == 200
     assert response.json() == {
         "asset_id": asset["id"],
         "fields": [
             {
                 "name": "id",
-                "field_id": "legacy:fc949a4dac6b077d1c847c8706688fbb",
+                "field_id": "iceberg:id",
                 "path": ["id"],
                 "type": "long",
                 "nullable": False,
             },
             {
                 "name": "email",
-                "field_id": "legacy:663d341058bb4332eba62bf5887ed38d",
+                "field_id": "iceberg:email",
                 "path": ["email"],
                 "type": "string",
                 "nullable": True,
@@ -166,14 +207,14 @@ def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail():
     assert detail["schema_fields"] == [
         {
             "name": "id",
-            "field_id": "legacy:fc949a4dac6b077d1c847c8706688fbb",
+            "field_id": "iceberg:id",
             "path": ["id"],
             "type": "long",
             "nullable": False,
         },
         {
             "name": "email",
-            "field_id": "legacy:663d341058bb4332eba62bf5887ed38d",
+            "field_id": "iceberg:email",
             "path": ["email"],
             "type": "string",
             "nullable": False,

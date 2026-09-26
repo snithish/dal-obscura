@@ -120,9 +120,27 @@ def test_policy_preview_uses_server_policy_resolution(db_session):
     service.replace_asset_schema_fields(
         asset_id,
         [
-            {"name": "id", "type": "long", "nullable": False},
-            {"name": "email", "type": "string", "nullable": True},
-            {"name": "region", "type": "string", "nullable": True},
+            {
+                "name": "id",
+                "field_id": "id",
+                "path": ["id"],
+                "type": "long",
+                "nullable": False,
+            },
+            {
+                "name": "email",
+                "field_id": "email",
+                "path": ["email"],
+                "type": "string",
+                "nullable": True,
+            },
+            {
+                "name": "region",
+                "field_id": "region",
+                "path": ["region"],
+                "type": "string",
+                "nullable": True,
+            },
         ],
         expected_revision=0,
     )

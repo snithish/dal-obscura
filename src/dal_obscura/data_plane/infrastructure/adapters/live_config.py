@@ -291,8 +291,8 @@ class LiveConfigStore:
         schema_fields = [
             {
                 "name": field.name,
-                "field_id": field.field_id or f"legacy:{field.name}",
-                "path": list(field.path_json) if field.path_json else [field.name],
+                "field_id": field.field_id,
+                "path": list(field.path_json),
                 "type": field.type,
                 "nullable": field.nullable,
             }
@@ -313,8 +313,7 @@ class LiveConfigStore:
                 "encoding": 1,
                 "fields": schema_fields,
                 "stable_ids": not any(
-                    str(field["field_id"]).startswith(("synthetic:", "legacy:"))
-                    for field in schema_fields
+                    str(field["field_id"]).startswith("synthetic:") for field in schema_fields
                 ),
                 "digest": sha256(schema_bytes).hexdigest(),
             }
