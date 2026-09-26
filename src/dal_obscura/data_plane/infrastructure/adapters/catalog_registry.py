@@ -356,13 +356,15 @@ def _load_iceberg_catalog(catalog_name: str, catalog_options: dict[str, Any]) ->
 
 
 def _provider_catalog_name(logical_name: str, options: dict[str, Any]) -> str:
-    return str(options.get("provider_catalog_name") or options.get("catalog_name") or logical_name)
+    if "catalog_name" in options:
+        raise ValueError("Catalog option 'catalog_name' is retired; use 'provider_catalog_name'")
+    provider_name = options.get("provider_catalog_name")
+    return str(provider_name) if provider_name else logical_name
 
 
 def _catalog_options(options: dict[str, Any]) -> dict[str, Any]:
     cleaned = dict(options)
     cleaned.pop("provider_catalog_name", None)
-    cleaned.pop("catalog_name", None)
     return cleaned
 
 

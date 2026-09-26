@@ -123,6 +123,13 @@ def test_iceberg_catalog_uses_provider_catalog_name_from_options(monkeypatch):
     assert descriptor.table_identifier == "default.users"
 
 
+def test_iceberg_catalog_rejects_retired_catalog_name_option() -> None:
+    catalog = IcebergCatalog(name="analytics", options={"catalog_name": "old-provider-name"})
+
+    with pytest.raises(ValueError, match=r"catalog_name.*provider_catalog_name"):
+        catalog.list_tables()
+
+
 def test_iceberg_registry_rejects_root_only_table_listing(monkeypatch):
     class RootOnlyCatalog:
         def list_namespaces(self, namespace):

@@ -630,7 +630,8 @@ def _catalog_config_from_live_catalog(
     if "module" in config:
         raise ValueError("Catalog config uses a retired module identity")
     options = dict(_mapping(config.get("options")))
-    options.pop("provider_modules", None)
+    if "provider_modules" in options:
+        raise ValueError("Catalog config uses a retired provider_modules option")
     raw_revision = config.get("revision")
     revision = (
         raw_revision

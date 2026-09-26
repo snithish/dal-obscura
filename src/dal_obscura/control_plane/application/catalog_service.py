@@ -362,6 +362,10 @@ def validate_catalog_options(
     useful for local development, while production startup requires one.
     """
 
+    if "catalog_name" in options:
+        raise ValidationFailure(
+            "Catalog option 'catalog_name' is retired; use 'provider_catalog_name'"
+        )
     _validate_option_shape(options)
     normalized_allowlist = {item.strip().lower().rstrip(".") for item in egress_allowlist}
     _reject_dynamic_loader_options(options)

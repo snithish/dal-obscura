@@ -16,6 +16,11 @@ def test_catalog_options_reject_non_finite_numbers() -> None:
         validate_catalog_options({"properties": {"timeout": float("nan")}})
 
 
+def test_catalog_options_reject_retired_catalog_name_alias() -> None:
+    with pytest.raises(ValidationFailure, match=r"catalog_name.*provider_catalog_name"):
+        validate_catalog_options({"catalog_name": "provider-name"})
+
+
 @pytest.mark.parametrize("host", ["127.0.0.1", "10.0.0.8", "::1"])
 def test_catalog_options_reject_unallowlisted_private_literal(host: str) -> None:
     with pytest.raises(ValidationFailure, match="private address"):

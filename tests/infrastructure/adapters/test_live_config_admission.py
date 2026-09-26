@@ -179,6 +179,30 @@ def test_live_config_rejects_legacy_catalog_module_shape():
         _catalog_config_for_asset(catalog, asset)
 
 
+def test_live_config_rejects_retired_provider_modules_option():
+    asset = LiveAsset(
+        config_revision=uuid4(),
+        tenant_id=uuid4(),
+        catalog="analytics",
+        target="default.users",
+        backend="iceberg",
+        compiled_config={
+            "plugins": {"catalog": "iceberg.sql", "table_format": "iceberg"},
+            "target": {"backend": "iceberg", "table": "default.users"},
+        },
+        policy_version=1,
+    )
+    catalog = LiveCatalog(
+        config_revision=asset.config_revision,
+        tenant_id=asset.tenant_id,
+        catalog="analytics",
+        config={"type": "iceberg", "options": {"provider_modules": ["old.provider"]}},
+    )
+
+    with pytest.raises(ValueError, match="retired provider_modules option"):
+        _catalog_config_for_asset(catalog, asset)
+
+
 def test_live_config_passes_runtime_path_enforcer_to_catalog():
     asset = LiveAsset(
         config_revision=uuid4(),
