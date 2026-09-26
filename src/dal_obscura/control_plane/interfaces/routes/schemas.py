@@ -433,8 +433,6 @@ class PolicyEvaluationResponse(BaseModel):
     rows: list[dict[str, Any]]
     evidence: dict[str, Any]
 
-    model_config = ConfigDict(populate_by_name=True)
-
 
 class AuthProviderResponse(BaseModel):
     """Redacted authentication-provider record returned to management clients."""

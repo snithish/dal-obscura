@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from pyiceberg.schema import Schema
 from pyiceberg.types import LongType, NestedField, StringType, StructType
 
 from dal_obscura.control_plane.application import schema_service
+from dal_obscura.control_plane.interfaces.routes.schemas import PolicyEvaluationResponse
 from tests.interfaces.control_plane.workspace_helpers import (
     ADMIN_HEADERS,
     ICEBERG_CATALOG_ID,
@@ -126,6 +129,27 @@ def test_asset_schema_route_reads_authoritative_iceberg_schema(monkeypatch) -> N
     assert response.json()["fields"][1]["path"]["segments"][0]["field_id"] == 3
 
 
+def test_policy_evaluation_response_rejects_internal_schema_field_name() -> None:
+    payload = {
+        "status": "completed",
+        "decision": "allow",
+        "allowed_columns": [],
+        "masks": [],
+        "row_filter": None,
+        "input_rows": 0,
+        "output_rows": 0,
+        "schema_text": "id: int64",
+        "policy_revision": 0,
+        "rows": [],
+        "evidence": {},
+    }
+
+    with pytest.raises(ValidationError) as exc_info:
+        PolicyEvaluationResponse.model_validate(payload)
+
+    assert any(error["loc"] == ("schema",) for error in exc_info.value.errors())
+
+
 def test_policy_evaluation_returns_duckdb_transformed_synthetic_rows(monkeypatch) -> None:
     client = _client()
     client.put(
@@ -200,6 +224,8 @@ def test_policy_evaluation_returns_duckdb_transformed_synthetic_rows(monkeypatch
     assert response.status_code == 200
     payload = response.json()
     assert payload["decision"] == "allow"
+    assert isinstance(payload["schema"], str)
+    assert "schema_text" not in payload
     assert payload["input_rows"] == 2
     assert payload["output_rows"] == 1
     assert payload["rows"][0]["email"] == "[right]"
