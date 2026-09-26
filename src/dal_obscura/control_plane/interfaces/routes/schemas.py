@@ -168,11 +168,12 @@ class AssetCapabilityResponse(BaseModel):
 
 
 class AssetAccessResponse(BaseModel):
-    """Effective capabilities for one governed asset and actor."""
+    """Effective capabilities and owner-only operations for one governed asset."""
 
     asset_id: str
     principal: str
     issuer: str | None = None
+    can_revoke_tokens: bool
     capabilities: list[AssetCapabilityResponse]
 
 

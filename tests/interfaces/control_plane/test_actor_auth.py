@@ -593,6 +593,7 @@ def test_asset_owner_can_replace_policy_rules_through_api():
 
     access = client.get(f"/v1/assets/{asset}/access", headers=_bearer("owner-token"))
     assert access.status_code == 200
+    assert access.json()["can_revoke_tokens"] is True
     assert {item["capability"]: item["allowed"] for item in access.json()["capabilities"]} == {
         "read": True,
         "edit": True,
@@ -866,6 +867,7 @@ def test_grant_manager_cannot_self_escalate_but_can_delegate_held_authority():
         json={
             "grants": [
                 {"principal": "grant-manager", "capability": "grant"},
+                {"principal": "outsider", "capability": "read"},
                 {"principal": "outsider", "capability": "edit"},
             ],
             "expected_revision": 2,
@@ -877,6 +879,15 @@ def test_grant_manager_cannot_self_escalate_but_can_delegate_held_authority():
     assert self_escalation.status_code == 403
     assert "already hold" in self_escalation.json()["detail"]
     assert delegation.status_code == 200
+    editor_access = client.get(f"/v1/assets/{asset}/access", headers=_bearer("outsider-token"))
+    assert editor_access.status_code == 200
+    assert editor_access.json()["can_revoke_tokens"] is False
+    assert (
+        next(item for item in editor_access.json()["capabilities"] if item["capability"] == "edit")[
+            "allowed"
+        ]
+        is True
+    )
 
 
 def test_policy_save_rejects_invalid_row_filter_before_commit():

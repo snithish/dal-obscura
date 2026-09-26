@@ -3751,6 +3751,10 @@
             ],
             "title": "Issuer"
           },
+          "can_revoke_tokens": {
+            "type": "boolean",
+            "title": "Can Revoke Tokens"
+          },
           "capabilities": {
             "items": {
               "$ref": "#/components/schemas/AssetCapabilityResponse"
@@ -3763,10 +3767,11 @@
         "required": [
           "asset_id",
           "principal",
+          "can_revoke_tokens",
           "capabilities"
         ],
         "title": "AssetAccessResponse",
-        "description": "Effective capabilities for one governed asset and actor."
+        "description": "Effective capabilities and owner-only operations for one governed asset."
       },
       "AssetCapabilityResponse": {
         "properties": {

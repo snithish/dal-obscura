@@ -297,7 +297,7 @@ test("late pre-logout asset responses cannot repopulate a reauthenticated worksp
       }
       if (suffix === "schema") return route.fulfill({ json: schema(id, name) });
       if (suffix === "grants") return route.fulfill({ json: [] });
-      if (suffix === "access") return route.fulfill({ json: { asset_id: id, principal: "alice", issuer: null, capabilities: [{ capability: "read", allowed: true, reasons: ["Asset owner"] }, { capability: "edit", allowed: id === assetA, reasons: id === assetA ? ["Asset owner"] : [] }, { capability: "grant", allowed: false, reasons: [] }] } });
+      if (suffix === "access") return route.fulfill({ json: { asset_id: id, principal: "alice", issuer: null, can_revoke_tokens: id === assetA, capabilities: [{ capability: "read", allowed: true, reasons: ["Asset owner"] }, { capability: "edit", allowed: id === assetA, reasons: id === assetA ? ["Asset owner"] : [] }, { capability: "grant", allowed: false, reasons: [] }] } });
       return route.fulfill({ json: detail(id, name) });
     }
     if (path === "/v1/session/options") return route.fulfill({ json: { bootstrap_enabled: true, oidc: null } });

@@ -77,10 +77,11 @@ const access: AssetAccess = {
   asset_id: asset.id,
   principal: "user:admin@example.com",
   issuer: "https://idp.example",
+  can_revoke_tokens: true,
   capabilities: [
-    { capability: "read", allowed: true, reasons: ["platform administrator"] },
-    { capability: "edit", allowed: true, reasons: ["asset owner"] },
-    { capability: "grant", allowed: true, reasons: ["platform administrator"] },
+    { capability: "read", allowed: true, reasons: ["Platform administrator"] },
+    { capability: "edit", allowed: true, reasons: ["Asset owner"] },
+    { capability: "grant", allowed: true, reasons: ["Platform administrator"] },
   ],
 };
 
@@ -203,6 +204,53 @@ export const AccessAndGrants: Story = {
     await expect(canvas.getByLabelText("Grant principal 1")).toHaveValue("group:analysts");
     await expect(canvas.getByLabelText("Grant capability 1")).toHaveValue("read");
     await expect(canvas.getByRole("button", { name: "Save capabilities" })).toBeEnabled();
+  },
+};
+
+export const OwnerCanRevokeTokens: Story = {
+  args: {
+    access: { ...access, principal: "user:owner@example.com", can_revoke_tokens: true },
+    session: { ...session, principal: "user:owner@example.com", platform_admin: false, capabilities: [] },
+    onSave: fn(),
+  },
+  play: async ({ canvas, args }) => {
+    const revoke = canvas.getByLabelText("Revoke existing tokens after saving");
+    await expect(revoke).toBeVisible();
+    await userEvent.click(revoke);
+    await userEvent.click(canvas.getByRole("button", { name: "Save policy" }));
+    await expect(args.onSave).toHaveBeenCalledWith(true);
+  },
+};
+
+export const OwnerCanRevokeAllTokens: Story = {
+  args: {
+    initialTab: "access",
+    access: { ...access, principal: "user:owner@example.com", can_revoke_tokens: true },
+    session: { ...session, principal: "user:owner@example.com", platform_admin: false, capabilities: [] },
+    onRevokeTokens: fn(),
+  },
+  play: async ({ canvas, args }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Revoke all active tokens" }));
+    await expect(args.onRevokeTokens).toHaveBeenCalledOnce();
+  },
+};
+
+export const DelegatedEditorCannotRevokeTokens: Story = {
+  args: {
+    initialTab: "access",
+    session: { ...session, principal: "user:editor@example.com", platform_admin: false, capabilities: [] },
+    access: {
+      ...access,
+      principal: "user:editor@example.com",
+      can_revoke_tokens: false,
+      capabilities: access.capabilities.map((item) => item.capability === "edit"
+        ? { ...item, allowed: true, reasons: ["Delegated to user:editor@example.com"] }
+        : { ...item, allowed: false, reasons: [] }),
+    },
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("button", { name: "Save capabilities" })).toBeDisabled();
+    await expect(canvas.queryByRole("button", { name: "Revoke all active tokens" })).not.toBeInTheDocument();
   },
 };
 

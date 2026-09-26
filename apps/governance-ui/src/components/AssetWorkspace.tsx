@@ -81,11 +81,7 @@ export function AssetWorkspace(props: {
   const visibleFields = useMemo(() => filterSchemaNodes(fields, schemaSearch), [fields, schemaSearch]);
   const currentPreview = props.preview;
   const canEdit = Boolean(props.access?.capabilities.some((item) => item.capability === "edit" && item.allowed));
-  const canRevokeTokens = Boolean(
-    props.session?.platform_admin
-      || props.access?.capabilities
-        .find((item) => item.capability === "edit")?.reasons.includes("Asset owner"),
-  );
+  const canRevokeTokens = props.access?.can_revoke_tokens === true;
   const readOnly = !canEdit;
   const listedAssets = props.assets.some((item) => item.id === props.asset.id) ? props.assets : [props.asset, ...props.assets];
   const inventoryAsset = listedAssets.find((item) => item.id === props.asset.id) ?? props.asset;
@@ -290,7 +286,7 @@ function AccessView({ asset, access, grants, session, onReload, onDirtyChange, o
   };
   const canManageOwners = Boolean(session?.platform_admin);
   const canManageGrants = Boolean(session?.platform_admin || access?.capabilities.some((item) => item.capability === "grant" && item.allowed));
-  const canRevokeTokens = Boolean(session?.platform_admin || access?.capabilities.find((item) => item.capability === "edit")?.reasons.includes("Asset owner"));
+  const canRevokeTokens = access?.can_revoke_tokens === true;
   async function saveOwners() {
     if (!canManageOwners) return setMessage("Only a platform administrator can change owners.");
     if (savingRef.current) return;

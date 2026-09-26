@@ -159,6 +159,7 @@ export type AssetAccess = {
   asset_id: string;
   principal: string;
   issuer: string | null;
+  can_revoke_tokens: boolean;
   capabilities: AssetCapability[];
 };
 

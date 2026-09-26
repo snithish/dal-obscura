@@ -2064,3 +2064,21 @@ revision fields. The test failed before the fix with two publication calls.
 Proof: all eight demo-initialization tests, targeted Ruff, and `git diff --check`
 pass. Full container startup remains in progress; R03/R09 are not verified until
 the seeded UI, login and allowed/denied journeys work end to end.
+
+## R07/R08 — VERIFY: explicit token-revocation permission for the UI (2026-09-26)
+
+The access response now includes a server-computed `can_revoke_tokens` flag
+derived from platform-admin or asset-owner authority. Policy and access screens
+consume that flag instead of inferring authority from editable display reasons.
+Added production-component stories for an owner selecting revocation on save,
+an owner revoking active tokens, and a delegated editor who cannot revoke; API
+tests cover owner, admin, and delegated-editor responses. Updated the checked-in
+OpenAPI snapshot and generated browser types.
+
+Proof: 55 focused control-plane tests, 45 Storybook interactions, TypeScript,
+production Vite build and UI bundle budgets pass. Ruff check/format and generated
+API-type freshness checks pass. The Storybook runner required loopback bind
+permission; checks ran on host Node 26.8.2/pnpm 12.4.2 rather than the declared
+Node 24/pnpm 12.3.4 pair, so they do not close R01's support contract. Real
+role-authorized browser flows and manual visual/accessibility review remain open.
+No authentication or pickle behavior changed.

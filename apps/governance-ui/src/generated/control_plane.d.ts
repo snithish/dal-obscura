@@ -591,11 +591,13 @@ export interface components {
     schemas: {
         /**
          * AssetAccessResponse
-         * @description Effective capabilities for one governed asset and actor.
+         * @description Effective capabilities and owner-only operations for one governed asset.
          */
         AssetAccessResponse: {
             /** Asset Id */
             asset_id: string;
+            /** Can Revoke Tokens */
+            can_revoke_tokens: boolean;
             /** Capabilities */
             capabilities: components["schemas"]["AssetCapabilityResponse"][];
             /** Issuer */

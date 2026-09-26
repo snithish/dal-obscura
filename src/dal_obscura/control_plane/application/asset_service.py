@@ -105,12 +105,13 @@ def get_asset_access(
     ensure_asset_capability(store, asset_id, actor, "read")
     principals = actor.owner_principals()
     owners = set(store.list_asset_owners(asset_id))
+    is_owner = bool(owners.intersection(principals))
     explanations: dict[str, list[str]] = {capability: [] for capability in _ASSET_CAPABILITIES}
     if actor.platform_admin:
         for capability in _ASSET_CAPABILITIES:
             explanations[capability].append("Platform administrator")
     else:
-        if owners.intersection(principals):
+        if is_owner:
             explanations["read"].append("Asset owner")
             explanations["edit"].append("Asset owner")
         for grant in store.list_asset_grants(asset_id):
@@ -120,6 +121,7 @@ def get_asset_access(
         "asset_id": str(asset_id),
         "principal": actor.principal,
         "issuer": actor.issuer or None,
+        "can_revoke_tokens": actor.platform_admin or is_owner,
         "capabilities": [
             {
                 "capability": capability,
