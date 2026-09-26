@@ -29,6 +29,7 @@ from dal_obscura.control_plane.application.schema_service import (
     get_asset_schema,
     schema_fingerprint,
 )
+from dal_obscura.data_plane.infrastructure.adapters.secret_providers import EnvSecretProvider
 
 
 class _FakeTable:
@@ -504,6 +505,9 @@ def test_schema_loading_resolves_secret_references_before_provider_call(
         ControlPlaneActor.for_platform_admin("admin"),
         load_catalog_fn=load_catalog,
         egress_allowlist=("catalog.example",),
+        secret_provider=EnvSecretProvider(
+            config={"scope_grants": {"catalog:analytics": ["CATALOG_TOKEN"]}}
+        ),
     )
 
     assert received["token"] == "sentinel-secret"

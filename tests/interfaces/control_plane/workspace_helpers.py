@@ -8,6 +8,7 @@ from dal_obscura.common.config_store.db import (
     session_factory,
 )
 from dal_obscura.control_plane.interfaces.api import create_app
+from dal_obscura.data_plane.infrastructure.adapters.secret_providers import SecretProvider
 
 ADMIN_HEADERS = {"authorization": "Bearer test-admin"}
 ICEBERG_CATALOG_MODULE = (
@@ -18,10 +19,16 @@ DEFAULT_AUTH_MODULE = (
 )
 
 
-def _client() -> TestClient:
+def _client(*, secret_provider: SecretProvider | None = None) -> TestClient:
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
     migrate_config_store(engine)
-    return TestClient(create_app(session_factory(engine), admin_token="test-admin"))
+    return TestClient(
+        create_app(
+            session_factory(engine),
+            admin_token="test-admin",
+            secret_provider=secret_provider,
+        )
+    )
 
 
 def _provision_asset(client: TestClient) -> dict[str, str]:

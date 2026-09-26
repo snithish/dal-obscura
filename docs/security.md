@@ -104,8 +104,10 @@ container secret stores, or another runtime secret provider.
 The supported environment provider accepts a `scope_grants` object in
 `DAL_OBSCURA_SECRET_PROVIDER_CONFIG`. Each exact caller scope (for example,
 `catalog:analytics` or `identity`) must name the secret keys it may resolve.
-Production startup requires this grant map in both planes; a matching reference
-scope alone cannot authorize an environment lookup.
+Secret resolution is denied unless the provider implements scope authorization
+and this grant map includes the exact scope and key; a matching reference scope
+alone cannot authorize an environment lookup. Production startup requires a
+non-empty grant map in both planes.
 
 ## Live Configuration And Ticket Revocation
 

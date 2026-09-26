@@ -8,6 +8,7 @@ from dal_obscura.common.config_store.db import (
     session_factory,
 )
 from dal_obscura.control_plane.interfaces.api import create_app
+from dal_obscura.data_plane.infrastructure.adapters.secret_providers import EnvSecretProvider
 from tests.interfaces.control_plane.workspace_helpers import (
     ADMIN_HEADERS,
     ICEBERG_CATALOG_MODULE,
@@ -347,7 +348,11 @@ def test_workspace_catalog_tables_can_be_discovered_without_runtime_ids(monkeypa
 
 
 def test_workspace_catalog_discovery_resolves_secret_references(monkeypatch):
-    client = _client()
+    client = _client(
+        secret_provider=EnvSecretProvider(
+            config={"scope_grants": {"catalog:analytics": ["CATALOG_TOKEN"]}}
+        )
+    )
     monkeypatch.setenv("CATALOG_TOKEN", "sentinel-secret")
     client.put(
         "/v1/catalogs/analytics",

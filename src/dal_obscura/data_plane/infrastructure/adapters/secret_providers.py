@@ -21,16 +21,12 @@ class SecretProvider(ABC):
     def get_secret(self, key: str) -> str | None:
         """Returns the secret value for `key`, or `None` when it is unavailable."""
 
+    @abstractmethod
     def is_allowed(self, key: str, scope: str) -> bool:
         """Returns whether the operator granted ``key`` to ``scope``.
 
-        Providers that do not expose a grant registry retain their own policy;
-        the default keeps the interface compatible while the environment
-        provider can enforce explicit startup grants.
+        Implementations must enforce authorization for every reference.
         """
-
-        del key, scope
-        return True
 
 
 class EnvSecretProvider(SecretProvider):
@@ -54,7 +50,7 @@ class EnvSecretProvider(SecretProvider):
 
     def is_allowed(self, key: str, scope: str) -> bool:
         if self._scope_grants is None:
-            return True
+            return False
         return key in self._scope_grants.get(scope, frozenset())
 
 
@@ -156,7 +152,9 @@ def resolve_secret_refs(
             ):
                 raise ValueError("Secret reference scope does not match the requesting scope")
             is_allowed = getattr(provider, "is_allowed", None)
-            if callable(is_allowed) and not is_allowed(secret_key, reference_scope):
+            if not callable(is_allowed):
+                raise ValueError("Secret provider does not implement scope authorization")
+            if not is_allowed(secret_key, reference_scope):
                 raise ValueError("Secret reference is not granted to the requesting scope")
             resolved = provider.get_secret(secret_key)
             if resolved is None or not resolved:

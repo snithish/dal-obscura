@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from typing import cast
 from uuid import UUID
 
 import pytest
 
 from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
     EnvSecretProvider,
+    SecretProvider,
     SecretProviderConfig,
     SecretProviderContext,
     load_secret_provider,
@@ -100,7 +102,12 @@ def test_load_secret_provider_rejects_dynamic_module_path():
 def test_resolve_secret_refs_uses_explicit_secret_shape_only(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("LOCAL_jwt-signing", "jwt")
     monkeypatch.setenv("LOCAL_api-key", "api")
-    provider = EnvSecretProvider(config={"prefix": "LOCAL_"})
+    provider = EnvSecretProvider(
+        config={
+            "prefix": "LOCAL_",
+            "scope_grants": {"identity": ["jwt-signing", "api-key"]},
+        }
+    )
 
     resolved = resolve_secret_refs(
         {
@@ -136,7 +143,7 @@ def test_resolve_secret_refs_rejects_malformed_secret_mappings():
 
 
 def test_resolve_secret_refs_rejects_missing_secret():
-    provider = EnvSecretProvider()
+    provider = EnvSecretProvider(config={"scope_grants": {"identity": ["missing"]}})
 
     with pytest.raises(ValueError, match="Secret 'missing' could not be resolved"):
         resolve_secret_refs(
@@ -150,11 +157,12 @@ def test_resolve_secret_refs_requires_matching_scope(monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("LOCAL_catalog-password", "value")
     provider = EnvSecretProvider(config={"prefix": "LOCAL_"})
 
-    assert resolve_secret_refs(
-        {"password": {"secret": "catalog-password", "scope": "catalog:analytics"}},
-        provider=provider,
-        expected_scope="catalog:analytics",
-    ) == {"password": "value"}
+    with pytest.raises(ValueError, match="not granted"):
+        resolve_secret_refs(
+            {"password": {"secret": "catalog-password", "scope": "catalog:analytics"}},
+            provider=provider,
+            expected_scope="catalog:analytics",
+        )
     with pytest.raises(ValueError, match="scope"):
         resolve_secret_refs(
             {"password": {"secret": "catalog-password", "scope": "catalog:other"}},
@@ -196,3 +204,16 @@ def test_env_provider_enforces_operator_scope_grants(monkeypatch: pytest.MonkeyP
 def test_env_provider_rejects_malformed_scope_grants():
     with pytest.raises(ValueError, match="scope grant"):
         EnvSecretProvider(config={"scope_grants": {"catalog:analytics": "catalog-password"}})
+
+
+def test_resolver_rejects_provider_without_scope_authorization():
+    class UnscopedProvider:
+        def get_secret(self, key: str) -> str | None:
+            return "secret-value"
+
+    with pytest.raises(ValueError, match="scope authorization"):
+        resolve_secret_refs(
+            {"password": {"secret": "password", "scope": "catalog:analytics"}},
+            provider=cast(SecretProvider, UnscopedProvider()),
+            expected_scope="catalog:analytics",
+        )
