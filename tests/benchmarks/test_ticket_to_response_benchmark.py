@@ -51,9 +51,8 @@ LARGE_BENCHMARK_TOTAL_ROWS = 25_000_000
 LARGE_BENCHMARK_ROWS_PER_FILE = 5_000_000
 LARGE_BENCHMARK_FILE_COUNT = LARGE_BENCHMARK_TOTAL_ROWS // LARGE_BENCHMARK_ROWS_PER_FILE
 LARGE_BENCHMARK_MAX_TICKETS = 4
-# Empirical delta from the current 25M-row subprocess run was ~1.586 GB.
-# Keep a modest buffer for machine-to-machine variance without allowing
-# accidental full-result materialization to slip through.
+# This is a coarse, machine-specific resource guard, not a portable performance
+# SLO. Recalibrate it when the benchmark runner's OS or architecture changes.
 LARGE_BENCHMARK_RSS_LIMIT_BYTES = 1_900_000_000
 PC = cast(Any, pc)
 COMPLEX_BENCHMARK_COLUMNS = [
@@ -549,52 +548,6 @@ def test_benchmark_ticket_to_response_complex_schema(tmp_path, benchmark):
     assert table.column("user").to_pylist()[0]["email"] == "[hidden]"
 
 
-@pytest.mark.benchmark(group="ticket-to-response", min_rounds=1, max_time=1)
-def test_benchmark_ticket_to_response_streams_twenty_five_million_masked_rows(tmp_path, benchmark):
-    def run() -> dict[str, object]:
-        return _run_large_iceberg_stream_scenario(tmp_path)
-
-    stream_result = benchmark.pedantic(run, rounds=1, iterations=1, warmup_rounds=0)
-
-    benchmark.extra_info["input_rows"] = LARGE_BENCHMARK_TOTAL_ROWS
-    benchmark.extra_info["output_rows"] = LARGE_BENCHMARK_TOTAL_ROWS
-    benchmark.extra_info["storage_backend"] = "iceberg-sql-catalog"
-    benchmark.extra_info["planned_files"] = cast(int, stream_result["planned_file_count"])
-    benchmark.extra_info["endpoint_count"] = cast(int, stream_result["endpoint_count"])
-    benchmark.extra_info["stream_chunks"] = cast(int, stream_result["chunk_count"])
-    benchmark.extra_info["max_chunk_rows"] = cast(int, stream_result["max_chunk_rows"])
-    assert cast(int, stream_result["planned_file_count"]) == LARGE_BENCHMARK_FILE_COUNT
-    assert cast(int, stream_result["rows_per_file"]) == LARGE_BENCHMARK_ROWS_PER_FILE
-    assert cast(int, stream_result["endpoint_count"]) > 1
-    assert stream_result["rows"] == LARGE_BENCHMARK_TOTAL_ROWS
-    schema = cast(pa.Schema, stream_result["schema"])
-    first_row = cast(dict[str, object], stream_result["first_row"])
-    assert schema.field("id").type == pa.string()
-    assert schema.field("created_at").type == pa.timestamp("us")
-    assert schema.field("birth_date").type == pa.date32()
-    assert pa.types.is_string(schema.field("nickname").type) or pa.types.is_large_string(
-        schema.field("nickname").type
-    )
-    assert pa.types.is_string(
-        schema.field("user").type.field("email").type
-    ) or pa.types.is_large_string(schema.field("user").type.field("email").type)
-    assert schema.field("user").type.field("address").type.field("zip").type == pa.string()
-    assert first_row["id"] != "0"
-    assert len(cast(str, first_row["id"])) == 64
-    assert first_row["account_number"] != "ACCT-000000000000"
-    assert cast(str, first_row["account_number"]).endswith("0000")
-    assert first_row["nickname"] is None
-    assert first_row["notes"] == "[redacted-note]"
-    assert first_row["status"] == "benchmark-default"
-    assert cast(dict[str, object], first_row["user"])["email"] == "u***@example.com"
-    assert cast(int, stream_result["chunk_count"]) >= cast(int, stream_result["endpoint_count"])
-    assert cast(int, stream_result["max_chunk_rows"]) <= _DUCKDB_ARROW_OUTPUT_BATCH_SIZE
-    assert (
-        cast(float, stream_result["first_chunk_elapsed_s"])
-        < cast(float, stream_result["total_read_elapsed_s"]) * 0.5
-    )
-
-
 def _run_streaming_probe_in_subprocess(
     tmp_path: Path,
     *,
@@ -621,11 +574,16 @@ def _run_streaming_probe_in_subprocess(
             max_tickets=int(sys.argv[4]),
             sample_rss=True,
         )
+        schema = result["schema"]
+        first_row = result["first_row"]
+        user = first_row["user"]
+        address = user["address"]
         print(
             json.dumps(
                 {
                     "rows": result["rows"],
                     "planned_file_count": result["planned_file_count"],
+                    "rows_per_file": result["rows_per_file"],
                     "endpoint_count": result["endpoint_count"],
                     "chunk_count": result["chunk_count"],
                     "max_chunk_rows": result["max_chunk_rows"],
@@ -633,6 +591,25 @@ def _run_streaming_probe_in_subprocess(
                     "total_read_elapsed_s": result["total_read_elapsed_s"],
                     "baseline_rss": result["baseline_rss"],
                     "peak_rss": result["peak_rss"],
+                    "schema_types": {
+                        "id": str(schema.field("id").type),
+                        "created_at": str(schema.field("created_at").type),
+                        "birth_date": str(schema.field("birth_date").type),
+                        "nickname": str(schema.field("nickname").type),
+                        "user_email": str(schema.field("user").type.field("email").type),
+                        "user_zip": str(
+                            schema.field("user").type.field("address").type.field("zip").type
+                        ),
+                    },
+                    "first_row": {
+                        "id": first_row["id"],
+                        "account_number": first_row["account_number"],
+                        "nickname": first_row["nickname"],
+                        "notes": first_row["notes"],
+                        "status": first_row["status"],
+                        "user_email": user["email"],
+                        "user_zip": address["zip"],
+                    },
                 }
             )
         )
@@ -676,6 +653,12 @@ def test_ticket_to_response_streaming_is_chunked_with_bounded_rss(tmp_path, benc
 
     smaller, larger = benchmark.pedantic(run, rounds=1, iterations=1, warmup_rounds=0)
     benchmark.extra_info["input_rows"] = 35_000_000
+    benchmark.extra_info["output_rows"] = 35_000_000
+    benchmark.extra_info["large_probe_planned_files"] = larger["planned_file_count"]
+    benchmark.extra_info["large_probe_rows_per_file"] = larger["rows_per_file"]
+    benchmark.extra_info["large_probe_endpoint_count"] = larger["endpoint_count"]
+    benchmark.extra_info["large_probe_stream_chunks"] = larger["chunk_count"]
+    benchmark.extra_info["large_probe_max_chunk_rows"] = larger["max_chunk_rows"]
     benchmark.extra_info["large_probe_rss_delta"] = larger["rss_delta"]
     benchmark.extra_info["large_probe_rss_limit"] = LARGE_BENCHMARK_RSS_LIMIT_BYTES
 
@@ -689,5 +672,25 @@ def test_ticket_to_response_streaming_is_chunked_with_bounded_rss(tmp_path, benc
     assert smaller["endpoint_count"] == 2
     assert larger["rows"] == LARGE_BENCHMARK_TOTAL_ROWS
     assert larger["planned_file_count"] == LARGE_BENCHMARK_FILE_COUNT
+    assert larger["rows_per_file"] == LARGE_BENCHMARK_ROWS_PER_FILE
     assert larger["endpoint_count"] == LARGE_BENCHMARK_MAX_TICKETS
     assert larger["rss_delta"] < LARGE_BENCHMARK_RSS_LIMIT_BYTES
+
+    schema = larger["schema_types"]
+    assert schema["id"] == "string"
+    assert schema["created_at"] == "timestamp[us]"
+    assert schema["birth_date"] == "date32[day]"
+    assert schema["nickname"] in {"string", "large_string"}
+    assert schema["user_email"] in {"string", "large_string"}
+    assert schema["user_zip"] == "string"
+
+    first_row = larger["first_row"]
+    assert first_row["id"] != "0"
+    assert len(first_row["id"]) == 64
+    assert first_row["account_number"] != "ACCT-000000000000"
+    assert first_row["account_number"].endswith("0000")
+    assert first_row["nickname"] is None
+    assert first_row["notes"] == "[redacted-note]"
+    assert first_row["status"] == "benchmark-default"
+    assert first_row["user_email"] == "u***@example.com"
+    assert len(first_row["user_zip"]) == 64
