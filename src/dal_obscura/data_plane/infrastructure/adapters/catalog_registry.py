@@ -163,7 +163,7 @@ class IcebergCatalog(CatalogPlugin):
         return self._name
 
     def resolve_table(self, target: str) -> TableFormat:
-        descriptor = self.describe_table(target)
+        descriptor = self._describe_table(target)
         metadata_location = descriptor.metadata_location
         if metadata_location is None:
             raise ValueError(
@@ -177,8 +177,8 @@ class IcebergCatalog(CatalogPlugin):
             path_enforcer=self._path_enforcer,
         )
 
-    def describe_table(self, target: str) -> CatalogTableDescriptor:
-        """Compatibility helper for catalog-discovery tests."""
+    def _describe_table(self, target: str) -> CatalogTableDescriptor:
+        """Resolve provider metadata needed to build the Iceberg table adapter."""
         if self._catalog is None:
             self._catalog = _load_iceberg_catalog(
                 _provider_catalog_name(self.name, self.options),

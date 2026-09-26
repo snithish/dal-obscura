@@ -112,7 +112,7 @@ def test_iceberg_catalog_uses_provider_catalog_name_from_options(monkeypatch):
         options={"provider_catalog_name": "prod_glue", "type": "glue"},
     )
 
-    descriptor = catalog.describe_table("default.users")
+    descriptor = catalog._describe_table("default.users")
 
     assert loaded == {
         "catalog_name": "prod_glue",
