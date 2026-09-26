@@ -123,9 +123,10 @@ def test_iceberg_catalog_uses_provider_catalog_name_from_options(monkeypatch):
     assert descriptor.table_identifier == "default.users"
 
 
-def test_iceberg_registry_supports_root_only_table_listing(monkeypatch):
+def test_iceberg_registry_rejects_root_only_table_listing(monkeypatch):
     class RootOnlyCatalog:
-        def list_namespaces(self):
+        def list_namespaces(self, namespace):
+            del namespace
             return [()]
 
         def list_tables(self):
@@ -138,12 +139,14 @@ def test_iceberg_registry_supports_root_only_table_listing(monkeypatch):
     )
     catalog = IcebergCatalog(name="analytics", options={})
 
-    assert [item.table_identifier for item in catalog.list_tables()] == ["users"]
+    with pytest.raises(TypeError):
+        catalog.list_tables()
 
 
 def test_iceberg_registry_does_not_hide_root_table_provider_errors(monkeypatch):
     class FailingCatalog:
-        def list_namespaces(self):
+        def list_namespaces(self, namespace):
+            del namespace
             return [()]
 
         def list_tables(self, namespace):
@@ -164,10 +167,12 @@ def test_iceberg_registry_does_not_hide_root_table_provider_errors(monkeypatch):
 @pytest.mark.parametrize("bad_namespace", [("prod", 7), "prod..staging", ""])
 def test_iceberg_registry_rejects_malformed_provider_namespaces(monkeypatch, bad_namespace):
     class MalformedCatalog:
-        def list_namespaces(self):
+        def list_namespaces(self, namespace):
+            del namespace
             return [bad_namespace]
 
-        def list_tables(self):
+        def list_tables(self, namespace):
+            del namespace
             return []
 
     monkeypatch.setattr(
@@ -184,10 +189,12 @@ def test_iceberg_registry_rejects_malformed_provider_namespaces(monkeypatch, bad
 @pytest.mark.parametrize("bad_identifier", [("prod", 7), "prod..orders", "orders\n"])
 def test_iceberg_registry_rejects_malformed_provider_table_identifiers(monkeypatch, bad_identifier):
     class MalformedCatalog:
-        def list_namespaces(self):
+        def list_namespaces(self, namespace):
+            del namespace
             return [()]
 
-        def list_tables(self):
+        def list_tables(self, namespace):
+            del namespace
             return [bad_identifier]
 
     monkeypatch.setattr(
@@ -203,10 +210,12 @@ def test_iceberg_registry_rejects_malformed_provider_table_identifiers(monkeypat
 
 def test_iceberg_registry_bounds_unbounded_namespace_providers(monkeypatch):
     class EndlessCatalog:
-        def list_namespaces(self):
+        def list_namespaces(self, namespace):
+            del namespace
             return (("namespace", str(index)) for index in range(100_000))
 
-        def list_tables(self):
+        def list_tables(self, namespace):
+            del namespace
             return []
 
     monkeypatch.setattr(
@@ -222,10 +231,12 @@ def test_iceberg_registry_bounds_unbounded_namespace_providers(monkeypatch):
 
 def test_iceberg_registry_bounds_unbounded_table_providers(monkeypatch):
     class EndlessCatalog:
-        def list_namespaces(self):
+        def list_namespaces(self, namespace):
+            del namespace
             return [()]
 
-        def list_tables(self):
+        def list_tables(self, namespace):
+            del namespace
             return (("users", str(index)) for index in range(100_000))
 
     monkeypatch.setattr(

@@ -392,24 +392,16 @@ def _walk_namespaces(
 
 
 def _list_namespaces(catalog: Any, namespace: tuple[str, ...]) -> Iterable[object]:
-    try:
-        if namespace:
-            return catalog.list_namespaces(namespace)
-        return catalog.list_namespaces()
-    except TypeError:
-        return catalog.list_namespaces(namespace)
+    return catalog.list_namespaces(namespace)
 
 
 def _list_tables(catalog: Any, namespace: tuple[str, ...]) -> Iterable[object]:
     try:
         return catalog.list_tables(namespace)
-    except TypeError:
-        # Some providers expose a root-only ``list_tables()`` method.  Limit
-        # the compatibility fallback to that signature mismatch so a real
-        # provider outage cannot be mistaken for an empty catalog.
-        if namespace:
-            raise
-        return catalog.list_tables()
+    except ValueError as exc:
+        if not namespace and str(exc) == "Empty namespace identifier":
+            return ()
+        raise
 
 
 def _bounded_provider_items(

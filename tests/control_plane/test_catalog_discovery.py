@@ -75,7 +75,7 @@ def test_iceberg_discovery_closes_provider_after_failure() -> None:
     assert closed == [True]
 
 
-def test_iceberg_discovery_preserves_root_only_list_tables_signature() -> None:
+def test_iceberg_discovery_rejects_root_only_list_tables_signature() -> None:
     class RootOnlyCatalog:
         def list_namespaces(self, namespace=()):
             return [] if namespace else [()]
@@ -83,11 +83,12 @@ def test_iceberg_discovery_preserves_root_only_list_tables_signature() -> None:
         def list_tables(self):
             return [("users",)]
 
-    assert discover_iceberg_tables(
-        "analytics",
-        {},
-        load_catalog_fn=lambda name, **options: RootOnlyCatalog(),
-    ) == [{"backend": "iceberg", "name": "users", "table_identifier": "users"}]
+    with pytest.raises(TypeError):
+        discover_iceberg_tables(
+            "analytics",
+            {},
+            load_catalog_fn=lambda name, **options: RootOnlyCatalog(),
+        )
 
 
 def test_iceberg_discovery_skips_pyiceberg_empty_root_namespace() -> None:

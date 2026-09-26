@@ -270,25 +270,12 @@ def _walk_namespaces(
 
 
 def _list_namespaces(catalog: Any, namespace: Namespace) -> Iterable[object]:
-    try:
-        if namespace:
-            return catalog.list_namespaces(namespace)
-        return catalog.list_namespaces()
-    except TypeError:
-        return catalog.list_namespaces(namespace)
+    return catalog.list_namespaces(namespace)
 
 
 def _list_tables(catalog: Any, namespace: Namespace) -> Iterable[object]:
     try:
         return catalog.list_tables(namespace)
-    except TypeError:
-        # A few Iceberg catalog implementations expose a root-only
-        # ``list_tables()`` signature.  Keep that compatibility fallback
-        # narrow: provider failures must propagate instead of being reported
-        # as an empty catalog.
-        if namespace:
-            raise
-        return catalog.list_tables()
     except ValueError as exc:
         # PyIceberg SQL catalogs reject the root namespace instead of returning
         # an empty result. Tables still appear under the namespaces discovered
