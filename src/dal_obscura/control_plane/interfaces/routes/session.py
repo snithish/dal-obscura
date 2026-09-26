@@ -12,7 +12,6 @@ import base64
 import hashlib
 import ipaddress
 import secrets
-from collections.abc import Mapping
 from typing import NoReturn
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
@@ -78,10 +77,10 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         response = RedirectResponse(f"{authorization_url}?{query}", status_code=303)
         response.headers["cache-control"] = "no-store"
         response.set_cookie(
-            key="dal_obscura_auth_state",
+            key="__Host-dal_obscura_auth_state",
             value=state,
             httponly=True,
-            secure=_secure_cookie(config),
+            secure=True,
             samesite="lax",
             max_age=600,
             path="/",
@@ -94,7 +93,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         code: str | None = None,
         state: str | None = None,
         error: str | None = None,
-        auth_state: str | None = Cookie(default=None, alias="dal_obscura_auth_state"),
+        auth_state: str | None = Cookie(default=None, alias="__Host-dal_obscura_auth_state"),
     ) -> Response:
         auth_state = _cookie_text(auth_state)
         config = _required_ui_config(deps)
@@ -136,24 +135,23 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         deps.clear_login_rate_limit(client_key)
         result = RedirectResponse(_post_login_redirect(config, redirect_uri), status_code=303)
         result.headers["cache-control"] = "no-store"
-        session_cookie, csrf_cookie = _browser_cookie_names(config)
         result.set_cookie(
-            key=session_cookie,
+            key="__Host-dal_obscura_session",
             value=session_token,
             httponly=True,
-            secure=_secure_cookie(config),
+            secure=True,
             samesite="lax",
             path="/",
         )
         result.set_cookie(
-            key=csrf_cookie,
+            key="__Host-dal_obscura_csrf",
             value=csrf_token,
             httponly=False,
-            secure=_secure_cookie(config),
+            secure=True,
             samesite="lax",
             path="/",
         )
-        result.delete_cookie(key="dal_obscura_auth_state", path="/")
+        result.delete_cookie(key="__Host-dal_obscura_auth_state", path="/", secure=True)
         return result
 
     @api.get("/v1/session", response_model=SessionResponse, response_model_exclude_none=True)
@@ -213,22 +211,19 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
         session_token, csrf_token = deps.issue_browser_session_credentials(actor)
         client_key, _aggregate_key = _login_rate_keys(deps, request)
         deps.clear_login_rate_limit(client_key)
-        config = dict(deps.ui_auth_config or {})
-        session_cookie, csrf_cookie = _browser_cookie_names(config)
-        secure = _secure_cookie(config)
         response.set_cookie(
-            key=session_cookie,
+            key="__Host-dal_obscura_session",
             value=session_token,
             httponly=True,
-            secure=secure,
+            secure=True,
             samesite="lax",
             path="/",
         )
         response.set_cookie(
-            key=csrf_cookie,
+            key="__Host-dal_obscura_csrf",
             value=csrf_token,
             httponly=False,
-            secure=secure,
+            secure=True,
             samesite="lax",
             path="/",
         )
@@ -248,21 +243,15 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
     def logout(
         request: Request,
         response: Response,
-        session_token: str | None = Cookie(default=None, alias="dal_obscura_session"),
-        csrf_cookie: str | None = Cookie(default=None, alias="dal_obscura_csrf"),
-        host_session_token: str | None = Cookie(default=None, alias="__Host-dal_obscura_session"),
-        host_csrf_cookie: str | None = Cookie(default=None, alias="__Host-dal_obscura_csrf"),
+        session_token: str | None = Cookie(default=None, alias="__Host-dal_obscura_session"),
+        csrf_cookie: str | None = Cookie(default=None, alias="__Host-dal_obscura_csrf"),
     ) -> AuthenticationMutationResponse:
         """Expires browser credentials even when the server session is stale."""
-        session_token = _coalesce_cookie(host_session_token, session_token)
-        csrf_cookie = _coalesce_cookie(host_csrf_cookie, csrf_cookie)
         if session_token:
             deps.validate_browser_mutation(request, csrf_cookie)
             deps.revoke_browser_session(session_token)
-        for cookie_name in ("dal_obscura_session", "__Host-dal_obscura_session"):
-            response.delete_cookie(key=cookie_name, path="/")
-        for cookie_name in ("dal_obscura_csrf", "__Host-dal_obscura_csrf"):
-            response.delete_cookie(key=cookie_name, path="/")
+        response.delete_cookie(key="__Host-dal_obscura_session", path="/", secure=True)
+        response.delete_cookie(key="__Host-dal_obscura_csrf", path="/", secure=True)
         return AuthenticationMutationResponse(authenticated=False)
 
     return api
@@ -280,16 +269,6 @@ def _cookie_text(value: object) -> str | None:
     if isinstance(value, str):
         return value or None
     return None
-
-
-def _coalesce_cookie(primary: object, fallback: object) -> str | None:
-    """Accept identical duplicate cookie names but reject conflicting values."""
-
-    first = _cookie_text(primary)
-    second = _cookie_text(fallback)
-    if first and second and not secrets.compare_digest(first, second):
-        raise HTTPException(status_code=400, detail="Conflicting browser credentials")
-    return first or second
 
 
 def _required_config_value(config: dict[str, object], key: str) -> str:
@@ -327,16 +306,6 @@ def _oidc_endpoint(config: dict[str, object], key: str, suffix: str) -> str:
 def _code_challenge(verifier: str) -> str:
     digest = hashlib.sha256(verifier.encode("ascii")).digest()
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
-
-
-def _secure_cookie(config: dict[str, object]) -> bool:
-    return str(config.get("redirect_uri", "")).startswith("https://")
-
-
-def _browser_cookie_names(config: Mapping[str, object]) -> tuple[str, str]:
-    if _secure_cookie(dict(config)):
-        return "__Host-dal_obscura_session", "__Host-dal_obscura_csrf"
-    return "dal_obscura_session", "dal_obscura_csrf"
 
 
 def _post_login_redirect(config: dict[str, object], redirect_uri: str) -> str:

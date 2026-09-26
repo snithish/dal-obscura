@@ -114,7 +114,7 @@
             }
           },
           {
-            "name": "dal_obscura_auth_state",
+            "name": "__Host-dal_obscura_auth_state",
             "in": "cookie",
             "required": false,
             "schema": {
@@ -126,7 +126,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Dal Obscura Auth State"
+              "title": "  Host-Dal Obscura Auth State"
             }
           }
         ],
@@ -165,38 +165,6 @@
               "type": "string",
               "default": "",
               "title": "Authorization"
-            }
-          },
-          {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
             }
           },
           {
@@ -341,38 +309,6 @@
         "operationId": "logout_v1_logout_post",
         "parameters": [
           {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
-            }
-          },
-          {
             "name": "__Host-dal_obscura_session",
             "in": "cookie",
             "required": false,
@@ -442,38 +378,6 @@
               "type": "string",
               "default": "",
               "title": "Authorization"
-            }
-          },
-          {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
             }
           },
           {
@@ -549,38 +453,6 @@
             }
           },
           {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
-            }
-          },
-          {
             "name": "__Host-dal_obscura_session",
             "in": "cookie",
             "required": false,
@@ -650,38 +522,6 @@
               "type": "string",
               "default": "",
               "title": "Authorization"
-            }
-          },
-          {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
             }
           },
           {
@@ -770,38 +610,6 @@
             }
           },
           {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
-            }
-          },
-          {
             "name": "__Host-dal_obscura_session",
             "in": "cookie",
             "required": false,
@@ -880,38 +688,6 @@
               "type": "string",
               "default": "",
               "title": "Authorization"
-            }
-          },
-          {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
             }
           },
           {
@@ -996,38 +772,6 @@
             }
           },
           {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
-            }
-          },
-          {
             "name": "__Host-dal_obscura_session",
             "in": "cookie",
             "required": false,
@@ -1107,38 +851,6 @@
               "type": "string",
               "default": "",
               "title": "Authorization"
-            }
-          },
-          {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
             }
           },
           {
@@ -1231,38 +943,6 @@
               "type": "string",
               "default": "",
               "title": "Authorization"
-            }
-          },
-          {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
             }
           },
           {
@@ -1513,38 +1193,6 @@
             }
           },
           {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
-            }
-          },
-          {
             "name": "__Host-dal_obscura_session",
             "in": "cookie",
             "required": false,
@@ -1614,38 +1262,6 @@
               "type": "string",
               "default": "",
               "title": "Authorization"
-            }
-          },
-          {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
             }
           },
           {
@@ -1771,38 +1387,6 @@
             }
           },
           {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
-            }
-          },
-          {
             "name": "__Host-dal_obscura_session",
             "in": "cookie",
             "required": false,
@@ -1882,38 +1466,6 @@
               "type": "string",
               "default": "",
               "title": "Authorization"
-            }
-          },
-          {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
             }
           },
           {
@@ -1999,38 +1551,6 @@
             }
           },
           {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
-            }
-          },
-          {
             "name": "__Host-dal_obscura_session",
             "in": "cookie",
             "required": false,
@@ -2110,38 +1630,6 @@
               "type": "string",
               "default": "",
               "title": "Authorization"
-            }
-          },
-          {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
             }
           },
           {
@@ -2227,38 +1715,6 @@
             }
           },
           {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
-            }
-          },
-          {
             "name": "__Host-dal_obscura_session",
             "in": "cookie",
             "required": false,
@@ -2338,38 +1794,6 @@
               "type": "string",
               "default": "",
               "title": "Authorization"
-            }
-          },
-          {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
             }
           },
           {
@@ -2465,38 +1889,6 @@
             }
           },
           {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
-            }
-          },
-          {
             "name": "__Host-dal_obscura_session",
             "in": "cookie",
             "required": false,
@@ -2578,38 +1970,6 @@
               "type": "string",
               "default": "",
               "title": "Authorization"
-            }
-          },
-          {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
             }
           },
           {
@@ -2702,38 +2062,6 @@
               "type": "string",
               "default": "",
               "title": "Authorization"
-            }
-          },
-          {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
             }
           },
           {
@@ -2837,38 +2165,6 @@
             }
           },
           {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
-            }
-          },
-          {
             "name": "__Host-dal_obscura_session",
             "in": "cookie",
             "required": false,
@@ -2951,38 +2247,6 @@
             }
           },
           {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
-            }
-          },
-          {
             "name": "__Host-dal_obscura_session",
             "in": "cookie",
             "required": false,
@@ -3058,38 +2322,6 @@
               "type": "string",
               "default": "",
               "title": "Authorization"
-            }
-          },
-          {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
             }
           },
           {
@@ -3175,38 +2407,6 @@
             }
           },
           {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
-            }
-          },
-          {
             "name": "__Host-dal_obscura_session",
             "in": "cookie",
             "required": false,
@@ -3278,38 +2478,6 @@
               "type": "string",
               "default": "",
               "title": "Authorization"
-            }
-          },
-          {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
             }
           },
           {
@@ -3399,38 +2567,6 @@
             }
           },
           {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
-            }
-          },
-          {
             "name": "__Host-dal_obscura_session",
             "in": "cookie",
             "required": false,
@@ -3500,38 +2636,6 @@
               "type": "string",
               "default": "",
               "title": "Authorization"
-            }
-          },
-          {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
             }
           },
           {
@@ -3626,38 +2730,6 @@
               "type": "string",
               "default": "",
               "title": "Authorization"
-            }
-          },
-          {
-            "name": "dal_obscura_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Session"
-            }
-          },
-          {
-            "name": "dal_obscura_csrf",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Dal Obscura Csrf"
             }
           },
           {

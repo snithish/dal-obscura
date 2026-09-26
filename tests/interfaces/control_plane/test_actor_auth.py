@@ -103,7 +103,7 @@ def _client_with_ui_auth_config() -> TestClient:
                 "id_token": "owner-id-token",
             },
         ),
-        base_url="http://127.0.0.1:8820",
+        base_url="https://127.0.0.1:8820",
     )
 
 
@@ -174,8 +174,8 @@ def test_cookie_session_requires_csrf_header_for_mutations():
     login = _login_as_asset_owner(client)
 
     cookie_header = (
-        f"dal_obscura_session={login.cookies['dal_obscura_session']}; "
-        f"dal_obscura_csrf={login.cookies['dal_obscura_csrf']}"
+        f"__Host-dal_obscura_session={login.cookies['__Host-dal_obscura_session']}; "
+        f"__Host-dal_obscura_csrf={login.cookies['__Host-dal_obscura_csrf']}"
     )
     session = client.get("/v1/session", headers={"cookie": cookie_header})
     rejected = client.put(
@@ -186,7 +186,7 @@ def test_cookie_session_requires_csrf_header_for_mutations():
     csrf = client.put(
         "/v1/assets/00000000-0000-0000-0000-000000000000/policy",
         json={"expected_revision": 0, "rules": []},
-        headers={"cookie": cookie_header, "x-csrf-token": login.cookies["dal_obscura_csrf"]},
+        headers={"cookie": cookie_header, "x-csrf-token": login.cookies["__Host-dal_obscura_csrf"]},
     )
 
     assert session.status_code == 200
@@ -204,7 +204,8 @@ def test_cookie_session_rejects_a_forged_csrf_cookie():
     client = _client_with_ui_auth_config()
     login = _login_as_asset_owner(client)
     cookie_header = (
-        f"dal_obscura_session={login.cookies['dal_obscura_session']}; dal_obscura_csrf=forged"
+        f"__Host-dal_obscura_session={login.cookies['__Host-dal_obscura_session']}; "
+        "__Host-dal_obscura_csrf=forged"
     )
 
     response = client.get("/v1/session", headers={"cookie": cookie_header})
@@ -213,46 +214,41 @@ def test_cookie_session_rejects_a_forged_csrf_cookie():
     assert response.json()["detail"] == "CSRF validation failed"
 
 
-def test_cookie_session_rejects_conflicting_host_and_legacy_cookies():
+def test_legacy_browser_cookies_are_not_authenticated():
     client = _client_with_ui_auth_config()
-    login = _login_as_asset_owner(client)
-    cookie_header = (
-        f"dal_obscura_session={login.cookies['dal_obscura_session']}; "
-        f"__Host-dal_obscura_session=forged; "
-        f"dal_obscura_csrf={login.cookies['dal_obscura_csrf']}"
+    response = client.get(
+        "/v1/session",
+        headers={"cookie": "dal_obscura_session=forged; dal_obscura_csrf=forged"},
     )
 
-    response = client.get("/v1/session", headers={"cookie": cookie_header})
-
-    assert response.status_code == 400
-    assert response.json()["detail"] == "Conflicting browser credentials"
+    assert response.status_code == 401
 
 
 def test_cookie_session_logout_requires_csrf_and_expires_browser_cookies():
     client = _client_with_ui_auth_config()
     login = _login_as_asset_owner(client)
     cookie_header = (
-        f"dal_obscura_session={login.cookies['dal_obscura_session']}; "
-        f"dal_obscura_csrf={login.cookies['dal_obscura_csrf']}"
+        f"__Host-dal_obscura_session={login.cookies['__Host-dal_obscura_session']}; "
+        f"__Host-dal_obscura_csrf={login.cookies['__Host-dal_obscura_csrf']}"
     )
 
     rejected = client.post("/v1/logout", headers={"cookie": cookie_header})
     logout = client.post(
         "/v1/logout",
-        headers={"cookie": cookie_header, "x-csrf-token": login.cookies["dal_obscura_csrf"]},
+        headers={"cookie": cookie_header, "x-csrf-token": login.cookies["__Host-dal_obscura_csrf"]},
     )
 
     assert rejected.status_code == 403
     assert logout.status_code == 200
     assert logout.json() == {"authenticated": False}
     cookies = logout.headers.get_list("set-cookie")
-    assert any('dal_obscura_session=""' in cookie for cookie in cookies)
-    assert any('dal_obscura_csrf=""' in cookie for cookie in cookies)
+    assert any('__Host-dal_obscura_session=""' in cookie for cookie in cookies)
+    assert any('__Host-dal_obscura_csrf=""' in cookie for cookie in cookies)
     assert client.get("/v1/session", headers={"cookie": cookie_header}).status_code == 401
 
     repeated = client.post(
         "/v1/logout",
-        headers={"cookie": cookie_header, "x-csrf-token": login.cookies["dal_obscura_csrf"]},
+        headers={"cookie": cookie_header, "x-csrf-token": login.cookies["__Host-dal_obscura_csrf"]},
     )
     assert repeated.status_code == 200
     assert repeated.json() == {"authenticated": False}
@@ -262,15 +258,15 @@ def test_cookie_mutation_rejects_untrusted_origin():
     client = _client_with_ui_auth_config()
     login = _login_as_asset_owner(client)
     cookie_header = (
-        f"dal_obscura_session={login.cookies['dal_obscura_session']}; "
-        f"dal_obscura_csrf={login.cookies['dal_obscura_csrf']}"
+        f"__Host-dal_obscura_session={login.cookies['__Host-dal_obscura_session']}; "
+        f"__Host-dal_obscura_csrf={login.cookies['__Host-dal_obscura_csrf']}"
     )
 
     response = client.post(
         "/v1/logout",
         headers={
             "cookie": cookie_header,
-            "x-csrf-token": login.cookies["dal_obscura_csrf"],
+            "x-csrf-token": login.cookies["__Host-dal_obscura_csrf"],
             "origin": "https://attacker.example",
         },
     )
@@ -283,15 +279,15 @@ def test_cookie_mutation_cannot_trust_forged_host_and_matching_origin():
     client = _client_with_ui_auth_config()
     login = _login_as_asset_owner(client)
     cookie_header = (
-        f"dal_obscura_session={login.cookies['dal_obscura_session']}; "
-        f"dal_obscura_csrf={login.cookies['dal_obscura_csrf']}"
+        f"__Host-dal_obscura_session={login.cookies['__Host-dal_obscura_session']}; "
+        f"__Host-dal_obscura_csrf={login.cookies['__Host-dal_obscura_csrf']}"
     )
 
     response = client.post(
         "/v1/logout",
         headers={
             "cookie": cookie_header,
-            "x-csrf-token": login.cookies["dal_obscura_csrf"],
+            "x-csrf-token": login.cookies["__Host-dal_obscura_csrf"],
             "host": "attacker.example",
             "origin": "http://attacker.example",
         },
@@ -305,15 +301,15 @@ def test_cookie_mutation_rejects_forged_host_without_origin_header():
     client = _client_with_ui_auth_config()
     login = _login_as_asset_owner(client)
     cookie_header = (
-        f"dal_obscura_session={login.cookies['dal_obscura_session']}; "
-        f"dal_obscura_csrf={login.cookies['dal_obscura_csrf']}"
+        f"__Host-dal_obscura_session={login.cookies['__Host-dal_obscura_session']}; "
+        f"__Host-dal_obscura_csrf={login.cookies['__Host-dal_obscura_csrf']}"
     )
 
     response = client.post(
         "/v1/logout",
         headers={
             "cookie": cookie_header,
-            "x-csrf-token": login.cookies["dal_obscura_csrf"],
+            "x-csrf-token": login.cookies["__Host-dal_obscura_csrf"],
             "host": "attacker.example",
         },
     )
@@ -326,15 +322,15 @@ def test_cookie_mutation_accepts_configured_host_without_origin_header():
     client = _client_with_ui_auth_config()
     login = _login_as_asset_owner(client)
     cookie_header = (
-        f"dal_obscura_session={login.cookies['dal_obscura_session']}; "
-        f"dal_obscura_csrf={login.cookies['dal_obscura_csrf']}"
+        f"__Host-dal_obscura_session={login.cookies['__Host-dal_obscura_session']}; "
+        f"__Host-dal_obscura_csrf={login.cookies['__Host-dal_obscura_csrf']}"
     )
 
     response = client.post(
         "/v1/logout",
         headers={
             "cookie": cookie_header,
-            "x-csrf-token": login.cookies["dal_obscura_csrf"],
+            "x-csrf-token": login.cookies["__Host-dal_obscura_csrf"],
         },
     )
 
@@ -371,10 +367,10 @@ def test_cookie_mutation_origin_and_host_matrix(
     login = _login_as_asset_owner(client)
     headers = {
         "cookie": (
-            f"dal_obscura_session={login.cookies['dal_obscura_session']}; "
-            f"dal_obscura_csrf={login.cookies['dal_obscura_csrf']}"
+            f"__Host-dal_obscura_session={login.cookies['__Host-dal_obscura_session']}; "
+            f"__Host-dal_obscura_csrf={login.cookies['__Host-dal_obscura_csrf']}"
         ),
-        "x-csrf-token": login.cookies["dal_obscura_csrf"],
+        "x-csrf-token": login.cookies["__Host-dal_obscura_csrf"],
         **extra_headers,
     }
 
@@ -456,14 +452,15 @@ def test_secure_requests_include_transport_isolation_headers():
 
 
 def test_local_bootstrap_login_exchanges_bearer_for_browser_session():
-    client = _client()
+    client = _client(secure=True)
 
     response = client.post("/v1/session/bootstrap", headers=ADMIN_HEADERS)
 
     assert response.status_code == 200
     assert response.json() == {"authenticated": True}
-    assert response.cookies["dal_obscura_session"]
-    assert response.cookies["dal_obscura_csrf"]
+    assert response.cookies["__Host-dal_obscura_session"]
+    assert response.cookies["__Host-dal_obscura_csrf"]
+    assert "secure" in response.headers["set-cookie"].lower()
     session = client.get("/v1/session")
     assert session.status_code == 200
     assert session.json()["principal"] == "platform:admin"

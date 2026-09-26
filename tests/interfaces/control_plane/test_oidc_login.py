@@ -36,7 +36,8 @@ def _client(nonce_resolver) -> TestClient:
                 "post_login_redirect_uri": "http://testserver/",
                 "scope": "openid profile",
             },
-        )
+        ),
+        base_url="https://testserver",
     )
 
 
@@ -60,7 +61,7 @@ def test_oidc_login_uses_state_pkce_nonce_and_opaque_session(monkeypatch) -> Non
     assert query["code_challenge_method"] == ["S256"]
     assert len(query["code_challenge"][0]) == 43
     assert query["nonce"][0]
-    assert "dal_obscura_auth_state" in start.headers.get("set-cookie", "")
+    assert "__Host-dal_obscura_auth_state" in start.headers.get("set-cookie", "")
 
     callback = client.get(
         "/auth/callback",
@@ -72,9 +73,9 @@ def test_oidc_login_uses_state_pkce_nonce_and_opaque_session(monkeypatch) -> Non
     assert callback.headers["location"] == "http://testserver/"
     assert exchanges[0][0] == "auth-code"
     assert len(exchanges[0][1]) >= 43
-    session_cookie = client.cookies["dal_obscura_session"]
+    session_cookie = client.cookies["__Host-dal_obscura_session"]
     assert session_cookie not in {"access-token", "id-token"}
-    assert 'dal_obscura_auth_state=""' in callback.headers.get("set-cookie", "")
+    assert '__Host-dal_obscura_auth_state=""' in callback.headers.get("set-cookie", "")
     session = client.get("/v1/session")
     assert session.status_code == 200
     assert session.json()["principal"] == "alice"
@@ -186,6 +187,7 @@ def test_trusted_gateway_keeps_per_client_and_aggregate_login_budgets() -> None:
     )
     first_client = TestClient(
         app,
+        base_url="https://testserver",
         client=("10.0.0.8", 443),
         headers={"x-forwarded-for": "198.51.100.7"},
     )
@@ -262,6 +264,7 @@ def test_successful_oidc_callback_does_not_clear_shared_gateway_budget(monkeypat
     )
     first_client = TestClient(
         app,
+        base_url="https://testserver",
         client=("10.0.0.8", 443),
         headers={"x-forwarded-for": "198.51.100.7"},
     )

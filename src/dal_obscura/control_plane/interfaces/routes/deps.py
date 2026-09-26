@@ -15,7 +15,6 @@ Example:
 from __future__ import annotations
 
 import ipaddress
-import secrets
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import TypeVar, cast
@@ -99,18 +98,10 @@ class ControlPlaneDeps:
         self,
         request: Request,
         authorization: str = Header(default=""),
-        session_token: str | None = Cookie(default=None, alias="dal_obscura_session"),
-        csrf_cookie: str | None = Cookie(default=None, alias="dal_obscura_csrf"),
-        host_session_token: str | None = Cookie(default=None, alias="__Host-dal_obscura_session"),
-        host_csrf_cookie: str | None = Cookie(default=None, alias="__Host-dal_obscura_csrf"),
+        session_token: str | None = Cookie(default=None, alias="__Host-dal_obscura_session"),
+        csrf_cookie: str | None = Cookie(default=None, alias="__Host-dal_obscura_csrf"),
     ) -> ControlPlaneActor:
         """Authenticates bearer clients or an HttpOnly browser session."""
-        # FastAPI normally injects cookie parameters as strings.  Keep the
-        # dependency boundary defensive because direct dependency invocation
-        # and older Starlette/Pydantic combinations can leave the marker
-        # object in place when the cookie is absent.
-        session_token = _coalesce_cookie(host_session_token, session_token)
-        csrf_cookie = _coalesce_cookie(host_csrf_cookie, csrf_cookie)
         expected = f"Bearer {self.admin_token}"
         if self.bootstrap_enabled and authorization == expected:
             return ControlPlaneActor.for_platform_admin("platform:admin")
@@ -336,16 +327,14 @@ class ControlPlaneDeps:
         self,
         request: Request,
         authorization: str = Header(default=""),
-        session_token: str | None = Cookie(default=None, alias="dal_obscura_session"),
-        csrf_cookie: str | None = Cookie(default=None, alias="dal_obscura_csrf"),
-        host_session_token: str | None = Cookie(default=None, alias="__Host-dal_obscura_session"),
-        host_csrf_cookie: str | None = Cookie(default=None, alias="__Host-dal_obscura_csrf"),
+        session_token: str | None = Cookie(default=None, alias="__Host-dal_obscura_session"),
+        csrf_cookie: str | None = Cookie(default=None, alias="__Host-dal_obscura_csrf"),
     ) -> ControlPlaneActor:
         actor = self.require_actor(
             request=request,
             authorization=authorization,
-            session_token=_coalesce_cookie(host_session_token, session_token),
-            csrf_cookie=_coalesce_cookie(host_csrf_cookie, csrf_cookie),
+            session_token=session_token,
+            csrf_cookie=csrf_cookie,
         )
         if not actor.platform_admin:
             raise HTTPException(status_code=403, detail="Platform admin required")
@@ -390,24 +379,6 @@ def _bearer_value(authorization: str) -> str | None:
     if len(parts) != 2 or parts[0].lower() != "bearer":
         return None
     return parts[1].strip() or None
-
-
-def _cookie_text(value: object) -> str | None:
-    """Return a cookie value only when FastAPI supplied a real string."""
-
-    if isinstance(value, str):
-        return value or None
-    return None
-
-
-def _coalesce_cookie(primary: object, fallback: object) -> str | None:
-    """Accept identical duplicate cookie names but reject conflicting values."""
-
-    first = _cookie_text(primary)
-    second = _cookie_text(fallback)
-    if first and second and not secrets.compare_digest(first, second):
-        raise HTTPException(status_code=400, detail="Conflicting browser credentials")
-    return first or second
 
 
 def _canonical_origin(value: str) -> str | None:
