@@ -546,7 +546,7 @@ def _provision_control_plane(
             cell_id=cell_id,
             tenant_id=tenant_id,
             name=CATALOG_NAME,
-            module="iceberg.sql",
+            plugin_id="iceberg.sql",
             options={
                 "type": "sql",
                 "uri": f"sqlite:///{output_dir / f'{CATALOG_NAME}.db'}",

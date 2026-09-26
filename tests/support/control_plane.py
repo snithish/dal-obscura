@@ -54,7 +54,7 @@ def provision_default_live_asset(
         client.put(
             f"/v1/catalogs/{catalog_name}",
             json={
-                "module": ICEBERG_CATALOG_ID,
+                "plugin_id": ICEBERG_CATALOG_ID,
                 "options": catalog_options,
             },
             headers=headers,

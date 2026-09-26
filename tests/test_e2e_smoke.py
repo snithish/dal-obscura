@@ -252,7 +252,7 @@ def control_plane_setup(
             cell_id=cell_id,
             tenant_id=tenant_id,
             name="e2e_catalog",
-            module="iceberg.sql",
+            plugin_id="iceberg.sql",
             options={
                 "type": "sql",
                 "uri": catalog_uri,

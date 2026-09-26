@@ -176,10 +176,7 @@ class ProvisioningService:
         )
 
     def list_workspace_catalogs(self) -> list[dict[str, object]]:
-        return catalog_service.list_workspace_catalogs(
-            self._store,
-            plugin_registry=self._plugin_registry,
-        )
+        return catalog_service.list_workspace_catalogs(self._store)
 
     def discover_workspace_catalog_tables(
         self,
@@ -308,14 +305,14 @@ class ProvisioningService:
         cell_id: UUID,
         tenant_id: UUID,
         name: str,
-        module: str,
+        plugin_id: str,
         options: dict[str, Any],
     ) -> dict[str, str]:
         catalog_id = self._store.upsert_catalog(
             cell_id=cell_id,
             tenant_id=tenant_id,
             name=name,
-            module=module,
+            plugin_id=plugin_id,
             options=options,
         )
         return {"id": str(catalog_id), "name": name}
@@ -323,7 +320,7 @@ class ProvisioningService:
     def upsert_workspace_catalog(
         self,
         name: str,
-        module: str,
+        plugin_id: str,
         options: dict[str, Any],
         expected_revision: int | None = None,
         actor: ControlPlaneActor | None = None,
@@ -331,7 +328,7 @@ class ProvisioningService:
         return catalog_service.upsert_workspace_catalog(
             self._store,
             name=name,
-            module=module,
+            plugin_id=plugin_id,
             options=options,
             expected_revision=expected_revision,
             egress_allowlist=self._catalog_egress_allowlist,

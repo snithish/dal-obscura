@@ -31,7 +31,7 @@ def test_scoped_audit_visibility_enforces_cell_and_tenant_context(db_session) ->
                 cell_id=cell_id,
                 tenant_id=visible_tenant_id,
                 name="visible-catalog",
-                module="plugin.catalog",
+                plugin_id="plugin.catalog",
                 options_json={},
             ),
             CatalogRecord(
@@ -39,7 +39,7 @@ def test_scoped_audit_visibility_enforces_cell_and_tenant_context(db_session) ->
                 cell_id=cell_id,
                 tenant_id=hidden_tenant_id,
                 name="hidden-catalog",
-                module="plugin.catalog",
+                plugin_id="plugin.catalog",
                 options_json={},
             ),
         ]

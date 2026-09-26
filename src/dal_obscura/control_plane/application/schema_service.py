@@ -116,7 +116,7 @@ def load_asset_iceberg_schema(
     )
     options = cast(dict[str, Any], catalog["options"])
     validate_admitted_catalog_options(
-        str(catalog["module"]),
+        str(catalog["plugin_id"]),
         options,
         plugin_registry,
     )
@@ -129,7 +129,7 @@ def load_asset_iceberg_schema(
             expected_scope=f"catalog:{catalog['name']}",
         ),
     )
-    if str(catalog["module"]) != ICEBERG_CATALOG_ID:
+    if str(catalog["plugin_id"]) != ICEBERG_CATALOG_ID:
         return _load_public_plugin_schema(
             asset=asset,
             catalog=catalog,
@@ -170,7 +170,7 @@ def _load_public_plugin_schema(
         TableIdentifier,
     )
 
-    catalog_plugin_id = str(catalog["module"])
+    catalog_plugin_id = str(catalog["plugin_id"])
     format_plugin_id = str(asset["backend"])
     context = ExecutionContext(
         deadline=datetime.now(timezone.utc) + timedelta(seconds=30),

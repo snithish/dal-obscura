@@ -1014,8 +1014,6 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /** Module */
-            module: string;
             /** Name */
             name: string;
             /** Options */
@@ -1023,7 +1021,7 @@ export interface components {
                 [key: string]: unknown;
             };
             /** Plugin Id */
-            plugin_id?: string | null;
+            plugin_id: string;
             /** Revision */
             revision: number;
             /** Status */

@@ -77,8 +77,6 @@ def _admit_session_discovery(session_key: str | None):
 
 def list_workspace_catalogs(
     store: ConfigStore,
-    *,
-    plugin_registry: PluginRegistry | None = None,
 ) -> list[dict[str, object]]:
     """Lists catalogs configured in the default workspace.
 
@@ -91,19 +89,7 @@ def list_workspace_catalogs(
     context = store.get_default_workspace_context()
     if context is None:
         return []
-    catalogs = store.list_workspace_catalogs(context)
-    if plugin_registry is None:
-        return catalogs
-    # Admission is a startup concern. Request paths read the immutable
-    # snapshot and fail closed when startup did not admit the plugin.
-    admitted = plugin_registry.admitted()
-    for catalog in catalogs:
-        plugin_id = str(catalog.get("module", ""))
-        if ("catalog", plugin_id) in admitted:
-            catalog["plugin_id"] = plugin_id
-        else:
-            catalog["plugin_id"] = None
-    return catalogs
+    return store.list_workspace_catalogs(context)
 
 
 def discover_workspace_catalog_tables(
@@ -127,7 +113,7 @@ def discover_workspace_catalog_tables(
     context = _required_workspace_context(store)
     catalog = store.get_workspace_catalog(context, name)
     catalog_options = cast(dict[str, Any], catalog["options"])
-    validate_admitted_catalog_options(str(catalog["module"]), catalog_options, plugin_registry)
+    validate_admitted_catalog_options(str(catalog["plugin_id"]), catalog_options, plugin_registry)
     validate_catalog_options(catalog_options, egress_allowlist=egress_allowlist)
     catalog_options = _resolve_catalog_secrets(
         catalog_options,
@@ -136,10 +122,10 @@ def discover_workspace_catalog_tables(
     )
     try:
         with _admit_session_discovery(session_key):
-            if str(catalog["module"]) != ICEBERG_CATALOG_ID:
+            if str(catalog["plugin_id"]) != ICEBERG_CATALOG_ID:
                 tables = discover_public_catalog_tables(
                     str(catalog["name"]),
-                    str(catalog["module"]),
+                    str(catalog["plugin_id"]),
                     catalog_options,
                     revision=_catalog_revision(catalog),
                     plugin_registry=plugin_registry,
@@ -147,7 +133,7 @@ def discover_workspace_catalog_tables(
             else:
                 tables = discover(
                     str(catalog["name"]),
-                    str(catalog["module"]),
+                    str(catalog["plugin_id"]),
                     catalog_options,
                 )
     except ValidationFailure:
@@ -192,7 +178,7 @@ def diagnose_workspace_catalog(
     context = _required_workspace_context(store)
     catalog = store.get_workspace_catalog(context, name)
     catalog_options = cast(dict[str, Any], catalog["options"])
-    validate_admitted_catalog_options(str(catalog["module"]), catalog_options, plugin_registry)
+    validate_admitted_catalog_options(str(catalog["plugin_id"]), catalog_options, plugin_registry)
     validate_catalog_options(catalog_options, egress_allowlist=egress_allowlist)
     catalog_options = _resolve_catalog_secrets(
         catalog_options,
@@ -205,15 +191,15 @@ def diagnose_workspace_catalog(
             tables = list(
                 discover_public_catalog_tables(
                     str(catalog["name"]),
-                    str(catalog["module"]),
+                    str(catalog["plugin_id"]),
                     catalog_options,
                     revision=_catalog_revision(catalog),
                     plugin_registry=plugin_registry,
                 )
-                if str(catalog["module"]) != ICEBERG_CATALOG_ID
+                if str(catalog["plugin_id"]) != ICEBERG_CATALOG_ID
                 else discover(
                     str(catalog["name"]),
-                    str(catalog["module"]),
+                    str(catalog["plugin_id"]),
                     catalog_options,
                 )
             )
@@ -244,7 +230,7 @@ def diagnose_workspace_catalog(
 def upsert_workspace_catalog(
     store: ConfigStore,
     name: str,
-    module: str,
+    plugin_id: str,
     options: dict[str, Any],
     egress_allowlist: tuple[str, ...] = (),
     *,
@@ -256,24 +242,24 @@ def upsert_workspace_catalog(
 
     Example:
         ```python
-        result = upsert_workspace_catalog(store, "analytics", "iceberg", {})
+        result = upsert_workspace_catalog(store, "analytics", "iceberg.sql", {})
         ```
     """
 
-    if module != ICEBERG_CATALOG_ID:
+    if plugin_id != ICEBERG_CATALOG_ID:
         if plugin_registry is None:
             raise ValidationFailure("Catalog plugin is not admitted")
         admitted = plugin_registry.admitted()
-        if ("catalog", module) not in admitted:
+        if ("catalog", plugin_id) not in admitted:
             raise ValidationFailure("Catalog plugin is not admitted")
-        validate_descriptor_options(admitted[("catalog", module)], options)
+        validate_descriptor_options(admitted[("catalog", plugin_id)], options)
     validate_catalog_options(options, egress_allowlist=egress_allowlist)
     context = store.ensure_default_workspace_context()
     catalog_id = store.upsert_catalog(
         cell_id=context.cell_id,
         tenant_id=context.tenant_id,
         name=name,
-        module=module,
+        plugin_id=plugin_id,
         options=options,
         expected_revision=expected_revision,
     )
@@ -284,13 +270,13 @@ def upsert_workspace_catalog(
         action="workspace.catalog.update",
         resource_type="catalog",
         resource_id=str(catalog_id),
-        details={"name": name, "module": module, "option_keys": sorted(options)},
+        details={"name": name, "plugin_id": plugin_id, "option_keys": sorted(options)},
     )
     return {"id": str(catalog_id), "name": name}
 
 
 def validate_admitted_catalog_options(
-    module: str,
+    plugin_id: str,
     options: dict[str, Any],
     plugin_registry: PluginRegistry | Any | None,
 ) -> None:
@@ -299,16 +285,16 @@ def validate_admitted_catalog_options(
     Catalog rows can predate descriptor validation or be restored from an
     older deployment. Every discovery and schema path therefore repeats the
     admitted descriptor check before resolving secrets or loading a factory.
-    The built-in Iceberg compatibility module retains its legacy option
-    contract and is validated by ``validate_catalog_options``.
+    Built-in Iceberg options use the PyIceberg configuration contract and are
+    validated by ``validate_catalog_options``.
     """
 
-    if module == ICEBERG_CATALOG_ID:
+    if plugin_id == ICEBERG_CATALOG_ID:
         return
     if plugin_registry is None:
         raise ValidationFailure("Catalog plugin is not admitted")
     admitted = plugin_registry.admitted()
-    descriptor = admitted.get(("catalog", module))
+    descriptor = admitted.get(("catalog", plugin_id))
     if descriptor is None:
         raise ValidationFailure("Catalog plugin is not admitted")
     validate_descriptor_options(descriptor, options)

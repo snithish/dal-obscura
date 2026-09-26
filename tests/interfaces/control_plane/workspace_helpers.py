@@ -42,7 +42,7 @@ def _provision_asset(client: TestClient) -> dict[str, str]:
     client.put(
         "/v1/catalogs/analytics",
         json={
-            "module": ICEBERG_CATALOG_ID,
+            "plugin_id": ICEBERG_CATALOG_ID,
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
         },
         headers=ADMIN_HEADERS,

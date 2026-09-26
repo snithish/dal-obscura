@@ -952,7 +952,7 @@ def _provision_asset_without_owner(client: TestClient, *, target: str = "default
     client.put(
         "/v1/catalogs/analytics",
         json={
-            "module": ICEBERG_CATALOG_ID,
+            "plugin_id": ICEBERG_CATALOG_ID,
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
         },
         headers=ADMIN_HEADERS,

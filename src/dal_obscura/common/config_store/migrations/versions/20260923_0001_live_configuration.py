@@ -157,7 +157,7 @@ def upgrade() -> None:
         sa.Column("cell_id", sa.Uuid(), nullable=False),
         sa.Column("tenant_id", sa.Uuid(), nullable=False),
         sa.Column("name", sa.String(length=160), nullable=False),
-        sa.Column("module", sa.Text(), nullable=False),
+        sa.Column("plugin_id", sa.Text(), nullable=False),
         sa.Column("options_json", sa.JSON(), nullable=False),
         sa.Column("revision", sa.Integer(), nullable=False),
         sa.ForeignKeyConstraint(

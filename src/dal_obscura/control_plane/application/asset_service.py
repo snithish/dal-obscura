@@ -153,14 +153,14 @@ def upsert_workspace_asset(
 
     context = _required_workspace_context(store)
     catalog_record = store.get_workspace_catalog(context, catalog)
-    catalog_module = str(catalog_record["module"])
-    if backend != "iceberg" or catalog_module != ICEBERG_CATALOG_ID:
+    catalog_plugin_id = str(catalog_record["plugin_id"])
+    if backend != "iceberg" or catalog_plugin_id != ICEBERG_CATALOG_ID:
         if plugin_registry is None:
             raise ValidationFailure("Plugin pair is not admitted")
         # Plugin admission is frozen at startup; never discover or import
         # newly installed code while handling an asset mutation.
         admitted = plugin_registry.admitted()
-        catalog_descriptor = admitted.get(("catalog", catalog_module))
+        catalog_descriptor = admitted.get(("catalog", catalog_plugin_id))
         format_descriptor = admitted.get(("table_format", backend))
         if catalog_descriptor is None or format_descriptor is None:
             raise ValidationFailure("Plugin pair is not admitted")

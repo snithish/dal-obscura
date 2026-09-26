@@ -41,10 +41,6 @@ function configFieldLabel(name: string): string {
   return name.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function pluginIdForCatalog(catalog: Catalog): string | undefined {
-  return catalog.plugin_id ?? undefined;
-}
-
 function safeFormValue(value: unknown, field: PluginConfigField): string {
   if (field.secret) {
     // Secret options are references, never resolved credentials. Keep the
@@ -213,15 +209,14 @@ export function ConnectionsView({ catalogs, plugins, pluginStates, pluginPairs, 
   }
 
   function editCatalog(catalog: Catalog) {
-    const nextPluginId = pluginIdForCatalog(catalog);
-    const nextPlugin = catalogPlugins.find((plugin) => plugin.plugin_id === nextPluginId);
-    if (!nextPluginId || !nextPlugin) {
-      setMessage(`Catalog adapter ${catalog.plugin_id ?? catalog.module} is no longer admitted; refresh plugins before editing this connection.`);
+    const nextPlugin = catalogPlugins.find((plugin) => plugin.plugin_id === catalog.plugin_id);
+    if (!nextPlugin) {
+      setMessage(`Catalog adapter ${catalog.plugin_id} is no longer admitted; refresh plugins before editing this connection.`);
       return;
     }
     setEditingCatalog(catalog);
     setName(catalog.name);
-    setPluginId(nextPluginId);
+    setPluginId(catalog.plugin_id);
     setConfig(formConfigForCatalog(catalog, nextPlugin));
     setMessage(`Editing ${catalog.name}. Leave secret references unchanged to keep the existing server-held credential.`);
     connectionEditEpoch.current += 1;
@@ -374,7 +369,7 @@ export function ConnectionsView({ catalogs, plugins, pluginStates, pluginPairs, 
 
 
 function catalogDisplayName(catalog: Catalog): string {
-  return catalog.plugin_id ? `Catalog adapter · ${catalog.plugin_id}` : `Unresolved adapter · ${catalog.module}`;
+  return `Catalog adapter · ${catalog.plugin_id}`;
 }
 
 function discoveredTableIdentifier(table: Record<string, unknown>): string {

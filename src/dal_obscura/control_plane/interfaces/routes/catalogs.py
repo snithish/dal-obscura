@@ -85,7 +85,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         return deps.with_service(
             lambda service: service.upsert_workspace_catalog(
                 name=name,
-                module=payload.module,
+                plugin_id=payload.plugin_id,
                 options=payload.options,
                 expected_revision=payload.expected_revision,
                 actor=actor,

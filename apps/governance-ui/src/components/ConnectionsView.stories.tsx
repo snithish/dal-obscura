@@ -48,8 +48,7 @@ const typedCatalogPlugin: PluginDescriptor = {
 const catalogs: Catalog[] = [{
   id: "catalog-analytics",
   name: "analytics",
-  module: "dal_obscura.catalogs.iceberg_rest",
-  plugin_id: "iceberg-rest",
+  plugin_id: "iceberg.rest",
   options: { uri: "https://catalog.example" },
   status: "ready",
   revision: 4,

@@ -270,7 +270,7 @@ class ConfigStore:
         cell_id: UUID,
         tenant_id: UUID,
         name: str,
-        module: str,
+        plugin_id: str,
         options: dict[str, Any],
         expected_revision: int | None = None,
     ) -> UUID:
@@ -297,7 +297,7 @@ class ConfigStore:
                     cell_id=cell_id,
                     tenant_id=tenant_id,
                     name=name,
-                    module=module,
+                    plugin_id=plugin_id,
                     options_json=options,
                 )
             )
@@ -313,8 +313,8 @@ class ConfigStore:
                     f"{expected_revision}, current {existing.revision}); reread before writing."
                 )
             catalog_id = existing.id
-            if existing.module != module or existing.options_json != options:
-                existing.module = module
+            if existing.plugin_id != plugin_id or existing.options_json != options:
+                existing.plugin_id = plugin_id
                 existing.options_json = options
                 existing.revision += 1
         self._session.flush()
@@ -603,7 +603,7 @@ class ConfigStore:
                 "cell_id": str(record.cell_id),
                 "tenant_id": str(record.tenant_id),
                 "name": record.name,
-                "module": record.module,
+                "plugin_id": record.plugin_id,
                 "options": dict(record.options_json),
                 "revision": record.revision,
             }
@@ -629,7 +629,7 @@ class ConfigStore:
             {
                 "id": str(record.id),
                 "name": record.name,
-                "module": record.module,
+                "plugin_id": record.plugin_id,
                 "options": dict(record.options_json),
                 "status": "configured",
                 "revision": record.revision,
@@ -655,7 +655,7 @@ class ConfigStore:
         return {
             "id": str(record.id),
             "name": record.name,
-            "module": record.module,
+            "plugin_id": record.plugin_id,
             "options": dict(record.options_json),
             "revision": record.revision,
         }

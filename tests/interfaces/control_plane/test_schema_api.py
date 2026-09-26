@@ -69,7 +69,7 @@ def _provision_reviewable_asset(client: TestClient) -> dict[str, object]:
     client.put(
         "/v1/catalogs/analytics",
         json={
-            "module": ICEBERG_CATALOG_ID,
+            "plugin_id": ICEBERG_CATALOG_ID,
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
         },
         headers=ADMIN_HEADERS,
@@ -110,7 +110,7 @@ def test_asset_schema_route_reads_authoritative_iceberg_schema(monkeypatch) -> N
     client.put(
         "/v1/catalogs/analytics",
         json={
-            "module": ICEBERG_CATALOG_ID,
+            "plugin_id": ICEBERG_CATALOG_ID,
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
         },
         headers=ADMIN_HEADERS,
@@ -155,7 +155,7 @@ def test_policy_evaluation_returns_duckdb_transformed_synthetic_rows(monkeypatch
     client.put(
         "/v1/catalogs/analytics",
         json={
-            "module": ICEBERG_CATALOG_ID,
+            "plugin_id": ICEBERG_CATALOG_ID,
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
         },
         headers=ADMIN_HEADERS,

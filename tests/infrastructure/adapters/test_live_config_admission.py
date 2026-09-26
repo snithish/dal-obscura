@@ -155,7 +155,7 @@ def test_live_config_rejects_tampered_plugin_binding():
         _catalog_config_for_asset(catalog, asset)
 
 
-def test_live_config_rejects_legacy_catalog_module_shape():
+def test_live_config_rejects_legacy_plugin_id_shape():
     asset = LiveAsset(
         config_revision=uuid4(),
         tenant_id=uuid4(),
@@ -907,7 +907,7 @@ def _seed_live_asset(
     policy_version: int,
     backend: str = "iceberg",
     table: str = "prod.users",
-    catalog_module: str = ICEBERG_CATALOG_ID,
+    plugin_id: str = ICEBERG_CATALOG_ID,
     catalog_options: dict[str, object] | None = None,
     target_options: dict[str, object] | None = None,
 ) -> None:
@@ -931,7 +931,7 @@ def _seed_live_asset(
                 cell_id=cell_id,
                 tenant_id=tenant_id,
                 name="analytics",
-                module=catalog_module,
+                plugin_id=plugin_id,
                 options_json=dict(catalog_options or {}),
                 revision=0,
             ),

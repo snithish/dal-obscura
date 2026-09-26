@@ -126,7 +126,7 @@ def _seed_live_config(session: Session):
                 cell_id=cell_id,
                 tenant_id=tenant_id,
                 name="analytics",
-                module=ICEBERG_CATALOG_ID,
+                plugin_id=ICEBERG_CATALOG_ID,
                 options_json={"type": "sql", "uri": "sqlite:///catalog.db"},
                 revision=3,
             ),

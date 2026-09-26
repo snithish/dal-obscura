@@ -270,8 +270,7 @@ class CatalogInventoryResponse(BaseModel):
 
     id: UUID
     name: str
-    module: str
-    plugin_id: str | None = None
+    plugin_id: str
     options: dict[str, Any]
     status: str
     revision: int
@@ -454,13 +453,13 @@ class CatalogRequest(StrictModel):
 
     Example:
         ```python
-        CatalogRequest(module="iceberg.sql", options={"uri": "sqlite:///catalog.db"})
+        CatalogRequest(plugin_id="iceberg.sql", options={"uri": "sqlite:///catalog.db"})
         ```
     """
 
-    module: str = Field(
+    plugin_id: str = Field(
         min_length=1,
-        max_length=256,
+        max_length=64,
         pattern=r"^[a-z][a-z0-9_.-]{0,63}$",
     )
     options: dict[str, Any] = Field(default_factory=dict)

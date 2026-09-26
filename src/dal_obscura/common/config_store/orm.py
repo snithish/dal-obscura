@@ -99,7 +99,7 @@ class CatalogRecord(Base):
     cell_id: Mapped[UUID] = mapped_column(ForeignKey("cells.id"), nullable=False, index=True)
     tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(160), nullable=False)
-    module: Mapped[str] = mapped_column(Text, nullable=False)
+    plugin_id: Mapped[str] = mapped_column(Text, nullable=False)
     options_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     # Monotonic generation for provider configuration changes.
     revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

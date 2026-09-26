@@ -69,7 +69,7 @@ class _FakeStore:
         assert name == "analytics"
         return {
             "name": "analytics",
-            "module": "iceberg.sql",
+            "plugin_id": "iceberg.sql",
             "options": {"type": "sql", "uri": "sqlite:///catalog.db"},
         }
 
@@ -205,7 +205,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
             assert name == "analytics"
             return {
                 "name": name,
-                "module": "fixture.catalog",
+                "plugin_id": "fixture.catalog",
                 "revision": 3,
                 "options": {"uri": "https://catalog.example"},
             }
@@ -354,7 +354,7 @@ def test_get_asset_schema_rejects_persisted_unknown_catalog_option_before_factor
     store = _FakeStore(asset_id)
     cast(Any, store).get_workspace_catalog = lambda context, name: {
         "name": name,
-        "module": "fixture.catalog",
+        "plugin_id": "fixture.catalog",
         "revision": 1,
         "options": {"uri": "https://catalog.example", "debug": True},
     }
@@ -456,7 +456,7 @@ def test_schema_loading_enforces_catalog_egress_before_provider_call(
         "get_workspace_catalog",
         lambda context, name: {
             "name": name,
-            "module": "iceberg.sql",
+            "plugin_id": "iceberg.sql",
             "options": {"uri": "https://blocked.example/catalog"},
         },
     )
@@ -489,7 +489,7 @@ def test_schema_loading_resolves_secret_references_before_provider_call(
         "get_workspace_catalog",
         lambda context, name: {
             "name": name,
-            "module": "iceberg.sql",
+            "plugin_id": "iceberg.sql",
             "options": {
                 "uri": "https://catalog.example/api",
                 "token": {"secret": "CATALOG_TOKEN", "scope": "catalog:analytics"},

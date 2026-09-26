@@ -49,7 +49,7 @@ def _store() -> Mock:
     store.get_default_workspace_context.return_value = SimpleNamespace(
         cell_id=uuid4(), tenant_id=uuid4()
     )
-    store.get_workspace_catalog.return_value = {"module": "fixture.catalog"}
+    store.get_workspace_catalog.return_value = {"plugin_id": "fixture.catalog"}
     store.upsert_asset.return_value = uuid4()
     return store
 

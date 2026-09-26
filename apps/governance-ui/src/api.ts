@@ -126,8 +126,7 @@ export type AuditEventPage = {
 export type Catalog = {
   id: string;
   name: string;
-  module: string;
-  plugin_id?: string | null;
+  plugin_id: string;
   options: Record<string, unknown>;
   status?: string;
   revision?: number;
@@ -416,9 +415,9 @@ export const controlPlane = {
     const observations = await request<ApiSchemas["WorkspaceObservationsResponse"]>("/v1/workspace/observations", { signal });
     return { ...observations, generation: observations.generation ?? null } satisfies WorkspaceObservations;
   },
-  saveCatalog: (name: string, module: string, options: Record<string, unknown>, expectedRevision?: number, signal?: AbortSignal) => request<ApiSchemas["CatalogMutationResponse"]>(`/v1/catalogs/${encodeURIComponent(name)}`, {
+  saveCatalog: (name: string, pluginId: string, options: Record<string, unknown>, expectedRevision?: number, signal?: AbortSignal) => request<ApiSchemas["CatalogMutationResponse"]>(`/v1/catalogs/${encodeURIComponent(name)}`, {
     method: "PUT",
-    body: JSON.stringify({ module, options, ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }) }),
+    body: JSON.stringify({ plugin_id: pluginId, options, ...(expectedRevision === undefined ? {} : { expected_revision: expectedRevision }) }),
     signal,
   }),
   saveAsset: (catalog: string, target: string, backend: string, tableIdentifier: string, signal?: AbortSignal) => request<ApiSchemas["AssetMutationResponse"]>(`/v1/assets/${encodeURIComponent(catalog)}/${encodeURIComponent(target)}`, {

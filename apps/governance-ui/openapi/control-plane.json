@@ -3717,19 +3717,8 @@
             "type": "string",
             "title": "Name"
           },
-          "module": {
-            "type": "string",
-            "title": "Module"
-          },
           "plugin_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
             "title": "Plugin Id"
           },
           "options": {
@@ -3760,7 +3749,7 @@
         "required": [
           "id",
           "name",
-          "module",
+          "plugin_id",
           "options",
           "status",
           "revision"

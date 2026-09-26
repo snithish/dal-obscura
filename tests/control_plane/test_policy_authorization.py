@@ -179,7 +179,7 @@ def _workspace_asset(db_session) -> tuple[ProvisioningService, UUID]:
     service = ProvisioningService(db_session)
     service.upsert_workspace_catalog(
         name="analytics",
-        module=ICEBERG_CATALOG_ID,
+        plugin_id=ICEBERG_CATALOG_ID,
         options={"type": "sql", "uri": "sqlite:///catalog.db"},
     )
     asset = service.upsert_workspace_asset(

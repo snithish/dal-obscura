@@ -272,7 +272,7 @@ class LiveConfigStore:
             "target": target,
             "rules": policy_rules,
         }
-        catalog_plugin_id = catalog_record.module
+        catalog_plugin_id = catalog_record.plugin_id
         compiled_config: dict[str, Any] = {
             "catalog": {
                 "type": "iceberg" if catalog_plugin_id == "iceberg.sql" else "plugin",
@@ -358,12 +358,12 @@ class LiveConfigStore:
                 tenant_id=record.tenant_id,
                 catalog=record.name,
                 config={
-                    "type": ("iceberg" if record.module == "iceberg.sql" else "plugin"),
-                    "plugin_id": record.module,
+                    "type": ("iceberg" if record.plugin_id == "iceberg.sql" else "plugin"),
+                    "plugin_id": record.plugin_id,
                     "options": dict(record.options_json),
                     "revision": record.revision,
                 },
-                plugin_id=record.module,
+                plugin_id=record.plugin_id,
                 plugin_revision=record.revision,
             )
             for record in records
