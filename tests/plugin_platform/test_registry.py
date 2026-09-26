@@ -31,6 +31,13 @@ class _EntryPoints:
         return [entry for entry in self.entries if entry.group == group]
 
 
+def test_plugin_discovery_requires_selectable_entry_points() -> None:
+    registry = PluginRegistry(entry_points_fn=lambda: cast(Any, {"catalog": []}))
+
+    with pytest.raises(AttributeError, match="select"):
+        registry._select("dal_obscura.catalogs.v1")
+
+
 def _entry(name: str, group: str, distribution: str = "plugin-wheel", version: str = "1.2.3"):
     loaded = {"name": name}
     kind = "catalog" if group.endswith("catalogs.v1") else "table_format"

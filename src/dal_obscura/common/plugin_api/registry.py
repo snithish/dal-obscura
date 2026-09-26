@@ -9,7 +9,7 @@ from collections.abc import Callable, Mapping
 from importlib import metadata
 from pathlib import Path
 from threading import RLock
-from typing import Any, Literal, cast
+from typing import Literal, cast
 
 from dal_obscura_plugin_api import (
     SUPPORTED_PLUGIN_API_VERSIONS,
@@ -190,11 +190,7 @@ class PluginRegistry:
         return tuple(rows)
 
     def _select(self, group: str) -> list[metadata.EntryPoint]:
-        points: Any = self._entry_points_fn()
-        selected = (
-            points.select(group=group) if hasattr(points, "select") else points.get(group, ())
-        )
-        return list(cast(Any, selected))
+        return list(self._entry_points_fn().select(group=group))
 
     def _discover_with_entries(  # noqa: C901
         self,
