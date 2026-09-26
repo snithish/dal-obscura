@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import secrets
 from pathlib import Path
+from urllib.parse import urlsplit
 
 DEMO_DIR = Path(__file__).resolve().parents[1]
 RUNTIME_DIR = DEMO_DIR / ".runtime"
@@ -46,12 +47,12 @@ STATIC_VALUES = {
     "DAL_OBSCURA_CONTROL_PLANE_OIDC_SUBJECT_CLAIM": "preferred_username",
     "DAL_OBSCURA_CONTROL_PLANE_OIDC_GROUP_CLAIMS": "groups",
     "DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP": "platform-admins",
-    "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": "http://127.0.0.1:28821",
+    "DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS": "http://localhost:28821",
     "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER": ("http://127.0.0.1:20080/realms/dal-obscura-demo"),
     "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID": "dal-obscura-ui",
-    "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN": "http://127.0.0.1:28821",
-    "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": ("http://127.0.0.1:28821/auth/callback"),
-    "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI": ("http://127.0.0.1:28821"),
+    "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN": "http://localhost:28821",
+    "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI": ("http://localhost:28821/auth/callback"),
+    "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI": ("http://localhost:28821"),
     "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_TOKEN_ENDPOINT": (
         "http://keycloak:8080/realms/dal-obscura-demo/protocol/openid-connect/token"
     ),
@@ -85,7 +86,7 @@ def main() -> None:
 
 def _load_or_create_values() -> dict[str, str]:
     existing = _read_all_env_files()
-    ui_origin = f"http://127.0.0.1:{_demo_ui_port(existing)}"
+    ui_origin = f"http://localhost:{_demo_ui_port(existing)}"
     values = {
         **existing,
         **STATIC_VALUES,
@@ -109,8 +110,17 @@ def _demo_ui_port(existing: dict[str, str]) -> int:
     configured = os.environ.get("DAL_OBSCURA_DEMO_UI_PORT")
     if configured is None:
         origin = existing.get("DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN", "")
-        prefix = "http://127.0.0.1:"
-        existing_port = origin.removeprefix(prefix) if origin.startswith(prefix) else ""
+        try:
+            parsed_origin = urlsplit(origin)
+            parsed_port = parsed_origin.port
+        except ValueError:
+            existing_port = ""
+        else:
+            existing_port = (
+                str(parsed_port or "")
+                if parsed_origin.hostname in {"localhost", "127.0.0.1"}
+                else ""
+            )
         if not existing_port.isascii() or not existing_port.isdecimal():
             existing_port = ""
         if existing_port and 20000 <= int(existing_port) <= 29999:

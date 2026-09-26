@@ -2,7 +2,7 @@
   "catalogs": [
     {
       "name": "retail_demo",
-      "kind": "iceberg_sql"
+      "plugin_id": "iceberg.sql"
     }
   ],
   "tables": [

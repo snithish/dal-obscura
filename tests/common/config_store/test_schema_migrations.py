@@ -22,8 +22,8 @@ MIGRATIONS_DIR = (
     / "migrations"
     / "versions"
 )
-MIGRATION_FILE = MIGRATIONS_DIR / "20260923_0001_live_configuration.py"
-REVISION = "20260923_0001"
+MIGRATION_FILE = MIGRATIONS_DIR / "20260926_0001_live_configuration.py"
+REVISION = "20260926_0001"
 
 
 def test_history_is_a_single_frozen_baseline() -> None:
@@ -73,6 +73,7 @@ def test_baseline_creates_only_the_current_live_schema() -> None:
         "revoked_at",
     }
     assert "revision" in {column["name"] for column in inspector.get_columns("catalogs")}
+    assert "plugin_id" in {column["name"] for column in inspector.get_columns("catalogs")}
     assert "policy_revision" in {column["name"] for column in inspector.get_columns("assets")}
     with engine.connect() as connection:
         version = connection.scalar(text("SELECT version_num FROM alembic_version"))

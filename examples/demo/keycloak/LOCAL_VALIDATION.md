@@ -1,46 +1,28 @@
 # Local demo validation
 
-Validation run: 2026-09-22
-
-Endpoint update: 2026-09-23. The local demo now uses loopback ports in the
-20000 range and no longer has a Caddy gateway. Runtime evidence below predates
-this endpoint update; repeat the live OIDC and stack-health checks for the new
-ports before treating them as validated.
+Validation run: 2026-09-26, Podman Compose.
 
 Start the demo with `./run up`. The management UI is served at
-`http://127.0.0.1:28821` by default (or the configured
+`http://localhost:28821` by default (or the configured
 `DAL_OBSCURA_DEMO_UI_PORT`). Sign-in uses the configured Keycloak realm and the
 normal OIDC authorization-code flow with PKCE.
 
 ## Passed
 
-- `ui-smoke`: browser session creation, authorization, and logout passed.
-- Live Playwright OIDC acceptance: the UI redirected to Keycloak, completed
-  the PKCE callback for `demo-admin`, exposed the seeded platform-admin
-  capability and asset inventory, then signed out and returned to the
-  unauthenticated state.
-- Focused control-plane, demo fixture, schema-admission, and local-demo
-  architecture tests passed.
-- `tests/test_e2e_smoke.py` passed.
-- The fresh Compose stack became healthy, including the control plane, UI,
-  Keycloak, and Flight server.
+- `./run up` succeeded twice consecutively. Postgres, Keycloak, migrations,
+  control plane, provisioning, UI, and Flight reached their expected healthy
+  or successful completion states on both runs.
+- `./run ui-smoke` passed in Chromium. It exercised Keycloak Authorization
+  Code + PKCE login, session cookie acceptance, platform-admin access, seeded
+  asset inventory, CSRF-protected logout, and session revocation.
+- `./run smoke` passed for all five seeded personas: US and EU row filters and
+  email masking, unrestricted steward and owner reads, and blocked-user denial.
+- `pnpm build` and its JavaScript, CSS, and font size budgets passed during the
+  Compose image build.
+- `uv run pytest` passed: 861 passed, 12 skipped.
+- `ruff check .`, `ruff format --check .`, and `ty check` all passed.
 
-## Pending Flight demo check
-
-The role-by-role demo smoke did not complete. Its first `us-analyst` read was
-rejected during planning. Diagnostics showed that Iceberg's `string` schema
-type was compared literally with Arrow's equivalent `large_string` type. The
-code now normalizes those equivalent type names, including inside nested
-struct types, and the schema-admission regression test passes.
-
-The running demo container still has the image built before this fix. Rebuilding
-that standard runtime image failed because the Podman VM ran out of storage
-(about 1 GB free in a 28 GB VM). No existing image or volume was removed. The
-Flight demo smoke, including all personas and the denied-user case, must be run
-after the updated image can be built. Do not treat this record as full demo
-acceptance until that check passes.
-
-The demo fixture provisioner now reads the live schema and admits each nested
-field with its stable provider ID and typed path. Its tests cover nested struct
-and list paths. These changes are covered by tests but still need a successful
-Flight run through the rebuilt demo image.
+The UI origin is `http://localhost:28821` by default. The application retains
+its `Secure` and `__Host-` session cookie settings; browsers treat localhost as
+a secure context. API, database, Keycloak, and Flight ports remain bound to
+loopback in the 20000 range.

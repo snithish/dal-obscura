@@ -18,7 +18,7 @@ def _load_script(name: str) -> ModuleType:
 
 def _fixture() -> dict[str, object]:
     return {
-        "catalogs": [{"name": "retail_demo", "kind": "iceberg_sql"}],
+        "catalogs": [{"name": "retail_demo", "plugin_id": "iceberg.sql"}],
         "tables": [{"catalog": "retail_demo", "target": "retail.customer_revenue"}],
     }
 
@@ -97,10 +97,11 @@ def test_provision_reuses_complete_workspace_without_writes(monkeypatch) -> None
             {
                 "id": "asset-1",
                 "catalog": "retail_demo",
-                "target": "retail.customer_revenue",
+                "name": "retail.customer_revenue",
                 "policy_status": "configured",
             }
         ],
+        "/v1/settings/auth-providers": [module._demo_auth_provider()],
     }
 
     def request(method: str, path: str, body=None):
@@ -114,6 +115,7 @@ def test_provision_reuses_complete_workspace_without_writes(monkeypatch) -> None
     assert calls == [
         ("GET", "/v1/workspace/summary"),
         ("GET", "/v1/assets"),
+        ("GET", "/v1/settings/auth-providers"),
     ]
 
 
@@ -122,7 +124,7 @@ def test_provision_enables_identity_provider_before_saving_live_policy(monkeypat
     monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
     module = _load_script("provision_demo")
     fixture = {
-        "catalogs": [{"name": "retail_demo", "kind": "iceberg_sql"}],
+        "catalogs": [{"name": "retail_demo", "plugin_id": "iceberg.sql"}],
         "tables": [
             {
                 "catalog": "retail_demo",
@@ -138,6 +140,12 @@ def test_provision_enables_identity_provider_before_saving_live_policy(monkeypat
 
     def request(method: str, path: str, body=None):
         calls.append((method, path, body))
+        if path == "/v1/settings/runtime":
+            return {"revision": 0}
+        if path == "/v1/settings/auth-providers":
+            return []
+        if path == "/v1/settings/auth-providers/revision":
+            return {"revision": 0}
         if path == "/v1/catalogs/retail_demo/tables":
             return {
                 "tables": [
@@ -186,6 +194,15 @@ def test_provision_enables_identity_provider_before_saving_live_policy(monkeypat
     )
     assert len(policy_calls) == 1
     assert provider_call < policy_calls[0][0]
+    runtime_call = next(
+        call for call in calls if call[0] == "PUT" and call[1] == "/v1/settings/runtime"
+    )
+    assert runtime_call[2] == {
+        "ticket_ttl_seconds": 600,
+        "max_tickets": 16,
+        "max_ticket_exchanges": 1,
+        "expected_revision": 0,
+    }
     assert schema_fields_call[2] == {
         "expected_revision": 1,
         "fields": [

@@ -27,17 +27,40 @@ prepare() {
   python3 "$ROOT/scripts/prepare_demo.py"
 }
 
+check_container_runtime() {
+  if ! docker info >/dev/null 2>&1; then
+    printf 'Container runtime is unavailable. Start Docker Desktop or, with Podman, run `podman machine start`.\n' >&2
+    return 1
+  fi
+  if ! docker compose version >/dev/null 2>&1; then
+    printf 'Docker Compose is unavailable. Install Compose v2 or configure the Podman Compose provider.\n' >&2
+    return 1
+  fi
+  return 0
+}
+
 compose() {
   project_name="${DAL_OBSCURA_DEMO_PROJECT_NAME:-dal-obscura-keycloak-demo}"
-  ui_port="${DAL_OBSCURA_DEMO_UI_PORT:-$(sed -n 's@^DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN=http://127.0.0.1:@@p' "$ROOT/.runtime/control-plane.env" 2>/dev/null)}"
+  ui_port="${DAL_OBSCURA_DEMO_UI_PORT:-$(sed -n 's@^DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN=http://localhost:@@p' "$ROOT/.runtime/control-plane.env" 2>/dev/null)}"
   ui_port="${ui_port:-28821}"
   DAL_OBSCURA_IMAGE="$DEMO_IMAGE" DAL_OBSCURA_DEMO_UI_PORT="$ui_port" \
     docker compose --project-name "$project_name" -f "$COMPOSE_FILE" "$@"
 }
 
-configured_ui_origin() {
-  sed -n 's/^DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN=//p' \
-    "$ROOT/.runtime/control-plane.env" 2>/dev/null || true
+report_startup_failure() {
+  printf '\nLocal demo did not become ready. Container state and recent setup logs:\n' >&2
+  compose ps -a >&2 || true
+  compose logs --no-color --tail=100 setup control-plane dal-obscura >&2 || true
+}
+
+realm_digest() {
+  python3 - "$ROOT/.runtime/keycloak/realm.json" <<'PY'
+import hashlib
+import sys
+from pathlib import Path
+
+print(hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest())
+PY
 }
 
 build_image() {
@@ -49,10 +72,10 @@ build_image() {
 credentials() {
   prepare >/dev/null
   ui_origin="$(sed -n 's/^DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN=//p' "$ROOT/.runtime/control-plane.env")"
-  printf 'Control plane UI: %s\n' "${ui_origin:-http://127.0.0.1:28821}"
+  printf 'Control plane UI: %s\n' "${ui_origin:-http://localhost:28821}"
   printf 'API docs:         http://127.0.0.1:28820/docs\n'
   printf 'Keycloak:         http://127.0.0.1:20080\n'
-  printf 'OIDC callback:    %s/auth/callback\n' "${ui_origin:-http://127.0.0.1:28821}"
+  printf 'OIDC callback:    %s/auth/callback\n' "${ui_origin:-http://localhost:28821}"
   printf 'Flight URI:       grpc+tcp://127.0.0.1:28115\n'
   printf '\n'
   sed -n \
@@ -86,14 +109,23 @@ shift || true
 
 case "$action" in
   up)
-    previous_ui_origin="$(configured_ui_origin)"
+    check_container_runtime
+    previous_realm_digest="$(cat "$ROOT/.runtime/keycloak/realm.sha256" 2>/dev/null || true)"
     prepare
     build_image
-    current_ui_origin="$(configured_ui_origin)"
-    if [ -n "$previous_ui_origin" ] && [ "$previous_ui_origin" != "$current_ui_origin" ]; then
+    current_realm_digest="$(realm_digest)"
+    if [ "$previous_realm_digest" != "$current_realm_digest" ]; then
       compose up -d --force-recreate --wait keycloak
     fi
-    compose up -d --build --wait
+    if ! compose up -d --build --force-recreate --wait setup dal-obscura; then
+      report_startup_failure
+      exit 1
+    fi
+    if ! compose up -d --build --wait; then
+      report_startup_failure
+      exit 1
+    fi
+    printf '%s\n' "$current_realm_digest" > "$ROOT/.runtime/keycloak/realm.sha256"
     credentials
     ;;
   credentials)
@@ -109,7 +141,15 @@ case "$action" in
     compose exec client python /workspace/demo/scripts/smoke_demo.py
     ;;
   ui-smoke)
-    python3 "$ROOT/scripts/ui_smoke.py"
+    command -v pnpm >/dev/null 2>&1 || {
+      printf 'UI smoke requires pnpm and the governance UI dependencies. Run `pnpm --dir ../../../apps/governance-ui install --frozen-lockfile`.\n' >&2
+      exit 1
+    }
+    ui_origin="$(sed -n 's/^DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN=//p' "$ROOT/.runtime/control-plane.env")"
+    repo_root="$(CDPATH= cd -- "$ROOT/../../.." && pwd)"
+    cd "$repo_root/apps/governance-ui"
+    DAL_OBSCURA_E2E_LIVE_OIDC=1 DAL_OBSCURA_E2E_BASE_URL="${ui_origin:-http://localhost:28821}" \
+      pnpm exec playwright test e2e/live-oidc-demo.spec.ts
     ;;
   logs)
     compose logs "${1:-control-plane}"

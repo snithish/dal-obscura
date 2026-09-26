@@ -28,6 +28,7 @@ def test_demo_services_wait_for_real_readiness_boundaries() -> None:
         yaml.safe_load((REPOSITORY_ROOT / "examples/demo/keycloak/compose.yaml").read_text()),
     )
     services = cast(dict[str, dict[str, Any]], document["services"])
+    volumes = cast(dict[str, Any], document["volumes"])
 
     keycloak = services["keycloak"]
     assert "--health-enabled=true" in keycloak["command"]
@@ -45,6 +46,10 @@ def test_demo_services_wait_for_real_readiness_boundaries() -> None:
 
     assert services["setup"]["depends_on"]["control-plane"]["condition"] == "service_healthy"
     assert services["setup"]["depends_on"]["keycloak"]["condition"] == "service_healthy"
+    assert "rm -f /workspace/demo/.runtime/setup.done" in " ".join(services["setup"]["command"])
+
+    assert services["postgres"]["volumes"] == ["postgres-data-v2:/var/lib/postgresql/data"]
+    assert "postgres-data-v2" in volumes
 
     data_plane = services["dal-obscura"]
     assert data_plane["depends_on"]["setup"]["condition"] == "service_healthy"

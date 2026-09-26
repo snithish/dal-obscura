@@ -5,12 +5,14 @@ control-plane state, a seeded Iceberg table, and a Flight data plane. It is
 built for sales walkthroughs and hands-on trials on a laptop.
 
 Generated secrets and table files stay under this directory in `.runtime/`.
-Control-plane state is stored in the Compose `postgres-data` volume so policy
-changes survive container restarts.
+Control-plane state is stored in the Compose `postgres-data-v2` volume so policy
+changes survive container restarts. The versioned volume starts with the current
+schema baseline and leaves older local demo data untouched.
 
 ## Requirements
 
-- Docker with Compose v2
+- Docker Engine with Compose v2, or Podman with a running machine and a working
+  Compose provider
 - Python 3 for the local `./run` helper
 
 ## Start
@@ -33,7 +35,7 @@ What happens:
 5. The control plane starts on `127.0.0.1:28820` with Postgres config storage,
    Keycloak token validation, and public UI authentication configuration.
    The governance UI is built from `apps/governance-ui`, served on
-   `127.0.0.1:28821` by default, and proxies `/v1` to the control plane on the
+   `localhost:28821` by default, and proxies `/v1` to the control plane on the
    same origin. Set `DAL_OBSCURA_DEMO_UI_PORT` to choose another loopback port.
 6. The `setup` service creates the Iceberg table metadata and data files from `fixtures/demo_fixture.json`.
 7. The setup service waits for the control plane and provisions it through the
@@ -43,6 +45,11 @@ What happens:
 8. The setup service assigns `group:asset-owners`, saves the demo policies
    directly to each live asset, and configures OIDC/JWKS auth for the data plane.
 9. The Flight data plane starts on `127.0.0.1:28115`.
+
+The Compose project network resolves service names such as `postgres`,
+`keycloak`, and `control-plane` between containers. Browser-facing issuer and
+callback URLs use loopback addresses because the browser runs on the host. If
+startup fails, `./run up` prints service state and recent provisioning logs.
 
 ## Credentials
 
@@ -70,7 +77,7 @@ scripted reads; it does not create a browser session.
 
 The public OIDC issuer uses `http://127.0.0.1:20080/realms/dal-obscura-demo`.
 Keycloak redirects the browser back to the UI callback at
-`http://127.0.0.1:28821/auth/callback` by default; if you change the UI port,
+`http://localhost:28821/auth/callback` by default; if you change the UI port,
 `./run up` updates the registered callback to that UI origin.
 
 If port 28821 is already in use, start the demo on another loopback port from
@@ -81,7 +88,13 @@ runner writes that origin into its OIDC callback and Keycloak realm settings:
 DAL_OBSCURA_DEMO_UI_PORT=28822 ./run up
 ```
 
-`./run credentials` prints the configured UI URL, and `./run ui-smoke` uses it.
+`./run credentials` prints the configured UI URL, and `./run ui-smoke` runs the
+real browser SSO flow against it. UI smoke requires Node.js 24, pnpm 12, and
+the governance UI dependencies installed with the command below:
+
+```bash
+pnpm --dir ../../../apps/governance-ui install --frozen-lockfile
+```
 Set `DAL_OBSCURA_DEMO_PROJECT_NAME` to target another Compose project and its
 separate database volume. The default project name stays stable across runs.
 
@@ -89,15 +102,16 @@ separate database volume. The default project name stays stable across runs.
 
 Use `./run token --as <user>` and the read checks below to exercise the governed Flight path.
 
-Verify the browser shell, session setup, authenticated inventory, CSRF-protected
-logout, and session revocation after `./run up`:
+Verify the complete Keycloak sign-in, authenticated inventory, CSRF-protected
+logout, and session revocation with a real Chromium browser after `./run up`:
 
 ```bash
 ./run ui-smoke
 ```
 
-This smoke uses the explicitly enabled local bootstrap endpoint. It does not
-verify OIDC or replace the normal **Sign in with SSO** browser flow.
+This uses the normal **Sign in with SSO** flow; it does not use the local
+bootstrap endpoint. The UI uses `localhost` so browsers accept the production
+`Secure` and `__Host-` session cookies over the loopback-only local HTTP origin.
 
 For the full browser flow, open the UI and:
 
@@ -113,8 +127,8 @@ running and UI dependencies installed, run:
 
 ```bash
 DAL_OBSCURA_E2E_LIVE_OIDC=1 \
-DAL_OBSCURA_E2E_BASE_URL=http://127.0.0.1:8822 \
-pnpm --dir ../../../apps/governance-ui test:e2e -- e2e/live-oidc-demo.spec.ts
+DAL_OBSCURA_E2E_BASE_URL=http://localhost:28822 \
+pnpm --dir ../../../apps/governance-ui exec playwright test e2e/live-oidc-demo.spec.ts
 ```
 
 Adjust the base URL when using a different UI port. The test reads the generated
@@ -153,7 +167,7 @@ Stop containers but keep generated demo state, including the Postgres volume:
 ./run down
 ```
 
-Delete containers, generated files, and the Postgres volume:
+Delete containers, generated files, and the current versioned Postgres volume:
 
 ```bash
 ./run reset

@@ -19,9 +19,6 @@ DATA_PLANE_ENV = RUNTIME_DIR / "data-plane.env"
 CONTROL_PLANE_URL = os.environ.get("CONTROL_PLANE_URL", "http://control-plane:8820")
 ADMIN_TOKEN = os.environ.get("DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN", "")
 DATABASE_URL = os.environ.get("DAL_OBSCURA_DATABASE_URL", "")
-ICEBERG_CATALOG_MODULE = (
-    "dal_obscura.data_plane.infrastructure.adapters.catalog_registry.IcebergCatalog"
-)
 OIDC_AUTH_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks.OidcJwksIdentityProvider"
 )
@@ -29,6 +26,29 @@ DEMO_OIDC_ISSUER = os.environ.get(
     "DEMO_OIDC_ISSUER",
     "http://127.0.0.1:20080/realms/dal-obscura-demo",
 )
+DEMO_RUNTIME_SETTINGS = {
+    "ticket_ttl_seconds": 600,
+    "max_tickets": 16,
+    "max_ticket_exchanges": 1,
+}
+
+
+def _demo_auth_provider() -> dict[str, Any]:
+    return {
+        "ordinal": 10,
+        "module": OIDC_AUTH_MODULE,
+        "args": {
+            "issuer": DEMO_OIDC_ISSUER,
+            "audience": "dal-obscura",
+            "jwks_url": (
+                "http://keycloak:8080/realms/dal-obscura-demo/protocol/openid-connect/certs"
+            ),
+            "subject_claim": "preferred_username",
+            "group_claims": ["groups"],
+            "attribute_claims": {"tenant_id": "tenant_id"},
+        },
+        "enabled": True,
+    }
 
 
 def main() -> None:
@@ -81,43 +101,14 @@ def _workspace_cell_id() -> str:
 def _provision_workspace(fixture: dict[str, Any]) -> str:
     workspace_state = _workspace_state(fixture)
     if workspace_state == "complete":
+        _configure_auth_provider()
         return _workspace_cell_id()
 
     warehouse_path = "/workspace/demo/.runtime/warehouse"
-    _request(
-        "PUT",
-        "/v1/settings/runtime",
-        {
-            "ticket_ttl_seconds": 600,
-            "max_tickets": 16,
-            "max_ticket_exchanges": 1,
-        },
-    )
+    _configure_runtime_settings()
     cell_id = _workspace_cell_id()
     _upsert_catalogs(fixture, warehouse_path)
-    _request(
-        "PUT",
-        "/v1/settings/auth-providers",
-        {
-            "providers": [
-                {
-                    "ordinal": 10,
-                    "module": OIDC_AUTH_MODULE,
-                    "args": {
-                        "issuer": DEMO_OIDC_ISSUER,
-                        "audience": "dal-obscura",
-                        "jwks_url": (
-                            "http://keycloak:8080/realms/dal-obscura-demo/"
-                            "protocol/openid-connect/certs"
-                        ),
-                        "subject_claim": "preferred_username",
-                        "group_claims": ["groups"],
-                    },
-                    "enabled": True,
-                }
-            ]
-        },
-    )
+    _configure_auth_provider()
     for table_fixture in fixture["tables"]:
         _configure_table_policy(fixture, table_fixture)
     return cell_id
@@ -126,11 +117,11 @@ def _provision_workspace(fixture: dict[str, Any]) -> str:
 def _workspace_state(fixture: dict[str, Any]) -> str:
     """Classify the workspace before any mutating setup request.
 
-    A fresh database is safe to initialize.  A fully provisioned database is
-    safe to reuse after checking the expected demo assets and their live policies.
-    Any other state is ambiguous, so setup fails instead of overwriting
-    customer-authored configuration.  Operators can use the explicit reset
-    workflow when they really intend to destroy the demo state.
+    A fresh database is safe to initialize. A workspace containing only the
+    demo's runtime defaults is also safe to resume after an interrupted setup.
+    A fully provisioned database is reused after checking its demo assets and
+    policies. Any other partial state is ambiguous, so setup refuses to
+    overwrite operator-authored configuration.
     """
 
     summary = _request("GET", "/v1/workspace/summary")
@@ -138,6 +129,8 @@ def _workspace_state(fixture: dict[str, Any]) -> str:
         raise RuntimeError("workspace summary returned an unexpected response")
     summary_payload = cast(dict[str, Any], summary)
     if _summary_is_empty(summary_payload):
+        return "empty"
+    if _summary_is_runtime_only(summary_payload) and _runtime_settings_match_demo():
         return "empty"
 
     expected_catalog_count = len(fixture["catalogs"])
@@ -156,7 +149,7 @@ def _workspace_state(fixture: dict[str, Any]) -> str:
     assets_response = _request("GET", "/v1/assets")
     assets = _as_list(assets_response, "assets")
     asset_by_target = {
-        (str(asset.get("catalog")), str(asset.get("target"))): asset for asset in assets
+        (str(asset.get("catalog")), str(asset.get("name"))): asset for asset in assets
     }
     expected_targets = {
         (str(table["catalog"]), str(table["target"])) for table in fixture["tables"]
@@ -179,6 +172,51 @@ def _workspace_state(fixture: dict[str, Any]) -> str:
     )
 
 
+def _configure_runtime_settings() -> None:
+    current = _request("GET", "/v1/settings/runtime")
+    body = dict(DEMO_RUNTIME_SETTINGS)
+    if not isinstance(current, dict):
+        raise RuntimeError("runtime settings response was invalid")
+    current_payload = cast(dict[str, Any], current)
+    revision = current_payload.get("revision")
+    if not isinstance(revision, int):
+        raise RuntimeError("runtime settings response omitted its revision")
+    body["expected_revision"] = revision
+    _request("PUT", "/v1/settings/runtime", body)
+
+
+def _configure_auth_provider() -> None:
+    expected = _demo_auth_provider()
+    current = _as_list(_request("GET", "/v1/settings/auth-providers"), "auth providers")
+    if len(current) == 1 and _auth_provider_matches(current[0], expected["args"]):
+        return
+    if current:
+        raise RuntimeError(
+            "configured auth providers differ from the local demo identity; "
+            "restore the demo provider or reset this disposable workspace"
+        )
+    revision_response = _request("GET", "/v1/settings/auth-providers/revision")
+    if not isinstance(revision_response, dict):
+        raise RuntimeError("auth provider revision response was invalid")
+    revision_payload = cast(dict[str, Any], revision_response)
+    if not isinstance(revision_payload.get("revision"), int):
+        raise RuntimeError("auth provider revision response was invalid")
+    _request(
+        "PUT",
+        "/v1/settings/auth-providers",
+        {"providers": [expected], "expected_revision": revision_payload["revision"]},
+    )
+
+
+def _auth_provider_matches(provider: dict[str, Any], expected_args: dict[str, Any]) -> bool:
+    return (
+        provider.get("ordinal") == 10
+        and provider.get("module") == OIDC_AUTH_MODULE
+        and provider.get("enabled") is True
+        and provider.get("args") == expected_args
+    )
+
+
 def _summary_is_empty(summary: dict[str, Any]) -> bool:
     return (
         int(summary.get("catalog_count", 0)) == 0
@@ -187,6 +225,28 @@ def _summary_is_empty(summary: dict[str, Any]) -> bool:
         and int(summary.get("missing_policy_count", 0)) == 0
         and not bool(summary.get("runtime_configured"))
         and int(summary.get("enabled_auth_provider_count", 0)) == 0
+    )
+
+
+def _summary_is_runtime_only(summary: dict[str, Any]) -> bool:
+    return (
+        int(summary.get("catalog_count", 0)) == 0
+        and int(summary.get("asset_count", 0)) == 0
+        and int(summary.get("unowned_asset_count", 0)) == 0
+        and int(summary.get("missing_policy_count", 0)) == 0
+        and bool(summary.get("runtime_configured"))
+        and int(summary.get("enabled_auth_provider_count", 0)) == 0
+    )
+
+
+def _runtime_settings_match_demo() -> bool:
+    settings = _request("GET", "/v1/settings/runtime")
+    if not isinstance(settings, dict):
+        return False
+    settings_payload = cast(dict[str, Any], settings)
+    auth_providers = _as_list(_request("GET", "/v1/settings/auth-providers"), "auth providers")
+    return not auth_providers and all(
+        settings_payload.get(key) == value for key, value in DEMO_RUNTIME_SETTINGS.items()
     )
 
 
@@ -215,10 +275,10 @@ def _as_list(value: object, label: str) -> list[dict[str, Any]]:
 def _upsert_catalogs(fixture: dict[str, Any], warehouse_path: str) -> None:
     for catalog in fixture["catalogs"]:
         catalog_name = str(catalog["name"])
-        kind = str(catalog["kind"])
-        if kind == "iceberg_sql":
+        plugin_id = str(catalog["plugin_id"])
+        if plugin_id == "iceberg.sql":
             body = {
-                "module": ICEBERG_CATALOG_MODULE,
+                "plugin_id": plugin_id,
                 "options": {
                     "type": "sql",
                     "uri": f"sqlite:///{RUNTIME_DIR / f'{catalog_name}.db'}",
@@ -226,7 +286,7 @@ def _upsert_catalogs(fixture: dict[str, Any], warehouse_path: str) -> None:
                 },
             }
         else:
-            raise RuntimeError(f"unsupported demo catalog kind {kind!r}")
+            raise RuntimeError(f"unsupported demo catalog plugin {plugin_id!r}")
         _request("PUT", f"/v1/catalogs/{catalog_name}", body)
 
 

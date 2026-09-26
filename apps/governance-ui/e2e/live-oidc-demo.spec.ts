@@ -25,7 +25,7 @@ function demoAdminPassword(): string {
 
 test("live local Keycloak sign-in, governed inventory, and sign-out", async ({ page }) => {
   test.skip(!enabled, "set DAL_OBSCURA_E2E_LIVE_OIDC=1 to run against the local demo");
-  const baseURL = process.env.DAL_OBSCURA_E2E_BASE_URL ?? "http://127.0.0.1:28821";
+  const baseURL = process.env.DAL_OBSCURA_E2E_BASE_URL ?? "http://localhost:28821";
   const origin = new URL(baseURL).origin;
 
   await page.goto("/");

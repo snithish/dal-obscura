@@ -31,7 +31,7 @@ services:
     ports:
       - "127.0.0.1:25432:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres-data-v2:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 2s
@@ -64,8 +64,8 @@ services:
       - .:/workspace/demo:rw
     command:
       - sh
-      - -c
-      - python /workspace/demo/scripts/seed_table.py && python /workspace/demo/scripts/provision_demo.py && touch /workspace/demo/.runtime/setup.done && tail -f /dev/null
+      - -ec
+      - rm -f /workspace/demo/.runtime/setup.done; python /workspace/demo/scripts/seed_table.py && python /workspace/demo/scripts/provision_demo.py && touch /workspace/demo/.runtime/setup.done && exec tail -f /dev/null
     healthcheck:
       test: ["CMD", "test", "-f", "/workspace/demo/.runtime/setup.done"]
       interval: 1s
@@ -150,4 +150,5 @@ services:
     command: ["tail", "-f", "/dev/null"]
 
 volumes:
-  postgres-data:
+  # Schema baseline changed during pre-release development. Keep old local state intact.
+  postgres-data-v2:

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from examples.demo.keycloak.scripts import prepare_demo, provision_demo, ui_smoke
+from examples.demo.keycloak.scripts import prepare_demo, provision_demo
 
 
 @pytest.mark.parametrize(
@@ -14,6 +14,7 @@ from examples.demo.keycloak.scripts import prepare_demo, provision_demo, ui_smok
         ("https://governance.localhost", 28821),
         ("http://127.0.0.1:8821", 28821),
         ("http://127.0.0.1:28822", 28822),
+        ("http://localhost:28823", 28823),
     ],
 )
 def test_prepare_demo_uses_high_port_after_legacy_runtime(
@@ -32,7 +33,7 @@ def test_keycloak_demo_fixture_declares_catalog_backed_iceberg_tables():
         Path("examples/demo/keycloak/fixtures/demo_fixture.json").read_text(encoding="utf-8")
     )
 
-    assert fixture["catalogs"] == [{"name": "retail_demo", "kind": "iceberg_sql"}]
+    assert fixture["catalogs"] == [{"name": "retail_demo", "plugin_id": "iceberg.sql"}]
     assert {table["backend"] for table in fixture["tables"]} == {"iceberg"}
     assert all("table_path" not in table for table in fixture["tables"])
     assert all(table["rows"] for table in fixture["tables"])
@@ -115,19 +116,7 @@ def test_provision_demo_rejects_schema_without_provider_field_ids():
         )
 
 
-def test_ui_smoke_reads_bootstrap_token_from_keycloak_demo_runtime(tmp_path, monkeypatch):
-    monkeypatch.setattr(ui_smoke, "DEMO_DIR", tmp_path)
-    runtime_dir = tmp_path / ".runtime"
-    runtime_dir.mkdir()
-    (runtime_dir / "control-plane.env").write_text(
-        "DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN=local-test-token\n", encoding="utf-8"
-    )
-
-    assert ui_smoke.control_plane_admin_token() == "local-test-token"
-
-
-@pytest.mark.parametrize("ui_port", ["28821", "28822"])
-def test_prepare_demo_writes_separate_ui_runtime_config(tmp_path, monkeypatch, ui_port):
+def test_prepare_demo_refreshes_runtime_config_without_rotating_secrets(tmp_path, monkeypatch):
     runtime_dir = tmp_path / ".runtime"
     realm_file = runtime_dir / "keycloak" / "realm.json"
 
@@ -140,11 +129,19 @@ def test_prepare_demo_writes_separate_ui_runtime_config(tmp_path, monkeypatch, u
     monkeypatch.setattr(prepare_demo, "CLIENT_ENV", runtime_dir / "client.env")
     monkeypatch.setattr(prepare_demo, "SETUP_ENV", runtime_dir / "setup.env")
     monkeypatch.setattr(prepare_demo, "UI_ENV", runtime_dir / "ui.env")
-    monkeypatch.setenv("DAL_OBSCURA_DEMO_UI_PORT", ui_port)
+    monkeypatch.setenv("DAL_OBSCURA_DEMO_UI_PORT", "28821")
     runtime_dir.mkdir(parents=True)
     setup_marker = runtime_dir / "setup.done"
     setup_marker.write_text("", encoding="utf-8")
 
+    prepare_demo.main()
+
+    first_admin_token = next(
+        line.partition("=")[2]
+        for line in (runtime_dir / "control-plane.env").read_text(encoding="utf-8").splitlines()
+        if line.startswith("DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN=")
+    )
+    monkeypatch.setenv("DAL_OBSCURA_DEMO_UI_PORT", "28822")
     prepare_demo.main()
 
     keycloak_env = (runtime_dir / "keycloak.env").read_text(encoding="utf-8")
@@ -154,10 +151,16 @@ def test_prepare_demo_writes_separate_ui_runtime_config(tmp_path, monkeypatch, u
     ui_client = next(
         client for client in realm["clients"] if client["clientId"] == "dal-obscura-ui"
     )
+    cli_client = next(
+        client for client in realm["clients"] if client["clientId"] == "dal-obscura-cli"
+    )
     ui_groups_mapper = next(
         mapper for mapper in ui_client["protocolMappers"] if mapper["name"] == "groups"
     )
-    ui_origin = f"http://127.0.0.1:{ui_port}"
+    tenant_mapper = next(
+        mapper for mapper in cli_client["protocolMappers"] if mapper["name"] == "tenant-id"
+    )
+    ui_origin = "http://localhost:28822"
 
     assert "127.0.0.1:20080:8080" in Path("examples/demo/keycloak/compose.yaml").read_text(
         encoding="utf-8"
@@ -190,4 +193,8 @@ def test_prepare_demo_writes_separate_ui_runtime_config(tmp_path, monkeypatch, u
     assert ui_client["webOrigins"] == [ui_origin]
     assert ui_groups_mapper["config"]["claim.name"] == "groups"
     assert ui_groups_mapper["config"]["id.token.claim"] == "true"
+    assert tenant_mapper["config"]["claim.name"] == "tenant_id"
+    assert tenant_mapper["config"]["claim.value"] == "default"
+    assert tenant_mapper["config"]["access.token.claim"] == "true"
     assert setup_marker.exists()
+    assert f"DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN={first_admin_token}" in control_plane_env

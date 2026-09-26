@@ -1,12 +1,13 @@
 """Initial schema for the direct live-configuration model.
 
-Revision ID: 20260923_0001
+Revision ID: 20260926_0001
 Revises: None
-Create Date: 2026-09-23
+Create Date: 2026-09-26
 
-This is the sole supported config-store baseline. It intentionally replaces
-the pre-live-configuration migration history; existing databases from those
-revisions must be recreated from this baseline.
+This is the sole supported config-store baseline. Its revision was advanced
+after the baseline changed during pre-release development so older local
+schemas fail instead of appearing successfully migrated. Existing databases
+must be recreated from this baseline.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20260923_0001"
+revision = "20260926_0001"
 down_revision = None
 branch_labels = None
 depends_on = None

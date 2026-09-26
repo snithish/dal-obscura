@@ -50,3 +50,5 @@ def test_keycloak_demo_builds_the_governance_ui_and_proxies_api_same_origin() ->
     assert "DAL_OBSCURA_DEMO_PROJECT_NAME:-dal-obscura-keycloak-demo" in runner
     assert 'docker compose --project-name "$project_name"' in runner
     assert "compose up -d --build --wait" in runner
+    assert "playwright test e2e/live-oidc-demo.spec.ts" in runner
+    assert 'python3 "$ROOT/scripts/ui_smoke.py"' not in runner
