@@ -119,9 +119,6 @@ class CatalogRegistry:
     ) -> TableFormat:
         return self.resolve(catalog, target, tenant_id=tenant_id)
 
-    def describe_catalog(self, catalog_name: str, target: str) -> TableFormat:
-        return self.resolve(catalog_name, target)
-
     def list_tables(self, catalog_name: str) -> list[CatalogTableListing]:
         self._ensure_open()
         with self._swap_lock:
