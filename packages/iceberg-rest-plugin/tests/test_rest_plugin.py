@@ -171,7 +171,8 @@ def test_rest_catalog_paginates_bounded_sorted_identifiers():
     plugin = RestCatalog(_config(), _context())
 
     class FakeCatalog:
-        def list_namespaces(self):
+        def list_namespaces(self, namespace):
+            assert namespace == ()
             return [("default",)]
 
         def list_tables(self, namespace):
@@ -190,7 +191,8 @@ def test_rest_catalog_exposes_validated_namespace_and_config_lifecycle():
     plugin = RestCatalog(_config(), _context())
 
     class FakeCatalog:
-        def list_namespaces(self):
+        def list_namespaces(self, namespace):
+            assert namespace in ((), ("default",))
             return [("z",), ("default",), ("z",)]
 
     plugin._catalog = FakeCatalog()
@@ -199,11 +201,24 @@ def test_rest_catalog_exposes_validated_namespace_and_config_lifecycle():
     assert plugin.list_namespaces(_context(), namespace=("default",)) == (("default",),)
 
 
+def test_rest_catalog_rejects_root_only_namespace_signature():
+    plugin = RestCatalog(_config(), _context())
+
+    class RootOnlyCatalog:
+        def list_namespaces(self):
+            return [("default",)]
+
+    plugin._catalog = RootOnlyCatalog()
+    with pytest.raises(TypeError):
+        plugin.list_namespaces(_context())
+
+
 def test_rest_catalog_rejects_non_string_provider_identifier_segments():
     plugin = RestCatalog(_config(), _context())
 
     class FakeCatalog:
-        def list_namespaces(self):
+        def list_namespaces(self, namespace):
+            del namespace
             return [("default",)]
 
         def list_tables(self, namespace):
@@ -280,7 +295,8 @@ def test_rest_catalog_bounds_namespace_listing():
     plugin = RestCatalog(_config(), _context())
 
     class FakeCatalog:
-        def list_namespaces(self):
+        def list_namespaces(self, namespace):
+            del namespace
             yield from (("ns", str(index)) for index in range(10_001))
 
         def list_tables(self, namespace):

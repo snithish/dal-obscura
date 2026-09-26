@@ -81,13 +81,10 @@ class IcebergTableFormat(TableFormat):
         )
         iceberg_row_filter = _compile_row_filter(pushdown_row_filter)
 
-        try:
-            scan = pyiceberg_table.scan(
-                row_filter=iceberg_row_filter,
-                selected_fields=column_tuple,
-            )
-        except TypeError:
-            scan = pyiceberg_table.scan(row_filter=iceberg_row_filter).select(*column_tuple)
+        scan = pyiceberg_table.scan(
+            row_filter=iceberg_row_filter,
+            selected_fields=column_tuple,
+        )
 
         file_tasks = list(scan.plan_files())
         _check_file_tasks(file_tasks, self.path_enforcer)

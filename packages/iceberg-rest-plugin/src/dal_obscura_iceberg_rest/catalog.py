@@ -134,12 +134,7 @@ class RestCatalog(CatalogPlugin):
         with self._request_budget(context):
             catalog = self._load_catalog(context)
             result: set[tuple[str, ...]] = set()
-            try:
-                raw_namespaces = (
-                    catalog.list_namespaces(namespace) if namespace else catalog.list_namespaces()
-                )
-            except TypeError:
-                raw_namespaces = catalog.list_namespaces()
+            raw_namespaces = catalog.list_namespaces(namespace)
             for raw in raw_namespaces:
                 self._validate_context(context)
                 if (
@@ -169,7 +164,7 @@ class RestCatalog(CatalogPlugin):
             offset = _continuation_offset(continuation)
             catalog = self._load_catalog(context)
             identifiers = []
-            for index, namespace in enumerate(catalog.list_namespaces()):
+            for index, namespace in enumerate(catalog.list_namespaces(())):
                 if index >= MAX_NAMESPACES:
                     raise ValueError("REST catalog contains too many namespaces")
                 self._validate_context(context)
