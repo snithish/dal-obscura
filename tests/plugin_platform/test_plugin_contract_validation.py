@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import cast
 
@@ -157,22 +158,36 @@ def test_plugin_contract_value_objects_validate_generation_and_schema_identity()
 
 
 def test_execution_context_rejects_ambiguous_or_unbounded_values() -> None:
-    valid = {
-        "deadline": datetime.now(timezone.utc),
-        "correlation_id": "request-1",
-        "capabilities": frozenset({"nested_schema"}),
-    }
-    context = ExecutionContext(**valid)
+    deadline = datetime.now(timezone.utc)
+    capabilities = frozenset({"nested_schema"})
+    context = ExecutionContext(
+        deadline=deadline,
+        correlation_id="request-1",
+        capabilities=capabilities,
+    )
     assert context.correlation_id == "request-1"
 
     with pytest.raises(ValueError, match="timezone-aware"):
-        ExecutionContext(**{**valid, "deadline": datetime.now()})
+        ExecutionContext(
+            deadline=datetime.now(),
+            correlation_id="request-1",
+            capabilities=capabilities,
+        )
     with pytest.raises(ValueError, match="correlation ID"):
-        ExecutionContext(**{**valid, "correlation_id": "\n"})
+        ExecutionContext(deadline=deadline, correlation_id="\n", capabilities=capabilities)
     with pytest.raises(ValueError, match="capabilities"):
-        ExecutionContext(**{**valid, "capabilities": frozenset({""})})
+        ExecutionContext(
+            deadline=deadline,
+            correlation_id="request-1",
+            capabilities=frozenset({""}),
+        )
     with pytest.raises(ValueError, match="cancellation"):
-        ExecutionContext(**{**valid, "cancel_check": "later"})
+        ExecutionContext(
+            deadline=deadline,
+            correlation_id="request-1",
+            capabilities=capabilities,
+            cancel_check=cast(Callable[[], bool], "later"),
+        )
 
 
 def test_table_identifier_rejects_unbounded_or_non_printable_segments() -> None:
@@ -181,4 +196,4 @@ def test_table_identifier_rejects_unbounded_or_non_printable_segments() -> None:
     with pytest.raises(ValueError, match="bounded printable"):
         TableIdentifier(namespace=("default",), name="orders\narchive")
     with pytest.raises(ValueError, match="bounded printable"):
-        TableIdentifier(namespace=("default",), name=42)
+        TableIdentifier(namespace=("default",), name=cast(str, 42))

@@ -16,6 +16,7 @@ from dal_obscura.common.config_store.db import (
     session_factory,
 )
 from dal_obscura.common.config_store.orm import AssetRecord, DataPlaneTicketRecord
+from dal_obscura.common.identity import encode_federated_identity
 from dal_obscura.control_plane.interfaces import api as api_module
 from dal_obscura.control_plane.interfaces.api import create_app, create_oidc_actor_resolver
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
@@ -31,6 +32,7 @@ OIDC_AUTH_MODULE = (
 class DemoToken:
     principal: str
     groups: tuple[str, ...] = ()
+    issuer: str = ""
 
 
 def _actor_for_token(token: str) -> DemoToken:
@@ -44,6 +46,10 @@ def _actor_for_token(token: str) -> DemoToken:
         return DemoToken("demo-admin", ("platform-admins",))
     if token == "editor-token":
         return DemoToken("editor")
+    if token == "issuer-a-owner-token":
+        return DemoToken("alice", issuer="https://issuer-a.example/")
+    if token == "issuer-b-owner-token":
+        return DemoToken("alice", issuer="https://issuer-b.example")
     raise PermissionError("bad token")
 
 
@@ -703,6 +709,43 @@ def test_non_owner_cannot_change_live_policy():
     )
 
     assert replace.status_code == 403
+
+
+def test_federated_asset_owner_is_scoped_to_exact_issuer_through_api():
+    client = _client()
+    asset = _provision_asset_without_owner(client)
+    issuer_a = "https://issuer-a.example/"
+
+    owners = client.put(
+        f"/v1/assets/{asset}/owners",
+        json={
+            "owners": [encode_federated_identity(issuer_a, "alice")],
+            "expected_revision": 0,
+        },
+        headers=ADMIN_HEADERS,
+    )
+    assert owners.status_code == 200, owners.text
+
+    current = client.get(f"/v1/assets/{asset}", headers=ADMIN_HEADERS).json()
+    owner_update = client.put(
+        f"/v1/assets/{asset}/policy",
+        json={
+            "expected_revision": current["policy_revision"],
+            "rules": [_allow_rule(row_filter="region = 'us'")],
+        },
+        headers=_bearer("issuer-a-owner-token"),
+    )
+    other_issuer_update = client.put(
+        f"/v1/assets/{asset}/policy",
+        json={
+            "expected_revision": current["policy_revision"] + 1,
+            "rules": [_allow_rule(row_filter="region = 'eu'")],
+        },
+        headers=_bearer("issuer-b-owner-token"),
+    )
+
+    assert owner_update.status_code == 200, owner_update.text
+    assert other_issuer_update.status_code == 403
 
 
 def test_policy_edit_authorizes_before_validating_submitted_rules():
