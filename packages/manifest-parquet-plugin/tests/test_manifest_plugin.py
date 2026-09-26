@@ -45,6 +45,8 @@ def _write_fixture(tmp_path):
                 "revision": "snapshot-1",
                 "tables": {
                     "default.users": {
+                        "namespace": ["default"],
+                        "name": "users",
                         "files": ["part-0.parquet", "part-1.parquet"],
                         "schema_ipc": schema_ipc,
                         "field_ids": ["id", "profile"],
@@ -232,6 +234,7 @@ def test_manifest_catalog_paginates_with_string_continuation_tokens(tmp_path):
     root, manifest, _table = _write_fixture(tmp_path)
     payload = json.loads(manifest.read_text())
     payload["tables"]["default.orders"] = dict(payload["tables"]["default.users"])
+    payload["tables"]["default.orders"]["name"] = "orders"
     manifest.write_text(json.dumps(payload))
 
     catalog = ManifestCatalog(
@@ -270,6 +273,17 @@ def test_manifest_catalog_accepts_structured_dotted_table_names(tmp_path):
     )
     page = catalog.list_tables(_context(), limit=1)
     assert page.entries == (TableIdentifier(namespace=("default",), name="users.with.dot"),)
+
+
+def test_manifest_catalog_rejects_legacy_dotted_identifier_entries(tmp_path):
+    root, manifest, _table = _write_fixture(tmp_path)
+    payload = json.loads(manifest.read_text())
+    payload["tables"]["default.users"].pop("namespace")
+    payload["tables"]["default.users"].pop("name")
+    manifest.write_text(json.dumps(payload))
+
+    with pytest.raises(ValueError, match="structured namespace and name"):
+        ManifestCatalog(_config_for_manifest(root, manifest), _context())
 
 
 def test_manifest_identity_paths_use_core_collection_markers(tmp_path):

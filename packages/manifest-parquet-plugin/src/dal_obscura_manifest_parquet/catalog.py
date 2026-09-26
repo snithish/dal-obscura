@@ -226,13 +226,6 @@ def _load_manifest(  # noqa: C901
     return revision, digest, tuple(parsed)
 
 
-def _parse_identifier(raw: str) -> TableIdentifier:
-    parts = tuple(raw.split("."))
-    if len(parts) < 1 or any(not part for part in parts):
-        raise ValueError("manifest table identifier is invalid")
-    return TableIdentifier(namespace=parts[:-1], name=parts[-1])
-
-
 def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
     """Reject duplicate keys so table membership cannot be overwritten."""
 
@@ -245,16 +238,14 @@ def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
 
 
 def _parse_identifier_entry(raw_identifier: str, raw_table: dict[str, object]) -> TableIdentifier:
-    """Parse structured identifiers while retaining the legacy dotted-key form."""
+    """Parse a manifest table's explicit namespace and name."""
 
     raw_namespace = raw_table.get("namespace")
     raw_name = raw_table.get("name")
-    if raw_namespace is None and raw_name is None:
-        return _parse_identifier(raw_identifier)
     if not isinstance(raw_namespace, list) or any(
         not isinstance(part, str) for part in raw_namespace
     ):
-        raise ValueError("manifest table namespace is invalid")
+        raise ValueError("manifest table identifier requires a structured namespace and name")
     if not isinstance(raw_name, str) or not raw_name:
         raise ValueError("manifest table name is invalid")
     return TableIdentifier(

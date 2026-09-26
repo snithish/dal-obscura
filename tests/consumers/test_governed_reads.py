@@ -220,6 +220,8 @@ def test_python_and_duckdb_consumers_read_real_manifest_parquet_nested_data(tmp_
                 "revision": "snapshot-1",
                 "tables": {
                     "default.users": {
+                        "namespace": ["default"],
+                        "name": "users",
                         "files": ["part-0.parquet", "part-1.parquet"],
                         "schema_ipc": base64.b64encode(schema.serialize().to_pybytes()).decode(
                             "ascii"
