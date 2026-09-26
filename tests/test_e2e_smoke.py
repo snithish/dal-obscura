@@ -474,6 +474,22 @@ def test_e2e_flight_server_with_iceberg(control_plane_setup: dict[str, str]):
         assert data[0]["metadata"]["preferences"][0]["name"] == "web"
         assert data[0]["metadata"]["preferences"][0]["theme"] == "dark"
 
+        token_without_tenant = jwt.encode(
+            {
+                "sub": "e2e_user",
+                "iss": "https://issuer.example",
+                "exp": int(time.time()) + 900,
+            },
+            control_plane_setup["private_key"],
+            algorithm="RS256",
+            headers={"kid": "e2e"},
+        )
+        missing_tenant_options = flight.FlightCallOptions(
+            headers=[(b"authorization", f"Bearer {token_without_tenant}".encode())]
+        )
+        with pytest.raises(flight.FlightUnauthorizedError):
+            client.get_flight_info(descriptor, options=missing_tenant_options)
+
     finally:
         process.terminate()
         process.wait(timeout=5)

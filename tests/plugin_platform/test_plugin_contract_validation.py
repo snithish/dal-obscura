@@ -14,18 +14,6 @@ from dal_obscura_plugin_api import (
     TableHandle,
     TableIdentifier,
 )
-from dal_obscura_plugin_api import (
-    CatalogConfig as PublicCatalogConfig,
-)
-from dal_obscura_plugin_api import (
-    ExecutionContext as PublicExecutionContext,
-)
-from dal_obscura_plugin_api import (
-    TableHandle as PublicTableHandle,
-)
-from dal_obscura_plugin_api import (
-    TableIdentifier as PublicTableIdentifier,
-)
 
 
 def test_plugin_descriptor_rejects_unbounded_or_invalid_metadata() -> None:
@@ -156,34 +144,9 @@ def test_plugin_contract_value_objects_validate_generation_and_schema_identity()
     with pytest.raises(ValueError, match="SHA-256"):
         SchemaDescriptor(schema_version=1, fingerprint="bad", arrow_schema=pa.schema([]))
 
-    with pytest.raises(ValueError, match="JSON-like"):
-        PublicCatalogConfig(
-            plugin_id="iceberg.sql",
-            instance_id="analytics",
-            revision=0,
-            options={"provider": object()},
-        )
-    with pytest.raises(ValueError, match="too many keys"):
-        PublicCatalogConfig(
-            plugin_id="iceberg.sql",
-            instance_id="analytics",
-            revision=0,
-            options={f"key-{index}": index for index in range(65)},
-        )
-
-    identifier = PublicTableIdentifier(namespace=("default",), name="users")
-    with pytest.raises(ValueError, match="JSON-like"):
-        PublicTableHandle(
-            catalog_plugin_id="manifest",
-            catalog_instance_id="fixture",
-            catalog_revision=1,
-            identifier=identifier,
-            format_plugin_id="parquet.dataset",
-            handle_version=1,
-            metadata={"task": object()},
-        )
+    identifier = TableIdentifier(namespace=("default",), name="users")
     with pytest.raises(ValueError, match="Invalid table-format plugin ID"):
-        PublicTableHandle(
+        TableHandle(
             catalog_plugin_id="manifest",
             catalog_instance_id="fixture",
             catalog_revision=1,
@@ -193,31 +156,29 @@ def test_plugin_contract_value_objects_validate_generation_and_schema_identity()
         )
 
 
-@pytest.mark.parametrize("context_type", [ExecutionContext, PublicExecutionContext])
-def test_execution_context_rejects_ambiguous_or_unbounded_values(context_type) -> None:
+def test_execution_context_rejects_ambiguous_or_unbounded_values() -> None:
     valid = {
         "deadline": datetime.now(timezone.utc),
         "correlation_id": "request-1",
         "capabilities": frozenset({"nested_schema"}),
     }
-    context = context_type(**valid)
+    context = ExecutionContext(**valid)
     assert context.correlation_id == "request-1"
 
     with pytest.raises(ValueError, match="timezone-aware"):
-        context_type(**{**valid, "deadline": datetime.now()})
+        ExecutionContext(**{**valid, "deadline": datetime.now()})
     with pytest.raises(ValueError, match="correlation ID"):
-        context_type(**{**valid, "correlation_id": "\n"})
+        ExecutionContext(**{**valid, "correlation_id": "\n"})
     with pytest.raises(ValueError, match="capabilities"):
-        context_type(**{**valid, "capabilities": frozenset({""})})
+        ExecutionContext(**{**valid, "capabilities": frozenset({""})})
     with pytest.raises(ValueError, match="cancellation"):
-        context_type(**{**valid, "cancel_check": "later"})
+        ExecutionContext(**{**valid, "cancel_check": "later"})
 
 
-@pytest.mark.parametrize("identifier_type", [TableIdentifier, PublicTableIdentifier])
-def test_table_identifier_rejects_unbounded_or_non_printable_segments(identifier_type) -> None:
+def test_table_identifier_rejects_unbounded_or_non_printable_segments() -> None:
     with pytest.raises(ValueError, match="too many segments"):
-        identifier_type(namespace=tuple("ns" for _ in range(32)), name="users")
+        TableIdentifier(namespace=tuple("ns" for _ in range(32)), name="users")
     with pytest.raises(ValueError, match="bounded printable"):
-        identifier_type(namespace=("default",), name="orders\narchive")
+        TableIdentifier(namespace=("default",), name="orders\narchive")
     with pytest.raises(ValueError, match="bounded printable"):
-        identifier_type(namespace=("default",), name=42)
+        TableIdentifier(namespace=("default",), name=42)

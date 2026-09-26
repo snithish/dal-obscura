@@ -657,19 +657,27 @@ def _run_streaming_probe_in_subprocess(
     return payload
 
 
-def test_ticket_to_response_streaming_proves_chunked_delivery_in_subprocess(tmp_path):
-    smaller = _run_streaming_probe_in_subprocess(
-        tmp_path,
-        total_rows=10_000_000,
-        rows_per_file=5_000_000,
-        max_tickets=LARGE_BENCHMARK_MAX_TICKETS,
-    )
-    larger = _run_streaming_probe_in_subprocess(
-        tmp_path,
-        total_rows=LARGE_BENCHMARK_TOTAL_ROWS,
-        rows_per_file=LARGE_BENCHMARK_ROWS_PER_FILE,
-        max_tickets=LARGE_BENCHMARK_MAX_TICKETS,
-    )
+@pytest.mark.benchmark(group="ticket-to-response-streaming")
+def test_ticket_to_response_streaming_is_chunked_with_bounded_rss(tmp_path, benchmark):
+    def run() -> tuple[dict[str, Any], dict[str, Any]]:
+        smaller = _run_streaming_probe_in_subprocess(
+            tmp_path,
+            total_rows=10_000_000,
+            rows_per_file=5_000_000,
+            max_tickets=LARGE_BENCHMARK_MAX_TICKETS,
+        )
+        larger = _run_streaming_probe_in_subprocess(
+            tmp_path,
+            total_rows=LARGE_BENCHMARK_TOTAL_ROWS,
+            rows_per_file=LARGE_BENCHMARK_ROWS_PER_FILE,
+            max_tickets=LARGE_BENCHMARK_MAX_TICKETS,
+        )
+        return smaller, larger
+
+    smaller, larger = benchmark.pedantic(run, rounds=1, iterations=1, warmup_rounds=0)
+    benchmark.extra_info["input_rows"] = 35_000_000
+    benchmark.extra_info["large_probe_rss_delta"] = larger["rss_delta"]
+    benchmark.extra_info["large_probe_rss_limit"] = LARGE_BENCHMARK_RSS_LIMIT_BYTES
 
     for probe in (smaller, larger):
         assert probe["chunk_count"] > probe["endpoint_count"]
@@ -682,19 +690,4 @@ def test_ticket_to_response_streaming_proves_chunked_delivery_in_subprocess(tmp_
     assert larger["rows"] == LARGE_BENCHMARK_TOTAL_ROWS
     assert larger["planned_file_count"] == LARGE_BENCHMARK_FILE_COUNT
     assert larger["endpoint_count"] == LARGE_BENCHMARK_MAX_TICKETS
-
-
-def test_ticket_to_response_streaming_rss_is_bounded_in_subprocess(tmp_path):
-    payload = _run_streaming_probe_in_subprocess(
-        tmp_path,
-        total_rows=LARGE_BENCHMARK_TOTAL_ROWS,
-        rows_per_file=LARGE_BENCHMARK_ROWS_PER_FILE,
-        max_tickets=LARGE_BENCHMARK_MAX_TICKETS,
-    )
-    rss_delta = payload["rss_delta"]
-
-    assert payload["rows"] == LARGE_BENCHMARK_TOTAL_ROWS
-    assert payload["planned_file_count"] == LARGE_BENCHMARK_FILE_COUNT
-    assert payload["endpoint_count"] > 1
-    assert payload["chunk_count"] >= payload["endpoint_count"]
-    assert rss_delta < LARGE_BENCHMARK_RSS_LIMIT_BYTES
+    assert larger["rss_delta"] < LARGE_BENCHMARK_RSS_LIMIT_BYTES
