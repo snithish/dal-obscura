@@ -39,7 +39,12 @@ def _payload(ticket_id: str, *, expires_at: int = 2000) -> TicketPayload:
         target="default.users",
         tenant_id="tenant-a",
         columns=["id"],
-        scan={"read_payload": "payload", "full_row_filter": None, "masks": {}},
+        scan={
+            "authorization_columns": ["id", "region"],
+            "read_payload": "payload",
+            "full_row_filter": None,
+            "masks": {},
+        },
         policy_version=100,
         principal_id="user1",
         expires_at=expires_at,

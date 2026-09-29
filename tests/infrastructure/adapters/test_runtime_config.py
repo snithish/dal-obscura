@@ -30,6 +30,16 @@ def test_runtime_config_reads_required_database_and_cell(monkeypatch: pytest.Mon
     assert config.ticket_cleanup_interval_seconds == 60
 
 
+@pytest.mark.parametrize("value", ["-1", "0MB", "80%", "", "infinity", "1e100TB"])
+def test_runtime_config_rejects_unbounded_or_invalid_memory_limit(monkeypatch, value):
+    monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
+    monkeypatch.setenv("DAL_OBSCURA_CELL_ID", "00000000-0000-4000-8000-000000000001")
+    monkeypatch.setenv("DAL_OBSCURA_TICKET_SECRET", "test-secret")
+    monkeypatch.setenv("DAL_OBSCURA_DUCKDB_MEMORY_LIMIT", value)
+    with pytest.raises(ValueError, match="DAL_OBSCURA_DUCKDB_MEMORY_LIMIT"):
+        load_data_plane_runtime_config()
+
+
 def test_runtime_config_reads_previous_ticket_secrets(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
     monkeypatch.setenv("DAL_OBSCURA_CELL_ID", "00000000-0000-0000-0000-000000000001")

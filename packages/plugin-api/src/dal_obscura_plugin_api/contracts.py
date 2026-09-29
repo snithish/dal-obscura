@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from math import isfinite
@@ -292,13 +292,24 @@ class TableFormatPlugin(Protocol):
         projection: Sequence[str],
         row_filter: str | None,
         max_tasks: int,
-    ) -> Sequence[object]: ...
+    ) -> Sequence[object]:
+        """Plan at most max_tasks inert tasks, grouping splittable work as needed.
+
+        Projection contains exact top-level Arrow field names, in output order;
+        dots and '*' are literal names, not paths or wildcards. Core expands
+        nested selections and supplies filter dependencies before calling here.
+        Filters are optional DuckDB SQL hints, sent only for filter_pushdown;
+        core always reapplies the complete filter before masking output.
+        An empty sequence means no rows. None is an ordinary opaque task value,
+        never a core-generated empty-scan sentinel.
+        """
+        ...
 
     def execute(
         self,
         task: object,
         context: ExecutionContext,
-    ) -> tuple[pa.Schema, Sequence[pa.RecordBatch]]: ...
+    ) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]: ...
 
     def close(self) -> None: ...
 

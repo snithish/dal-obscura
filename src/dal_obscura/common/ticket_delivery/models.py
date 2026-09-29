@@ -24,18 +24,23 @@ class MaskPayload(TypedDict):
     value: object | None
 
 
-class ScanPayloadBase(TypedDict):
+class ScanPayload(TypedDict):
     """JSON shape for server-stored scan context referenced by a ticket."""
 
     read_payload: str
     full_row_filter: str | None
     masks: dict[str, MaskPayload]
 
-
-class ScanPayload(ScanPayloadBase, total=False):
-    """Scan payload with optional fields supported by prior ticket records."""
-
     authorization_columns: list[str]
+
+
+@dataclass(frozen=True)
+class TicketReference:
+    """The complete signed transport reference; scan context stays server-side."""
+
+    ticket_id: str
+    expires_at: int
+    nonce: str
 
 
 @dataclass(frozen=True)
@@ -202,9 +207,8 @@ def _strict_scan_payload(raw: object) -> ScanPayload:
         "read_payload": read_payload,
         "full_row_filter": full_row_filter,
         "masks": _strict_masks(raw_mapping.get("masks")),
+        "authorization_columns": _strict_columns(raw_mapping.get("authorization_columns")),
     }
-    if "authorization_columns" in raw_mapping:
-        payload["authorization_columns"] = _strict_columns(raw_mapping.get("authorization_columns"))
     return payload
 
 

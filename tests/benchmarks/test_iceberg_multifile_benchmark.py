@@ -42,8 +42,9 @@ class _BatchingArrowScan:
         del table_metadata, io, row_filter
         self._schema = projected_schema.as_arrow()
 
-    def to_record_batches(self, file_tasks):
-        for index, _task in enumerate(file_tasks):
+    def _record_batches_from_scan_tasks_and_deletes(self, file_tasks, deletes):
+        for task in file_tasks:
+            index = task["file"]
             yield pa.record_batch(
                 [
                     pa.array([index], type=pa.int64()),
@@ -55,6 +56,11 @@ class _BatchingArrowScan:
 
 @pytest.mark.benchmark(group="iceberg-multifile")
 def test_benchmark_iceberg_multifile_scan_baseline(benchmark, monkeypatch):
+    # Measure dispatch overhead only; the ticket-to-response benchmark uses real files.
+    monkeypatch.setattr(
+        "dal_obscura.data_plane.infrastructure.table_formats.iceberg._read_all_delete_files",
+        lambda io, tasks: {},
+    )
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     file_count = 512
     table_format = IcebergTableFormat(
@@ -84,7 +90,8 @@ def test_benchmark_iceberg_multifile_scan_baseline(benchmark, monkeypatch):
 
     table = benchmark(run)
 
-    benchmark.extra_info["scenario"] = "large-iceberg-multifile-scan"
+    benchmark.extra_info["scenario"] = "simulated-iceberg-multifile-dispatch"
     benchmark.extra_info["planned_files"] = file_count
     benchmark.extra_info["output_rows"] = file_count
     assert table.num_rows == file_count
+    assert table.column("id").to_pylist() == list(range(file_count))

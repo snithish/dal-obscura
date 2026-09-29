@@ -20,6 +20,8 @@ from dal_obscura.common.access_control.filters import (
 from dal_obscura.common.access_control.models import AccessDecision, Principal
 from dal_obscura.common.query_planning.field_paths import (
     FieldPath,
+    FieldSegment,
+    ListElementSegment,
     MapKeySegment,
     MapValueSegment,
     parse_field_path,
@@ -130,7 +132,7 @@ def plan_read(
 
     requested_columns = _with_required_map_keys(
         base_schema,
-        _expand_requested_columns(base_schema, request.columns),
+        _expand_to_leaves(base_schema, _expand_requested_columns(base_schema, request.columns)),
     )
     requested_row_filter = _validate_requested_row_filter(base_schema, request.row_filter)
     requested_filter_dependencies = _extract_filter_dependencies(requested_row_filter)
@@ -161,6 +163,10 @@ def plan_read(
         row_filter=effective_row_filter,
     )
     plan = table_format.plan(execution_request, flow.max_tickets)
+    if not plan.schema.equals(base_schema, check_metadata=True) or any(
+        not task.schema.equals(base_schema, check_metadata=True) for task in plan.tasks
+    ):
+        raise ValueError("Backend schema changed after authorization")
 
     now = flow.now()
     flow.ticket_store.cleanup_expired_and_exhausted(now=now)
@@ -181,8 +187,8 @@ def plan_read(
             scan={
                 "read_payload": base64.b64encode(serialized_task).decode("utf-8"),
                 "full_row_filter": None
-                if plan.full_row_filter is None
-                else serialize_row_filter(plan.full_row_filter),
+                if effective_row_filter is None
+                else serialize_row_filter(effective_row_filter),
                 "masks": {
                     key: {"type": value.type, "value": value.value}
                     for key, value in decision.masks.items()
@@ -216,7 +222,7 @@ def plan_read(
         catalog=request.catalog,
         requested_row_filter_present=requested_row_filter is not None,
         requested_row_filter_dependency_count=len(requested_filter_dependencies),
-        full_row_filter_present=plan.full_row_filter is not None,
+        full_row_filter_present=effective_row_filter is not None,
         backend_pushdown_row_filter_present=plan.backend_pushdown_row_filter is not None,
         residual_row_filter_present=plan.residual_row_filter is not None,
         visible_column_count=len(execution_projection.visible_columns),
@@ -447,3 +453,26 @@ def _nonce() -> str:
 
 def _ticket_id() -> str:
     return str(uuid4())
+
+
+def _expand_to_leaves(schema: pa.Schema, requested: list[str]) -> list[str]:
+    """Authorize every nested leaf so unspecified siblings retain NULL masks."""
+    result: list[str] = []
+
+    def visit(field: pa.Field, path: FieldPath) -> None:
+        if pa.types.is_struct(field.type):
+            for child in field.type:
+                visit(child, FieldPath((*path.segments, FieldSegment(child.name))))
+        elif pa.types.is_list(field.type) or pa.types.is_large_list(field.type):
+            visit(field.type.value_field, FieldPath((*path.segments, ListElementSegment())))
+        elif pa.types.is_map(field.type):
+            visit(field.type.key_field, FieldPath((*path.segments, MapKeySegment())))
+            visit(field.type.item_field, FieldPath((*path.segments, MapValueSegment())))
+        else:
+            if path.to_human() not in result:
+                result.append(path.to_human())
+
+    for name in requested:
+        path = parse_field_path(name)
+        visit(resolve_schema_path(schema, path), path)
+    return result

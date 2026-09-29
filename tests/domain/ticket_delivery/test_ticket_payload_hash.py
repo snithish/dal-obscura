@@ -21,6 +21,7 @@ def _payload(
     nonce: str = "nonce-a",
 ) -> TicketPayload:
     default_scan: ScanPayload = {
+        "authorization_columns": ["id", "region"],
         "read_payload": "payload-a",
         "full_row_filter": None,
         "masks": {},
@@ -46,7 +47,14 @@ def test_ticket_payload_hash_is_stable_for_same_payload():
 
 def test_ticket_payload_hash_changes_when_executable_scan_payload_changes():
     first = _payload()
-    second = _payload(scan={"read_payload": "payload-b", "full_row_filter": None, "masks": {}})
+    second = _payload(
+        scan={
+            "authorization_columns": ["id", "region"],
+            "read_payload": "payload-b",
+            "full_row_filter": None,
+            "masks": {},
+        }
+    )
 
     assert ticket_payload_hash(first) != ticket_payload_hash(second)
 

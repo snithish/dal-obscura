@@ -76,7 +76,7 @@ def validate_auth_provider_payloads(providers: list[dict[str, Any]]) -> None:
 
 
 def redact_auth_provider(provider: Mapping[str, object]) -> dict[str, object]:
-    """Returns a browser-safe provider record, redacting legacy sensitive rows."""
+    """Returns a browser-safe provider record, redacting sensitive values."""
 
     result = {
         key: provider[key]

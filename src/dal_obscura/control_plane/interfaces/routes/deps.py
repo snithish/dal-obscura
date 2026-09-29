@@ -28,6 +28,7 @@ from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.errors import (
     AuthorizationFailure,
     ConfigurationConflictError,
+    PolicyValidationFailure,
     RevisionPreconditionRequired,
     ValidationFailure,
 )
@@ -354,6 +355,18 @@ class ControlPlaneDeps:
                 result = callback(service)
                 session.commit()
                 return result
+            except PolicyValidationFailure as exc:
+                session.rollback()
+                raise HTTPException(
+                    status_code=422,
+                    detail=[
+                        {
+                            "loc": ["body", "rules", exc.rule_index],
+                            "msg": str(exc),
+                            "type": "value_error",
+                        }
+                    ],
+                ) from exc
             except ValidationFailure as exc:
                 session.rollback()
                 raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -117,10 +117,8 @@ def test_workspace_policy_rules_reject_deny_effect_before_save():
         },
     )
 
-    assert response.status_code == 400
-    assert response.json()["detail"] == (
-        "Policy rules are explicit grants; effect must be 'allow'."
-    )
+    assert response.status_code == 422
+    assert response.json()["error"]["field_errors"][0]["field"] == "rules.0.effect"
     detail = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()
     assert detail["policy_status"] == "configured"
     assert detail["policy_rules"] == before["policy_rules"]

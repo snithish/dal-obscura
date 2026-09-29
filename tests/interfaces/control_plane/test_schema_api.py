@@ -15,6 +15,28 @@ from tests.interfaces.control_plane.workspace_helpers import (
 )
 
 
+@pytest.mark.parametrize(
+    ("payload", "field"),
+    [
+        ({"principal": "analyst", "columns": ["email"]}, "columns"),
+        ({"principal": "   "}, "principal"),
+        ({"principal": "analyst", "groups": [" "]}, "groups.0"),
+    ],
+)
+def test_policy_evaluation_rejects_ignored_or_blank_inputs(payload, field):
+    client = _client()
+    response = client.post(
+        "/v1/assets/00000000-0000-4000-8000-000000000001/policy-evaluate",
+        json=payload,
+        headers=ADMIN_HEADERS,
+    )
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "validation_error"
+    assert error["field_errors"][0]["field"] == field
+    assert "input" not in error["field_errors"][0]
+
+
 class _FakeTable:
     def schema(self) -> Schema:
         return Schema(

@@ -610,6 +610,31 @@ def test_asset_owner_can_replace_policy_rules_through_api():
     assert detail["policy_rules"][0]["row_filter"] == "region = 'us'"
 
 
+def test_mask_exemptions_survive_policy_save_and_live_read():
+    client = _client()
+    asset = _provision_owned_asset(client)
+    owner = _bearer("owner-token")
+    rule = _allow_rule(row_filter="region = 'us'")
+    rule["masks"] = {
+        "email": {"type": "hash", "exempt_principals": ["user:alice", "group:privacy"]}
+    }
+    response = _replace_live_policy(client, asset, [rule], owner)
+    assert response.status_code == 200, response.text
+    detail = client.get(f"/v1/assets/{asset}", headers=owner)
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["policy_rules"][0]["masks"]["email"] == {
+        "type": "hash",
+        "exempt_principals": ["group:privacy", "user:alice"],
+    }
+    invalid = _allow_rule(row_filter=None)
+    invalid["masks"] = {"email": {"type": "hash", "exempt_principals": ["group:"]}}
+    rejected = _replace_live_policy(client, asset, [invalid], owner)
+    assert rejected.status_code == 422
+    unsupported = _allow_rule(row_filter=None)
+    unsupported["masks"] = {"email": {"type": "hash", "silent_drop": True}}
+    assert _replace_live_policy(client, asset, [unsupported], owner).status_code == 422
+
+
 def test_asset_owner_can_replace_live_policy_with_revision_precondition():
     client = _client()
     asset = _provision_owned_asset(client)
@@ -936,8 +961,10 @@ def test_policy_save_rejects_invalid_row_filter_before_commit():
         client, asset, [_allow_rule(row_filter="region =")], _bearer("owner-token")
     )
 
-    assert response.status_code == 400
-    assert "Invalid row_filter SQL" in response.json()["detail"]
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["field_errors"][0]["field"] == "rules.0"
+    assert "Invalid row_filter SQL" in error["field_errors"][0]["message"]
 
 
 def test_policy_save_rejects_deny_rule_with_mask_before_commit():
@@ -949,8 +976,10 @@ def test_policy_save_rejects_deny_rule_with_mask_before_commit():
 
     response = _replace_live_policy(client, asset, [rule], _bearer("owner-token"))
 
-    assert response.status_code == 400
-    assert "Policy rules are explicit grants" in response.json()["detail"]
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "validation_error"
+    assert error["field_errors"][0]["field"] == "rules.0.effect"
 
 
 def test_platform_admin_can_assign_owner_and_bootstrap_policy():
@@ -1042,3 +1071,46 @@ def _allow_rule(*, row_filter: str | None) -> dict[str, object]:
         "masks": {"email": {"type": "email"}},
         "row_filter": row_filter,
     }
+
+
+def test_rule_metadata_and_global_allow_all_round_trip():
+    client = _client()
+    asset = _provision_owned_asset(client)
+    rule = {
+        "ordinal": 0,
+        "effect": "allow_all",
+        "principals": ["*"],
+        "columns": ["*"],
+        "masks": {},
+        "row_filter": None,
+        "when": {},
+        "name": "Open access",
+        "description": "All authenticated readers",
+    }
+    response = _replace_live_policy(client, asset, [rule], _bearer("owner-token"))
+    assert response.status_code == 200, response.text
+    loaded = client.get(f"/v1/assets/{asset}", headers=_bearer("owner-token")).json()[
+        "policy_rules"
+    ][0]
+    assert {key: loaded[key] for key in rule} == rule
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"principals": ["group:analysts"]},
+        {"columns": ["email"]},
+        {"row_filter": "region = 'US'"},
+        {"when": {"region": "US"}},
+        {"masks": {"email": {"type": "hash"}}},
+    ],
+)
+def test_global_allow_all_rejects_restrictions(change):
+    client = _client()
+    asset = _provision_owned_asset(client)
+    rule = {"effect": "allow_all", "principals": ["*"], "columns": ["*"], **change}
+    response = _replace_live_policy(client, asset, [rule], _bearer("owner-token"))
+    assert response.status_code == 422
+    error = response.json()["error"]["field_errors"][0]
+    assert error["field"] == "rules.0"
+    assert "Allow all must target all users" in error["message"]

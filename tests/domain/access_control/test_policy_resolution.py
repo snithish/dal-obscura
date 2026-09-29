@@ -1,5 +1,10 @@
 import pytest
 
+from dal_obscura.common.access_control.compiled_policy import (
+    CompiledMaskRule,
+    CompiledPolicy,
+    CompiledPolicyRule,
+)
 from dal_obscura.common.access_control.models import (
     AccessRule,
     DatasetPolicy,
@@ -29,12 +34,13 @@ def test_resolve_access_allows_columns():
         requested_columns=["id", "name", "region"],
     )
 
-    assert allowed == ["id", "name"]
+    assert allowed == ["id", "name", "region"]
+    assert masks["region"] == MaskRule(type="null")
     assert masks["name"].type == "redact"
     assert row_filter == "(region = 'us')"
 
 
-def test_resolve_access_default_denies_without_matching_grant():
+def test_resolve_access_defaults_to_null_without_matching_grant():
     policy = _policy(
         AccessRule(
             principals=["group:analyst"],
@@ -45,14 +51,12 @@ def test_resolve_access_default_denies_without_matching_grant():
     )
     principal = Principal(id="user1", groups=["guest"], attributes={})
 
-    with pytest.raises(PermissionError, match="No allowed columns"):
-        resolve_access(
-            policy,
-            principal,
-            target="catalog.db.table",
-            catalog="analytics",
-            requested_columns=["id"],
-        )
+    allowed, masks, row_filter = resolve_access(
+        policy, principal, target="catalog.db.table", catalog="analytics", requested_columns=["id"]
+    )
+    assert allowed == ["id"]
+    assert masks == {"id": MaskRule(type="null")}
+    assert row_filter is None
 
 
 def test_resolve_access_unions_grants_filters_and_strictest_masks():
@@ -193,12 +197,13 @@ def test_resolve_access_unions_columns_and_filters_for_matching_grants():
         requested_columns=["id", "name", "region"],
     )
 
-    assert allowed == ["id", "name"]
+    assert allowed == ["id", "name", "region"]
+    assert masks["region"] == MaskRule(type="null")
     assert "name" in masks
     assert row_filter == "(region = 'us') AND (active = true)"
 
 
-def test_resolve_access_prunes_parent_request_to_authorized_nested_grant():
+def test_resolve_access_nulls_ungranted_nested_siblings():
     policy = _policy(
         AccessRule(
             principals=["user1"],
@@ -208,15 +213,16 @@ def test_resolve_access_prunes_parent_request_to_authorized_nested_grant():
         )
     )
 
-    allowed, _masks, _filter = resolve_access(
+    allowed, masks, _filter = resolve_access(
         policy,
         Principal(id="user1", groups=[], attributes={}),
         target="catalog.db.table",
         catalog="analytics",
-        requested_columns=["profile"],
+        requested_columns=["profile.name", "profile.email"],
     )
 
-    assert allowed == ["profile.name"]
+    assert allowed == ["profile.name", "profile.email"]
+    assert masks == {"profile.email": MaskRule(type="null")}
 
 
 def test_resolve_access_parent_grant_authorizes_requested_nested_leaf():
@@ -261,6 +267,112 @@ def test_policy_version_changes_when_abac_clauses_change():
     ).datasets[0]
 
     assert dataset_version(first) != dataset_version(second)
+
+
+def test_mask_exemption_skips_only_that_rule_mask_and_preserves_grant_and_filter():
+    policy = _policy(
+        AccessRule(
+            principals=["group:analyst"],
+            columns=["email"],
+            masks={"email": MaskRule(type="hash", exempt_principals=("group:privacy",))},
+            row_filter="country = 'US'",
+        ),
+        AccessRule(
+            principals=["group:analyst"],
+            columns=["email"],
+            masks={"email": MaskRule(type="hash")},
+            row_filter=None,
+        ),
+    )
+    for ordered in (policy.datasets[0].rules, list(reversed(policy.datasets[0].rules))):
+        allowed, masks, row_filter = resolve_access(
+            _policy(*ordered),
+            Principal(id="alice", groups=["analyst", "privacy"], attributes={}),
+            target="catalog.db.table",
+            catalog="analytics",
+            requested_columns=["email"],
+        )
+        assert allowed == ["email"]
+        assert masks["email"] == MaskRule(type="hash")
+        assert row_filter == "(country = 'US')"
+
+    exempt_only = _policy(policy.datasets[0].rules[0])
+    _allowed, masks, _filter = resolve_access(
+        exempt_only,
+        Principal(id="alice", groups=["analyst", "privacy"], attributes={}),
+        target="catalog.db.table",
+        catalog="analytics",
+        requested_columns=["email"],
+    )
+    assert masks == {}
+
+
+def test_exempt_non_reader_gets_no_grant_and_condition_mismatch_does_not_exempt():
+    policy = _policy(
+        AccessRule(
+            principals=["group:analyst"],
+            when={"tenant": "acme"},
+            columns=["email"],
+            masks={"email": MaskRule(type="hash", exempt_principals=("user:alice",))},
+            row_filter="active = true",
+        )
+    )
+    for principal in [
+        Principal(id="alice", groups=[], attributes={"tenant": "acme"}),
+        Principal(id="bob", groups=["analyst"], attributes={"tenant": "other"}),
+    ]:
+        allowed, masks, row_filter = resolve_access(
+            policy, principal, "catalog.db.table", "analytics", ["email"]
+        )
+        assert allowed == ["email"]
+        assert masks == {"email": MaskRule(type="null")}
+        assert row_filter is None
+
+
+def test_mask_exemption_changes_effective_policy_version():
+    empty = _policy(
+        AccessRule(
+            principals=["user:alice"],
+            columns=["email"],
+            masks={"email": MaskRule(type="hash")},
+            row_filter=None,
+        )
+    ).datasets[0]
+    explicit_empty = _policy(
+        AccessRule(
+            principals=["user:alice"],
+            columns=["email"],
+            masks={"email": MaskRule(type="hash", exempt_principals=())},
+            row_filter=None,
+        )
+    ).datasets[0]
+    exempt = _policy(
+        AccessRule(
+            principals=["user:alice"],
+            columns=["email"],
+            masks={"email": MaskRule(type="hash", exempt_principals=("user:bob",))},
+            row_filter=None,
+        )
+    ).datasets[0]
+    assert dataset_version(empty) == dataset_version(explicit_empty)
+    assert dataset_version(empty) != dataset_version(exempt)
+
+
+def test_compiled_mask_exemptions_round_trip():
+    rule = CompiledPolicyRule(
+        ordinal=0,
+        effect="allow",
+        principals=["group:analyst"],
+        columns=["email"],
+        masks={
+            "email": CompiledMaskRule(
+                type="hash", exempt_principals=("group:privacy", "user:alice")
+            )
+        },
+    )
+    policy = CompiledPolicy(version=1, catalog="analytics", target="orders", rules=[rule])
+    decoded = CompiledPolicy.from_json(policy.to_json())
+    assert decoded.rules[0].masks["email"].exempt_principals == ("group:privacy", "user:alice")
 
 
 def _policy(

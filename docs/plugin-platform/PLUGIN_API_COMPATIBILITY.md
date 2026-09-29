@@ -1,46 +1,25 @@
-# Plugin API compatibility policy
+# Plugin contract policy
 
-**Planning update, 2026-09-13:** this file records the baseline v1 policy.
-[N02/N03](IMPLEMENTATION_PLAN.md) replace duplicated internal contracts with the
-canonical public SDK and one explicitly supported version set. Breaking changes
-require version bumps and offline cutover, not runtime compatibility shims.
-The future multiple-major-version option below is outside the approved scope.
-Protected pickle definitions remain unchanged. See [cleanup](CLEANUP_PLAN.md).
+Development cutover, 2026-09-27: there are no supported older or future runtime
+contracts. Breaking changes may update the service, SDK, fixtures, and bootstrap
+database together. No historical ticket bytes, pickle import paths, schema
+aliases, or migration chains must be preserved. Recreate disposable databases
+and issue new tickets when the stored contract changes.
 
-The plugin SDK is a separately built distribution. Its public contract is
-identified by `PLUGIN_API_VERSION`, currently `"1"`, and by the integer
-`config_version` carried in each descriptor. The service admits only the
-versions exported by `dal_obscura.common.plugin_api`; an installed plugin that
-claims another API or configuration version is incompatible and is rejected
-before its factory is imported.
+The public SDK is the sole plugin contract. `PLUGIN_API_VERSION` defines the
+current API version. Admission checks the current API and
+configuration version, distribution, release, descriptor digest, and artifact
+digest. Unknown versions and capabilities fail closed; missing descriptors are
+errors. A self-consistent lock cannot override the supported-version checks.
 
-Version 1 follows these rules:
+Catalog descriptors declare their output format IDs. Both catalog and format
+descriptors declare supported handle versions; resolved handles must match the
+admitted catalog identity, format identity, and handle version. Schema and
+execution use the registered format factory, including Iceberg resolved by an
+external catalog. The native Iceberg engine remains an implementation detail.
 
-- Patch releases may fix validation, documentation, and adapter bugs without
-  changing the meaning of existing fields or error codes.
-- Additive optional fields and capabilities require a compatible config/schema
-  interpretation and must keep unknown capabilities fail-closed.
-- Removing a field, changing its meaning or type, changing serialization or
-  lifetime guarantees, or adding a required operation requires a new API major.
-- A configuration interpretation that cannot safely read an existing persisted
-  value requires a new `config_version`; the control plane must provide an
-  explicit migration or reject the configuration for review again.
-- Core and public SDK version sets are tested for alignment. The registry lock
-  records the exact API/config versions, distribution, release, descriptor
-  digest, and artifact digest. A self-consistent lock does not override the
-  core's supported-version set.
-
-Plugins must target the lowest API/config version they need and declare only
-capabilities implemented by that version. The service may support multiple
-major versions in a future release, but it will never guess a compatibility
-fallback or import an unadmitted factory. Historical publications retain their
-recorded plugin identity and revision; changing the admitted plugin generation
-requires a new review and publication.
-
-Pair metadata is part of the v1 descriptor contract. A catalog descriptor must
-list every table-format plugin ID in `output_formats`; both catalog and format
-descriptors must list the handle versions they support in `handle_versions`.
-The control plane requires the explicit format declaration, a non-empty handle
-version intersection, and compatible capabilities. Capability overlap by itself
-never admits a pair. Resolved handles are checked against the selected format
-ID and declared handle version before schema or data execution.
+SDK execution may return an iterable of Arrow batches so streaming never needs
+to materialize the full result. Core validates schemas, bounded tasks, deadlines,
+and each yielded batch. Only trusted internal tasks are serialized; client input
+is never deserialized with pickle. Path allowlists, authentication, and key
+rotation remain operational security features, not version-compatibility shims.

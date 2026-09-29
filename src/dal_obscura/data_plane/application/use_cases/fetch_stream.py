@@ -125,7 +125,7 @@ def fetch_read(
     ):
         raise PermissionError("Unauthorized")
 
-    scan = _decode_scan(payload.scan, fallback_authorization_columns=payload.columns)
+    scan = _decode_scan(payload.scan)
 
     now = flow.now()
     try:
@@ -244,9 +244,7 @@ def _identity_context_digest(principal: Principal, tenant_id: str) -> str:
     )
 
 
-def _decode_scan(
-    scan_info: Mapping[str, object], *, fallback_authorization_columns: list[str]
-) -> DecodedScan:
+def _decode_scan(scan_info: Mapping[str, object]) -> DecodedScan:
     """Parses the format scan payload and mask metadata embedded in a ticket."""
     read_payload = scan_info.get("read_payload")
     if not read_payload:
@@ -268,7 +266,7 @@ def _decode_scan(
             value=mask_data.get("value"),
         )
 
-    authorization_columns = scan_info.get("authorization_columns", fallback_authorization_columns)
+    authorization_columns = scan_info.get("authorization_columns")
     if (
         not isinstance(authorization_columns, list)
         or not authorization_columns

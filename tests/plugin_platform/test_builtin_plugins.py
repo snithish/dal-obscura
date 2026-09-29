@@ -4,7 +4,7 @@ from dal_obscura.data_plane.infrastructure.adapters.builtin_plugins import (
     create_builtin_plugin_registry,
 )
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import IcebergCatalog
-from dal_obscura.data_plane.infrastructure.table_formats.iceberg import IcebergTableFormat
+from dal_obscura.data_plane.infrastructure.adapters.iceberg_format_plugin import IcebergFormatPlugin
 
 
 def test_builtin_registry_admits_qualified_iceberg_pair_and_factories() -> None:
@@ -17,4 +17,4 @@ def test_builtin_registry_admits_qualified_iceberg_pair_and_factories() -> None:
         ("table_format", "iceberg"),
     }
     assert registry.load("catalog", "iceberg.sql") is IcebergCatalog
-    assert registry.load("table_format", "iceberg") is IcebergTableFormat
+    assert registry.load("table_format", "iceberg") is IcebergFormatPlugin

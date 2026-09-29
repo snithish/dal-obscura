@@ -1,3 +1,4 @@
+import { discardChanges, useConfirmation } from "./ConfirmationProvider";
 import { useEffect, useRef, useState } from "react";
 import { Button, NativeSelect, TextInput } from "@mantine/core";
 import type { QueryClient } from "@tanstack/react-query";
@@ -94,6 +95,7 @@ export function ConnectionsView({ catalogs, plugins, pluginStates, pluginPairs, 
   const fields = configFields(selectedPlugin);
   const effectiveFields = fields;
   const [config, setConfig] = useState<Record<string, string>>({});
+  const { confirm } = useConfirmation();
   const [message, setMessage] = useState("");
   const [lifecycleTargets, setLifecycleTargets] = useState<Record<string, PluginState["lifecycle"]>>({});
   const [lifecycleBusy, setLifecycleBusy] = useState<string | null>(null);
@@ -225,12 +227,13 @@ export function ConnectionsView({ catalogs, plugins, pluginStates, pluginPairs, 
     setLifecycleDirty(false);
   }
 
-  function beginEdit(catalog: Catalog) {
-    if (dirty && !window.confirm("You have unsaved connection changes. Leave this editor?")) return;
+  async function beginEdit(catalog: Catalog) {
+    if (dirty && !await confirm(discardChanges("connection", "edit another connection"))) return;
     editCatalog(catalog);
   }
 
-  function cancelEdit() {
+  async function cancelEdit() {
+    if (dirty && !await confirm(discardChanges("connection", "close this editor"))) return;
     setEditingCatalog(null);
     setName("");
     setConfig({});
@@ -241,8 +244,8 @@ export function ConnectionsView({ catalogs, plugins, pluginStates, pluginPairs, 
     setLifecycleDirty(false);
   }
 
-  function reload() {
-    if (dirty && !window.confirm("You have unsaved connection changes. Reload and discard them?")) return;
+  async function reload() {
+    if (dirty && !await confirm(discardChanges("connection", "reload connections"))) return;
     connectionEditEpoch.current += 1;
     lifecycleEditEpoch.current += 1;
     setConnectionDirty(false);
@@ -325,7 +328,7 @@ export function ConnectionsView({ catalogs, plugins, pluginStates, pluginPairs, 
     const target = lifecycleTargets[key];
     if (!target) return;
     if (lifecycleBusyRef.current.has(key)) return;
-    if (target === "removed" && !window.confirm(`Remove ${plugin.display_name} from this process?`)) return;
+    if (target === "removed" && !await confirm({ title: "Remove plugin?", message: `Remove ${plugin.display_name} from this process? Connections depending on this plugin may become unavailable.`, confirmLabel: "Remove plugin", destructive: true })) return;
     lifecycleBusyRef.current.add(key);
     setLifecycleBusy(key);
     const controller = beginMutation();

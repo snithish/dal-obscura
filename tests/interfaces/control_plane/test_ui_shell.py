@@ -43,6 +43,9 @@ def test_openapi_schema_describes_control_plane_api() -> None:
     assert payload["info"]["title"] == "dal-obscura control-plane API"
     assert "/v1/assets" in payload["paths"]
     assert "/v1/ui-auth-config" in payload["paths"]
+    schemas = payload["components"]["schemas"]
+    assert schemas["PolicyRuleRequest"]["properties"]["effect"]["enum"] == ["allow", "allow_all"]
+    assert "columns" not in schemas["PolicyEvaluationRequest"]["properties"]
     runtime_get = payload["paths"]["/v1/settings/runtime"]["get"]["responses"]["200"]["content"][
         "application/json"
     ]["schema"]

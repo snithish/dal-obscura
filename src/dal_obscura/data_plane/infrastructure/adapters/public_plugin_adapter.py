@@ -1,4 +1,4 @@
-"""Bridge the public plugin SDK to the legacy governed table-format ports.
+"""Bridge the public plugin SDK to the governed application ports.
 
 The bridge is deliberately small: core still owns authorization, row-filter
 reapplication, masking, ticket serialization, and output validation. Public
@@ -27,6 +27,7 @@ from dal_obscura_plugin_api import (
 from dal_obscura_plugin_api import (
     DiscoveryPage,
     ExecutionContext,
+    PluginDescriptor,
     SchemaDescriptor,
     TableFormatPlugin,
     TableHandle,
@@ -34,11 +35,17 @@ from dal_obscura_plugin_api import (
 )
 
 from dal_obscura.common.catalog.ports import (
-    CatalogPlugin as LegacyCatalogPlugin,
+    CatalogPlugin as GovernedCatalogPlugin,
 )
 from dal_obscura.common.catalog.ports import (
     CatalogTableListing,
     TableFormat,
+)
+from dal_obscura.common.query_planning.field_paths import (
+    FieldPath,
+    FieldSegment,
+    parse_field_path,
+    resolve_schema_path,
 )
 from dal_obscura.common.query_planning.models import PlanRequest
 from dal_obscura.common.schema_bounds import validate_arrow_schema_bounds
@@ -80,7 +87,7 @@ class PublicPluginTableFormat(TableFormat):
         try:
             descriptor = plugin.schema(self.handle, context)
             _ensure_context_active(context)
-            _validate_schema_descriptor(descriptor)
+            _validate_schema_descriptor(descriptor, self.handle)
             return descriptor.arrow_schema
         finally:
             _close_plugin_preserving_error(plugin)
@@ -93,29 +100,31 @@ class PublicPluginTableFormat(TableFormat):
         try:
             descriptor = plugin.schema(self.handle, context)
             _ensure_context_active(context)
-            _validate_schema_descriptor(descriptor)
+            _validate_schema_descriptor(descriptor, self.handle)
             row_filter = None
-            if request.row_filter is not None:
+            if (
+                request.row_filter is not None
+                and "filter_pushdown" in plugin.descriptor.capabilities
+            ):
                 row_filter = request.row_filter.expression.sql(dialect="duckdb")
+            output_schema = _projected_schema(descriptor.arrow_schema, request.columns)
             planned = plugin.plan(
                 self.handle,
                 descriptor,
                 context,
-                projection=request.columns,
+                projection=output_schema.names,
                 row_filter=row_filter,
                 max_tasks=max_tickets,
             )
             _ensure_context_active(context)
-            output_schema = _projected_schema(descriptor.arrow_schema, request.columns)
             tasks: list[object] = []
             for task in planned:
+                _ensure_context_active(context)
                 _validate_task_payload(task)
                 tasks.append(task)
                 if len(tasks) > max_tickets:
                     raise ValueError("Plugin returned more tasks than requested")
-            if not tasks:
-                # Preserve schema-only/empty result behavior through one empty task.
-                tasks = [None]
+            _ensure_context_active(context)
             partitions = [
                 PublicPluginPartition(
                     task=task,
@@ -144,38 +153,49 @@ class PublicPluginTableFormat(TableFormat):
             raise TypeError("Public plugin format requires a PublicPluginPartition")
         if partition.handle != self.handle or partition.format_factory != self.format_factory:
             raise ValueError("Public plugin partition does not match its format")
-        context = _context()
-        plugin = self._open(context)
-        try:
-            output_schema, batches = plugin.execute(partition.task, context)
-            _ensure_context_active(context)
-            if output_schema != partition.schema:
-                raise ValueError("Public plugin changed the declared output schema")
-            checked = _checked_plugin_batches(batches, output_schema, context)
-        except Exception:
-            _close_plugin_preserving_error(plugin)
-            raise
-        return output_schema, _close_after(checked, plugin)
+
+        def execute_batches() -> Iterable[pa.RecordBatch]:
+            context = _context()
+            plugin = self._open(context)
+            try:
+                output_schema, batches = plugin.execute(partition.task, context)
+                try:
+                    _ensure_context_active(context)
+                    if output_schema != partition.schema:
+                        raise ValueError("Public plugin changed the declared output schema")
+                    yield from _checked_plugin_batches(batches, output_schema, context)
+                finally:
+                    _close_plugin_preserving_error(batches)
+            finally:
+                _close_plugin_preserving_error(plugin)
+
+        return partition.schema, execute_batches()
 
     def _open(self, context: ExecutionContext | None = None) -> TableFormatPlugin:
         context = context or _context()
         _ensure_context_active(context)
         plugin = self.format_factory(self.handle, context)
-        _ensure_context_active(context)
-        if not all(
-            callable(getattr(plugin, name, None)) for name in ("schema", "plan", "execute", "close")
-        ):
-            raise ValueError("Public format factory returned an invalid plugin")
-        descriptor = getattr(plugin, "descriptor", None)
-        if descriptor is not None and (
-            getattr(descriptor, "kind", None) != "table_format"
-            or getattr(descriptor, "plugin_id", None) != self.format
-        ):
-            raise ValueError("Public format factory returned a mismatched descriptor")
+        try:
+            _ensure_context_active(context)
+            if not all(
+                callable(getattr(plugin, name, None))
+                for name in ("schema", "plan", "execute", "close")
+            ):
+                raise ValueError("Public format factory returned an invalid plugin")
+            descriptor = getattr(plugin, "descriptor", None)
+            if not isinstance(descriptor, PluginDescriptor) or (
+                getattr(descriptor, "kind", None) != "table_format"
+                or getattr(descriptor, "plugin_id", None) != self.format
+                or self.handle.handle_version not in descriptor.handle_versions
+            ):
+                raise ValueError("Public format factory returned a mismatched descriptor")
+        except Exception:
+            _close_plugin_preserving_error(plugin)
+            raise
         return plugin
 
 
-class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
+class PublicPluginCatalogAdapter(GovernedCatalogPlugin):
     """Adapts one public catalog factory to the existing governed catalog port."""
 
     def __init__(
@@ -218,7 +238,7 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
             catalog.validate_config(context)
             _ensure_context_active(context)
             descriptor = getattr(catalog, "descriptor", None)
-            if descriptor is not None and (
+            if not isinstance(descriptor, PluginDescriptor) or (
                 getattr(descriptor, "kind", None) != "catalog"
                 or getattr(descriptor, "plugin_id", None) != self._catalog_plugin_id
             ):
@@ -235,7 +255,7 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
 
     def resolve_table(self, target: str) -> TableFormat:
         self._ensure_open()
-        identifier = _legacy_identifier(target)
+        identifier = _table_identifier(target)
         context = _context()
         handle = self._catalog.resolve_table(identifier, context)
         _ensure_context_active(context)
@@ -249,39 +269,22 @@ class PublicPluginCatalogAdapter(LegacyCatalogPlugin):
         ):
             raise ValueError("Public catalog returned a mismatched table handle identity")
         catalog_descriptor = getattr(self._catalog, "descriptor", None)
-        if catalog_descriptor is not None and (
+        if not isinstance(catalog_descriptor, PluginDescriptor) or (
             handle.format_plugin_id not in getattr(catalog_descriptor, "output_formats", ())
             or handle.handle_version not in getattr(catalog_descriptor, "handle_versions", ())
         ):
             raise ValueError("Public catalog returned an undeclared table-format handle")
-        if handle.format_plugin_id == "iceberg":
-            from dal_obscura.data_plane.infrastructure.table_formats.iceberg import (
-                IcebergTableFormat,
+        if self._path_enforcer is not None:
+            from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
+                _nested_strings,
             )
 
-            metadata_location = handle.metadata.get("metadata_location")
-            if not isinstance(metadata_location, str) or not metadata_location:
-                raise ValueError("Iceberg plugin handle is missing metadata_location")
-            if self._path_enforcer is not None:
-                self._path_enforcer.check(metadata_location)
-            io_options = handle.metadata.get("io_options", {})
-            if not isinstance(io_options, dict):
-                raise ValueError("Iceberg plugin handle has invalid io_options")
-            return IcebergTableFormat(
-                catalog_name=self._name,
-                table_name=target,
-                metadata_location=metadata_location,
-                io_options=cast(dict[str, object], io_options),
-                path_enforcer=self._path_enforcer,
-            )
+            for location in _nested_strings(dict(handle.metadata)):
+                if "://" in location or location.startswith("/"):
+                    self._path_enforcer.check(location)
         raw_factory = self._format_factory_loader(handle.format_plugin_id)
         if not callable(raw_factory):
             raise ValueError("Public format factory is not callable")
-        format_descriptor = getattr(raw_factory, "descriptor", None)
-        if format_descriptor is not None and handle.handle_version not in getattr(
-            format_descriptor, "handle_versions", ()
-        ):
-            raise ValueError("Public table-format factory does not support this handle version")
         format_factory = cast(PublicFormatFactory, raw_factory)
         return PublicPluginTableFormat(
             catalog_name=self._name,
@@ -351,15 +354,20 @@ def _context() -> ExecutionContext:
     )
 
 
-def _legacy_identifier(target: str) -> TableIdentifier:
+def _table_identifier(target: str) -> TableIdentifier:
     if not isinstance(target, str) or not target.strip():
         raise ValueError("table target must be non-empty")
-    parts = tuple(target.split("."))
+    segments = parse_field_path(target).segments
+    if any(not isinstance(segment, FieldSegment) for segment in segments):
+        raise ValueError("Table identifiers cannot contain collection segments")
+    parts = tuple(cast(FieldSegment, segment).name for segment in segments)
     return TableIdentifier(namespace=parts[:-1], name=parts[-1])
 
 
 def _identifier_name(identifier: TableIdentifier) -> str:
-    return ".".join((*identifier.namespace, identifier.name))
+    return FieldPath(
+        tuple(FieldSegment(part) for part in (*identifier.namespace, identifier.name))
+    ).to_human()
 
 
 def _validated_page_entries(page: object) -> tuple[TableIdentifier, ...]:
@@ -386,16 +394,6 @@ def _close_plugin(plugin: object) -> None:
         close()
 
 
-def _close_after(batches: Iterable[pa.RecordBatch], plugin: object) -> Iterable[pa.RecordBatch]:
-    def closed() -> Iterable[pa.RecordBatch]:
-        try:
-            yield from batches
-        finally:
-            _close_plugin_preserving_error(plugin)
-
-    return closed()
-
-
 def _close_plugin_preserving_error(plugin: object) -> None:
     """Close a provider without masking an active stream error."""
 
@@ -407,9 +405,11 @@ def _close_plugin_preserving_error(plugin: object) -> None:
             raise
 
 
-def _validate_schema_descriptor(descriptor: SchemaDescriptor) -> None:
+def _validate_schema_descriptor(descriptor: SchemaDescriptor, handle: TableHandle) -> None:
     if not isinstance(descriptor, SchemaDescriptor):
         raise ValueError("Public plugin returned an invalid schema descriptor")
+    if handle.snapshot_id is not None and descriptor.snapshot_id != handle.snapshot_id:
+        raise ValueError("Public plugin schema does not match the catalog snapshot")
     validate_arrow_schema_bounds(descriptor.arrow_schema)
     serialized = descriptor.arrow_schema.serialize().size
     if serialized > MAX_PLUGIN_TASK_BYTES:
@@ -423,7 +423,9 @@ def _projected_schema(schema: pa.Schema, columns: list[str]) -> pa.Schema:
         return schema
     names: list[str] = []
     for column in columns:
-        top_level = column.split(".", 1)[0]
+        path = parse_field_path(column)
+        resolve_schema_path(schema, path)
+        top_level = cast(FieldSegment, path.segments[0]).name
         if top_level not in schema.names:
             raise ValueError("Plugin projection contains an unknown field")
         if top_level not in names:
@@ -494,14 +496,24 @@ def _checked_plugin_batches(
     """Validate each lazy batch before it reaches DuckDB or Flight output."""
 
     def checked() -> Iterable[pa.RecordBatch]:
-        for batch in batches:
-            _ensure_context_active(context)
-            if not isinstance(batch, pa.RecordBatch):
-                raise ValueError("Public plugin returned a non-Arrow batch")
-            if batch.schema != schema:
-                raise ValueError("Public plugin batch schema differs from the declared schema")
-            if batch.nbytes > MAX_PLUGIN_TASK_BYTES:
-                raise ValueError("Public plugin batch exceeds the byte limit")
-            yield batch
+        iterator = iter(batches)
+        try:
+            while True:
+                _ensure_context_active(context)
+                try:
+                    batch = next(iterator)
+                except StopIteration:
+                    return
+                _ensure_context_active(context)
+                if not isinstance(batch, pa.RecordBatch):
+                    raise ValueError("Public plugin returned a non-Arrow batch")
+                if batch.schema != schema:
+                    raise ValueError("Public plugin batch schema differs from the declared schema")
+                if max(batch.nbytes, batch.get_total_buffer_size()) > MAX_PLUGIN_TASK_BYTES:
+                    raise ValueError("Public plugin batch exceeds the byte limit")
+                yield batch
+        finally:
+            if iterator is not batches:
+                _close_plugin_preserving_error(iterator)
 
     return checked()

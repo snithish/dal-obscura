@@ -26,37 +26,68 @@ def resolve_access(
     if not matched_dataset:
         raise PermissionError("No policy for requested table")
 
-    principal_tokens = set(principal.tokens())
-    allowed_columns: list[str] = []
-    masks: dict[str, MaskRule] = {}
-    row_filters: list[str] = []
+    requested = list(dict.fromkeys(requested_columns))
+    # This is an explicit, authenticated policy bypass, not an ordinary grant.
+    if any(
+        rule.effect == "allow_all"
+        and rule.principals == ["*"]
+        and rule.columns == ["*"]
+        and not rule.when
+        and not rule.row_filter
+        and not rule.masks
+        for rule in matched_dataset.rules
+    ):
+        return requested, {}, None
 
-    requested = list(requested_columns)
+    principal_tokens = set(principal.tokens())
+    granted: set[str] = set()
+    candidates: dict[str, list[MaskRule]] = {}
+    row_filters: list[str] = []
     for rule in matched_dataset.rules:
         if rule.effect != "allow":
             continue
-        if not principal_tokens.intersection(rule.principals):
+        if "*" not in rule.principals and not principal_tokens.intersection(rule.principals):
             continue
         if not _matches_conditions(principal, rule.when):
             continue
-
         matching_columns = _matching_columns(requested, rule.columns)
-        # Rule matches are unioned so multiple roles can widen the projection while
-        # still allowing the stricter mask precedence rules below to win.
-        for column in matching_columns:
-            if column not in allowed_columns:
-                allowed_columns.append(column)
-        for column, mask in rule.masks.items():
-            existing = masks.get(column)
-            masks[column] = _choose_mask(existing, mask)
+        granted.update(matching_columns)
+        _collect_masks(candidates, matching_columns, rule.masks, principal_tokens)
+        # Row rules are independent of projection and mask exemptions.
         if rule.row_filter:
             row_filters.append(rule.row_filter)
 
-    if not allowed_columns:
-        raise PermissionError("No allowed columns for principal")
-
+    masks = {column: _combine_masks(items) for column, items in candidates.items()}
+    for column in requested:
+        if column not in granted:
+            masks[column] = MaskRule(type="null")
     combined_filter = " AND ".join(f"({part})" for part in row_filters) if row_filters else None
-    return allowed_columns, masks, combined_filter
+    return requested, masks, combined_filter
+
+
+def _collect_masks(
+    candidates: dict[str, list[MaskRule]],
+    columns: list[str],
+    masks: dict[str, MaskRule],
+    principal_tokens: set[str],
+) -> None:
+    for column in columns:
+        for path, mask in masks.items():
+            if _path_covers(path, column) and not principal_tokens.intersection(
+                mask.exempt_principals
+            ):
+                candidates.setdefault(column, []).append(MaskRule(type=mask.type, value=mask.value))
+
+
+def _combine_masks(candidates: list[MaskRule]) -> MaskRule:
+    # Resolve NULL before comparing other masks, so rule order never changes
+    # whether an otherwise incompatible set is safely suppressed.
+    if any(mask.type.lower() == "null" for mask in candidates):
+        return MaskRule(type="null")
+    result = candidates[0]
+    for candidate in candidates[1:]:
+        result = _choose_mask(result, candidate)
+    return result
 
 
 def _matching_columns(requested: list[str], grants: list[str]) -> list[str]:
@@ -97,6 +128,7 @@ def _path_covers(parent: str, child: str) -> bool:
 def dataset_version(dataset: DatasetPolicy) -> int:
     """Hashes the effective dataset policy so tickets can detect stale policy state."""
     payload = {
+        "contract": "null-default-v1",
         "catalog": dataset.catalog,
         "target": dataset.target,
         "rules": [
@@ -104,7 +136,15 @@ def dataset_version(dataset: DatasetPolicy) -> int:
                 "principals": rule.principals,
                 "columns": rule.columns,
                 "masks": {
-                    name: {"type": mask.type, "value": mask.value}
+                    name: {
+                        "type": mask.type,
+                        "value": mask.value,
+                        **(
+                            {"exempt_principals": sorted(mask.exempt_principals)}
+                            if mask.exempt_principals
+                            else {}
+                        ),
+                    }
                     for name, mask in rule.masks.items()
                 },
                 "row_filter": rule.row_filter,

@@ -63,6 +63,7 @@ export type AssetSchema = {
 export type Mask = {
   type: "null" | "redact" | "hash" | "email" | "keep_last" | "default";
   value?: string | number | boolean | null;
+  exempt_principals?: string[];
 };
 
 export type PolicyRule = {
@@ -71,7 +72,9 @@ export type PolicyRule = {
   columns: string[];
   masks: Record<string, Mask>;
   row_filter: string | null;
-  effect: "allow";
+  effect: "allow" | "allow_all";
+  name?: string;
+  description?: string;
   when?: Record<string, string | string[]>;
 };
 
@@ -466,12 +469,8 @@ function readCookie(name: string): string | undefined {
 }
 
 function normalizeAsset(asset: Asset): Asset {
-  return {
-    ...asset,
-    name: asset.name ?? (asset as Asset & { target?: string }).target ?? "Unnamed asset",
-    owners: asset.owners ?? [],
-    schema_fields: asset.schema_fields ?? [],
-  };
+  if (typeof asset.name !== "string" || !asset.name || !isStringArray(asset.owners) || !Array.isArray(asset.schema_fields)) throw new Error("Invalid asset response.");
+  return asset;
 }
 
 function normalizeInventoryAsset(asset: ApiSchemas["AssetInventoryResponse"]): Asset {
@@ -499,19 +498,18 @@ function normalizeDetailAsset(asset: ApiSchemas["AssetDetailResponse"]): Asset {
     table_identifier: asset.table_identifier,
     owners: asset.owners,
     policy_status: asset.policy_status,
-    schema_fields: asset.schema_fields.map((field) => ({
-      name: typeof field.name === "string" ? field.name : "",
-      type: typeof field.type === "string" ? field.type : "string",
-      nullable: field.nullable !== false,
-    })),
+    schema_fields: asset.schema_fields.map((field) => {
+      if (typeof field.name !== "string" || typeof field.type !== "string" || typeof field.nullable !== "boolean") throw new Error("Invalid schema field response.");
+      return { name: field.name, type: field.type, nullable: field.nullable };
+    }),
     policy_rules: asset.policy_rules.map(normalizePolicyRule),
   });
 }
 
 function normalizePolicyRule(value: ApiSchemas["AssetDetailResponse"]["policy_rules"][number], index: number): PolicyRule {
   const rule = value as Record<string, unknown>;
-  const effect = rule.effect ?? "allow";
-  if (effect !== "allow") throw new Error(`Asset policy rule ${index + 1} has unsupported effect.`);
+  const effect = rule.effect;
+  if (effect !== "allow" && effect !== "allow_all") throw new Error(`Asset policy rule ${index + 1} has unsupported effect.`);
   if (!Number.isInteger(rule.ordinal)) throw new Error(`Asset policy rule ${index + 1} has invalid ordinal.`);
   if (!isStringArray(rule.principals) || !isStringArray(rule.columns)) throw new Error(`Asset policy rule ${index + 1} has invalid principal or column selections.`);
   if (rule.row_filter !== null && typeof rule.row_filter !== "string") throw new Error(`Asset policy rule ${index + 1} has invalid row filter.`);
@@ -525,7 +523,10 @@ function normalizePolicyRule(value: ApiSchemas["AssetDetailResponse"]["policy_ru
     if (typeof mask.type !== "string" || !supportedMasks.includes(mask.type as Mask["type"])) throw new Error(`Asset policy rule ${index + 1} has unsupported mask for ${field}.`);
     const scalar = mask.value;
     if (scalar !== undefined && scalar !== null && !["string", "number", "boolean"].includes(typeof scalar)) throw new Error(`Asset policy rule ${index + 1} has invalid mask value for ${field}.`);
-    return [field, { type: mask.type as Mask["type"], ...(scalar === undefined ? {} : { value: scalar as Mask["value"] }) }];
+    const exemptions = mask.exempt_principals;
+    const validExemptions = exemptions === undefined || (isStringArray(exemptions) && exemptions.every((token) => token.trim() && token === token.trim() && token !== "*" && token.toLowerCase() !== "everyone" && (!token.startsWith("group:") || (token.slice(6).trim() && !["*", "everyone"].includes(token.slice(6).toLowerCase()) && !/\s/.test(token)))));
+    if (!validExemptions) throw new Error(`Asset policy rule ${index + 1} has invalid mask exemptions for ${field}.`);
+    return [field, { type: mask.type as Mask["type"], ...(scalar === undefined ? {} : { value: scalar as Mask["value"] }), ...(exemptions?.length ? { exempt_principals: [...new Set(exemptions)].sort() } : {}) }];
   }));
   const when: Record<string, string | string[]> = {};
   for (const [claim, condition] of Object.entries(rule.when)) {
@@ -535,7 +536,9 @@ function normalizePolicyRule(value: ApiSchemas["AssetDetailResponse"]["policy_ru
   }
   return {
     ordinal: rule.ordinal as number,
-    effect: "allow",
+    effect,
+    name: typeof rule.name === "string" ? rule.name : "",
+    description: typeof rule.description === "string" ? rule.description : "",
     principals: rule.principals,
     columns: rule.columns,
     masks,

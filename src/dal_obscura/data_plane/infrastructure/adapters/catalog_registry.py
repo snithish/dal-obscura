@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
+from functools import partial
 from threading import RLock
 from typing import Any, cast
 
@@ -38,6 +39,8 @@ class CatalogConfig:
     def __post_init__(self) -> None:
         if not self.name.strip():
             raise ValueError("Catalog configuration requires a non-empty logical name")
+        if self.type not in {"iceberg", "plugin"}:
+            raise ValueError(f"Unsupported catalog type: {self.type}")
         if self.revision < 0:
             raise ValueError("Catalog configuration revision cannot be negative")
 
@@ -244,40 +247,53 @@ def _build_catalog(
     *,
     plugin_registry: PluginRegistry | None = None,
 ) -> CatalogPlugin:
-    if plugin_registry is not None:
-        factory = plugin_registry.load("catalog", config.plugin_id)
-        if not callable(factory):
-            raise ValueError(f"Plugin factory is invalid: {config.plugin_id}")
-        if config.plugin_id != "iceberg.sql":
-            # The public SDK is an optional runtime dependency. Keep the
-            # built-in Iceberg service importable in a minimal installation;
-            # only an explicitly selected external plugin needs this bridge.
-            from dal_obscura.data_plane.infrastructure.adapters.public_plugin_adapter import (
-                PublicPluginCatalogAdapter,
-            )
-
-            return PublicPluginCatalogAdapter(
-                config.name,
-                config.options,
-                config.plugin_id,
-                cast(Any, factory),
-                lambda plugin_id: plugin_registry.load("table_format", plugin_id),
-                config.path_enforcer,
-                config.revision,
-            )
-        constructor = cast(
-            Callable[[str, dict[str, Any], PathRuleEnforcer | None], CatalogPlugin],
-            factory,
+    if plugin_registry is None:
+        from dal_obscura.data_plane.infrastructure.adapters.builtin_plugins import (
+            create_builtin_plugin_registry,
         )
-        implementation = constructor(config.name, config.options, config.path_enforcer)
-        if not hasattr(implementation, "resolve_table") or not hasattr(
-            implementation, "list_tables"
-        ):
-            raise ValueError(f"Plugin factory returned an invalid catalog: {config.plugin_id}")
-        return implementation
-    if config.type == "iceberg":
-        return IcebergCatalog(config.name, config.options, config.path_enforcer)
-    raise ValueError(f"Unsupported catalog type: {config.type}")
+
+        plugin_registry = create_builtin_plugin_registry()
+    factory = plugin_registry.load("catalog", config.plugin_id)
+    if not callable(factory):
+        raise ValueError(f"Plugin factory is invalid: {config.plugin_id}")
+    if config.plugin_id != "iceberg.sql":
+        from dal_obscura.data_plane.infrastructure.adapters.public_plugin_adapter import (
+            PublicPluginCatalogAdapter,
+        )
+
+        return PublicPluginCatalogAdapter(
+            config.name,
+            config.options,
+            config.plugin_id,
+            cast(Any, factory),
+            lambda plugin_id: _load_format_factory(
+                plugin_registry, plugin_id, config.path_enforcer
+            ),
+            config.path_enforcer,
+            config.revision,
+        )
+    constructor = cast(
+        Callable[[str, dict[str, Any], PathRuleEnforcer | None], CatalogPlugin],
+        factory,
+    )
+    implementation = constructor(config.name, config.options, config.path_enforcer)
+    if not hasattr(implementation, "resolve_table") or not hasattr(implementation, "list_tables"):
+        raise ValueError(f"Plugin factory returned an invalid catalog: {config.plugin_id}")
+    return implementation
+
+
+def _load_format_factory(
+    registry: PluginRegistry, plugin_id: str, path_enforcer: PathRuleEnforcer | None
+) -> object:
+    from dal_obscura.data_plane.infrastructure.adapters.iceberg_format_plugin import (
+        IcebergFormatPlugin,
+    )
+
+    factory = registry.load("table_format", plugin_id)
+    # Bind native IO enforcement as a construction dependency, not handle data.
+    return (
+        partial(factory, path_enforcer=path_enforcer) if factory is IcebergFormatPlugin else factory
+    )
 
 
 def _resolve_iceberg_descriptor(

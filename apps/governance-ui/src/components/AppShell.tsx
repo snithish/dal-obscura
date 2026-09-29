@@ -84,6 +84,7 @@ export function AppShell(props: AppShellProps) {
       <MantineAppShell.Main className="workbench-main">
         <nav aria-label="Breadcrumbs"><Breadcrumbs>
           <a href="#assets" onClick={(event) => { event.preventDefault(); props.onNavigate("assets"); }}>Workspace</a>
+          {props.page === "assets" && props.assetName && <a href="#assets" onClick={(event) => { event.preventDefault(); props.onNavigate("assets"); }}>Assets</a>}
           {props.page === "assets" && props.assetCatalog && <Text size="sm">{props.assetCatalog}</Text>}
           <Text size="sm" aria-current="page">{props.page === "assets" ? props.assetName ?? "Assets" : navigation.find((item) => item.page === props.page)?.label}</Text>
         </Breadcrumbs></nav>

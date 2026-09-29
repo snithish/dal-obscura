@@ -48,7 +48,7 @@ const typedCatalogPlugin: PluginDescriptor = {
 const catalogs: Catalog[] = [{
   id: "catalog-analytics",
   name: "analytics",
-  plugin_id: "iceberg.rest",
+  plugin_id: "iceberg-rest",
   options: { uri: "https://catalog.example" },
   status: "ready",
   revision: 4,
@@ -132,7 +132,7 @@ export const SecretReferenceEditing: Story = {
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("button", { name: "Edit" })).toBeVisible();
-    await canvas.getByRole("button", { name: "Edit" }).click();
+    await userEvent.click(canvas.getByRole("button", { name: "Edit" }));
     await expect(canvas.getByDisplayValue("https://catalog.example")).toBeVisible();
     const secretField = canvas.getByLabelText(/Password secret reference/);
     await expect(secretField).toHaveAttribute("type", "password");

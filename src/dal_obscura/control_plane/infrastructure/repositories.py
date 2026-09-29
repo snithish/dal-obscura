@@ -399,6 +399,8 @@ class ConfigStore:
                     asset_id=asset_id,
                     ordinal=int(raw["ordinal"]),
                     effect=raw["effect"],
+                    name=raw.get("name", ""),
+                    description=raw.get("description", ""),
                     principals_json=list(raw.get("principals", [])),
                     when_json=dict(raw.get("when", {})),
                     columns_json=list(raw.get("columns", [])),
@@ -908,6 +910,8 @@ class ConfigStore:
                 "asset_id": str(record.asset_id),
                 "ordinal": record.ordinal,
                 "effect": record.effect,
+                "name": record.name,
+                "description": record.description,
                 "principals": list(record.principals_json),
                 "when": dict(record.when_json),
                 "columns": list(record.columns_json),
@@ -1408,7 +1412,7 @@ def _normalize_policy_rule(raw: dict[str, Any]) -> dict[str, Any]:
     return {**raw, "effect": effect}
 
 
-def _normalize_policy_rule_effect(effect: str) -> Literal["allow"]:
-    if effect != "allow":
+def _normalize_policy_rule_effect(effect: str) -> Literal["allow", "allow_all"]:
+    if effect not in {"allow", "allow_all"}:
         raise ValueError("Policy rules are explicit grants")
-    return "allow"
+    return cast(Literal["allow", "allow_all"], effect)

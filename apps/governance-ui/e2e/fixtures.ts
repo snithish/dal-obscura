@@ -46,7 +46,7 @@ export async function edgeChallengeApi(page: Page, options: EdgeChallengeOptions
  * This fixture proves browser composition and capability presentation only;
  * it is never evidence of a live identity provider or production backend.
  */
-export async function authenticatedApi(page: Page, options: { admin?: boolean; configuredSettings?: boolean; configuredConnections?: boolean; configuredLifecycle?: boolean; configuredAudit?: boolean; multipleFormats?: boolean; initialPolicyRules?: Array<Record<string, unknown>>; deferredAudit?: DeferredResponse; deferredSettings?: DeferredResponse; deferredConnections?: DeferredResponse; deferredDiscovery?: DeferredResponse; deferredInventory?: DeferredResponse; deferredSave?: DeferredResponse; deferredEvaluate?: DeferredResponse } = {}) {
+export async function authenticatedApi(page: Page, options: { admin?: boolean; readOnly?: boolean; conflictSave?: boolean; configuredSettings?: boolean; configuredConnections?: boolean; configuredLifecycle?: boolean; configuredAudit?: boolean; multipleFormats?: boolean; initialPolicyRules?: Array<Record<string, unknown>>; ruleEditor?: boolean; deferredAudit?: DeferredResponse; deferredSettings?: DeferredResponse; deferredConnections?: DeferredResponse; deferredDiscovery?: DeferredResponse; deferredInventory?: DeferredResponse; deferredSave?: DeferredResponse; deferredEvaluate?: DeferredResponse } = {}) {
   const assetId = "00000000-0000-4000-8000-000000000001";
   const identity = {
     principal: "alex@example.invalid",
@@ -64,13 +64,18 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; c
     owners: ["alex@example.invalid"],
     policy_status: "configured",
   };
+  const schemaFields = options.ruleEditor ? [
+    { field_id: 1, name: "email", human_path: "email", type: "string", nullable: false, kind: "scalar", path: { version: 1, segments: [{ kind: "field", name: "email", field_id: 1 }] } },
+    { field_id: 2, name: "phone", human_path: "phone", type: "string", nullable: false, kind: "scalar", path: { version: 1, segments: [{ kind: "field", name: "phone", field_id: 2 }] } },
+    { field_id: 3, name: "country", human_path: "country", type: "string", nullable: false, kind: "scalar", path: { version: 1, segments: [{ kind: "field", name: "country", field_id: 3 }] } },
+  ] : [{ field_id: 1, name: "order_id", human_path: "order_id", type: "string", nullable: false, kind: "scalar", path: { version: 1, segments: [{ kind: "field", name: "order_id", field_id: 1 }] } }];
   const detail = {
     ...inventory,
     revision: 1,
     policy_revision: 1,
     options: {},
     policy_rules: options.initialPolicyRules ?? [],
-    schema_fields: [{ name: "order_id", type: "string", nullable: false }],
+    schema_fields: schemaFields.map(({ name, type, nullable }) => ({ name, type, nullable })),
   };
   const configuredCatalog = {
     id: "catalog-analytics",
@@ -202,7 +207,7 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; c
         schema_fingerprint: "orders-schema",
         stable_field_ids: true,
         supported_masks: ["null", "redact", "hash", "email", "keep_last", "default"],
-        fields: [{ field_id: 1, name: "order_id", human_path: "order_id", type: "string", nullable: false, kind: "scalar", path: { version: 1, segments: [{ kind: "field", name: "order_id", field_id: 1 }] } }],
+        fields: schemaFields,
       } });
       if (suffix === "grants" && request.method() === "PUT") {
         const payload = request.postDataJSON() as { grants?: unknown[] };
@@ -211,7 +216,7 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; c
       if (suffix === "grants") return route.fulfill({ json: [] });
       if (suffix === "access") return route.fulfill({ json: { asset_id: assetId, principal: identity.principal, issuer: null, can_revoke_tokens: true, capabilities: [
         { capability: "read", allowed: true, reasons: ["owner"] },
-        { capability: "edit", allowed: true, reasons: ["Asset owner"] },
+    { capability: "edit", allowed: !options.readOnly, reasons: options.readOnly ? ["Read-only fixture"] : ["Asset owner"] },
         { capability: "grant", allowed: false, reasons: [] },
       ] } });
       if (suffix === "owners" && request.method() === "PUT") {
@@ -223,8 +228,10 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; c
           options.deferredSave.markStarted();
           await options.deferredSave.wait();
         }
-        const payload = request.postDataJSON() as { expected_revision: number; revoke_existing_tokens?: boolean };
+        const payload = request.postDataJSON() as { expected_revision: number; revoke_existing_tokens?: boolean; rules?: Array<Record<string, unknown>> };
+        if (options.conflictSave) return route.fulfill({ status: 409, json: { detail: "Live policy changed; reload before saving." } });
         if (payload.expected_revision !== detail.policy_revision) return route.fulfill({ status: 409, json: { detail: "Live policy changed; reload before saving." } });
+        detail.policy_rules = payload.rules ?? [];
         detail.policy_revision += 1;
         const revokedTokenCount = payload.revoke_existing_tokens ? 2 : 0;
         return route.fulfill({ json: { asset_id: assetId, policy_revision: detail.policy_revision, revoked_token_count: revokedTokenCount } });

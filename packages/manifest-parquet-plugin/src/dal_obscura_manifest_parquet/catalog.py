@@ -223,6 +223,8 @@ def _load_manifest(  # noqa: C901
         for file_path in files:
             _safe_child(root, Path(file_path))
         parsed.append(_ManifestTable(identifier, files, schema, tuple(raw_field_ids)))
+    if len({_identifier_key(item.identifier) for item in parsed}) != len(parsed):
+        raise ValueError("manifest contains duplicate table identities")
     return revision, digest, tuple(parsed)
 
 
@@ -255,7 +257,7 @@ def _parse_identifier_entry(raw_identifier: str, raw_table: dict[str, object]) -
 
 
 def _identifier_key(identifier: TableIdentifier) -> str:
-    return ".".join((*identifier.namespace, identifier.name))
+    return json.dumps([*identifier.namespace, identifier.name], separators=(",", ":"))
 
 
 def _schema_identities(

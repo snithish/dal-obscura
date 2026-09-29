@@ -313,7 +313,7 @@ def test_plan_access_accepts_nested_requested_columns():
     assert authorizer.last_requested_columns == ["user.address.zip"]
 
 
-def test_plan_access_prunes_parent_request_to_authorized_nested_leaf():
+def test_plan_access_expands_parent_request_with_null_masked_siblings():
     schema = pa.schema(
         [
             pa.field(
@@ -333,8 +333,8 @@ def test_plan_access_prunes_parent_request_to_authorized_nested_leaf():
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         authorizer=FakeAuthorizer(
             decision=AccessDecision(
-                allowed_columns=["profile.name"],
-                masks={},
+                allowed_columns=["profile.name", "profile.ssn"],
+                masks={"profile.ssn": MaskRule(type="null")},
                 row_filter=None,
                 policy_version=100,
             )
@@ -353,7 +353,7 @@ def test_plan_access_prunes_parent_request_to_authorized_nested_leaf():
         AUTHORIZATION_HEADER,
     )
 
-    assert result.columns == ["profile.name"]
+    assert result.columns == ["profile.name", "profile.ssn"]
 
 
 def test_plan_access_requires_map_key_permission_for_map_value_projection():
@@ -1029,3 +1029,52 @@ def test_plan_access_prunes_wildcard_to_authorized_columns():
 
     assert result.columns == ["id"]
     assert planned_columns == [["id"]]
+
+
+def test_backend_cannot_remove_core_row_filter(monkeypatch):
+    from dataclasses import replace
+
+    from tests.support.arrow import id_region_batch
+
+    _, decision, table = _build_use_case_dependencies()
+    table = replace(table, batches=(id_region_batch([1, 2], ["us", "eu"]),))
+    original = StubTableFormat.plan
+    monkeypatch.setattr(
+        StubTableFormat,
+        "plan",
+        lambda self, request, max_tickets: replace(
+            original(self, request, max_tickets), full_row_filter=None
+        ),
+    )
+    planner, fetch = _build_end_to_end_access_flow(table, decision)
+    plan = planner.execute(
+        PlanRequest(catalog="catalog1", target="users", columns=["id", "region"]),
+        AUTHORIZATION_HEADER,
+    )
+    result = fetch.execute(plan.ticket_tokens[0], AUTHORIZATION_HEADER)
+    assert pa.Table.from_batches(result.result_batches).column("id").to_pylist() == [1]
+
+
+@pytest.mark.parametrize("drift", ["type", "metadata"])
+def test_backend_schema_drift_is_rejected_before_ticket_creation(monkeypatch, drift):
+    from dataclasses import replace
+
+    _, decision, table = _build_use_case_dependencies()
+    original = StubTableFormat.plan
+    monkeypatch.setattr(
+        StubTableFormat,
+        "plan",
+        lambda self, request, max_tickets: replace(
+            original(self, request, max_tickets),
+            schema=(
+                pa.schema([pa.field("id", pa.string())])
+                if drift == "type"
+                else table.schema.with_metadata({b"revision": b"changed"})
+            ),
+        ),
+    )
+    planner, _ = _build_end_to_end_access_flow(table, decision)
+    with pytest.raises(ValueError, match="schema changed"):
+        planner.execute(
+            PlanRequest(catalog="catalog1", target="users", columns=["id"]), AUTHORIZATION_HEADER
+        )

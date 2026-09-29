@@ -34,9 +34,9 @@ code, pre, .mono { font-family: var(--mantine-font-family-monospace); }
 .mantine-Menu-label { overflow-wrap: anywhere; white-space: normal; }
 .workbench-main { max-width: none; }
 .asset-inventory { padding: 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
-.asset-inventory-table { overflow: auto; max-height: 280px; margin-top: 12px; }
+.asset-inventory-table { overflow: auto; margin-top: 16px; }
+.inventory-intro { color: var(--text-secondary); margin: 12px 0 24px; }
 .asset-inventory-table table { min-width: 760px; }
-.asset-inventory-table tr[data-selected] { background: var(--selection); }
 .asset-inventory-table th { white-space: nowrap; }
 .asset-inventory-table td { overflow-wrap: anywhere; }
 .asset-inventory-table td:nth-child(1) { min-width: 160px; }

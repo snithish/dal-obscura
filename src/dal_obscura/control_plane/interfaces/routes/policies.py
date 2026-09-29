@@ -30,7 +30,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         result = deps.with_service(
             lambda service: service.replace_policy_rules(
                 asset_id,
-                request.rules,
+                [rule.model_dump(exclude_unset=True) for rule in request.rules],
                 actor=actor,
                 expected_revision=request.expected_revision,
                 revoke_existing_tokens=request.revoke_existing_tokens,

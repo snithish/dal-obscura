@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator, Mapping
+from contextlib import ExitStack
 from functools import lru_cache
 from itertools import chain
 from threading import BoundedSemaphore
@@ -18,8 +19,11 @@ from dal_obscura.common.query_planning.field_paths import (
     MapKeySegment,
     MapValueSegment,
     parse_field_path,
+    resolve_schema_path,
 )
 from dal_obscura.data_plane.application.ports.masking import MaskedSelection
+from dal_obscura.data_plane.application.ports.row_transform import StreamResourceError
+from dal_obscura.data_plane.infrastructure.adapters.memory_limits import validate_memory_limit
 
 _DUCKDB_ARROW_OUTPUT_BATCH_SIZE = 8_192
 _DUCKDB_TRANSFORM_CONFIG: dict[str, str | bool | int | float | list[str]] = {
@@ -34,16 +38,20 @@ _DEFAULT_MAX_INPUT_BATCH_BYTES = 64 * 1024 * 1024
 _DEFAULT_MAX_OUTPUT_BATCH_BYTES = 64 * 1024 * 1024
 
 
-class StreamAdmissionError(RuntimeError):
+class StreamAdmissionError(StreamResourceError):
     """Raised when the configured governed-stream capacity is exhausted."""
 
 
-class InputBatchLimitError(ValueError):
+class InputBatchLimitError(ValueError, StreamResourceError):
     """Raised when an Arrow input batch exceeds the configured byte budget."""
 
 
-class OutputBatchLimitError(ValueError):
+class OutputBatchLimitError(ValueError, StreamResourceError):
     """Raised when an Arrow output batch exceeds the configured byte budget."""
+
+
+class StreamMemoryLimitError(StreamResourceError):
+    """DuckDB or Arrow could not allocate memory for the governed stream."""
 
 
 class DefaultMaskingAdapter:
@@ -56,12 +64,18 @@ class DefaultMaskingAdapter:
         masks: Mapping[str, MaskRule],
     ) -> MaskedSelection:
         """Returns the DuckDB SELECT list for the requested columns and masks."""
+        for path in masks:
+            resolve_schema_path(base_schema, parse_field_path(path))
+            _mask_expression("NULL", masks[path])
         return _build_select_list(base_schema, columns, masks)
 
     def masked_schema(
         self, base_schema: pa.Schema, columns: Iterable[str], masks: Mapping[str, MaskRule]
     ) -> pa.Schema:
         """Projects the schema visible to clients after masking is applied."""
+        for path in masks:
+            resolve_schema_path(base_schema, parse_field_path(path))
+            _mask_expression("NULL", masks[path])
         selected_fields: list[pa.Field] = []
         seen: set[str] = set()
         projection = _build_projection(columns)
@@ -110,8 +124,7 @@ class DuckDBRowTransformAdapter:
     ) -> None:
         if max_active_streams < 1:
             raise ValueError("max_active_streams must be positive")
-        if not isinstance(duckdb_memory_limit, str) or not duckdb_memory_limit.strip():
-            raise ValueError("duckdb_memory_limit must be non-empty text")
+        duckdb_memory_limit = validate_memory_limit(duckdb_memory_limit)
         if max_input_batch_bytes < 1:
             raise ValueError("max_input_batch_bytes must be positive")
         if max_output_batch_bytes < 1:
@@ -133,83 +146,80 @@ class DuckDBRowTransformAdapter:
         masks: Mapping[str, MaskRule],
     ) -> Iterable[pa.RecordBatch]:
         """Builds a transient DuckDB query and streams transformed record batches."""
-        batch_iter = iter(batches)
-        try:
-            first_batch = next(batch_iter)
-        except StopIteration:
-            return iter(())
-        _require_batch_size(first_batch, self._max_input_batch_bytes)
-        query = _build_query(first_batch.schema, columns, row_filter, masks, self._masking)
+        if not self._stream_slots.acquire(blocking=False):
+            _close_if_possible(batches)
+            raise StreamAdmissionError("Governed stream capacity is exhausted; retry later")
+        with ExitStack() as resources:
+            resources.callback(self._stream_slots.release)
+            resources.callback(_close_if_possible, batches)
+            batch_iter = iter(batches)
+            if batch_iter is not batches:
+                resources.callback(_close_if_possible, batch_iter)
+            try:
+                first_batch = next(batch_iter)
+            except StopIteration:
+                return
+            except MemoryError as exc:
+                raise StreamMemoryLimitError(
+                    "Arrow input allocation exhausted the stream memory budget"
+                ) from exc
+            try:
+                _require_batch_size(first_batch, self._max_input_batch_bytes)
+                schema = first_batch.schema
+                query = _build_query(schema, columns, row_filter, masks, self._masking)
+                con = _connect(self._duckdb_config)
+                resources.callback(con.close)
+                # Policy expressions are row-local. Bound each query to one input
+                # batch: DuckDB may eagerly consume an Arrow reader before yielding.
+                input_batches = chain((first_batch,), batch_iter)
+                del first_batch
+                for batch in input_batches:
+                    if not batch.schema.equals(schema):
+                        raise ValueError("Arrow input schema changed during the governed stream")
+                    _require_batch_size(batch, self._max_input_batch_bytes)
+                    result_reader = (
+                        con.from_arrow(batch)
+                        .query("input", query)
+                        .to_arrow_reader(batch_size=_DUCKDB_ARROW_OUTPUT_BATCH_SIZE)
+                    )
+                    try:
+                        yield from _bounded_output_batches(
+                            result_reader,
+                            max_output_batch_bytes=self._max_output_batch_bytes,
+                        )
+                    finally:
+                        _close_if_possible(result_reader)
+                    del batch
+            except (duckdb.OutOfMemoryException, MemoryError) as exc:
+                raise StreamMemoryLimitError(
+                    "Governed stream memory budget exhausted; reduce batch size or concurrent reads"
+                ) from exc
 
-        reader = pa.RecordBatchReader.from_batches(
-            first_batch.schema,
-            _bounded_batches(
-                chain((first_batch,), batch_iter),
-                max_input_batch_bytes=self._max_input_batch_bytes,
-            ),
-        )
-        return _stream_query_results(
-            reader,
-            query,
-            self._stream_slots,
-            self._duckdb_config,
-            max_output_batch_bytes=self._max_output_batch_bytes,
-        )
 
-
-def _stream_query_results(
-    reader: pa.RecordBatchReader,
-    query: str,
-    stream_slots: BoundedSemaphore,
-    duckdb_config: Mapping[str, str | bool | int | float | list[str]],
-    *,
-    max_output_batch_bytes: int,
-) -> Iterator[pa.RecordBatch]:
-    """Executes the generated SQL over the incoming Arrow reader."""
-    # DuckDB 1.5.0 removes the Python-side per-batch loop here, but the input side
-    # does not appear observably lazy enough to assert callback-order streaming.
-    if not stream_slots.acquire(blocking=False):
-        raise StreamAdmissionError("Governed stream capacity is exhausted")
-    con: duckdb.DuckDBPyConnection | None = None
-    try:
-        con = _connect(duckdb_config)
-        result_reader = (
-            con.from_arrow(reader)
-            .query("input", query)
-            .to_arrow_reader(batch_size=_DUCKDB_ARROW_OUTPUT_BATCH_SIZE)
-        )
-        yield from _bounded_output_batches(
-            result_reader,
-            max_output_batch_bytes=max_output_batch_bytes,
-        )
-    finally:
-        try:
-            if con is not None:
-                con.close()
-        finally:
-            stream_slots.release()
+def _close_if_possible(value: object) -> None:
+    close = getattr(value, "close", None)
+    if callable(close):
+        close()
 
 
 def _connect(
     config: Mapping[str, str | bool | int | float | list[str]] | None = None,
 ) -> duckdb.DuckDBPyConnection:
     con = duckdb.connect(config=dict(config or _DUCKDB_TRANSFORM_CONFIG))
-    con.execute("SET enable_progress_bar = false")
-    return con
-
-
-def _bounded_batches(
-    batches: Iterable[pa.RecordBatch], *, max_input_batch_bytes: int
-) -> Iterator[pa.RecordBatch]:
-    for batch in batches:
-        _require_batch_size(batch, max_input_batch_bytes)
-        yield batch
+    try:
+        con.execute("SET enable_progress_bar = false")
+        return con
+    except BaseException:
+        con.close()
+        raise
 
 
 def _require_batch_size(batch: pa.RecordBatch, maximum: int) -> None:
-    if batch.nbytes > maximum:
+    retained = batch.get_total_buffer_size()
+    if max(batch.nbytes, retained) > maximum:
         raise InputBatchLimitError(
-            f"Arrow input batch is {batch.nbytes} bytes; limit is {maximum} bytes"
+            f"Arrow input batch uses {batch.nbytes} logical / {retained} retained bytes; "
+            f"limit is {maximum} bytes"
         )
 
 
@@ -217,10 +227,11 @@ def _bounded_output_batches(
     batches: Iterable[pa.RecordBatch], *, max_output_batch_bytes: int
 ) -> Iterator[pa.RecordBatch]:
     for batch in batches:
-        if batch.nbytes > max_output_batch_bytes:
+        retained = batch.get_total_buffer_size()
+        if max(batch.nbytes, retained) > max_output_batch_bytes:
             raise OutputBatchLimitError(
-                "Arrow output batch is "
-                f"{batch.nbytes} bytes; limit is {max_output_batch_bytes} bytes"
+                f"Arrow output batch uses {batch.nbytes} logical / {retained} retained bytes; "
+                f"limit is {max_output_batch_bytes} bytes"
             )
         yield batch
 
@@ -421,6 +432,12 @@ def _nested_projection_expression(
     if pa.types.is_map(data_type):
         if "$key" not in projection or "$value" not in projection:
             raise ValueError("Map projection requires explicit key and value paths")
+        key_path = _append_collection_path(path, MapKeySegment())
+        key_mask = masks.get(key_path)
+        # A hidden key cannot be returned as a valid map key. Hide the whole map
+        # rather than leaking keys or constructing an invalid NULL-key map.
+        if key_mask is not None and key_mask.type != "null":
+            raise ValueError("Map keys support only the null mask; mask map values instead")
         value_path = _append_collection_path(path, MapValueSegment())
         value_expr = _nested_projection_leaf_or_struct(
             f"{item_var}_entry.value",
@@ -431,21 +448,19 @@ def _nested_projection_expression(
             item_var=f"{item_var}_entry",
         )
         entry_var = f"{item_var}_entry"
-        return (
+        projected_map = (
             "map_from_entries(list_transform(map_entries("
             f"{expr}), {entry_var} -> struct_pack(key := {entry_var}.key, value := {value_expr})))"
         )
+        return f"cast_to_type(NULL, {projected_map})" if key_mask else projected_map
 
     if pa.types.is_list(data_type) or pa.types.is_large_list(data_type):
         child_var = f"{item_var}_{len(_path_field_names(path))}"
         value_field = data_type.value_field
-        canonical_projection = projection.get("$element")
-        value_projection = projection if canonical_projection is None else canonical_projection
-        value_path = (
-            path
-            if canonical_projection is None
-            else _append_collection_path(path, ListElementSegment())
-        )
+        if set(projection) != {"$element"}:
+            raise ValueError("List projection requires an explicit $element path")
+        value_projection = projection["$element"]
+        value_path = _append_collection_path(path, ListElementSegment())
         transformed = _nested_projection_leaf_or_struct(
             child_var,
             value_path,
@@ -493,6 +508,8 @@ def _nested_projection_leaf_or_struct(
 def _mask_expression(expr: str, mask: MaskRule) -> str:
     """Returns the DuckDB SQL fragment for a single mask rule."""
     mask_type = mask.type.lower()
+    if mask_type in {"null", "hash", "email"} and mask.value is not None:
+        raise ValueError(f"Mask {mask_type!r} does not accept a value")
     if mask_type == "null":
         return f"cast_to_type(NULL, {expr})"
     if mask_type == "redact":
@@ -510,7 +527,7 @@ def _mask_expression(expr: str, mask: MaskRule) -> str:
             "ELSE NULL END"
         )
     if mask_type == "keep_last":
-        if not isinstance(mask.value, int) or mask.value < 0:
+        if isinstance(mask.value, bool) or not isinstance(mask.value, int) or mask.value < 0:
             raise ValueError("keep_last mask requires a non-negative integer value")
         text_column = f"CAST({expr} AS VARCHAR)"
         keep = mask.value
@@ -573,7 +590,7 @@ def _apply_nested_masks(
         child_var = f"{item_var}_{len(_path_field_names(path))}"
         transformed = _apply_nested_masks(
             child_var,
-            path,
+            _append_collection_path(path, ListElementSegment()),
             value_field.type,
             masks,
             item_var=child_var,
@@ -628,19 +645,16 @@ def _projected_nested_field(
         return pa.field(
             field.name,
             pa.map_(field.type.key_field.type, projected_value_field),
-            nullable=field.nullable,
+            nullable=field.nullable or _append_collection_path(path, MapKeySegment()) in masks,
             metadata=field.metadata,
         )
 
     if pa.types.is_list(field.type) or pa.types.is_large_list(field.type):
         value_field = field.type.value_field
-        canonical_projection = projection.get("$element")
-        value_projection = projection if canonical_projection is None else canonical_projection
-        value_path = (
-            path
-            if canonical_projection is None
-            else _append_collection_path(path, ListElementSegment())
-        )
+        if set(projection) != {"$element"}:
+            raise ValueError("List projection requires an explicit $element path")
+        value_projection = projection["$element"]
+        value_path = _append_collection_path(path, ListElementSegment())
         projected_value_field = _projected_nested_field(
             value_field, value_path, value_projection, masks
         )
@@ -656,15 +670,7 @@ def _projected_nested_field(
 
 def _field_for_path(schema: pa.Schema, path: str) -> pa.Field:
     """Resolves a canonical field path from the Arrow schema."""
-    parts = _path_field_names(path)
-    field = schema.field(parts[0])
-    for part in parts[1:]:
-        field_type = field.type
-        if pa.types.is_list(field_type) or pa.types.is_large_list(field_type):
-            field = field_type.value_field
-            field_type = field.type
-        field = field_type.field(part)
-    return field
+    return resolve_schema_path(schema, parse_field_path(path))
 
 
 def _masked_field(field: pa.Field, path: str, masks: Mapping[str, MaskRule]) -> pa.Field:
@@ -692,9 +698,7 @@ def _masked_field(field: pa.Field, path: str, masks: Mapping[str, MaskRule]) -> 
         if pa.types.is_list(field.type) or pa.types.is_large_list(field.type):
             value_field = field.type.value_field
             canonical_value_path = _append_collection_path(path, ListElementSegment())
-            value_path = (
-                canonical_value_path if _has_mask_for_path(canonical_value_path, masks) else path
-            )
+            value_path = canonical_value_path
             nested_value_field = _masked_field(value_field, value_path, masks)
             if nested_value_field.equals(value_field) and pa.types.is_list(field.type):
                 return field

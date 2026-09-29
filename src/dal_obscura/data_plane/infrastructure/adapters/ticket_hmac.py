@@ -10,6 +10,7 @@ from hashlib import sha256
 
 from dal_obscura.common.ticket_delivery.models import (
     TicketPayload,
+    TicketReference,
 )
 
 
@@ -33,7 +34,7 @@ class HmacTicketCodecAdapter:
         encoded_payload = base64.urlsafe_b64encode(raw).decode("utf-8")
         return f"{encoded_payload}.{signature}"
 
-    def verify(self, token: str) -> TicketPayload:
+    def verify(self, token: str) -> TicketReference:
         """Verifies the signature and expiry before restoring the ticket payload."""
         try:
             encoded_payload, signature = token.split(".", 1)
@@ -55,7 +56,11 @@ class HmacTicketCodecAdapter:
                 raise PermissionError("Ticket signature mismatch")
 
             reference = json.loads(raw.decode("utf-8"))
-            if not isinstance(reference, dict):
+            if not isinstance(reference, dict) or set(reference) != {
+                "expires_at",
+                "nonce",
+                "ticket_id",
+            }:
                 raise PermissionError("Invalid ticket payload")
             expires_at = reference.get("expires_at")
             if isinstance(expires_at, bool) or not isinstance(expires_at, int):
@@ -68,17 +73,7 @@ class HmacTicketCodecAdapter:
                 raise PermissionError("Invalid ticket payload")
             if not isinstance(nonce, str) or not nonce:
                 raise PermissionError("Invalid ticket payload")
-            return TicketPayload(
-                asset_id="00000000-0000-4000-8000-000000000001",
-                ticket_id=ticket_id,
-                target="",
-                columns=[],
-                scan={"read_payload": "", "full_row_filter": None, "masks": {}},
-                policy_version=0,
-                principal_id="",
-                expires_at=expires_at,
-                nonce=nonce,
-            )
+            return TicketReference(ticket_id=ticket_id, expires_at=expires_at, nonce=nonce)
         except PermissionError:
             raise
         except (

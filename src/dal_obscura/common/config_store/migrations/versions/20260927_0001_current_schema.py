@@ -1,6 +1,6 @@
 """Initial schema for the direct live-configuration model.
 
-Revision ID: 20260926_0001
+Revision ID: 20260927_0001
 Revises: None
 Create Date: 2026-09-26
 
@@ -15,7 +15,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20260926_0001"
+revision = "20260927_0001"
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -347,6 +347,8 @@ def upgrade() -> None:
         sa.Column("asset_id", sa.Uuid(), nullable=False),
         sa.Column("ordinal", sa.Integer(), nullable=False),
         sa.Column("effect", sa.String(length=16), nullable=False),
+        sa.Column("name", sa.String(length=160), nullable=False),
+        sa.Column("description", sa.Text(), nullable=False),
         sa.Column("principals_json", sa.JSON(), nullable=False),
         sa.Column("when_json", sa.JSON(), nullable=False),
         sa.Column("columns_json", sa.JSON(), nullable=False),

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import base64
-from collections.abc import Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -44,6 +44,14 @@ class ParquetRowGroupTask:
 
     relative_path: str
     row_group: int
+    columns: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ParquetScanTask:
+    """Bounded group of row-group scans assigned to one independently readable ticket."""
+
+    row_groups: tuple[ParquetRowGroupTask, ...]
     columns: tuple[str, ...]
 
 
@@ -101,7 +109,7 @@ class ParquetDatasetFormat:
         projection: Sequence[str],
         row_filter: str | None,
         max_tasks: int,
-    ) -> Sequence[ParquetRowGroupTask]:
+    ) -> Sequence[ParquetScanTask]:
         _check_context(context)
         if handle != self._handle or schema.arrow_schema != self._schema:
             raise ValueError("Parquet plan input does not match the admitted handle/schema")
@@ -118,50 +126,57 @@ class ParquetDatasetFormat:
                 parquet_file = pq.ParquetFile(path)
             except Exception as exc:
                 raise ValueError("manifest Parquet member is unreadable") from exc
-            _validate_file_schema(parquet_file.schema_arrow, self._schema)
-            for row_group in range(parquet_file.num_row_groups):
-                _check_context(context)
-                tasks.append(ParquetRowGroupTask(relative_path, row_group, columns))
-                if len(tasks) > max_tasks:
-                    raise ValueError("Parquet dataset requires more tasks than allowed")
-        if not tasks:
-            raise ValueError("manifest contains no readable Parquet row groups")
-        return tasks
+            try:
+                _validate_file_schema(parquet_file.schema_arrow, self._schema)
+                for row_group in range(parquet_file.num_row_groups):
+                    _check_context(context)
+                    tasks.append(ParquetRowGroupTask(relative_path, row_group, columns))
+            finally:
+                parquet_file.close()
+        groups: list[list[ParquetRowGroupTask]] = [[] for _ in range(min(max_tasks, len(tasks)))]
+        for index, task in enumerate(tasks):
+            groups[index % len(groups)].append(task)
+        return [ParquetScanTask(tuple(group), columns) for group in groups]
 
     def execute(
         self,
         task: object,
         context: ExecutionContext,
-    ) -> tuple[pa.Schema, Sequence[pa.RecordBatch]]:
+    ) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
         _check_context(context)
-        if not isinstance(task, ParquetRowGroupTask):
-            raise ValueError("Parquet task has an invalid type")
-        if task.relative_path not in self._files or task.row_group < 0:
-            raise ValueError("Parquet task is not a member of the admitted manifest")
-        path = _safe_member(self._root, task.relative_path)
-        parquet_file = None
-        try:
-            parquet_file = pq.ParquetFile(path)
-            _validate_file_schema(parquet_file.schema_arrow, self._schema)
-            table = parquet_file.read_row_group(task.row_group, columns=list(task.columns))
-            # Do not return data after the request has been cancelled or has
-            # exceeded its deadline while the row group was being decoded.
-            _check_context(context)
-        except (RuntimeError, TimeoutError):
-            raise
-        except Exception as exc:
-            raise ValueError("Parquet task execution failed") from exc
-        finally:
-            close = getattr(parquet_file, "close", None)
-            if callable(close):
-                close()
+        if not isinstance(task, ParquetScanTask) or not task.row_groups:
+            raise ValueError("Parquet task has an invalid type or no row groups")
         expected_schema = _select_schema(self._schema, task.columns)
-        if table.schema != expected_schema:
-            try:
-                table = table.cast(expected_schema)
-            except Exception as exc:
-                raise ValueError("Parquet output schema differs from the admitted schema") from exc
-        return expected_schema, tuple(table.to_batches(max_chunksize=_MAX_BATCH_ROWS))
+        for group in task.row_groups:
+            if (
+                group.relative_path not in self._files
+                or group.row_group < 0
+                or group.columns != task.columns
+            ):
+                raise ValueError("Parquet task is not a member of the admitted manifest")
+
+        def batches() -> Iterator[pa.RecordBatch]:
+            for group in task.row_groups:
+                _check_context(context)
+                path = _safe_member(self._root, group.relative_path)
+                with pq.ParquetFile(path) as parquet_file:
+                    _validate_file_schema(parquet_file.schema_arrow, self._schema)
+                    if group.row_group >= parquet_file.num_row_groups:
+                        raise ValueError("Parquet task row group is outside the admitted file")
+                    for batch in parquet_file.iter_batches(
+                        batch_size=_MAX_BATCH_ROWS,
+                        row_groups=[group.row_group],
+                        columns=list(task.columns),
+                    ):
+                        _check_context(context)
+                        # Parquet columns use dotted prefixes and may include a
+                        # nested-name twin. Arrow selection uses exact field names.
+                        batch = batch.select(list(task.columns))
+                        if batch.schema != expected_schema:
+                            batch = batch.cast(expected_schema)
+                        yield batch
+
+        return expected_schema, batches()
 
     def close(self) -> None:
         return None
@@ -231,11 +246,9 @@ def _validate_handle_schema_identity(schema: pa.Schema, metadata: dict[str, obje
 
 
 def _projected_columns(schema: pa.Schema, projection: Sequence[str]) -> tuple[str, ...]:
-    if not projection or (len(projection) == 1 and projection[0] == "*"):
-        return tuple(schema.names)
     selected: list[str] = []
     for path in projection:
-        top_level = path.split(".", 1)[0]
+        top_level = path
         if top_level not in schema.names:
             raise ValueError("projection contains a field outside the pinned schema")
         if top_level not in selected:

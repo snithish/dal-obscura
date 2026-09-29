@@ -56,7 +56,12 @@ def test_invalidate_access_revokes_sessions_and_replayable_artifacts(tmp_path):
             target="default.users",
             tenant_id="default",
             columns=["id"],
-            scan={"read_payload": "payload", "full_row_filter": None, "masks": {}},
+            scan={
+                "authorization_columns": ["id", "region"],
+                "read_payload": "payload",
+                "full_row_filter": None,
+                "masks": {},
+            },
             policy_version=1,
             principal_id="user:alice",
             expires_at=2_000_000_000,

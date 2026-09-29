@@ -34,22 +34,26 @@ class CompiledMaskRule:
 
     type: str
     value: object | None = None
+    exempt_principals: tuple[str, ...] = ()
 
     def to_mask_rule(self) -> MaskRule:
-        return MaskRule(type=self.type, value=self.value)
+        return MaskRule(type=self.type, value=self.value, exempt_principals=self.exempt_principals)
 
     def to_json(self) -> dict[str, object]:
         payload: dict[str, object] = {"type": self.type}
         if self.value is not None:
             payload["value"] = self.value
+        if self.exempt_principals:
+            payload["exempt_principals"] = list(self.exempt_principals)
         return payload
 
     @classmethod
     def from_json(cls, raw: object) -> CompiledMaskRule:
         data = _required_mapping(raw, "mask")
-        _reject_unknown(data, {"type", "value"}, "mask")
+        _reject_unknown(data, {"type", "value", "exempt_principals"}, "mask")
         mask_type = _required_text(data.get("type"), "mask.type")
-        return cls(type=mask_type, value=data.get("value"))
+        exemptions = tuple(_text_list(data.get("exempt_principals", []), "mask.exempt_principals"))
+        return cls(type=mask_type, value=data.get("value"), exempt_principals=exemptions)
 
 
 @dataclass(frozen=True)
@@ -69,12 +73,14 @@ class CompiledPolicyRule:
     """
 
     ordinal: int
-    effect: Literal["allow", "deny"]
+    effect: Literal["allow", "allow_all"]
     principals: list[str]
     columns: list[str]
     masks: dict[str, CompiledMaskRule]
     row_filter: str | None = None
     when: dict[str, PrincipalConditionValue] = field(default_factory=dict)
+    name: str = ""
+    description: str = ""
 
     def to_access_rule(self) -> AccessRule:
         return AccessRule(
@@ -84,11 +90,15 @@ class CompiledPolicyRule:
             row_filter=self.row_filter,
             effect=self.effect,
             when=dict(self.when),
+            name=self.name,
+            description=self.description,
         )
 
     def to_json(self) -> dict[str, object]:
         return {
             "ordinal": self.ordinal,
+            "name": self.name,
+            "description": self.description,
             "principals": list(self.principals),
             "columns": list(self.columns),
             "effect": self.effect,
@@ -102,7 +112,17 @@ class CompiledPolicyRule:
         data = _required_mapping(raw, "policy rule")
         _reject_unknown(
             data,
-            {"ordinal", "effect", "principals", "columns", "masks", "row_filter", "when"},
+            {
+                "ordinal",
+                "effect",
+                "principals",
+                "columns",
+                "masks",
+                "row_filter",
+                "when",
+                "name",
+                "description",
+            },
             "policy rule",
         )
         masks = _required_mapping(data.get("masks"), "policy rule.masks")
@@ -117,6 +137,8 @@ class CompiledPolicyRule:
             },
             row_filter=_optional_str(data.get("row_filter")),
             when=_conditions(data.get("when")),
+            name=str(data.get("name", "")),
+            description=str(data.get("description", "")),
         )
 
 
@@ -157,20 +179,13 @@ class CompiledPolicy:
         }
 
     @classmethod
-    def from_json(
-        cls,
-        raw: object,
-        *,
-        version: int | None = None,
-        catalog: str | None = None,
-        target: str | None = None,
-    ) -> CompiledPolicy:
+    def from_json(cls, raw: object) -> CompiledPolicy:
         data = _required_mapping(raw, "policy")
         _reject_unknown(data, {"version", "catalog", "target", "rules"}, "policy")
         return cls(
-            version=_non_negative_int(data.get("version", version), "policy.version"),
-            catalog=_required_text(data.get("catalog", catalog), "policy.catalog"),
-            target=_required_text(data.get("target", target), "policy.target"),
+            version=_non_negative_int(data.get("version"), "policy.version"),
+            catalog=_required_text(data.get("catalog"), "policy.catalog"),
+            target=_required_text(data.get("target"), "policy.target"),
             rules=[
                 CompiledPolicyRule.from_json(item)
                 for item in _required_list(data.get("rules"), "policy.rules")
@@ -208,10 +223,10 @@ def _non_negative_int(value: object, label: str) -> int:
     return value
 
 
-def _effect(value: object) -> Literal["allow", "deny"]:
-    if value not in {"allow", "deny"}:
-        raise ValueError("policy rule.effect must be allow or deny")
-    return cast(Literal["allow", "deny"], value)
+def _effect(value: object) -> Literal["allow", "allow_all"]:
+    if value not in {"allow", "allow_all"}:
+        raise ValueError("policy rule.effect must be allow or allow_all")
+    return cast(Literal["allow", "allow_all"], value)
 
 
 def _text_list(value: object, label: str) -> list[str]:

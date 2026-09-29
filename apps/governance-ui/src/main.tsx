@@ -1,9 +1,11 @@
+import { parseTestClaims } from "./policy_test";
+import { discardChanges, useConfirmation } from "./components/ConfirmationProvider";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient } from "@tanstack/react-query";
-import { useMantineColorScheme } from "@mantine/core";
+import { Button, useMantineColorScheme } from "@mantine/core";
 import { AppProviders } from "./design/AppProviders";
-import type { ApiFailure, Asset, Mask, PolicyRule, Preview, Session, SessionOptions, UiAuthConfig } from "./api";
+import type { ApiFailure, Asset, PolicyRule, Preview, Session, SessionOptions, UiAuthConfig } from "./api";
 import { controlPlane } from "./api";
 import { isCurrentEpoch } from "./lifecycle";
 import { locationFromUrl, pageFromHash, type UiPage } from "./navigation";
@@ -11,6 +13,7 @@ import { assetInventoryQueryKey, sessionQueryScope } from "./query_scope";
 import { recoveryMessage } from "./recovery";
 import { isAbortError } from "./async";
 import { AppShell } from "./components/AppShell";
+import { AssetInventory } from "./components/AssetInventory";
 import { CommandPalette, type PaletteCommand } from "./components/CommandPalette";
 import { LoginPanel } from "./components/LoginPanel";
 import type { AuditFilters, ManagementData } from "./components/ManagementViews";
@@ -25,9 +28,11 @@ type Page = UiPage;
 type SaveState = "saved" | "saving" | "unsaved" | "failed";
 type Theme = "system" | "light" | "dark";
 type WorkspaceState = "loading" | "ready" | "unavailable";
-const newRule = (field: string, ordinal: number): PolicyRule => ({ ordinal, effect: "allow", principals: [], columns: field ? [field] : [], masks: {}, row_filter: null });
+const newRule = (ordinal: number): PolicyRule => ({ ordinal, effect: "allow", name: "", description: "", principals: [], columns: [], masks: {}, row_filter: null, when: {} });
 
 function App() {
+  const { confirm, cancelConfirmation } = useConfirmation();
+  const historyNavigationPending = useRef(false);
   const { colorScheme, setColorScheme } = useMantineColorScheme();
   const theme: Theme = colorScheme === "auto" ? "system" : colorScheme;
   const setTheme = (next: Theme) => setColorScheme(next === "system" ? "auto" : next);
@@ -39,18 +44,24 @@ function App() {
   const [workspace, setWorkspace] = useState<WorkspaceState>("loading");
   const [assets, setAssets] = useState<Asset[]>([]);
   const [asset, setAsset] = useState<Asset | null>(null);
+  const [requestedAssetId, setRequestedAssetId] = useState(() => locationFromUrl(window.location.hash, window.location.search).assetId);
+  const [assetLoading, setAssetLoading] = useState(false);
+  const [revokingTokens, setRevokingTokens] = useState(false);
+  const revokePending = useRef(false);
+  const [routeTab, setRouteTab] = useState(() => locationFromUrl(window.location.hash, window.location.search).tab);
   const [assetSearch, setAssetSearch] = useState("");
   const [assetCursor, setAssetCursor] = useState<string | null>(null);
   const [assetHasMore, setAssetHasMore] = useState(false);
   const [assetInventoryLoading, setAssetInventoryLoading] = useState(false);
+  const [assetInventoryError, setAssetInventoryError] = useState("");
   const [rules, setRules] = useState<PolicyRule[]>([]);
   const rulesRef = useRef<PolicyRule[]>([]);
-  const rulesUndoStack = useRef<PolicyRule[][]>([]);
-  const rulesRedoStack = useRef<PolicyRule[][]>([]);
+  const savedRules = useRef<PolicyRule[]>([]);
   const [policyRevision, setPolicyRevision] = useState(0);
-  const [selectedRule, setSelectedRule] = useState(0);
-  const [selectedField, setSelectedField] = useState("");
   const [saveState, setSaveState] = useState<SaveState>("saved");
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const [previewError, setPreviewError] = useState("");
+  const previewInputEpoch = useRef(0);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [previewPrincipal, setPreviewPrincipal] = useState("analyst.alex");
   const [previewGroups, setPreviewGroups] = useState("us-analysts");
@@ -109,17 +120,6 @@ function App() {
   }, [rules]);
 
   useEffect(() => {
-    const onRuleShortcut = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "z") return;
-      event.preventDefault();
-      if (event.shiftKey) redoRules();
-      else undoRules();
-    };
-    window.addEventListener("keydown", onRuleShortcut);
-    return () => window.removeEventListener("keydown", onRuleShortcut);
-  }, []);
-
-  useEffect(() => {
     const onShortcut = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
@@ -146,18 +146,29 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const syncBrowserLocation = () => {
+    const syncBrowserLocation = async () => {
+      if (historyNavigationPending.current) return;
       const location = locationFromUrl(window.location.hash, window.location.search);
       const next = location.page;
-      if (next !== page && !confirmDiscardUnsaved()) {
-        window.history.replaceState(null, "", `#${page}`);
+      const leaving = next !== page || location.assetId !== requestedAssetId;
+      const needsGuard = (leaving || location.tab !== routeTab) && (saveState === "unsaved" || saveState === "failed" || managementDirty);
+      historyNavigationPending.current = true;
+      const approved = !needsGuard || await confirmDiscardUnsaved();
+      historyNavigationPending.current = false;
+      if (!approved) {
+        const params = new URLSearchParams();
+        if (requestedAssetId) params.set("asset", requestedAssetId);
+        if (routeTab) params.set("tab", routeTab);
+        window.history.pushState(null, "", `${window.location.pathname}${params.size ? `?${params}` : ""}#${page}`);
         return;
       }
       setPage(next);
-      if (next === "assets" && session && location.assetId && location.assetId !== asset?.id) {
-        if (confirmDiscardUnsaved()) {
-          void loadAsset(location.assetId, assets, undefined, sessionCacheKey);
-        }
+      if (leaving) window.scrollTo(0, 0);
+      setRouteTab(location.tab);
+      setRequestedAssetId(location.assetId);
+      if (leaving) { setAsset(null); setSaveState("saved"); setManagementDirty(false); ++loadEpoch.current; }
+      if (next === "assets" && session && location.assetId && leaving) {
+        void loadAsset(location.assetId, undefined, sessionCacheKey);
       }
     };
     window.addEventListener("hashchange", syncBrowserLocation);
@@ -166,7 +177,7 @@ function App() {
       window.removeEventListener("hashchange", syncBrowserLocation);
       window.removeEventListener("popstate", syncBrowserLocation);
     };
-  }, [asset?.id, assets, managementDirty, page, saveState, session, sessionCacheKey]);
+  }, [requestedAssetId, routeTab, assets, managementDirty, page, saveState, session, sessionCacheKey]);
 
   useEffect(() => {
     const handleAuthExpired = (event: Event) => {
@@ -352,8 +363,7 @@ function App() {
         return;
       }
       const requestedAssetId = location.assetId;
-      const selectedId = requestedAssetId ?? loaded[0].id;
-      await loadAsset(selectedId, loaded, epoch, loadedSessionScope);
+      if (requestedAssetId && location.page === "assets") await loadAsset(requestedAssetId, epoch, loadedSessionScope);
       if (epoch !== loadEpoch.current) return;
       setWorkspace("ready");
       restorePostLoginHash();
@@ -375,6 +385,7 @@ function App() {
     const searchTerm = search.trim();
     await queryClient.cancelQueries({ queryKey: ["asset-inventory", sessionCacheKey] });
     setAssetInventoryLoading(true);
+    setAssetInventoryError("");
     try {
       const pageResult = await queryClient.fetchQuery({
         queryKey: assetInventoryQueryKey(
@@ -393,11 +404,10 @@ function App() {
       setAssets((current) => append ? [...current, ...pageResult.items] : pageResult.items);
       setAssetCursor(pageResult.next_cursor);
       setAssetHasMore(Boolean(pageResult.next_cursor));
-      if (!append && !pageResult.items.length) setNotice("No governed assets match this search.");
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       if (epoch !== inventoryEpoch.current) return;
-      setNotice(recoveryMessage(error, "Asset inventory could not be loaded. Your current editor state remains unchanged."));
+      setAssetInventoryError(recoveryMessage(error, "Could not update the asset list. Showing the previously loaded results."));
     } finally {
       if (epoch === inventoryEpoch.current) setAssetInventoryLoading(false);
     }
@@ -487,12 +497,13 @@ function App() {
   }
 
   function clearPrivateState() {
+    cancelConfirmation();
     void queryClient.cancelQueries();
     queryClient.clear();
     previousSessionCacheKey.current = "anonymous";
     policyEditEpoch.current += 1;
-    setSession(null); setAsset(null); setAssets([]); resetRuleHistory([]); setPreview(null);
-    setManagementData({}); setAssetCursor(null); setAssetHasMore(false); setAssetSearch("");
+    setSession(null); setAsset(null); setAssets([]); setSavedRules([]); setPreview(null); setPreviewError("");
+    setManagementData({}); setAssetCursor(null); setAssetHasMore(false); setAssetSearch(""); setAssetInventoryError("");
     setManagementDirty(false);
     setPolicyRevision(0); setSaveState("saved");
     setWorkspace("unavailable");
@@ -504,11 +515,15 @@ function App() {
     });
   }
 
-  function navigateTo(next: Page) {
-    if (!confirmDiscardUnsaved()) return;
+  async function navigateTo(next: Page) {
+    if (next === page && !requestedAssetId) return;
+    if (!await confirmDiscardUnsaved()) return;
     setMobileNavOpen(false);
-    if (pageFromHash(window.location.hash) !== next) window.location.hash = next;
-    else setPage(next);
+    window.scrollTo(0, 0);
+    ++loadEpoch.current;
+    setAsset(null); setRequestedAssetId(undefined); setRouteTab(undefined);
+    setSaveState("saved"); setManagementDirty(false); setPage(next);
+    window.history.pushState(null, "", `${window.location.pathname}#${next}`);
   }
 
   useEffect(() => {
@@ -527,11 +542,9 @@ function App() {
 
   function openPaletteAsset(assetId: string) {
     closePalette();
-    if (!confirmDiscardUnsaved()) return;
     const target = assets.find((item) => item.id === assetId);
     if (!target) return;
-    if (page !== "assets") window.location.hash = "assets";
-    void loadAsset(target.id, assets);
+    openAsset(target.id);
   }
 
   function closePalette() {
@@ -550,9 +563,9 @@ function App() {
     }
   }
 
-  function confirmDiscardUnsaved() {
-    if (saveState !== "unsaved" && !managementDirty) return true;
-    const confirmed = window.confirm("You have unsaved changes. Leave this editor?");
+  async function confirmDiscardUnsaved() {
+    if (saveState !== "unsaved" && saveState !== "failed" && !managementDirty) return true;
+    const confirmed = await confirm(discardChanges("editor"));
     if (confirmed) setManagementDirty(false);
     return confirmed;
   }
@@ -563,12 +576,23 @@ function App() {
     void queryClient.invalidateQueries({ queryKey: ["management", sessionCacheKey] });
   }
 
+  async function openAsset(id: string) {
+    if (page === "assets" && requestedAssetId === id) return;
+    if (!await confirmDiscardUnsaved()) return;
+    window.scrollTo(0, 0);
+    setAsset(null); setRequestedAssetId(id); setRouteTab(undefined); setPage("assets");
+    setSaveState("saved"); setManagementDirty(false);
+    const params = new URLSearchParams({ asset: id });
+    window.history.pushState(null, "", `${window.location.pathname}?${params}#assets`);
+    void loadAsset(id);
+  }
+
   async function loadAsset(
     assetId: string,
-    knownAssets = assets,
     inheritedEpoch?: number,
     inheritedSessionScope = sessionCacheKey,
   ) {
+    setAssetLoading(true);
     const epoch = inheritedEpoch ?? ++loadEpoch.current;
     await queryClient.cancelQueries({ queryKey: ["asset", inheritedSessionScope] });
     if (epoch !== loadEpoch.current) return;
@@ -584,63 +608,43 @@ function App() {
       const hydratedAsset: Asset = { ...fullAsset, schema };
       const effectiveRules = fullAsset.policy_rules ?? [];
       setManagementData((current) => ({ ...current, grants, access }));
-      setAssets(knownAssets); setAsset(hydratedAsset); resetRuleHistory(effectiveRules); setPolicyRevision(fullAsset.policy_revision ?? 0); setSelectedRule(0);
+      setAsset(hydratedAsset); setSavedRules(effectiveRules); setPolicyRevision(fullAsset.policy_revision ?? 0);
       policyEditEpoch.current += 1;
-      setSelectedField(schema.fields[0]?.human_path ?? hydratedAsset.schema_fields[0]?.name ?? ""); setPreview(null); setSaveState("saved");
-      setNotice(effectiveRules.length ? "Loaded the current live policy." : "No policy rules are configured. The asset denies access until rules are added.");
+      setPreview(null); setPreviewError(""); setSaveState("saved");
+      setNotice(effectiveRules.length ? "Loaded the current live policy." : "No policy rules are configured. All columns return NULL until a rule overrides their masks.");
     } catch (error) {
       if ((error instanceof DOMException && error.name === "AbortError") || (error instanceof Error && error.name === "CancelledError")) return;
       if (epoch !== loadEpoch.current) return;
-      setNotice(recoveryMessage(error, "Could not load this asset and its access metadata. Your previous editor state remains unchanged."));
+      setNotice(recoveryMessage(error, "Could not load this asset and its access metadata. Retry or return to assets."));
+    } finally {
+      if (epoch === loadEpoch.current) setAssetLoading(false);
     }
   }
 
-  const activeRule = rules[selectedRule];
-  const selectedMask = activeRule?.masks[selectedField];
-  const effectiveFields = useMemo(() => new Set(rules.flatMap((rule) => rule.columns)), [rules]);
-  function replaceRules(next: PolicyRule[], record = true) {
-    if (record) {
-      rulesUndoStack.current = [...rulesUndoStack.current, rulesRef.current].slice(-100);
-      rulesRedoStack.current = [];
-    }
-    rulesRef.current = next;
-    setRules(next);
+  function replaceRules(next: PolicyRule[]) { rulesRef.current = next; setRules(next); }
+  function setSavedRules(next: PolicyRule[]) { savedRules.current = structuredClone(next); replaceRules(next); }
+  function discardPolicyChanges() {
+    replaceRules(structuredClone(savedRules.current)); policyEditEpoch.current += 1;
+    setManagementDirty(false); setFieldErrors([]); setSaveState("saved");
+    setNotice("Discarded all local changes. Showing the last saved policy.");
   }
-  function resetRuleHistory(next: PolicyRule[]) {
-    rulesUndoStack.current = [];
-    rulesRedoStack.current = [];
-    rulesRef.current = next;
-    setRules(next);
+  function allowAllPolicy() {
+    const ordinal = Math.max(0, ...rulesRef.current.map((rule) => rule.ordinal)) + 10;
+    replaceRules([...rulesRef.current.filter((rule) => rule.effect !== "allow_all"), { ordinal, effect: "allow_all", name: "Allow all", description: "All authenticated readers receive all columns and rows without masks.", principals: ["*"], columns: ["*"], masks: {}, row_filter: null, when: {} }]);
+    policyEditEpoch.current += 1; setSaveState("unsaved"); setPreview(null);
+    setNotice("Allow all is staged. Save policy to bypass all masks and row filters for authenticated readers.");
   }
-  function undoRules() {
-    const previous = rulesUndoStack.current.pop();
-    if (!previous) return;
-    rulesRedoStack.current.push(rulesRef.current);
-    replaceRules(previous, false);
+  function updateRule(change: (rule: PolicyRule) => PolicyRule, targetIndex: number) {
+    if (!rulesRef.current[targetIndex]) return;
+    replaceRules(rulesRef.current.map((rule, index) => index === targetIndex ? change(rule) : rule));
     policyEditEpoch.current += 1;
-    setSaveState("unsaved"); setPreview(null);
-    setNotice("Undid the last local policy edit. Save the policy to persist this version.");
-  }
-  function redoRules() {
-    const next = rulesRedoStack.current.pop();
-    if (!next) return;
-    rulesUndoStack.current.push(rulesRef.current);
-    replaceRules(next, false);
-    policyEditEpoch.current += 1;
-    setSaveState("unsaved"); setPreview(null);
-    setNotice("Reapplied the local policy edit. Save the policy to persist this version.");
-  }
-  function updateRule(change: (rule: PolicyRule) => PolicyRule) {
-    if (!activeRule) return;
-    replaceRules(rulesRef.current.map((rule, index) => index === selectedRule ? change(rule) : rule));
-    policyEditEpoch.current += 1;
-    setSaveState("unsaved"); setPreview(null); setNotice("Policy changed. Save the live policy before running a policy test.");
+    setSaveState("unsaved"); setPreview(null); setNotice("Policy changed locally. Test saved policy to evaluate the last saved version.");
   }
   function addRule() {
     const ordinal = Math.max(0, ...rules.map((rule) => rule.ordinal)) + 10;
-    replaceRules([...rulesRef.current, newRule(selectedField, ordinal)]);
+    replaceRules([...rulesRef.current, newRule(ordinal)]);
     policyEditEpoch.current += 1;
-    setSelectedRule(rules.length); setSaveState("unsaved"); setPreview(null);
+    setSaveState("unsaved"); setPreview(null);
     setNotice("New rule added locally. Add at least one principal before saving.");
   }
   function duplicateRule(index: number) {
@@ -657,47 +661,29 @@ function App() {
     };
     replaceRules([...rulesRef.current, duplicate]);
     policyEditEpoch.current += 1;
-    setSelectedRule(rulesRef.current.length - 1); setSaveState("unsaved"); setPreview(null);
+    setSaveState("unsaved"); setPreview(null);
     setNotice("Rule duplicated locally. Check its principals and fields before saving.");
   }
-  function removeRule() {
-    if (!activeRule) return;
-    replaceRules(rulesRef.current.filter((_, index) => index !== selectedRule));
+  function removeRule(targetIndex: number) {
+    if (!rulesRef.current[targetIndex]) return;
+    replaceRules(rulesRef.current.filter((_, index) => index !== targetIndex));
     policyEditEpoch.current += 1;
-    setSelectedRule(Math.max(0, selectedRule - 1)); setSaveState("unsaved"); setPreview(null);
+    setSaveState("unsaved"); setPreview(null);
     setNotice("Rule removed locally. Save policy to apply the change.");
-  }
-  function moveRule(index: number, direction: -1 | 1) {
-    const nextIndex = index + direction;
-    if (!rules[index] || nextIndex < 0 || nextIndex >= rules.length) return;
-    const next = [...rulesRef.current];
-    [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
-    replaceRules(next.map((rule, index) => ({ ...rule, ordinal: (index + 1) * 10 })));
-    policyEditEpoch.current += 1;
-    setSelectedRule(nextIndex); setSaveState("unsaved"); setPreview(null);
-    setNotice("Rule order changed locally. Save the policy to persist precedence.");
-  }
-  function toggleField(name: string) {
-    updateRule((rule) => ({ ...rule, columns: rule.columns.includes(name) ? rule.columns.filter((column) => column !== name) : [...rule.columns, name] }));
-  }
-  function setMask(mask: Mask | undefined) {
-    updateRule((rule) => {
-      const masks = { ...rule.masks };
-      if (mask) masks[selectedField] = mask; else delete masks[selectedField];
-      return { ...rule, masks };
-    });
   }
   async function savePolicy(revokeExistingTokens = false) {
     if (!asset || savePolicyPending.current) return;
     savePolicyPending.current = true;
     const assetId = asset.id;
+    const submittedRules = structuredClone(rules);
     const editEpoch = policyEditEpoch.current;
     const revision = policyRevision;
     const loadScope = loadEpoch.current;
     setSaveState("saving");
     const controller = beginMutation();
     try {
-      const saved = await controlPlane.replaceAssetPolicy(assetId, revision, rules, revokeExistingTokens, controller.signal);
+      const saved = await controlPlane.replaceAssetPolicy(assetId, revision, submittedRules, revokeExistingTokens, controller.signal);
+      if (loadScope === loadEpoch.current) { savedRules.current = submittedRules; setPolicyRevision(saved.policy_revision); }
       if (loadScope !== loadEpoch.current || editEpoch !== policyEditEpoch.current) {
         if (loadScope === loadEpoch.current) setSaveState("unsaved");
         return;
@@ -708,6 +694,7 @@ function App() {
         return;
       }
       setSaveState("saved");
+      setAssets((current) => current.map((item) => item.id === assetId ? { ...item, policy_status: submittedRules.length ? "configured" : "missing", policy_revision: saved.policy_revision } : item));
       setNotice(revokeExistingTokens
         ? `Live policy saved; revoked ${saved.revoked_token_count} active token(s).`
         : "Live policy saved. Existing tokens remain valid until expiry unless an owner revokes them.");
@@ -722,49 +709,59 @@ function App() {
       savePolicyPending.current = false;
     }
   }
+  function changeTestPersona(setter: (value: string) => void, value: string) {
+    previewInputEpoch.current += 1; setter(value); setPreview(null); setPreviewError("");
+  }
+
   async function runPreview() {
     if (!asset) return;
-    if (saveState !== "saved") {
-      setNotice("Save the live policy before running a server-side policy test.");
+    if (saveState === "saving") {
+      setNotice("Policy save is in progress. Try the saved-policy test again when it completes.");
       return;
     }
     if (previewPendingRef.current) return;
+    const parsed = parseTestClaims(previewClaims);
+    if (parsed.error || !previewPrincipal.trim()) { setPreviewError(parsed.error ?? "Enter a principal to test."); return; }
+    const personaScope = previewInputEpoch.current;
+    setPreviewBusy(true); setPreviewError(""); setPreview(null);
     previewPendingRef.current = true;
     const loadScope = loadEpoch.current;
     const editScope = policyEditEpoch.current;
     const revision = policyRevision;
     const controller = beginMutation();
     try {
-      let claims: Record<string, unknown> = {};
-      if (previewClaims.trim()) {
-        const parsed = JSON.parse(previewClaims);
-        if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") throw new Error("Claims must be a JSON object");
-        claims = parsed as Record<string, unknown>;
-      }
+      const claims = parsed.claims;
       const result: Preview = await controlPlane.evaluate(asset.id, { principal: previewPrincipal.trim(), groups: previewGroups.split(",").map((value) => value.trim()).filter(Boolean), claims }, controller.signal);
-      if (loadScope !== loadEpoch.current || editScope !== policyEditEpoch.current || revision !== policyRevision) return;
+      if (loadScope !== loadEpoch.current || editScope !== policyEditEpoch.current || revision !== policyRevision || personaScope !== previewInputEpoch.current) return;
       setPreview(result); setNotice(`Server-side evaluation completed: ${result.decision === "allow" ? "allowed" : "denied"}.`);
     } catch (error) {
       if (isAbortError(error)) return;
-      if (loadScope !== loadEpoch.current || editScope !== policyEditEpoch.current || revision !== policyRevision) return;
-      setPreview(null); setNotice(recoveryMessage(error, "Policy test could not run."));
+      if (loadScope !== loadEpoch.current || editScope !== policyEditEpoch.current || revision !== policyRevision || personaScope !== previewInputEpoch.current) return;
+      setPreview(null); setPreviewError(recoveryMessage(error, "Policy test could not run. Try again."));
     } finally {
       finishMutation(controller);
-      previewPendingRef.current = false;
+      previewPendingRef.current = false; setPreviewBusy(false);
     }
   }
 
   async function revokeAssetTokens() {
-    if (!asset || !window.confirm("Revoke every active token issued for this asset? Existing readers will be denied on their next token exchange.")) return;
+    if (revokePending.current) return;
+    if (!asset || !await confirm({ title: "Revoke all active tokens?", message: `Revoke every active token for ${asset.name}? Existing readers will be denied on their next token exchange and must request new access.`, confirmLabel: "Revoke tokens", destructive: true })) return;
+    revokePending.current = true;
+    setRevokingTokens(true);
+    const scope = loadEpoch.current;
     const controller = beginMutation();
     try {
       const result = await controlPlane.revokeAssetTokens(asset.id, controller.signal);
+      if (controller.signal.aborted || scope !== loadEpoch.current) return;
       setNotice(`Revoked ${result.revoked_token_count} active token(s).`);
       invalidateAssetQueries(asset.id);
     } catch (error) {
-      if (!isAbortError(error)) setNotice(recoveryMessage(error, "Could not revoke this asset's tokens."));
+      if (!isAbortError(error) && scope === loadEpoch.current) setNotice(recoveryMessage(error, "Could not revoke this asset's tokens."));
     } finally {
       finishMutation(controller);
+      revokePending.current = false;
+      setRevokingTokens(false);
     }
   }
 
@@ -774,7 +771,8 @@ function App() {
   const paletteAssets = assets.filter((item) => `${item.catalog} ${item.name}`.toLowerCase().includes(paletteQuery.trim().toLowerCase())).slice(0, 8);
   const accessView = <LoginPanel showAuth={workspace === "unavailable"} title={workspace === "loading" ? "Loading governed workspace" : "Sign in to your workspace"} message={workspace === "loading" ? "Checking your workspace access and available assets." : notice} retry={workspace === "unavailable" ? loadInitialWorkspace : undefined} authConfig={authConfig} sessionOptions={sessionOptions} bootstrapToken={bootstrapToken} onBootstrapToken={setBootstrapToken} onBootstrapLogin={() => void bootstrapLogin()} loggingIn={loggingIn} authError={authError} />;
   const managementView = page === "assets" ? null : <Suspense fallback={<section className="coming-soon" role="status"><h2>Loading management view</h2><p>Preparing the governed workspace controls.</p></section>}><ManagementView page={page} data={managementData} loading={managementLoading} error={managementError} onReload={() => void loadManagement(page)} onLoadMore={page === "activity" ? () => void loadMoreAudit() : undefined} auditLoading={auditLoading} filters={auditFilters} onFiltersChange={updateAuditFilters} session={session} queryClient={queryClient} sessionScope={sessionCacheKey} onDirtyChange={setManagementDirty} /></Suspense>;
-  const assetView = asset ? <Suspense fallback={<section className="coming-soon" role="status"><h2>Loading policy workspace</h2><p>Preparing the nested policy editor.</p></section>}><AssetWorkspace initialTab={locationFromUrl(window.location.hash, window.location.search).tab} assets={assets} asset={asset} access={managementData.access} grants={managementData.grants ?? []} onAsset={(id) => { if (confirmDiscardUnsaved()) { void loadAsset(id); } }} assetSearch={assetSearch} assetHasMore={assetHasMore} assetInventoryLoading={assetInventoryLoading} onSearch={searchAssets} onLoadMore={() => void refreshAssetInventory(assetSearch, true)} rules={rules} activeRule={activeRule} activeRevision={policyRevision} selectedRule={selectedRule} onRule={setSelectedRule} onMoveRule={moveRule} selectedField={selectedField} onField={setSelectedField} selectedMask={selectedMask} effectiveFields={effectiveFields} saveState={saveState} notice={notice} fieldErrors={fieldErrors} onToggleField={toggleField} onMask={setMask} onUpdateRule={updateRule} onAddRule={addRule} onRemoveRule={removeRule} onDuplicateRule={duplicateRule} onUndo={undoRules} onRedo={redoRules} canUndo={rulesUndoStack.current.length > 0} canRedo={rulesRedoStack.current.length > 0} onSave={(revokeExistingTokens) => void savePolicy(revokeExistingTokens)} onPreview={() => void runPreview()} previewPrincipal={previewPrincipal} previewGroups={previewGroups} previewClaims={previewClaims} onPreviewPrincipal={setPreviewPrincipal} onPreviewGroups={setPreviewGroups} onPreviewClaims={setPreviewClaims} preview={preview} session={session} onReloadAccess={() => void loadAsset(asset.id, assets)} onRevokeTokens={() => void revokeAssetTokens()} onDirtyChange={setManagementDirty} queryClient={queryClient} sessionScope={sessionCacheKey} /></Suspense> : undefined;
+  const editorView = asset && asset.id === requestedAssetId ? <Suspense fallback={<section className="coming-soon" role="status"><h2>Loading policy workspace</h2><p>Preparing the nested policy editor.</p></section>}><AssetWorkspace initialTab={routeTab} onTabChange={setRouteTab} asset={asset} access={managementData.access} grants={managementData.grants ?? []} onBack={() => navigateTo("assets")} rules={rules} activeRevision={policyRevision} saveState={saveState} notice={notice} fieldErrors={fieldErrors} onUpdateRule={updateRule} onAddRule={addRule} onRemoveRule={removeRule} onDuplicateRule={duplicateRule} onDiscard={discardPolicyChanges} onAllowAll={allowAllPolicy} onSave={(revokeExistingTokens) => void savePolicy(revokeExistingTokens)} onPreview={() => void runPreview()} previewPrincipal={previewPrincipal} previewGroups={previewGroups} previewClaims={previewClaims} onPreviewPrincipal={(value) => changeTestPersona(setPreviewPrincipal, value)} onPreviewGroups={(value) => changeTestPersona(setPreviewGroups, value)} onPreviewClaims={(value) => changeTestPersona(setPreviewClaims, value)} preview={preview} previewBusy={previewBusy} previewError={previewError} session={session} onReloadAccess={() => void loadAsset(asset.id)} revokingTokens={revokingTokens} onRevokeTokens={() => void revokeAssetTokens()} onDirtyChange={setManagementDirty} queryClient={queryClient} sessionScope={sessionCacheKey} /></Suspense> : undefined;
+  const assetView = !requestedAssetId ? <><p className="inventory-intro">Browse governed data. Open an asset to manage its policy, access, and consumers.</p>{assetInventoryError && <div role="alert" className="notice">{assetInventoryError} <Button variant="subtle" onClick={() => void refreshAssetInventory(assetSearch)}>Retry asset search</Button></div>}<AssetInventory assets={assets} search={assetSearch} loading={assetInventoryLoading} hasMore={assetHasMore} onSearch={searchAssets} onSelect={openAsset} onLoadMore={() => void refreshAssetInventory(assetSearch, true)} /></> : editorView ?? <section aria-label="Asset workspace"><Button variant="subtle" onClick={() => navigateTo("assets")}>Back to assets</Button>{assetLoading ? <p role="status">Loading asset workspace…</p> : <LoginPanel title="Asset unavailable" message={notice} retry={() => void loadAsset(requestedAssetId)} />}</section>;
   const content = <WorkspaceContent signedOut={signedOut} page={page} workspace={workspace} accessView={accessView} managementView={managementView} noAssetsView={<LoginPanel title={assets.length || locationFromUrl(window.location.hash, window.location.search).assetId ? "Asset unavailable" : "No governed assets"} message={notice} retry={loadInitialWorkspace} />} assetView={assetView} />;
 
   return (
@@ -782,8 +780,8 @@ function App() {
       page={page}
       session={session}
       workspace={workspace}
-      assetName={asset?.name}
-      assetCatalog={asset?.catalog}
+      assetName={page === "assets" && requestedAssetId ? asset?.name ?? "Asset workspace" : undefined}
+      assetCatalog={page === "assets" && requestedAssetId ? asset?.catalog : undefined}
       mobileNavOpen={mobileNavOpen}
       mobileNavTrigger={mobileNavTrigger}
       theme={theme}

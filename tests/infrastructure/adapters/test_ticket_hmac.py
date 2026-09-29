@@ -9,7 +9,12 @@ from dal_obscura.data_plane.infrastructure.adapters.ticket_hmac import HmacTicke
 
 
 def _scan_payload():
-    return {"read_payload": "payload", "full_row_filter": None, "masks": {}}
+    return {
+        "authorization_columns": ["id", "region"],
+        "read_payload": "payload",
+        "full_row_filter": None,
+        "masks": {},
+    }
 
 
 def _ticket_payload() -> TicketPayload:
@@ -35,8 +40,8 @@ def test_ticket_sign_and_verify():
     assert verified.ticket_id == payload.ticket_id
     assert verified.expires_at == payload.expires_at
     assert verified.nonce == payload.nonce
-    assert verified.target == ""
-    assert verified.columns == []
+    assert not hasattr(verified, "target")
+    assert not hasattr(verified, "columns")
 
 
 def test_ticket_verify_rejects_noncanonical_base64_even_with_valid_signature():
@@ -88,6 +93,7 @@ def test_signed_ticket_is_opaque_and_does_not_embed_scan_payload():
         target="default.users",
         columns=["id", "email"],
         scan={
+            "authorization_columns": ["id", "region"],
             "read_payload": "sensitive-pickled-scan-task",
             "full_row_filter": "region = 'us'",
             "masks": {"email": {"type": "email", "value": None}},
@@ -112,7 +118,7 @@ def test_signed_ticket_is_opaque_and_does_not_embed_scan_payload():
     assert verified.ticket_id == payload.ticket_id
     assert verified.expires_at == payload.expires_at
     assert verified.nonce == payload.nonce
-    assert verified.scan["read_payload"] == ""
+    assert not hasattr(verified, "scan")
 
 
 def test_ticket_expiry():
@@ -212,3 +218,16 @@ def test_ticket_rejects_non_json_payload_with_valid_signature():
 
     with pytest.raises(PermissionError):
         codec.verify(f"{encoded_payload}.{signature}")
+
+
+def test_signed_reference_rejects_unknown_fields_even_with_valid_signature():
+    import json
+
+    codec = HmacTicketCodecAdapter("secret")
+    raw = json.dumps(
+        {"ticket_id": "id", "nonce": "nonce", "expires_at": 2**31, "future_field": "ignored-before"}
+    ).encode()
+    signature = hmac.new(b"secret", raw, sha256).hexdigest()
+    token = f"{base64.urlsafe_b64encode(raw).decode()}.{signature}"
+    with pytest.raises(PermissionError, match="Invalid ticket payload"):
+        codec.verify(token)

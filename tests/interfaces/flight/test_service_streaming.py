@@ -371,7 +371,8 @@ def test_get_schema_returns_masked_authorized_schema(tmp_path):
 
         result = client.get_schema(descriptor, options=options)
 
-        assert result.schema.names == ["id", "email"]
+        assert result.schema.names == ["id", "email", "region"]
+        assert result.schema.field("region").nullable
         assert result.schema.field("email").type == pa.string()
 
 
@@ -501,7 +502,7 @@ def test_flight_streaming_supports_nested_projection_with_policy_and_requested_r
         assert all(len(user["address"]["zip"]) == 64 for user in users)
 
 
-def test_flight_parent_projection_prunes_unauthorized_nested_siblings(tmp_path):
+def test_flight_parent_projection_nulls_ungranted_nested_siblings(tmp_path):
     profile_type = pa.struct([pa.field("name", pa.string()), pa.field("ssn", pa.string())])
     schema = pa.schema([pa.field("profile", profile_type)])
     batch = pa.record_batch(
@@ -526,11 +527,13 @@ def test_flight_parent_projection_prunes_unauthorized_nested_siblings(tmp_path):
             {"catalog": "analytics", "target": "test.table", "columns": ["profile"]}
         )
         options = flight_call_options("user1")
+        client_schema = client.get_schema(descriptor, options=options).schema
         info = client.get_flight_info(descriptor, options=options)
         table = client.do_get(info.endpoints[0].ticket, options=options).read_all()
 
-    assert info.schema.field("profile").type.names == ["name"]
-    assert table.column("profile").to_pylist() == [{"name": "Ada"}]
+    assert info.schema.field("profile").type.names == ["name", "ssn"]
+    assert table.column("profile").to_pylist() == [{"name": "Ada", "ssn": None}]
+    assert client_schema == info.schema
 
 
 def test_flight_streaming_masks_list_of_struct_fields(tmp_path):
@@ -550,7 +553,9 @@ def test_flight_streaming_masks_list_of_struct_fields(tmp_path):
         policy_rules=[
             allow_rule(
                 ["id", "metadata"],
-                masks={"metadata.preferences.theme": {"type": "redact", "value": "[hidden]"}},
+                masks={
+                    "metadata.preferences.$element.theme": {"type": "redact", "value": "[hidden]"}
+                },
             )
         ],
     )
@@ -743,3 +748,40 @@ def test_do_get_requires_authorization_header(tmp_path):
 
     with pytest.raises(flight.FlightUnauthorizedError):
         server.do_get(DummyContext(headers=[]), info.endpoints[0].ticket)
+
+
+@pytest.mark.parametrize("after_first_batch", [False, True])
+def test_stream_resource_failure_is_unavailable_and_closes_source(after_first_batch):
+    from threading import Thread
+
+    from dal_obscura.data_plane.application.ports.row_transform import StreamResourceError
+    from dal_obscura.data_plane.interfaces.flight.streaming import make_stream
+
+    closed = []
+    schema = pa.schema([pa.field("id", pa.int64())])
+
+    def batches():
+        try:
+            if after_first_batch:
+                yield pa.record_batch([pa.array([1])], schema=schema)
+            raise StreamResourceError("Governed stream memory budget exhausted")
+        finally:
+            closed.append(True)
+
+    class Server(flight.FlightServerBase):
+        def do_get(self, context, ticket):
+            return make_stream(schema, batches())
+
+    server = Server("grpc://127.0.0.1:0")
+    thread = Thread(target=server.serve)
+    thread.start()
+    try:
+        with (
+            flight.FlightClient(f"grpc://127.0.0.1:{server.port}") as client,
+            pytest.raises(flight.FlightUnavailableError, match="memory budget exhausted"),
+        ):
+            client.do_get(flight.Ticket(b"test")).read_all()
+        assert closed == [True]
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)

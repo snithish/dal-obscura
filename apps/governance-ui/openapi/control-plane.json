@@ -2937,8 +2937,7 @@
           },
           "policy_rules": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/PolicyRuleSchema"
             },
             "type": "array",
             "title": "Policy Rules"
@@ -4123,7 +4122,8 @@
           },
           "groups": {
             "items": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "type": "array",
             "maxItems": 64,
@@ -4133,14 +4133,6 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Claims"
-          },
-          "columns": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "maxItems": 512,
-            "title": "Columns"
           },
           "rows": {
             "anyOf": [
@@ -4254,6 +4246,56 @@
         "title": "PolicyEvaluationResponse",
         "description": "Bounded server-side policy evaluation evidence."
       },
+      "PolicyMaskSchema": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "null",
+              "redact",
+              "hash",
+              "email",
+              "keep_last",
+              "default"
+            ],
+            "title": "Type"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "exempt_principals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Exempt Principals"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "title": "PolicyMaskSchema",
+        "description": "Scalar mask configuration with optional rule-local exemptions."
+      },
       "PolicyMutationResponse": {
         "properties": {
           "asset_id": {
@@ -4277,6 +4319,208 @@
         ],
         "title": "PolicyMutationResponse"
       },
+      "PolicyRuleRequest": {
+        "properties": {
+          "ordinal": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ordinal"
+          },
+          "effect": {
+            "type": "string",
+            "enum": [
+              "allow",
+              "allow_all"
+            ],
+            "title": "Effect",
+            "default": "allow"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "title": "Name",
+            "default": ""
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Description",
+            "default": ""
+          },
+          "principals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Principals"
+          },
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Columns"
+          },
+          "masks": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PolicyMaskSchema"
+            },
+            "type": "object",
+            "title": "Masks"
+          },
+          "row_filter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Filter"
+          },
+          "when": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "When"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PolicyRuleRequest",
+        "description": "One editable grant supplied by a policy author."
+      },
+      "PolicyRuleSchema": {
+        "properties": {
+          "ordinal": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ordinal"
+          },
+          "effect": {
+            "type": "string",
+            "enum": [
+              "allow",
+              "allow_all"
+            ],
+            "title": "Effect",
+            "default": "allow"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "title": "Name",
+            "default": ""
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Description",
+            "default": ""
+          },
+          "principals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Principals"
+          },
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Columns"
+          },
+          "masks": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PolicyMaskSchema"
+            },
+            "type": "object",
+            "title": "Masks"
+          },
+          "row_filter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Filter"
+          },
+          "when": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "When"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "asset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PolicyRuleSchema",
+        "description": "One explicit grant returned with its canonical storage identity."
+      },
       "PolicyRulesRequest": {
         "properties": {
           "expected_revision": {
@@ -4286,8 +4530,7 @@
           },
           "rules": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/PolicyRuleRequest"
             },
             "type": "array",
             "maxItems": 100,

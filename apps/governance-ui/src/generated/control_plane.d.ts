@@ -644,9 +644,7 @@ export interface components {
             /** Policy Revision */
             policy_revision: number;
             /** Policy Rules */
-            policy_rules: {
-                [key: string]: unknown;
-            }[];
+            policy_rules: components["schemas"]["PolicyRuleSchema"][];
             /** Policy Status */
             policy_status: string;
             /** Revision */
@@ -1193,8 +1191,6 @@ export interface components {
             claims?: {
                 [key: string]: unknown;
             };
-            /** Columns */
-            columns?: string[];
             /** Groups */
             groups?: string[];
             /** Principal */
@@ -1244,6 +1240,21 @@ export interface components {
              */
             status: "completed";
         };
+        /**
+         * PolicyMaskSchema
+         * @description Scalar mask configuration with optional rule-local exemptions.
+         */
+        PolicyMaskSchema: {
+            /** Exempt Principals */
+            exempt_principals?: string[];
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "null" | "redact" | "hash" | "email" | "keep_last" | "default";
+            /** Value */
+            value?: string | number | boolean | null;
+        };
         /** PolicyMutationResponse */
         PolicyMutationResponse: {
             /** Asset Id */
@@ -1252,6 +1263,86 @@ export interface components {
             policy_revision: number;
             /** Revoked Token Count */
             revoked_token_count: number;
+        };
+        /**
+         * PolicyRuleRequest
+         * @description One editable grant supplied by a policy author.
+         */
+        PolicyRuleRequest: {
+            /** Columns */
+            columns?: string[];
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Effect
+             * @default allow
+             * @enum {string}
+             */
+            effect: "allow" | "allow_all";
+            /** Masks */
+            masks?: {
+                [key: string]: components["schemas"]["PolicyMaskSchema"];
+            };
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /** Ordinal */
+            ordinal?: number | null;
+            /** Principals */
+            principals?: string[];
+            /** Row Filter */
+            row_filter?: string | null;
+            /** When */
+            when?: {
+                [key: string]: string | string[];
+            };
+        };
+        /**
+         * PolicyRuleSchema
+         * @description One explicit grant returned with its canonical storage identity.
+         */
+        PolicyRuleSchema: {
+            /** Asset Id */
+            asset_id?: string | null;
+            /** Columns */
+            columns?: string[];
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Effect
+             * @default allow
+             * @enum {string}
+             */
+            effect: "allow" | "allow_all";
+            /** Id */
+            id?: string | null;
+            /** Masks */
+            masks?: {
+                [key: string]: components["schemas"]["PolicyMaskSchema"];
+            };
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /** Ordinal */
+            ordinal?: number | null;
+            /** Principals */
+            principals?: string[];
+            /** Row Filter */
+            row_filter?: string | null;
+            /** When */
+            when?: {
+                [key: string]: string | string[];
+            };
         };
         /**
          * PolicyRulesRequest
@@ -1266,9 +1357,7 @@ export interface components {
              */
             revoke_existing_tokens: boolean;
             /** Rules */
-            rules: {
-                [key: string]: unknown;
-            }[];
+            rules: components["schemas"]["PolicyRuleRequest"][];
         };
         /**
          * RuntimeSettingsRequest

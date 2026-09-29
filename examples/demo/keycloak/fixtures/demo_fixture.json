@@ -35,6 +35,108 @@
         {
           "name": "annual_revenue",
           "type": "double"
+        },
+        {
+          "name": "profile",
+          "type": "struct",
+          "fields": [
+            {
+              "name": "identity",
+              "type": "struct",
+              "fields": [
+                {
+                  "name": "contact",
+                  "type": "struct",
+                  "fields": [
+                    {
+                      "name": "address",
+                      "type": "struct",
+                      "fields": [
+                        {
+                          "name": "city",
+                          "type": "string"
+                        },
+                        {
+                          "name": "postcode",
+                          "type": "string"
+                        }
+                      ]
+                    },
+                    {
+                      "name": "email",
+                      "type": "string"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "contacts",
+          "type": "list",
+          "element": {
+            "type": "struct",
+            "fields": [
+              {
+                "name": "details",
+                "type": "struct",
+                "fields": [
+                  {
+                    "name": "address",
+                    "type": "struct",
+                    "fields": [
+                      {
+                        "name": "city",
+                        "type": "string"
+                      },
+                      {
+                        "name": "postcode",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "phone",
+                    "type": "string"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "contact_book",
+          "type": "map",
+          "value": {
+            "type": "struct",
+            "fields": [
+              {
+                "name": "details",
+                "type": "struct",
+                "fields": [
+                  {
+                    "name": "address",
+                    "type": "struct",
+                    "fields": [
+                      {
+                        "name": "city",
+                        "type": "string"
+                      },
+                      {
+                        "name": "postcode",
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  {
+                    "name": "phone",
+                    "type": "string"
+                  }
+                ]
+              }
+            ]
+          }
         }
       ],
       "rows": [
@@ -44,7 +146,40 @@
           "email": "alice@northwind.example",
           "region": "us",
           "account_owner": "Maya Chen",
-          "annual_revenue": 1250000.0
+          "annual_revenue": 1250000,
+          "profile": {
+            "identity": {
+              "contact": {
+                "address": {
+                  "city": "Amsterdam",
+                  "postcode": "1012 AB"
+                },
+                "email": "alice@northwind.example"
+              }
+            }
+          },
+          "contacts": [
+            {
+              "details": {
+                "address": {
+                  "city": "Amsterdam",
+                  "postcode": "1012 AB"
+                },
+                "phone": "+31-20-555-0100"
+              }
+            }
+          ],
+          "contact_book": {
+            "primary": {
+              "details": {
+                "address": {
+                  "city": "Amsterdam",
+                  "postcode": "1012 AB"
+                },
+                "phone": "+31-20-555-0100"
+              }
+            }
+          }
         },
         {
           "customer_id": 1002,
@@ -52,7 +187,40 @@
           "email": "bob@contoso.example",
           "region": "us",
           "account_owner": "Maya Chen",
-          "annual_revenue": 820000.0
+          "annual_revenue": 820000,
+          "profile": {
+            "identity": {
+              "contact": {
+                "address": {
+                  "city": "Amsterdam",
+                  "postcode": "1012 AB"
+                },
+                "email": "bob@contoso.example"
+              }
+            }
+          },
+          "contacts": [
+            {
+              "details": {
+                "address": {
+                  "city": "Amsterdam",
+                  "postcode": "1012 AB"
+                },
+                "phone": "+31-20-555-0100"
+              }
+            }
+          ],
+          "contact_book": {
+            "primary": {
+              "details": {
+                "address": {
+                  "city": "Amsterdam",
+                  "postcode": "1012 AB"
+                },
+                "phone": "+31-20-555-0100"
+              }
+            }
+          }
         },
         {
           "customer_id": 2001,
@@ -60,7 +228,40 @@
           "email": "carla@fabrikam.example",
           "region": "eu",
           "account_owner": "Jonas Weber",
-          "annual_revenue": 1475000.0
+          "annual_revenue": 1475000,
+          "profile": {
+            "identity": {
+              "contact": {
+                "address": {
+                  "city": "Amsterdam",
+                  "postcode": "1012 AB"
+                },
+                "email": "carla@fabrikam.example"
+              }
+            }
+          },
+          "contacts": [
+            {
+              "details": {
+                "address": {
+                  "city": "Amsterdam",
+                  "postcode": "1012 AB"
+                },
+                "phone": "+31-20-555-0100"
+              }
+            }
+          ],
+          "contact_book": {
+            "primary": {
+              "details": {
+                "address": {
+                  "city": "Amsterdam",
+                  "postcode": "1012 AB"
+                },
+                "phone": "+31-20-555-0100"
+              }
+            }
+          }
         },
         {
           "customer_id": 2002,
@@ -68,7 +269,40 @@
           "email": "diego@adventure.example",
           "region": "eu",
           "account_owner": "Jonas Weber",
-          "annual_revenue": 960000.0
+          "annual_revenue": 960000,
+          "profile": {
+            "identity": {
+              "contact": {
+                "address": {
+                  "city": "Amsterdam",
+                  "postcode": "1012 AB"
+                },
+                "email": "diego@adventure.example"
+              }
+            }
+          },
+          "contacts": [
+            {
+              "details": {
+                "address": {
+                  "city": "Amsterdam",
+                  "postcode": "1012 AB"
+                },
+                "phone": "+31-20-555-0100"
+              }
+            }
+          ],
+          "contact_book": {
+            "primary": {
+              "details": {
+                "address": {
+                  "city": "Amsterdam",
+                  "postcode": "1012 AB"
+                },
+                "phone": "+31-20-555-0100"
+              }
+            }
+          }
         }
       ]
     }
@@ -97,7 +331,9 @@
           "type": "email"
         }
       },
-      "row_filter": "region = 'us'"
+      "row_filter": "region = 'us'",
+      "name": "Demo rule 1",
+      "description": "Demonstrates audience-specific column masks and independent row restrictions."
     },
     {
       "ordinal": 20,
@@ -119,7 +355,9 @@
           "type": "email"
         }
       },
-      "row_filter": "region = 'eu'"
+      "row_filter": "region = 'eu'",
+      "name": "Demo rule 2",
+      "description": "Demonstrates audience-specific column masks and independent row restrictions."
     },
     {
       "ordinal": 30,
@@ -138,7 +376,9 @@
         "annual_revenue"
       ],
       "masks": {},
-      "row_filter": null
+      "row_filter": null,
+      "name": "Demo rule 3",
+      "description": "Demonstrates audience-specific column masks and independent row restrictions."
     }
   ]
 }

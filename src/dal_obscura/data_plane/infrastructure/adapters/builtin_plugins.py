@@ -8,7 +8,7 @@ from dal_obscura_plugin_api import PluginDescriptor, PluginKind
 
 from dal_obscura.common.plugin_api import PluginLock, PluginRegistry
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import IcebergCatalog
-from dal_obscura.data_plane.infrastructure.table_formats.iceberg import IcebergTableFormat
+from dal_obscura.data_plane.infrastructure.adapters.iceberg_format_plugin import IcebergFormatPlugin
 
 _ICEBERG_CATALOG_ID = "iceberg.sql"
 _ICEBERG_FORMAT_ID = "iceberg"
@@ -21,9 +21,7 @@ def create_builtin_plugin_registry(
 ) -> PluginRegistry:
     """Build and admit the trusted in-tree Iceberg catalog/format pair.
 
-    The classes are kept behind the registry boundary so future external
-    distributions use the same admission path.  Existing constructors and
-    pickle-referenced task classes remain unchanged.
+    Both built-in identities are admitted through the registry boundary.
     """
 
     catalog_descriptor = PluginDescriptor(
@@ -52,22 +50,14 @@ def create_builtin_plugin_registry(
             ],
         },
     )
-    format_descriptor = PluginDescriptor(
-        kind="table_format",
-        plugin_id=_ICEBERG_FORMAT_ID,
-        api_version="1",
-        config_version=1,
-        distribution=_BUILTIN_DISTRIBUTION,
-        version=_BUILTIN_VERSION,
-        display_name="Apache Iceberg",
-        capabilities=frozenset({"nested_schema", "snapshot_reads", "splittable_scan"}),
-        handle_versions=frozenset({1}),
-    )
     registry = PluginRegistry(
         allowlist=allowlist,
         builtins={
             ("catalog", _ICEBERG_CATALOG_ID): (catalog_descriptor, IcebergCatalog),
-            ("table_format", _ICEBERG_FORMAT_ID): (format_descriptor, IcebergTableFormat),
+            ("table_format", _ICEBERG_FORMAT_ID): (
+                IcebergFormatPlugin.descriptor,
+                IcebergFormatPlugin,
+            ),
         },
     )
     registry.reload()

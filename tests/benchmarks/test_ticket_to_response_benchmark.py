@@ -1,6 +1,3 @@
-import json
-import subprocess
-import sys
 import textwrap
 import time
 from collections.abc import Iterable
@@ -42,6 +39,7 @@ from tests.support.flight import (
     flight_call_options,
     running_flight_client,
 )
+from tests.support.memory_probe import begin_memory_probe, run_memory_probe
 from tests.support.policy import allow_rule
 
 pytestmark = pytest.mark.heavy
@@ -53,7 +51,7 @@ LARGE_BENCHMARK_FILE_COUNT = LARGE_BENCHMARK_TOTAL_ROWS // LARGE_BENCHMARK_ROWS_
 LARGE_BENCHMARK_MAX_TICKETS = 4
 # This is a coarse, machine-specific resource guard, not a portable performance
 # SLO. Recalibrate it when the benchmark runner's OS or architecture changes.
-LARGE_BENCHMARK_RSS_LIMIT_BYTES = 1_900_000_000
+LARGE_BENCHMARK_RSS_LIMIT_BYTES = 1024 * 1024 * 1024
 PC = cast(Any, pc)
 COMPLEX_BENCHMARK_COLUMNS = [
     "id",
@@ -301,8 +299,6 @@ def _consume_streamed_info(
     client: flight.FlightClient,
     info: flight.FlightInfo,
     options: flight.FlightCallOptions,
-    *,
-    process: Any | None = None,
 ) -> dict[str, Any]:
     rows = 0
     schema: pa.Schema | None = None
@@ -311,7 +307,6 @@ def _consume_streamed_info(
     max_chunk_rows = 0
     first_chunk_elapsed_s: float | None = None
     read_started_at = time.perf_counter()
-    peak_rss = None if process is None else process.memory_info().rss
 
     for endpoint in info.endpoints:
         reader = client.do_get(endpoint.ticket, options=options).to_reader()
@@ -325,8 +320,6 @@ def _consume_streamed_info(
             rows += batch.num_rows
             if first_row is None and batch.num_rows:
                 first_row = batch.slice(0, 1).to_pylist()[0]
-            if process is not None:
-                peak_rss = max(cast(int, peak_rss), process.memory_info().rss)
 
     total_read_elapsed_s = time.perf_counter() - read_started_at
 
@@ -341,7 +334,6 @@ def _consume_streamed_info(
         ),
         "total_read_elapsed_s": total_read_elapsed_s,
         "endpoint_count": len(info.endpoints),
-        "peak_rss": peak_rss,
     }
 
 
@@ -410,20 +402,12 @@ def _run_iceberg_stream_scenario(
             }
         )
         info = client.get_flight_info(descriptor, options=options)
-        baseline_rss = None
         if sample_rss:
-            import psutil
-
-            process = psutil.Process()
-            baseline_rss = process.memory_info().rss
-            metrics = _consume_streamed_info(client, info, options, process=process)
-        else:
-            metrics = _consume_streamed_info(client, info, options)
+            begin_memory_probe()
+        metrics = _consume_streamed_info(client, info, options)
         return {
             **metrics,
             "planned_file_count": planned_file_count,
-            "baseline_rss": baseline_rss,
-            "peak_rss": metrics["peak_rss"],
             "total_rows": total_rows,
             "rows_per_file": rows_per_file,
         }
@@ -470,7 +454,7 @@ def _create_benchmark_iceberg_table(
         properties={
             "format-version": "2",
             "write.target-file-size-bytes": str(8 * 1024 * 1024 * 1024),
-            "write.parquet.row-group-limit": str(rows_per_batch),
+            "write.parquet.row-group-limit": "65536",
         },
     )
 
@@ -589,8 +573,6 @@ def _run_streaming_probe_in_subprocess(
                     "max_chunk_rows": result["max_chunk_rows"],
                     "first_chunk_elapsed_s": result["first_chunk_elapsed_s"],
                     "total_read_elapsed_s": result["total_read_elapsed_s"],
-                    "baseline_rss": result["baseline_rss"],
-                    "peak_rss": result["peak_rss"],
                     "schema_types": {
                         "id": str(schema.field("id").type),
                         "created_at": str(schema.field("created_at").type),
@@ -615,23 +597,9 @@ def _run_streaming_probe_in_subprocess(
         )
         """
     )
-    completed = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            script,
-            str(tmp_path),
-            str(total_rows),
-            str(rows_per_file),
-            str(max_tickets),
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
+    return run_memory_probe(
+        script, [str(tmp_path), str(total_rows), str(rows_per_file), str(max_tickets)], timeout=300
     )
-    payload = json.loads(completed.stdout.strip().splitlines()[-1])
-    payload["rss_delta"] = payload["peak_rss"] - payload["baseline_rss"]
-    return payload
 
 
 @pytest.mark.benchmark(group="ticket-to-response-streaming")
@@ -659,10 +627,12 @@ def test_ticket_to_response_streaming_is_chunked_with_bounded_rss(tmp_path, benc
     benchmark.extra_info["large_probe_endpoint_count"] = larger["endpoint_count"]
     benchmark.extra_info["large_probe_stream_chunks"] = larger["chunk_count"]
     benchmark.extra_info["large_probe_max_chunk_rows"] = larger["max_chunk_rows"]
+    benchmark.extra_info["small_probe_rss_delta"] = smaller["rss_delta"]
     benchmark.extra_info["large_probe_rss_delta"] = larger["rss_delta"]
     benchmark.extra_info["large_probe_rss_limit"] = LARGE_BENCHMARK_RSS_LIMIT_BYTES
 
     for probe in (smaller, larger):
+        assert probe["rss_samples"] > 2
         assert probe["chunk_count"] > probe["endpoint_count"]
         assert probe["max_chunk_rows"] <= _DUCKDB_ARROW_OUTPUT_BATCH_SIZE
         assert probe["first_chunk_elapsed_s"] < probe["total_read_elapsed_s"] * 0.5
@@ -675,6 +645,7 @@ def test_ticket_to_response_streaming_is_chunked_with_bounded_rss(tmp_path, benc
     assert larger["rows_per_file"] == LARGE_BENCHMARK_ROWS_PER_FILE
     assert larger["endpoint_count"] == LARGE_BENCHMARK_MAX_TICKETS
     assert larger["rss_delta"] < LARGE_BENCHMARK_RSS_LIMIT_BYTES
+    assert larger["rss_delta"] < smaller["rss_delta"] + 256 * 1024 * 1024
 
     schema = larger["schema_types"]
     assert schema["id"] == "string"

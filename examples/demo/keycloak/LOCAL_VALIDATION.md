@@ -1,6 +1,6 @@
 # Local demo validation
 
-Validation run: 2026-09-26, Podman Compose.
+Earlier validation run: 2026-09-26, Podman Compose.
 
 Start the demo with `./run up`. The management UI is served at
 `http://localhost:28821` by default (or the configured
@@ -21,6 +21,20 @@ normal OIDC authorization-code flow with PKCE.
   Compose image build.
 - `uv run pytest` passed: 861 passed, 12 skipped.
 - `ruff check .`, `ruff format --check .`, and `ty check` all passed.
+
+## Startup regression fixed and rechecked (2026-09-27)
+
+The first fresh-workspace start exposed a provisioning bug: the control plane
+returns JSON `null` for `GET /v1/settings/runtime` until the workspace has a
+runtime settings record. Provisioning incorrectly treated that valid empty
+state as an invalid response. It now creates settings at revision zero, with a
+regression test in `tests/examples/test_demo_initialization.py`.
+
+After the fix, `./run up` succeeded twice consecutively without resetting the
+demo or its Postgres volume. `./run smoke` passed all five personas, the UI
+returned HTTP 200, the control plane `/readyz` returned `ok`, and `./run
+ui-smoke` passed the Chromium OIDC sign-in, governed inventory, and sign-out
+flow.
 
 The UI origin is `http://localhost:28821` by default. The application retains
 its `Secure` and `__Host-` session cookie settings; browsers treat localhost as

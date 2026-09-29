@@ -13,9 +13,11 @@ from dal_obscura.data_plane.application.use_cases.plan_access import (
     _authorize_requested_row_filter,
     _build_authorization_columns,
     _expand_requested_columns,
+    _expand_to_leaves,
     _tenant_id,
     _validate_requested_row_filter,
     _visible_columns,
+    _with_required_map_keys,
 )
 
 
@@ -64,7 +66,10 @@ class GetSchemaUseCase:
         )
         base_schema = table_format.get_schema()
 
-        requested_columns = _expand_requested_columns(base_schema, request.columns)
+        requested_columns = _with_required_map_keys(
+            base_schema,
+            _expand_to_leaves(base_schema, _expand_requested_columns(base_schema, request.columns)),
+        )
         requested_row_filter = _validate_requested_row_filter(base_schema, request.row_filter)
 
         decision = self._authorizer.authorize(

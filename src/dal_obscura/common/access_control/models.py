@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import fnmatch
 from dataclasses import dataclass
+from typing import Literal
 
 PrincipalConditionValue = str | list[str]
 
@@ -12,6 +13,10 @@ class MaskRule:
 
     type: str
     value: object | None = None
+    exempt_principals: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "exempt_principals", tuple(self.exempt_principals))
 
 
 @dataclass(frozen=True)
@@ -22,8 +27,10 @@ class AccessRule:
     columns: list[str]
     masks: dict[str, MaskRule]
     row_filter: str | None
-    effect: str = "allow"
+    effect: Literal["allow", "allow_all"] = "allow"
     when: dict[str, PrincipalConditionValue] | None = None
+    name: str = ""
+    description: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "principals", list(self.principals))

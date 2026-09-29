@@ -1,6 +1,3 @@
-import json
-import subprocess
-import sys
 import textwrap
 from collections.abc import Generator
 from typing import cast
@@ -16,7 +13,9 @@ from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
     DuckDBRowTransformAdapter,
     InputBatchLimitError,
     StreamAdmissionError,
+    StreamMemoryLimitError,
 )
+from tests.support.memory_probe import run_memory_probe
 
 
 def test_duckdb_transform_connection_disables_progress_bar(monkeypatch: pytest.MonkeyPatch):
@@ -376,7 +375,7 @@ def test_masked_schema_updates_list_of_struct_nested_field_types():
     masked_schema = DefaultMaskingAdapter().masked_schema(
         schema,
         ["metadata"],
-        {"metadata.preferences.theme": MaskRule(type="redact", value="[hidden]")},
+        {"metadata.preferences.$element.theme": MaskRule(type="redact", value="[hidden]")},
     )
 
     preferences_field = masked_schema.field("metadata").type.field("preferences")
@@ -410,80 +409,30 @@ def test_list_of_struct_selection_applies_descendant_masks():
     selection = DefaultMaskingAdapter().apply(
         schema,
         ["metadata"],
-        {"metadata.preferences.theme": MaskRule(type="redact", value="[hidden]")},
+        {"metadata.preferences.$element.theme": MaskRule(type="redact", value="[hidden]")},
     )
 
     assert "list_transform" in selection.select_list[0]
     assert 'struct_update(_item_2, "theme"' in selection.select_list[0]
 
 
-def test_duckdb_transform_uses_single_arrow_stream_query(monkeypatch):
-    result_batch = pa.record_batch([pa.array([10, 20])], names=["id"])
-
-    class FakeRelation:
-        def __init__(self) -> None:
-            self.query_calls: list[tuple[str, str]] = []
-            self.batch_size: int | None = None
-
-        def query(self, table_name: str, query: str):
-            self.query_calls.append((table_name, query))
-            return self
-
-        def to_arrow_reader(self, batch_size: int):
-            self.batch_size = batch_size
-            return iter([result_batch])
-
-    class FakeConnection:
-        def __init__(self) -> None:
-            self.relation = FakeRelation()
-            self.from_arrow_calls: list[pa.RecordBatchReader] = []
-            self.register_calls = 0
-            self.unregister_calls = 0
-            self.closed = 0
-
-        def execute(self, query: str) -> None:
-            del query
-
-        def from_arrow(self, reader: pa.RecordBatchReader):
-            self.from_arrow_calls.append(reader)
-            return self.relation
-
-        def register(self, *args, **kwargs):
-            self.register_calls += 1
-
-        def unregister(self, *args, **kwargs):
-            self.unregister_calls += 1
-
-        def close(self) -> None:
-            self.closed += 1
-
-    fake_connection = FakeConnection()
-    monkeypatch.setattr(duckdb_transform.duckdb, "connect", lambda **_kwargs: fake_connection)
-    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
-    input_batches = [
-        pa.record_batch([pa.array([1, 2])], names=["id"]),
-        pa.record_batch([pa.array([3, 4])], names=["id"]),
+def test_filters_and_masks_preserve_results_across_batch_boundaries():
+    schema = pa.schema([pa.field("id", pa.int64())])
+    batches = [
+        pa.record_batch([pa.array(values)], schema=schema) for values in ([0, 1], [2, 3], [4, 5])
     ]
-
-    result = list(
-        adapter.apply_filters_and_masks_stream(
-            input_batches,
-            ["id"],
-            parse_row_filter("id > 1", pa.schema([pa.field("id", pa.int64())])),
-            {},
+    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
+    output = pa.Table.from_batches(
+        list(
+            adapter.apply_filters_and_masks_stream(
+                batches,
+                ["id"],
+                parse_row_filter("id > 1", schema),
+                {"id": MaskRule(type="redact", value="hidden")},
+            )
         )
     )
-
-    assert len(result) == 1
-    assert result[0].equals(result_batch)
-    assert len(fake_connection.from_arrow_calls) == 1
-    assert fake_connection.relation.query_calls == [
-        ("input", 'SELECT "id" AS "id" FROM input WHERE id > 1')
-    ]
-    assert fake_connection.relation.batch_size == duckdb_transform._DUCKDB_ARROW_OUTPUT_BATCH_SIZE
-    assert fake_connection.register_calls == 0
-    assert fake_connection.unregister_calls == 0
-    assert fake_connection.closed == 1
+    assert output.column("id").to_pylist() == ["hidden"] * 4
 
 
 def test_duckdb_transform_disables_external_access(monkeypatch):
@@ -613,6 +562,92 @@ def test_duckdb_transform_rejects_streams_beyond_configured_admission_limit():
     assert list(adapter.apply_filters_and_masks_stream([batch], ["id"], None, {}))
 
 
+def test_stream_admission_precedes_source_reads_and_creation_is_lazy():
+    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter(), max_active_streams=1)
+    batch = pa.record_batch([pa.array([1])], names=["id"])
+    consumed = []
+
+    def source():
+        consumed.append(True)
+        yield batch
+
+    first = iter(adapter.apply_filters_and_masks_stream(source(), ["id"], None, {}))
+    assert consumed == []
+    next(first)
+    second = iter(adapter.apply_filters_and_masks_stream(source(), ["id"], None, {}))
+    with pytest.raises(StreamAdmissionError):
+        next(second)
+    assert consumed == [True]
+    cast(Generator[pa.RecordBatch, None, None], first).close()
+
+
+def test_input_budget_counts_retained_slice_buffers():
+    batch = pa.record_batch([pa.array(range(10000), type=pa.int64())], names=["id"]).slice(0, 1)
+    assert batch.nbytes == 8
+    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter(), max_input_batch_bytes=100)
+    with pytest.raises(InputBatchLimitError, match="limit"):
+        list(adapter.apply_filters_and_masks_stream([batch], ["id"], None, {}))
+
+
+def test_input_failure_closes_source_and_releases_admission():
+    closed = []
+
+    def source():
+        try:
+            yield pa.record_batch([pa.array(["oversized"])], names=["id"])
+        finally:
+            closed.append(True)
+
+    adapter = DuckDBRowTransformAdapter(
+        DefaultMaskingAdapter(), max_active_streams=1, max_input_batch_bytes=8
+    )
+    with pytest.raises(InputBatchLimitError):
+        list(adapter.apply_filters_and_masks_stream(source(), ["id"], None, {}))
+    assert closed == [True]
+    assert list(
+        adapter.apply_filters_and_masks_stream(
+            [pa.record_batch([pa.array([1])], names=["id"])], ["id"], None, {}
+        )
+    )
+
+
+@pytest.mark.parametrize("limit", ["-1", "0B", "unlimited", "80%", "nanGB", "garbage"])
+def test_duckdb_memory_limit_must_be_a_positive_finite_size(limit):
+    with pytest.raises(ValueError, match="memory_limit"):
+        DuckDBRowTransformAdapter(DefaultMaskingAdapter(), duckdb_memory_limit=limit)
+
+
+def test_real_duckdb_oom_releases_slot_and_does_not_expose_query():
+    adapter = DuckDBRowTransformAdapter(
+        DefaultMaskingAdapter(), max_active_streams=1, duckdb_memory_limit="1KB"
+    )
+    batch = pa.record_batch([pa.array(range(10000))], names=["id"])
+    for _ in range(2):
+        with pytest.raises(StreamMemoryLimitError, match="memory budget exhausted") as error:
+            list(
+                adapter.apply_filters_and_masks_stream(
+                    [batch], ["id"], None, {"id": MaskRule(type="hash")}
+                )
+            )
+        assert "SELECT" not in str(error.value)
+
+
+def test_later_input_limit_failure_keeps_its_type_and_closes_source():
+    closed = []
+
+    def source():
+        try:
+            yield pa.record_batch([pa.array([1])], names=["id"])
+            yield pa.record_batch([pa.array(range(100))], names=["id"])
+        finally:
+            closed.append(True)
+
+    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter(), max_input_batch_bytes=8)
+    with pytest.raises(InputBatchLimitError):
+        list(adapter.apply_filters_and_masks_stream(source(), ["id"], None, {}))
+    assert closed == [True]
+
+
 @pytest.mark.parametrize("limit", [0, -1])
 def test_duckdb_transform_rejects_non_positive_admission_limits(limit):
     with pytest.raises(ValueError, match="max_active_streams"):
@@ -660,6 +695,24 @@ def test_duckdb_transform_filters_on_hidden_execution_column():
 
     assert result.schema.names == ["id"]
     assert result.column("id").to_pylist() == [1, 3]
+
+
+def test_duckdb_transform_filters_original_masked_values_before_output_mask():
+    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
+    input_batch = pa.record_batch(
+        [pa.array(["alice@example.com", "bob@example.com"], type=pa.string())],
+        names=["email"],
+    )
+    result_batches = list(
+        adapter.apply_filters_and_masks_stream(
+            [input_batch],
+            ["email"],
+            parse_row_filter("email = 'alice@example.com'", input_batch.schema),
+            {"email": MaskRule(type="redact", value="[hidden]")},
+        )
+    )
+    result = pa.Table.from_batches(result_batches)
+    assert result.column("email").to_pylist() == ["[hidden]"]
 
 
 def test_duckdb_transform_uses_canonical_sql_for_function_filters(monkeypatch):
@@ -755,7 +808,7 @@ def test_duckdb_transform_applies_list_of_struct_mask():
             [input_batch],
             ["metadata"],
             None,
-            {"metadata.preferences.theme": MaskRule(type="redact", value="[hidden]")},
+            {"metadata.preferences.$element.theme": MaskRule(type="redact", value="[hidden]")},
         )
     )
     result = pa.Table.from_batches(result_batches)
@@ -765,13 +818,14 @@ def test_duckdb_transform_applies_list_of_struct_mask():
 
 
 @pytest.mark.heavy
-def test_duckdb_transform_memory_is_bounded_in_subprocess():
+@pytest.mark.parametrize("payload_bytes", [0, 256])
+def test_duckdb_transform_memory_is_bounded_in_subprocess(payload_bytes):
     script = textwrap.dedent(
         """
         import json
         import sys
 
-        import psutil
+        from tests.support.memory_probe import begin_memory_probe
         import pyarrow as pa
 
         from dal_obscura.common.access_control.filters import parse_row_filter
@@ -782,7 +836,7 @@ def test_duckdb_transform_memory_is_bounded_in_subprocess():
 
         total_batches = int(sys.argv[1])
         rows_per_batch = int(sys.argv[2])
-        process = psutil.Process()
+        payload_bytes = int(sys.argv[3])
         adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
 
         def source():
@@ -792,16 +846,16 @@ def test_duckdb_transform_memory_is_bounded_in_subprocess():
                     [
                         pa.array(range(start, start + rows_per_batch), type=pa.int64()),
                         pa.array(range(rows_per_batch), type=pa.int64()),
+                        pa.array(["x" * payload_bytes] * rows_per_batch),
                     ],
-                    names=["id", "value"],
+                    names=["id", "value", "payload"],
                 )
 
-        baseline_rss = process.memory_info().rss
-        peak_rss = baseline_rss
+        begin_memory_probe()
         row_count = 0
         for batch in adapter.apply_filters_and_masks_stream(
             source(),
-            ["id", "value"],
+            ["id", "value", "payload"],
             parse_row_filter(
                 "id >= 0",
                 pa.schema(
@@ -814,13 +868,10 @@ def test_duckdb_transform_memory_is_bounded_in_subprocess():
             {},
         ):
             row_count += batch.num_rows
-            peak_rss = max(peak_rss, process.memory_info().rss)
 
         print(
             json.dumps(
                 {
-                    "baseline_rss": baseline_rss,
-                    "peak_rss": peak_rss,
                     "rows": row_count,
                 }
             )
@@ -829,13 +880,9 @@ def test_duckdb_transform_memory_is_bounded_in_subprocess():
     )
 
     def run_probe(total_batches: int, rows_per_batch: int) -> dict[str, int]:
-        completed = subprocess.run(
-            [sys.executable, "-c", script, str(total_batches), str(rows_per_batch)],
-            check=True,
-            capture_output=True,
-            text=True,
+        return run_memory_probe(
+            script, [str(total_batches), str(rows_per_batch), str(payload_bytes)]
         )
-        return _parse_json_payload_from_subprocess_output(completed.stdout)
 
     rows_per_batch = 50_000
     medium = run_probe(total_batches=32, rows_per_batch=rows_per_batch)
@@ -845,17 +892,9 @@ def test_duckdb_transform_memory_is_bounded_in_subprocess():
 
     assert medium["rows"] == 32 * rows_per_batch
     assert large["rows"] == 256 * rows_per_batch
-    assert large_delta >= medium_delta
-    assert large_delta < medium_delta * 6
+    assert medium["rss_samples"] > 2 and large["rss_samples"] > 2
+    assert large_delta < medium_delta + 64 * 1024 * 1024
     assert large_delta < 256 * 1024 * 1024
-
-
-def _parse_json_payload_from_subprocess_output(output: str) -> dict[str, int]:
-    for line in reversed(output.splitlines()):
-        candidate = line.strip()
-        if candidate.startswith("{") and candidate.endswith("}"):
-            return cast(dict[str, int], json.loads(candidate))
-    raise AssertionError(f"subprocess did not emit a JSON object:\n{output}")
 
 
 def test_duckdb_transform_preserves_literal_dotted_top_level_field_name():
@@ -969,3 +1008,143 @@ def test_output_batch_limit_rejects_oversized_result_batch():
 
     with pytest.raises(duckdb_transform.OutputBatchLimitError, match="output batch"):
         list(duckdb_transform._bounded_output_batches([batch], max_output_batch_bytes=1))
+
+
+def test_null_map_key_hides_entire_map_and_preserves_projected_value_schema():
+    value_type = pa.struct([pa.field("name", pa.string()), pa.field("secret", pa.string())])
+    schema = pa.schema([pa.field("contacts", pa.map_(pa.string(), value_type), nullable=False)])
+    batch = pa.RecordBatch.from_pylist(
+        [{"contacts": [("private-key", {"name": "Ada", "secret": "secret"})]}], schema=schema
+    )
+    columns = ["contacts.$key", "contacts.$value.name"]
+    masks = {"contacts.$key": MaskRule(type="null")}
+    masking = DefaultMaskingAdapter()
+    result = pa.Table.from_batches(
+        list(
+            DuckDBRowTransformAdapter(masking).apply_filters_and_masks_stream(
+                [batch], columns, None, masks
+            )
+        )
+    )
+    assert result.to_pylist() == [{"contacts": None}]
+    assert result.schema == masking.masked_schema(schema, columns, masks)
+    assert result.schema.field("contacts").type.item_type.names == ["name"]
+
+
+def test_null_default_masks_deep_list_siblings_without_hiding_selected_leaf():
+    from dal_obscura.common.access_control.models import (
+        AccessRule,
+        DatasetPolicy,
+        Policy,
+        Principal,
+    )
+    from dal_obscura.common.access_control.policy_resolution import resolve_access
+    from dal_obscura.data_plane.application.use_cases.plan_access import _expand_to_leaves
+
+    leaf = pa.struct([pa.field("city", pa.string()), pa.field("postcode", pa.string())])
+    element = pa.struct([pa.field("details", pa.struct([pa.field("address", leaf)]))])
+    schema = pa.schema([pa.field("contacts", pa.list_(element))])
+    batch = pa.RecordBatch.from_pylist(
+        [{"contacts": [{"details": {"address": {"city": "Paris", "postcode": "private"}}}]}],
+        schema=schema,
+    )
+    path = "contacts.$element.details.address.city"
+    policy = Policy(
+        version=1,
+        datasets=[
+            DatasetPolicy(
+                catalog="demo",
+                target="users",
+                rules=[AccessRule(principals=["*"], columns=[path], masks={}, row_filter=None)],
+            )
+        ],
+    )
+    columns, masks, _ = resolve_access(
+        policy,
+        Principal(id="alice", groups=[], attributes={}),
+        "users",
+        "demo",
+        _expand_to_leaves(schema, ["contacts"]),
+    )
+    result = pa.Table.from_batches(
+        list(
+            DuckDBRowTransformAdapter(DefaultMaskingAdapter()).apply_filters_and_masks_stream(
+                [batch], columns, None, masks
+            )
+        )
+    )
+    assert result.to_pylist() == [
+        {"contacts": [{"details": {"address": {"city": "Paris", "postcode": None}}}]}
+    ]
+
+
+def test_implicit_list_element_mask_paths_are_rejected():
+    schema = pa.schema(
+        [pa.field("contacts", pa.list_(pa.struct([pa.field("email", pa.string())])))]
+    )
+    adapter = DefaultMaskingAdapter()
+    for operation in (adapter.apply, adapter.masked_schema):
+        with pytest.raises(ValueError, match="does not contain a struct"):
+            operation(schema, ["contacts"], {"contacts.email": MaskRule(type="hash")})
+
+
+def test_first_output_does_not_consume_later_input_batches():
+    consumed = []
+
+    def source():
+        for index in range(10):
+            consumed.append(index)
+            yield pa.record_batch([pa.array([index])], names=["id"])
+
+    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
+    stream = cast(
+        Generator[pa.RecordBatch, None, None],
+        adapter.apply_filters_and_masks_stream(source(), ["id"], None, {}),
+    )
+    try:
+        assert next(stream).column(0).to_pylist() == [0]
+        assert consumed == [0]
+    finally:
+        stream.close()
+
+
+def test_input_schema_changes_are_rejected():
+    adapter = DuckDBRowTransformAdapter(DefaultMaskingAdapter())
+    batches = [
+        pa.record_batch([pa.array([1])], names=["id"]),
+        pa.record_batch([pa.array(["changed"])], names=["id"]),
+    ]
+    with pytest.raises(ValueError, match="schema changed"):
+        list(adapter.apply_filters_and_masks_stream(batches, ["id"], None, {}))
+
+
+def test_connection_setup_failure_closes_connection(monkeypatch):
+    closed = []
+
+    class Connection:
+        def execute(self, query):
+            raise RuntimeError("setup failed")
+
+        def close(self):
+            closed.append(True)
+
+    monkeypatch.setattr(duckdb_transform.duckdb, "connect", lambda **kwargs: Connection())
+    with pytest.raises(RuntimeError, match="setup failed"):
+        duckdb_transform._connect()
+    assert closed == [True]
+
+
+@pytest.mark.parametrize(
+    "mask",
+    [
+        MaskRule(type="unsupported"),
+        MaskRule(type="keep_last", value=True),
+        MaskRule(type="hash", value="ignored"),
+    ],
+)
+def test_mask_schema_and_execution_reject_the_same_invalid_configuration(mask):
+    schema = pa.schema([pa.field("id", pa.int64())])
+    adapter = DefaultMaskingAdapter()
+    for operation in (adapter.apply, adapter.masked_schema):
+        with pytest.raises(ValueError):
+            operation(schema, ["id"], {"id": mask})

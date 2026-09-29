@@ -1,185 +1,132 @@
+import { parseTestClaims } from "../policy_test";
+import { discardChanges, useConfirmation } from "./ConfirmationProvider";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
-import { Button, Checkbox, NativeSelect, SegmentedControl, Tabs, Textarea, TextInput } from "@mantine/core";
+import { Button, Checkbox, Modal, NativeSelect, Tabs, Textarea, TextInput } from "@mantine/core";
 import type { QueryClient } from "@tanstack/react-query";
-import type { Asset, AssetAccess, AssetGrant, Mask, PolicyRule, Preview, SchemaNode, Session } from "../api";
+import type { Asset, AssetAccess, AssetGrant, PolicyRule, Preview, Session } from "../api";
 import { controlPlane } from "../api";
 import { type AssetTab } from "../navigation";
-import { recoveryMessage } from "../recovery";
+import { recoveryMessage, displayErrorField } from "../recovery";
 import { isAbortError } from "../async";
-import { flattenSchemaTree } from "../schema_tree";
-import { AssetInventory } from "./AssetInventory";
 import { Icon } from "./Icon";
+import { PolicyRuleEditor } from "./PolicyRuleEditor";
+import { TokenInput } from "./TokenInput";
 
 type SaveState = "saved" | "saving" | "unsaved" | "failed";
-
-const maskLabels: Record<Mask["type"], { label: string; needsValue?: boolean }> = {
-  null: { label: "Null" },
-  redact: { label: "Redact", needsValue: true },
-  hash: { label: "Hash" },
-  email: { label: "Email" },
-  keep_last: { label: "Keep last", needsValue: true },
-  default: { label: "Default", needsValue: true },
-};
-
 function saveLabel(state: SaveState) { return ({ saved: "Saved", saving: "Saving", unsaved: "Unsaved changes", failed: "Save failed" })[state]; }
-
-function inventoryStatusLabel(asset: Asset): string {
-  if (asset.policy_status === "configured") return "Policy configured";
-  if (asset.policy_status === "missing") return "Policy missing";
-  return "Policy status unavailable";
-}
+function inventoryStatusLabel(asset: Asset): string { return asset.policy_status === "configured" ? "Policy configured" : "Default NULL policy"; }
 
 export function AssetWorkspace(props: {
-  initialTab?: AssetTab; assets: Asset[]; asset: Asset; access?: AssetAccess;
-  grants: AssetGrant[]; onAsset: (id: string) => void; assetSearch: string;
-  assetHasMore: boolean; assetInventoryLoading: boolean; onSearch: (value: string) => void;
-  onLoadMore: () => void; rules: PolicyRule[]; activeRule?: PolicyRule;
-  activeRevision: number; selectedRule: number; onRule: (index: number) => void;
-  onMoveRule: (index: number, direction: -1 | 1) => void; selectedField: string;
-  onField: (name: string) => void; selectedMask?: Mask; effectiveFields: Set<string>;
+  initialTab?: AssetTab; onTabChange?: (tab: AssetTab) => void; asset: Asset; access?: AssetAccess;
+  grants: AssetGrant[]; onBack: () => void; rules: PolicyRule[];
+  activeRevision: number;
   saveState: SaveState; notice: string; fieldErrors?: Array<{ field: string; message: string; type: string }>;
-  onToggleField: (name: string) => void; onMask: (mask?: Mask) => void;
-  onUpdateRule: (change: (rule: PolicyRule) => PolicyRule) => void; onAddRule: () => void;
-  onRemoveRule: () => void; onDuplicateRule: (index: number) => void; onUndo: () => void;
-  onRedo: () => void; canUndo: boolean; canRedo: boolean; onSave: (revokeExistingTokens: boolean) => void;
+  onUpdateRule: (change: (rule: PolicyRule) => PolicyRule, index: number) => void; onAddRule: () => void;
+  onRemoveRule: (index: number) => void; onDuplicateRule: (index: number) => void;
+  onDiscard: () => void; onAllowAll: () => void; onSave: (revokeExistingTokens: boolean) => void;
   onPreview: () => void; previewPrincipal: string; previewGroups: string; previewClaims: string;
   onPreviewPrincipal: (value: string) => void; onPreviewGroups: (value: string) => void;
-  onPreviewClaims: (value: string) => void; preview: Preview | null; session: Session | null;
-  onReloadAccess: () => void; onRevokeTokens?: () => void; onDirtyChange?: (dirty: boolean) => void;
+  onPreviewClaims: (value: string) => void; preview: Preview | null; previewBusy?: boolean; previewError?: string; session: Session | null;
+  onReloadAccess: () => void; onRevokeTokens?: () => void; revokingTokens?: boolean; onDirtyChange?: (dirty: boolean) => void;
   queryClient: QueryClient; sessionScope: string;
 }) {
-  const [policyPanel, setPolicyPanel] = useState("schema");
+  const { confirm } = useConfirmation();
   const [tab, setTab] = useState<AssetTab>(props.initialTab ?? "policy");
-  const [schemaSearch, setSchemaSearch] = useState("");
-  const [conditionsText, setConditionsText] = useState("{}");
-  const [conditionsError, setConditionsError] = useState(false);
+  const validationSummary = useRef<HTMLDivElement>(null);
+  const [testOpen, setTestOpen] = useState(false);
+  const [pending, setPending] = useState<Record<number, boolean>>({});
+  const [expanded, setExpanded] = useState<Set<number>>(() => new Set(props.rules.slice(0, 1).map((rule) => rule.ordinal)));
+  const [generation, setGeneration] = useState(0);
   const [accessDirty, setAccessDirty] = useState(false);
-  const [revokeTokensOnSave, setRevokeTokensOnSave] = useState(false);
+  const [revoke, setRevoke] = useState(false);
+  const pendingRef = useRef(pending);
+  const lastOrdinals = useRef(new Set(props.rules.map((rule) => rule.ordinal)));
+  const readOnly = !props.access?.capabilities.some((item) => item.capability === "edit" && item.allowed);
+  const dirty = Object.values(pending).some(Boolean);
+  const bypass = props.rules.some((rule) => rule.effect === "allow_all");
   useEffect(() => {
-    setConditionsText(JSON.stringify(props.activeRule?.when ?? {}, null, 2));
-    setConditionsError(false);
-  }, [props.asset.id, props.selectedRule, props.activeRule?.when]);
-  useEffect(() => setTab(props.initialTab ?? "policy"), [props.asset.id, props.initialTab]);
-  useEffect(() => setRevokeTokensOnSave(false), [props.asset.id]);
+    const added = props.rules.filter((rule) => !lastOrdinals.current.has(rule.ordinal));
+    if (added.length) setExpanded((current) => new Set([...current, ...added.map((rule) => rule.ordinal)]));
+    lastOrdinals.current = new Set(props.rules.map((rule) => rule.ordinal));
+  }, [props.rules]);
+  useEffect(() => { setPending({}); pendingRef.current = {}; setGeneration((value) => value + 1); setRevoke(false); setExpanded(new Set(props.rules.slice(0, 1).map((rule) => rule.ordinal))); }, [props.asset.id]);
   useEffect(() => {
-    const syncLocation = () => {
-      const location = new URLSearchParams(window.location.search);
-      const rawTab = location.get("tab");
-      const nextTab = ["policy", "tests", "access", "consumers"].includes(rawTab ?? "") ? rawTab as AssetTab : "policy";
-      if (accessDirty && nextTab !== tab) {
-        if (!window.confirm("You have unsaved access changes. Leave this editor?")) return;
-        setAccessDirty(false);
-        props.onDirtyChange?.(false);
-      }
-      setTab(nextTab);
-    };
-    window.addEventListener("popstate", syncLocation);
-    return () => window.removeEventListener("popstate", syncLocation);
-  }, [accessDirty, props.onDirtyChange, tab]);
-  const fields = props.asset.schema?.fields ?? [];
-  const visibleFields = useMemo(() => filterSchemaNodes(fields, schemaSearch), [fields, schemaSearch]);
-  const currentPreview = props.preview;
-  const canEdit = Boolean(props.access?.capabilities.some((item) => item.capability === "edit" && item.allowed));
-  const canRevokeTokens = props.access?.can_revoke_tokens === true;
-  const readOnly = !canEdit;
-  const listedAssets = props.assets.some((item) => item.id === props.asset.id) ? props.assets : [props.asset, ...props.assets];
-  const inventoryAsset = listedAssets.find((item) => item.id === props.asset.id) ?? props.asset;
-  function selectTab(next: AssetTab) {
-    if (accessDirty && !window.confirm("You have unsaved access changes. Leave this editor?")) return;
-    if (accessDirty) {
-      setAccessDirty(false);
-      props.onDirtyChange?.(false);
-    }
-    setTab(next);
-    const params = new URLSearchParams(window.location.search);
-    if (next === "policy") params.delete("tab"); else params.set("tab", next);
-    const query = params.toString();
-    window.history.pushState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}#assets`);
+    setTab(props.initialTab ?? "policy");
+    pendingRef.current = {}; setPending({}); setGeneration((value) => value + 1);
+    setAccessDirty(false); props.onDirtyChange?.(false);
+  }, [props.initialTab, props.asset.id]);
+  useEffect(() => {
+    if (!props.fieldErrors?.length) return;
+    setExpanded((current) => { const next = new Set(current); for (const error of props.fieldErrors ?? []) { const match = /^rules\.(\d+)/.exec(error.field); const rule = match && props.rules[Number(match[1])]; if (rule) next.add(rule.ordinal); } return next; });
+    validationSummary.current?.focus();
+  }, [props.fieldErrors]);
+  function report(ordinal: number, value: boolean) {
+    pendingRef.current = { ...pendingRef.current, [ordinal]: value };
+    setPending(pendingRef.current); props.onDirtyChange?.(Object.values(pendingRef.current).some(Boolean) || accessDirty);
   }
-  return <><AssetInventory assets={props.assets} selectedId={props.asset.id} search={props.assetSearch} loading={props.assetInventoryLoading} hasMore={props.assetHasMore} onSearch={props.onSearch} onSelect={props.onAsset} onLoadMore={props.onLoadMore} /><div className="asset-summary"><div className="asset-picker"><div className="asset-governance-status" aria-label="Governance status"><span className={"pill " + (inventoryAsset.policy_status === "missing" ? "warning" : "")}>{inventoryStatusLabel(inventoryAsset)}</span><small>Live policy revision {props.activeRevision}</small></div></div><div className="save-status" aria-live="polite"><span className={"save-dot " + props.saveState} /> {saveLabel(props.saveState)}</div></div><div className="notice" role="status">{props.notice}</div>{Boolean(props.fieldErrors?.length) && <div className="validation-summary" tabIndex={-1} role="alert" aria-labelledby="validation-summary-title"><strong id="validation-summary-title">Fix these fields before saving</strong><ul>{props.fieldErrors?.map((item) => <li key={`${item.field}-${item.type}`}>{item.field || "Policy"}: {item.message}</li>)}</ul></div>}<Tabs value={tab} onChange={(value) => { if (value) selectTab(value as AssetTab); }}><Tabs.List className="asset-tabs" aria-label="Asset views">{(["policy", "tests", "access", "consumers"] as const).map((item) => <Tabs.Tab key={item} value={item}><span className="asset-tab-label"><Icon name={item === "policy" ? "shield-check" : item === "tests" ? "play" : item === "access" ? "key-round" : "database"} size={15} />{item[0].toUpperCase() + item.slice(1)}</span></Tabs.Tab>)}</Tabs.List><Tabs.Panel value={tab}>{tab === "policy" ? <><SegmentedControl className="policy-panel-switch" aria-label="Policy panels" value={policyPanel} onChange={setPolicyPanel} data={[{ value: "schema", label: "Fields" }, { value: "editor", label: "Rules" }, { value: "result", label: "Test result" }]} /><div className="studio" data-panel={policyPanel}>
-    <section className="schema-panel" aria-label="Schema and field selection"><div className="panel-head"><div><span className="eyebrow">SCHEMA</span><h2>Fields & access</h2></div></div><p className="help">Fields retain server-defined paths. A checked field is visible through the selected rule.</p>{!props.asset.schema && <p className="schema-drift-warning" role="status"><strong>Authoritative schema unavailable</strong><br />Refresh the asset before selecting fields. The editor will not invent field identities from legacy summaries.</p>}{props.asset.schema?.stable_field_ids === false && <p className="schema-drift-warning" role="status"><strong>Field identities are unstable</strong><br />Verify policy field selections after every schema refresh.</p>}<TextInput className="schema-search" label="Search fields" type="search" value={schemaSearch} onChange={(event) => setSchemaSearch(event.currentTarget.value)} placeholder="name or nested path" leftSection={<Icon name="search" size={15} />} />{visibleFields.length ? <VirtualSchemaTree nodes={visibleFields} selectedField={props.selectedField} effectiveFields={props.effectiveFields} onField={(field) => { props.onField(field); setPolicyPanel("editor"); }} forceExpanded={Boolean(schemaSearch)} /> : <div className="empty-result"><strong>{props.asset.schema ? "No matching fields" : "No authoritative fields available"}</strong><p>{props.asset.schema ? "Clear the search to browse the authoritative schema." : "Refresh the asset to load its authoritative nested schema."}</p></div>}<div className="schema-note"><strong>Nested fields</strong><p>Struct, list, and map paths come from the control plane. Collection nodes expose explicit <code>$element</code>, <code>$key</code>, and <code>$value</code> segments.</p></div></section>
-    <section className="editor-panel" aria-label="Policy rule editor"><div className="panel-head"><div><span className="eyebrow">POLICY RULES</span><h2>{props.activeRule ? "Rule " + (props.selectedRule + 1) : "No rule selected"}</h2></div><div className="card-actions"><Button type="button" variant="default" size="sm" className="secondary compact" onClick={props.onUndo} disabled={readOnly || !props.canUndo} aria-label="Undo policy edit" leftSection={<Icon name="undo" size={15} />}>Undo</Button><Button type="button" variant="default" size="sm" className="secondary compact" onClick={props.onRedo} disabled={readOnly || !props.canRedo} aria-label="Redo policy edit" leftSection={<Icon name="redo" size={15} />}>Redo</Button><Button type="button" variant="subtle" className="text-button" onClick={props.onAddRule} disabled={readOnly} leftSection={<Icon name="plus" size={16} />}>Add rule</Button></div></div>{props.rules.length ? <><div className="rule-list" aria-label="Policy rule list">{props.rules.map((rule, index) => <div className="rule-row" key={index}><button type="button" className={index === props.selectedRule ? "selected" : ""} onClick={() => props.onRule(index)}>Rule {index + 1}<small>{rule.principals.join(", ") || "No principal"}</small></button><div className="rule-order"><Button className="secondary compact" variant="default" size="sm" type="button" aria-label={`Duplicate rule ${index + 1}`} onClick={() => props.onDuplicateRule(index)} disabled={readOnly} leftSection={<Icon name="copy" size={14} />}>Duplicate</Button><Button className="secondary compact" variant="default" size="sm" type="button" aria-label={`Move rule ${index + 1} up`} onClick={() => props.onMoveRule(index, -1)} disabled={readOnly || index === 0}><Icon name="arrow-up" size={14} /></Button><Button className="secondary compact" variant="default" size="sm" type="button" aria-label={`Move rule ${index + 1} down`} onClick={() => props.onMoveRule(index, 1)} disabled={readOnly || index === props.rules.length - 1}><Icon name="arrow-down" size={14} /></Button></div></div>)}</div><EditorSection label="Who"><TextInput value={props.activeRule?.principals.join(", ") ?? ""} onChange={(event) => { const value = event.currentTarget.value; props.onUpdateRule((rule) => ({ ...rule, principals: value.split(",").map((item) => item.trim()).filter(Boolean) })); }} aria-label="Principals or groups" placeholder="group:us-analysts" disabled={readOnly} /></EditorSection><EditorSection label="Conditions"><ConditionBuilder value={props.activeRule?.when} disabled={readOnly} onChange={(when) => props.onUpdateRule((rule) => ({ ...rule, when }))} /><details className="advanced-json"><summary>Advanced JSON</summary><Textarea value={conditionsText} onChange={(event) => { const text = event.currentTarget.value; setConditionsText(text); try { const parsed = JSON.parse(text); if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") throw new Error("object required"); setConditionsError(false); props.onUpdateRule((rule) => ({ ...rule, when: parsed as Record<string, string | string[]> })); } catch { setConditionsError(true); } }} aria-invalid={conditionsError} aria-label="Advanced principal conditions JSON" placeholder='{"region":"us"}' disabled={readOnly} />{conditionsError && <p className="auth-error" role="alert">Conditions must be a JSON object before saving.</p>}<p className="help">Advanced JSON remains lossless for claims supported by the control plane.</p></details></EditorSection><EditorSection label="Which fields"><Checkbox className="check-line" checked={props.activeRule?.columns.includes(props.selectedField) ?? false} disabled={readOnly || !props.selectedField} onChange={() => props.onToggleField(props.selectedField)} label={<>Include <strong>{props.selectedField || "a schema field"}</strong></>} /><p className="help">Parent/child conflicts and invalid nested paths are rejected by the control plane.</p></EditorSection><EditorSection label="Which rows"><Textarea value={props.activeRule?.row_filter ?? ""} onChange={(event) => props.onUpdateRule((rule) => ({ ...rule, row_filter: event.currentTarget.value || null }))} aria-label="DuckDB row restriction" placeholder="region = 'US'" disabled={readOnly} /><p className="help">Matching rules combine row restrictions with AND.</p></EditorSection><EditorSection label="How values appear"><MaskEditor mask={props.selectedMask} onChange={props.onMask} field={props.selectedField} supportedMasks={props.asset.schema?.supported_masks ?? []} /></EditorSection><div className="editor-actions"><Button type="button" className="danger" variant="default" onClick={props.onRemoveRule} disabled={readOnly} leftSection={<Icon name="trash" size={16} />}>Remove rule</Button><Button type="button" variant="default" className="secondary" onClick={props.onPreview} leftSection={<Icon name="play" size={15} />}>Run policy test</Button>{canRevokeTokens && <Checkbox checked={revokeTokensOnSave} onChange={(event) => setRevokeTokensOnSave(event.currentTarget.checked)} label="Revoke existing tokens after saving" />}<Button type="button" className="primary" onClick={() => props.onSave(revokeTokensOnSave)} disabled={readOnly || props.saveState === "saving" || conditionsError} leftSection={<Icon name="save" size={16} />}>{props.saveState === "saving" ? "Saving…" : "Save policy"}</Button></div></> : <div className="empty-result"><strong>No policy rules</strong><p>This is an intentional deny-all policy. Save it to make the live policy deny all reads.</p><div className="editor-actions"><Button type="button" variant="default" className="secondary" onClick={props.onPreview} leftSection={<Icon name="play" size={15} />}>Run policy test</Button>{canRevokeTokens && <Checkbox checked={revokeTokensOnSave} onChange={(event) => setRevokeTokensOnSave(event.currentTarget.checked)} label="Revoke existing tokens after saving" />}<Button type="button" className="primary" onClick={() => props.onSave(revokeTokensOnSave)} disabled={readOnly || props.saveState === "saving"} leftSection={<Icon name="save" size={16} />}>{props.saveState === "saving" ? "Saving…" : "Save deny-all policy"}</Button></div><Button type="button" className="primary" onClick={props.onAddRule} disabled={readOnly} leftSection={<Icon name="plus" size={16} />}>Add first rule</Button></div>}</section>
-    <section className="result-panel" aria-label="Effective access inspector"><span className="eyebrow">EFFECTIVE ACCESS</span><h2>{props.previewPrincipal || "Synthetic persona"}</h2><p className="muted">{props.previewGroups ? `Groups: ${props.previewGroups}` : "No groups"} · not reader authentication</p>{currentPreview ? <><div className={"result-state " + (currentPreview.decision === "deny" ? "denied" : "allowed")}>Test {currentPreview.decision === "deny" ? "denied" : "allowed"}</div><h3>Visible output</h3><ul>{currentPreview.allowed_columns.map((field) => <li key={field}>{field}{currentPreview.masks[field] && <small> · {currentPreview.masks[field].type} mask</small>}</li>)}</ul><h3>Row restriction</h3><code>{currentPreview.row_filter ?? "No matching row restriction"}</code></> : <div className="empty-result"><strong>Run policy test</strong><p>See authorized output schema, masks, and row restriction for the current live policy.</p></div>}<div className="result-warning"><strong>Current policy</strong><p>Test results reflect the saved live policy. Existing tickets remain valid until expiry unless an owner revokes them.</p></div></section>
-  </div></> : tab === "tests" ? <TestsView onPreview={props.onPreview} preview={props.preview} principal={props.previewPrincipal} groups={props.previewGroups} claims={props.previewClaims} onPrincipal={props.onPreviewPrincipal} onGroups={props.onPreviewGroups} onClaims={props.onPreviewClaims} /> : tab === "access" ? <AccessView asset={props.asset} access={props.access} grants={props.grants} session={props.session} onReload={props.onReloadAccess} onDirtyChange={(dirty) => { setAccessDirty(dirty); props.onDirtyChange?.(dirty); }} queryClient={props.queryClient} sessionScope={props.sessionScope} onRevokeTokens={props.onRevokeTokens ?? (() => undefined)} /> : <ConsumerView asset={props.asset} />}</Tabs.Panel></Tabs></>;
+  function discard() {
+    props.onDiscard(); pendingRef.current = {}; setPending({}); setGeneration((value) => value + 1); setRevoke(false); props.onDirtyChange?.(accessDirty);
+  }
+  async function selectTab(next: AssetTab) {
+    if (next === tab) return;
+    if ((dirty || accessDirty) && !await confirm(discardChanges("form", "switch tabs"))) return;
+    pendingRef.current = {}; setPending({}); setGeneration((value) => value + 1); setAccessDirty(false); props.onDirtyChange?.(false);
+    setTab(next); const params = new URLSearchParams(window.location.search); if (next === "policy") params.delete("tab"); else params.set("tab", next);
+    window.history.pushState(null, "", `${window.location.pathname}${params.size ? `?${params}` : ""}#assets`);
+    props.onTabChange?.(next);
+  }
+  return <>
+    <Button variant="subtle" onClick={props.onBack}>Back to assets</Button>
+    <div className="asset-summary"><span>{inventoryStatusLabel(props.asset)} · Live revision {props.activeRevision}</span><span className="save-status"><span className={`save-dot ${props.saveState}`} />{saveLabel(props.saveState)}</span></div>
+    <div className="notice" role="status">{props.notice}</div>
+    {Boolean(props.fieldErrors?.length) && <div ref={validationSummary} tabIndex={-1} className="validation-summary" role="alert">{props.fieldErrors!.map((item, index) => <p key={index}>{displayErrorField(item.field)}: {item.message}</p>)}</div>}
+    <Tabs value={tab} onChange={(value) => { if (value) selectTab(value as AssetTab); }}><div className="policy-view-tabs"><Tabs.List aria-label="Asset views">{(["policy", "access", "consumers"] as const).map((item) => <Tabs.Tab value={item} key={item}>{item[0].toUpperCase() + item.slice(1)}</Tabs.Tab>)}</Tabs.List><Button variant="default" onClick={() => setTestOpen(true)} leftSection={<Icon name="play" size={15} />}>Test Policy</Button></div>
+    <Tabs.Panel value={tab}>{tab === "policy" ? <div className="policy-authoring">
+      <div className={`policy-baseline ${bypass ? "bypassed" : ""}`}><Icon name="shield-check" size={20} /><div><strong>{bypass ? "Allow all is enabled" : "Every column starts with a NULL mask"}</strong><p>{bypass ? "All authenticated readers receive every column and row, without masks. Other rules are bypassed." : "Rules reveal selected columns with no mask, or replace the default with another mask. Row filters are independent."}</p></div><Button variant="default" disabled={readOnly || bypass || dirty} onClick={props.onAllowAll}>Allow all to all users</Button></div>
+      <div className="policy-list-heading"><h2>Rules <span className="policy-count">{props.rules.length}</span></h2><Button disabled={readOnly} onClick={props.onAddRule} leftSection={<Icon name="plus" size={15} />}>Add rule</Button></div>
+      <div className="stacked-rules">{props.rules.map((rule, index) => {
+        const open = expanded.has(rule.ordinal); const title = rule.name?.trim() || `Rule ${index + 1}`;
+        return <article className="collapsible-rule" key={`${props.asset.id}:${generation}:${rule.ordinal}`}>
+          <button className="rule-disclosure" type="button" aria-expanded={open} aria-controls={`rule-body-${rule.ordinal}`} onClick={() => setExpanded((current) => { const next = new Set(current); if (next.has(rule.ordinal)) next.delete(rule.ordinal); else next.add(rule.ordinal); return next; })}><Icon name="chevron-down" size={18} /><span><strong>{title}</strong><small>{rule.effect === "allow_all" ? "Global bypass" : `${rule.columns.length} selections · ${rule.principals.join(", ") || "No audience"}${rule.row_filter ? " · Filtered rows" : ""}`}</small></span>{pending[rule.ordinal] && <span className="local-edit-label">Unapplied edits</span>}</button>
+          <div id={`rule-body-${rule.ordinal}`} className="rule-body" hidden={!open}>
+            <div className="rule-metadata"><TextInput label="Rule name" maxLength={160} value={rule.name ?? ""} disabled={readOnly} onChange={(event) => { const name = event.currentTarget.value; props.onUpdateRule((current) => ({ ...current, name }), index); }} /><Textarea label="Description" maxLength={2000} autosize value={rule.description ?? ""} disabled={readOnly} placeholder="Explain who needs this access and why" onChange={(event) => { const description = event.currentTarget.value; props.onUpdateRule((current) => ({ ...current, description }), index); }} /></div>
+            {rule.effect === "allow_all" ? <p className="policy-bypass-description">This rule short-circuits all column masks and row filters. Delete it to restore the other rules and the default NULL masks.</p> : <>
+              <TokenInput label="Applies to people or groups" value={rule.principals} onChange={(principals) => props.onUpdateRule((current) => ({ ...current, principals }), index)} placeholder="group:analysts or * for all authenticated users" disabled={readOnly} />
+              <details className="audience-conditions"><summary>Identity claim conditions</summary><ConditionBuilder value={rule.when} disabled={readOnly} onChange={(when) => props.onUpdateRule((current) => ({ ...current, when }), index)} /></details>
+              <PolicyRuleEditor assetId={props.asset.id} ruleIndex={index} rule={rule} fields={props.asset.schema?.fields} supportedMasks={props.asset.schema?.supported_masks ?? []} readOnly={readOnly || bypass} onUpdateRule={(change) => props.onUpdateRule(change, index)} onDirtyChange={(value) => report(rule.ordinal, value)} />
+            </>}
+            <div className="rule-footer"><Button variant="subtle" disabled={readOnly || dirty || rule.effect === "allow_all"} onClick={() => props.onDuplicateRule(index)}>Duplicate rule</Button><Button variant="subtle" color="red" disabled={readOnly || props.saveState === "saving"} onClick={() => { report(rule.ordinal, false); props.onRemoveRule(index); }}>Delete rule</Button></div>
+          </div>
+        </article>;
+      })}</div>
+      {!props.rules.length && <div className="policy-empty"><p>No overrides. Every column returns NULL for authenticated readers.</p></div>}
+      <div className="policy-save-bar"><Button variant="default" onClick={() => setTestOpen(true)} leftSection={<Icon name="play" size={15} />}>Test saved policy</Button><Button variant="default" disabled={readOnly || props.saveState === "saving" || (props.saveState === "saved" && !dirty)} onClick={discard}>Discard all changes</Button>{props.access?.can_revoke_tokens && <Checkbox label="Revoke existing tokens after saving" checked={revoke} onChange={(event) => setRevoke(event.currentTarget.checked)} />}{dirty && <p className="pending-edit-note">Apply or cancel open mask and row-filter forms before saving.</p>}<Button disabled={readOnly || dirty || props.saveState === "saving"} onClick={() => props.onSave(revoke)}>{props.saveState === "saving" ? "Saving…" : "Save policy"}</Button></div>
+      <details className="policy-conflicts"><summary>How overlapping rules combine</summary><p>Order does not change the result. A matching grant overrides the default NULL mask. Between explicit masks, NULL wins and keep-last uses the smaller count; incompatible masks reject the read. Row filters combine with AND. Allow all bypasses everything.</p></details>
+    </div> : tab === "access" ? <AccessView asset={props.asset} access={props.access} grants={props.grants} session={props.session} onReload={props.onReloadAccess} onDirtyChange={(value) => { setAccessDirty(value); props.onDirtyChange?.(value || dirty); }} queryClient={props.queryClient} sessionScope={props.sessionScope} revokingTokens={props.revokingTokens} onRevokeTokens={props.onRevokeTokens ?? (() => undefined)} /> : <ConsumerView asset={props.asset} />}</Tabs.Panel></Tabs>
+    <Modal opened={testOpen} onClose={() => setTestOpen(false)} title="Test policy" size="lg" keepMounted><TestsView busy={props.previewBusy} error={props.previewError} unsaved={props.saveState !== "saved" || dirty} onPreview={props.onPreview} preview={props.preview} principal={props.previewPrincipal} groups={props.previewGroups} claims={props.previewClaims} onPrincipal={props.onPreviewPrincipal} onGroups={props.onPreviewGroups} onClaims={props.onPreviewClaims} />{props.preview && <div className="policy-test-result"><h3>Effective values</h3><ul>{props.preview.allowed_columns.map((column) => <li key={column}><code>{column}</code><span>{props.preview!.masks[column]?.type ?? "No mask"}</span></li>)}</ul><h3>Combined row filter</h3><code>{props.preview.row_filter ?? "All rows"}</code></div>}</Modal>
+  </>;
 }
 
-const TREE_ROW_HEIGHT = 42;
-const TREE_VIEWPORT_HEIGHT = 504;
-const TREE_OVERSCAN = 8;
-
-function VirtualSchemaTree({ nodes, selectedField, effectiveFields, onField, forceExpanded = false }: { nodes: SchemaNode[]; selectedField: string; effectiveFields: Set<string>; onField: (name: string) => void; forceExpanded?: boolean }) {
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(nodes.filter((node) => node.children?.length).map((node) => node.human_path)));
-  const [scrollTop, setScrollTop] = useState(0);
-  const viewportRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    setExpanded(new Set(nodes.filter((node) => node.children?.length).map((node) => node.human_path)));
-    setScrollTop(0);
-  }, [nodes]);
-  const flattened = useMemo(() => flattenSchemaTree(nodes, expanded, forceExpanded), [expanded, forceExpanded, nodes]);
-  const first = Math.max(0, Math.floor(scrollTop / TREE_ROW_HEIGHT) - TREE_OVERSCAN);
-  const last = Math.min(flattened.length, Math.ceil((scrollTop + TREE_VIEWPORT_HEIGHT) / TREE_ROW_HEIGHT) + TREE_OVERSCAN);
-  const windowed = flattened.slice(first, last);
-  const toggle = (path: string) => setExpanded((current) => {
-    const next = new Set(current);
-    if (next.has(path)) next.delete(path); else next.add(path);
-    return next;
-  });
-  const focusIndex = (index: number) => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    const targetTop = index * TREE_ROW_HEIGHT;
-    const visibleTop = viewport.scrollTop;
-    const visibleBottom = visibleTop + TREE_VIEWPORT_HEIGHT;
-    if (targetTop < visibleTop || targetTop + TREE_ROW_HEIGHT > visibleBottom) {
-      viewport.scrollTo({ top: Math.max(0, targetTop - (TREE_VIEWPORT_HEIGHT - TREE_ROW_HEIGHT) / 2) });
-    }
-    window.requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-schema-index="${index}"]`)?.focus());
-  };
-  return <div ref={viewportRef} className="field-tree-viewport" role="tree" aria-label="Schema fields" style={{ maxHeight: TREE_VIEWPORT_HEIGHT }} onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}><div className="field-tree-window" style={{ height: flattened.length * TREE_ROW_HEIGHT }}>{windowed.map(({ node, depth, index, posinset, setsize }) => {
-    const hasChildren = Boolean(node.children?.length);
-    const isExpanded = hasChildren && (forceExpanded || expanded.has(node.human_path));
-    return <div className="field-tree-item" key={node.field_id} data-schema-index={index} role="treeitem" aria-level={depth + 1} aria-posinset={posinset} aria-setsize={setsize} aria-selected={selectedField === node.human_path} aria-expanded={hasChildren ? isExpanded : undefined} style={{ top: index * TREE_ROW_HEIGHT }} tabIndex={selectedField === node.human_path ? 0 : -1} onKeyDown={(event) => {
-      if (event.key === "ArrowRight" && hasChildren && !isExpanded) { event.preventDefault(); toggle(node.human_path); }
-      else if (event.key === "ArrowLeft" && hasChildren && isExpanded && !forceExpanded) { event.preventDefault(); toggle(node.human_path); }
-      else if (event.key === "ArrowDown" && index < flattened.length - 1) { event.preventDefault(); focusIndex(index + 1); }
-      else if (event.key === "ArrowUp" && index > 0) { event.preventDefault(); focusIndex(index - 1); }
-      else if (event.key === "Home") { event.preventDefault(); focusIndex(0); }
-      else if (event.key === "End") { event.preventDefault(); focusIndex(flattened.length - 1); }
-      else if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onField(node.human_path); }
-    }}><div className="field-row-wrap">{hasChildren ? <button className="tree-toggle" type="button" tabIndex={-1} aria-label={`${isExpanded ? "Collapse" : "Expand"} ${node.human_path}`} aria-expanded={isExpanded} onClick={() => toggle(node.human_path)}>{isExpanded ? "▾" : "▸"}</button> : <span className="tree-toggle spacer" aria-hidden="true" /> }<button type="button" tabIndex={-1} className={selectedField === node.human_path ? "field-row selected" : "field-row"} style={{ paddingLeft: `${8 + depth * 16}px` }} onClick={() => onField(node.human_path)} aria-label={`Select ${node.human_path}`}><span className="field-name">{node.name}</span><span className="field-type">{node.type}{node.nullable ? " · nullable" : ""}</span>{effectiveFields.has(node.human_path) && <span className="grant">Granted</span>}</button></div></div>;
-  })}</div></div>;
+function TestsView({ unsaved, busy, error, onPreview, preview, principal, groups, claims, onPrincipal, onGroups, onClaims }: {
+  unsaved: boolean; busy?: boolean; error?: string; onPreview: () => void; preview: Preview | null;
+  principal: string; groups: string; claims: string;
+  onPrincipal: (value: string) => void; onGroups: (value: string) => void; onClaims: (value: string) => void;
+}) {
+  const parsed = parseTestClaims(claims);
+  const principalError = principal.trim() ? undefined : "Enter a principal to test.";
+  return <section className="tests-view">
+    <p>Evaluate the saved policy with a sample identity. {unsaved && "Unsaved edits are not included."}</p>
+    <div className="test-card persona-form">
+      <TextInput label="Principal" value={principal} error={principalError} onChange={(event) => onPrincipal(event.currentTarget.value)} placeholder="user:analyst@example.com" />
+      <TextInput label="Groups" value={groups} onChange={(event) => onGroups(event.currentTarget.value)} description="Separate groups with commas." placeholder="us-analysts, finance" />
+      <Textarea label="Claims (JSON)" value={claims} error={parsed.error} onChange={(event) => onClaims(event.currentTarget.value)} aria-label="Synthetic persona claims" placeholder='{"region":"us"}' />
+      <Button type="button" loading={busy} disabled={busy || Boolean(parsed.error || principalError)} onClick={onPreview} leftSection={<Icon name="play" size={15} />}>{busy ? "Testing…" : "Test saved policy"}</Button>
+    </div>
+    {busy && <p role="status">Evaluating saved policy…</p>}
+    {error && <p className="field-error" role="alert">{error}</p>}
+    {preview && <div role="status" className={"result-state " + (preview.decision === "deny" ? "denied" : "allowed")}>Current test: {preview.decision === "deny" ? "denied" : preview.allowed_columns.length + " fields evaluated"}</div>}
+  </section>;
 }
-
-function filterSchemaNodes(nodes: SchemaNode[], search: string): SchemaNode[] {
-  const normalized = search.trim().toLowerCase();
-  if (!normalized) return nodes;
-  const visit = (node: SchemaNode): SchemaNode | null => {
-    const children = (node.children ?? []).map(visit).filter((child): child is SchemaNode => child !== null);
-    if (node.human_path.toLowerCase().includes(normalized) || node.name.toLowerCase().includes(normalized)) {
-      return { ...node, children: node.children };
-    }
-    return children.length ? { ...node, children } : null;
-  };
-  return nodes.map(visit).filter((node): node is SchemaNode => node !== null);
-}
-
-function EditorSection({ label, children }: { label: string; children: ReactNode }) { return <section className="editor-section"><h3>{label}</h3>{children}</section>; }
-function MaskEditor({ mask, field, supportedMasks, onChange }: { mask?: Mask; field: string; supportedMasks: Mask["type"][]; onChange: (mask?: Mask) => void }) {
-  const maskOptions = supportedMasks.flatMap((type) => {
-    const metadata = maskLabels[type];
-    return metadata ? [{ type, ...metadata }] : [];
-  });
-  const option = maskOptions.find((candidate) => candidate.type === mask?.type);
-  return <div className="mask-editor"><NativeSelect id="mask-type" label={<>Mask for <strong>{field || "selected field"}</strong></>} value={mask?.type ?? ""} disabled={!field} onChange={(event) => {
-    const type = event.currentTarget.value as Mask["type"] | "";
-    if (!type) return onChange(undefined);
-    const selected = maskOptions.find((candidate) => candidate.type === type);
-    const value = selected?.needsValue ? (type === "redact" ? "[REDACTED]" : type === "keep_last" ? 4 : "") : undefined;
-    onChange({ type, ...(selected?.needsValue ? { value } : {}) });
-  }} data={[{ value: "", label: "No mask" }, ...maskOptions.map((candidate) => ({ value: candidate.type, label: candidate.label }))]} />{option?.needsValue && <TextInput aria-label="Mask value" type={mask?.type === "keep_last" ? "number" : "text"} min={mask?.type === "keep_last" ? 0 : undefined} step={mask?.type === "keep_last" ? 1 : undefined} inputMode={mask?.type === "keep_last" ? "numeric" : undefined} value={mask?.value === undefined || mask.value === null ? "" : String(mask.value)} placeholder={mask?.type === "keep_last" ? "Characters to retain" : "Text or JSON scalar"} onChange={(event) => { const raw = event.currentTarget.value; if (mask?.type === "keep_last") { const value = Number(raw); if (Number.isInteger(value) && value >= 0) onChange({ ...mask, value }); return; } try { const parsed = JSON.parse(raw); onChange({ ...mask!, value: parsed === null || ["string", "number", "boolean"].includes(typeof parsed) ? parsed : raw }); } catch { onChange({ ...mask!, value: raw }); } }} />}<p className="help">Mask behavior is validated by the control plane before saving.</p></div>;
-}
-function TestsView({ onPreview, preview, principal, groups, claims, onPrincipal, onGroups, onClaims }: { onPreview: () => void; preview: Preview | null; principal: string; groups: string; claims: string; onPrincipal: (value: string) => void; onGroups: (value: string) => void; onClaims: (value: string) => void }) { return <section className="tests-view"><span className="eyebrow">POLICY TESTS</span><h2>Test current policy</h2><p>Simulate a representative persona. This is a policy evaluation, not an impersonated read or data preview.</p><div className="test-card persona-form"><TextInput label="Principal" value={principal} onChange={(event) => onPrincipal(event.currentTarget.value)} placeholder="user:analyst@example.com" /><TextInput label="Groups" value={groups} onChange={(event) => onGroups(event.currentTarget.value)} placeholder="us-analysts, finance" /><Textarea label="Claims (JSON)" value={claims} onChange={(event) => onClaims(event.currentTarget.value)} aria-label="Synthetic persona claims" placeholder='{"region":"us"}' /><Button type="button" className="primary" onClick={onPreview} leftSection={<Icon name="play" size={15} />}>Run test</Button></div>{preview && <div className={"result-state " + (preview.decision === "deny" ? "denied" : "allowed")}>Current test: {preview.decision === "deny" ? "denied" : `${preview.allowed_columns.length} fields visible`}</div>}</section>; }
 function ConditionBuilder({ value, disabled, onChange }: { value?: Record<string, string | string[]>; disabled: boolean; onChange: (value: Record<string, string | string[]>) => void }) {
   const [rows, setRows] = useState<Array<{ key: string; mode: "equals" | "one_of"; value: string }>>(() => conditionRows(value));
   const [error, setError] = useState("");
@@ -238,7 +185,8 @@ function CopyableCode({ title, code }: { title: string; code: string }) {
   return <article className="consumer-card"><div className="consumer-card-head"><h3>{title}</h3><Button type="button" variant="default" size="sm" className="secondary compact" onClick={() => void copy()} leftSection={<Icon name={copied ? "check" : "copy"} size={14} />}>{copied ? "Copied" : copyError ? "Retry copy" : "Copy"}</Button></div><pre><code>{code}</code></pre>{copyError && <p className="help" role="status">Clipboard access is unavailable. Select the code above or retry copying.</p>}</article>;
 }
 
-function AccessView({ asset, access, grants, session, onReload, onDirtyChange, onRevokeTokens, queryClient, sessionScope }: { asset: Asset; access?: AssetAccess; grants: AssetGrant[]; session: Session | null; onReload: () => void; onDirtyChange?: (dirty: boolean) => void; onRevokeTokens?: () => void; queryClient: QueryClient; sessionScope: string }) {
+function AccessView({ asset, access, grants, session, onReload, onDirtyChange, onRevokeTokens, revokingTokens, queryClient, sessionScope }: { asset: Asset; access?: AssetAccess; grants: AssetGrant[]; session: Session | null; onReload: () => void; onDirtyChange?: (dirty: boolean) => void; onRevokeTokens?: () => void; revokingTokens?: boolean; queryClient: QueryClient; sessionScope: string }) {
+  const { confirm } = useConfirmation();
   const [owners, setOwners] = useState(asset.owners.join(", "));
   const [rows, setRows] = useState<AssetGrant[]>(grants);
   const [message, setMessage] = useState("");
@@ -323,8 +271,8 @@ function AccessView({ asset, access, grants, session, onReload, onDirtyChange, o
       if (!isAbortError(error)) setMessage(recoveryMessage(error, "Capability update was rejected; refresh before retrying."));
     } finally { finishMutation(controller); savingRef.current = false; setSaving(false); }
   }
-  function reload() {
-    if (dirty && !window.confirm("You have unsaved access changes. Reload and discard them?")) return;
+  async function reload() {
+    if (dirty && !await confirm(discardChanges("access", "reload access"))) return;
     ownersEditEpoch.current += 1;
     grantsEditEpoch.current += 1;
     setOwnersDirty(false);
@@ -332,5 +280,5 @@ function AccessView({ asset, access, grants, session, onReload, onDirtyChange, o
     onReload();
   }
   const identityHint = session?.issuer ? `Federated identities use the exact issuer ${session.issuer}|subject and ${session.issuer}|group:name.` : "Federated identities should use the exact issuer|subject form so identical subjects from different providers stay isolated.";
-  return <section className="management-view access-view"><div className="management-head"><div><span className="eyebrow">ACCESS</span><h2>Owners and delegated capabilities</h2><p className="muted">Owners can edit the live policy and revoke active tokens. Delegated access remains enforced by the control plane.</p></div><Button type="button" variant="default" className="secondary" onClick={reload} leftSection={<Icon name="refresh-cw" size={16} />}>Refresh</Button></div>{access && <div className="form-card"><h3>Your effective capabilities</h3><p className="help">Calculated by the control plane for <strong>{access.principal}</strong>. A denied capability remains unavailable even when a control is visible.</p><div className="capability-grid">{access.capabilities.map((item) => <div className={item.allowed ? "capability-card allowed" : "capability-card denied"} key={item.capability}><strong>{item.capability}</strong><span>{item.allowed ? "Allowed" : "Not granted"}</span><small>{item.reasons.length ? item.reasons.join(" · ") : "No matching owner or delegated grant"}</small></div>)}</div></div>}<div className="form-card"><h3>Owners</h3><TextInput className="form-label" label="Owner principals" value={owners} onChange={(event) => { markDirty("owners"); setOwners(event.currentTarget.value); }} placeholder="user:owner@example.com, group:data-stewards" disabled={!canManageOwners} /><p className="help">Comma-separated user or group principals. Removing the last owner is blocked while the asset is not safely reassigned. {identityHint}</p><Button type="button" className="primary" onClick={() => void saveOwners()} disabled={!canManageOwners || saving} leftSection={<Icon name="save" size={16} />}>{saving ? "Saving…" : "Save owners"}</Button></div>{canRevokeTokens && <div className="form-card"><h3>Active tokens</h3><p className="help">Policy edits do not revoke tokens. Revoke every unexpired token for this asset when you need changes to take effect for existing readers.</p><Button type="button" className="danger" variant="default" onClick={onRevokeTokens} leftSection={<Icon name="key-round" size={16} />}>Revoke all active tokens</Button></div>}<div className="form-card"><h3>Delegated capabilities</h3>{rows.length ? <div className="grant-editor">{rows.map((grant, index) => <div className="grant-row" key={`${grant.principal}-${grant.capability}-${index}`}><TextInput aria-label={`Grant principal ${index + 1}`} value={grant.principal} disabled={!canManageGrants} onChange={(event) => { const value = event.currentTarget.value; markDirty("grants"); setRows((current) => current.map((item, row) => row === index ? { ...item, principal: value } : item)); }} placeholder="user:analyst@example.com" /><NativeSelect aria-label={`Grant capability ${index + 1}`} value={grant.capability} disabled={!canManageGrants} onChange={(event) => { const value = event.currentTarget.value as AssetGrant["capability"]; markDirty("grants"); setRows((current) => current.map((item, row) => row === index ? { ...item, capability: value } : item)); }} data={[{ value: "read", label: "Read" }, { value: "edit", label: "Edit" }, { value: "grant", label: "Grant management" }]} /><Button type="button" className="danger" variant="default" disabled={!canManageGrants || saving} onClick={() => { markDirty("grants"); setRows((current) => current.filter((_, row) => row !== index)); }} leftSection={<Icon name="trash" size={15} />}>Remove</Button></div>)}</div> : <p className="muted">No explicit delegated capabilities. Grant management is reserved for platform administrators or explicitly delegated grant managers.</p>}<div className="editor-actions"><Button type="button" className="secondary" variant="default" disabled={!canManageGrants || saving} onClick={() => { markDirty("grants"); setRows((current) => [...current, { principal: "", capability: "read" }]); }} leftSection={<Icon name="plus" size={16} />}>Add capability</Button><Button type="button" className="primary" disabled={!canManageGrants || saving} onClick={() => void saveGrants()} leftSection={<Icon name="save" size={16} />}>{saving ? "Saving…" : "Save capabilities"}</Button></div>{message && <p className="notice" role="status">{message}</p>}</div></section>;
+  return <section className="management-view access-view"><div className="management-head"><div><span className="eyebrow">ACCESS</span><h2>Owners and delegated capabilities</h2><p className="muted">Owners can edit the live policy and revoke active tokens. Delegated access remains enforced by the control plane.</p></div><Button type="button" variant="default" className="secondary" onClick={reload} leftSection={<Icon name="refresh-cw" size={16} />}>Refresh</Button></div>{access && <div className="form-card"><h3>Your effective capabilities</h3><p className="help">Calculated by the control plane for <strong>{access.principal}</strong>. A denied capability remains unavailable even when a control is visible.</p><div className="capability-grid">{access.capabilities.map((item) => <div className={item.allowed ? "capability-card allowed" : "capability-card denied"} key={item.capability}><strong>{item.capability}</strong><span>{item.allowed ? "Allowed" : "Not granted"}</span><small>{item.reasons.length ? item.reasons.join(" · ") : "No matching owner or delegated grant"}</small></div>)}</div></div>}<div className="form-card"><h3>Owners</h3><TextInput className="form-label" label="Owner principals" value={owners} onChange={(event) => { markDirty("owners"); setOwners(event.currentTarget.value); }} placeholder="user:owner@example.com, group:data-stewards" disabled={!canManageOwners} /><p className="help">Comma-separated user or group principals. Removing the last owner is blocked while the asset is not safely reassigned. {identityHint}</p><Button type="button" className="primary" onClick={() => void saveOwners()} disabled={!canManageOwners || saving} leftSection={<Icon name="save" size={16} />}>{saving ? "Saving…" : "Save owners"}</Button></div>{canRevokeTokens && <div className="form-card"><h3>Active tokens</h3><p className="help">Policy edits do not revoke tokens. Revoke every unexpired token for this asset when you need changes to take effect for existing readers.</p><Button type="button" className="danger" variant="default" loading={revokingTokens} disabled={revokingTokens} onClick={onRevokeTokens} leftSection={<Icon name="key-round" size={16} />}>Revoke all active tokens</Button></div>}<div className="form-card"><h3>Delegated capabilities</h3>{rows.length ? <div className="grant-editor">{rows.map((grant, index) => <div className="grant-row" key={index}><TextInput aria-label={`Grant principal ${index + 1}`} value={grant.principal} disabled={!canManageGrants} onChange={(event) => { const value = event.currentTarget.value; markDirty("grants"); setRows((current) => current.map((item, row) => row === index ? { ...item, principal: value } : item)); }} placeholder="user:analyst@example.com" /><NativeSelect aria-label={`Grant capability ${index + 1}`} value={grant.capability} disabled={!canManageGrants} onChange={(event) => { const value = event.currentTarget.value as AssetGrant["capability"]; markDirty("grants"); setRows((current) => current.map((item, row) => row === index ? { ...item, capability: value } : item)); }} data={[{ value: "read", label: "Read" }, { value: "edit", label: "Edit" }, { value: "grant", label: "Grant management" }]} /><Button type="button" className="danger" variant="default" disabled={!canManageGrants || saving} onClick={() => { markDirty("grants"); setRows((current) => current.filter((_, row) => row !== index)); }} leftSection={<Icon name="trash" size={15} />}>Remove</Button></div>)}</div> : <p className="muted">No explicit delegated capabilities. Grant management is reserved for platform administrators or explicitly delegated grant managers.</p>}<div className="editor-actions"><Button type="button" className="secondary" variant="default" disabled={!canManageGrants || saving} onClick={() => { markDirty("grants"); setRows((current) => [...current, { principal: "", capability: "read" }]); }} leftSection={<Icon name="plus" size={16} />}>Add capability</Button><Button type="button" className="primary" disabled={!canManageGrants || saving} onClick={() => void saveGrants()} leftSection={<Icon name="save" size={16} />}>{saving ? "Saving…" : "Save capabilities"}</Button></div>{message && <p className="notice" role="status">{message}</p>}</div></section>;
 }

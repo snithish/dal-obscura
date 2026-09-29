@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, userEvent } from "storybook/test";
+import { expect, userEvent, within } from "storybook/test";
 import type { AuthProvider, RuntimeSettings } from "../api";
 import { SettingsView } from "./SettingsView";
 
@@ -75,16 +75,12 @@ export const NoProvidersConfigured: Story = {
 
 export const PreventAccidentalProviderLockout: Story = {
   play: async ({ canvas }) => {
-    const originalConfirm = window.confirm;
-    window.confirm = () => false;
-    try {
-      const removeButtons = canvas.getAllByRole("button", { name: "Remove" });
-      await userEvent.click(removeButtons[removeButtons.length - 1]);
-      await userEvent.click(canvas.getByRole("button", { name: "Save identity providers" }));
-      await expect(canvas.getByRole("status")).toHaveTextContent("were not saved");
-    } finally {
-      window.confirm = originalConfirm;
-    }
+    const removeButtons = canvas.getAllByRole("button", { name: "Remove" });
+    await userEvent.click(removeButtons[removeButtons.length - 1]);
+    await userEvent.click(canvas.getByRole("button", { name: "Save identity providers" }));
+    const dialog = await within(document.body).findByRole("dialog", { name: "Disable all identity providers?" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Keep editing" }));
+    await expect(canvas.getByRole("status")).toHaveTextContent("were not saved");
   },
 };
 

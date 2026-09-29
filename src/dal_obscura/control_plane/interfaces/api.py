@@ -252,7 +252,12 @@ def create_app(  # noqa: C901
 
         del request
         detail = exc.detail if isinstance(exc.detail, (str, list, dict)) else "Request rejected"
-        message = detail if isinstance(detail, str) else "Request rejected"
+        field_errors = _field_errors_from_detail(detail)
+        message = (
+            detail
+            if isinstance(detail, str)
+            else ("Request validation failed" if field_errors else "Request rejected")
+        )
         code = _http_error_code(exc.status_code)
         error: dict[str, object] = {
             "code": code,
@@ -261,7 +266,7 @@ def create_app(  # noqa: C901
         }
         if (current_revision := _revision_from_detail(detail)) is not None:
             error["current_revision"] = current_revision
-        if field_errors := _field_errors_from_detail(detail):
+        if field_errors:
             error["field_errors"] = field_errors
         return JSONResponse(
             status_code=exc.status_code,

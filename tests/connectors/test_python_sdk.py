@@ -194,7 +194,9 @@ def test_python_sdk_preserves_nested_masked_arrow_values_in_polars():
         policy_rules=[
             allow_rule(
                 ["id", "metadata"],
-                masks={"metadata.preferences.theme": {"type": "redact", "value": "[hidden]"}},
+                masks={
+                    "metadata.preferences.$element.theme": {"type": "redact", "value": "[hidden]"}
+                },
             )
         ],
     )

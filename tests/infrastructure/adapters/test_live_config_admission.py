@@ -986,3 +986,22 @@ def test_live_authorizer_changes_effective_version_after_policy_edit(db_session:
         "default.users", "analytics", tenant_id=str(tenant_id)
     )
     assert current_version != initial_version
+
+
+def test_explicit_allow_all_does_not_require_a_frozen_column_selection():
+    asset = LiveAsset(
+        config_revision=uuid4(),
+        tenant_id=uuid4(),
+        catalog="analytics",
+        target="default.users",
+        backend="iceberg",
+        policy_version=1,
+        compiled_config={
+            "policy": {
+                "rules": [
+                    {"effect": "allow_all", "principals": ["*"], "columns": ["*"], "masks": {}}
+                ]
+            }
+        },
+    )
+    _validate_schema_admission(asset, pa.schema([pa.field("new_column", pa.string())]))

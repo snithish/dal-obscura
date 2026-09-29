@@ -27,21 +27,10 @@ from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
 
 
 def test_catalog_registry_rejects_removed_file_catalog_type(tmp_path):
-    config = ServiceConfig(
-        catalogs={
-            "local": CatalogConfig(
-                name="local",
-                type=cast(Any, "files"),
-                options={"format": "parquet", "location": str(tmp_path / "users.parquet")},
-            )
-        }
-    )
-    try:
-        CatalogRegistry(config)
-    except ValueError as exc:
-        assert str(exc) == "Unsupported catalog type: files"
-    else:
-        raise AssertionError("expected removed catalog type rejection")
+    with pytest.raises(ValueError, match="Unsupported catalog type: files"):
+        CatalogConfig(
+            name="local", type="files", options={"location": str(tmp_path / "users.parquet")}
+        )
 
 
 def test_catalog_registry_close_attempts_all_catalogs_when_one_fails(monkeypatch) -> None:

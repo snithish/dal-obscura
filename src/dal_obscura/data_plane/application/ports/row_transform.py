@@ -9,6 +9,10 @@ from dal_obscura.common.access_control.filters import RowFilter
 from dal_obscura.common.access_control.models import MaskRule
 
 
+class StreamResourceError(RuntimeError):
+    """A governed stream exceeded an operational resource budget."""
+
+
 class RowTransformPort(Protocol):
     """Applies row-level filtering and masking to streamed backend batches."""
 

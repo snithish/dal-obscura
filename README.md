@@ -37,6 +37,9 @@ and [implementation ledger](docs/plugin-platform/STATUS.md) for the evidence.
 
 - Governed reads through Arrow Flight plan/ticket flow.
 - Direct, revision-checked policy changes for row filters, column grants, and masks.
+- Multi-column mask editing with rule-local column and principal exemptions.
+- Guided audience, column, mask, and row-filter authoring with editable mask
+  cards, an AND/OR condition builder, and a live summary of local changes.
 - Authenticated control-plane UI and API for assets, catalogs, owners, and policies.
 - Stateless data-plane serving over canonical live configuration records.
 - HMAC-signed, DB-backed tickets with explicit per-asset revocation.
@@ -152,6 +155,11 @@ uv run dal-obscura
 
 Manage assets and policies through the authenticated governance UI or control
 plane API. Policy updates validate and take effect for new reads immediately.
+The policy editor applies mask changes locally to explicit columns, then saves
+the complete policy atomically against its revision. Matching rule filters
+combine with AND; exemptions skip only the specified rule's mask and never
+bypass row restrictions or masks from another rule. Policy tests evaluate the
+saved policy version.
 To invalidate existing tickets, revoke them from the asset's Access view or
 choose **Revoke existing tokens after saving** in the policy editor.
 
@@ -203,3 +211,67 @@ before/after artifact for planner, masking, filtering, and table-format changes.
   explicit allowed-value lists.
 - Tickets persist trusted internal Python scan tasks server-side, so the DB
   ticket payload format is tied to Python internals.
+
+### NULL-default policy authoring
+
+All requested columns start NULL-masked. Named, collapsible rules reveal selected
+columns or apply explicit masks; row filters combine independently with AND.
+The editor provides optional mask/filter controls, nested-column shortcuts,
+whole-policy discard, and a shared saved-policy test modal. An explicit **Allow
+all to all users** rule bypasses masks and row filters for authenticated readers.
+See [policy authoring](docs/policy-authoring.md) for conflict and exemption rules.
+
+This is a breaking development cutover. Recreate disposable configuration
+databases, then run `uv run dal-obscura-migrate upgrade` to install the current
+bootstrap schema, including rule names and descriptions. Old policy, field-path,
+and ticket shapes are not supported. Ungranted columns return NULL.
+
+Compatibility policy: development contracts have a single supported shape.
+Use explicit `$element`, `$key`, and `$value` field-path segments, admitted plugin
+descriptors, and complete stored ticket scan context. Signed transport tickets
+contain only a ticket ID, expiry, and nonce. Removed URL tabs, field-name aliases,
+missing ticket fields, and older database revisions are not adapted at runtime.
+Native Iceberg and public plugins retain their IO validation and lifecycle checks.
+
+### Streaming memory budgets
+
+Governed reads admit a stream before reading its first Arrow batch. Each admitted
+stream reuses one DuckDB connection, but executes each input batch separately.
+Masks and supported row filters are row-local, so this preserves their results
+while preventing DuckDB from buffering an entire input reader before returning
+output. Output batches contain at most 8,192 rows. Tiny input batches incur more
+query setup overhead; configure source batch sizes within the input byte budget.
+Iceberg scanning consumes one file lazily per ticket, including that file's deletes,
+while independent tickets preserve parallelism. This deliberately uses PyIceberg's
+native internal scan iterator because its public iterator materializes whole files;
+run native-scan conformance tests when upgrading PyIceberg. Delete-file decoding and
+Parquet read-ahead still require additional memory. Large Parquet row groups can
+retain oversized buffers and be rejected; write suitably sized row groups rather
+than relying on small output slices to reduce their retained memory.
+
+- `DAL_OBSCURA_MAX_ACTIVE_STREAMS` defaults to `16`; excess reads fail immediately.
+- `DAL_OBSCURA_DUCKDB_MEMORY_LIMIT` defaults to `512MB` per connection. Supply an
+  explicit positive byte size, such as `256MB` or `1GiB`; unlimited and percentage
+  values are rejected at startup.
+- `DAL_OBSCURA_MAX_INPUT_BATCH_BYTES` and `DAL_OBSCURA_MAX_OUTPUT_BATCH_BYTES`
+  default to 64 MiB each. Both logical size and retained Arrow buffers are checked;
+  a small slice retaining a large parent buffer can exceed the limit.
+
+Capacity, batch-budget, and allocation failures surface as Flight `UNAVAILABLE`.
+A failure can occur after partial output: callers must discard partial results
+before retrying the read. Oversized batches are rejected rather than truncated.
+Connections, readers, and admission slots are released on completion, failure, or
+stream cancellation.
+
+These are per-stream guardrails, not a hard process RSS cap. DuckDB's memory limit
+covers its buffer manager, while Arrow, source plugins, and transport buffers also
+allocate memory. Source batches are allocated before their size can be checked.
+Size concurrency and budgets together, leave headroom, and use an OS/container
+memory limit for a hard ceiling. See [DuckDB's memory-limit scope](https://duckdb.org/docs/current/operations_manual/limits).
+
+Memory regression tests sample child-process RSS externally every 5 ms, including
+work before the first output, with fixture setup excluded by a synchronization
+barrier. They compare numeric and wide-row streams at different total sizes and
+exercise the full Iceberg/Flight path. Sampling can miss shorter spikes; it is a
+regression signal, not proof of a hard upper bound. The end-to-end probe includes
+both the client and server in the measured process.

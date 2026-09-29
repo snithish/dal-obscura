@@ -30,8 +30,70 @@ from tests.support.use_cases import (
     FakeTicketCodec,
     FakeTicketStore,
     PretendPushdownTableFormat,
+    StubTableFormat,
     encode_scan_task,
 )
+
+
+def test_exempt_reader_keeps_rule_row_filter_through_plan_and_fetch():
+    schema = pa.schema([pa.field("email", pa.string()), pa.field("country", pa.string())])
+    batches = (
+        pa.record_batch(
+            [
+                pa.array(["alice@example.com", "bob@example.com"]),
+                pa.array(["US", "CA"]),
+            ],
+            schema=schema,
+        ),
+    )
+    table_format = StubTableFormat(
+        catalog_name="catalog1", table_name="users", format="stub", schema=schema, batches=batches
+    )
+    principal = Principal(id="alice", groups=["analysts", "privacy-reviewers"], attributes={})
+    authorizer = InMemoryPolicyAuthorizer(
+        catalog="catalog1",
+        target="users",
+        rules=[
+            {
+                "principals": ["group:analysts"],
+                "columns": ["email", "country"],
+                "masks": {
+                    "email": {"type": "hash", "exempt_principals": ["group:privacy-reviewers"]}
+                },
+                "row_filter": "country = 'US'",
+            }
+        ],
+    )
+    ticket_codec = HmacTicketCodecAdapter("secret")
+    ticket_store = FakeTicketStore()
+    masking = DefaultMaskingAdapter()
+    identity = FakeIdentity(principal=principal)
+    plan_access = PlanAccessUseCase(
+        identity=identity,
+        authorizer=authorizer,
+        catalog_registry=FakeCatalogRegistry(table_format),
+        masking=masking,
+        ticket_codec=ticket_codec,
+        ticket_store=ticket_store,
+        ticket_ttl_seconds=300,
+        max_tickets=1,
+        max_ticket_exchanges=1,
+    )
+    fetch_stream = FetchStreamUseCase(
+        identity=identity,
+        authorizer=authorizer,
+        masking=masking,
+        row_transform=DuckDBRowTransformAdapter(masking),
+        ticket_codec=ticket_codec,
+        ticket_store=ticket_store,
+    )
+    planned = plan_access.execute(
+        PlanRequest(catalog="catalog1", target="users", columns=["email"]), AUTHORIZATION_HEADER
+    )
+    result = fetch_stream.execute(planned.ticket_tokens[0], AUTHORIZATION_HEADER)
+    output = pa.Table.from_batches(list(result.result_batches), schema=result.output_schema)
+    assert output.schema.names == ["email"]
+    assert output.column("email").to_pylist() == ["alice@example.com"]
 
 
 def test_fetch_stream_does_not_recheck_policy_version():
@@ -44,6 +106,7 @@ def test_fetch_stream_does_not_recheck_policy_version():
         tenant_id="tenant-a",
         columns=["id"],
         scan={
+            "authorization_columns": ["id", "region"],
             "read_payload": encode_scan_task(table_format, schema),
             "full_row_filter": None,
             "masks": {},
@@ -188,6 +251,7 @@ def test_fetch_stream_principal_mismatch():
         target="users",
         columns=["id", "region"],
         scan={
+            "authorization_columns": ["id", "region"],
             "read_payload": encode_scan_task(table_format, schema),
             "full_row_filter": None,
             "masks": {},
@@ -269,6 +333,7 @@ def test_fetch_stream_rejects_matching_subject_from_another_issuer():
         tenant_id="tenant-a",
         columns=["id", "region"],
         scan={
+            "authorization_columns": ["id", "region"],
             "read_payload": encode_scan_task(table_format, schema),
             "full_row_filter": None,
             "masks": {},
@@ -322,6 +387,7 @@ def test_fetch_stream_stops_before_emitting_batches_after_identity_expiry():
         tenant_id="tenant-a",
         columns=["id"],
         scan={
+            "authorization_columns": ["id", "region"],
             "read_payload": encode_scan_task(table_format, schema),
             "full_row_filter": None,
             "masks": {},
@@ -382,6 +448,7 @@ def test_fetch_stream_keeps_captured_policy_after_policy_version_changes():
         tenant_id="tenant-a",
         columns=["id"],
         scan={
+            "authorization_columns": ["id", "region"],
             "read_payload": encode_scan_task(table_format, schema),
             "full_row_filter": None,
             "masks": {},
@@ -435,6 +502,7 @@ def test_fetch_stream_stops_after_ticket_is_revoked_between_batches():
         tenant_id="tenant-a",
         columns=["id"],
         scan={
+            "authorization_columns": ["id", "region"],
             "read_payload": encode_scan_task(table_format, schema),
             "full_row_filter": None,
             "masks": {},

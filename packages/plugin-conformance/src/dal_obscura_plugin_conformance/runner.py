@@ -386,7 +386,7 @@ def run_format_checks(  # noqa: C901
             handle,
             schema,
             context,
-            projection=projection,
+            projection=projection or schema.arrow_schema.names,
             row_filter=row_filter,
             max_tasks=max_tasks,
         )

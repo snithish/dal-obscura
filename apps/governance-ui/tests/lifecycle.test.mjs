@@ -24,10 +24,10 @@ test("hash navigation accepts governed pages and defaults unknown values safely"
   assert.equal(pageFromHash("#private-script"), "assets");
 });
 
-test("typed asset locations preserve review draft and tab deep links", () => {
+test("asset locations accept current tabs and discard retired draft parameters", () => {
   assert.deepEqual(
     locationFromUrl("#assets", "?asset=asset-42&draft=draft-7&draft_revision=4&tab=history&version=3"),
-    { page: "assets", assetId: "asset-42", draftId: "draft-7", draftRevision: 4, tab: "history", version: 3 },
+    { page: "assets", assetId: "asset-42" },
   );
   assert.deepEqual(locationFromUrl("#assets", "?tab=unknown&version=0"), { page: "assets" });
 });
@@ -60,7 +60,7 @@ test("recovery mapper covers every governed HTTP recovery status", () => {
 test("recovery mapper names safe validation fields", () => {
   assert.equal(
     recoveryMessage({ status: 422, fieldErrors: [{ field: "options.uri", message: "invalid", type: "value_error" }] }, "fallback"),
-    "The server rejected the submitted values. Correct the highlighted policy or configuration fields. Fields: options.uri.",
+    "The server rejected the submitted values. Check the validation details and retry. options.uri: invalid",
   );
 });
 
@@ -71,4 +71,8 @@ test("runtime path rules trim roots and reject blank rows", () => {
   ]);
   assert.deepEqual(serializePathRules([]), []);
   assert.equal(serializePathRules(["  "]), undefined);
+});
+
+test("removed Tests tab is not restored through old URLs", () => {
+  assert.deepEqual(locationFromUrl("#assets", "?asset=asset-42&tab=tests"), { page: "assets", assetId: "asset-42" });
 });

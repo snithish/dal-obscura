@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import pickle
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -21,8 +21,9 @@ from pyiceberg.expressions import (
     NotNull,
     Or,
 )
-from pyiceberg.io.pyarrow import ArrowScan
-from pyiceberg.table import ALWAYS_TRUE
+from pyiceberg.io import FileIO
+from pyiceberg.io.pyarrow import ArrowScan, _read_all_delete_files
+from pyiceberg.table import ALWAYS_TRUE, FileScanTask
 from sqlglot import exp
 
 from dal_obscura.common.access_control.filters import (
@@ -31,6 +32,7 @@ from dal_obscura.common.access_control.filters import (
     serialize_row_filter,
 )
 from dal_obscura.common.catalog.ports import TableFormat
+from dal_obscura.common.query_planning.field_paths import FieldSegment, parse_field_path
 from dal_obscura.common.query_planning.models import PlanRequest
 from dal_obscura.common.schema_bounds import validate_arrow_schema_bounds
 from dal_obscura.common.table_format.ports import InputPartition, Plan, ScanTask
@@ -145,7 +147,7 @@ class IcebergTableFormat(TableFormat):
             projected_schema=projected_schema,
             row_filter=_compile_row_filter(pushdown_row_filter),
         )
-        return arrow_schema, arrow_scan.to_record_batches(file_tasks)
+        return arrow_schema, _stream_iceberg_batches(arrow_scan, table.io, file_tasks)
 
     def _load_table(
         self,
@@ -160,6 +162,19 @@ class IcebergTableFormat(TableFormat):
         _check_table_locations(table, self.path_enforcer)
         _require_supported_format_version(int(getattr(table.metadata, "format_version", 1)))
         return table
+
+
+def _stream_iceberg_batches(
+    scan: ArrowScan, io: FileIO, tasks: Iterable[FileScanTask]
+) -> Iterator[pa.RecordBatch]:
+    # PyIceberg 0.11's public to_record_batches materializes each entire file in
+    # executor.map. Use its native projection/delete implementation lazily instead.
+    # This private dependency is intentional; native-scan conformance tests must
+    # pass on upgrades. Parallelism remains at the independently planned tickets.
+    for task in tasks:
+        deletes = _read_all_delete_files(io, [task])
+        yield from scan._record_batches_from_scan_tasks_and_deletes([task], deletes)
+        del deletes
 
 
 def _require_supported_format_version(format_version: int) -> None:
@@ -190,7 +205,9 @@ def _execution_columns(columns: Iterable[str]) -> list[str]:
     selected: list[str] = []
     seen: set[str] = set()
     for column in columns:
-        top_level = column.split(".", 1)[0]
+        top_level = (
+            "*" if column == "*" else cast(FieldSegment, parse_field_path(column).segments[0]).name
+        )
         if top_level in seen:
             continue
         seen.add(top_level)

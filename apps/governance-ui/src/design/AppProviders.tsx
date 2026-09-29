@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { MantineProvider, localStorageColorSchemeManager } from "@mantine/core";
 import { setNonce } from "get-nonce";
 import { cssVariablesResolver, theme } from "./theme";
+import { ConfirmationProvider } from "../components/ConfirmationProvider";
 import "@mantine/core/styles.css";
 import "@fontsource/ibm-plex-sans/latin-400.css";
 import "@fontsource/ibm-plex-sans/latin-500.css";
@@ -19,7 +20,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     <MantineProvider theme={theme} cssVariablesResolver={cssVariablesResolver}
       colorSchemeManager={colorSchemeManager} defaultColorScheme="auto"
       getStyleNonce={styleNonce ? () => styleNonce : undefined}>
-      {children}
+      <ConfirmationProvider>{children}</ConfirmationProvider>
     </MantineProvider>
   );
 }

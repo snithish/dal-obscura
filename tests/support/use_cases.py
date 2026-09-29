@@ -4,6 +4,7 @@ import base64
 import pickle
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
+from typing import cast
 
 import pyarrow as pa
 
@@ -15,6 +16,7 @@ from dal_obscura.common.table_format.ports import InputPartition, Plan, ScanTask
 from dal_obscura.common.ticket_delivery.models import (
     ScanPayload,
     TicketPayload,
+    TicketReference,
     ticket_payload_hash,
 )
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
@@ -22,7 +24,12 @@ from dal_obscura.data_plane.application.ports.ticket_store import StoredTicket
 
 
 def scan_payload() -> ScanPayload:
-    return {"read_payload": "payload", "full_row_filter": None, "masks": {}}
+    return {
+        "authorization_columns": ["id", "region"],
+        "read_payload": "payload",
+        "full_row_filter": None,
+        "masks": {},
+    }
 
 
 @dataclass(frozen=True)
@@ -206,9 +213,13 @@ class FakeTicketCodec:
         self.signed_payloads.append(payload)
         return "signed-token"
 
-    def verify(self, token: str) -> TicketPayload:
+    def verify(self, token: str) -> TicketReference:
         del token
-        return self._payload
+        return TicketReference(
+            ticket_id=cast(str, self._payload.ticket_id),
+            expires_at=self._payload.expires_at,
+            nonce=self._payload.nonce,
+        )
 
 
 class FakeTicketStore:

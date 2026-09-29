@@ -22,6 +22,7 @@ from dal_obscura.common.access_control.models import (
     PrincipalConditionValue,
 )
 from dal_obscura.common.access_control.policy_resolution import resolve_access
+from dal_obscura.common.query_planning.field_paths import parse_field_path
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.errors import AuthorizationFailure
 from dal_obscura.control_plane.application.policy_compiler import compile_policy_rule_payloads
@@ -263,21 +264,31 @@ def _compiled_policy_from_response(
 
 def _compiled_rule_from_response(raw: dict[str, object]) -> CompiledPolicyRule:
     masks = cast(dict[str, object], raw.get("masks", {}))
+
+    def compile_mask(value: object) -> CompiledMaskRule:
+        raw_mask = cast(dict[str, object], value)
+        return CompiledMaskRule(
+            type=str(raw_mask.get("type")),
+            value=raw_mask.get("value"),
+            exempt_principals=tuple(
+                str(item) for item in _object_list(raw_mask.get("exempt_principals"))
+            ),
+        )
+
     return CompiledPolicyRule(
         ordinal=int(cast(int | str, raw.get("ordinal", 0))),
         principals=[str(item) for item in _object_list(raw.get("principals"))],
         columns=[str(item) for item in _object_list(raw.get("columns"))],
         masks={
-            str(column): CompiledMaskRule(
-                type=str(cast(dict[str, object], value).get("type")),
-                value=cast(dict[str, object], value).get("value"),
-            )
+            str(column): compile_mask(value)
             for column, value in masks.items()
             if isinstance(value, dict) and cast(dict[str, object], value).get("type")
         },
         row_filter=cast(str | None, raw.get("row_filter")),
-        effect=cast(Literal["allow", "deny"], str(raw.get("effect", "allow"))),
+        effect=cast(Literal["allow", "allow_all"], str(raw.get("effect", "allow"))),
         when=cast(dict[str, PrincipalConditionValue], raw.get("when", {})),
+        name=str(raw.get("name", "")),
+        description=str(raw.get("description", "")),
     )
 
 
@@ -297,7 +308,14 @@ def _preview_columns(asset: dict[str, object], rules: list[AccessRule]) -> list[
     schema_fields = cast(list[dict[str, object]], asset.get("schema_fields", []))
     schema_columns = [str(field["name"]) for field in schema_fields if str(field.get("name", ""))]
     if schema_columns:
-        return schema_columns
+        paths = {name: parse_field_path(name).segments for name in schema_columns}
+        return [
+            name
+            for name, path in paths.items()
+            if not any(
+                len(other) > len(path) and other[: len(path)] == path for other in paths.values()
+            )
+        ]
     columns: list[str] = []
     seen: set[str] = set()
     for rule in rules:
@@ -316,7 +334,7 @@ def _first_matching_rule_ordinal(
     principal_tokens = set(principal.tokens())
     for raw_rule in raw_rules:
         rule = _access_rule_from_response(raw_rule)
-        if not principal_tokens.intersection(rule.principals):
+        if "*" not in rule.principals and not principal_tokens.intersection(rule.principals):
             continue
         if _preview_conditions_match(rule.when, principal.attributes):
             return int(cast(int | str, raw_rule["ordinal"]))

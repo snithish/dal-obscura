@@ -90,7 +90,7 @@ def test_manifest_catalog_and_parquet_format_split_nested_rows(tmp_path):
         handle,
         schema,
         context,
-        projection=("profile.email",),
+        projection=("profile",),
         row_filter=None,
         max_tasks=4,
     )
@@ -163,7 +163,7 @@ def test_parquet_execute_propagates_cancellation_and_closes_reader(tmp_path, mon
     format_plugin = ParquetDatasetFormat(handle, initial)
     schema = format_plugin.schema(handle, initial)
     task = format_plugin.plan(
-        handle, schema, initial, projection=("profile.email",), row_filter=None, max_tasks=4
+        handle, schema, initial, projection=("profile",), row_filter=None, max_tasks=4
     )[0]
 
     cancelled = False
@@ -175,11 +175,21 @@ def test_parquet_execute_propagates_cancellation_and_closes_reader(tmp_path, mon
             self._inner = real_parquet_file(path)
             self.schema_arrow = self._inner.schema_arrow
 
-        def read_row_group(self, *args, **kwargs):
+        @property
+        def num_row_groups(self):
+            return self._inner.num_row_groups
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            self.close()
+
+        def iter_batches(self, *args, **kwargs):
             nonlocal cancelled
-            table = self._inner.read_row_group(*args, **kwargs)
-            cancelled = True
-            return table
+            for batch in self._inner.iter_batches(*args, **kwargs):
+                cancelled = True
+                yield batch
 
         def close(self):
             nonlocal closed
@@ -194,7 +204,8 @@ def test_parquet_execute_propagates_cancellation_and_closes_reader(tmp_path, mon
     )
 
     with pytest.raises(RuntimeError, match="cancelled"):
-        format_plugin.execute(task, context)
+        _, batches = format_plugin.execute(task, context)
+        list(batches)
     assert closed
 
 
@@ -247,7 +258,7 @@ def test_manifest_catalog_paginates_with_string_continuation_tokens(tmp_path):
         _context(),
     )
     first = catalog.list_tables(_context(), limit=1)
-    assert first.continuation == "default.orders"
+    assert isinstance(first.continuation, str) and first.continuation
     second = catalog.list_tables(_context(), continuation=first.continuation, limit=1)
     assert second.entries == (TableIdentifier(namespace=("default",), name="users"),)
     assert second.continuation is None
@@ -401,7 +412,7 @@ def test_manifest_and_format_reject_expired_context(tmp_path):
         )
 
 
-def test_parquet_format_accepts_wildcard_projection(tmp_path):
+def test_parquet_format_accepts_explicit_full_projection(tmp_path):
     root, manifest, table = _write_fixture(tmp_path)
     context = _context()
     catalog = ManifestCatalog(
@@ -419,7 +430,9 @@ def test_parquet_format_accepts_wildcard_projection(tmp_path):
     )
     plugin = ParquetDatasetFormat(handle, context)
     schema = plugin.schema(handle, context)
-    tasks = plugin.plan(handle, schema, context, projection=["*"], row_filter=None, max_tasks=4)
+    tasks = plugin.plan(
+        handle, schema, context, projection=schema.arrow_schema.names, row_filter=None, max_tasks=4
+    )
     assert tasks
     output_schema, batches = plugin.execute(tasks[0], context)
     assert output_schema == table.schema
@@ -453,7 +466,7 @@ def test_parquet_format_rejects_member_schema_drift(tmp_path):
             handle,
             plugin.schema(handle, context),
             context,
-            projection=("*",),
+            projection=plugin.schema(handle, context).arrow_schema.names,
             row_filter=None,
             max_tasks=8,
         )
@@ -483,7 +496,92 @@ def test_parquet_format_rejects_corrupt_member_during_plan(tmp_path):
             handle,
             plugin.schema(handle, context),
             context,
-            projection=("*",),
+            projection=plugin.schema(handle, context).arrow_schema.names,
             row_filter=None,
             max_tasks=8,
         )
+
+
+def test_parquet_groups_all_row_groups_within_task_budget(tmp_path):
+    root, manifest, expected = _write_fixture(tmp_path)
+    context = _context()
+    catalog = ManifestCatalog(
+        CatalogConfig(
+            plugin_id="manifest",
+            instance_id="fixture",
+            revision=1,
+            options={"root": str(root), "manifest_path": str(manifest)},
+        ),
+        context,
+    )
+    handle = catalog.resolve_table(TableIdentifier(namespace=("default",), name="users"), context)
+    plugin = ParquetDatasetFormat(handle, context)
+    schema = plugin.schema(handle, context)
+    tasks = plugin.plan(
+        handle, schema, context, projection=schema.arrow_schema.names, row_filter=None, max_tasks=2
+    )
+    assert len(tasks) == 2
+    rows = []
+    for task in tasks:
+        _, batches = plugin.execute(task, context)
+        rows.extend(pa.Table.from_batches(batches).to_pylist())
+    assert sorted(rows, key=lambda row: row["id"]) == expected.to_pylist()
+
+
+def test_manifest_identity_keys_distinguish_literal_dots():
+    from dal_obscura_manifest_parquet.catalog import _identifier_key
+
+    assert _identifier_key(TableIdentifier(namespace=("a.b",), name="c")) != _identifier_key(
+        TableIdentifier(namespace=("a",), name="b.c")
+    )
+
+
+def test_parquet_projection_treats_star_and_dots_as_literal_names():
+    from dal_obscura_manifest_parquet.format import _projected_columns
+
+    schema = pa.schema(
+        [
+            pa.field("*", pa.string()),
+            pa.field("profile.email", pa.string()),
+            pa.field("secret", pa.string()),
+        ]
+    )
+    assert _projected_columns(schema, ["*"]) == ("*",)
+    assert _projected_columns(schema, ["profile.email"]) == ("profile.email",)
+
+
+def test_parquet_reads_literal_dotted_column_without_nested_sibling(tmp_path):
+    root, manifest, _ = _write_fixture(tmp_path)
+    table = pa.table({"profile.email": ["literal"], "profile": [{"email": "nested secret"}]})
+    pq.write_table(table, root / "literal.parquet")
+    payload = json.loads(manifest.read_text())
+    entry = payload["tables"]["default.users"]
+    entry.update(
+        files=["literal.parquet"],
+        schema_ipc=base64.b64encode(table.schema.serialize().to_pybytes()).decode("ascii"),
+        field_ids=["literal", "nested"],
+    )
+    manifest.write_text(json.dumps(payload))
+    context = _context()
+    catalog = ManifestCatalog(
+        CatalogConfig(
+            plugin_id="manifest",
+            instance_id="fixture",
+            revision=1,
+            options={"root": str(root), "manifest_path": str(manifest)},
+        ),
+        context,
+    )
+    handle = catalog.resolve_table(TableIdentifier(namespace=("default",), name="users"), context)
+    plugin = ParquetDatasetFormat(handle, context)
+    task = plugin.plan(
+        handle,
+        plugin.schema(handle, context),
+        context,
+        projection=["profile.email"],
+        row_filter=None,
+        max_tasks=1,
+    )[0]
+    schema, batches = plugin.execute(task, context)
+    assert schema.names == ["profile.email"]
+    assert pa.Table.from_batches(batches).to_pylist() == [{"profile.email": "literal"}]

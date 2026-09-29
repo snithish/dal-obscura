@@ -217,16 +217,7 @@ def _load_public_plugin_schema(
         if handle.format_plugin_id != format_plugin_id:
             raise ValidationFailure("Catalog and table-format plugins do not match")
         _validate_handle_contract(handle, catalog_plugin, format_plugin_id)
-        if format_plugin_id == "iceberg":
-            # The built-in Iceberg format remains the legacy compatibility
-            # adapter. External catalogs (for example REST) still resolve
-            # through the public catalog contract, then use this exact
-            # compatibility path for metadata/schema loading.
-            return _load_legacy_iceberg_schema(
-                handle=handle,
-                catalog_name=str(catalog["name"]),
-                egress_allowlist=egress_allowlist,
-            )
+        validate_catalog_options(dict(handle.metadata), egress_allowlist=egress_allowlist)
         format_plugin = format_factory(handle, context)
         _validate_plugin_descriptor(format_plugin, "table_format", format_plugin_id)
         _validate_handle_contract(handle, format_plugin, format_plugin_id)
@@ -247,59 +238,13 @@ def _load_public_plugin_schema(
 def _validate_handle_contract(handle: Any, plugin: Any, format_plugin_id: str) -> None:
     descriptor = getattr(plugin, "descriptor", None)
     if descriptor is None:
-        return
+        raise ValidationFailure("Plugin descriptor is required")
     if getattr(descriptor, "kind", None) == "catalog" and format_plugin_id not in getattr(
         descriptor, "output_formats", ()
     ):
         raise ValidationFailure("Catalog returned an undeclared table-format handle")
     if handle.handle_version not in getattr(descriptor, "handle_versions", ()):
         raise ValidationFailure("Table-format plugin does not support this handle version")
-
-
-def _load_legacy_iceberg_schema(
-    *,
-    handle: Any,
-    catalog_name: str,
-    egress_allowlist: tuple[str, ...],
-) -> pa.Schema:
-    """Load a built-in Iceberg schema from a public catalog handle.
-
-    This compatibility adapter is intentionally limited to the admitted
-    ``iceberg`` format ID. Provider-returned metadata locations still pass the
-    same catalog egress validator before any storage access.
-    """
-
-    metadata = getattr(handle, "metadata", {})
-    if not isinstance(metadata, dict):
-        raise ValidationFailure("Iceberg table handle metadata is invalid")
-    metadata_location = metadata.get("metadata_location")
-    if not isinstance(metadata_location, str) or not metadata_location.strip():
-        raise ValidationFailure("Iceberg table handle is missing metadata location")
-    validate_catalog_options(
-        {"metadata_location": metadata_location},
-        egress_allowlist=egress_allowlist,
-    )
-    io_options = metadata.get("io_options", {})
-    if not isinstance(io_options, dict):
-        raise ValidationFailure("Iceberg table handle IO options are invalid")
-    try:
-        from dal_obscura.data_plane.infrastructure.table_formats.iceberg import IcebergTableFormat
-
-        table_format = IcebergTableFormat(
-            catalog_name=catalog_name,
-            table_name=".".join((*handle.identifier.namespace, handle.identifier.name)),
-            metadata_location=metadata_location,
-            io_options=cast(dict[str, object], io_options),
-        )
-        schema = table_format.get_schema()
-    except ValidationFailure:
-        raise
-    except Exception as exc:
-        raise ValidationFailure("Schema discovery failed") from exc
-    if not isinstance(schema, pa.Schema):
-        raise ValidationFailure("Iceberg format returned an invalid schema")
-    _validate_arrow_schema_bounds(schema)
-    return schema
 
 
 def _require_plugin_methods(plugin: object, names: tuple[str, ...], kind: str) -> None:

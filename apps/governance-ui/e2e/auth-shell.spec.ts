@@ -113,7 +113,7 @@ test("authenticated mobile navigation respects capabilities and restores focus",
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/#assets");
 
-  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Assets", exact: true })).toBeVisible();
   const openNavigation = page.getByRole("button", { name: "Open navigation menu" });
   await openNavigation.click();
   await expect(page.getByRole("dialog", { name: "Navigation" })).toBeVisible();
@@ -134,7 +134,7 @@ test("authenticated policy workspace stays within the page at supported sizes an
   await authenticatedApi(page);
   for (const viewport of [{ width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1440, height: 900 }]) {
     await page.setViewportSize(viewport);
-    await page.goto("/#assets");
+    await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
     await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
     const dimensions = await page.evaluate(() => ({
       documentWidth: document.documentElement.scrollWidth,
@@ -163,7 +163,7 @@ test("asset owner chooses whether live policy changes revoke tokens", async ({ p
     masks: { order_id: { type: "hash" } },
     row_filter: "region = 'eu'",
   }] });
-  await page.goto("/#assets");
+  await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
   await expect(page.getByText("Live policy revision 1")).toBeVisible();
   await expect(page.getByText("Loaded the current live policy.")).toBeVisible();
@@ -191,9 +191,9 @@ test("asset owner chooses whether live policy changes revoke tokens", async ({ p
   await expect(page.getByText("Live policy saved; revoked 2 active token(s)." )).toBeVisible();
 
   await page.getByRole("tab", { name: "Access" }).click();
-  page.once("dialog", (dialog) => dialog.accept());
   const allTokensRequest = page.waitForRequest((request) => request.method() === "POST" && request.url().endsWith(`/v1/assets/${assetId}/tickets/revoke`));
   await page.getByRole("button", { name: "Revoke all active tokens" }).click();
+  await page.getByRole("button", { name: "Revoke tokens", exact: true }).click();
   await allTokensRequest;
   await expect(page.getByText("Revoked 2 active token(s)." )).toBeVisible();
 });
@@ -221,7 +221,7 @@ test("nested schema tree virtualizes 10k fields and keeps keyboard movement resp
       fields,
     },
   }));
-  await page.goto("/#assets");
+  await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
 
   const tree = page.getByRole("tree", { name: "Schema fields" });
@@ -328,7 +328,7 @@ test("administrator management forms keep predictable keyboard order", async ({ 
 test("authenticated reader shell has no serious or critical accessibility violations", async ({ page }) => {
   await authenticatedApi(page);
   await page.goto("/#assets");
-  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Assets", exact: true })).toBeVisible();
 
   const results = await new AxeBuilder({ page }).analyze();
   const blockingViolations = results.violations.filter(
@@ -357,7 +357,8 @@ test("administrator management routes load through the authenticated shell", asy
 test("administrator access management submits owner and grant changes", async ({ page }) => {
   await authenticatedApi(page, { admin: true });
   await page.goto("/#assets");
-  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Assets", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "orders", exact: true }).click();
   await page.getByRole("tab", { name: "Access" }).click();
   await expect(page.getByRole("heading", { name: "Owners and delegated capabilities" })).toBeVisible();
 
@@ -448,9 +449,9 @@ test("administrator plugin lifecycle applies disable and retire transitions", as
   await expect(page.getByText("Synthetic Iceberg lifecycle is now revoked.")).toBeVisible();
   await formatPlugin.getByLabel("Lifecycle for Synthetic Iceberg").selectOption("removed");
   await expect(formatPlugin.getByRole("button", { name: "Apply" })).toBeEnabled();
-  page.once("dialog", (dialog) => dialog.accept());
   const removalResponse = page.waitForResponse((response) => response.url().includes("/v1/plugins/table_format/synthetic.table.iceberg/lifecycle") && response.request().method() === "PATCH");
   await formatPlugin.getByRole("button", { name: "Apply" }).click();
+  await page.getByRole("button", { name: "Remove plugin", exact: true }).click();
   await expect((await removalResponse).status()).toBe(200);
   await expect(page.getByText("Synthetic Iceberg lifecycle is now removed.")).toBeVisible();
 });
@@ -493,7 +494,7 @@ test("late catalog discovery cannot replace the current table inventory", async 
   await deferredDiscovery.started;
 
   await page.getByRole("button", { name: "Assets" }).click();
-  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Assets", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Connections" }).click();
   await expect(page.getByRole("heading", { name: "Catalog connections" })).toBeVisible();
   await page.getByRole("button", { name: "Discover tables" }).click();
@@ -506,7 +507,7 @@ test("late catalog discovery cannot replace the current table inventory", async 
 
 test("mutation HTML challenges clear private workspace state", async ({ page }) => {
   await authenticatedApi(page);
-  await page.goto("/#assets");
+  await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
 
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
   await page.route("**/v1/assets/**/policy", async (route) => route.fulfill({
@@ -542,7 +543,7 @@ test("late management responses cannot replace the current page", async ({ page 
   await deferredAudit.started;
 
   await page.getByRole("button", { name: "Assets", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Assets", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Activity", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Workspace status" })).toBeVisible();
   await expect(page.getByText("fresh-audit")).toBeVisible();
@@ -559,7 +560,7 @@ test("late settings responses cannot replace the current administrator page", as
   await deferredSettings.started;
 
   await page.getByRole("button", { name: "Assets" }).click();
-  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Assets", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Settings" }).click();
   await expect(page.getByRole("heading", { name: "Runtime and identity" })).toBeVisible();
   await expect(page.getByLabel("Ticket TTL (seconds)")).toHaveValue("22");
@@ -575,7 +576,7 @@ test("late connection responses cannot replace the current administrator page", 
   await deferredConnections.started;
 
   await page.getByRole("button", { name: "Assets" }).click();
-  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Assets", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Connections" }).click();
   await expect(page.getByRole("heading", { name: "Catalog connections" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "fresh-catalog" })).toBeVisible();
@@ -589,7 +590,7 @@ test("late asset lookup responses cannot replace the current inventory", async (
   const deferredInventory = deferredResponse();
   await authenticatedApi(page, { deferredInventory });
   await page.goto("/#assets");
-  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Assets", exact: true })).toBeVisible();
 
   const search = page.getByLabel("Find governed asset");
   await search.fill("stale");
@@ -598,7 +599,7 @@ test("late asset lookup responses cannot replace the current inventory", async (
   await page.getByRole("button", { name: "Activity", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Activity", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Assets" }).click();
-  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Assets", exact: true })).toBeVisible();
   await expect(search).toBeEnabled();
   await search.fill("fresh");
   await expect(page.getByRole("region", { name: "Governed assets table" })).toContainText("fresh-orders");
@@ -611,7 +612,7 @@ test("late asset lookup responses cannot replace the current inventory", async (
 test("late live policy saves cannot clear a newer local edit", async ({ page }) => {
   const deferredSave = deferredResponse();
   await authenticatedApi(page, { deferredSave });
-  await page.goto("/#assets");
+  await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
 
   await page.getByRole("button", { name: "Save deny-all policy" }).click();
@@ -628,7 +629,7 @@ test("late live policy saves cannot clear a newer local edit", async ({ page }) 
 test("late policy evaluations cannot replace a newer unsaved edit", async ({ page }) => {
   const deferredEvaluate = deferredResponse();
   await authenticatedApi(page, { deferredEvaluate });
-  await page.goto("/#assets");
+  await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
 
   await page.getByRole("button", { name: "Run policy test" }).click();
@@ -650,7 +651,7 @@ test("reader deep links fail closed before admin settings requests", async ({ pa
   await authenticatedApi(page);
   await page.goto("/#settings");
 
-  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Assets", exact: true })).toBeVisible();
   await expect.poll(() => new URL(page.url()).hash).toBe("#assets");
   expect(adminRequests).toEqual([]);
 });
@@ -666,7 +667,7 @@ test("reader deep links fail closed before connection management requests", asyn
   await authenticatedApi(page);
   await page.goto("/#connections");
 
-  await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Assets", exact: true })).toBeVisible();
   await expect.poll(() => new URL(page.url()).hash).toBe("#assets");
   expect(adminRequests).toEqual([]);
 });

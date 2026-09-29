@@ -22,11 +22,11 @@ MIGRATIONS_DIR = (
     / "migrations"
     / "versions"
 )
-MIGRATION_FILE = MIGRATIONS_DIR / "20260926_0001_live_configuration.py"
-REVISION = "20260926_0001"
+MIGRATION_FILE = MIGRATIONS_DIR / "20260927_0001_current_schema.py"
+REVISION = "20260927_0001"
 
 
-def test_history_is_a_single_frozen_baseline() -> None:
+def test_history_is_a_single_bootstrap_schema() -> None:
     migration_source = MIGRATION_FILE.read_text()
     revisions = {path.name for path in MIGRATIONS_DIR.glob("*.py")} - {"__init__.py"}
 

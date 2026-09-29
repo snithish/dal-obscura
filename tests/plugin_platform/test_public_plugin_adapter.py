@@ -61,7 +61,9 @@ def _fixture(tmp_path: Path) -> tuple[Path, pa.Table]:
     return root, table
 
 
-def test_catalog_registry_routes_public_manifest_plugin_through_legacy_port(tmp_path: Path) -> None:
+def test_catalog_registry_routes_public_manifest_plugin_through_governed_port(
+    tmp_path: Path,
+) -> None:
     root, table = _fixture(tmp_path)
     registry = PluginRegistry(
         builtins=cast(
@@ -112,19 +114,21 @@ def test_catalog_registry_routes_public_manifest_plugin_through_legacy_port(tmp_
     assert pa.Table.from_batches(list(projected_batches)).to_pylist() == [{"id": 1}]
 
 
-def test_public_iceberg_compatibility_path_enforces_metadata_destination(tmp_path: Path) -> None:
+def test_public_catalog_enforces_handle_metadata_destination(tmp_path: Path) -> None:
     identifier = TableIdentifier(namespace=("default",), name="users")
     handle = TableHandle(
-        catalog_plugin_id="rest.catalog",
+        catalog_plugin_id="manifest",
         catalog_instance_id="analytics",
         catalog_revision=1,
         identifier=identifier,
-        format_plugin_id="iceberg",
+        format_plugin_id="parquet.dataset",
         handle_version=1,
         metadata={"metadata_location": "s3://untrusted/metadata.json"},
     )
 
     class Catalog:
+        descriptor = CATALOG_DESCRIPTOR
+
         def close(self):
             return None
 
@@ -145,7 +149,7 @@ def test_public_iceberg_compatibility_path_enforces_metadata_destination(tmp_pat
     adapter = PublicPluginCatalogAdapter(
         "analytics",
         {},
-        "rest.catalog",
+        "manifest",
         lambda config, context: Catalog(),
         lambda plugin_id: object(),
         PathRuleEnforcer([{"root": str(tmp_path)}]),
@@ -167,6 +171,8 @@ def test_public_catalog_adapter_rejects_forged_handle_identity() -> None:
     )
 
     class Catalog:
+        descriptor = CATALOG_DESCRIPTOR
+
         def validate_config(self, context):
             del context
 
@@ -210,6 +216,8 @@ def test_public_format_rejects_opaque_task_payloads_before_ticket_serialization(
     schema = pa.schema([pa.field("id", pa.int64())])
 
     class OpaqueFormat:
+        descriptor = FORMAT_DESCRIPTOR
+
         def close(self):
             return None
 
@@ -250,6 +258,8 @@ def test_public_format_requires_explicit_close_lifecycle() -> None:
     )
 
     class MissingCloseFormat:
+        descriptor = FORMAT_DESCRIPTOR
+
         def schema(self, value, context):
             del value, context
             from dal_obscura_plugin_api import SchemaDescriptor
@@ -291,6 +301,8 @@ def test_public_format_preserves_schema_error_when_close_fails() -> None:
     )
 
     class FailingCloseFormat:
+        descriptor = FORMAT_DESCRIPTOR
+
         def close(self):
             raise RuntimeError("close failed")
 
@@ -330,6 +342,8 @@ def test_public_format_validates_lazy_batch_schema_before_streaming() -> None:
     schema = pa.schema([pa.field("id", pa.int64())])
 
     class BadBatchFormat:
+        descriptor = FORMAT_DESCRIPTOR
+
         def __init__(self):
             self.executed = False
 
@@ -380,6 +394,8 @@ def test_public_format_stops_lazy_batches_when_context_is_cancelled(monkeypatch)
     cancelled = [False]
 
     class SlowFormat:
+        descriptor = FORMAT_DESCRIPTOR
+
         def close(self):
             return None
 
@@ -440,6 +456,8 @@ def test_public_format_closes_plugin_after_lazy_output_is_consumed() -> None:
     closed = []
 
     class ClosableFormat:
+        descriptor = FORMAT_DESCRIPTOR
+
         def schema(self, value, context):
             del value, context
             from dal_obscura_plugin_api import SchemaDescriptor
@@ -477,7 +495,7 @@ def test_public_catalog_adapter_closes_catalog_and_rejects_reuse() -> None:
     closed = []
 
     class ClosableCatalog:
-        descriptor = type("Descriptor", (), {"kind": "catalog", "plugin_id": "manifest"})()
+        descriptor = CATALOG_DESCRIPTOR
 
         def validate_config(self, context):
             del context
@@ -514,6 +532,8 @@ def test_public_catalog_adapter_closes_catalog_and_rejects_reuse() -> None:
 
 def test_public_catalog_adapter_rejects_missing_lifecycle_methods() -> None:
     class IncompleteCatalog:
+        descriptor = CATALOG_DESCRIPTOR
+
         def list_tables(self, context, *, continuation, limit):
             del context, continuation, limit
             return DiscoveryPage(())
@@ -540,6 +560,8 @@ def test_public_catalog_adapter_rejects_malformed_continuation(malformed_token) 
     identifier = TableIdentifier(namespace=("default",), name="users")
 
     class Catalog:
+        descriptor = CATALOG_DESCRIPTOR
+
         def validate_config(self, context):
             del context
 
@@ -573,6 +595,8 @@ def test_public_catalog_adapter_rejects_oversized_page() -> None:
     identifier = TableIdentifier(namespace=("default",), name="users")
 
     class Catalog:
+        descriptor = CATALOG_DESCRIPTOR
+
         def validate_config(self, context):
             del context
 
@@ -662,6 +686,8 @@ def test_public_format_rejects_false_stable_id_claim() -> None:
     schema = pa.schema([pa.field("id", pa.int64())])
 
     class LyingFormat:
+        descriptor = FORMAT_DESCRIPTOR
+
         def close(self):
             return None
 
@@ -711,6 +737,8 @@ def test_public_format_rejects_schema_depth_before_plugin_execution() -> None:
     schema = pa.schema([pa.field("root", nested)])
 
     class DeepFormat:
+        descriptor = FORMAT_DESCRIPTOR
+
         def close(self):
             return None
 
@@ -737,3 +765,216 @@ def test_public_format_rejects_schema_depth_before_plugin_execution() -> None:
     )
     with pytest.raises(ValueError, match="nesting-depth"):
         table_format.get_schema()
+
+
+def test_format_without_current_descriptor_is_rejected_and_closed():
+    closed = []
+
+    class MissingDescriptor:
+        def schema(self, *args):
+            pytest.fail("schema must not execute")
+
+        def plan(self, *args):
+            pytest.fail("plan must not execute")
+
+        def execute(self, *args):
+            pytest.fail("execute must not execute")
+
+        def close(self):
+            closed.append(True)
+
+    handle = TableHandle(
+        catalog_plugin_id="manifest",
+        catalog_instance_id="fixture",
+        catalog_revision=1,
+        identifier=TableIdentifier(namespace=("default",), name="users"),
+        format_plugin_id="parquet.dataset",
+        handle_version=1,
+    )
+    adapter = PublicPluginTableFormat(
+        catalog_name="fixture",
+        table_name="default.users",
+        format="parquet.dataset",
+        handle=handle,
+        format_factory=cast(Any, lambda handle, context: MissingDescriptor()),
+    )
+    with pytest.raises(ValueError, match="mismatched descriptor"):
+        adapter.get_schema()
+    assert closed == [True]
+
+
+def _contract_format(schema, *, tasks=("scan",)):
+    from dal_obscura_plugin_api import SchemaDescriptor
+
+    calls = []
+    handle = TableHandle(
+        catalog_plugin_id="manifest",
+        catalog_instance_id="fixture",
+        catalog_revision=1,
+        identifier=TableIdentifier(namespace=("default",), name="users"),
+        format_plugin_id="parquet.dataset",
+        handle_version=1,
+    )
+
+    class Format:
+        descriptor = FORMAT_DESCRIPTOR
+
+        def schema(self, handle, context):
+            return SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=schema)
+
+        def plan(self, handle, schema, context, **kwargs):
+            calls.append(kwargs)
+            return list(tasks)
+
+        def execute(self, task, context):
+            calls.append("execute")
+            return schema, iter(())
+
+        def close(self):
+            calls.append("close")
+
+    def factory(handle, context):
+        calls.append("open")
+        return Format()
+
+    return PublicPluginTableFormat(
+        catalog_name="fixture",
+        table_name="default.users",
+        format="parquet.dataset",
+        format_factory=factory,
+        handle=handle,
+    ), calls
+
+
+def test_optional_filter_pushdown_keeps_full_filter_for_core():
+    from dal_obscura.common.access_control.filters import parse_row_filter
+
+    schema = pa.schema([pa.field("id", pa.int64())])
+    table, calls = _contract_format(schema)
+    row_filter = parse_row_filter("id > 0", schema)
+    plan = table.plan(PlanRequest(target="default.users", columns=["id"], row_filter=row_filter), 2)
+    assert calls[1]["row_filter"] is None
+    assert plan.full_row_filter == row_filter
+    assert plan.residual_row_filter == row_filter
+
+
+def test_backend_projection_uses_literal_top_level_names():
+    schema = pa.schema(
+        [
+            pa.field("profile.email", pa.string()),
+            pa.field("profile", pa.struct([pa.field("email", pa.string())])),
+        ]
+    )
+    table, calls = _contract_format(schema)
+    plan = table.plan(
+        PlanRequest(target="default.users", columns=['["profile.email"]', "profile.email"]), 2
+    )
+    assert calls[1]["projection"] == ["profile.email", "profile"]
+    assert plan.tasks[0].partition.schema == schema
+
+
+def test_empty_plan_does_not_invent_a_backend_task():
+    schema = pa.schema([pa.field("id", pa.int64())])
+    table, calls = _contract_format(schema, tasks=())
+    plan = table.plan(PlanRequest(target="default.users", columns=["id"]), 2)
+    assert plan.tasks == []
+    assert "execute" not in calls
+
+
+def test_unstarted_execution_does_not_open_plugin_resources():
+    schema = pa.schema([pa.field("id", pa.int64())])
+    table, calls = _contract_format(schema)
+    plan = table.plan(PlanRequest(target="default.users", columns=["id"]), 2)
+    calls.clear()
+    output_schema, batches = table.execute(plan.tasks[0].partition)
+    assert output_schema == schema
+    assert calls == []
+    assert list(batches) == []
+    assert calls == ["open", "execute", "close"]
+
+
+def test_catalog_identifiers_round_trip_without_dotted_name_collisions():
+    from dal_obscura.data_plane.infrastructure.adapters.public_plugin_adapter import (
+        _identifier_name,
+        _table_identifier,
+    )
+
+    identifiers = [
+        TableIdentifier(namespace=("a.b",), name="c"),
+        TableIdentifier(namespace=("a",), name="b.c"),
+    ]
+    names = [_identifier_name(identifier) for identifier in identifiers]
+    assert len(set(names)) == 2
+    assert [_table_identifier(name) for name in names] == identifiers
+
+
+def test_expired_batch_context_does_not_read_source():
+    from dal_obscura.data_plane.infrastructure.adapters.public_plugin_adapter import (
+        _checked_plugin_batches,
+    )
+
+    read = []
+
+    def source():
+        read.append(True)
+        yield pa.record_batch([pa.array([1])], names=["id"])
+
+    context = ExecutionContext(
+        deadline=datetime.now(timezone.utc) - timedelta(seconds=1), correlation_id="expired"
+    )
+    with pytest.raises(ValueError, match="deadline"):
+        list(_checked_plugin_batches(source(), pa.schema([pa.field("id", pa.int64())]), context))
+    assert read == []
+
+
+def test_manifest_read_enforces_policy_filter_before_masking(tmp_path):
+    import hashlib
+
+    from dal_obscura.common.access_control.models import AccessDecision, MaskRule
+    from tests.application.access_flow.helpers import (
+        AUTHORIZATION_HEADER,
+        _build_end_to_end_access_flow,
+    )
+
+    root, _ = _fixture(tmp_path)
+    catalog = PublicPluginCatalogAdapter(
+        "fixture",
+        {"root": str(root), "manifest_path": str(root / "manifest.json")},
+        "manifest",
+        manifest_factory,
+        lambda _: parquet_factory,
+    )
+    try:
+        table = catalog.resolve_table("default.users")
+        planner, fetch = _build_end_to_end_access_flow(
+            table,
+            AccessDecision(
+                allowed_columns=["id"],
+                masks={"id": MaskRule(type="hash")},
+                row_filter="id > 1",
+                policy_version=1,
+            ),
+        )
+        plan = planner.execute(
+            PlanRequest(catalog="fixture", target="default.users", columns=["id"]),
+            AUTHORIZATION_HEADER,
+        )
+        assert len(plan.ticket_tokens) == 1
+        result = fetch.execute(plan.ticket_tokens[0], AUTHORIZATION_HEADER)
+        assert pa.Table.from_batches(result.result_batches).to_pylist() == [
+            {"id": hashlib.sha256(b"2").hexdigest()}
+        ]
+    finally:
+        catalog.close()
+
+
+def test_schema_must_match_catalog_pinned_snapshot():
+    from dataclasses import replace
+
+    schema = pa.schema([pa.field("id", pa.int64())])
+    table, _ = _contract_format(schema)
+    table = replace(table, handle=replace(table.handle, snapshot_id="pinned"))
+    with pytest.raises(ValueError, match="snapshot"):
+        table.get_schema()
+    with pytest.raises(ValueError, match="snapshot"):
+        table.plan(PlanRequest(target="default.users", columns=["id"]), 1)

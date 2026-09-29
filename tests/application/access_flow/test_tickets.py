@@ -35,6 +35,7 @@ def test_ticket_payload_from_dict_keeps_string_full_row_filter():
             "target": "users",
             "columns": ["id"],
             "scan": {
+                "authorization_columns": ["id", "region"],
                 "read_payload": "payload",
                 "full_row_filter": "LOWER(region) = 'us'",
                 "masks": {},
@@ -61,7 +62,12 @@ def test_ticket_payload_from_dict_requires_governed_asset_identity():
             {
                 "target": "users",
                 "columns": ["id"],
-                "scan": {"read_payload": "payload", "full_row_filter": None, "masks": {}},
+                "scan": {
+                    "authorization_columns": ["id", "region"],
+                    "read_payload": "payload",
+                    "full_row_filter": None,
+                    "masks": {},
+                },
                 "policy_version": 100,
                 "principal_id": "user1",
                 "expires_at": 9999999999,
@@ -82,6 +88,7 @@ def test_ticket_payload_from_dict_rejects_non_string_full_row_filter():
                 "target": "users",
                 "columns": ["id"],
                 "scan": {
+                    "authorization_columns": ["id", "region"],
                     "read_payload": "payload",
                     "full_row_filter": {"type": "comparison"},
                     "masks": {},
@@ -109,7 +116,12 @@ def test_ticket_payload_from_dict_rejects_malformed_or_unknown_fields(field, val
         "catalog": "catalog1",
         "target": "users",
         "columns": ["id"],
-        "scan": {"read_payload": "payload", "full_row_filter": None, "masks": {}},
+        "scan": {
+            "authorization_columns": ["id", "region"],
+            "read_payload": "payload",
+            "full_row_filter": None,
+            "masks": {},
+        },
         "policy_version": 100,
         "principal_id": "user1",
         "expires_at": 9999999999,
@@ -134,6 +146,7 @@ def test_fetch_stream_keeps_captured_authorization_after_policy_change():
         tenant_id="tenant-a",
         columns=["id"],
         scan={
+            "authorization_columns": ["id", "region"],
             "read_payload": encode_scan_task(table_format, schema),
             "full_row_filter": None,
             "masks": {},
@@ -173,6 +186,7 @@ def test_fetch_stream_rejects_legacy_ticket_without_ticket_id_before_decoding(mo
         tenant_id="tenant-a",
         columns=["id"],
         scan={
+            "authorization_columns": ["id", "region"],
             "read_payload": encode_scan_task(table_format, schema),
             "full_row_filter": None,
             "masks": {},
@@ -220,6 +234,7 @@ def test_fetch_stream_rejects_missing_db_ticket_before_decoding(monkeypatch):
         tenant_id="tenant-a",
         columns=["id"],
         scan={
+            "authorization_columns": ["id", "region"],
             "read_payload": encode_scan_task(table_format, schema),
             "full_row_filter": None,
             "masks": {},
@@ -268,6 +283,7 @@ def test_fetch_stream_rejects_hash_mismatch_before_reserving_or_decoding(monkeyp
         tenant_id="tenant-a",
         columns=["id"],
         scan={
+            "authorization_columns": ["id", "region"],
             "read_payload": encode_scan_task(table_format, schema),
             "full_row_filter": None,
             "masks": {},
@@ -315,6 +331,7 @@ def test_fetch_stream_reserves_exchange_before_scan_execution():
         tenant_id="tenant-a",
         columns=["id"],
         scan={
+            "authorization_columns": ["id", "region"],
             "read_payload": encode_scan_task(table_format, schema),
             "full_row_filter": None,
             "masks": {},
@@ -423,6 +440,7 @@ def test_fetch_stream_does_not_recheck_policy_version_before_fetch():
         target="users",
         columns=["id", "region"],
         scan={
+            "authorization_columns": ["id", "region"],
             "read_payload": encode_scan_task(table_format, schema),
             "full_row_filter": None,
             "masks": {},
@@ -451,6 +469,7 @@ def test_fetch_stream_rejects_invalid_scan_payloads():
     cases = [
         (
             {
+                "authorization_columns": ["id", "region"],
                 "read_payload": "",
                 "full_row_filter": None,
                 "masks": {},
@@ -459,6 +478,7 @@ def test_fetch_stream_rejects_invalid_scan_payloads():
         ),
         (
             {
+                "authorization_columns": ["id", "region"],
                 "read_payload": encode_scan_task(table_format, schema),
                 "full_row_filter": None,
                 "masks": {"region": "not-an-object"},
@@ -467,6 +487,7 @@ def test_fetch_stream_rejects_invalid_scan_payloads():
         ),
         (
             {
+                "authorization_columns": ["id", "region"],
                 "read_payload": encode_scan_task(table_format, schema),
                 "full_row_filter": None,
                 "masks": {"region": {"value": "***"}},
@@ -475,6 +496,7 @@ def test_fetch_stream_rejects_invalid_scan_payloads():
         ),
         (
             {
+                "authorization_columns": ["id", "region"],
                 "read_payload": encode_scan_task(table_format, schema),
                 "full_row_filter": {"type": "comparison", "field": "region"},
                 "masks": {},
@@ -518,6 +540,7 @@ def test_fetch_stream_rejects_legacy_partition_payload():
         target="users",
         columns=["id", "region"],
         scan={
+            "authorization_columns": ["id", "region"],
             "read_payload": base64.b64encode(pickle.dumps(StubInputPartition(b"payload"))).decode(
                 "utf-8"
             ),
@@ -550,3 +573,10 @@ def test_fetch_stream_rejects_legacy_partition_payload():
 
     with pytest.raises(ValueError, match="Invalid read payload"):
         use_case.execute("token", AUTHORIZATION_HEADER)
+
+
+def test_scan_decoder_rejects_missing_authorization_columns():
+    from dal_obscura.data_plane.application.use_cases.fetch_stream import _decode_scan
+
+    with pytest.raises(ValueError, match="Invalid authorization columns"):
+        _decode_scan({"read_payload": "cGF5bG9hZA==", "masks": {}, "full_row_filter": None})

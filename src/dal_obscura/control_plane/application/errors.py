@@ -5,6 +5,14 @@ class ValidationFailure(ValueError):
     """Raised when a live configuration mutation is invalid."""
 
 
+class PolicyValidationFailure(ValidationFailure):
+    """A policy rule failed semantic validation before storage."""
+
+    def __init__(self, rule_index: int, message: str) -> None:
+        super().__init__(message)
+        self.rule_index = rule_index
+
+
 class AuthorizationFailure(PermissionError):
     """Raised when a control-plane actor cannot mutate a protected resource."""
 

@@ -23,6 +23,33 @@ def _fixture() -> dict[str, object]:
     }
 
 
+def test_runtime_settings_initialize_from_empty_workspace(monkeypatch) -> None:
+    module = _load_script("provision_demo")
+    calls: list[tuple[str, str, object]] = []
+
+    def request(method: str, path: str, body=None):
+        calls.append((method, path, body))
+        if method == "GET":
+            return None
+        return {}
+
+    monkeypatch.setattr(module, "_request", request)
+
+    module._configure_runtime_settings()
+
+    assert calls == [
+        ("GET", "/v1/settings/runtime", None),
+        (
+            "PUT",
+            "/v1/settings/runtime",
+            {
+                **module.DEMO_RUNTIME_SETTINGS,
+                "expected_revision": 0,
+            },
+        ),
+    ]
+
+
 def test_seed_table_keeps_existing_table(monkeypatch, tmp_path) -> None:
     module = _load_script("seed_table")
     monkeypatch.setattr(module, "RUNTIME_DIR", tmp_path / ".runtime")
@@ -264,3 +291,23 @@ def test_demo_owner_keys_require_an_owner(monkeypatch) -> None:
 
     with pytest.raises(ValueError, match="at least one owner"):
         module._scoped_demo_owners([])
+
+
+def test_demo_fixture_supports_deep_structs_and_collection_elements():
+    import json
+
+    import pyarrow as pa
+
+    module = _load_script("seed_table")
+    fixture = json.loads(
+        (
+            Path(__file__).parents[2] / "examples/demo/keycloak/fixtures/demo_fixture.json"
+        ).read_text()
+    )
+    _, schema = module._schemas(fixture["tables"][0]["schema"])
+    table = pa.Table.from_pylist(fixture["tables"][0]["rows"], schema=schema)
+    assert pa.types.is_struct(schema.field("profile").type)
+    assert pa.types.is_list(schema.field("contacts").type)
+    assert pa.types.is_map(schema.field("contact_book").type)
+    assert table.to_pylist()[0]["profile"]["identity"]["contact"]["address"]["city"] == "Amsterdam"
+    assert table.to_pylist()[0]["contacts"][0]["details"]["address"]["city"] == "Amsterdam"

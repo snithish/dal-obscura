@@ -1,3 +1,4 @@
+import { discardChanges, useConfirmation } from "./ConfirmationProvider";
 import { useEffect, useRef, useState } from "react";
 import { Button, Checkbox, TextInput } from "@mantine/core";
 import type { QueryClient } from "@tanstack/react-query";
@@ -51,6 +52,7 @@ export function SettingsView({
   const [providerRows, setProviderRows] = useState<AuthProvider[]>(providers);
   const [providerTexts, setProviderTexts] = useState<Record<string, string>>({});
   const [providerErrors, setProviderErrors] = useState<Record<string, string>>({});
+  const { confirm } = useConfirmation();
   const [message, setMessage] = useState("");
   const [pathRuleRoots, setPathRuleRoots] = useState<string[]>([]);
   const [runtimeDirty, setRuntimeDirty] = useState(false);
@@ -100,8 +102,8 @@ export function SettingsView({
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
 
-  function reload() {
-    if (dirty && !window.confirm("You have unsaved settings changes. Reload and discard them?")) return;
+  async function reload() {
+    if (dirty && !await confirm(discardChanges("settings", "reload settings"))) return;
     runtimeEditEpoch.current += 1;
     providerEditEpoch.current += 1;
     setRuntimeDirty(false);
@@ -152,9 +154,7 @@ export function SettingsView({
       setMessage("Fix the highlighted identity provider fields before saving.");
       return;
     }
-    if (!providerRows.some((provider) => provider.enabled) && !window.confirm(
-      "No identity provider will remain enabled. Save this lockout configuration anyway?",
-    )) {
+    if (!providerRows.some((provider) => provider.enabled) && !await confirm({ title: "Disable all identity providers?", message: "No identity provider will remain enabled. Users may be unable to authenticate after workers reload this configuration.", confirmLabel: "Save with no providers", cancelLabel: "Keep editing", destructive: true })) {
       setMessage("Identity provider changes were not saved. Keep at least one provider enabled unless lockout is intentional.");
       return;
     }
@@ -336,7 +336,7 @@ export function SettingsView({
         <fieldset className="runtime-path-rules">
           <legend>Storage path roots</legend>
           <p className="help">Every metadata and data location must stay under one of these roots. Leave the list empty only for an explicitly local development profile.</p>
-          <div className="path-rule-list">{pathRuleRoots.map((root, index) => <div className="path-rule-row" key={`${index}-${root}`}>
+          <div className="path-rule-list">{pathRuleRoots.map((root, index) => <div className="path-rule-row" key={index}>
             <TextInput aria-label={`Storage path root ${index + 1}`} value={root} onChange={(event) => updatePathRule(index, event.currentTarget.value)} placeholder="s3://warehouse/curated" />
             <Button className="danger" variant="default" size="sm" type="button" onClick={() => { markDirty("runtime"); setPathRuleRoots((current) => current.filter((_, row) => row !== index)); }} leftSection={<Icon name="trash" size={15} />}>Remove</Button>
           </div>)}</div>

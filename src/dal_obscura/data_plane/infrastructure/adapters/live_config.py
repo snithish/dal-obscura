@@ -256,6 +256,8 @@ class LiveConfigStore:
                 "principals": list(rule.principals_json),
                 "columns": list(rule.columns_json),
                 "effect": rule.effect,
+                "name": rule.name,
+                "description": rule.description,
                 "when": dict(rule.when_json),
                 "masks": dict(rule.masks_json),
                 "row_filter": rule.row_filter_sql,
@@ -607,16 +609,15 @@ class LiveConfigCatalogRegistry:
 
 def _effective_policy_version(asset: LiveAsset) -> int:
     """Binds ticket authorization to the live config and policy revisions."""
-    digest = sha256(f"{asset.config_revision}:{asset.policy_version}".encode()).digest()
+    digest = sha256(
+        f"null-default-v1:{asset.config_revision}:{asset.policy_version}".encode()
+    ).digest()
     return int.from_bytes(digest[:8], "big") & ((1 << 63) - 1)
 
 
 def _policy_from_asset(asset: LiveAsset) -> Policy:
     return CompiledPolicy.from_json(
         _mapping(asset.compiled_config.get("policy")),
-        version=asset.policy_version,
-        catalog=asset.catalog,
-        target=asset.target,
     ).to_policy()
 
 
@@ -769,7 +770,7 @@ def _validate_schema_admission(asset: LiveAsset, schema: pa.Schema) -> None:
 
 
 def _reject_unbound_broad_policy(asset: LiveAsset, schema: pa.Schema) -> None:
-    """Prevent legacy wildcard/parent grants from expanding on schema drift."""
+    """Prevent unbound wildcard/parent grants from expanding on schema drift."""
 
     policy = asset.compiled_config.get("policy")
     if not isinstance(policy, dict):
@@ -779,6 +780,9 @@ def _reject_unbound_broad_policy(asset: LiveAsset, schema: pa.Schema) -> None:
         return
     for rule in rules:
         if not isinstance(rule, dict):
+            continue
+        if rule.get("effect") == "allow_all":
+            # Explicit bypass intentionally includes every current/future column.
             continue
         selectors: list[object] = []
         columns = rule.get("columns")

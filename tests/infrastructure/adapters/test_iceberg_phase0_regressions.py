@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import pickle
+from collections.abc import Generator
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import Any, ClassVar, cast
 
 import pyarrow as pa
 import pytest
@@ -266,3 +267,35 @@ def test_iceberg_native_schema_preserves_nested_field_ids(tmp_path):
     assert pa.Table.from_batches(list(batches)).column("profile").to_pylist() == [
         {"email": "a@example.com"}
     ]
+
+
+def test_iceberg_stream_reads_one_batch_and_one_files_deletes_at_a_time(monkeypatch):
+    from dal_obscura.data_plane.infrastructure.table_formats import iceberg
+
+    visited = []
+    closed = []
+    deletes = []
+
+    class Scan:
+        def _record_batches_from_scan_tasks_and_deletes(self, tasks, delete_map):
+            try:
+                for index in range(3):
+                    visited.append((tasks[0], index))
+                    yield pa.record_batch([pa.array([index])], names=["id"])
+            finally:
+                closed.append(tasks[0])
+
+    def read_deletes(io, tasks):
+        deletes.extend(tasks)
+        return {}
+
+    monkeypatch.setattr(iceberg, "_read_all_delete_files", read_deletes)
+    stream = iceberg._stream_iceberg_batches(
+        cast(Any, Scan()), cast(Any, None), cast(Any, ["first", "second"])
+    )
+    assert deletes == []
+    assert next(stream).num_rows == 1
+    assert visited == [("first", 0)]
+    assert deletes == ["first"]
+    cast(Generator[pa.RecordBatch, None, None], stream).close()
+    assert closed == ["first"]

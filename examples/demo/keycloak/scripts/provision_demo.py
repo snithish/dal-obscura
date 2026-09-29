@@ -175,11 +175,15 @@ def _workspace_state(fixture: dict[str, Any]) -> str:
 def _configure_runtime_settings() -> None:
     current = _request("GET", "/v1/settings/runtime")
     body = dict(DEMO_RUNTIME_SETTINGS)
-    if not isinstance(current, dict):
+    if current is None:
+        # Fresh workspaces have no runtime record. The create request starts
+        # at revision zero and creates the default workspace context.
+        revision = 0
+    elif isinstance(current, dict):
+        revision = cast(dict[str, Any], current).get("revision")
+    else:
         raise RuntimeError("runtime settings response was invalid")
-    current_payload = cast(dict[str, Any], current)
-    revision = current_payload.get("revision")
-    if not isinstance(revision, int):
+    if isinstance(revision, bool) or not isinstance(revision, int):
         raise RuntimeError("runtime settings response omitted its revision")
     body["expected_revision"] = revision
     _request("PUT", "/v1/settings/runtime", body)

@@ -330,7 +330,12 @@ def test_postgres_restore_invalidation_removes_replayable_access(
             target="default.table",
             tenant_id="default",
             columns=["id"],
-            scan={"read_payload": "payload", "full_row_filter": None, "masks": {}},
+            scan={
+                "authorization_columns": ["id", "region"],
+                "read_payload": "payload",
+                "full_row_filter": None,
+                "masks": {},
+            },
             policy_version=1,
             principal_id="user:recovery",
             expires_at=2_000_000_000,

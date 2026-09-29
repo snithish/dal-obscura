@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 from uuid import UUID
 
+from dal_obscura.data_plane.infrastructure.adapters.memory_limits import validate_memory_limit
 from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
     ENV_SECRET_PROVIDER_MODULE,
     SecretProviderConfig,
@@ -198,9 +199,10 @@ def _positive_int_env(name: str, *, default: int) -> int:
 
 def _memory_limit_env() -> str:
     value = os.getenv("DAL_OBSCURA_DUCKDB_MEMORY_LIMIT", "512MB").strip()
-    if not value:
-        raise ValueError("DAL_OBSCURA_DUCKDB_MEMORY_LIMIT must be non-empty")
-    return value
+    try:
+        return validate_memory_limit(value)
+    except ValueError as exc:
+        raise ValueError(f"DAL_OBSCURA_DUCKDB_MEMORY_LIMIT: {exc}") from exc
 
 
 def _secret_provider_config() -> SecretProviderConfig:

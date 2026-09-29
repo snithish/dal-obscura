@@ -402,12 +402,15 @@ def _access_rule_from_dict(raw: dict[str, object]) -> AccessRule:
             str(name): MaskRule(
                 type=str(_mapping(mask).get("type")),
                 value=_mapping(mask).get("value"),
+                exempt_principals=tuple(
+                    str(item) for item in _list(_mapping(mask).get("exempt_principals"))
+                ),
             )
             for name, mask in _mapping(raw.get("masks")).items()
             if isinstance(mask, dict) and _mapping(mask).get("type")
         },
         row_filter=None if raw.get("row_filter") is None else str(raw["row_filter"]),
-        effect=cast(Literal["allow", "deny"], str(raw.get("effect", "allow"))),
+        effect=cast(Literal["allow", "allow_all"], str(raw.get("effect", "allow"))),
         when=cast(dict[str, PrincipalConditionValue], _mapping(raw.get("when"))),
     )
 

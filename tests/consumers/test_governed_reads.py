@@ -76,7 +76,7 @@ def test_python_and_duckdb_consumers_receive_identical_nested_governed_data() ->
     policy = [
         allow_rule(
             ["id", "metadata"],
-            masks={"metadata.preferences.theme": {"type": "redact", "value": "[hidden]"}},
+            masks={"metadata.preferences.$element.theme": {"type": "redact", "value": "[hidden]"}},
         )
     ]
     server = build_flight_service(table_format=table_format, policy_rules=policy)
@@ -155,7 +155,7 @@ def test_python_and_duckdb_consumers_read_real_sql_iceberg_nested_data(tmp_path)
     policy = [
         allow_rule(
             ["id", "metadata"],
-            masks={"metadata.preferences.theme": {"type": "redact", "value": "[hidden]"}},
+            masks={"metadata.preferences.$element.theme": {"type": "redact", "value": "[hidden]"}},
         )
     ]
     server = build_flight_service(

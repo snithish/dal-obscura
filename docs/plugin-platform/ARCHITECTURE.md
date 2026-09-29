@@ -3,7 +3,8 @@
 Updated planning contract, 2026-09-13. The active queue is
 [N01–N16](IMPLEMENTATION_PLAN.md). This describes required boundaries, not a
 production-readiness claim. [Cleanup](CLEANUP_PLAN.md) and [acceptance](ACCEPTANCE.md)
-supersede old compatibility requirements outside the protected pickle boundary.
+describe the planned architecture. The current [contract policy](PLUGIN_API_COMPATIBILITY.md)
+supersedes all historical preservation and mixed-version requirements.
 
 ## 1. Extension boundaries
 
@@ -137,8 +138,8 @@ Required contract objects and operations:
 
 Reuse existing core `FieldPath` interpretation and escaping. SDK schema segments
 are data, not a second dot-path parser or SQL renderer. Convert them into the
-existing canonical model at one tested adapter boundary. Do not relocate any
-pickle-referenced class to accomplish SDK extraction.
+existing canonical model at one tested adapter boundary. Update internal task
+classes and their callers together when that contract changes.
 
 Capabilities are an enumerated, versioned vocabulary, not arbitrary booleans with
 undefined behavior. Include nested struct/list/map support, field-ID stability,
@@ -158,9 +159,8 @@ locks, open scanners, or credentials in a serialized task. Keep its new plugin
 state limited to validated IDs, bounded internal plan data, and scoped references.
 The core supplies the request-scoped context to SDK operations at execution time
 through the wrapper; third-party plugins never import private core context globals.
-Do not add context fields to legacy `ScanTask` or Iceberg objects. Conformance checks
-new task serialization/cleanup through the unchanged serializer and preserves old
-fixtures; a non-serializable factory closure is not an acceptable plugin task.
+Conformance checks current task serialization and cleanup. A non-serializable
+factory closure is not an acceptable plugin task.
 
 ## 4. Schema identity and policy evolution
 
@@ -200,8 +200,7 @@ change a task's declared output schema during execution.
 Use one connection resolver in both planes for validation, diagnostic, discovery,
 schema, evaluation, review, planning, and execution. Resolve secrets by connection
 and purpose only when needed. New plugin task objects hold scoped references, not
-raw secrets. Preserve existing pickle behavior; inspect and separately document
-legacy trusted object contents instead of silently changing them.
+raw secrets. Validate the current trusted task shape before storing it.
 
 Provider adapters must enforce permitted schemes, authority/port, object prefixes,
 and local filesystem roots on every resource, including metadata-returned locations,
@@ -244,28 +243,16 @@ before lifecycle controls can be treated as a production drain workflow.
 
 ## 6. Persistence and deliberate cutover
 
-Use the existing database for stable plugin IDs, config schema versions,
-configuration/binding revisions, canonical schema IDs and publication requirements.
-Preserve immutable historical publications. Remove replaced runtime readers; valid
-old mutable records may use an explicit offline migration, never a compatibility
-interpretation layer in serving requests.
+Use the current bootstrap database for plugin IDs, configuration revisions,
+canonical schema IDs, live policies, and ticket records. This unreleased project
+has no compatibility migration chain. A breaking cutover recreates disposable
+configuration databases and issues new tickets. Never reset data automatically
+at service startup.
 
-Map only known exact legacy class strings through a static mapping; reject unknown
-legacy strings. Do not retain suffix-based Iceberg inference or generic imports.
-Provide an operator dry-run showing every migrated/unsupported record. Apply only
-explicitly; restart cannot migrate, reset, reseed, or republish.
-
-Keep existing pickle serialization functions, payload shape, referenced classes
-and import paths intact. Leave original definitions in place; do not move them and
-create a facade. Test trusted fixtures against the selected worker artifact.
-Stop admissions and drain/expire or explicitly invalidate tickets before a breaking
-cutover to one artifact set. Never opportunistically reinterpret payloads.
-Do not add fields to serialized task objects without separate owner approval.
-
-Registry/package checks use existing publication/runtime metadata or explicit
-database records outside unchanged pickle blobs. Reject unsupported versions at
-startup. Test maintenance-mode upgrade and rollback through an isolated backup and
-the previous complete artifact set; do not add mixed-version runtime shims.
+The runtime reads one current contract. Reject unsupported identities, versions,
+and incomplete records; do not map old class strings, infer missing fields, or
+reinterpret old serialized tasks. Security checks on trusted internal pickle
+payloads remain required, without preserving historical class paths or bytes.
 
 ## 7. UI and configuration lifecycle
 
@@ -310,4 +297,4 @@ Future Glue/Hive/other catalog or Delta/other format adapters each require their
 own scoped use case, typed config, threat analysis, conformance, live fixtures,
 consumer/upgrade evidence, and release matrix entry. Order them by validated user
 demand. Do not add bespoke core branches for each adapter. A new need outside the
-SDK contract requires a versioned SDK change with compatibility evidence first.
+SDK contract requires an explicit SDK change, updated callers, and current-contract tests.

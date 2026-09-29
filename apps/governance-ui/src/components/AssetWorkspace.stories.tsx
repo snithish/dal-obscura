@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent, within } from "storybook/test";
-import type { Asset, AssetAccess, Mask, PolicyRule, SchemaNode, Session } from "../api";
+import type { Asset, AssetAccess, PolicyRule, SchemaNode, Session } from "../api";
 import { AssetWorkspace } from "./AssetWorkspace";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -101,38 +101,20 @@ const meta = {
   tags: ["autodocs"],
   args: {
     initialTab: "policy" as const,
-    assets: [asset],
     asset,
     access,
     grants: [],
-    onAsset: noop,
-    assetSearch: "",
-    assetHasMore: false,
-    assetInventoryLoading: false,
-    onSearch: noop,
-    onLoadMore: noop,
+    onBack: noop,
     rules: [rule],
-    activeRule: rule,
     activeRevision: 1,
-    selectedRule: 0,
-    onRule: noop,
-    onMoveRule: noop,
-    selectedField: "customer.email",
-    onField: noop,
-    selectedMask: { type: "email" } as Mask,
-    effectiveFields: new Set(["customer.email", "region"]),
     saveState: "saved" as const,
     notice: "Current live policy loaded from the workspace.",
-    onToggleField: noop,
-    onMask: noop,
     onUpdateRule: noop,
     onAddRule: noop,
     onRemoveRule: noop,
     onDuplicateRule: noop,
-    onUndo: noop,
-    onRedo: noop,
-    canUndo: false,
-    canRedo: false,
+    onDiscard: noop,
+    onAllowAll: noop,
     onSave: noop,
     onPreview: noop,
     previewPrincipal: "user:analyst@example.com",
@@ -161,23 +143,24 @@ type Story = StoryObj<typeof meta>;
 
 export const NestedLivePolicy: Story = {
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole("heading", { name: "Fields & access" })).toBeVisible();
-    await expect(canvas.getByRole("button", { name: "Select customer.email" })).toBeVisible();
-    await expect(canvas.getByLabelText("DuckDB row restriction")).toHaveValue("region = 'EU'");
-    await expect(canvas.getByLabelText("Mask for customer.email")).toHaveValue("email");
+    await expect(canvas.getByRole("heading", { name: "Select allowed columns" })).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "Allowed columns: 2 selected" })).toHaveTextContent("2 selected");
+    await expect(canvas.getByRole("heading", { name: "Protect sensitive values" })).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "Edit Mask email mask" })).toBeVisible();
+    await expect(canvas.getByLabelText("DuckDB SQL row filter")).toHaveValue("region = 'EU'");
     await expect(canvas.getByRole("button", { name: "Save policy" })).toBeEnabled();
   },
 };
 
-export const ReaderInventoryAndKeyboardTabs: Story = {
-  args: { onAsset: fn(), access: undefined, session: { principal: "reader", groups: [], platform_admin: false, capabilities: [] } },
+export const ReaderNavigationAndKeyboardTabs: Story = {
+  args: { onBack: fn(), access: undefined, session: { principal: "reader", groups: [], platform_admin: false, capabilities: [] } },
   play: async ({ canvas, args }) => {
-    await expect(canvas.getByLabelText("Find governed asset")).toBeEnabled();
-    await userEvent.click(canvas.getByRole("button", { name: "orders" }));
-    await expect(args.onAsset).toHaveBeenCalledWith(asset.id);
+    await expect(canvas.queryByLabelText("Find governed asset")).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("button", { name: "Back to assets" }));
+    await expect(args.onBack).toHaveBeenCalled();
     canvas.getByRole("tab", { name: "Policy" }).focus();
     await userEvent.keyboard("{ArrowRight}");
-    await expect(canvas.getByRole("tab", { name: "Tests" })).toHaveFocus();
+    await expect(canvas.getByRole("tab", { name: "Access" })).toHaveFocus();
     await expect(canvas.getByRole("tabpanel")).toBeVisible();
   },
 };
@@ -186,8 +169,8 @@ export const DarkNestedPolicy: Story = {
   ...NestedLivePolicy,
   globals: { theme: "dark" },
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole("heading", { name: "Fields & access" })).toBeVisible();
-    await expect(canvas.getByRole("button", { name: "Select customer.email" })).toBeVisible();
+    await expect(canvas.getByRole("heading", { name: "Select allowed columns" })).toBeVisible();
+    await expect(canvas.getByRole("button", { name: "Allowed columns: 2 selected" })).toHaveTextContent("2 selected");
     await expect(canvas.getByRole("button", { name: "Save policy" })).toBeEnabled();
   },
 };
@@ -285,11 +268,10 @@ export const DelegatedGrantActor: Story = {
 };
 
 export const SchemaUnavailable: Story = {
-  args: { asset: { ...asset, schema: undefined }, selectedField: "", rules: [], activeRule: undefined, selectedMask: undefined },
+  args: { asset: { ...asset, schema: undefined }, rules: [] },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText("Authoritative schema unavailable")).toBeVisible();
-    await expect(canvas.queryByRole("tree")).not.toBeInTheDocument();
-    await expect(canvas.getByText("No authoritative fields available")).toBeVisible();
+    await expect(canvas.getByText("No overrides. Every column returns NULL for authenticated readers.")).toBeVisible();
+    await expect(canvas.getByRole("button", { name: /^Test Policy$/ })).toBeVisible();
   },
 };
 

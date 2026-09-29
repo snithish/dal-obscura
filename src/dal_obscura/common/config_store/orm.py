@@ -183,6 +183,8 @@ class PolicyRuleRecord(Base):
     asset_id: Mapped[UUID] = mapped_column(ForeignKey("assets.id"), nullable=False, index=True)
     ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
     effect: Mapped[str] = mapped_column(String(16), nullable=False)
+    name: Mapped[str] = mapped_column(String(160), nullable=False, default="")
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     principals_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     when_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     columns_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
