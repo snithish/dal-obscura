@@ -45,3 +45,28 @@ A schema change between authorization and planning is rejected before tickets
 are created.
 When a catalog pins `TableHandle.snapshot_id`, schema descriptors must report that
 same snapshot. Core rejects a missing or different snapshot before planning.
+
+## Admission and contract compatibility
+
+The service supports one development contract at a time. Breaking changes
+update the SDK, fixtures, service, and database baseline together. Recreate
+disposable databases and issue new tickets when stored contracts change;
+historical ticket bytes, schema aliases, and migration chains are unsupported.
+
+The public SDK is the sole plugin contract. `PLUGIN_API_VERSION` defines the
+current API version. Admission checks the current API and
+configuration version, distribution, release, descriptor digest, and artifact
+digest. Unknown versions and capabilities fail closed; missing descriptors are
+errors. A self-consistent lock cannot override the supported-version checks.
+
+Catalog descriptors declare their output format IDs. Both catalog and format
+descriptors declare supported handle versions; resolved handles must match the
+admitted catalog identity, format identity, and handle version. Schema and
+execution use the registered format factory, including Iceberg resolved by an
+external catalog. The native Iceberg engine remains an implementation detail.
+
+SDK execution may return an iterable of Arrow batches so streaming never needs
+to materialize the full result. Core validates schemas, bounded tasks, deadlines,
+and each yielded batch. Only trusted internal tasks are serialized; client input
+is never deserialized with pickle. Path allowlists, authentication, and key
+rotation remain operational security features, not version-compatibility shims.

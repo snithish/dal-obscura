@@ -1,50 +1,53 @@
 # Governance UI
 
-New policy authoring and management application for dal-obscura. It is a
-separate administrative surface; it does not grant governed data-read access.
+Authenticated administrative application for dal-obscura. It manages live
+configuration and policies; administrative permissions do not grant Flight data access.
 
-## Current slice
+## Workflows
 
-The first working slice implements an asset workspace with:
+- Search and browse governed assets through bounded inventory requests.
+- Edit named policy rules, nested columns, row restrictions, and column masks.
+- Save the complete live policy against its expected revision; discard local
+  changes or reconcile a concurrent edit.
+- Test the saved policy with a synthetic principal, groups, and attributes.
+- Revoke outstanding asset tickets explicitly, or as part of a policy save.
+- Manage catalog connections, owners, grants, authentication providers, and runtime settings.
+- Obtain Python/DuckDB, Spark, and Arrow consumer instructions.
 
-- bounded, searchable asset inventory loading from `GET /v1/assets/page`;
-- revisioned draft loading and saving through `/v1/assets/{id}/draft`;
-- schema-field selection, row restriction editing, and all six supported masks;
-- synthetic persona policy evaluation through `/v1/assets/{id}/policy-evaluate`;
-- editable synthetic principal, group, and claims inputs for server-side review;
-- per-asset consumer handoff snippets for Python/DuckDB, Spark, and raw Arrow;
-- bounded catalog connection diagnostics with redacted provider failures;
-- authenticated Settings editing for the OIDC provider chain, with staged
-  activation guidance and redacted secret preservation;
-- local draft status, explicit save, and stale-test messaging.
-
-Changes are saved as personal drafts and require a current server review before
-publication. This app does not call the gateway data plane or render source rows.
+Edits remain local until saved. Successful policy saves immediately affect new
+plans; issued tickets retain captured access until expiry unless revoked.
+Runtime and authentication startup settings require worker restarts. See
+[policy authoring](../../docs/policy-authoring.md) and
+[live configuration](../../docs/live-configuration.md).
 
 ## Development
 
-```bash
-cd apps/governance-ui
-pnpm install
-pnpm run dev
-```
-
-Vite proxies `/v1` and `/auth` to a local control plane at
-`http://127.0.0.1:8821`. The normal route starts signed out. In the local
-profile, enter the configured `DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN` in the
-labelled local sign-in form; the server exchanges it for the same HttpOnly
-session and CSRF cookie used by OIDC. Production disables this bootstrap route
-and uses the SSO button, which starts the OIDC authorization-code/PKCE flow.
-Failed authentication never loads policy data. Local development uses the same
-authenticated browser session and CSRF flow as production; the only local
-bootstrap is the explicitly configured control-plane token form. Production
-disables that bootstrap route and uses the SSO button.
+From the repository root:
 
 ```bash
-pnpm run check
-pnpm run build
+pnpm --dir apps/governance-ui install --frozen-lockfile
+pnpm --dir apps/governance-ui dev
 ```
 
-The production asset-serving and authenticated session integration are defined
-in [U02–U03](../../docs/ui-v2/IMPLEMENTATION.md). Do not ship this development
-proxy as a production authorization boundary.
+Vite proxies `/v1` and `/auth` to `http://127.0.0.1:8821`. The normal route starts
+signed out. OIDC uses the authorization-code flow with PKCE. Disposable local
+profiles can enable the bootstrap token form with
+`DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED=true`; it exchanges the configured
+admin token for an HttpOnly session and CSRF cookie. Production disables bootstrap
+and requires SSO. The development proxy is not a production authorization boundary.
+
+## Checks
+
+```bash
+pnpm --dir apps/governance-ui check
+pnpm --dir apps/governance-ui test
+pnpm --dir apps/governance-ui test:stories
+pnpm --dir apps/governance-ui test:e2e
+pnpm --dir apps/governance-ui build
+```
+
+Storybook is available with `pnpm --dir apps/governance-ui storybook`. Browser tests
+need their configured services and browser runtime; use the
+[Keycloak demo](../../examples/demo/keycloak/README.md) for live OIDC checks.
+See [control-plane API](../../docs/control-plane-api.md) for generated-contract updates
+and [production deployment](../../deployment/production/README.md) for serving the built app.

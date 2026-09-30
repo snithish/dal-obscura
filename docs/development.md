@@ -12,6 +12,7 @@ This guide is for contributors changing the service, policies, or connectors.
 - [Change Guidance](#change-guidance)
 - [Release-Oriented Checklist](#release-oriented-checklist)
 - [Extension Notes](#extension-notes)
+- [Current Runtime Rules](#current-runtime-rules)
 
 ## Architecture
 
@@ -65,9 +66,31 @@ flowchart TB
     integration --> unit["Domain and use-case tests"]
 ```
 
-Prefer focused tests near the behavior you changed. Do not add tests for
-example seeding or setup scripts unless those scripts contain non-trivial
-behavior that would be costly to debug manually.
+Follow TDD for new behavior: add or extend the owning behavioral test, implement
+the smallest change, then run focused and broad checks. Prefer real outputs and
+observable rejection or cleanup over source spelling, private SQL strings, or
+mock bookkeeping. Add integration tests when they exercise an independent
+transport, database, provider, browser, or consumer boundary.
+
+Behavioral ownership:
+
+- Policy resolution: `tests/domain/access_control/` and
+  `tests/application/access_flow/`.
+- Administrative permissions and HTTP contracts: `tests/interfaces/control_plane/`
+  and `tests/control_plane/`.
+- Filters, masks, schemas, streaming, and memory: DuckDB and Iceberg adapter tests
+  and `tests/interfaces/flight/test_service_streaming.py`.
+- Request snapshots, provider leases, revision races, and tickets: live configuration
+  adapter tests, `tests/integration/`, and ticket adapter/access-flow tests.
+- Plugin contracts and IO boundaries: `tests/plugin_platform/`, package conformance
+  tests, and integration suites.
+- Browser and client behavior: governance UI tests, Python connector tests, and
+  the JVM workspace.
+
+Keep benchmarks separate from functional tests. See
+[read execution invariants](read-execution-invariants.md) for specific guarantees
+and their executable evidence. Avoid setup-script tests unless they cover
+non-trivial behavior that would be costly to debug manually.
 
 ## Common Checks
 
@@ -99,6 +122,19 @@ mvn -f connectors/jvm/pom.xml -Pspark-3.5 verify
 mvn -f connectors/jvm/pom.xml -Pspark-4.0 verify
 ```
 
+Benchmarks for planner, masking, filtering, and streaming changes:
+
+```bash
+uv run pytest tests/benchmarks --benchmark-only
+uv run pytest tests/benchmarks/test_masking_row_filter_benchmarks.py --benchmark-only --benchmark-json .benchmarks/row-filter-mask.json
+uv run pytest tests/benchmarks/test_iceberg_multifile_benchmark.py --benchmark-only --benchmark-json .benchmarks/iceberg-multifile.json
+uv run pytest tests/benchmarks/test_ticket_to_response_benchmark.py --benchmark-only
+```
+
+Compare JSON with same-host baselines before claiming an improvement. For repeated
+capacity runs and environment metadata, see the
+[capacity runbook](../evaluation/capacity/README.md).
+
 ## Change Guidance
 
 | Change | Update |
@@ -127,9 +163,13 @@ paths or backend module names. Asset and policy changes are edited through the
 authenticated control-plane API and take effect for new plans after a
 successful revision-checked write.
 
-Add a catalog by implementing `CatalogPlugin.resolve_table()` and returning a
-`TableFormat` directly. A table format owns schema extraction, scan-task
-planning, and execution.
+Implement external adapters against the [public plugin SDK](../packages/plugin-api/README.md),
+not service internals. Catalog plugins return structured table handles; the
+admitted table-format plugin owns schema extraction, bounded scan-task planning,
+and lazy execution. Declare output formats, capabilities, and handle versions in
+the static descriptor, run the [conformance kit](../packages/plugin-conformance/README.md),
+and admit the exact wheel through the plugin lock. See
+[operators](operators.md) for lock configuration and artifact admission.
 
 ## Current Runtime Rules
 

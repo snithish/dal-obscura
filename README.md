@@ -19,8 +19,9 @@ normal authenticated workspace, OIDC/PKCE login, local bootstrap login for
 development, direct policy authoring, catalog management, and consumer
 instructions. Paid-production release remains on hold until the live
 PostgreSQL, TLS/OIDC, artifact, browser, consumer, recovery, and independent
-security gates pass. See the [code-backed readiness review](docs/ui-v2/PRODUCTION_READINESS.md)
-and [implementation ledger](docs/plugin-platform/STATUS.md) for the evidence.
+security gates pass. Use the [operator guide](docs/operators.md) and
+[compatibility matrix](docs/compatibility.md) to assess deployment requirements
+and tested client support. Local test results do not certify a production release.
 
 ## Contents
 
@@ -183,6 +184,9 @@ mvn -f connectors/jvm/pom.xml verify
 ```
 
 ## Development
+
+See [development](docs/development.md) for test ownership and checks, and
+[read execution invariants](docs/read-execution-invariants.md) for correctness boundaries.
 
 ```bash
 uv sync --dev --extra server --extra sqlite

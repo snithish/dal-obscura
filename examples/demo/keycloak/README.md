@@ -134,9 +134,6 @@ pnpm --dir ../../../apps/governance-ui exec playwright test e2e/live-oidc-demo.s
 Adjust the base URL when using a different UI port. The test reads the generated
 `demo-admin` password from `.runtime/client.env` and reports only pass/fail.
 
-See [LOCAL_VALIDATION.md](LOCAL_VALIDATION.md) for the latest recorded run and
-any acceptance checks that remain pending.
-
 ## Read Checks
 
 Run these from `examples/demo/keycloak`:
