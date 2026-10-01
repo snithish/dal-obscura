@@ -286,6 +286,11 @@ def _validate_profile(  # noqa: C901
     )
     _validate_optional_https(
         values,
+        "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_END_SESSION_ENDPOINT",
+        "browser logout endpoint",
+    )
+    _validate_optional_https(
+        values,
         "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGIN_REDIRECT_URI",
         "browser post-login redirect URI",
     )
@@ -383,6 +388,10 @@ def _ui_auth_config(values: Mapping[str, str]) -> dict[str, object] | None:
         "token_endpoint": _optional(
             values,
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_TOKEN_ENDPOINT",
+        ),
+        "end_session_endpoint": _optional(
+            values,
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_END_SESSION_ENDPOINT",
         ),
     }
     return {key: value for key, value in config.items() if value is not None}

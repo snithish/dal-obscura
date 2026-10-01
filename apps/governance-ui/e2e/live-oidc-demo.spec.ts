@@ -72,6 +72,12 @@ test("live local Keycloak sign-in, governed inventory, and sign-out", async ({ p
   await expect(page.getByRole("heading", { name: "Assets" })).toBeVisible();
 
   await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page.getByRole("button", { name: "Logout", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Logout", exact: true }).click();
+  await page.waitForURL((url) => url.origin === origin);
   await expect(page.getByRole("heading", { name: "Sign in to your workspace" })).toBeVisible();
   expect((await page.request.get(`${origin}/v1/session`)).status()).toBe(401);
+  await page.getByRole("button", { name: "Sign in with SSO" }).click();
+  await expect(page.getByRole("textbox", { name: "Username or email" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Password" })).toBeVisible();
 });

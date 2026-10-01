@@ -17,7 +17,11 @@ from dal_obscura.common.config_store.db import (
 from dal_obscura.control_plane.interfaces import api as api_module
 from dal_obscura.control_plane.interfaces.api import create_app
 from dal_obscura.control_plane.interfaces.routes import session as session_routes
-from dal_obscura.control_plane.interfaces.routes.session import _oidc_endpoint, _post_login_redirect
+from dal_obscura.control_plane.interfaces.routes.session import (
+    _oidc_endpoint,
+    _post_login_redirect,
+    _provider_logout_url,
+)
 from dal_obscura.control_plane.interfaces.session_api import exchange_authorization_code
 
 
@@ -79,6 +83,109 @@ def test_oidc_login_uses_state_pkce_nonce_and_opaque_session(monkeypatch) -> Non
     session = client.get("/v1/session")
     assert session.status_code == 200
     assert session.json()["principal"] == "alice"
+
+
+def test_logout_revokes_local_session_and_returns_provider_logout_without_tokens(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        api_module,
+        "_exchange_authorization_code",
+        lambda config, code, verifier: {"id_token": "private-id-token"},
+    )
+    client = _client(lambda token, nonce_hash: {"principal": "alice", "groups": []})
+    start = client.get("/auth/login", follow_redirects=False)
+    state = parse_qs(urlsplit(start.headers["location"]).query)["state"][0]
+    client.get("/auth/callback", params={"code": "code", "state": state}, follow_redirects=False)
+    session_cookie = client.cookies["__Host-dal_obscura_session"]
+    csrf = client.cookies["__Host-dal_obscura_csrf"]
+
+    rejected = client.post("/v1/logout")
+    assert rejected.status_code == 403
+    assert client.get("/v1/session").status_code == 200
+    response = client.post("/v1/logout", headers={"x-csrf-token": csrf})
+
+    assert response.status_code == 200
+    assert response.json()["authenticated"] is False
+    url = urlsplit(response.json()["logout_url"])
+    assert url.scheme == "https"
+    assert url.netloc == "issuer.example"
+    assert url.path == "/realms/demo/protocol/openid-connect/logout"
+    assert parse_qs(url.query) == {
+        "client_id": ["dal-obscura-ui"],
+        "post_logout_redirect_uri": ["http://testserver/"],
+    }
+    assert "private-id-token" not in response.text
+    assert response.headers["cache-control"] == "no-store"
+    assert any(
+        '__Host-dal_obscura_session=""' in cookie
+        for cookie in response.headers.get_list("set-cookie")
+    )
+    assert (
+        client.get(
+            "/v1/session", headers={"cookie": f"__Host-dal_obscura_session={session_cookie}"}
+        ).status_code
+        == 401
+    )
+    assert client.post("/v1/logout").json()["logout_url"] == response.json()["logout_url"]
+
+
+def test_provider_logout_uses_configured_endpoint_and_registered_return_uri() -> None:
+    location = _provider_logout_url(
+        {
+            "authority": "https://issuer.example",
+            "end_session_endpoint": "https://issuer.example/session/end?locale=en",
+            "client_id": "console",
+            "redirect_uri": "https://console.example/auth/callback",
+            "post_logout_redirect_uri": "https://console.example/signed-out?source=sso",
+            "client_secret": "private-secret",
+        }
+    )
+    parts = urlsplit(location)
+    assert parts.path == "/session/end"
+    assert parse_qs(parts.query) == {
+        "locale": ["en"],
+        "client_id": ["console"],
+        "post_logout_redirect_uri": ["https://console.example/signed-out?source=sso"],
+    }
+    assert "private-secret" not in location
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "https://attacker.example/",
+        "javascript:alert(1)",
+        "https://user:password@console.example/",
+        "https://[broken/",
+        "https://console.example:99999/",
+        "https://console.example/#fragment",
+    ],
+)
+def test_provider_logout_rejects_unsafe_return_uri(target: str) -> None:
+    with pytest.raises(HTTPException, match="post-logout redirect is invalid"):
+        _provider_logout_url(
+            {
+                "authority": "https://issuer.example",
+                "client_id": "console",
+                "redirect_uri": "https://console.example/auth/callback",
+                "post_logout_redirect_uri": target,
+            }
+        )
+
+
+def test_bootstrap_only_logout_does_not_offer_provider_redirect() -> None:
+    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+    migrate_config_store(engine)
+    client = TestClient(
+        create_app(session_factory(engine), admin_token="test-admin"), base_url="https://testserver"
+    )
+    login = client.post("/v1/session/bootstrap", headers={"authorization": "Bearer test-admin"})
+    response = client.post(
+        "/v1/logout", headers={"x-csrf-token": login.cookies["__Host-dal_obscura_csrf"]}
+    )
+    assert response.json() == {"authenticated": False}
+    assert client.get("/v1/session").status_code == 401
 
 
 def test_oidc_callback_rejects_state_replay_and_nonce_failure(monkeypatch) -> None:

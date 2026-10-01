@@ -1145,7 +1145,7 @@
     "/v1/logout": {
       "post": {
         "summary": "Logout",
-        "description": "Expires browser credentials even when the server session is stale.",
+        "description": "Revokes local credentials and directs the browser to provider logout.",
         "operationId": "logout_v1_logout_post",
         "parameters": [
           {
@@ -1187,7 +1187,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AuthenticationMutationResponse"
+                  "$ref": "#/components/schemas/LogoutResponse"
                 }
               }
             }
@@ -7472,6 +7472,31 @@
         ],
         "title": "DataPlaneObservationResponse",
         "description": "Explicit data-plane health observation state."
+      },
+      "LogoutResponse": {
+        "properties": {
+          "authenticated": {
+            "type": "boolean",
+            "title": "Authenticated"
+          },
+          "logout_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logout Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "authenticated"
+        ],
+        "title": "LogoutResponse",
+        "description": "Local session revocation and optional provider sign-out destination."
       },
       "PluginDescriptorResponse": {
         "properties": {

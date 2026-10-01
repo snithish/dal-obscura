@@ -468,8 +468,12 @@ function App() {
     clearPrivateState();
     const controller = beginMutation();
     try {
-      await controlPlane.logout(controller.signal);
+      const result = await controlPlane.logout(controller.signal);
       setLogoutPending(false);
+      if (result.logout_url) {
+        window.location.assign(result.logout_url);
+        return;
+      }
       setNotice("Signed out. No policy data remains loaded in this browser.");
     } catch (error) {
       if (isAbortError(error)) return;

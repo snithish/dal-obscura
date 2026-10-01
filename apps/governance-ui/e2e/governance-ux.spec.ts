@@ -56,6 +56,56 @@ test("schema reference searches nested fields and collapses without changing rul
   await expect(page.getByRole("button", { name: "Allowed columns: 3 selected" })).toBeVisible();
 });
 
+test("expanding nested schema fields reveals children without losing scroll or focus", async ({ page }) => {
+  const scalar = (name: string, id: number) => ({ field_id: id, name, human_path: name, type: "string", nullable: true, kind: "scalar", path: { version: 1, segments: [{ kind: "field", name, field_id: id }] } });
+  const profile = scalar("profile", 101);
+  const contact = { ...scalar("contact", 102), human_path: "profile.contact", path: { version: 1, segments: [...profile.path.segments, { kind: "field", name: "contact", field_id: 102 }] } };
+  const email = { ...scalar("email", 103), human_path: "profile.contact.email", path: { version: 1, segments: [...contact.path.segments, { kind: "field", name: "email", field_id: 103 }] } };
+  const fields = [...Array.from({ length: 20 }, (_, i) => scalar(`before_${i}`, i + 1)), { ...profile, kind: "struct", type: "struct", children: [{ ...contact, kind: "struct", type: "struct", children: [email] }] }, ...Array.from({ length: 30 }, (_, i) => scalar(`after_${i}`, i + 200))];
+  await page.route(`**/v1/assets/${uxAssetId}/schema`, (route) => route.fulfill({ json: { asset_id: uxAssetId, schema_version: 1, fields, supported_masks: ["null"] } }));
+  await page.goto(assetUrl);
+  await page.getByRole("button", { name: "Show schema", exact: true }).click();
+  const sidebar = page.getByRole("complementary", { name: "Asset schema" });
+  const viewport = sidebar.locator(".schema-reference-list");
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await viewport.scrollIntoViewIfNeeded();
+    await viewport.evaluate((element) => { element.scrollTop = 20 * 56; });
+    const expand = sidebar.getByRole("button", { name: "Expand profile.contact", exact: true });
+    await expect(expand).toBeInViewport();
+    const before = await viewport.evaluate((element) => ({ list: element.scrollTop, page: window.scrollY }));
+    await expand.click();
+    await expect(sidebar.getByText("profile.contact.email", { exact: true })).toBeInViewport();
+    const collapse = sidebar.getByRole("button", { name: "Collapse profile.contact", exact: true });
+    await expect(collapse).toBeFocused();
+    expect(await viewport.evaluate((element) => ({ list: element.scrollTop, page: window.scrollY }))).toEqual(before);
+    await collapse.press("Enter");
+    await expect(sidebar.getByText("profile.contact.email", { exact: true })).toHaveCount(0);
+    await expect(sidebar.getByRole("button", { name: "Expand profile.contact", exact: true })).toBeFocused();
+    expect(await viewport.evaluate((element) => ({ list: element.scrollTop, page: window.scrollY }))).toEqual(before);
+  }
+  if (process.env.UX_CAPTURE_PHASE === "after") {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await viewport.scrollIntoViewIfNeeded();
+    await viewport.evaluate((element) => { element.scrollTop = 20 * 56; });
+    await sidebar.getByRole("button", { name: "Expand profile.contact", exact: true }).click();
+    await expect(sidebar.getByText("profile.contact.email", { exact: true })).toBeInViewport();
+    await sidebar.screenshot({ path: "../../docs/ui-review/images/after-schema-expansion.png" });
+  }
+});
+
+test("sign-out follows the provider logout URL after revoking the local session", async ({ page }) => {
+  let revoked = false;
+  const providerUrl = "https://issuer.example/realms/demo/protocol/openid-connect/logout?client_id=dal-obscura-ui&post_logout_redirect_uri=http%3A%2F%2F127.0.0.1%3A4173%2F";
+  await page.route("**/v1/logout", (route) => { revoked = true; return route.fulfill({ json: { authenticated: false, logout_url: providerUrl } }); });
+  await page.route("https://issuer.example/**", (route) => route.fulfill({ contentType: "text/html", body: "<h1>Confirm SSO sign-out</h1>" }));
+  await page.goto(assetUrl);
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(page).toHaveURL(providerUrl);
+  await expect(page.getByRole("heading", { name: "Confirm SSO sign-out" })).toBeVisible();
+  expect(revoked).toBe(true);
+});
+
 test("one persistent New rule action stays reachable while editing on desktop and mobile", async ({ page }) => {
   await page.goto(assetUrl);
   for (const width of [1440, 390]) {

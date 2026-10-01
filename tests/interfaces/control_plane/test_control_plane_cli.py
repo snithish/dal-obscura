@@ -320,6 +320,11 @@ def test_control_plane_cli_requires_oidc_redirect_origins_in_cors(capsys):
             "HTTPS browser token endpoint",
         ),
         (
+            "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_END_SESSION_ENDPOINT",
+            "http://issuer.example/logout",
+            "HTTPS browser logout endpoint",
+        ),
+        (
             "DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI",
             "http://console.example",
             "HTTPS browser post-logout redirect URI",

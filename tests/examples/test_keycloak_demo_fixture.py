@@ -1,8 +1,18 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
 from examples.demo.keycloak.scripts import provision_demo
+
+
+def test_browser_client_registers_the_demo_logout_return_uri():
+    realm = json.loads(Path("examples/demo/keycloak/keycloak/realm.json").read_text())
+    client = next(client for client in realm["clients"] if client["clientId"] == "dal-obscura-ui")
+    assert client["attributes"]["post.logout.redirect.uris"] == "${UI_ORIGIN}"
+    assert client["attributes"]["pkce.code.challenge.method"] == "S256"
 
 
 def test_provision_demo_preserves_nested_live_schema_identities():

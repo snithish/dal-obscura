@@ -47,6 +47,14 @@ issuer. Browser login uses authorization code with PKCE; bootstrap browser login
 is disabled. The CLI fixture client permits password grants solely for local read
 checks. Administrative authority alone does not permit reading governed rows.
 
+**Sign out** now opens Keycloak's logout confirmation after revoking the app
+session. Confirm **Logout** to end SSO as well; signing in again should require
+credentials. New realm imports register the UI origin as a valid post-logout
+redirect. For an existing realm, add the exact UI origin (for example,
+`http://localhost:28821`) to **Valid Post Logout Redirect URIs** on the
+`dal-obscura-ui` client in Keycloak. Restarting Keycloak preserves its existing
+realm and does not reapply the import file.
+
 ## Everyday commands
 
 ```bash

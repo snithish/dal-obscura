@@ -58,6 +58,15 @@ interval; unknown key IDs fail closed without causing one network request per
 authentication attempt. Operators can tighten both limits in the provider
 configuration when their IdP rotation policy requires it.
 
+Browser sign-out revokes the local session and expires both session and CSRF
+cookies before navigating to the provider's RP-initiated logout endpoint. The
+request carries the configured client ID and registered post-logout return URI;
+provider tokens are not retained or sent to the browser. Without an ID-token
+hint, the provider can require confirmation before ending its SSO session.
+Deployments using a non-Keycloak provider should set
+`DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_END_SESSION_ENDPOINT` to its logout endpoint.
+The return URI must match the UI origin and be registered with the provider.
+
 ## Ticket Lifecycle
 
 ```mermaid

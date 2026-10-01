@@ -235,7 +235,8 @@ def test_cookie_session_logout_requires_csrf_and_expires_browser_cookies():
 
     assert rejected.status_code == 403
     assert logout.status_code == 200
-    assert logout.json() == {"authenticated": False}
+    assert logout.json()["authenticated"] is False
+    assert urlsplit(logout.json()["logout_url"]).path.endswith("/protocol/openid-connect/logout")
     cookies = logout.headers.get_list("set-cookie")
     assert any('__Host-dal_obscura_session=""' in cookie for cookie in cookies)
     assert any('__Host-dal_obscura_csrf=""' in cookie for cookie in cookies)
@@ -246,7 +247,7 @@ def test_cookie_session_logout_requires_csrf_and_expires_browser_cookies():
         headers={"cookie": cookie_header, "x-csrf-token": login.cookies["__Host-dal_obscura_csrf"]},
     )
     assert repeated.status_code == 200
-    assert repeated.json() == {"authenticated": False}
+    assert repeated.json() == logout.json()
 
 
 @pytest.mark.parametrize(

@@ -162,9 +162,9 @@ code, pre, .mono { font-family: var(--mantine-font-family-monospace); }
 .schema-sidebar .eyebrow { color: var(--text-secondary); font-size: 10px; margin-bottom: 3px; }
 .schema-sidebar > .help { margin: 10px 0 16px; }
 .schema-results-count { font-size: 11px; color: var(--text-secondary); padding: 12px 0; }
-.schema-reference-list { overflow: auto; overscroll-behavior: contain; border: 1px solid var(--border); border-radius: 8px; }
+.schema-reference-list { overflow: auto; overscroll-behavior: contain; overflow-anchor: none; border: 1px solid var(--border); border-radius: 8px; }
 .schema-reference-row { display: flex; flex-direction: column; justify-content: center; gap: 5px; left: 0; right: 0; width: 100%; min-width: 0; text-align: left; padding: 6px 10px; border: 0; border-bottom: 1px solid var(--border); color: var(--text); background: transparent; }
-.schema-reference-row.expandable { padding-left: 28px !important; background: var(--surface-subtle); }
+.schema-reference-row.expandable { background: var(--surface-subtle); }
 .schema-reference-row > svg { position: absolute; left: 8px; top: 12px; }
 .schema-reference-row[aria-expanded=false] > svg { transform: rotate(-90deg); }
 .schema-field-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px var(--mantine-font-family-monospace); max-width: 100%; }

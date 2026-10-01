@@ -339,7 +339,7 @@ export const controlPlane = {
     headers: { authorization: `Bearer ${token}` },
     signal,
   }),
-  logout: (signal?: AbortSignal) => request<ApiSchemas["AuthenticationMutationResponse"]>("/v1/logout", { method: "POST", signal }),
+  logout: (signal?: AbortSignal) => request<ApiSchemas["LogoutResponse"]>("/v1/logout", { method: "POST", signal }),
   listAssetPage: async (params: { limit?: number; cursor?: string; search?: string; signal?: AbortSignal } = {}) => {
     const query = new URLSearchParams();
     if (params.limit !== undefined) query.set("limit", String(params.limit));

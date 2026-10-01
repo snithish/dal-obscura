@@ -373,7 +373,7 @@ export interface paths {
         put?: never;
         /**
          * Logout
-         * @description Expires browser credentials even when the server session is stale.
+         * @description Revokes local credentials and directs the browser to provider logout.
          */
         post: operations["logout_v1_logout_post"];
         delete?: never;
@@ -1116,6 +1116,16 @@ export interface components {
             reason: string;
             /** Status */
             status: string;
+        };
+        /**
+         * LogoutResponse
+         * @description Local session revocation and optional provider sign-out destination.
+         */
+        LogoutResponse: {
+            /** Authenticated */
+            authenticated: boolean;
+            /** Logout Url */
+            logout_url?: string | null;
         };
         /**
          * PluginDescriptorResponse
@@ -4326,7 +4336,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuthenticationMutationResponse"];
+                    "application/json": components["schemas"]["LogoutResponse"];
                 };
             };
             /** @description Bad Request */

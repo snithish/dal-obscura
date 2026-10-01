@@ -54,6 +54,14 @@ profiles can enable the bootstrap token form with
 admin token for an HttpOnly session and CSRF cookie. Production disables bootstrap
 and requires SSO. The development proxy is not a production authorization boundary.
 
+**Sign out** clears private UI state, revokes the app session, and sends the browser
+to the configured provider logout endpoint. Confirm sign-out on the provider's page
+when prompted; a subsequent SSO sign-in should ask for credentials again. The app
+does not retain ID tokens. Bootstrap-only profiles clear only the local session.
+Configure `DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_END_SESSION_ENDPOINT` for providers
+whose logout endpoint differs from the default Keycloak path. Register the exact
+`DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI` with the provider.
+
 ## Checks
 
 ```bash

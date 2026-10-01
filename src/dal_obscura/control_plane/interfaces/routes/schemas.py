@@ -119,6 +119,12 @@ class AuthenticationMutationResponse(BaseModel):
     authenticated: bool
 
 
+class LogoutResponse(AuthenticationMutationResponse):
+    """Local session revocation and optional provider sign-out destination."""
+
+    logout_url: str | None = None
+
+
 class AssetCapabilityResponse(BaseModel):
     """One server-resolved capability and its explainable reasons."""
 

@@ -22,6 +22,7 @@ from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps, bearer_authorization
 from dal_obscura.control_plane.interfaces.routes.schemas import (
     AuthenticationMutationResponse,
+    LogoutResponse,
     SessionOptionsResponse,
     SessionResponse,
     UiAuthConfigResponse,
@@ -239,20 +240,26 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
             raise HTTPException(status_code=404, detail="UI auth is not configured")
         return UiAuthConfigResponse.model_validate(public_ui_auth_config(deps.ui_auth_config))
 
-    @api.post("/v1/logout", response_model=AuthenticationMutationResponse)
+    @api.post("/v1/logout", response_model=LogoutResponse, response_model_exclude_none=True)
     def logout(
         request: Request,
         response: Response,
         session_token: str | None = Cookie(default=None, alias="__Host-dal_obscura_session"),
         csrf_cookie: str | None = Cookie(default=None, alias="__Host-dal_obscura_csrf"),
-    ) -> AuthenticationMutationResponse:
-        """Expires browser credentials even when the server session is stale."""
+    ) -> LogoutResponse:
+        """Revokes local credentials and directs the browser to provider logout."""
         if session_token:
             deps.validate_browser_mutation(request, csrf_cookie)
             deps.revoke_browser_session(session_token)
         response.delete_cookie(key="__Host-dal_obscura_session", path="/", secure=True)
         response.delete_cookie(key="__Host-dal_obscura_csrf", path="/", secure=True)
-        return AuthenticationMutationResponse(authenticated=False)
+        response.headers["cache-control"] = "no-store"
+        return LogoutResponse(
+            authenticated=False,
+            logout_url=_provider_logout_url(dict(deps.ui_auth_config))
+            if deps.ui_auth_config is not None
+            else None,
+        )
 
     return api
 
@@ -278,7 +285,9 @@ def _required_config_value(config: dict[str, object], key: str) -> str:
     return value
 
 
-def _oidc_endpoint(config: dict[str, object], key: str, suffix: str) -> str:
+def _oidc_endpoint(
+    config: dict[str, object], key: str, suffix: str, *, allow_query: bool = False
+) -> str:
     configured = str(config.get(key, "")).strip()
     endpoint = configured
     if not endpoint:
@@ -296,11 +305,45 @@ def _oidc_endpoint(config: dict[str, object], key: str, suffix: str) -> str:
         or not hostname
         or parsed.username is not None
         or parsed.password is not None
-        or parsed.query
+        or (parsed.query and not allow_query)
         or parsed.fragment
     ):
         raise HTTPException(status_code=503, detail=f"OIDC {key} is invalid")
     return endpoint
+
+
+def _provider_logout_url(config: dict[str, object]) -> str:
+    endpoint = _oidc_endpoint(
+        config, "end_session_endpoint", "/protocol/openid-connect/logout", allow_query=True
+    )
+    callback = _required_config_value(config, "redirect_uri")
+    target = str(config.get("post_logout_redirect_uri", "")).strip()
+    if not target:
+        target = _post_login_redirect(config, callback)
+    try:
+        callback_parts = urlsplit(callback)
+        parts = urlsplit(target)
+        _ = parts.port
+        if (
+            parts.scheme not in {"https", "http"}
+            or not parts.hostname
+            or parts.username is not None
+            or parts.password is not None
+            or parts.fragment
+            or parts.scheme.lower() != callback_parts.scheme.lower()
+            or parts.netloc.lower() != callback_parts.netloc.lower()
+        ):
+            raise ValueError("Invalid post-logout redirect")
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail="UI post-logout redirect is invalid") from exc
+    query = urlencode(
+        {
+            "client_id": _required_config_value(config, "client_id"),
+            "post_logout_redirect_uri": target,
+        }
+    )
+    separator = "&" if urlsplit(endpoint).query else "?"
+    return f"{endpoint}{separator}{query}"
 
 
 def _code_challenge(verifier: str) -> str:
