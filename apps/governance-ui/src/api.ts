@@ -204,6 +204,8 @@ export type PluginPair = {
   status: "admitted" | "incompatible";
 };
 
+export type AttributeProvider = ApiSchemas["AttributeProviderResponse"];
+
 export type AuthProvider = {
   id: string;
   ordinal: number;
@@ -441,7 +443,13 @@ export const controlPlane = {
     body: JSON.stringify({ ticket_ttl_seconds: settings.ticket_ttl_seconds, max_tickets: settings.max_tickets, max_ticket_exchanges: settings.max_ticket_exchanges, path_rules: settings.path_rules, ...(settings.revision === undefined ? {} : { expected_revision: settings.revision }) }),
     signal,
   }),
-  evaluate: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, unknown> }, signal?: AbortSignal) => {
+  attributeCatalog: async (assetId: string, signal?: AbortSignal) => {
+    const data = await request<AttributeProvider[]>(`${assetPath(assetId)}/identity-attributes`, { signal });
+    if (!Array.isArray(data)) throw new Error("Identity attribute metadata is unavailable. Refresh to retry.");
+    return data;
+  },
+  previewAttributeMapping: (ordinal: number, claims: Record<string, unknown>, providerArgs: Record<string, unknown>, signal?: AbortSignal) => request<ApiSchemas["AttributeMappingPreviewResponse"]>(`/v1/settings/auth-providers/${ordinal}/attribute-preview`, { method: "POST", body: JSON.stringify({ claims, provider_args: providerArgs }), signal }),
+  evaluate: async (assetId: string, persona: { principal: string; groups: string[]; claims: Record<string, unknown>; provider_ordinal?: number }, signal?: AbortSignal) => {
     const raw = await request<ApiSchemas["PolicyEvaluationResponse"]>(`${assetPath(assetId)}/policy-evaluate`, {
       method: "POST",
       body: JSON.stringify(persona),

@@ -7,6 +7,7 @@ from math import isfinite
 from typing import Any, cast
 from urllib.parse import urlsplit
 
+from dal_obscura.common.access_control.identity_claims import validate_attribute_definitions
 from dal_obscura.control_plane.application.errors import ValidationFailure
 
 OIDC_IDENTITY_MODULE = (
@@ -22,6 +23,7 @@ _SUPPORTED_ARGUMENTS = frozenset(
         "subject_claim",
         "group_claims",
         "attribute_claims",
+        "attribute_definitions",
         "leeway_seconds",
         "jwks_refresh_interval_seconds",
         "max_jwks_keys",
@@ -166,6 +168,13 @@ def _validate_oidc_args(args: Mapping[str, object], *, index: int) -> None:  # n
         for key, value in attribute_claims.items():
             _validate_claim_path(key, label=f"Authentication provider {index} attribute name")
             _validate_claim_path(value, label=f"Authentication provider {index} attribute claim")
+    try:
+        validate_attribute_definitions(
+            cast(Mapping[str, Any] | None, args.get("attribute_definitions")),
+            cast(Mapping[str, str], attribute_claims or {}),
+        )
+    except ValueError as exc:
+        raise ValidationFailure(str(exc)) from exc
     leeway = args.get("leeway_seconds", 0)
     if isinstance(leeway, bool) or not isinstance(leeway, int) or not 0 <= leeway <= 300:
         raise ValidationFailure(f"Authentication provider {index} leeway_seconds must be 0-300")

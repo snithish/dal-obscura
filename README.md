@@ -178,6 +178,10 @@ The searchable column picker previews bulk selections, multiple exclusions, and
 prefix matches. A collapsible schema reference keeps nested paths and types
 nearby, and a sticky rules toolbar keeps one **New rule** action within reach. See the
 [UI before/after review](docs/ui-review/review.html) for screenshots and rationale.
+Identity settings map trusted provider claims to named policy attributes with
+optional enforced allowed values. Policy conditions offer searchable attributes
+and value chips; provider-mode tests use the runtime mapper and show missing or
+mismatched claims. See [identity attribute authoring](docs/policy-authoring.md#identity-attributes).
 To invalidate existing tickets, revoke them from the asset's Access view or
 choose **Revoke existing tokens after saving** in the policy editor.
 

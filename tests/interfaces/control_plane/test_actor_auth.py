@@ -676,6 +676,14 @@ def test_non_owner_cannot_read_asset_policy_or_preview():
     assert detail.status_code == 403
     assert rules.status_code == 403
     assert preview.status_code == 403
+    attributes = client.get(
+        f"/v1/assets/{asset}/identity-attributes", headers=_bearer("outsider-token")
+    )
+    assert attributes.status_code == 403
+    owner_attributes = client.get(
+        f"/v1/assets/{asset}/identity-attributes", headers=_bearer("owner-token")
+    )
+    assert owner_attributes.status_code == 200
 
 
 def test_workspace_summary_is_scoped_to_visible_assets():

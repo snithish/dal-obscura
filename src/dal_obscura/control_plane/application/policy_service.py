@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any, Literal, cast
 from uuid import UUID
 
+from dal_obscura.common.access_control.attribute_conditions import attributes_match
 from dal_obscura.common.access_control.compiled_policy import (
     CompiledMaskRule,
     CompiledPolicy,
@@ -148,6 +149,18 @@ def preview_asset_policy(
         groups=groups,
         attributes=_principal_attributes(claims),
     )
+    conditions = [
+        {
+            "rule_ordinal": raw["ordinal"],
+            "key": key,
+            "expected": expected,
+            "actual": preview_principal.attributes.get(key),
+            "matched": _preview_conditions_match({key: expected}, preview_principal.attributes),
+            "missing": key not in preview_principal.attributes,
+        }
+        for raw in raw_rules
+        for key, expected in cast(dict[str, PrincipalConditionValue], raw.get("when", {})).items()
+    ]
     requested = requested_columns or _preview_columns(asset, rules)
     matched_ordinal = _first_matching_rule_ordinal(raw_rules, preview_principal)
     try:
@@ -160,6 +173,7 @@ def preview_asset_policy(
         )
     except PermissionError:
         return {
+            "conditions": conditions,
             "decision": "deny",
             "matched_ordinal": matched_ordinal,
             "reason": _deny_preview_reason(matched_ordinal),
@@ -176,6 +190,7 @@ def preview_asset_policy(
         for column, mask in sorted(masks.items())
     ]
     return {
+        "conditions": conditions,
         "decision": "allow",
         "matched_ordinal": matched_ordinal,
         "reason": _allow_preview_reason(matched_ordinal),
@@ -297,7 +312,17 @@ def _access_rule_from_response(raw: dict[str, object]) -> AccessRule:
 
 
 def _principal_attributes(claims: dict[str, object]) -> dict[str, str]:
-    return {str(key): str(value) for key, value in claims.items()}
+    from dal_obscura.control_plane.application.errors import ValidationFailure
+
+    if any(isinstance(value, dict | list) for value in claims.values()):
+        raise ValidationFailure(
+            "Internal attributes must be scalar values; use provider claims for nested input"
+        )
+    return {
+        str(key): str(value).strip()
+        for key, value in claims.items()
+        if value is not None and str(value).strip()
+    }
 
 
 def _object_list(value: object) -> list[object]:
@@ -345,19 +370,7 @@ def _preview_conditions_match(
     conditions: dict[str, PrincipalConditionValue] | None,
     attributes: dict[str, str],
 ) -> bool:
-    if not conditions:
-        return True
-    for key, expected in conditions.items():
-        actual = attributes.get(key)
-        if actual is None:
-            return False
-        if isinstance(expected, list):
-            if actual not in {str(item) for item in expected}:
-                return False
-            continue
-        if actual != str(expected):
-            return False
-    return True
+    return attributes_match(attributes, conditions)
 
 
 def _allow_preview_reason(matched_ordinal: int | None) -> str:

@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 from dal_obscura.control_plane.interfaces.routes.schemas import (
+    AttributeProviderResponse,
     PolicyEvaluationRequest,
     PolicyEvaluationResponse,
     PolicyMutationResponse,
@@ -38,6 +39,15 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         )
         return PolicyMutationResponse(asset_id=str(asset_id), **result)
 
+    @api.get(
+        "/v1/assets/{asset_id}/identity-attributes", response_model=list[AttributeProviderResponse]
+    )
+    def list_identity_attributes(
+        asset_id: UUID,
+        actor: ControlPlaneActor = Depends(deps.require_actor),  # noqa: B008
+    ) -> list[dict[str, object]]:
+        return deps.with_service(lambda service: service.list_attribute_catalog(asset_id, actor))
+
     @api.post(
         "/v1/assets/{asset_id}/policy-evaluate",
         response_model=PolicyEvaluationResponse,
@@ -55,6 +65,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
                 groups=request.groups,
                 claims=request.claims,
                 rows=request.rows,
+                provider_ordinal=request.provider_ordinal,
             )
         )
 

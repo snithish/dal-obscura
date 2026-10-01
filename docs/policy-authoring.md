@@ -240,6 +240,74 @@ not grant access, remove row restrictions, or cancel masks from other rules.
 }
 ```
 
+## Identity Attributes
+
+Configure policy attributes under **Settings → Authentication providers → Identity
+attributes**. These providers govern data-plane bearer identities; browser SSO
+login configuration remains deployment-managed. Each row maps a dotted source claim path to an internal policy key,
+with an optional display name, description, and allowed-value domain. Definitions
+live in the existing provider configuration; there is no user directory or
+observed-value collection. Profile fields such as display names and email are not
+automatically made policy attributes.
+
+For example, a verified payload containing `employee.department: "Finance"` maps
+to `department: "Finance"` with this provider configuration:
+
+```json
+{
+  "attribute_claims": {"department": "employee.department"},
+  "attribute_definitions": {
+    "department": {
+      "label": "Department",
+      "description": "Employee business unit",
+      "allowed_values": ["Engineering", "Finance"]
+    }
+  }
+}
+```
+
+Attribute values remain scalar and normalize to trimmed text. Missing or empty
+claims produce no attribute; missing attributes never satisfy a condition. Lists
+and objects are rejected. A non-empty allowed-value domain is enforced by runtime
+authentication and mapping previews. Values outside that domain reject the
+identity; an empty domain permits unrestricted scalar text. Matching is
+case-sensitive. Several expected values in an `is one of` condition represent
+alternatives for one scalar user attribute, not a multi-valued user attribute.
+
+Use **Preview attribute mapping** to check unsaved mappings against a synthetic
+JSON payload without saving or contacting the identity provider. Never paste an
+encoded bearer token. Save providers and restart data-plane workers to reload the
+configured chain, as for other identity-provider settings.
+
+In the policy editor, **Identity attribute conditions** provides searchable keys
+and allowed-value chips, with the source issuer and claim path shown beside each
+condition. Changing keys clears the prior value selections. Unknown existing keys
+and removed values remain visible with warnings. Incomplete or duplicate
+conditions block saving. All conditions use AND; `equals` and `is one of` retain
+the existing policy semantics. Commas within a value are preserved.
+
+Enabled providers expose their mapped keys through the asset-scoped
+`GET /v1/assets/{asset_id}/identity-attributes` endpoint to authorized asset
+readers. The projection includes descriptions, domains, issuer, and configuration
+revision, without credentials or user records. Providers sharing one canonical
+key intentionally supply the same policy fact: pick a namespaced key when those
+facts should be separate. The authoring picker unions their domains; if any source
+allows unrestricted text, the shared key supports custom values.
+
+Policy tests offer two explicit identity modes:
+
+- **Internal attributes (synthetic):** supplied canonical attributes test policy
+  logic directly, without provider mapping or domain enforcement. Nested values
+  are rejected rather than converted to string representations.
+- **Provider claims:** choose an enabled provider and supply its decoded subject,
+  group, and attribute claims. The test uses the runtime mapper and domain checks,
+  then displays the normalized identity and individual attribute checks, including
+  missing claims. This does not verify a JWT or authenticate the sample identity.
+
+Mapping previews are admin-only and source-free. Policy evaluation requires asset
+read capability. Authentication secrets are neither accepted in these forms nor
+included in attribute discovery. No SCIM provisioning is implemented.
+
 ## Testing A Policy
 
 Test every policy with representative principals:

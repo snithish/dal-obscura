@@ -4,6 +4,7 @@ import hashlib
 import json
 from collections.abc import Iterable
 
+from dal_obscura.common.access_control.attribute_conditions import attributes_match
 from dal_obscura.common.access_control.models import (
     DatasetPolicy,
     MaskRule,
@@ -185,17 +186,4 @@ def _matches_conditions(
     principal: Principal,
     when: dict[str, PrincipalConditionValue] | None,
 ) -> bool:
-    if not when:
-        return True
-
-    for key, expected in when.items():
-        actual = principal.attributes.get(key)
-        if actual is None:
-            return False
-        if isinstance(expected, list):
-            if actual not in {str(item) for item in expected}:
-                return False
-            continue
-        if actual != expected:
-            return False
-    return True
+    return attributes_match(principal.attributes, when)

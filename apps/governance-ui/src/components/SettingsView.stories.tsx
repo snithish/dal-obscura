@@ -23,6 +23,7 @@ const providers: AuthProvider[] = [{
     subject_claim: "sub",
     group_claims: ["groups"],
     attribute_claims: { department: "department.id" },
+    attribute_definitions: { department: { label: "Department", description: "Business unit", allowed_values: ["Engineering", "Finance"] } },
     algorithms: ["RS256"],
     leeway_seconds: 30,
     jwks_refresh_interval_seconds: 300,
@@ -86,10 +87,10 @@ export const PreventAccidentalProviderLockout: Story = {
 
 export const InvalidAttributeMapping: Story = {
   play: async ({ canvas }) => {
-    const field = canvas.getByPlaceholderText("department=department.id");
+    const field = canvas.getByLabelText("Source claim path 1");
     await userEvent.clear(field);
-    await userEvent.type(field, "department");
-    await expect(canvas.getByRole("alert")).toHaveTextContent("Use name=claim.path entries separated by commas.");
+    await userEvent.type(field, "employee..department");
+    await expect(canvas.getByRole("alert")).toHaveTextContent("Every mapping needs a unique internal key and a valid source claim path.");
     await expect(canvas.getByRole("button", { name: "Save identity providers" })).toBeDisabled();
   },
 };

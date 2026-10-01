@@ -104,3 +104,52 @@ def test_auth_provider_accepts_full_claim_and_cache_configuration():
             }
         ]
     )
+
+
+@pytest.mark.parametrize(
+    "definitions",
+    [
+        {"unknown": {"allowed_values": ["Finance"]}},
+        {"department": {"allowed_values": ["Finance", "Finance"]}},
+        {"department": {"allowed_values": [""]}},
+        {"department": {"allowed_values": "Finance"}},
+        {"department": {"unexpected": True}},
+    ],
+)
+def test_attribute_definitions_reject_invalid_domains(definitions):
+    with pytest.raises(ValidationFailure):
+        validate_auth_provider_payloads(
+            [
+                {
+                    "ordinal": 1,
+                    "module": OIDC_IDENTITY_MODULE,
+                    "args": {
+                        "issuer": "https://issuer.example",
+                        "attribute_claims": {"department": "employee.dept"},
+                        "attribute_definitions": definitions,
+                    },
+                }
+            ]
+        )
+
+
+def test_attribute_definitions_accept_descriptive_enum():
+    validate_auth_provider_payloads(
+        [
+            {
+                "ordinal": 1,
+                "module": OIDC_IDENTITY_MODULE,
+                "args": {
+                    "issuer": "https://issuer.example",
+                    "attribute_claims": {"department": "employee.dept"},
+                    "attribute_definitions": {
+                        "department": {
+                            "label": "Department",
+                            "description": "Business unit",
+                            "allowed_values": ["Engineering", "Finance"],
+                        }
+                    },
+                },
+            }
+        ]
+    )

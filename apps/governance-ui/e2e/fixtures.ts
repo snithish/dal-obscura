@@ -199,6 +199,7 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; r
     const match = path.match(/^\/v1\/assets\/([^/]+)(?:\/(.*))?$/);
     if (match && match[1] === assetId) {
       const suffix = match[2] ?? "";
+      if (suffix === "identity-attributes") return route.fulfill({ json: [] });
       if (suffix === "schema") return route.fulfill({ json: {
         asset_id: assetId,
         catalog: "demo",

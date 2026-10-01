@@ -100,6 +100,7 @@ const meta = {
   component: AssetWorkspace,
   tags: ["autodocs"],
   args: {
+    attributeProviders: [],
     initialTab: "policy" as const,
     asset,
     access,

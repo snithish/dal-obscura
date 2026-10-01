@@ -26,6 +26,7 @@ from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.application.errors import (
     ValidationFailure,
 )
+from dal_obscura.control_plane.application.identity_attributes import map_preview_identity
 from dal_obscura.control_plane.infrastructure.repositories import ConfigStore
 from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
     DefaultMaskingAdapter,
@@ -47,12 +48,23 @@ def evaluate_asset_policy(
     groups: list[str],
     claims: dict[str, object],
     rows: list[dict[str, object]] | None,
+    provider_ordinal: int | None = None,
     egress_allowlist: tuple[str, ...] = (),
     plugin_registry: Any | None = None,
     secret_provider: SecretProvider | None = None,
 ) -> dict[str, object]:
     """Evaluates the current live policy over bounded synthetic rows."""
 
+    policy_service.ensure_asset_reader(store, asset_id, actor)
+    mapping_evidence: dict[str, object] = {"mode": "internal_attributes"}
+    if provider_ordinal is not None:
+        mapped = map_preview_identity(store, provider_ordinal, claims)
+        principal, groups, claims = (
+            mapped.id,
+            mapped.groups,
+            cast(dict[str, object], dict(mapped.attributes)),
+        )
+        mapping_evidence = {"mode": "provider_claims", "provider_ordinal": provider_ordinal}
     _validate_synthetic_rows(rows)
     supplied_row_count = 0 if rows is None else len(rows)
     loaded_schema = schema_service.load_asset_iceberg_schema(
@@ -89,6 +101,9 @@ def evaluate_asset_policy(
             )
         ),
         "evaluator_version": EVALUATOR_VERSION,
+        "identity_mapping": mapping_evidence,
+        "identity": {"principal": principal, "groups": groups, "attributes": claims},
+        "conditions": preview.get("conditions", []),
     }
     if preview["decision"] != "allow":
         return {

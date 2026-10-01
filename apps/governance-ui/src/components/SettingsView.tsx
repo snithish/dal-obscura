@@ -7,6 +7,7 @@ import { controlPlane } from "../api";
 import { recoveryMessage } from "../recovery";
 import { isAbortError } from "../async";
 import { serializePathRules } from "../runtime_settings";
+import { AttributeMappings } from "./AttributeMappings";
 import { Icon } from "./Icon";
 
 export type SettingsViewProps = {
@@ -176,6 +177,7 @@ export function SettingsView({
       if (controller.signal.aborted || operationEpoch !== providerEditEpoch.current) return;
       setProvidersDirty(false);
       void queryClient.invalidateQueries({ queryKey: ["management", sessionScope, "settings"] });
+      void queryClient.invalidateQueries({ queryKey: ["identity-attributes", sessionScope] });
       setMessage("Identity provider settings saved to live configuration. Restart data-plane workers to reload their provider chain.");
       onReload();
     } catch (error) {
@@ -375,12 +377,16 @@ export function SettingsView({
               {providerField("jwks_url", "JWKS URL", { placeholder: "optional; discovered from issuer" })}
               {providerField("subject_claim", "Subject claim", { placeholder: "sub" })}
               {providerField("group_claims", "Group claims", { placeholder: "groups, realm_access.roles" })}
-              {providerField("attribute_claims", "Attribute claims", { placeholder: "department=department.id", help: "Use name=claim.path entries separated by commas." })}
               {providerField("algorithms", "Signing algorithms", { placeholder: "RS256" })}
               {providerField("leeway_seconds", "Clock leeway (seconds)", { type: "number", placeholder: "0" })}
               {providerField("jwks_refresh_interval_seconds", "JWKS refresh (seconds)", { type: "number", placeholder: "30" })}
               {providerField("max_jwks_keys", "Maximum JWKS keys", { type: "number", placeholder: "256" })}
             </div>
+            <AttributeMappings provider={provider} onChange={(claims, definitions, error) => {
+              markDirty("providers");
+              setProviderRows((current) => current.map((item, row) => row === index ? { ...item, args: { ...item.args, attribute_claims: claims, attribute_definitions: definitions } } : item));
+              setProviderErrors((current) => { const next = { ...current }; const key = `${provider.id}:attribute-mappings`; if (error) next[key] = error; else delete next[key]; return next; });
+            }} />
           </fieldset>;
         })}</div> : <p className="empty-result"><strong>No identity providers configured.</strong><br />Add the first OIDC provider through the control-plane bootstrap or API.</p>}
         <Button type="button" className="primary" disabled={saving || Object.keys(providerErrors).length > 0} onClick={() => void saveProviders()} leftSection={<Icon name="save" size={16} />}>{saving ? "Saving…" : "Save identity providers"}</Button>

@@ -141,6 +141,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/assets/{asset_id}/identity-attributes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Identity Attributes */
+        get: operations["list_identity_attributes_v1_assets__asset_id__identity_attributes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/assets/{asset_id}/owners": {
         parameters: {
             query?: never;
@@ -493,6 +510,23 @@ export interface paths {
         /** Replace Workspace Auth Providers */
         put: operations["replace_workspace_auth_providers_v1_settings_auth_providers_put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/settings/auth-providers/{ordinal}/attribute-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Attribute Mapping */
+        post: operations["preview_attribute_mapping_v1_settings_auth_providers__ordinal__attribute_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -926,6 +960,35 @@ export interface components {
             /** Revoked Token Count */
             revoked_token_count: number;
         };
+        /** AttributeMappingPreviewRequest */
+        AttributeMappingPreviewRequest: {
+            /** Claims */
+            claims?: {
+                [key: string]: unknown;
+            };
+            /** Provider Args */
+            provider_args?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** AttributeMappingPreviewResponse */
+        AttributeMappingPreviewResponse: {
+            /** Attributes */
+            attributes: {
+                [key: string]: string;
+            };
+        };
+        /** AttributeProviderResponse */
+        AttributeProviderResponse: {
+            /** Attributes */
+            attributes: components["schemas"]["IdentityAttributeResponse"][];
+            /** Issuer */
+            issuer: string;
+            /** Ordinal */
+            ordinal: number;
+            /** Revision */
+            revision: number;
+        };
         /**
          * AuditEventPageResponse
          * @description Keyset-paginated redacted audit events.
@@ -1117,6 +1180,19 @@ export interface components {
             /** Status */
             status: string;
         };
+        /** IdentityAttributeResponse */
+        IdentityAttributeResponse: {
+            /** Allowed Values */
+            allowed_values: string[];
+            /** Claim Path */
+            claim_path: string;
+            /** Description */
+            description: string;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+        };
         /**
          * LogoutResponse
          * @description Local session revocation and optional provider sign-out destination.
@@ -1260,6 +1336,8 @@ export interface components {
             groups?: string[];
             /** Principal */
             principal: string;
+            /** Provider Ordinal */
+            provider_ordinal?: number | null;
             /** Rows */
             rows?: {
                 [key: string]: unknown;
@@ -2569,6 +2647,130 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssetGrantsResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Method Not Allowed */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    list_identity_attributes_v1_assets__asset_id__identity_attributes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: {
+                "__Host-dal_obscura_csrf"?: string | null;
+                "__Host-dal_obscura_session"?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttributeProviderResponse"][];
                 };
             };
             /** @description Bad Request */
@@ -5196,6 +5398,134 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthProviderResponse"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Method Not Allowed */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Precondition Required */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_attribute_mapping_v1_settings_auth_providers__ordinal__attribute_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ordinal: number;
+            };
+            cookie?: {
+                "__Host-dal_obscura_csrf"?: string | null;
+                "__Host-dal_obscura_session"?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttributeMappingPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttributeMappingPreviewResponse"];
                 };
             };
             /** @description Bad Request */

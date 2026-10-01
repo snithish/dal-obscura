@@ -13,6 +13,7 @@ from dal_obscura.control_plane.application import (
     audit_service,
     catalog_service,
     evaluation_service,
+    identity_attributes,
     policy_service,
     schema_service,
     workspace_service,
@@ -424,6 +425,17 @@ class ProvisioningService:
             requested_columns=requested_columns,
         )
 
+    def list_attribute_catalog(
+        self, asset_id: UUID, actor: ControlPlaneActor
+    ) -> list[dict[str, object]]:
+        policy_service.ensure_asset_reader(self._store, asset_id, actor)
+        return identity_attributes.attribute_catalog(self._store)
+
+    def preview_identity_attributes(
+        self, ordinal: int, claims: dict[str, object], provider_args: dict[str, Any] | None = None
+    ) -> dict[str, object]:
+        return identity_attributes.preview_attributes(self._store, ordinal, claims, provider_args)
+
     def evaluate_asset_policy(
         self,
         asset_id: UUID,
@@ -433,6 +445,7 @@ class ProvisioningService:
         groups: list[str],
         claims: dict[str, object],
         rows: list[dict[str, object]] | None,
+        provider_ordinal: int | None = None,
     ) -> dict[str, object]:
         return evaluation_service.evaluate_asset_policy(
             self._store,
@@ -442,6 +455,7 @@ class ProvisioningService:
             groups=groups,
             claims=claims,
             rows=rows,
+            provider_ordinal=provider_ordinal,
             egress_allowlist=self._catalog_egress_allowlist,
             plugin_registry=self._plugin_registry,
             secret_provider=self._secret_provider,

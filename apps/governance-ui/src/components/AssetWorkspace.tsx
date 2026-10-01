@@ -1,9 +1,11 @@
 import { parseTestClaims } from "../policy_test";
 import { discardChanges, useConfirmation } from "./ConfirmationProvider";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Checkbox, Modal, NativeSelect, Tabs, Textarea, TextInput } from "@mantine/core";
+import { Alert, Button, Checkbox, Modal, NativeSelect, Select, Tabs, Textarea, TextInput } from "@mantine/core";
+import { useQuery } from "@tanstack/react-query";
+import { AttributeConditions } from "./AttributeConditions";
 import type { QueryClient } from "@tanstack/react-query";
-import type { Asset, AssetAccess, AssetGrant, PolicyRule, Preview, Session } from "../api";
+import type { Asset, AssetAccess, AssetGrant, AttributeProvider, PolicyRule, Preview, Session } from "../api";
 import { controlPlane } from "../api";
 import { type AssetTab } from "../navigation";
 import { recoveryMessage, displayErrorField } from "../recovery";
@@ -25,6 +27,7 @@ export function AssetWorkspace(props: {
   onUpdateRule: (change: (rule: PolicyRule) => PolicyRule, index: number) => void; onAddRule: () => void;
   onRemoveRule: (index: number) => void; onDuplicateRule: (index: number) => void;
   onDiscard: () => void; onAllowAll: () => void; onSave: (revokeExistingTokens: boolean) => void;
+  attributeProviders?: AttributeProvider[]; previewProvider?: string; onPreviewProvider?: (value: string) => void;
   onPreview: () => void; previewPrincipal: string; previewGroups: string; previewClaims: string;
   onPreviewPrincipal: (value: string) => void; onPreviewGroups: (value: string) => void;
   onPreviewClaims: (value: string) => void; preview: Preview | null; previewBusy?: boolean; previewError?: string; session: Session | null;
@@ -37,6 +40,9 @@ export function AssetWorkspace(props: {
   const [testOpen, setTestOpen] = useState(false);
   const [schemaOpen, setSchemaOpen] = useState(false);
   const schemaTrigger = useRef<HTMLButtonElement>(null);
+  const catalog = useQuery({ queryKey: ["identity-attributes", props.sessionScope, props.asset.id], queryFn: ({ signal }) => controlPlane.attributeCatalog(props.asset.id, signal), enabled: props.attributeProviders === undefined, staleTime: 0 }, props.queryClient);
+  const attributeProviders = props.attributeProviders ?? catalog.data ?? [];
+  const [conditionErrors, setConditionErrors] = useState<Record<number, boolean>>({});
   const [pending, setPending] = useState<Record<number, boolean>>({});
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set(props.rules.slice(0, 1).map((rule) => rule.ordinal)));
   const [generation, setGeneration] = useState(0);
@@ -47,7 +53,7 @@ export function AssetWorkspace(props: {
   const focusAddedRule = useRef(false);
   const addRule = () => { focusAddedRule.current = true; props.onAddRule(); };
   const readOnly = !props.access?.capabilities.some((item) => item.capability === "edit" && item.allowed);
-  const dirty = Object.values(pending).some(Boolean);
+  const dirty = Object.values(pending).some(Boolean) || Object.values(conditionErrors).some(Boolean);
   const bypass = props.rules.some((rule) => rule.effect === "allow_all");
   useEffect(() => {
     const added = props.rules.filter((rule) => !lastOrdinals.current.has(rule.ordinal));
@@ -62,7 +68,7 @@ export function AssetWorkspace(props: {
     }
     lastOrdinals.current = new Set(props.rules.map((rule) => rule.ordinal));
   }, [props.rules]);
-  useEffect(() => { setPending({}); pendingRef.current = {}; setGeneration((value) => value + 1); setRevoke(false); setExpanded(new Set(props.rules.slice(0, 1).map((rule) => rule.ordinal))); }, [props.asset.id]);
+  useEffect(() => { setConditionErrors({}); setPending({}); pendingRef.current = {}; setGeneration((value) => value + 1); setRevoke(false); setExpanded(new Set(props.rules.slice(0, 1).map((rule) => rule.ordinal))); }, [props.asset.id]);
   useEffect(() => {
     setTab(props.initialTab ?? "policy");
     pendingRef.current = {}; setPending({}); setGeneration((value) => value + 1);
@@ -78,7 +84,7 @@ export function AssetWorkspace(props: {
     setPending(pendingRef.current); props.onDirtyChange?.(Object.values(pendingRef.current).some(Boolean) || accessDirty);
   }
   function discard() {
-    props.onDiscard(); pendingRef.current = {}; setPending({}); setGeneration((value) => value + 1); setRevoke(false); props.onDirtyChange?.(accessDirty);
+    props.onDiscard(); setConditionErrors({}); pendingRef.current = {}; setPending({}); setGeneration((value) => value + 1); setRevoke(false); props.onDirtyChange?.(accessDirty);
   }
   async function selectTab(next: AssetTab) {
     if (next === tab) return;
@@ -105,72 +111,48 @@ export function AssetWorkspace(props: {
             <div className="rule-metadata"><TextInput label="Rule name" maxLength={160} value={rule.name ?? ""} disabled={readOnly} onChange={(event) => { const name = event.currentTarget.value; props.onUpdateRule((current) => ({ ...current, name }), index); }} /><Textarea label="Description" maxLength={2000} autosize value={rule.description ?? ""} disabled={readOnly} placeholder="Explain who needs this access and why" onChange={(event) => { const description = event.currentTarget.value; props.onUpdateRule((current) => ({ ...current, description }), index); }} /></div>
             {rule.effect === "allow_all" ? <p className="policy-bypass-description">This rule short-circuits all column masks and row filters. Delete it to restore the other rules and the default NULL masks.</p> : <>
               <TokenInput label="Applies to people or groups" value={rule.principals} onChange={(principals) => props.onUpdateRule((current) => ({ ...current, principals }), index)} placeholder="group:analysts or * for all authenticated users" disabled={readOnly} />
-              <details className="audience-conditions"><summary>Identity claim conditions</summary><ConditionBuilder value={rule.when} disabled={readOnly} onChange={(when) => props.onUpdateRule((current) => ({ ...current, when }), index)} /></details>
+              <details className="audience-conditions"><summary>Identity attribute conditions{Object.keys(rule.when ?? {}).length ? ` (${Object.keys(rule.when!).length})` : ""}</summary>{catalog.isPending && props.attributeProviders === undefined && <p role="status">Loading attribute definitions…</p>}{catalog.isError && <Alert color="yellow">Attribute definitions unavailable. <Button variant="subtle" size="xs" onClick={() => void catalog.refetch()}>Retry</Button></Alert>}<AttributeConditions value={rule.when} providers={attributeProviders} disabled={readOnly} onInvalid={(invalid) => setConditionErrors((current) => current[rule.ordinal] === invalid ? current : { ...current, [rule.ordinal]: invalid })} onChange={(when) => props.onUpdateRule((current) => ({ ...current, when }), index)} /></details>
               <PolicyRuleEditor assetId={props.asset.id} ruleIndex={index} rule={rule} fields={props.asset.schema?.fields} supportedMasks={props.asset.schema?.supported_masks ?? []} readOnly={readOnly || bypass} onUpdateRule={(change) => props.onUpdateRule(change, index)} onDirtyChange={(value) => report(rule.ordinal, value)} />
             </>}
-            <div className="rule-footer"><Button variant="subtle" disabled={readOnly || dirty || rule.effect === "allow_all"} onClick={() => props.onDuplicateRule(index)} leftSection={<Icon name="copy" size={14} />}>Duplicate rule</Button><Button variant="subtle" color="red" disabled={readOnly || props.saveState === "saving"} onClick={() => { report(rule.ordinal, false); props.onRemoveRule(index); }} leftSection={<Icon name="trash" size={14} />}>Delete rule</Button></div>
+            <div className="rule-footer"><Button variant="subtle" disabled={readOnly || dirty || rule.effect === "allow_all"} onClick={() => props.onDuplicateRule(index)} leftSection={<Icon name="copy" size={14} />}>Duplicate rule</Button><Button variant="subtle" color="red" disabled={readOnly || props.saveState === "saving"} onClick={() => { report(rule.ordinal, false); setConditionErrors((current) => { const next = { ...current }; delete next[rule.ordinal]; return next; }); props.onRemoveRule(index); }} leftSection={<Icon name="trash" size={14} />}>Delete rule</Button></div>
           </div>
         </article>;
       })}</div>
       {!props.rules.length && <div className="policy-empty"><p>No overrides. Every column returns NULL for authenticated readers.</p></div>}
-      <div className="policy-save-bar"><Button variant="default" onClick={() => setTestOpen(true)} leftSection={<Icon name="play" size={15} />}>Test saved policy</Button><Button variant="default" disabled={readOnly || props.saveState === "saving" || (props.saveState === "saved" && !dirty)} onClick={discard}>Discard all changes</Button>{props.access?.can_revoke_tokens && <Checkbox label="Revoke existing tokens after saving" checked={revoke} onChange={(event) => setRevoke(event.currentTarget.checked)} />}{dirty && <p className="pending-edit-note">Apply or cancel open mask and row-filter forms before saving.</p>}<Button disabled={readOnly || dirty || props.saveState === "saving"} onClick={() => props.onSave(revoke)}>{props.saveState === "saving" ? "Saving…" : "Save policy"}</Button></div>
+      <div className="policy-save-bar"><Button variant="default" onClick={() => setTestOpen(true)} leftSection={<Icon name="play" size={15} />}>Test saved policy</Button><Button variant="default" disabled={readOnly || props.saveState === "saving" || (props.saveState === "saved" && !dirty)} onClick={discard}>Discard all changes</Button>{props.access?.can_revoke_tokens && <Checkbox label="Revoke existing tokens after saving" checked={revoke} onChange={(event) => setRevoke(event.currentTarget.checked)} />}{dirty && <p className="pending-edit-note">Complete identity conditions and apply or cancel open forms before saving.</p>}<Button disabled={readOnly || dirty || props.saveState === "saving"} onClick={() => props.onSave(revoke)}>{props.saveState === "saving" ? "Saving…" : "Save policy"}</Button></div>
       <details className="policy-conflicts"><summary>How overlapping rules combine</summary><p>Order does not change the result. A matching grant overrides the default NULL mask. Between explicit masks, NULL wins and keep-last uses the smaller count; incompatible masks reject the read. Row filters combine with AND. Allow all bypasses everything.</p></details>
     </div>{schemaOpen && <SchemaSidebar schema={props.asset.schema} onClose={() => { setSchemaOpen(false); schemaTrigger.current?.focus(); }} />}</div> : tab === "access" ? <AccessView asset={props.asset} access={props.access} grants={props.grants} session={props.session} onReload={props.onReloadAccess} onDirtyChange={(value) => { setAccessDirty(value); props.onDirtyChange?.(value || dirty); }} queryClient={props.queryClient} sessionScope={props.sessionScope} revokingTokens={props.revokingTokens} onRevokeTokens={props.onRevokeTokens ?? (() => undefined)} /> : <ConsumerView asset={props.asset} />}</Tabs.Panel></Tabs>
-    <Modal opened={testOpen} onClose={() => setTestOpen(false)} title="Test policy" size="lg" keepMounted closeButtonProps={{ "aria-label": "Close policy test" }}><TestsView busy={props.previewBusy} error={props.previewError} unsaved={props.saveState !== "saved" || dirty} onPreview={props.onPreview} preview={props.preview} principal={props.previewPrincipal} groups={props.previewGroups} claims={props.previewClaims} onPrincipal={props.onPreviewPrincipal} onGroups={props.onPreviewGroups} onClaims={props.onPreviewClaims} />{props.preview && <div className="policy-test-result"><h3>Effective values</h3><ul>{props.preview.allowed_columns.map((column) => <li key={column}><code>{column}</code><span>{props.preview!.masks[column]?.type ?? "No mask"}</span></li>)}</ul><h3>Combined row filter</h3><code>{props.preview.row_filter ?? "All rows"}</code></div>}</Modal>
+    <Modal opened={testOpen} onClose={() => setTestOpen(false)} title="Test policy" size="lg" keepMounted closeButtonProps={{ "aria-label": "Close policy test" }}><TestsView providers={attributeProviders} provider={props.previewProvider ?? ""} onProvider={props.onPreviewProvider} busy={props.previewBusy} error={props.previewError} unsaved={props.saveState !== "saved" || dirty} onPreview={props.onPreview} preview={props.preview} principal={props.previewPrincipal} groups={props.previewGroups} claims={props.previewClaims} onPrincipal={props.onPreviewPrincipal} onGroups={props.onPreviewGroups} onClaims={props.onPreviewClaims} />{props.preview && <div className="policy-test-result"><h3>Effective values</h3><ul>{props.preview.allowed_columns.map((column) => <li key={column}><code>{column}</code><span>{props.preview!.masks[column]?.type ?? "No mask"}</span></li>)}</ul><h3>Combined row filter</h3><code>{props.preview.row_filter ?? "All rows"}</code></div>}</Modal>
   </>;
 }
 
-function TestsView({ unsaved, busy, error, onPreview, preview, principal, groups, claims, onPrincipal, onGroups, onClaims }: {
+function TestsView({ providers, provider, onProvider, unsaved, busy, error, onPreview, preview, principal, groups, claims, onPrincipal, onGroups, onClaims }: {
+  providers: AttributeProvider[]; provider: string; onProvider?: (value: string) => void;
   unsaved: boolean; busy?: boolean; error?: string; onPreview: () => void; preview: Preview | null;
   principal: string; groups: string; claims: string;
   onPrincipal: (value: string) => void; onGroups: (value: string) => void; onClaims: (value: string) => void;
 }) {
   const parsed = parseTestClaims(claims);
-  const principalError = principal.trim() ? undefined : "Enter a principal to test.";
+  const identity = preview?.evidence?.identity as { principal: string; groups: string[]; attributes: Record<string, string> } | undefined;
+  const principalError = provider || principal.trim() ? undefined : "Enter a principal to test.";
   return <section className="tests-view">
     <p>Evaluate the saved policy with a sample identity. {unsaved && "Unsaved edits are not included."}</p>
-    <div className="test-card persona-form">
-      <TextInput label="Principal" value={principal} error={principalError} onChange={(event) => onPrincipal(event.currentTarget.value)} placeholder="user:analyst@example.com" />
-      <TextInput label="Groups" value={groups} onChange={(event) => onGroups(event.currentTarget.value)} description="Separate groups with commas." placeholder="us-analysts, finance" />
-      <Textarea label="Claims (JSON)" value={claims} error={parsed.error} onChange={(event) => onClaims(event.currentTarget.value)} aria-label="Synthetic persona claims" placeholder='{"region":"us"}' />
-      <Button type="button" loading={busy} disabled={busy || Boolean(parsed.error || principalError)} onClick={onPreview} leftSection={<Icon name="play" size={15} />}>{busy ? "Testing…" : "Test saved policy"}</Button>
+    <div className="test-card persona-form identity-test-form">
+      {onProvider && <Select className="identity-test-wide" label="Identity input" data={[{ value: "", label: "Internal attributes (synthetic)" }, ...providers.map((item) => ({ value: String(item.ordinal), label: `Provider ${item.ordinal} · ${item.issuer}` }))]} value={provider} onChange={(value) => onProvider(value ?? "")} />}
+      {!provider && onProvider && <p className="help identity-test-wide">Internal attributes test policy logic directly. Choose a provider to include claim mappings and allowed-value checks.</p>}
+      {provider && <Alert className="identity-test-wide" color="blue">Paste decoded sample claims, including the subject and group claims. Runtime mapping and allowed-value checks apply. This test does not authenticate the sample.</Alert>}
+      {!provider && <><TextInput label="Principal" value={principal} error={principalError} onChange={(event) => onPrincipal(event.currentTarget.value)} placeholder="user:analyst@example.com" />
+      <TextInput label="Groups" value={groups} onChange={(event) => onGroups(event.currentTarget.value)} description="Separate groups with commas." placeholder="us-analysts, finance" /></>}
+      <Textarea className="identity-test-wide" autosize minRows={4} maxRows={10} label={provider ? "Provider claims (JSON)" : "Internal attributes (JSON)"} value={claims} error={parsed.error} onChange={(event) => onClaims(event.currentTarget.value)} aria-label="Synthetic persona claims" placeholder='{"region":"us"}' />
+      <Button className="identity-test-run" type="button" loading={busy} disabled={busy || Boolean(parsed.error || (!provider && principalError))} onClick={onPreview} leftSection={<Icon name="play" size={15} />}>{busy ? "Testing…" : "Test saved policy"}</Button>
     </div>
     {busy && <p role="status">Evaluating saved policy…</p>}
     {error && <p className="field-error" role="alert">{error}</p>}
-    {preview && <div role="status" className={"result-state " + (preview.decision === "deny" ? "denied" : "allowed")}>Current test: {preview.decision === "deny" ? "denied" : preview.allowed_columns.length + " fields evaluated"}</div>}
+    {identity && <div className="identity-preview"><h3>{provider ? "Mapped identity" : "Synthetic identity"}</h3><dl className="identity-facts"><div><dt>Principal</dt><dd>{identity.principal}</dd></div><div><dt>Groups</dt><dd>{identity.groups.length ? identity.groups.join(", ") : "No groups"}</dd></div></dl><div className="identity-attribute-chips">{Object.entries(identity.attributes).map(([key, value]) => <span className="attribute-preview-chip" key={key}><strong>{key}</strong>{value}</span>)}{!Object.keys(identity.attributes).length && <p className="help">No identity attributes supplied.</p>}</div></div>}
+    {Array.isArray(preview?.evidence?.conditions) && <div className="condition-evidence"><h3>Attribute checks</h3>{(preview.evidence.conditions as Array<{ rule_ordinal: number; key: string; actual: string | null; expected: string | string[]; matched: boolean; missing: boolean }>).map((item, index) => <div key={index}><span className={`context-tag ${item.matched ? "condition-match" : "condition-miss"}`}>{item.matched ? "Matched" : item.missing ? "Missing" : "Not matched"}</span><span>Rule {item.rule_ordinal} · <strong>{item.key}</strong></span><span>Expected {JSON.stringify(item.expected)} · Actual {item.missing ? "missing" : JSON.stringify(item.actual)}</span></div>)}</div>}
+    {preview && <div role="status" className={"result-state " + (preview.decision === "deny" ? "denied" : "allowed")}>Current test: {preview.decision === "deny" ? "denied" : preview.allowed_columns.length + (preview.allowed_columns.length === 1 ? " field evaluated" : " fields evaluated")}</div>}
   </section>;
 }
-function ConditionBuilder({ value, disabled, onChange }: { value?: Record<string, string | string[]>; disabled: boolean; onChange: (value: Record<string, string | string[]>) => void }) {
-  const [rows, setRows] = useState<Array<{ key: string; mode: "equals" | "one_of"; value: string }>>(() => conditionRows(value));
-  const [error, setError] = useState("");
-  useEffect(() => {
-    const nextRows = conditionRows(value);
-    setRows(nextRows);
-    if (nextRows.some((row) => !row.key.trim())) setError("Every condition needs a claim name.");
-    else if (nextRows.some((row) => !row.value.split(",").map((item) => item.trim()).filter(Boolean).length)) setError("Every condition needs a value.");
-    else setError("");
-  }, [value]);
-  function commit(next: Array<{ key: string; mode: "equals" | "one_of"; value: string }>) {
-    const result: Record<string, string | string[]> = {};
-    let errorMessage = "";
-    for (const row of next) {
-      const key = row.key.trim();
-      const values = row.value.split(",").map((item) => item.trim()).filter(Boolean);
-      if (!key) errorMessage = "Every condition needs a claim name.";
-      else if (!values.length && !errorMessage) errorMessage = "Every condition needs a value.";
-      // Preserve incomplete rows while editing so they cannot disappear before
-      // the control plane rejects them with a field-level validation error.
-      result[key] = row.mode === "one_of" ? values : values[0] ?? "";
-    }
-    setError(errorMessage); onChange(result);
-  }
-  function update(index: number, change: Partial<{ key: string; mode: "equals" | "one_of"; value: string }>) {
-    const next = rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...change } : row);
-    setRows(next); commit(next);
-  }
-  return <div className="condition-builder"><p className="help">Match authenticated claims with AND semantics. Values are text or a comma-separated list.</p>{rows.map((row, index) => <div className="condition-row" key={index}><TextInput aria-label={`Condition claim ${index + 1}`} value={row.key} onChange={(event) => update(index, { key: event.currentTarget.value })} placeholder="region" disabled={disabled} /><NativeSelect aria-label={`Condition operator ${index + 1}`} value={row.mode} onChange={(event) => update(index, { mode: event.currentTarget.value as "equals" | "one_of" })} disabled={disabled} data={[{ value: "equals", label: "equals" }, { value: "one_of", label: "is one of" }]} /><TextInput aria-label={`Condition value ${index + 1}`} value={row.value} onChange={(event) => update(index, { value: event.currentTarget.value })} placeholder={row.mode === "one_of" ? "us, eu" : "us"} disabled={disabled} /><Button className="danger compact" variant="default" size="sm" type="button" onClick={() => { const next = rows.filter((_item, rowIndex) => rowIndex !== index); setRows(next); commit(next); }} disabled={disabled} leftSection={<Icon name="trash" size={14} />}>Remove</Button></div>)}<Button className="secondary compact" variant="default" size="sm" type="button" onClick={() => { const next = [...rows, { key: "", mode: "equals" as const, value: "" }]; setRows(next); commit(next); }} disabled={disabled} leftSection={<Icon name="plus" size={14} />}>Add condition</Button>{error && <p className="auth-error" role="alert">{error}</p>}</div>;
-}
-function conditionRows(value?: Record<string, string | string[]>): Array<{ key: string; mode: "equals" | "one_of"; value: string }> { return Object.entries(value ?? {}).map(([key, raw]) => ({ key, mode: Array.isArray(raw) ? "one_of" : "equals", value: Array.isArray(raw) ? raw.join(", ") : raw })); }
 function ConsumerView({ asset }: { asset: Asset }) {
   const catalog = JSON.stringify(asset.catalog);
   const target = JSON.stringify(asset.name);

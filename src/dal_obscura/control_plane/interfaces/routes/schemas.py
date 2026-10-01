@@ -503,6 +503,30 @@ class AssetTokenRevocationResponse(BaseModel):
     revoked_token_count: int
 
 
+class IdentityAttributeResponse(BaseModel):
+    key: str
+    claim_path: str
+    label: str
+    description: str
+    allowed_values: list[str]
+
+
+class AttributeProviderResponse(BaseModel):
+    ordinal: int
+    issuer: str
+    revision: int
+    attributes: list[IdentityAttributeResponse]
+
+
+class AttributeMappingPreviewRequest(StrictModel):
+    claims: dict[str, object] = Field(default_factory=dict)
+    provider_args: dict[str, Any] | None = None
+
+
+class AttributeMappingPreviewResponse(BaseModel):
+    attributes: dict[str, str]
+
+
 class PolicyEvaluationRequest(StrictModel):
     """Bounded synthetic rows for server-side DuckDB policy evaluation."""
 
@@ -511,6 +535,7 @@ class PolicyEvaluationRequest(StrictModel):
         default_factory=list, max_length=64
     )
     claims: dict[str, object] = Field(default_factory=dict)
+    provider_ordinal: int | None = Field(default=None, ge=1, le=1000)
 
     # ``None`` means use the documented synthetic fixture.  An explicit empty
     # list is a real zero-row evaluation and must preserve the output schema.

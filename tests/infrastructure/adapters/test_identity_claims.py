@@ -40,3 +40,27 @@ def test_principal_claim_mapper_rejects_non_scalar_attributes():
 
     with pytest.raises(PermissionError, match="Invalid attribute claim"):
         mapper.map_claims({"sub": "user-123", "department": ["acme"]})
+
+
+def test_attribute_domain_is_enforced_after_claim_mapping():
+    mapper = PrincipalClaimMapper(
+        attribute_claims={"department": "employee.dept"},
+        attribute_definitions={
+            "department": {
+                "label": "Department",
+                "description": "Business unit",
+                "allowed_values": ["Engineering", "Finance"],
+            }
+        },
+    )
+    assert mapper.map_claims({"sub": "alice", "employee": {"dept": " Finance "}}).attributes == {
+        "department": "Finance"
+    }
+    assert mapper.map_claims({"sub": "alice"}).attributes == {}
+    with pytest.raises(PermissionError, match="outside its allowed values"):
+        mapper.map_claims({"sub": "alice", "employee": {"dept": "Admin"}})
+
+
+def test_attribute_mapping_preview_uses_runtime_mapper_without_subject():
+    mapper = PrincipalClaimMapper(attribute_claims={"department": "employee.dept"})
+    assert mapper.map_attributes({"employee": {"dept": "Finance"}}) == {"department": "Finance"}

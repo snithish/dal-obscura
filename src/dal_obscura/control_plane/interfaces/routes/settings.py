@@ -15,6 +15,8 @@ from fastapi import APIRouter, Depends
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
 from dal_obscura.control_plane.interfaces.routes.schemas import (
+    AttributeMappingPreviewRequest,
+    AttributeMappingPreviewResponse,
     AuthProviderResponse,
     AuthProviderRevisionResponse,
     AuthProvidersRequest,
@@ -119,6 +121,20 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
                 )
             )
             or [],
+        )
+
+    @api.post(
+        "/v1/settings/auth-providers/{ordinal}/attribute-preview",
+        response_model=AttributeMappingPreviewResponse,
+        dependencies=[Depends(deps.require_admin)],
+    )
+    def preview_attribute_mapping(
+        ordinal: int, request: AttributeMappingPreviewRequest
+    ) -> dict[str, object]:
+        return deps.with_service(
+            lambda service: service.preview_identity_attributes(
+                ordinal, request.claims, request.provider_args
+            )
         )
 
     return api

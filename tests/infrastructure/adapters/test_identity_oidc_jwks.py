@@ -23,6 +23,28 @@ ISSUER = "https://keycloak.example.test/realms/acme"
 AUDIENCE = "dal-obscura"
 
 
+def test_verified_jwt_attributes_enforce_configured_domain():
+    private_key, jwk = _rsa_key_pair("attributes-key")
+    provider = OidcJwksIdentityProvider(
+        issuer=ISSUER,
+        audience=AUDIENCE,
+        jwks={"keys": [jwk]},
+        attribute_claims={"department": "employee.department"},
+        attribute_definitions={"department": {"allowed_values": ["Finance"]}},
+    )
+    token = _token(
+        private_key, kid="attributes-key", extra_claims={"employee": {"department": "Finance"}}
+    )
+    assert provider.authenticate(
+        AuthenticationRequest(headers={"authorization": f"Bearer {token}"})
+    ).attributes == {"department": "Finance"}
+    invalid = _token(
+        private_key, kid="attributes-key", extra_claims={"employee": {"department": "Engineering"}}
+    )
+    with pytest.raises(PermissionError, match="outside its allowed values"):
+        provider.authenticate(AuthenticationRequest(headers={"authorization": f"Bearer {invalid}"}))
+
+
 def _rsa_key_pair(kid: str):
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     public_numbers = private_key.public_key().public_numbers()

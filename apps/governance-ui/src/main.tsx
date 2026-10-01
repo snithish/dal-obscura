@@ -65,6 +65,7 @@ function App() {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [previewPrincipal, setPreviewPrincipal] = useState("analyst.alex");
   const [previewGroups, setPreviewGroups] = useState("us-analysts");
+  const [previewProvider, setPreviewProvider] = useState("");
   const [previewClaims, setPreviewClaims] = useState("{}");
   const [notice, setNotice] = useState("Loading workspace…");
   const [fieldErrors, setFieldErrors] = useState<Array<{ field: string; message: string; type: string }>>([]);
@@ -506,7 +507,7 @@ function App() {
     queryClient.clear();
     previousSessionCacheKey.current = "anonymous";
     policyEditEpoch.current += 1;
-    setSession(null); setAsset(null); setAssets([]); setSavedRules([]); setPreview(null); setPreviewError("");
+    setPreviewProvider(""); setSession(null); setAsset(null); setAssets([]); setSavedRules([]); setPreview(null); setPreviewError("");
     setManagementData({}); setAssetCursor(null); setAssetHasMore(false); setAssetSearch(""); setAssetInventoryError("");
     setManagementDirty(false);
     setPolicyRevision(0); setSaveState("saved");
@@ -614,7 +615,7 @@ function App() {
       setManagementData((current) => ({ ...current, grants, access }));
       setAsset(hydratedAsset); setSavedRules(effectiveRules); setPolicyRevision(fullAsset.policy_revision ?? 0);
       policyEditEpoch.current += 1;
-      setPreview(null); setPreviewError(""); setSaveState("saved");
+      setPreviewProvider(""); setPreview(null); setPreviewError(""); setSaveState("saved");
       setNotice(effectiveRules.length ? "Loaded the current live policy." : "No policy rules are configured. All columns return NULL until a rule overrides their masks.");
     } catch (error) {
       if ((error instanceof DOMException && error.name === "AbortError") || (error instanceof Error && error.name === "CancelledError")) return;
@@ -729,7 +730,7 @@ function App() {
     }
     if (previewPendingRef.current) return;
     const parsed = parseTestClaims(previewClaims);
-    if (parsed.error || !previewPrincipal.trim()) { setPreviewError(parsed.error ?? "Enter a principal to test."); return; }
+    if (parsed.error || (!previewProvider && !previewPrincipal.trim())) { setPreviewError(parsed.error ?? "Enter a principal to test."); return; }
     const personaScope = previewInputEpoch.current;
     setPreviewBusy(true); setPreviewError(""); setPreview(null);
     previewPendingRef.current = true;
@@ -739,7 +740,7 @@ function App() {
     const controller = beginMutation();
     try {
       const claims = parsed.claims;
-      const result: Preview = await controlPlane.evaluate(asset.id, { principal: previewPrincipal.trim(), groups: previewGroups.split(",").map((value) => value.trim()).filter(Boolean), claims }, controller.signal);
+      const result: Preview = await controlPlane.evaluate(asset.id, { principal: previewPrincipal.trim() || "synthetic", ...(previewProvider ? { provider_ordinal: Number(previewProvider) } : {}), groups: previewGroups.split(",").map((value) => value.trim()).filter(Boolean), claims }, controller.signal);
       if (loadScope !== loadEpoch.current || editScope !== policyEditEpoch.current || revision !== policyRevision || personaScope !== previewInputEpoch.current) return;
       setPreview(result); setNotice(`Server-side evaluation completed: ${result.decision === "allow" ? "allowed" : "denied"}.`);
     } catch (error) {
@@ -779,7 +780,7 @@ function App() {
   const paletteAssets = assets.filter((item) => `${item.catalog} ${item.name}`.toLowerCase().includes(paletteQuery.trim().toLowerCase())).slice(0, 8);
   const accessView = <LoginPanel showAuth={workspace === "unavailable"} title={workspace === "loading" ? "Loading governed workspace" : "Sign in to your workspace"} message={workspace === "loading" ? "Checking your workspace access and available assets." : notice} retry={workspace === "unavailable" ? loadInitialWorkspace : undefined} authConfig={authConfig} sessionOptions={sessionOptions} bootstrapToken={bootstrapToken} onBootstrapToken={setBootstrapToken} onBootstrapLogin={() => void bootstrapLogin()} loggingIn={loggingIn} authError={authError} />;
   const managementView = page === "assets" ? null : <Suspense fallback={<section className="coming-soon" role="status"><h2>Loading management view</h2><p>Preparing the governed workspace controls.</p></section>}><ManagementView page={page} data={managementData} loading={managementLoading} error={managementError} onReload={() => void loadManagement(page)} onLoadMore={page === "activity" ? () => void loadMoreAudit() : undefined} auditLoading={auditLoading} filters={auditFilters} onFiltersChange={updateAuditFilters} session={session} queryClient={queryClient} sessionScope={sessionCacheKey} onDirtyChange={setManagementDirty} /></Suspense>;
-  const editorView = asset && asset.id === requestedAssetId ? <Suspense fallback={<section className="coming-soon" role="status"><h2>Loading policy workspace</h2><p>Preparing the nested policy editor.</p></section>}><AssetWorkspace initialTab={routeTab} onTabChange={setRouteTab} asset={asset} access={managementData.access} grants={managementData.grants ?? []} onBack={() => navigateTo("assets")} rules={rules} activeRevision={policyRevision} saveState={saveState} notice={notice} fieldErrors={fieldErrors} onUpdateRule={updateRule} onAddRule={addRule} onRemoveRule={removeRule} onDuplicateRule={duplicateRule} onDiscard={discardPolicyChanges} onAllowAll={allowAllPolicy} onSave={(revokeExistingTokens) => void savePolicy(revokeExistingTokens)} onPreview={() => void runPreview()} previewPrincipal={previewPrincipal} previewGroups={previewGroups} previewClaims={previewClaims} onPreviewPrincipal={(value) => changeTestPersona(setPreviewPrincipal, value)} onPreviewGroups={(value) => changeTestPersona(setPreviewGroups, value)} onPreviewClaims={(value) => changeTestPersona(setPreviewClaims, value)} preview={preview} previewBusy={previewBusy} previewError={previewError} session={session} onReloadAccess={() => void loadAsset(asset.id)} revokingTokens={revokingTokens} onRevokeTokens={() => void revokeAssetTokens()} onDirtyChange={setManagementDirty} queryClient={queryClient} sessionScope={sessionCacheKey} /></Suspense> : undefined;
+  const editorView = asset && asset.id === requestedAssetId ? <Suspense fallback={<section className="coming-soon" role="status"><h2>Loading policy workspace</h2><p>Preparing the nested policy editor.</p></section>}><AssetWorkspace initialTab={routeTab} onTabChange={setRouteTab} asset={asset} access={managementData.access} grants={managementData.grants ?? []} onBack={() => navigateTo("assets")} rules={rules} activeRevision={policyRevision} saveState={saveState} notice={notice} fieldErrors={fieldErrors} onUpdateRule={updateRule} onAddRule={addRule} onRemoveRule={removeRule} onDuplicateRule={duplicateRule} onDiscard={discardPolicyChanges} onAllowAll={allowAllPolicy} onSave={(revokeExistingTokens) => void savePolicy(revokeExistingTokens)} onPreview={() => void runPreview()} previewProvider={previewProvider} onPreviewProvider={(value) => changeTestPersona(setPreviewProvider, value)} previewPrincipal={previewPrincipal} previewGroups={previewGroups} previewClaims={previewClaims} onPreviewPrincipal={(value) => changeTestPersona(setPreviewPrincipal, value)} onPreviewGroups={(value) => changeTestPersona(setPreviewGroups, value)} onPreviewClaims={(value) => changeTestPersona(setPreviewClaims, value)} preview={preview} previewBusy={previewBusy} previewError={previewError} session={session} onReloadAccess={() => void loadAsset(asset.id)} revokingTokens={revokingTokens} onRevokeTokens={() => void revokeAssetTokens()} onDirtyChange={setManagementDirty} queryClient={queryClient} sessionScope={sessionCacheKey} /></Suspense> : undefined;
   const assetView = !requestedAssetId ? <><p className="inventory-intro">Browse governed data. Open an asset to manage its policy, access, and consumers.</p>{assetInventoryError && <div role="alert" className="notice">{assetInventoryError} <Button variant="subtle" onClick={() => void refreshAssetInventory(assetSearch)}>Retry asset search</Button></div>}<AssetInventory assets={assets} search={assetSearch} loading={assetInventoryLoading} hasMore={assetHasMore} onSearch={searchAssets} onSelect={openAsset} onLoadMore={() => void refreshAssetInventory(assetSearch, true)} /></> : editorView ?? <section aria-label="Asset workspace"><Button variant="subtle" onClick={() => navigateTo("assets")}>Back to assets</Button>{assetLoading ? <p role="status">Loading asset workspace…</p> : <LoginPanel title="Asset unavailable" message={notice} retry={() => void loadAsset(requestedAssetId)} />}</section>;
   const content = <WorkspaceContent signedOut={signedOut} page={page} workspace={workspace} accessView={accessView} managementView={managementView} noAssetsView={<LoginPanel title={assets.length || locationFromUrl(window.location.hash, window.location.search).assetId ? "Asset unavailable" : "No governed assets"} message={notice} retry={loadInitialWorkspace} />} assetView={assetView} />;
 

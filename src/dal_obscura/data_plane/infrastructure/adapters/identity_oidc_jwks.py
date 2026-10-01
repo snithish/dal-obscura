@@ -62,6 +62,7 @@ class OidcJwksIdentityProvider:
         subject_claim: str = "sub",
         group_claims: Sequence[str] | None = None,
         attribute_claims: Mapping[str, str] | None = None,
+        attribute_definitions: Mapping[str, Any] | None = None,
         leeway_seconds: int = 0,
         jwks_refresh_interval_seconds: float = 30,
         max_jwks_keys: int = 256,
@@ -106,6 +107,7 @@ class OidcJwksIdentityProvider:
             subject_claim=subject_claim,
             group_claims=group_claims,
             attribute_claims=attribute_claims,
+            attribute_definitions=attribute_definitions,
         )
 
     def authenticate(
