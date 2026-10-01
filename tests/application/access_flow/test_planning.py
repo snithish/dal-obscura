@@ -7,6 +7,7 @@ from dal_obscura.common.access_control.filters import deserialize_row_filter, ro
 from dal_obscura.common.access_control.models import AccessDecision, MaskRule, Principal
 from dal_obscura.common.query_planning.models import PlanRequest
 from dal_obscura.common.ticket_delivery.models import TicketPayload
+from dal_obscura.data_plane.application.ports.access_context import StaticAccessContext
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
 from dal_obscura.data_plane.application.use_cases.plan_access import PlanAccessUseCase
 from tests.application.access_flow.helpers import (
@@ -28,58 +29,15 @@ from tests.support.use_cases import (
 )
 
 
-def test_plan_access_resolves_catalog_with_tenant_from_principal_attributes():
-    schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
-    table_format = TrackingTableFormat(
-        catalog_name="analytics",
-        table_name="default.users",
-        format="fake_format",
-        schema=schema,
-        planned_columns=[],
-    )
-    catalog_registry = FakeCatalogRegistry(table_format)
-    authorizer = FakeAuthorizer(
-        decision=AccessDecision(
-            allowed_columns=["id", "region"],
-            masks={},
-            row_filter=None,
-            policy_version=100,
-        ),
-        current_version=100,
-    )
-    ticket_codec = FakeTicketCodec()
-    use_case = PlanAccessUseCase(
-        identity=FakeIdentity(
-            principal=Principal(id="user1", groups=[], attributes={"tenant_id": "tenant-a"})
-        ),
-        authorizer=authorizer,
-        catalog_registry=cast(Any, catalog_registry),
-        masking=FakeMasking(),
-        ticket_codec=ticket_codec,
-        ticket_store=FakeTicketStore(),
-        ticket_ttl_seconds=300,
-        max_tickets=1,
-        max_ticket_exchanges=1,
-        now=lambda: 1000,
-        nonce_factory=lambda: "nonce",
-    )
-
-    use_case.execute(
-        PlanRequest(catalog="analytics", target="default.users", columns=["id"]),
-        AUTHORIZATION_HEADER,
-    )
-
-    assert catalog_registry.last_tenant_id == "tenant-a"
-    assert ticket_codec.signed_payloads[0].tenant_id == "tenant-a"
-
-
 def test_plan_access_rejects_authorization_without_asset_identity():
     _, decision, table_format = _build_use_case_dependencies()
     ticket_store = FakeTicketStore()
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=FakeAuthorizer(decision=decision, asset_id=None),
-        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        access_context=StaticAccessContext(
+            authorizer=FakeAuthorizer(decision=decision, asset_id=None),
+            catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        ),
         masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(),
         ticket_store=ticket_store,
@@ -90,8 +48,7 @@ def test_plan_access_rejects_authorization_without_asset_identity():
 
     with pytest.raises(PermissionError, match="governed asset identity"):
         use_case.execute(
-            PlanRequest(catalog="catalog1", target="users", columns=["id"]),
-            AUTHORIZATION_HEADER,
+            PlanRequest(catalog="catalog1", target="users", columns=["id"]), AUTHORIZATION_HEADER
         )
 
     assert ticket_store.stored == []
@@ -116,8 +73,9 @@ def test_plan_access_auth_failure():
     )
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=None),
-        authorizer=authorizer,
-        catalog_registry=cast(Any, catalog_registry),
+        access_context=StaticAccessContext(
+            authorizer=authorizer, catalog_registry=cast(Any, catalog_registry)
+        ),
         masking=FakeMasking(),
         ticket_codec=ticket_codec,
         ticket_store=FakeTicketStore(),
@@ -128,8 +86,7 @@ def test_plan_access_auth_failure():
 
     with pytest.raises(PermissionError):
         use_case.execute(
-            PlanRequest(catalog="catalog1", target="users", columns=["id"]),
-            AuthenticationRequest(),
+            PlanRequest(catalog="catalog1", target="users", columns=["id"]), AuthenticationRequest()
         )
 
 
@@ -151,8 +108,9 @@ def test_plan_access_authz_failure():
     )
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=FakeAuthorizer(decision=None),
-        catalog_registry=cast(Any, catalog_registry),
+        access_context=StaticAccessContext(
+            authorizer=FakeAuthorizer(decision=None), catalog_registry=cast(Any, catalog_registry)
+        ),
         masking=FakeMasking(),
         ticket_codec=ticket_codec,
         ticket_store=FakeTicketStore(),
@@ -163,8 +121,7 @@ def test_plan_access_authz_failure():
 
     with pytest.raises(PermissionError):
         use_case.execute(
-            PlanRequest(catalog="catalog1", target="users", columns=["id"]),
-            AUTHORIZATION_HEADER,
+            PlanRequest(catalog="catalog1", target="users", columns=["id"]), AUTHORIZATION_HEADER
         )
 
 
@@ -187,8 +144,9 @@ def test_plan_access_expands_wildcard_columns():
     )
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=authorizer,
-        catalog_registry=cast(Any, catalog_registry),
+        access_context=StaticAccessContext(
+            authorizer=authorizer, catalog_registry=cast(Any, catalog_registry)
+        ),
         masking=FakeMasking(),
         ticket_codec=ticket_codec,
         ticket_store=FakeTicketStore(),
@@ -197,8 +155,7 @@ def test_plan_access_expands_wildcard_columns():
         max_ticket_exchanges=1,
     )
     use_case.execute(
-        PlanRequest(catalog="catalog1", target="users", columns=["*"]),
-        AUTHORIZATION_HEADER,
+        PlanRequest(catalog="catalog1", target="users", columns=["*"]), AUTHORIZATION_HEADER
     )
 
     assert authorizer.last_requested_columns == ["id", "region"]
@@ -211,8 +168,10 @@ def test_plan_access_rejects_ambiguous_or_empty_column_requests(columns):
     _schema, decision, table_format = _build_use_case_dependencies()
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=FakeAuthorizer(decision=decision),
-        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        access_context=StaticAccessContext(
+            authorizer=FakeAuthorizer(decision=decision),
+            catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        ),
         masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(),
         ticket_store=FakeTicketStore(),
@@ -223,8 +182,7 @@ def test_plan_access_rejects_ambiguous_or_empty_column_requests(columns):
 
     with pytest.raises(ValueError, match="columns"):
         use_case.execute(
-            PlanRequest(catalog="catalog1", target="users", columns=columns),
-            AUTHORIZATION_HEADER,
+            PlanRequest(catalog="catalog1", target="users", columns=columns), AUTHORIZATION_HEADER
         )
 
 
@@ -232,8 +190,10 @@ def test_plan_access_rejects_scan_payloads_above_configured_ticket_limit():
     _schema, decision, table_format = _build_use_case_dependencies()
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=FakeAuthorizer(decision=decision),
-        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        access_context=StaticAccessContext(
+            authorizer=FakeAuthorizer(decision=decision),
+            catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        ),
         masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(),
         ticket_store=FakeTicketStore(),
@@ -245,8 +205,7 @@ def test_plan_access_rejects_scan_payloads_above_configured_ticket_limit():
 
     with pytest.raises(ValueError, match="ticket byte limit"):
         use_case.execute(
-            PlanRequest(catalog="catalog1", target="users", columns=["id"]),
-            AUTHORIZATION_HEADER,
+            PlanRequest(catalog="catalog1", target="users", columns=["id"]), AUTHORIZATION_HEADER
         )
 
 
@@ -254,24 +213,12 @@ def test_plan_access_accepts_nested_requested_columns():
     schema = pa.schema(
         [
             pa.field(
-                "user",
-                pa.struct(
-                    [
-                        pa.field(
-                            "address",
-                            pa.struct([pa.field("zip", pa.int64())]),
-                        )
-                    ]
-                ),
+                "user", pa.struct([pa.field("address", pa.struct([pa.field("zip", pa.int64())]))])
             )
         ]
     )
     table_format = StubTableFormat(
-        catalog_name="catalog1",
-        table_name="users",
-        format="fake_format",
-        schema=schema,
-        batches=(),
+        catalog_name="catalog1", table_name="users", format="fake_format", schema=schema, batches=()
     )
     decision = AccessDecision(
         allowed_columns=["user.address.zip"],
@@ -295,8 +242,9 @@ def test_plan_access_accepts_nested_requested_columns():
     )
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=authorizer,
-        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        access_context=StaticAccessContext(
+            authorizer=authorizer, catalog_registry=cast(Any, FakeCatalogRegistry(table_format))
+        ),
         masking=FakeMasking(),
         ticket_codec=ticket_codec,
         ticket_store=FakeTicketStore(),
@@ -317,29 +265,26 @@ def test_plan_access_expands_parent_request_with_null_masked_siblings():
     schema = pa.schema(
         [
             pa.field(
-                "profile",
-                pa.struct([pa.field("name", pa.string()), pa.field("ssn", pa.string())]),
+                "profile", pa.struct([pa.field("name", pa.string()), pa.field("ssn", pa.string())])
             )
         ]
     )
     table_format = StubTableFormat(
-        catalog_name="catalog1",
-        table_name="users",
-        format="fake_format",
-        schema=schema,
-        batches=(),
+        catalog_name="catalog1", table_name="users", format="fake_format", schema=schema, batches=()
     )
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=FakeAuthorizer(
-            decision=AccessDecision(
-                allowed_columns=["profile.name", "profile.ssn"],
-                masks={"profile.ssn": MaskRule(type="null")},
-                row_filter=None,
-                policy_version=100,
-            )
+        access_context=StaticAccessContext(
+            authorizer=FakeAuthorizer(
+                decision=AccessDecision(
+                    allowed_columns=["profile.name", "profile.ssn"],
+                    masks={"profile.ssn": MaskRule(type="null")},
+                    row_filter=None,
+                    policy_version=100,
+                )
+            ),
+            catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         ),
-        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(),
         ticket_store=FakeTicketStore(),
@@ -349,8 +294,7 @@ def test_plan_access_expands_parent_request_with_null_masked_siblings():
     )
 
     result = use_case.execute(
-        PlanRequest(catalog="catalog1", target="users", columns=["profile"]),
-        AUTHORIZATION_HEADER,
+        PlanRequest(catalog="catalog1", target="users", columns=["profile"]), AUTHORIZATION_HEADER
     )
 
     assert result.columns == ["profile.name", "profile.ssn"]
@@ -358,32 +302,21 @@ def test_plan_access_expands_parent_request_with_null_masked_siblings():
 
 def test_plan_access_requires_map_key_permission_for_map_value_projection():
     schema = pa.schema(
-        [
-            pa.field(
-                "contacts",
-                pa.map_(pa.string(), pa.struct([pa.field("name", pa.string())])),
-            )
-        ]
+        [pa.field("contacts", pa.map_(pa.string(), pa.struct([pa.field("name", pa.string())])))]
     )
     table_format = StubTableFormat(
-        catalog_name="catalog1",
-        table_name="users",
-        format="fake_format",
-        schema=schema,
-        batches=(),
+        catalog_name="catalog1", table_name="users", format="fake_format", schema=schema, batches=()
     )
     authorizer = FakeAuthorizer(
         decision=AccessDecision(
-            allowed_columns=["contacts.$value.name"],
-            masks={},
-            row_filter=None,
-            policy_version=100,
+            allowed_columns=["contacts.$value.name"], masks={}, row_filter=None, policy_version=100
         )
     )
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=authorizer,
-        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        access_context=StaticAccessContext(
+            authorizer=authorizer, catalog_registry=cast(Any, FakeCatalogRegistry(table_format))
+        ),
         masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(),
         ticket_store=FakeTicketStore(),
@@ -403,19 +336,10 @@ def test_plan_access_requires_map_key_permission_for_map_value_projection():
 
 def test_plan_access_includes_authorized_map_keys_with_value_projection():
     schema = pa.schema(
-        [
-            pa.field(
-                "contacts",
-                pa.map_(pa.string(), pa.struct([pa.field("name", pa.string())])),
-            )
-        ]
+        [pa.field("contacts", pa.map_(pa.string(), pa.struct([pa.field("name", pa.string())])))]
     )
     table_format = StubTableFormat(
-        catalog_name="catalog1",
-        table_name="users",
-        format="fake_format",
-        schema=schema,
-        batches=(),
+        catalog_name="catalog1", table_name="users", format="fake_format", schema=schema, batches=()
     )
     authorizer = FakeAuthorizer(
         decision=AccessDecision(
@@ -427,8 +351,9 @@ def test_plan_access_includes_authorized_map_keys_with_value_projection():
     )
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=authorizer,
-        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        access_context=StaticAccessContext(
+            authorizer=authorizer, catalog_registry=cast(Any, FakeCatalogRegistry(table_format))
+        ),
         masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(),
         ticket_store=FakeTicketStore(),
@@ -450,29 +375,26 @@ def test_plan_access_rejects_unknown_requested_columns():
         [
             pa.field("id", pa.int64()),
             pa.field(
-                "user",
-                pa.struct([pa.field("address", pa.struct([pa.field("zip", pa.int64())]))]),
+                "user", pa.struct([pa.field("address", pa.struct([pa.field("zip", pa.int64())]))])
             ),
         ]
     )
     table_format = StubTableFormat(
-        catalog_name="catalog1",
-        table_name="users",
-        format="fake_format",
-        schema=schema,
-        batches=(),
+        catalog_name="catalog1", table_name="users", format="fake_format", schema=schema, batches=()
     )
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=FakeAuthorizer(
-            decision=AccessDecision(
-                allowed_columns=["id", "user.address.zip"],
-                masks={},
-                row_filter=None,
-                policy_version=100,
-            )
+        access_context=StaticAccessContext(
+            authorizer=FakeAuthorizer(
+                decision=AccessDecision(
+                    allowed_columns=["id", "user.address.zip"],
+                    masks={},
+                    row_filter=None,
+                    policy_version=100,
+                )
+            ),
+            catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         ),
-        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(
             TicketPayload(
@@ -512,10 +434,7 @@ def test_plan_access_includes_hidden_row_filter_dependency_columns_in_execution_
         planned_columns=planned_columns,
     )
     decision = AccessDecision(
-        allowed_columns=["id"],
-        masks={},
-        row_filter="region = 'us'",
-        policy_version=100,
+        allowed_columns=["id"], masks={}, row_filter="region = 'us'", policy_version=100
     )
     authorizer = FakeAuthorizer(decision=decision)
     ticket_codec = FakeTicketCodec(
@@ -533,8 +452,9 @@ def test_plan_access_includes_hidden_row_filter_dependency_columns_in_execution_
     )
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=authorizer,
-        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
+        access_context=StaticAccessContext(
+            authorizer=authorizer, catalog_registry=cast(Any, FakeCatalogRegistry(table_format))
+        ),
         masking=FakeMasking(),
         ticket_codec=ticket_codec,
         ticket_store=FakeTicketStore(),
@@ -544,8 +464,7 @@ def test_plan_access_includes_hidden_row_filter_dependency_columns_in_execution_
     )
 
     result = use_case.execute(
-        PlanRequest(catalog="catalog1", target="users", columns=["id"]),
-        AUTHORIZATION_HEADER,
+        PlanRequest(catalog="catalog1", target="users", columns=["id"]), AUTHORIZATION_HEADER
     )
 
     assert authorizer.last_requested_columns == ["id"]
@@ -557,24 +476,26 @@ def test_plan_access_rejects_requested_row_filter_for_masked_column():
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=FakeAuthorizer(
-            decision=AccessDecision(
-                allowed_columns=["id", "region"],
-                masks={"region": MaskRule(type="redact", value="***")},
-                row_filter=None,
-                policy_version=100,
-            )
-        ),
-        catalog_registry=cast(
-            Any,
-            FakeCatalogRegistry(
-                TrackingTableFormat(
-                    catalog_name="catalog1",
-                    table_name="users",
-                    format="fake_format",
-                    schema=schema,
-                    planned_columns=[],
+        access_context=StaticAccessContext(
+            authorizer=FakeAuthorizer(
+                decision=AccessDecision(
+                    allowed_columns=["id", "region"],
+                    masks={"region": MaskRule(type="redact", value="***")},
+                    row_filter=None,
+                    policy_version=100,
                 )
+            ),
+            catalog_registry=cast(
+                Any,
+                FakeCatalogRegistry(
+                    TrackingTableFormat(
+                        catalog_name="catalog1",
+                        table_name="users",
+                        format="fake_format",
+                        schema=schema,
+                        planned_columns=[],
+                    )
+                ),
             ),
         ),
         masking=FakeMasking(),
@@ -598,8 +519,7 @@ def test_plan_access_rejects_requested_row_filter_for_masked_column():
     )
 
     with pytest.raises(
-        PermissionError,
-        match="Requested row filter may not reference masked columns: region",
+        PermissionError, match="Requested row filter may not reference masked columns: region"
     ):
         use_case.execute(
             PlanRequest(
@@ -623,24 +543,26 @@ def test_plan_access_rejects_requested_row_filter_below_masked_parent():
     )
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=FakeAuthorizer(
-            decision=AccessDecision(
-                allowed_columns=["profile.region"],
-                masks={"profile": MaskRule(type="null")},
-                row_filter=None,
-                policy_version=100,
-            )
-        ),
-        catalog_registry=cast(
-            Any,
-            FakeCatalogRegistry(
-                TrackingTableFormat(
-                    catalog_name="catalog1",
-                    table_name="users",
-                    format="fake_format",
-                    schema=schema,
-                    planned_columns=[],
+        access_context=StaticAccessContext(
+            authorizer=FakeAuthorizer(
+                decision=AccessDecision(
+                    allowed_columns=["profile.region"],
+                    masks={"profile": MaskRule(type="null")},
+                    row_filter=None,
+                    policy_version=100,
                 )
+            ),
+            catalog_registry=cast(
+                Any,
+                FakeCatalogRegistry(
+                    TrackingTableFormat(
+                        catalog_name="catalog1",
+                        table_name="users",
+                        format="fake_format",
+                        schema=schema,
+                        planned_columns=[],
+                    )
+                ),
             ),
         ),
         masking=FakeMasking(),
@@ -667,24 +589,23 @@ def test_plan_access_rejects_requested_row_filter_for_non_visible_column():
     schema = pa.schema([pa.field("id", pa.int64()), pa.field("region", pa.string())])
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=FakeAuthorizer(
-            decision=AccessDecision(
-                allowed_columns=["id"],
-                masks={},
-                row_filter=None,
-                policy_version=100,
-            )
-        ),
-        catalog_registry=cast(
-            Any,
-            FakeCatalogRegistry(
-                TrackingTableFormat(
-                    catalog_name="catalog1",
-                    table_name="users",
-                    format="fake_format",
-                    schema=schema,
-                    planned_columns=[],
+        access_context=StaticAccessContext(
+            authorizer=FakeAuthorizer(
+                decision=AccessDecision(
+                    allowed_columns=["id"], masks={}, row_filter=None, policy_version=100
                 )
+            ),
+            catalog_registry=cast(
+                Any,
+                FakeCatalogRegistry(
+                    TrackingTableFormat(
+                        catalog_name="catalog1",
+                        table_name="users",
+                        format="fake_format",
+                        schema=schema,
+                        planned_columns=[],
+                    )
+                ),
             ),
         ),
         masking=FakeMasking(),
@@ -734,15 +655,14 @@ def test_plan_access_allows_requested_row_filter_on_visible_unmasked_hidden_depe
     )
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=FakeAuthorizer(
-            decision=AccessDecision(
-                allowed_columns=["id", "region"],
-                masks={},
-                row_filter=None,
-                policy_version=100,
-            )
+        access_context=StaticAccessContext(
+            authorizer=FakeAuthorizer(
+                decision=AccessDecision(
+                    allowed_columns=["id", "region"], masks={}, row_filter=None, policy_version=100
+                )
+            ),
+            catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         ),
-        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(
             TicketPayload(
@@ -808,15 +728,17 @@ def test_plan_access_combines_policy_and_requested_row_filters_before_ticketing(
     )
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=FakeAuthorizer(
-            decision=AccessDecision(
-                allowed_columns=["id", "region", "active"],
-                masks={},
-                row_filter="active = true",
-                policy_version=100,
-            )
+        access_context=StaticAccessContext(
+            authorizer=FakeAuthorizer(
+                decision=AccessDecision(
+                    allowed_columns=["id", "region", "active"],
+                    masks={},
+                    row_filter="active = true",
+                    policy_version=100,
+                )
+            ),
+            catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         ),
-        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         masking=FakeMasking(),
         ticket_codec=ticket_codec,
         ticket_store=FakeTicketStore(),
@@ -890,24 +812,23 @@ def test_plan_access_revalidates_requested_row_filter_against_base_schema():
     schema = pa.schema([pa.field("id", pa.int64())])
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=FakeAuthorizer(
-            decision=AccessDecision(
-                allowed_columns=["id"],
-                masks={},
-                row_filter=None,
-                policy_version=100,
-            )
-        ),
-        catalog_registry=cast(
-            Any,
-            FakeCatalogRegistry(
-                TrackingTableFormat(
-                    catalog_name="catalog1",
-                    table_name="users",
-                    format="fake_format",
-                    schema=schema,
-                    planned_columns=[],
+        access_context=StaticAccessContext(
+            authorizer=FakeAuthorizer(
+                decision=AccessDecision(
+                    allowed_columns=["id"], masks={}, row_filter=None, policy_version=100
                 )
+            ),
+            catalog_registry=cast(
+                Any,
+                FakeCatalogRegistry(
+                    TrackingTableFormat(
+                        catalog_name="catalog1",
+                        table_name="users",
+                        format="fake_format",
+                        schema=schema,
+                        planned_columns=[],
+                    )
+                ),
             ),
         ),
         masking=FakeMasking(),
@@ -959,15 +880,14 @@ def test_plan_access_rejects_explicit_denied_column_request():
     )
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=FakeAuthorizer(
-            decision=AccessDecision(
-                allowed_columns=["id"],
-                masks={},
-                row_filter=None,
-                policy_version=100,
-            )
+        access_context=StaticAccessContext(
+            authorizer=FakeAuthorizer(
+                decision=AccessDecision(
+                    allowed_columns=["id"], masks={}, row_filter=None, policy_version=100
+                )
+            ),
+            catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         ),
-        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(
             TicketPayload(
@@ -1009,12 +929,14 @@ def test_plan_access_prunes_wildcard_to_authorized_columns():
     )
     use_case = PlanAccessUseCase(
         identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
-        authorizer=FakeAuthorizer(
-            decision=AccessDecision(
-                allowed_columns=["id"], masks={}, row_filter=None, policy_version=100
-            )
+        access_context=StaticAccessContext(
+            authorizer=FakeAuthorizer(
+                decision=AccessDecision(
+                    allowed_columns=["id"], masks={}, row_filter=None, policy_version=100
+                )
+            ),
+            catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         ),
-        catalog_registry=cast(Any, FakeCatalogRegistry(table_format)),
         masking=FakeMasking(),
         ticket_codec=FakeTicketCodec(),
         ticket_store=FakeTicketStore(),

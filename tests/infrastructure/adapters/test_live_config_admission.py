@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import replace
-from typing import cast
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pyarrow as pa
 import pytest
@@ -20,18 +19,14 @@ from dal_obscura.common.config_store.db import (
 from dal_obscura.common.config_store.orm import (
     AssetRecord,
     CatalogRecord,
-    CellRecord,
-    CellRuntimeSettingsRecord,
-    CellTenantRecord,
     PolicyRuleRecord,
-    TenantRecord,
+    RuntimeSettingsRecord,
+    WorkspaceRecord,
 )
 from dal_obscura.data_plane.infrastructure.adapters.live_config import (
-    CatalogRegistry,
     LiveAsset,
     LiveCatalog,
     LiveConfigAuthorizer,
-    LiveConfigCatalogRegistry,
     LiveConfigStore,
     _catalog_config_for_asset,
     _schema_identities,
@@ -40,34 +35,6 @@ from dal_obscura.data_plane.infrastructure.adapters.live_config import (
 from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 
 ICEBERG_CATALOG_ID = "iceberg.sql"
-
-
-def test_catalog_registry_close_attempts_all_cached_instances_when_one_fails() -> None:
-    closed: list[str] = []
-
-    class FakeRegistry:
-        def __init__(self, name: str) -> None:
-            self.name = name
-
-        def close(self) -> None:
-            closed.append(self.name)
-            if self.name == "first":
-                raise RuntimeError("first generation close failed")
-
-    registry = LiveConfigCatalogRegistry(cast(LiveConfigStore, object()))
-    registry._registry_cache = cast(
-        dict[tuple[UUID, UUID, str, str], CatalogRegistry],
-        {
-            (uuid4(), uuid4(), "analytics", "first"): FakeRegistry("first"),
-            (uuid4(), uuid4(), "analytics", "second"): FakeRegistry("second"),
-        },
-    )
-
-    with pytest.raises(RuntimeError, match="first generation close failed"):
-        registry.close()
-
-    assert closed == ["first", "second"]
-    assert registry._registry_cache == {}
 
 
 @pytest.fixture
@@ -80,13 +47,13 @@ def db_session() -> Iterator[Session]:
 
 
 def test_live_authorizer_resolves_policy_from_active_asset(db_session: Session):
-    cell_id = uuid4()
-    tenant_id = uuid4()
-    _seed_live_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
-    authorizer = LiveConfigAuthorizer(LiveConfigStore(db_session, cell_id=cell_id))
+    _seed_live_asset(db_session, policy_version=123)
+    authorizer = LiveConfigAuthorizer(
+        LiveConfigStore(session_factory(db_session.get_bind().engine))
+    )
 
     decision = authorizer.authorize(
-        principal=Principal(id="user1", groups=[], attributes={"tenant_id": str(tenant_id)}),
+        principal=Principal(id="user1", groups=[], attributes={}),
         target="default.users",
         catalog="analytics",
         requested_columns=["id", "email"],
@@ -95,46 +62,11 @@ def test_live_authorizer_resolves_policy_from_active_asset(db_session: Session):
     assert decision.allowed_columns == ["id", "email"]
     assert decision.masks["email"].type == "email"
     assert decision.row_filter == "(region = 'us')"
-    assert decision.policy_version != 123
-
-
-def test_live_authorizer_accepts_tenant_slug_attribute(db_session: Session):
-    cell_id = uuid4()
-    tenant_id = uuid4()
-    _seed_live_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
-    authorizer = LiveConfigAuthorizer(LiveConfigStore(db_session, cell_id=cell_id))
-
-    decision = authorizer.authorize(
-        principal=Principal(id="user1", groups=[], attributes={"tenant_id": f"tenant-{tenant_id}"}),
-        target="default.users",
-        catalog="analytics",
-        requested_columns=["id"],
-    )
-
-    assert decision.allowed_columns == ["id"]
-    assert decision.policy_version != 123
-
-
-def test_live_store_loads_asset_and_catalog_from_one_generation(db_session: Session):
-    cell_id = uuid4()
-    tenant_id = uuid4()
-    _seed_live_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
-    store = LiveConfigStore(db_session, cell_id=cell_id)
-
-    asset, catalog = store.get_asset_and_catalog(
-        tenant_id=str(tenant_id),
-        catalog="analytics",
-        target="default.users",
-    )
-
-    assert asset.config_revision == catalog.config_revision
-    assert asset.catalog == catalog.catalog == "analytics"
+    assert decision.policy_version == 123
 
 
 def test_live_config_rejects_tampered_plugin_binding():
     asset = LiveAsset(
-        config_revision=uuid4(),
-        tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
         backend="iceberg",
@@ -145,8 +77,6 @@ def test_live_config_rejects_tampered_plugin_binding():
         policy_version=1,
     )
     catalog = LiveCatalog(
-        config_revision=asset.config_revision,
-        tenant_id=asset.tenant_id,
         catalog="analytics",
         config={"type": "iceberg", "options": {}},
     )
@@ -155,58 +85,8 @@ def test_live_config_rejects_tampered_plugin_binding():
         _catalog_config_for_asset(catalog, asset)
 
 
-def test_live_config_rejects_legacy_plugin_id_shape():
-    asset = LiveAsset(
-        config_revision=uuid4(),
-        tenant_id=uuid4(),
-        catalog="analytics",
-        target="default.users",
-        backend="iceberg",
-        compiled_config={
-            "plugins": {"catalog": "iceberg.sql", "table_format": "iceberg"},
-            "target": {"backend": "iceberg", "table": "default.users"},
-        },
-        policy_version=1,
-    )
-    catalog = LiveCatalog(
-        config_revision=asset.config_revision,
-        tenant_id=asset.tenant_id,
-        catalog="analytics",
-        config={"module": ICEBERG_CATALOG_ID, "options": {}},
-    )
-
-    with pytest.raises(ValueError, match="retired module identity"):
-        _catalog_config_for_asset(catalog, asset)
-
-
-def test_live_config_rejects_retired_provider_modules_option():
-    asset = LiveAsset(
-        config_revision=uuid4(),
-        tenant_id=uuid4(),
-        catalog="analytics",
-        target="default.users",
-        backend="iceberg",
-        compiled_config={
-            "plugins": {"catalog": "iceberg.sql", "table_format": "iceberg"},
-            "target": {"backend": "iceberg", "table": "default.users"},
-        },
-        policy_version=1,
-    )
-    catalog = LiveCatalog(
-        config_revision=asset.config_revision,
-        tenant_id=asset.tenant_id,
-        catalog="analytics",
-        config={"type": "iceberg", "options": {"provider_modules": ["old.provider"]}},
-    )
-
-    with pytest.raises(ValueError, match="retired provider_modules option"):
-        _catalog_config_for_asset(catalog, asset)
-
-
 def test_live_config_passes_runtime_path_enforcer_to_catalog():
     asset = LiveAsset(
-        config_revision=uuid4(),
-        tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
         backend="iceberg",
@@ -217,8 +97,6 @@ def test_live_config_passes_runtime_path_enforcer_to_catalog():
         policy_version=1,
     )
     catalog = LiveCatalog(
-        config_revision=asset.config_revision,
-        tenant_id=asset.tenant_id,
         catalog="analytics",
         config={"type": "iceberg", "options": {}},
     )
@@ -239,40 +117,30 @@ class _AdmittedPluginSnapshot:
 
 def test_live_config_requires_both_plugin_identities_in_admitted_snapshot():
     asset = LiveAsset(
-        config_revision=uuid4(),
-        tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
         backend="iceberg",
         compiled_config={
-            "plugins": {
-                "catalog": "iceberg.sql",
-                "table_format": "iceberg",
-            },
+            "plugins": {"catalog": "iceberg.sql", "table_format": "iceberg"},
             "target": {"backend": "iceberg", "table": "default.users"},
         },
         policy_version=1,
     )
     catalog = LiveCatalog(
-        config_revision=asset.config_revision,
-        tenant_id=asset.tenant_id,
         catalog="analytics",
         config={"type": "iceberg", "options": {}},
     )
 
     with pytest.raises(ValueError, match="plugin binding is not admitted"):
         _catalog_config_for_asset(
-            catalog,
-            asset,
-            plugin_registry=_AdmittedPluginSnapshot(("catalog", "iceberg.sql")),
+            catalog, asset, plugin_registry=_AdmittedPluginSnapshot(("catalog", "iceberg.sql"))
         )
 
     resolved = _catalog_config_for_asset(
         catalog,
         asset,
         plugin_registry=_AdmittedPluginSnapshot(
-            ("catalog", "iceberg.sql"),
-            ("table_format", "iceberg"),
+            ("catalog", "iceberg.sql"), ("table_format", "iceberg")
         ),
     )
     assert resolved.type == "iceberg"
@@ -294,16 +162,13 @@ def test_live_config_requires_both_plugin_identities_in_admitted_snapshot():
             catalog,
             retired,
             plugin_registry=_AdmittedPluginSnapshot(
-                ("catalog", "iceberg.sql"),
-                ("table_format", "iceberg"),
+                ("catalog", "iceberg.sql"), ("table_format", "iceberg")
             ),
         )
 
 
 def test_live_config_preserves_external_plugin_identity():
     asset = LiveAsset(
-        config_revision=uuid4(),
-        tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
         backend="parquet.dataset",
@@ -314,14 +179,8 @@ def test_live_config_preserves_external_plugin_identity():
         policy_version=1,
     )
     catalog = LiveCatalog(
-        config_revision=asset.config_revision,
-        tenant_id=asset.tenant_id,
         catalog="analytics",
-        config={
-            "type": "plugin",
-            "plugin_id": "manifest",
-            "options": {"root": "/srv/data"},
-        },
+        config={"type": "plugin", "plugin_id": "manifest", "options": {"root": "/srv/data"}},
     )
     resolved = _catalog_config_for_asset(
         catalog,
@@ -336,8 +195,6 @@ def test_live_config_preserves_external_plugin_identity():
 
 def test_live_config_preserves_catalog_plugin_revision():
     asset = LiveAsset(
-        config_revision=uuid4(),
-        tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
         backend="parquet.dataset",
@@ -348,8 +205,6 @@ def test_live_config_preserves_catalog_plugin_revision():
         policy_version=1,
     )
     catalog = LiveCatalog(
-        config_revision=asset.config_revision,
-        tenant_id=asset.tenant_id,
         catalog="analytics",
         config={"type": "iceberg", "options": {"root": "/srv/data"}},
         plugin_id="manifest",
@@ -389,8 +244,6 @@ def test_schema_without_provider_ids_uses_schema_scoped_nested_synthetic_ids():
         ]
     }
     asset = LiveAsset(
-        config_revision=uuid4(),
-        tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
         backend="iceberg",
@@ -415,8 +268,6 @@ def test_schema_admission_rejects_unstable_live_schema_for_stable_ids():
     schema = pa.schema([pa.field("email", pa.string())])
     field_id = "iceberg:1"
     asset = LiveAsset(
-        config_revision=uuid4(),
-        tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
         backend="iceberg",
@@ -435,8 +286,6 @@ def test_schema_admission_rejects_unstable_live_schema_for_stable_ids():
 
 def test_legacy_wildcard_policy_requires_schema_admission():
     asset = LiveAsset(
-        config_revision=uuid4(),
-        tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
         backend="iceberg",
@@ -450,8 +299,6 @@ def test_legacy_wildcard_policy_requires_schema_admission():
 
 def test_legacy_parent_policy_requires_schema_admission():
     asset = LiveAsset(
-        config_revision=uuid4(),
-        tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
         backend="iceberg",
@@ -468,69 +315,51 @@ def test_live_store_fails_closed_by_default_after_transient_failure(
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    cell_id = uuid4()
-    tenant_id = uuid4()
-    _seed_live_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
-    config_store = LiveConfigStore(db_session, cell_id=cell_id)
+    _seed_live_asset(db_session, policy_version=123)
+    config_store = LiveConfigStore(session_factory(db_session.get_bind().engine))
 
-    config_store.get_asset(
-        tenant_id=str(tenant_id),
-        catalog="analytics",
-        target="default.users",
-    )
+    config_store.get_asset(catalog="analytics", target="default.users")
 
     def fail_get(*args, **kwargs):
         del args, kwargs
         raise RuntimeError("database unavailable")
 
-    monkeypatch.setattr(db_session, "get", fail_get)
+    monkeypatch.setattr(config_store, "_live_asset", fail_get)
 
     with pytest.raises(RuntimeError, match="database unavailable"):
-        config_store.get_asset(
-            tenant_id=str(tenant_id),
-            catalog="analytics",
-            target="default.users",
-        )
+        config_store.get_asset(catalog="analytics", target="default.users")
 
 
-def test_live_store_rejects_directly_removed_assets_and_flushes_cache(db_session: Session):
-    cell_id = uuid4()
-    tenant_id = uuid4()
-    _seed_live_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
-    config_store = LiveConfigStore(db_session, cell_id=cell_id)
-    config_store.get_asset(tenant_id=str(tenant_id), catalog="analytics", target="default.users")
+def test_live_store_rejects_directly_removed_assets(db_session: Session):
+    _seed_live_asset(db_session, policy_version=123)
+    config_store = LiveConfigStore(session_factory(db_session.get_bind().engine))
+    config_store.get_asset(catalog="analytics", target="default.users")
 
     asset = db_session.scalar(select(AssetRecord).where(AssetRecord.target == "default.users"))
     assert asset is not None
     db_session.delete(asset)
-    cell = db_session.get(CellRecord, cell_id)
-    assert cell is not None
-    cell.configuration_revision += 1
     db_session.commit()
 
     with pytest.raises(LookupError, match="No live asset"):
-        config_store.get_asset(
-            tenant_id=str(tenant_id), catalog="analytics", target="default.users"
-        )
-    assert config_store._asset_cache == {}
+        config_store.get_asset(catalog="analytics", target="default.users")
 
 
 def test_live_authorizer_rejects_corrupt_mask_instead_of_dropping_it(
     db_session: Session,
 ):
-    cell_id = uuid4()
-    tenant_id = uuid4()
-    _seed_live_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
+    _seed_live_asset(db_session, policy_version=123)
     record = db_session.scalar(select(PolicyRuleRecord))
     assert record is not None
     record.masks_json["email"] = {}
     flag_modified(record, "masks_json")
     db_session.commit()
-    authorizer = LiveConfigAuthorizer(LiveConfigStore(db_session, cell_id=cell_id))
+    authorizer = LiveConfigAuthorizer(
+        LiveConfigStore(session_factory(db_session.get_bind().engine))
+    )
 
     with pytest.raises(ValueError, match=r"mask\.type"):
         authorizer.authorize(
-            principal=Principal(id="user1", groups=[], attributes={"tenant_id": str(tenant_id)}),
+            principal=Principal(id="user1", groups=[], attributes={}),
             target="default.users",
             catalog="analytics",
             requested_columns=["email"],
@@ -539,8 +368,6 @@ def test_live_authorizer_rejects_corrupt_mask_instead_of_dropping_it(
 
 def test_live_schema_admission_rejects_rebound_or_added_field():
     asset = LiveAsset(
-        config_revision=uuid4(),
-        tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
         backend="iceberg",
@@ -564,15 +391,7 @@ def test_live_schema_admission_rejects_rebound_or_added_field():
         [
             pa.field(
                 "profile",
-                pa.struct(
-                    [
-                        pa.field(
-                            "email",
-                            pa.string(),
-                            metadata={b"PARQUET:field_id": b"99"},
-                        )
-                    ]
-                ),
+                pa.struct([pa.field("email", pa.string(), metadata={b"PARQUET:field_id": b"99"})]),
                 metadata={b"PARQUET:field_id": b"iceberg:2"},
             )
         ]
@@ -584,8 +403,6 @@ def test_live_schema_admission_rejects_rebound_or_added_field():
 
 def test_live_schema_admission_requires_refresh_after_renamed_field():
     asset = LiveAsset(
-        config_revision=uuid4(),
-        tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
         backend="iceberg",
@@ -610,13 +427,7 @@ def test_live_schema_admission_requires_refresh_after_renamed_field():
             pa.field(
                 "profile",
                 pa.struct(
-                    [
-                        pa.field(
-                            "contact_email",
-                            pa.string(),
-                            metadata={b"PARQUET:field_id": b"3"},
-                        )
-                    ]
+                    [pa.field("contact_email", pa.string(), metadata={b"PARQUET:field_id": b"3"})]
                 ),
                 metadata={b"PARQUET:field_id": b"2"},
             )
@@ -629,8 +440,6 @@ def test_live_schema_admission_requires_refresh_after_renamed_field():
 
 def test_live_schema_admission_accepts_iceberg_numeric_metadata_and_aliases():
     asset = LiveAsset(
-        config_revision=uuid4(),
-        tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
         backend="iceberg",
@@ -681,13 +490,7 @@ def test_live_schema_admission_accepts_iceberg_numeric_metadata_and_aliases():
                 pa.field(
                     "profile",
                     pa.struct(
-                        [
-                            pa.field(
-                                "name",
-                                pa.large_string(),
-                                metadata={b"PARQUET:field_id": b"4"},
-                            )
-                        ]
+                        [pa.field("name", pa.large_string(), metadata={b"PARQUET:field_id": b"4"})]
                     ),
                     metadata={b"PARQUET:field_id": b"3"},
                 ),
@@ -716,8 +519,6 @@ def test_schema_identity_rejects_unbounded_or_malformed_provider_ids(metadata: d
 
 def test_live_schema_admission_tracks_collection_element_and_map_value_paths():
     asset = LiveAsset(
-        config_revision=uuid4(),
-        tenant_id=uuid4(),
         catalog="analytics",
         target="default.nested",
         backend="iceberg",
@@ -755,34 +556,19 @@ def test_live_schema_admission_tracks_collection_element_and_map_value_paths():
         [
             pa.field(
                 "tags",
-                pa.list_(
-                    pa.field(
-                        "element",
-                        pa.string(),
-                        metadata={b"PARQUET:field_id": b"11"},
-                    )
-                ),
+                pa.list_(pa.field("element", pa.string(), metadata={b"PARQUET:field_id": b"11"})),
                 metadata={b"PARQUET:field_id": b"10"},
             ),
             pa.field(
                 "attributes",
                 pa.map_(
                     pa.field(
-                        "key",
-                        pa.string(),
-                        nullable=False,
-                        metadata={b"PARQUET:field_id": b"12"},
+                        "key", pa.string(), nullable=False, metadata={b"PARQUET:field_id": b"12"}
                     ),
                     pa.field(
                         "value",
                         pa.struct(
-                            [
-                                pa.field(
-                                    "label",
-                                    pa.string(),
-                                    metadata={b"PARQUET:field_id": b"14"},
-                                )
-                            ]
+                            [pa.field("label", pa.string(), metadata={b"PARQUET:field_id": b"14"})]
                         ),
                         metadata={b"PARQUET:field_id": b"13"},
                     ),
@@ -797,8 +583,6 @@ def test_live_schema_admission_tracks_collection_element_and_map_value_paths():
 
 def test_live_schema_admission_rejects_collection_identity_drift():
     asset = LiveAsset(
-        config_revision=uuid4(),
-        tenant_id=uuid4(),
         catalog="analytics",
         target="default.nested",
         backend="iceberg",
@@ -822,13 +606,7 @@ def test_live_schema_admission_rejects_collection_identity_drift():
         [
             pa.field(
                 "tags",
-                pa.list_(
-                    pa.field(
-                        "element",
-                        pa.string(),
-                        metadata={b"PARQUET:field_id": b"99"},
-                    )
-                ),
+                pa.list_(pa.field("element", pa.string(), metadata={b"PARQUET:field_id": b"99"})),
                 metadata={b"PARQUET:field_id": b"10"},
             )
         ]
@@ -840,8 +618,6 @@ def test_live_schema_admission_rejects_collection_identity_drift():
 
 def test_live_schema_admission_rejects_duplicate_live_field_ids():
     asset = LiveAsset(
-        config_revision=uuid4(),
-        tenant_id=uuid4(),
         catalog="analytics",
         target="default.duplicate",
         backend="iceberg",
@@ -874,17 +650,9 @@ def test_live_schema_admission_rejects_duplicate_live_field_ids():
 
 def test_live_schema_admission_rejects_tampered_admission_digest():
     fields = [
-        {
-            "name": "id",
-            "field_id": "iceberg:1",
-            "path": ["id"],
-            "type": "int64",
-            "nullable": False,
-        }
+        {"name": "id", "field_id": "iceberg:1", "path": ["id"], "type": "int64", "nullable": False}
     ]
     asset = LiveAsset(
-        config_revision=uuid4(),
-        tenant_id=uuid4(),
         catalog="analytics",
         target="default.tampered",
         backend="iceberg",
@@ -894,16 +662,13 @@ def test_live_schema_admission_rejects_tampered_admission_digest():
 
     with pytest.raises(ValueError, match="admission digest"):
         _validate_schema_admission(
-            asset,
-            pa.schema([pa.field("id", pa.int64(), metadata={b"PARQUET:field_id": b"1"})]),
+            asset, pa.schema([pa.field("id", pa.int64(), metadata={b"PARQUET:field_id": b"1"})])
         )
 
 
 def _seed_live_asset(
     session: Session,
     *,
-    cell_id,
-    tenant_id,
     policy_version: int,
     backend: str = "iceberg",
     table: str = "prod.users",
@@ -915,21 +680,17 @@ def _seed_live_asset(
     asset_id = uuid4()
     session.add_all(
         [
-            CellRecord(id=cell_id, name=f"cell-{cell_id}", region="local"),
-            TenantRecord(id=tenant_id, slug=f"tenant-{tenant_id}", display_name="Default"),
-            CellTenantRecord(cell_id=cell_id, tenant_id=tenant_id, shard_key="default"),
-            CellRuntimeSettingsRecord(
-                cell_id=cell_id,
+            WorkspaceRecord(id=1),
+            RuntimeSettingsRecord(
                 ticket_ttl_seconds=300,
                 max_tickets=32,
                 max_ticket_exchanges=1,
                 revision=0,
                 path_rules_json=[],
+                id=1,
             ),
             CatalogRecord(
                 id=catalog_id,
-                cell_id=cell_id,
-                tenant_id=tenant_id,
                 name="analytics",
                 plugin_id=plugin_id,
                 options_json=dict(catalog_options or {}),
@@ -937,8 +698,6 @@ def _seed_live_asset(
             ),
             AssetRecord(
                 id=asset_id,
-                cell_id=cell_id,
-                tenant_id=tenant_id,
                 catalog_id=catalog_id,
                 target="default.users",
                 backend=backend,
@@ -964,34 +723,25 @@ def _seed_live_asset(
 
 
 def test_live_authorizer_changes_effective_version_after_policy_edit(db_session: Session):
-    cell_id = uuid4()
-    tenant_id = uuid4()
-    _seed_live_asset(db_session, cell_id=cell_id, tenant_id=tenant_id, policy_version=123)
-    authorizer = LiveConfigAuthorizer(LiveConfigStore(db_session, cell_id=cell_id))
-    initial_version = authorizer.current_policy_version(
-        "default.users", "analytics", tenant_id=str(tenant_id)
+    _seed_live_asset(db_session, policy_version=123)
+    authorizer = LiveConfigAuthorizer(
+        LiveConfigStore(session_factory(db_session.get_bind().engine))
     )
+    initial_version = authorizer.current_policy_version("default.users", "analytics")
     asset = db_session.scalar(select(AssetRecord).where(AssetRecord.target == "default.users"))
     rule = db_session.scalar(select(PolicyRuleRecord))
     assert asset is not None and rule is not None
 
     rule.columns_json = ["email"]
     asset.policy_revision += 1
-    cell = db_session.get(CellRecord, cell_id)
-    assert cell is not None
-    cell.configuration_revision += 1
     db_session.commit()
 
-    current_version = authorizer.current_policy_version(
-        "default.users", "analytics", tenant_id=str(tenant_id)
-    )
+    current_version = authorizer.current_policy_version("default.users", "analytics")
     assert current_version != initial_version
 
 
 def test_explicit_allow_all_does_not_require_a_frozen_column_selection():
     asset = LiveAsset(
-        config_revision=uuid4(),
-        tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
         backend="iceberg",

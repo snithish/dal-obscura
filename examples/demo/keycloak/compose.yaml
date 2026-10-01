@@ -1,154 +1,194 @@
-name: dal-obscura-keycloak-demo
+# The demo launcher sequences finite jobs explicitly and checks their exit status.
+# Only these five services stay running; jobs are in the tools profile.
+x-service: &service
+  image: ${PROJECT_NAME:?run ./demo init}-service:local
+  environment: &database
+    DAL_OBSCURA_DATABASE_URL: postgresql+psycopg://obscura:${APP_DB_PASSWORD}@postgres:5432/obscura
+    LOCAL_ICEBERG_URI: postgresql+psycopg://iceberg:${ICEBERG_DB_PASSWORD}@postgres:5432/iceberg
+    DAL_OBSCURA_SECRET_PROVIDER_CONFIG: '{"scope_grants":{"catalog:retail_demo":["LOCAL_ICEBERG_URI"]}}'
+  volumes:
+    - ./scripts:/example/scripts:ro
+    - ./fixtures:/example/fixtures:ro
 
 services:
-  keycloak:
-    image: quay.io/keycloak/keycloak:26.0
-    env_file:
-      - .runtime/keycloak.env
+  postgres:
+    image: ${POSTGRES_IMAGE:?run ./demo init}
     environment:
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin
-    command:
-      - start-dev
-      - --import-realm
-      - --http-port=8080
-      - --hostname-strict=false
-      - --health-enabled=true
-    ports:
-      - "127.0.0.1:20080:8080"
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      ICEBERG_DB_PASSWORD: ${ICEBERG_DB_PASSWORD}
     volumes:
-      - ./.runtime/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/10-local-databases.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "{ printf 'HEAD /health/ready HTTP/1.0\\r\\n\\r\\n' >&0; grep 'HTTP/1.0 200'; } 0<>/dev/tcp/localhost/9000"]
+      test: [CMD-SHELL, 'pg_isready -U postgres -d postgres']
       interval: 2s
       timeout: 3s
       retries: 45
-      start_period: 10s
+    restart: unless-stopped
 
-  postgres:
-    image: postgres:17-alpine
-    env_file:
-      - .runtime/postgres.env
-    ports:
-      - "127.0.0.1:25432:5432"
-    volumes:
-      - postgres-data-v2:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
-      interval: 2s
-      timeout: 3s
-      retries: 30
-
-  migrate:
-    image: ${DAL_OBSCURA_IMAGE:-ghcr.io/snithish/dal-obscura:latest}
+  keycloak:
+    image: ${KEYCLOAK_IMAGE:?run ./demo init}
+    command: [start-dev, --import-realm]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+      KC_HOSTNAME: http://localhost:${KEYCLOAK_PORT}
+      KC_HEALTH_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      JAVA_OPTS_KC_HEAP: -Xms128m -Xmx512m
+      UI_ORIGIN: http://localhost:${UI_PORT}
+      OIDC_CLI_CLIENT_SECRET: ${OIDC_CLI_CLIENT_SECRET}
+      DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD}
+      ASSET_OWNER_PASSWORD: ${ASSET_OWNER_PASSWORD}
+      US_ANALYST_PASSWORD: ${US_ANALYST_PASSWORD}
+      EU_ANALYST_PASSWORD: ${EU_ANALYST_PASSWORD}
+      DATA_STEWARD_PASSWORD: ${DATA_STEWARD_PASSWORD}
+      BLOCKED_USER_PASSWORD: ${BLOCKED_USER_PASSWORD}
     depends_on:
       postgres:
         condition: service_healthy
-    env_file:
-      - .runtime/control-plane.env
-    command: ["dal-obscura-migrate", "upgrade"]
-
-  setup:
-    build:
-      context: ../../..
-      dockerfile: examples/demo/keycloak/Dockerfile.helper
-      args:
-        DAL_OBSCURA_IMAGE: ${DAL_OBSCURA_IMAGE:-ghcr.io/snithish/dal-obscura:latest}
-    env_file:
-      - .runtime/setup.env
-    depends_on:
-      control-plane:
-        condition: service_healthy
-      keycloak:
-        condition: service_healthy
+    ports:
+      - "127.0.0.1:${KEYCLOAK_PORT}:8080"
     volumes:
-      - .:/workspace/demo:rw
-    command:
-      - sh
-      - -ec
-      - rm -f /workspace/demo/.runtime/setup.done; python /workspace/demo/scripts/seed_table.py && python /workspace/demo/scripts/provision_demo.py && touch /workspace/demo/.runtime/setup.done && exec tail -f /dev/null
+      - ./keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
     healthcheck:
-      test: ["CMD", "test", "-f", "/workspace/demo/.runtime/setup.done"]
-      interval: 1s
-      timeout: 3s
+      test: [CMD-SHELL, "bash -ec '{ printf \"GET /health/ready HTTP/1.0\\r\\n\\r\\n\" >&0; grep -q \" 200 \"; } 0<>/dev/tcp/127.0.0.1/9000'"]
+      interval: 3s
+      timeout: 5s
       retries: 60
+      start_period: 20s
+    restart: unless-stopped
 
   control-plane:
-    image: ${DAL_OBSCURA_IMAGE:-ghcr.io/snithish/dal-obscura:latest}
-    depends_on:
-      keycloak:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-    env_file:
-      - .runtime/control-plane.env
-    ports:
-      - "127.0.0.1:28820:8820"
+    <<: *service
+    command: [control-plane]
+    environment:
+      <<: *database
+      DAL_OBSCURA_CONTROL_PLANE_HOST: 0.0.0.0
+      DAL_OBSCURA_CONTROL_PLANE_PORT: "8820"
+      DAL_OBSCURA_CONTROL_PLANE_PROFILE: local
+      DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN: ${ADMIN_TOKEN}
+      DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED: "false"
+      DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS: http://localhost:${UI_PORT}
+      DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER: http://localhost:${KEYCLOAK_PORT}/realms/dal-obscura-demo
+      DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE: dal-obscura
+      DAL_OBSCURA_CONTROL_PLANE_OIDC_JWKS_URL: http://keycloak:8080/realms/dal-obscura-demo/protocol/openid-connect/certs
+      DAL_OBSCURA_CONTROL_PLANE_OIDC_SUBJECT_CLAIM: preferred_username
+      DAL_OBSCURA_CONTROL_PLANE_OIDC_GROUP_CLAIMS: groups
+      DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP: platform-admins
+      DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER: http://localhost:${KEYCLOAK_PORT}/realms/dal-obscura-demo
+      DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID: dal-obscura-ui
+      DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN: http://localhost:${UI_PORT}
+      DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI: http://localhost:${UI_PORT}/auth/callback
+      DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI: http://localhost:${UI_PORT}
+      DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_TOKEN_ENDPOINT: http://keycloak:8080/realms/dal-obscura-demo/protocol/openid-connect/token
+      DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_JWKS_URL: http://keycloak:8080/realms/dal-obscura-demo/protocol/openid-connect/certs
+      DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_SCOPE: openid profile
     volumes:
-      - .:/workspace/demo:rw
-    command: ["control-plane"]
-    healthcheck:
-      test: ["CMD-SHELL", "python -c \"from urllib.request import urlopen; raise SystemExit(urlopen('http://127.0.0.1:8820/readyz', timeout=2).status != 200)\""]
-      interval: 2s
-      timeout: 3s
-      retries: 30
-
-  control-plane-ui:
-    build:
-      context: ../../..
-      dockerfile: ui/Dockerfile
+      - warehouse:/warehouse:ro
+      - ./scripts/healthcheck.py:/example/healthcheck.py:ro
     depends_on:
-      control-plane:
-        condition: service_healthy
-        restart: true
-    env_file:
-      - .runtime/ui.env
-    ports:
-      - "127.0.0.1:${DAL_OBSCURA_DEMO_UI_PORT:-28821}:8080"
-
-  dal-obscura:
-    image: ${DAL_OBSCURA_IMAGE:-ghcr.io/snithish/dal-obscura:latest}
-    depends_on:
-      setup:
+      postgres:
         condition: service_healthy
       keycloak:
         condition: service_healthy
-      postgres:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-    ports:
-      - "127.0.0.1:28115:8815"
-    volumes:
-      - .:/workspace/demo:rw
-    command:
-      - sh
-      - -c
-      - set -a && . /workspace/demo/.runtime/data-plane.env && set +a && exec dal-obscura-entrypoint data-plane
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"from urllib.request import urlopen; raise SystemExit(urlopen('http://127.0.0.1:8816/readyz', timeout=2).status != 200)\""]
+      test: [CMD, python, /example/healthcheck.py, http://127.0.0.1:8820/readyz]
       interval: 2s
       timeout: 3s
       retries: 45
+    restart: unless-stopped
 
-  client:
-    build:
-      context: ../../..
-      dockerfile: examples/demo/keycloak/Dockerfile.helper
-      args:
-        DAL_OBSCURA_IMAGE: ${DAL_OBSCURA_IMAGE:-ghcr.io/snithish/dal-obscura:latest}
-    depends_on:
-      dal-obscura:
-        condition: service_healthy
-      keycloak:
-        condition: service_healthy
-    env_file:
-      - .runtime/client.env
+  data-plane:
+    <<: *service
+    command: [data-plane]
+    environment:
+      <<: *database
+      DAL_OBSCURA_LOCATION: grpc://0.0.0.0:8815
+      DAL_OBSCURA_TICKET_SECRET: ${TICKET_SECRET}
+      DAL_OBSCURA_DATA_PLANE_HEALTH_HOST: 0.0.0.0
+      DAL_OBSCURA_DATA_PLANE_HEALTH_PORT: "8816"
     volumes:
-      - .:/workspace/demo:rw
-    command: ["tail", "-f", "/dev/null"]
+      - warehouse:/warehouse:ro
+      - ./scripts/healthcheck.py:/example/healthcheck.py:ro
+    ports:
+      - "127.0.0.1:${FLIGHT_PORT}:8815"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, /example/healthcheck.py, http://127.0.0.1:8816/readyz]
+      interval: 2s
+      timeout: 3s
+      retries: 45
+    restart: unless-stopped
+
+  ui:
+    image: ${PROJECT_NAME:?run ./demo init}-ui:local
+    ports:
+      - "127.0.0.1:${UI_PORT}:8080"
+    depends_on:
+      control-plane:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/]
+      interval: 2s
+      timeout: 3s
+      retries: 45
+    restart: unless-stopped
+
+  migrate:
+    <<: *service
+    profiles: [tools]
+    command: [dal-obscura-migrate, upgrade]
+
+  seed:
+    <<: *service
+    profiles: [tools]
+    user: "0:0"
+    command: [python, /example/scripts/seed_table.py]
+    environment:
+      ICEBERG_CATALOG_URI: postgresql+psycopg://iceberg:${ICEBERG_DB_PASSWORD}@postgres:5432/iceberg
+      ICEBERG_WAREHOUSE: /warehouse
+    volumes:
+      - ./scripts:/example/scripts:ro
+      - ./fixtures:/example/fixtures:ro
+      - warehouse:/warehouse
+
+  provision:
+    <<: *service
+    profiles: [tools]
+    command: [python, /example/scripts/provision_demo.py]
+    environment:
+      CONTROL_PLANE_URL: http://control-plane:8820
+      OIDC_TOKEN_URL: http://keycloak:8080/realms/dal-obscura-demo/protocol/openid-connect/token
+      OIDC_CLI_CLIENT_SECRET: ${OIDC_CLI_CLIENT_SECRET}
+      DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD}
+      DEMO_OIDC_ISSUER: http://localhost:${KEYCLOAK_PORT}/realms/dal-obscura-demo
+      ICEBERG_WAREHOUSE: /warehouse
+
+  check:
+    <<: *service
+    profiles: [tools]
+    command: [python, /example/scripts/check_demo.py]
+    environment:
+      FLIGHT_URI: grpc+tcp://data-plane:8815
+      OIDC_TOKEN_URL: http://keycloak:8080/realms/dal-obscura-demo/protocol/openid-connect/token
+      OIDC_CLIENT_ID: dal-obscura-cli
+      OIDC_CLI_CLIENT_SECRET: ${OIDC_CLI_CLIENT_SECRET}
+      DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD}
+      ASSET_OWNER_PASSWORD: ${ASSET_OWNER_PASSWORD}
+      US_ANALYST_PASSWORD: ${US_ANALYST_PASSWORD}
+      EU_ANALYST_PASSWORD: ${EU_ANALYST_PASSWORD}
+      DATA_STEWARD_PASSWORD: ${DATA_STEWARD_PASSWORD}
+      BLOCKED_USER_PASSWORD: ${BLOCKED_USER_PASSWORD}
 
 volumes:
-  # Schema baseline changed during pre-release development. Keep old local state intact.
-  postgres-data-v2:
+  postgres-data:
+  warehouse:

@@ -9,7 +9,6 @@ public final class FixtureBundle {
     private final String target;
     private final String userToken;
     private final String databaseUrl;
-    private final String cellId;
     private final String jwtSecret;
     private final String ticketSecret;
     private final long expectedRowCount;
@@ -23,7 +22,6 @@ public final class FixtureBundle {
             String target,
             String userToken,
             String databaseUrl,
-            String cellId,
             String jwtSecret,
             String ticketSecret) {
         this(
@@ -33,7 +31,6 @@ public final class FixtureBundle {
                 target,
                 userToken,
                 databaseUrl,
-                cellId,
                 jwtSecret,
                 ticketSecret,
                 -1L,
@@ -49,7 +46,6 @@ public final class FixtureBundle {
             String target,
             String userToken,
             String databaseUrl,
-            String cellId,
             String jwtSecret,
             String ticketSecret,
             long expectedRowCount,
@@ -62,7 +58,6 @@ public final class FixtureBundle {
         this.target = target;
         this.userToken = userToken;
         this.databaseUrl = databaseUrl;
-        this.cellId = cellId;
         this.jwtSecret = jwtSecret;
         this.ticketSecret = ticketSecret;
         this.expectedRowCount = expectedRowCount;
@@ -93,10 +88,6 @@ public final class FixtureBundle {
 
     public String databaseUrl() {
         return databaseUrl;
-    }
-
-    public String cellId() {
-        return cellId;
     }
 
     public String jwtSecret() {

@@ -374,11 +374,7 @@ def run_format_checks(  # noqa: C901
             raise TimeoutError("execution context deadline has expired")
         if context.cancel_check is not None and context.cancel_check():
             raise RuntimeError("execution context was cancelled")
-        check_capabilities(
-            descriptor.capabilities,
-            required_capabilities,
-            result=result,
-        )
+        check_capabilities(descriptor.capabilities, required_capabilities, result=result)
         check_schema_descriptor(schema, result=result)
         if max_tasks <= 0:
             raise ValueError("max_tasks must be positive")

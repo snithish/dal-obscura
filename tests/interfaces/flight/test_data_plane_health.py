@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import socket
 from typing import cast
-from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
@@ -12,10 +11,7 @@ from dal_obscura.common.config_store.db import create_engine_from_url, session_f
 from dal_obscura.data_plane.infrastructure.adapters.runtime_config import DataPlaneRuntimeConfig
 from dal_obscura.data_plane.interfaces.cli.main import _start_health_server
 from dal_obscura.data_plane.interfaces.flight.server import _health_payload
-from dal_obscura.data_plane.interfaces.health import (
-    create_health_app,
-    live_runtime_readiness,
-)
+from dal_obscura.data_plane.interfaces.health import create_health_app, live_runtime_readiness
 
 pytestmark = pytest.mark.socket
 
@@ -70,7 +66,7 @@ def test_data_plane_runtime_readiness_requires_active_auth_chain():
     checks = cast(dict[str, str], readiness["checks"])
 
     assert readiness["status"] == "not_ready"
-    assert checks["configuration_revision"] == "ok"
+    assert "configuration_revision" not in checks
     assert checks["auth_chain"] == "missing_enabled_provider"
 
 
@@ -96,7 +92,6 @@ def test_data_plane_health_server_bind_failure_blocks_startup():
                 session_factory(engine),
                 DataPlaneRuntimeConfig(
                     database_url="sqlite+pysqlite:///:memory:",
-                    cell_id=UUID("00000000-0000-0000-0000-000000000001"),
                     location="grpc://127.0.0.1:8815",
                     ticket_secret="ticket-secret",
                     health_port=port,
@@ -116,11 +111,7 @@ class _RuntimeStore:
         self._ticket = default_ticket if ticket is None else ticket
 
     def get_runtime(self) -> _Runtime:
-        return _Runtime(
-            config_revision="live-config-1",
-            auth_chain=self._auth_chain,
-            ticket=self._ticket,
-        )
+        return _Runtime(auth_chain=self._auth_chain, ticket=self._ticket)
 
 
 def test_live_runtime_readiness_redacts_store_exceptions():
@@ -138,10 +129,8 @@ class _Runtime:
     def __init__(
         self,
         *,
-        config_revision: str,
         auth_chain: dict[str, object],
         ticket: dict[str, object],
     ) -> None:
-        self.config_revision = config_revision
         self.auth_chain = auth_chain
         self.ticket = ticket

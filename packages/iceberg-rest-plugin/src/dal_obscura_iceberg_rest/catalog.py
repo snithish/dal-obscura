@@ -197,9 +197,7 @@ class RestCatalog(CatalogPlugin):
                 format_plugin_id="iceberg",
                 handle_version=1,
                 snapshot_id=_snapshot_id(table),
-                metadata={
-                    "metadata_location": metadata_location,
-                },
+                metadata={"metadata_location": metadata_location},
             )
 
     def close(self) -> None:

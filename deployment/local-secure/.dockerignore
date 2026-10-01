@@ -1,0 +1,3 @@
+# Only the thin edge Dockerfile belongs in this build context.
+*
+!Dockerfile.edge

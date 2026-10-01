@@ -71,15 +71,14 @@ revokes them.
 | UI exposure | Put the UI behind the same IAM posture as the API. |
 | Config-store outage | Fail closed; restore the config store before serving new requests. |
 
-Operators still configure `DAL_OBSCURA_CELL_ID` for each data-plane process so
-it can load the correct internal runtime partition.
+Every data-plane process connected to the same configuration database loads the
+same deployment settings, catalog namespace, and policies.
 
 ## Common Environment Variables
 
 | Variable | Used by | Meaning |
 | --- | --- | --- |
 | `DAL_OBSCURA_DATABASE_URL` | Control plane and data plane | SQLAlchemy database URL for config state. |
-| `DAL_OBSCURA_CELL_ID` | Data plane | Internal runtime cell identifier. |
 | `DAL_OBSCURA_LOCATION` | Data plane | Advertised Flight endpoint location. |
 | `DAL_OBSCURA_TICKET_SECRET` | Data plane | HMAC secret for opaque tickets. |
 | `DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST` | Control plane | Comma-separated exact catalog/object-store hostnames allowed in production. |
@@ -164,5 +163,5 @@ Operational verification should also include:
   permissions until expiry unless the asset owner revokes them. Confirm the
   revocation choice for high-impact changes.
 - SQLite state is easy to lose; use Postgres for anything shared.
-- Internal cell identifiers should not become user-facing concepts.
+- Configuration has one namespace per deployment; no routing identifier is required.
 - Data planes fail closed when they cannot read live configuration.

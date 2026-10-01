@@ -42,12 +42,7 @@ def test_resolve_access_allows_columns():
 
 def test_resolve_access_defaults_to_null_without_matching_grant():
     policy = _policy(
-        AccessRule(
-            principals=["group:analyst"],
-            columns=["id"],
-            masks={},
-            row_filter=None,
-        )
+        AccessRule(principals=["group:analyst"], columns=["id"], masks={}, row_filter=None)
     )
     principal = Principal(id="user1", groups=["guest"], attributes={})
 
@@ -150,13 +145,13 @@ def test_resolve_access_allows_by_role_and_principal_attributes():
     policy = _policy(
         AccessRule(
             principals=["group:analyst"],
-            when={"tenant": "acme"},
+            when={"department": "acme"},
             columns=["id", "region"],
             masks={},
             row_filter="region = 'us'",
         )
     )
-    principal = Principal(id="user1", groups=["analyst"], attributes={"tenant": "acme"})
+    principal = Principal(id="user1", groups=["analyst"], attributes={"department": "acme"})
 
     allowed, _masks, row_filter = resolve_access(
         policy,
@@ -172,12 +167,7 @@ def test_resolve_access_allows_by_role_and_principal_attributes():
 
 def test_resolve_access_unions_columns_and_filters_for_matching_grants():
     policy = _policy(
-        AccessRule(
-            principals=["user1"],
-            columns=["id"],
-            masks={},
-            row_filter="region = 'us'",
-        ),
+        AccessRule(principals=["user1"], columns=["id"], masks={}, row_filter="region = 'us'"),
         AccessRule(
             principals=["user1"],
             columns=["name"],
@@ -205,12 +195,7 @@ def test_resolve_access_unions_columns_and_filters_for_matching_grants():
 
 def test_resolve_access_nulls_ungranted_nested_siblings():
     policy = _policy(
-        AccessRule(
-            principals=["user1"],
-            columns=["profile.name"],
-            masks={},
-            row_filter=None,
-        )
+        AccessRule(principals=["user1"], columns=["profile.name"], masks={}, row_filter=None)
     )
 
     allowed, masks, _filter = resolve_access(
@@ -227,12 +212,7 @@ def test_resolve_access_nulls_ungranted_nested_siblings():
 
 def test_resolve_access_parent_grant_authorizes_requested_nested_leaf():
     policy = _policy(
-        AccessRule(
-            principals=["user1"],
-            columns=["profile"],
-            masks={},
-            row_filter=None,
-        )
+        AccessRule(principals=["user1"], columns=["profile"], masks={}, row_filter=None)
     )
 
     allowed, _masks, _filter = resolve_access(
@@ -250,7 +230,7 @@ def test_policy_version_changes_when_abac_clauses_change():
     first = _policy(
         AccessRule(
             principals=["group:analyst"],
-            when={"tenant": "acme"},
+            when={"department": "acme"},
             columns=["id"],
             masks={},
             row_filter=None,
@@ -259,7 +239,7 @@ def test_policy_version_changes_when_abac_clauses_change():
     second = _policy(
         AccessRule(
             principals=["group:analyst"],
-            when={"tenant": "globex"},
+            when={"department": "globex"},
             columns=["id"],
             masks={},
             row_filter=None,
@@ -311,15 +291,15 @@ def test_exempt_non_reader_gets_no_grant_and_condition_mismatch_does_not_exempt(
     policy = _policy(
         AccessRule(
             principals=["group:analyst"],
-            when={"tenant": "acme"},
+            when={"department": "acme"},
             columns=["email"],
             masks={"email": MaskRule(type="hash", exempt_principals=("user:alice",))},
             row_filter="active = true",
         )
     )
     for principal in [
-        Principal(id="alice", groups=[], attributes={"tenant": "acme"}),
-        Principal(id="bob", groups=["analyst"], attributes={"tenant": "other"}),
+        Principal(id="alice", groups=[], attributes={"department": "acme"}),
+        Principal(id="bob", groups=["analyst"], attributes={"department": "other"}),
     ]:
         allowed, masks, row_filter = resolve_access(
             policy, principal, "catalog.db.table", "analytics", ["email"]
@@ -381,6 +361,5 @@ def _policy(
     target: str = "catalog.db.table",
 ) -> Policy:
     return Policy(
-        version=1,
-        datasets=[DatasetPolicy(target=target, catalog=catalog, rules=list(rules))],
+        version=1, datasets=[DatasetPolicy(target=target, catalog=catalog, rules=list(rules))]
     )

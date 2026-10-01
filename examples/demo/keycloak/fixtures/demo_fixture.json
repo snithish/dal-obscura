@@ -368,12 +368,7 @@
       ],
       "when": {},
       "columns": [
-        "customer_id",
-        "customer_name",
-        "email",
-        "region",
-        "account_owner",
-        "annual_revenue"
+        "*"
       ],
       "masks": {},
       "row_filter": null,

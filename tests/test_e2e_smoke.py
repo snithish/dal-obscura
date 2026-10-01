@@ -20,13 +20,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from jwt.algorithms import RSAAlgorithm
 from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
-from pyiceberg.types import (
-    ListType,
-    LongType,
-    NestedField,
-    StringType,
-    StructType,
-)
+from pyiceberg.types import ListType, LongType, NestedField, StringType, StructType
 
 from dal_obscura.common.config_store.db import (
     create_engine_from_url,
@@ -70,12 +64,7 @@ def iceberg_setup(tmp_path: Path) -> tuple[str, Path]:
 
     catalog_uri = f"sqlite:///{tmp_path / 'catalog.db'}"
 
-    catalog = load_catalog(
-        catalog_name,
-        type="sql",
-        uri=catalog_uri,
-        warehouse=str(warehouse),
-    )
+    catalog = load_catalog(catalog_name, type="sql", uri=catalog_uri, warehouse=str(warehouse))
 
     identifier = "default.users"
 
@@ -117,9 +106,7 @@ def iceberg_setup(tmp_path: Path) -> tuple[str, Path]:
 
     catalog.create_namespace("default")
     table = catalog.create_table(
-        identifier=identifier,
-        schema=schema,
-        properties={"format-version": "2"},
+        identifier=identifier, schema=schema, properties={"format-version": "2"}
     )
 
     # Ingest data
@@ -185,9 +172,7 @@ def oidc_jwks_server() -> Iterator[dict[str, str]]:
     public_jwk["use"] = "sig"
     public_jwk["kid"] = "e2e"
     private_pem = private_key.private_bytes(
-        serialization.Encoding.PEM,
-        serialization.PrivateFormat.PKCS8,
-        serialization.NoEncryption(),
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
     ).decode()
     jwks = {"keys": [public_jwk]}
 
@@ -233,35 +218,13 @@ def control_plane_setup(
 
     with session_factory(engine)() as session:
         service = ProvisioningService(session)
-        tenant = service.create_tenant(slug="default", display_name="Default")
-        cell = service.create_cell(name="default", region="local")
-        tenant_id = UUID(tenant["id"])
-        cell_id = UUID(cell["id"])
-        service.assign_tenant(
-            cell_id=cell_id,
-            tenant_id=tenant_id,
-            shard_key="default",
-        )
-        service.upsert_runtime_settings(
-            cell_id=cell_id,
-            ttl=900,
-            max_tickets=64,
-            max_ticket_exchanges=1,
-        )
+        service.upsert_runtime_settings(ttl=900, max_tickets=64, max_ticket_exchanges=1)
         service.upsert_catalog(
-            cell_id=cell_id,
-            tenant_id=tenant_id,
             name="e2e_catalog",
             plugin_id="iceberg.sql",
-            options={
-                "type": "sql",
-                "uri": catalog_uri,
-                "warehouse": str(warehouse),
-            },
+            options={"type": "sql", "uri": catalog_uri, "warehouse": str(warehouse)},
         )
         asset = service.upsert_asset(
-            cell_id=cell_id,
-            tenant_id=tenant_id,
             catalog="e2e_catalog",
             target="default.users",
             backend="iceberg",
@@ -342,12 +305,9 @@ def control_plane_setup(
             actor=ControlPlaneActor.for_platform_admin("test:setup"),
         )
         service.replace_asset_owners(
-            asset_id=UUID(asset["id"]),
-            owners=["user:e2e-owner@example.com"],
-            expected_revision=1,
+            asset_id=UUID(asset["id"]), owners=["user:e2e-owner@example.com"], expected_revision=1
         )
         service.replace_auth_providers(
-            cell_id=cell_id,
             providers=[
                 {
                     "ordinal": 1,
@@ -359,20 +319,15 @@ def control_plane_setup(
                         "issuer": "https://issuer.example",
                         "algorithms": ["RS256"],
                         "jwks_url": oidc_jwks_server["url"],
-                        "attribute_claims": {"tenant_id": "attributes.tenant_id"},
+                        "attribute_claims": {},
                     },
                     "enabled": True,
                 }
-            ],
+            ]
         )
         session.commit()
 
-    return {
-        "database_url": database_url,
-        "cell_id": cell["id"],
-        "tenant_id": tenant["id"],
-        "private_key": oidc_jwks_server["private_key"],
-    }
+    return {"database_url": database_url, "private_key": oidc_jwks_server["private_key"]}
 
 
 def test_e2e_flight_server_with_iceberg(control_plane_setup: dict[str, str]):
@@ -381,7 +336,6 @@ def test_e2e_flight_server_with_iceberg(control_plane_setup: dict[str, str]):
 
     env = dict(os.environ)
     env["DAL_OBSCURA_DATABASE_URL"] = control_plane_setup["database_url"]
-    env["DAL_OBSCURA_CELL_ID"] = control_plane_setup["cell_id"]
     env["DAL_OBSCURA_LOCATION"] = f"grpc://0.0.0.0:{port}"
     env["DAL_OBSCURA_TICKET_SECRET"] = ticket_secret
 
@@ -404,11 +358,7 @@ def test_e2e_flight_server_with_iceberg(control_plane_setup: dict[str, str]):
         ]
 
     process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        env=env,
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
     )
 
     if not wait_for_flight_server(process, port):
@@ -429,7 +379,7 @@ def test_e2e_flight_server_with_iceberg(control_plane_setup: dict[str, str]):
         token = jwt.encode(
             {
                 "sub": "e2e_user",
-                "attributes": {"tenant_id": control_plane_setup["tenant_id"]},
+                "attributes": {},
                 "iss": "https://issuer.example",
                 "exp": int(time.time()) + 900,
             },
@@ -442,9 +392,7 @@ def test_e2e_flight_server_with_iceberg(control_plane_setup: dict[str, str]):
         # Query the data
         descriptor = flight.FlightDescriptor.for_command(
             encode_plan_command(
-                catalog="e2e_catalog",
-                target="default.users",
-                columns=["id", "email", "metadata"],
+                catalog="e2e_catalog", target="default.users", columns=["id", "email", "metadata"]
             )
         )
 
@@ -474,21 +422,16 @@ def test_e2e_flight_server_with_iceberg(control_plane_setup: dict[str, str]):
         assert data[0]["metadata"]["preferences"][0]["name"] == "web"
         assert data[0]["metadata"]["preferences"][0]["theme"] == "dark"
 
-        token_without_tenant = jwt.encode(
-            {
-                "sub": "e2e_user",
-                "iss": "https://issuer.example",
-                "exp": int(time.time()) + 900,
-            },
+        token_without_routing_claims = jwt.encode(
+            {"sub": "e2e_user", "iss": "https://issuer.example", "exp": int(time.time()) + 900},
             control_plane_setup["private_key"],
             algorithm="RS256",
             headers={"kid": "e2e"},
         )
-        missing_tenant_options = flight.FlightCallOptions(
-            headers=[(b"authorization", f"Bearer {token_without_tenant}".encode())]
+        unscoped_options = flight.FlightCallOptions(
+            headers=[(b"authorization", f"Bearer {token_without_routing_claims}".encode())]
         )
-        with pytest.raises(flight.FlightUnauthorizedError):
-            client.get_flight_info(descriptor, options=missing_tenant_options)
+        assert client.get_flight_info(descriptor, options=unscoped_options).endpoints
 
     finally:
         process.terminate()

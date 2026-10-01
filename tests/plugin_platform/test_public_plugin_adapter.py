@@ -72,7 +72,7 @@ def test_catalog_registry_routes_public_manifest_plugin_through_governed_port(
                 ("catalog", "manifest"): (CATALOG_DESCRIPTOR, manifest_factory),
                 ("table_format", "parquet.dataset"): (FORMAT_DESCRIPTOR, parquet_factory),
             },
-        ),
+        )
     )
     registry.reload()
     catalogs = CatalogRegistry(
@@ -581,11 +581,7 @@ def test_public_catalog_adapter_rejects_malformed_continuation(malformed_token) 
             return None
 
     adapter = PublicPluginCatalogAdapter(
-        "fixture",
-        {},
-        "manifest",
-        lambda config, context: Catalog(),
-        lambda plugin_id: object(),
+        "fixture", {}, "manifest", lambda config, context: Catalog(), lambda plugin_id: object()
     )
     with pytest.raises(ValueError, match="continuation token"):
         adapter.list_tables()
@@ -617,11 +613,7 @@ def test_public_catalog_adapter_rejects_oversized_page() -> None:
             return None
 
     adapter = PublicPluginCatalogAdapter(
-        "fixture",
-        {},
-        "manifest",
-        lambda config, context: Catalog(),
-        lambda plugin_id: object(),
+        "fixture", {}, "manifest", lambda config, context: Catalog(), lambda plugin_id: object()
     )
     with pytest.raises(ValueError, match="too many page entries"):
         adapter.list_tables()
@@ -649,9 +641,7 @@ def test_public_format_rejects_factory_descriptor_mismatch() -> None:
             from dal_obscura_plugin_api import SchemaDescriptor
 
             return SchemaDescriptor(
-                schema_version=1,
-                fingerprint="0" * 64,
-                arrow_schema=pa.schema([]),
+                schema_version=1, fingerprint="0" * 64, arrow_schema=pa.schema([])
             )
 
         def plan(self, value, descriptor, context, *, projection, row_filter, max_tasks):
@@ -696,10 +686,7 @@ def test_public_format_rejects_false_stable_id_claim() -> None:
             from dal_obscura_plugin_api import SchemaDescriptor
 
             return SchemaDescriptor(
-                schema_version=1,
-                fingerprint="0" * 64,
-                arrow_schema=schema,
-                stable_ids=True,
+                schema_version=1, fingerprint="0" * 64, arrow_schema=schema, stable_ids=True
             )
 
         def plan(self, value, descriptor, context, *, projection, row_filter, max_tasks):

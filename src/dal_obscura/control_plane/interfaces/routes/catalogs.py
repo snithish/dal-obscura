@@ -8,8 +8,7 @@ Example:
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import ValidationError
+from fastapi import APIRouter, Depends
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
@@ -19,7 +18,6 @@ from dal_obscura.control_plane.interfaces.routes.schemas import (
     CatalogMutationResponse,
     CatalogRequest,
     CatalogTablesResponse,
-    request_payload,
 )
 
 
@@ -73,21 +71,17 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
         response_model=CatalogMutationResponse,
         dependencies=[Depends(deps.require_admin)],
     )
-    async def upsert_workspace_catalog(
+    def upsert_workspace_catalog(
         name: str,
-        request: Request,
+        request: CatalogRequest,
         actor: ControlPlaneActor = Depends(deps.require_admin),  # noqa: B008
     ) -> CatalogMutationResponse:
-        try:
-            payload = CatalogRequest.model_validate(await request_payload(request))
-        except ValidationError as exc:
-            raise HTTPException(status_code=422, detail=exc.errors()) from exc
         return deps.with_service(
             lambda service: service.upsert_workspace_catalog(
                 name=name,
-                plugin_id=payload.plugin_id,
-                options=payload.options,
-                expected_revision=payload.expected_revision,
+                plugin_id=request.plugin_id,
+                options=request.options,
+                expected_revision=request.expected_revision,
                 actor=actor,
             )
         )

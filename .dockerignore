@@ -1,4 +1,9 @@
 .git
+**/.env
+**/.tls
+**/.tls-build-*
+**/secrets
+.cocoindex_code
 .github
 .mypy_cache
 .pytest_cache

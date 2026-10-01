@@ -88,6 +88,6 @@ Recommended order:
 ## Local Reference Runbook
 
 For a complete laptop environment, the repository includes
-[`examples/demo/keycloak`](../examples/demo/keycloak/README.md). Its `./run`
-helper starts Keycloak, Postgres, control plane, data plane, and seeded data.
+[`examples/demo/keycloak`](../examples/demo/keycloak/README.md). Its `./demo`
+helper initializes and starts Keycloak, Postgres, control plane, data plane, and seeded data.
 Use it as a reference or smoke environment, not as the generic operating model.

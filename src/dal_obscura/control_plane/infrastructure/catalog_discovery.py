@@ -226,11 +226,7 @@ def _discover_iceberg_tables(
             ):
                 table_names.add(_identifier_to_name(identifier))
         return [
-            {
-                "backend": "iceberg",
-                "name": table_name,
-                "table_identifier": table_name,
-            }
+            {"backend": "iceberg", "name": table_name, "table_identifier": table_name}
             for table_name in sorted(table_names)
         ]
     finally:

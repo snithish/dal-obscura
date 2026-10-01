@@ -12,7 +12,7 @@ cli = importlib.import_module("dal_obscura.data_plane.interfaces.cli.main")
 def test_data_plane_startup_checks_schema_without_migrating(tmp_path, monkeypatch) -> None:
     database_url = f"sqlite+pysqlite:///{tmp_path / 'config.db'}"
     monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", database_url)
-    monkeypatch.setenv("DAL_OBSCURA_CELL_ID", "00000000-0000-0000-0000-000000000001")
+    monkeypatch.delenv("DAL_OBSCURA_CELL_ID", raising=False)
     monkeypatch.setenv("DAL_OBSCURA_LOCATION", "grpc://127.0.0.1:8815")
     monkeypatch.setenv("DAL_OBSCURA_TICKET_SECRET", "secret")
 

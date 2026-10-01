@@ -20,12 +20,10 @@ from dal_obscura.common.config_store.orm import (
     AuditEventRecord,
     AuthProviderRecord,
     CatalogRecord,
-    CellRecord,
-    CellRuntimeSettingsRecord,
-    CellTenantRecord,
     DataPlaneTicketRecord,
     PolicyRuleRecord,
-    TenantRecord,
+    RuntimeSettingsRecord,
+    WorkspaceRecord,
     utcnow,
 )
 from dal_obscura.common.schema_identity import canonical_provider_field_id
@@ -37,26 +35,12 @@ from dal_obscura.control_plane.infrastructure.request_context import current_req
 
 
 @dataclass(frozen=True)
-class WorkspaceContext:
-    """Internal cell and tenant identifiers for the default workspace.
-
-    Example:
-        ```python
-        context = store.ensure_default_workspace_context()
-        ```
-    """
-
-    cell_id: UUID
-    tenant_id: UUID
-
-
-@dataclass(frozen=True)
 class AssetPage:
     """Cursor-paginated asset listing.
 
     Example:
         ```python
-        page = store.list_assets(cell_id=context.cell_id, tenant_id=context.tenant_id)
+        page = store.list_assets()
         ```
     """
 
@@ -86,141 +70,35 @@ class ConfigStore:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def create_cell(self, *, cell_id: UUID, name: str, region: str) -> None:
-        self._session.add(CellRecord(id=cell_id, name=name, region=region, status="active"))
-        self._session.flush()
+    def get_workspace(self) -> WorkspaceRecord | None:
+        """Return the deployment's singleton configuration record."""
+        return self._session.get(WorkspaceRecord, 1)
 
-    def create_tenant(self, *, tenant_id: UUID, slug: str, display_name: str) -> None:
-        self._session.add(
-            TenantRecord(id=tenant_id, slug=slug, display_name=display_name, status="active")
-        )
-        self._session.flush()
-
-    def get_configuration_revision(self, cell_id: UUID) -> int:
-        cell = self._session.get(CellRecord, cell_id)
-        if cell is None:
-            raise LookupError(f"No cell {cell_id}")
-        return cell.configuration_revision
-
-    def list_tenants(self) -> list[dict[str, str]]:
-        return [
-            {
-                "id": str(record.id),
-                "slug": record.slug,
-                "display_name": record.display_name,
-                "status": record.status,
-            }
-            for record in self._session.scalars(select(TenantRecord).order_by(TenantRecord.slug))
-        ]
-
-    def list_cells(self) -> list[dict[str, str]]:
-        return [
-            {
-                "id": str(record.id),
-                "name": record.name,
-                "region": record.region,
-                "status": record.status,
-            }
-            for record in self._session.scalars(select(CellRecord).order_by(CellRecord.name))
-        ]
-
-    def list_cells_for_tenant(self, tenant_id: UUID) -> list[dict[str, str]]:
-        return [
-            {
-                "id": str(cell.id),
-                "name": cell.name,
-                "region": cell.region,
-                "status": cell.status,
-                "shard_key": assignment.shard_key,
-            }
-            for cell, assignment in self._session.execute(
-                select(CellRecord, CellTenantRecord)
-                .join(CellTenantRecord, CellTenantRecord.cell_id == CellRecord.id)
-                .where(CellTenantRecord.tenant_id == tenant_id)
-                .order_by(CellRecord.name)
-            )
-        ]
-
-    def list_cell_tenant_assignments(self) -> list[dict[str, str]]:
-        return [
-            {
-                "cell_id": str(record.cell_id),
-                "tenant_id": str(record.tenant_id),
-                "shard_key": record.shard_key,
-            }
-            for record in self._session.scalars(
-                select(CellTenantRecord).order_by(
-                    CellTenantRecord.cell_id,
-                    CellTenantRecord.tenant_id,
-                )
-            )
-        ]
-
-    def get_default_workspace_context(self) -> WorkspaceContext | None:
-        row = self._session.execute(
-            select(CellRecord, TenantRecord)
-            .join(CellTenantRecord, CellTenantRecord.cell_id == CellRecord.id)
-            .join(TenantRecord, TenantRecord.id == CellTenantRecord.tenant_id)
-            .order_by(TenantRecord.slug, CellRecord.name)
-            .limit(1)
-        ).first()
-        if row is None:
-            return None
-        cell, tenant = row
-        return WorkspaceContext(cell_id=cell.id, tenant_id=tenant.id)
-
-    def ensure_default_workspace_context(self) -> WorkspaceContext:
-        existing = self.get_default_workspace_context()
-        if existing is not None:
-            return existing
-
-        tenant_id = uuid4()
-        cell_id = uuid4()
-        self._session.add(
-            TenantRecord(
-                id=tenant_id,
-                slug="default",
-                display_name="Default workspace",
-                status="active",
-            )
-        )
-        self._session.add(
-            CellRecord(
-                id=cell_id,
-                name="default",
-                region="local",
-                status="active",
-            )
-        )
-        self._session.flush()
-        self._session.add(
-            CellTenantRecord(cell_id=cell_id, tenant_id=tenant_id, shard_key="default")
-        )
-        self._session.flush()
-        return WorkspaceContext(cell_id=cell_id, tenant_id=tenant_id)
-
-    def assign_tenant_to_cell(self, *, cell_id: UUID, tenant_id: UUID, shard_key: str) -> None:
-        self._session.add(
-            CellTenantRecord(cell_id=cell_id, tenant_id=tenant_id, shard_key=shard_key)
-        )
-        self._session.flush()
-        self._bump_configuration_revision(cell_id)
+    def ensure_workspace(self) -> WorkspaceRecord:
+        """Initialize the deployment configuration if not yet configured."""
+        workspace = self.get_workspace()
+        if workspace is None:
+            workspace = WorkspaceRecord(id=1)
+            self._session.add(workspace)
+            self._session.flush()
+        return workspace
 
     def upsert_runtime_settings(
         self,
         *,
-        cell_id: UUID,
         ticket_ttl_seconds: int,
         max_tickets: int,
         max_ticket_exchanges: int,
         path_rules: list[dict[str, Any]] | None = None,
         expected_revision: int | None = None,
     ) -> None:
-        self.lock_cell_for_update(cell_id)
-        cell = self._session.get(CellRecord, cell_id)
-        if cell is None:
-            raise LookupError(f"No cell {cell_id}")
-        existing = self._session.get(CellRuntimeSettingsRecord, cell_id)
+        self.ensure_workspace()
+        existing = self._session.scalar(
+            select(RuntimeSettingsRecord)
+            .where(RuntimeSettingsRecord.id == 1)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
         if existing is None:
             if expected_revision not in (None, 0):
                 raise ConfigurationConflictError(
@@ -228,13 +106,13 @@ class ConfigStore:
                     f"(expected {expected_revision}, current 0); reread before writing."
                 )
             self._session.add(
-                CellRuntimeSettingsRecord(
-                    cell_id=cell_id,
+                RuntimeSettingsRecord(
                     revision=1,
                     ticket_ttl_seconds=ticket_ttl_seconds,
                     max_tickets=max_tickets,
                     max_ticket_exchanges=max_ticket_exchanges,
                     path_rules_json=[dict(rule) for rule in (path_rules or [])],
+                    id=1,
                 )
             )
         else:
@@ -262,27 +140,20 @@ class ConfigStore:
             if changed:
                 existing.revision += 1
         self._session.flush()
-        self._bump_configuration_revision(cell_id)
 
     def upsert_catalog(
         self,
         *,
-        cell_id: UUID,
-        tenant_id: UUID,
         name: str,
         plugin_id: str,
         options: dict[str, Any],
         expected_revision: int | None = None,
     ) -> UUID:
-        self.lock_cell_for_update(cell_id)
         existing = self._session.scalar(
             select(CatalogRecord)
-            .where(
-                CatalogRecord.cell_id == cell_id,
-                CatalogRecord.tenant_id == tenant_id,
-                CatalogRecord.name == name,
-            )
+            .where(CatalogRecord.name == name)
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         if existing is None:
             if expected_revision not in (None, 0):
@@ -292,14 +163,7 @@ class ConfigStore:
                 )
             catalog_id = uuid4()
             self._session.add(
-                CatalogRecord(
-                    id=catalog_id,
-                    cell_id=cell_id,
-                    tenant_id=tenant_id,
-                    name=name,
-                    plugin_id=plugin_id,
-                    options_json=options,
-                )
+                CatalogRecord(id=catalog_id, name=name, plugin_id=plugin_id, options_json=options)
             )
         else:
             if expected_revision is None:
@@ -318,14 +182,11 @@ class ConfigStore:
                 existing.options_json = options
                 existing.revision += 1
         self._session.flush()
-        self._bump_configuration_revision(cell_id)
         return catalog_id
 
     def upsert_asset(
         self,
         *,
-        cell_id: UUID,
-        tenant_id: UUID,
         catalog: str,
         target: str,
         backend: str,
@@ -333,16 +194,12 @@ class ConfigStore:
         options: dict[str, Any],
         expected_revision: int | None = None,
     ) -> UUID:
-        catalog_record = self._catalog_by_name(cell_id=cell_id, tenant_id=tenant_id, name=catalog)
+        catalog_record = self._catalog_by_name(name=catalog)
         existing = self._session.scalar(
             select(AssetRecord)
-            .where(
-                AssetRecord.cell_id == cell_id,
-                AssetRecord.tenant_id == tenant_id,
-                AssetRecord.catalog_id == catalog_record.id,
-                AssetRecord.target == target,
-            )
+            .where(AssetRecord.catalog_id == catalog_record.id, AssetRecord.target == target)
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         if existing is None:
             _assert_new_asset_revision(expected_revision)
@@ -350,8 +207,6 @@ class ConfigStore:
             self._session.add(
                 AssetRecord(
                     id=asset_id,
-                    cell_id=cell_id,
-                    tenant_id=tenant_id,
                     catalog_id=catalog_record.id,
                     target=target,
                     backend=backend,
@@ -367,7 +222,6 @@ class ConfigStore:
             existing.options_json = options
             existing.revision += 1
         self._session.flush()
-        self._bump_configuration_revision(cell_id)
         return asset_id
 
     def replace_policy_rules(
@@ -411,18 +265,16 @@ class ConfigStore:
         self._session.flush()
         asset.policy_revision += 1
         self._session.flush()
-        self._bump_configuration_revision(asset.cell_id)
         return asset.policy_revision
 
     def revoke_asset_tickets(self, *, asset_id: UUID) -> int:
-        """Revokes every unexpired token issued for an asset in this cell."""
+        """Revokes every unexpired token issued for an asset for this asset."""
 
         asset = self._locked_asset(asset_id)
         if asset is None:
             raise LookupError(f"No asset {asset_id}")
         result = self._session.execute(
             update(DataPlaneTicketRecord)
-            .where(DataPlaneTicketRecord.cell_id == asset.cell_id)
             .where(DataPlaneTicketRecord.revoked_at.is_(None))
             .where(DataPlaneTicketRecord.expires_at >= int(utcnow().timestamp()))
             .where(DataPlaneTicketRecord.asset_id == asset_id)
@@ -450,16 +302,12 @@ class ConfigStore:
         for ordinal, principal in enumerate(normalized, start=1):
             self._session.add(
                 AssetOwnerRecord(
-                    id=uuid4(),
-                    asset_id=asset_id,
-                    ordinal=ordinal,
-                    principal=principal,
+                    id=uuid4(), asset_id=asset_id, ordinal=ordinal, principal=principal
                 )
             )
         self._session.flush()
         asset.revision += 1
         self._session.flush()
-        self._bump_configuration_revision(asset.cell_id)
         return normalized
 
     def replace_asset_schema_fields(
@@ -495,26 +343,20 @@ class ConfigStore:
         self._session.flush()
         asset.revision += 1
         self._session.flush()
-        self._bump_configuration_revision(asset.cell_id)
         return normalized
 
     def replace_auth_providers(
         self,
         *,
-        cell_id: UUID,
         providers: list[dict[str, Any]],
         expected_revision: int | None = None,
     ) -> None:
-        self.lock_cell_for_update(cell_id)
-        cell = self._session.get(CellRecord, cell_id)
-        if cell is None:
-            raise LookupError(f"No cell {cell_id}")
-        existing = list(
-            self._session.scalars(
-                select(AuthProviderRecord).where(AuthProviderRecord.cell_id == cell_id)
-            )
-        )
-        current_revision = cell.auth_provider_revision
+        self.lock_auth_providers_for_update()
+        workspace = self._session.get(WorkspaceRecord, 1)
+        if workspace is None:
+            raise LookupError("Workspace is not configured")
+        existing = list(self._session.scalars(select(AuthProviderRecord)))
+        current_revision = workspace.auth_provider_revision
         if (existing or current_revision > 0) and expected_revision is None:
             raise RevisionPreconditionRequired(
                 "Authentication provider revision is required for updates "
@@ -535,7 +377,6 @@ class ConfigStore:
             self._session.add(
                 AuthProviderRecord(
                     id=uuid4(),
-                    cell_id=cell_id,
                     ordinal=int(raw["ordinal"]),
                     module=str(raw["module"]),
                     args_json=_preserve_redacted_args(
@@ -546,51 +387,32 @@ class ConfigStore:
                 )
             )
         self._session.flush()
-        cell.auth_provider_revision = new_revision
+        workspace.auth_provider_revision = new_revision
         self._session.flush()
-        self._bump_configuration_revision(cell_id)
 
-    def get_auth_provider_revision(self, cell_id: UUID) -> int:
-        cell = self._session.get(CellRecord, cell_id)
-        return 0 if cell is None else cell.auth_provider_revision
+    def get_auth_provider_revision(self) -> int:
+        workspace = self.get_workspace()
+        return 0 if workspace is None else workspace.auth_provider_revision
 
-    def _bump_configuration_revision(self, cell_id: UUID) -> None:
-        result = self._session.execute(
-            update(CellRecord)
-            .where(CellRecord.id == cell_id)
-            .values(
-                configuration_revision=CellRecord.configuration_revision + 1,
-            )
-        )
-        if int(getattr(result, "rowcount", 0) or 0) != 1:
-            raise LookupError(f"No cell {cell_id}")
-
-    def lock_cell_for_update(self, cell_id: UUID) -> None:
-        """Locks the cell row after the asset lock and before pointer mutation."""
-
+    def lock_auth_providers_for_update(self) -> None:
+        """Serialize authentication-provider collection edits, including first creation."""
+        self.ensure_workspace()
         record = self._session.scalar(
-            select(CellRecord).where(CellRecord.id == cell_id).with_for_update()
+            select(WorkspaceRecord)
+            .where(WorkspaceRecord.id == 1)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         if record is None:
-            raise LookupError(f"No cell {cell_id}")
+            raise LookupError("Workspace is not configured")
 
-    def get_cell(self, cell_id: UUID) -> dict[str, str]:
-        record = self._session.get(CellRecord, cell_id)
-        if record is None:
-            raise LookupError(f"No cell {cell_id}")
-        return {
-            "id": str(record.id),
-            "name": record.name,
-            "region": record.region,
-            "status": record.status,
-        }
-
-    def get_runtime_settings(self, cell_id: UUID) -> dict[str, object] | None:
-        record = self._session.get(CellRuntimeSettingsRecord, cell_id)
+    def get_runtime_settings(
+        self,
+    ) -> dict[str, object] | None:
+        record = self._session.get(RuntimeSettingsRecord, 1)
         if record is None:
             return None
         return {
-            "cell_id": str(record.cell_id),
             "ticket_ttl_seconds": record.ticket_ttl_seconds,
             "max_tickets": record.max_tickets,
             "max_ticket_exchanges": record.max_ticket_exchanges,
@@ -598,33 +420,26 @@ class ConfigStore:
             "revision": record.revision,
         }
 
-    def list_catalogs(self, cell_id: UUID) -> list[dict[str, object]]:
+    def list_catalogs(
+        self,
+    ) -> list[dict[str, object]]:
         return [
             {
                 "id": str(record.id),
-                "cell_id": str(record.cell_id),
-                "tenant_id": str(record.tenant_id),
                 "name": record.name,
                 "plugin_id": record.plugin_id,
                 "options": dict(record.options_json),
                 "revision": record.revision,
             }
-            for record in self._session.scalars(
-                select(CatalogRecord)
-                .where(CatalogRecord.cell_id == cell_id)
-                .order_by(CatalogRecord.name)
-            )
+            for record in self._session.scalars(select(CatalogRecord).order_by(CatalogRecord.name))
         ]
 
-    def list_workspace_catalogs(self, context: WorkspaceContext) -> list[dict[str, object]]:
+    def list_workspace_catalogs(
+        self,
+    ) -> list[dict[str, object]]:
         assets_by_catalog: dict[UUID, int] = {}
         for row in self._session.execute(
-            select(AssetRecord.catalog_id, func.count())
-            .where(
-                AssetRecord.cell_id == context.cell_id,
-                AssetRecord.tenant_id == context.tenant_id,
-            )
-            .group_by(AssetRecord.catalog_id)
+            select(AssetRecord.catalog_id, func.count()).group_by(AssetRecord.catalog_id)
         ):
             assets_by_catalog[row[0]] = row[1]
         return [
@@ -638,22 +453,11 @@ class ConfigStore:
                 "discovered_table_count": 0,
                 "governed_asset_count": assets_by_catalog.get(record.id, 0),
             }
-            for record in self._session.scalars(
-                select(CatalogRecord)
-                .where(
-                    CatalogRecord.cell_id == context.cell_id,
-                    CatalogRecord.tenant_id == context.tenant_id,
-                )
-                .order_by(CatalogRecord.name)
-            )
+            for record in self._session.scalars(select(CatalogRecord).order_by(CatalogRecord.name))
         ]
 
-    def get_workspace_catalog(self, context: WorkspaceContext, name: str) -> dict[str, object]:
-        record = self._catalog_by_name(
-            cell_id=context.cell_id,
-            tenant_id=context.tenant_id,
-            name=name,
-        )
+    def get_workspace_catalog(self, name: str) -> dict[str, object]:
+        record = self._catalog_by_name(name=name)
         return {
             "id": str(record.id),
             "name": record.name,
@@ -662,21 +466,17 @@ class ConfigStore:
             "revision": record.revision,
         }
 
-    def list_assets(self, cell_id: UUID) -> list[dict[str, object]]:
-        catalog_records = list(
-            self._session.scalars(select(CatalogRecord).where(CatalogRecord.cell_id == cell_id))
-        )
+    def list_assets(
+        self,
+    ) -> list[dict[str, object]]:
+        catalog_records = list(self._session.scalars(select(CatalogRecord)))
         catalog_by_id = {record.id: record for record in catalog_records}
         assets = []
-        for record in self._session.scalars(
-            select(AssetRecord).where(AssetRecord.cell_id == cell_id).order_by(AssetRecord.target)
-        ):
+        for record in self._session.scalars(select(AssetRecord).order_by(AssetRecord.target)):
             catalog = catalog_by_id[record.catalog_id]
             assets.append(
                 {
                     "id": str(record.id),
-                    "cell_id": str(record.cell_id),
-                    "tenant_id": str(record.tenant_id),
                     "catalog_id": str(record.catalog_id),
                     "catalog": catalog.name,
                     "target": record.target,
@@ -687,22 +487,16 @@ class ConfigStore:
             )
         return assets
 
-    def list_workspace_assets(self, context: WorkspaceContext) -> list[dict[str, object]]:
+    def list_workspace_assets(
+        self,
+    ) -> list[dict[str, object]]:
         records = list(
-            self._session.scalars(
-                select(AssetRecord)
-                .where(
-                    AssetRecord.cell_id == context.cell_id,
-                    AssetRecord.tenant_id == context.tenant_id,
-                )
-                .order_by(AssetRecord.target, AssetRecord.id)
-            )
+            self._session.scalars(select(AssetRecord).order_by(AssetRecord.target, AssetRecord.id))
         )
         return self._workspace_asset_rows(records)
 
     def list_workspace_assets_for_principals(
         self,
-        context: WorkspaceContext,
         principals: set[str],
     ) -> list[dict[str, object]]:
         """Lists only assets owned by one of the supplied actor principals."""
@@ -715,15 +509,13 @@ class ConfigStore:
                 .outerjoin(AssetOwnerRecord, AssetOwnerRecord.asset_id == AssetRecord.id)
                 .outerjoin(AssetGrantRecord, AssetGrantRecord.asset_id == AssetRecord.id)
                 .where(
-                    AssetRecord.cell_id == context.cell_id,
-                    AssetRecord.tenant_id == context.tenant_id,
                     or_(
                         AssetOwnerRecord.principal.in_(principals),
                         and_(
                             AssetGrantRecord.principal.in_(principals),
                             AssetGrantRecord.capability == "read",
                         ),
-                    ),
+                    )
                 )
                 .distinct()
                 .order_by(AssetRecord.target, AssetRecord.id)
@@ -733,7 +525,6 @@ class ConfigStore:
 
     def list_workspace_assets_page(
         self,
-        context: WorkspaceContext,
         *,
         limit: int,
         cursor: str | None = None,
@@ -744,10 +535,7 @@ class ConfigStore:
             raise ValueError("Asset page limit must be positive")
         normalized_search = search.strip() if search else ""
         after = _decode_asset_cursor(cursor, expected_search=normalized_search) if cursor else None
-        query = select(AssetRecord).where(
-            AssetRecord.cell_id == context.cell_id,
-            AssetRecord.tenant_id == context.tenant_id,
-        )
+        query = select(AssetRecord)
         if principals is not None:
             if not principals:
                 return AssetPage(items=[], next_cursor=None)
@@ -805,23 +593,21 @@ class ConfigStore:
         """Serializes live asset mutations for the duration of the transaction."""
 
         record = self._session.scalar(
-            select(AssetRecord).where(AssetRecord.id == asset_id).with_for_update()
+            select(AssetRecord)
+            .where(AssetRecord.id == asset_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         if record is None:
             raise LookupError(f"No asset {asset_id}")
 
     def _locked_asset(self, asset_id: UUID) -> AssetRecord | None:
         return self._session.scalar(
-            select(AssetRecord).where(AssetRecord.id == asset_id).with_for_update()
+            select(AssetRecord)
+            .where(AssetRecord.id == asset_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
-
-    def get_asset_workspace_context(self, asset_id: UUID) -> WorkspaceContext:
-        """Returns the internal workspace scope for one asset."""
-
-        record = self._session.get(AssetRecord, asset_id)
-        if record is None:
-            raise LookupError(f"No asset {asset_id}")
-        return WorkspaceContext(cell_id=record.cell_id, tenant_id=record.tenant_id)
 
     def list_asset_owners(self, asset_id: UUID) -> list[str]:
         return [
@@ -877,10 +663,7 @@ class ConfigStore:
             seen.add(key)
             self._session.add(
                 AssetGrantRecord(
-                    id=uuid4(),
-                    asset_id=asset_id,
-                    principal=principal,
-                    capability=capability,
+                    id=uuid4(), asset_id=asset_id, principal=principal, capability=capability
                 )
             )
             normalized.append({"principal": principal, "capability": capability})
@@ -925,11 +708,12 @@ class ConfigStore:
             )
         ]
 
-    def list_auth_providers(self, cell_id: UUID) -> list[dict[str, object]]:
+    def list_auth_providers(
+        self,
+    ) -> list[dict[str, object]]:
         return [
             {
                 "id": str(record.id),
-                "cell_id": str(record.cell_id),
                 "ordinal": record.ordinal,
                 "module": record.module,
                 "args": dict(record.args_json),
@@ -937,9 +721,7 @@ class ConfigStore:
                 "revision": record.revision,
             }
             for record in self._session.scalars(
-                select(AuthProviderRecord)
-                .where(AuthProviderRecord.cell_id == cell_id)
-                .order_by(AuthProviderRecord.ordinal)
+                select(AuthProviderRecord).order_by(AuthProviderRecord.ordinal)
             )
         ]
 
@@ -961,8 +743,6 @@ class ConfigStore:
         self._session.add(
             AuditEventRecord(
                 id=uuid4(),
-                cell_id=asset.cell_id,
-                tenant_id=asset.tenant_id,
                 actor_principal=actor_principal,
                 action=action,
                 resource_type="asset",
@@ -977,21 +757,17 @@ class ConfigStore:
     def record_workspace_audit_event(
         self,
         *,
-        cell_id: UUID,
-        tenant_id: UUID | None,
         actor_principal: str,
         action: str,
         resource_type: str,
         resource_id: str,
         details: dict[str, object] | None = None,
     ) -> None:
-        """Records a tenant-scoped event for workspace-level operations."""
+        """Records a asset-authorized event for workspace-level operations."""
 
         self._session.add(
             AuditEventRecord(
                 id=uuid4(),
-                cell_id=cell_id,
-                tenant_id=tenant_id,
                 actor_principal=actor_principal,
                 action=action,
                 resource_type=resource_type,
@@ -1005,7 +781,6 @@ class ConfigStore:
 
     def list_audit_events_page(  # noqa: C901
         self,
-        context: WorkspaceContext,
         *,
         asset_id: UUID | None = None,
         principals: set[str] | None = None,
@@ -1019,14 +794,11 @@ class ConfigStore:
         limit: int = 100,
         cursor: str | None = None,
     ) -> AuditEventPage:
-        """Returns a bounded, tenant-scoped audit page using stable keyset order."""
+        """Returns a bounded, asset-authorized audit page using stable keyset order."""
 
         if limit <= 0:
             raise ValueError("Audit page limit must be positive")
-        query = select(AuditEventRecord).where(
-            AuditEventRecord.cell_id == context.cell_id,
-            AuditEventRecord.tenant_id == context.tenant_id,
-        )
+        query = select(AuditEventRecord)
         if asset_id is not None:
             query = query.where(
                 AuditEventRecord.resource_type == "asset",
@@ -1051,8 +823,6 @@ class ConfigStore:
                 return AuditEventPage(items=[], next_cursor=None)
             visible_asset = exists(
                 select(1).where(
-                    AssetRecord.cell_id == context.cell_id,
-                    AssetRecord.tenant_id == context.tenant_id,
                     func.replace(sql_cast(AssetRecord.id, String), "-", "")
                     == func.replace(AuditEventRecord.resource_id, "-", ""),
                     or_(
@@ -1072,19 +842,13 @@ class ConfigStore:
                     ),
                 )
             )
-            query = query.where(
-                AuditEventRecord.resource_type == "asset",
-                visible_asset,
-            )
+            query = query.where(AuditEventRecord.resource_type == "asset", visible_asset)
         if cursor:
             created_at, event_id = _decode_audit_cursor(cursor)
             query = query.where(
                 or_(
                     AuditEventRecord.created_at < created_at,
-                    and_(
-                        AuditEventRecord.created_at == created_at,
-                        AuditEventRecord.id < event_id,
-                    ),
+                    and_(AuditEventRecord.created_at == created_at, AuditEventRecord.id < event_id),
                 )
             )
         records = list(
@@ -1117,34 +881,30 @@ class ConfigStore:
             next_cursor=next_cursor,
         )
 
-    def get_workspace_summary(self, context: WorkspaceContext | None) -> dict[str, object]:
-        if context is None:
+    def get_workspace_summary(
+        self,
+    ) -> dict[str, object]:
+        if self.get_workspace() is None:
             return _empty_workspace_summary()
-        catalogs = self.list_workspace_catalogs(context)
-        assets = self.list_workspace_assets(context)
+        catalogs = self.list_workspace_catalogs()
+        assets = self.list_workspace_assets()
         missing_policy_count = sum(1 for asset in assets if asset["policy_status"] == "missing")
         enabled_auth_provider_count = sum(
-            1 for provider in self.list_auth_providers(context.cell_id) if provider["enabled"]
+            1 for provider in self.list_auth_providers() if provider["enabled"]
         )
         return {
             "catalog_count": len(catalogs),
             "asset_count": len(assets),
             "unowned_asset_count": sum(1 for asset in assets if asset["owner_count"] == 0),
             "missing_policy_count": missing_policy_count,
-            "runtime_configured": self.get_runtime_settings(context.cell_id) is not None,
+            "runtime_configured": self.get_runtime_settings() is not None,
             "enabled_auth_provider_count": enabled_auth_provider_count,
         }
 
-    def _catalog_by_name(self, *, cell_id: UUID, tenant_id: UUID, name: str) -> CatalogRecord:
-        catalog = self._session.scalar(
-            select(CatalogRecord).where(
-                CatalogRecord.cell_id == cell_id,
-                CatalogRecord.tenant_id == tenant_id,
-                CatalogRecord.name == name,
-            )
-        )
+    def _catalog_by_name(self, *, name: str) -> CatalogRecord:
+        catalog = self._session.scalar(select(CatalogRecord).where(CatalogRecord.name == name))
         if catalog is None:
-            raise LookupError(f"No catalog {name!r} for tenant {tenant_id}")
+            raise LookupError(f"No catalog {name!r}")
         return catalog
 
     def _workspace_asset_row(
@@ -1233,8 +993,7 @@ def _assert_new_asset_revision(expected_revision: int | None) -> None:
 
 def _encode_asset_cursor(record: AssetRecord, *, search: str = "") -> str:
     raw = json.dumps(
-        {"target": record.target, "id": str(record.id), "search": search},
-        separators=(",", ":"),
+        {"target": record.target, "id": str(record.id), "search": search}, separators=(",", ":")
     )
     return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
 
@@ -1253,8 +1012,7 @@ def _decode_asset_cursor(value: str, *, expected_search: str = "") -> tuple[str,
 
 def _encode_audit_cursor(created_at: datetime, event_id: UUID) -> str:
     raw = json.dumps(
-        {"created_at": _isoformat(created_at), "id": str(event_id)},
-        separators=(",", ":"),
+        {"created_at": _isoformat(created_at), "id": str(event_id)}, separators=(",", ":")
     )
     return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
 
@@ -1323,8 +1081,7 @@ def _preserve_redacted_args(
         elif isinstance(value, list) and isinstance(old, list):
             result[key] = [
                 _preserve_redacted_args(
-                    cast(Mapping[str, object], item),
-                    cast(Mapping[str, object], old[index]),
+                    cast(Mapping[str, object], item), cast(Mapping[str, object], old[index])
                 )
                 if isinstance(item, Mapping)
                 and index < len(old)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, cast
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from dal_obscura_plugin_api import PluginKind
 from sqlalchemy.orm import Session
@@ -40,36 +40,6 @@ class ProvisioningService:
         self._plugin_registry = plugin_registry
         self._secret_provider = secret_provider
 
-    def create_tenant(self, slug: str, display_name: str) -> dict[str, str]:
-        tenant_id = uuid4()
-        self._store.create_tenant(tenant_id=tenant_id, slug=slug, display_name=display_name)
-        return {"id": str(tenant_id), "slug": slug, "display_name": display_name}
-
-    def create_cell(self, name: str, region: str) -> dict[str, str]:
-        cell_id = uuid4()
-        self._store.create_cell(cell_id=cell_id, name=name, region=region)
-        return {"id": str(cell_id), "name": name, "region": region}
-
-    def create_cell_for_tenant(
-        self,
-        tenant_id: UUID,
-        name: str,
-        region: str,
-        shard_key: str,
-    ) -> dict[str, str]:
-        cell = self.create_cell(name=name, region=region)
-        self.assign_tenant(UUID(cell["id"]), tenant_id, shard_key)
-        return cell
-
-    def list_tenants(self) -> list[dict[str, str]]:
-        return self._store.list_tenants()
-
-    def list_cells(self) -> list[dict[str, str]]:
-        return self._store.list_cells()
-
-    def list_cells_for_tenant(self, tenant_id: UUID) -> list[dict[str, str]]:
-        return self._store.list_cells_for_tenant(tenant_id)
-
     def set_plugin_lifecycle(
         self,
         *,
@@ -92,10 +62,8 @@ class ProvisioningService:
             )
         except ValueError as exc:
             raise ValidationFailure(str(exc)) from exc
-        context = self._store.ensure_default_workspace_context()
+        self._store.ensure_workspace()
         self._store.record_workspace_audit_event(
-            cell_id=context.cell_id,
-            tenant_id=context.tenant_id,
             actor_principal=actor.identity_key(),
             action="plugin.lifecycle.update",
             resource_type="plugin",
@@ -104,17 +72,20 @@ class ProvisioningService:
         )
         return {"kind": kind, "plugin_id": plugin_id, "lifecycle": lifecycle.value}
 
-    def list_cell_tenant_assignments(self) -> list[dict[str, str]]:
-        return self._store.list_cell_tenant_assignments()
+    def get_runtime_settings(
+        self,
+    ) -> dict[str, object] | None:
+        return self._store.get_runtime_settings()
 
-    def get_runtime_settings(self, cell_id: UUID) -> dict[str, object] | None:
-        return self._store.get_runtime_settings(cell_id)
+    def list_catalogs(
+        self,
+    ) -> list[dict[str, object]]:
+        return self._store.list_catalogs()
 
-    def list_catalogs(self, cell_id: UUID) -> list[dict[str, object]]:
-        return self._store.list_catalogs(cell_id)
-
-    def list_assets(self, cell_id: UUID) -> list[dict[str, object]]:
-        return self._store.list_assets(cell_id)
+    def list_assets(
+        self,
+    ) -> list[dict[str, object]]:
+        return self._store.list_assets()
 
     def list_policy_rules(
         self,
@@ -124,8 +95,10 @@ class ProvisioningService:
     ) -> list[dict[str, object]]:
         return policy_service.list_policy_rules(self._store, asset_id, actor=actor)
 
-    def list_auth_providers(self, cell_id: UUID) -> list[dict[str, object]]:
-        return self._store.list_auth_providers(cell_id)
+    def list_auth_providers(
+        self,
+    ) -> list[dict[str, object]]:
+        return self._store.list_auth_providers()
 
     def get_workspace_summary(
         self,
@@ -225,11 +198,7 @@ class ProvisioningService:
         search: str | None = None,
     ) -> dict[str, object]:
         return asset_service.list_workspace_assets_page(
-            self._store,
-            actor,
-            limit=limit,
-            cursor=cursor,
-            search=search,
+            self._store, actor, limit=limit, cursor=cursor, search=search
         )
 
     def get_workspace_asset(
@@ -260,22 +229,13 @@ class ProvisioningService:
             secret_provider=self._secret_provider,
         )
 
-    def assign_tenant(self, cell_id: UUID, tenant_id: UUID, shard_key: str) -> None:
-        self._store.assign_tenant_to_cell(
-            cell_id=cell_id,
-            tenant_id=tenant_id,
-            shard_key=shard_key,
-        )
-
     def upsert_runtime_settings(
         self,
-        cell_id: UUID,
         ttl: int,
         max_tickets: int,
         max_ticket_exchanges: int,
     ) -> None:
         self._store.upsert_runtime_settings(
-            cell_id=cell_id,
             ticket_ttl_seconds=ttl,
             max_tickets=max_tickets,
             max_ticket_exchanges=max_ticket_exchanges,
@@ -302,19 +262,11 @@ class ProvisioningService:
 
     def upsert_catalog(
         self,
-        cell_id: UUID,
-        tenant_id: UUID,
         name: str,
         plugin_id: str,
         options: dict[str, Any],
     ) -> dict[str, str]:
-        catalog_id = self._store.upsert_catalog(
-            cell_id=cell_id,
-            tenant_id=tenant_id,
-            name=name,
-            plugin_id=plugin_id,
-            options=options,
-        )
+        catalog_id = self._store.upsert_catalog(name=name, plugin_id=plugin_id, options=options)
         return {"id": str(catalog_id), "name": name}
 
     def upsert_workspace_catalog(
@@ -338,8 +290,6 @@ class ProvisioningService:
 
     def upsert_asset(
         self,
-        cell_id: UUID,
-        tenant_id: UUID,
         catalog: str,
         target: str,
         backend: str,
@@ -347,8 +297,6 @@ class ProvisioningService:
         options: dict[str, Any],
     ) -> dict[str, str]:
         asset_id = self._store.upsert_asset(
-            cell_id=cell_id,
-            tenant_id=tenant_id,
             catalog=catalog,
             target=target,
             backend=backend,
@@ -411,11 +359,7 @@ class ProvisioningService:
         actor: ControlPlaneActor | None = None,
     ) -> list[str]:
         return asset_service.replace_asset_owners(
-            self._store,
-            asset_id,
-            owners,
-            expected_revision=expected_revision,
-            actor=actor,
+            self._store, asset_id, owners, expected_revision=expected_revision, actor=actor
         )
 
     def list_asset_grants(self, asset_id: UUID) -> list[dict[str, str]]:
@@ -424,7 +368,7 @@ class ProvisioningService:
     def lock_asset_for_update(self, asset_id: UUID) -> None:
         """Locks an asset before authorization that participates in a mutation.
 
-        Grant-manager authorization must observe the same asset generation that
+        Grant-manager authorization must observe the same asset revision that
         the subsequent replacement writes.  Exposing the repository lock through
         the application service keeps that ordering out of the route adapter.
         """
@@ -439,11 +383,7 @@ class ProvisioningService:
         actor: ControlPlaneActor | None = None,
     ) -> list[dict[str, str]]:
         return asset_service.replace_asset_grants(
-            self._store,
-            asset_id,
-            grants,
-            expected_revision=expected_revision,
-            actor=actor,
+            self._store, asset_id, grants, expected_revision=expected_revision, actor=actor
         )
 
     def ensure_asset_capability(
@@ -461,10 +401,7 @@ class ProvisioningService:
         expected_revision: int | None = None,
     ) -> list[dict[str, object]]:
         return asset_service.replace_asset_schema_fields(
-            self._store,
-            asset_id,
-            fields,
-            expected_revision=expected_revision,
+            self._store, asset_id, fields, expected_revision=expected_revision
         )
 
     def preview_asset_policy(
@@ -510,8 +447,8 @@ class ProvisioningService:
             secret_provider=self._secret_provider,
         )
 
-    def replace_auth_providers(self, cell_id: UUID, providers: list[dict[str, Any]]) -> None:
-        self._store.replace_auth_providers(cell_id=cell_id, providers=providers)
+    def replace_auth_providers(self, providers: list[dict[str, Any]]) -> None:
+        self._store.replace_auth_providers(providers=providers)
 
     def replace_workspace_auth_providers(
         self,
@@ -529,8 +466,8 @@ class ProvisioningService:
     def workspace_auth_provider_revision(self) -> int:
         return workspace_service.workspace_auth_provider_revision(self._store)
 
-    def _required_workspace_context(self):
-        return workspace_service.required_workspace_context(self._store)
+    def _required_workspace(self):
+        return workspace_service.required_workspace(self._store)
 
     def _ensure_policy_editor(self, asset_id: UUID, actor: ControlPlaneActor) -> None:
         policy_service.ensure_policy_editor(self._store, asset_id, actor)

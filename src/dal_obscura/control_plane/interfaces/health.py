@@ -8,14 +8,24 @@ Example:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
 from dal_obscura.control_plane.infrastructure.request_context import current_request_id
+from dal_obscura.control_plane.interfaces.routes.schemas import ApiError
+
+
+class ReadinessResponse(BaseModel):
+    """Probe state with optional correlated failure evidence."""
+
+    status: Literal["ready", "not_ready"]
+    checks: dict[str, str]
+    error: ApiError | None = None
 
 
 def install_health_routes(app: FastAPI, session_maker: sessionmaker[Session]) -> None:
@@ -31,7 +41,12 @@ def install_health_routes(app: FastAPI, session_maker: sessionmaker[Session]) ->
     def healthz() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.get("/readyz", response_model=None)
+    @app.get(
+        "/readyz",
+        response_model=ReadinessResponse,
+        response_model_exclude_none=True,
+        responses={503: {"model": ReadinessResponse}},
+    )
     def readyz() -> dict[str, Any] | JSONResponse:
         try:
             with session_maker() as session:

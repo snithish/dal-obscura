@@ -30,8 +30,7 @@ from dal_obscura.common.query_planning.field_paths import (
 from dal_obscura.common.query_planning.models import ExecutionProjection, PlanRequest
 from dal_obscura.common.ticket_delivery.models import TicketPayload, canonical_context_digest
 from dal_obscura.data_plane.application.access_flow import AccessFlow
-from dal_obscura.data_plane.application.ports.authorization import AuthorizationPort
-from dal_obscura.data_plane.application.ports.catalog import CatalogRegistryPort
+from dal_obscura.data_plane.application.ports.access_context import AccessContextPort
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest, IdentityPort
 from dal_obscura.data_plane.application.ports.masking import MaskingPort
 from dal_obscura.data_plane.application.ports.row_transform import RowTransformPort
@@ -65,8 +64,7 @@ class PlanAccessUseCase:
     def __init__(
         self,
         identity: IdentityPort,
-        authorizer: AuthorizationPort,
-        catalog_registry: CatalogRegistryPort,
+        access_context: AccessContextPort,
         masking: MaskingPort,
         ticket_codec: TicketCodecPort,
         ticket_store: TicketStorePort,
@@ -82,8 +80,7 @@ class PlanAccessUseCase:
     ) -> None:
         self._flow = access_flow or AccessFlow(
             identity=identity,
-            authorizer=authorizer,
-            catalog_registry=catalog_registry,
+            access_context=access_context,
             masking=masking,
             row_transform=row_transform,
             ticket_codec=ticket_codec,
@@ -120,114 +117,113 @@ def plan_read(
     """
 
     principal = flow.identity.authenticate(auth_request)
-    tenant_id = _tenant_id(principal)
 
-    # Phase 1: Discovery via Catalog
-    table_format = flow.catalog_registry.describe(
-        request.catalog,
-        request.target,
-        tenant_id=tenant_id,
-    )
-    base_schema = table_format.get_schema()
+    if flow.access_context is None:
+        raise RuntimeError("Planning requires an access context provider")
+    with flow.access_context.open(request.catalog, request.target) as context:
+        # Phase 1: Discovery via Catalog
+        table_format = context.table_format
+        base_schema = table_format.get_schema()
 
-    requested_columns = _with_required_map_keys(
-        base_schema,
-        _expand_to_leaves(base_schema, _expand_requested_columns(base_schema, request.columns)),
-    )
-    requested_row_filter = _validate_requested_row_filter(base_schema, request.row_filter)
-    requested_filter_dependencies = _extract_filter_dependencies(requested_row_filter)
+        requested_columns = _with_required_map_keys(
+            base_schema,
+            _expand_to_leaves(base_schema, _expand_requested_columns(base_schema, request.columns)),
+        )
+        requested_row_filter = _validate_requested_row_filter(base_schema, request.row_filter)
+        requested_filter_dependencies = _extract_filter_dependencies(requested_row_filter)
 
-    authorization_columns = _build_authorization_columns(requested_columns, requested_row_filter)
-    decision = flow.authorizer.authorize(
-        principal=principal,
-        target=request.target,
-        catalog=request.catalog,
-        requested_columns=authorization_columns,
-    )
-    asset_id = decision.asset_id
-    if asset_id is None:
-        raise PermissionError("Authorization did not resolve a governed asset identity")
+        authorization_columns = _build_authorization_columns(
+            requested_columns, requested_row_filter
+        )
+        decision = context.authorizer.authorize(
+            principal=principal,
+            target=request.target,
+            catalog=request.catalog,
+            requested_columns=authorization_columns,
+        )
+        asset_id = decision.asset_id
+        if asset_id is None:
+            raise PermissionError("Authorization did not resolve a governed asset identity")
 
-    visible_columns = _visible_columns(
-        requested_columns, decision, wildcard_requested=request.columns == ["*"]
-    )
-    _authorize_requested_row_filter(requested_row_filter, decision)
+        visible_columns = _visible_columns(
+            requested_columns, decision, wildcard_requested=request.columns == ["*"]
+        )
+        _authorize_requested_row_filter(requested_row_filter, decision)
 
-    policy_row_filter = _validate_policy_row_filter(base_schema, decision.row_filter)
-    effective_row_filter = combine_row_filters(policy_row_filter, requested_row_filter)
-    execution_projection = _build_execution_projection(visible_columns, effective_row_filter)
-    execution_request = PlanRequest(
-        catalog=request.catalog,
-        target=request.target,
-        columns=execution_projection.execution_columns,
-        row_filter=effective_row_filter,
-    )
-    plan = table_format.plan(execution_request, flow.max_tickets)
-    if not plan.schema.equals(base_schema, check_metadata=True) or any(
-        not task.schema.equals(base_schema, check_metadata=True) for task in plan.tasks
-    ):
-        raise ValueError("Backend schema changed after authorization")
-
-    now = flow.now()
-    flow.ticket_store.cleanup_expired_and_exhausted(now=now)
-    payloads: list[TicketPayload] = []
-    for task in plan.tasks:
-        # Each ticket carries enough context to re-validate authz later without
-        # trusting the client to resubmit the original plan request faithfully.
-        import pickle
-
-        serialized_task = pickle.dumps(task)
-        if len(serialized_task) > flow.max_ticket_payload_bytes:
-            raise ValueError("Planned scan payload exceeds configured ticket byte limit")
-        payload = TicketPayload(
-            ticket_id=flow.ticket_id_factory(),
+        policy_row_filter = _validate_policy_row_filter(base_schema, decision.row_filter)
+        effective_row_filter = combine_row_filters(policy_row_filter, requested_row_filter)
+        execution_projection = _build_execution_projection(visible_columns, effective_row_filter)
+        execution_request = PlanRequest(
             catalog=request.catalog,
             target=request.target,
-            columns=execution_projection.visible_columns,
-            scan={
-                "read_payload": base64.b64encode(serialized_task).decode("utf-8"),
-                "full_row_filter": None
-                if effective_row_filter is None
-                else serialize_row_filter(effective_row_filter),
-                "masks": {
-                    key: {"type": value.type, "value": value.value}
-                    for key, value in decision.masks.items()
-                },
-                "authorization_columns": authorization_columns,
-            },
-            policy_version=decision.policy_version,
-            principal_id=principal.id,
-            expires_at=_ticket_expiry(principal.expires_at, now, flow.ticket_ttl_seconds),
-            nonce=flow.nonce_factory(),
-            tenant_id=tenant_id,
-            issuer=principal.issuer,
-            identity_context=_identity_context_digest(principal, tenant_id),
-            decision_digest=_decision_digest(decision),
-            asset_id=asset_id,
+            columns=execution_projection.execution_columns,
+            row_filter=effective_row_filter,
         )
-        payloads.append(payload)
-    flow.ticket_store.store_many(payloads, max_exchanges=flow.max_ticket_exchanges)
-    ticket_tokens = [flow.ticket_codec.sign_payload(payload) for payload in payloads]
+        plan = table_format.plan(execution_request, flow.max_tickets)
+        if not plan.schema.equals(base_schema, check_metadata=True) or any(
+            not task.schema.equals(base_schema, check_metadata=True) for task in plan.tasks
+        ):
+            raise ValueError("Backend schema changed after authorization")
 
-    output_schema = flow.masking.masked_schema(
-        base_schema, execution_projection.visible_columns, decision.masks
-    )
-    return PlanAccessResult(
-        output_schema=output_schema,
-        ticket_tokens=ticket_tokens,
-        target=request.target,
-        columns=execution_projection.visible_columns,
-        principal_id=principal.id,
-        policy_version=decision.policy_version,
-        catalog=request.catalog,
-        requested_row_filter_present=requested_row_filter is not None,
-        requested_row_filter_dependency_count=len(requested_filter_dependencies),
-        full_row_filter_present=effective_row_filter is not None,
-        backend_pushdown_row_filter_present=plan.backend_pushdown_row_filter is not None,
-        residual_row_filter_present=plan.residual_row_filter is not None,
-        visible_column_count=len(execution_projection.visible_columns),
-        execution_column_count=len(execution_projection.execution_columns),
-    )
+        now = flow.now()
+        flow.ticket_store.cleanup_expired(now=now)
+        payloads: list[TicketPayload] = []
+        for task in plan.tasks:
+            # Each ticket carries enough context to re-validate authz later without
+            # trusting the client to resubmit the original plan request faithfully.
+            import pickle
+
+            serialized_task = pickle.dumps(task)
+            if len(serialized_task) > flow.max_ticket_payload_bytes:
+                raise ValueError("Planned scan payload exceeds configured ticket byte limit")
+            payload = TicketPayload(
+                ticket_id=flow.ticket_id_factory(),
+                catalog=request.catalog,
+                target=request.target,
+                columns=execution_projection.visible_columns,
+                scan={
+                    "read_payload": base64.b64encode(serialized_task).decode("utf-8"),
+                    "full_row_filter": None
+                    if effective_row_filter is None
+                    else serialize_row_filter(effective_row_filter),
+                    "masks": {
+                        key: {"type": value.type, "value": value.value}
+                        for key, value in decision.masks.items()
+                    },
+                    "authorization_columns": authorization_columns,
+                },
+                policy_version=decision.policy_version,
+                principal_id=principal.id,
+                expires_at=_ticket_expiry(principal.expires_at, now, flow.ticket_ttl_seconds),
+                nonce=flow.nonce_factory(),
+                issuer=principal.issuer,
+                identity_context=_identity_context_digest(principal),
+                decision_digest=_decision_digest(decision),
+                asset_id=asset_id,
+            )
+            payloads.append(payload)
+        flow.ticket_store.store_many(payloads, max_exchanges=flow.max_ticket_exchanges)
+        ticket_tokens = [flow.ticket_codec.sign_payload(payload) for payload in payloads]
+
+        output_schema = flow.masking.masked_schema(
+            base_schema, execution_projection.visible_columns, decision.masks
+        )
+        return PlanAccessResult(
+            output_schema=output_schema,
+            ticket_tokens=ticket_tokens,
+            target=request.target,
+            columns=execution_projection.visible_columns,
+            principal_id=principal.id,
+            policy_version=decision.policy_version,
+            catalog=request.catalog,
+            requested_row_filter_present=requested_row_filter is not None,
+            requested_row_filter_dependency_count=len(requested_filter_dependencies),
+            full_row_filter_present=effective_row_filter is not None,
+            backend_pushdown_row_filter_present=plan.backend_pushdown_row_filter is not None,
+            residual_row_filter_present=plan.residual_row_filter is not None,
+            visible_column_count=len(execution_projection.visible_columns),
+            execution_column_count=len(execution_projection.execution_columns),
+        )
 
 
 def _ticket_expiry(identity_expiry: int | None, now: int, ttl_seconds: int) -> int:
@@ -240,13 +236,14 @@ def _ticket_expiry(identity_expiry: int | None, now: int, ttl_seconds: int) -> i
     return min(configured_expiry, identity_expiry)
 
 
-def _identity_context_digest(principal: Principal, tenant_id: str) -> str:
+def _identity_context_digest(
+    principal: Principal,
+) -> str:
     """Returns stable ticket-bound identity context without carrying raw claims."""
     return canonical_context_digest(
         {
             "issuer": principal.issuer,
             "subject": principal.id,
-            "tenant_id": tenant_id,
             "groups": sorted(set(principal.groups)),
             "attributes": dict(sorted(principal.attributes.items())),
         }
@@ -439,12 +436,6 @@ def _validate_requested_row_filter(
 
 def _epoch_seconds() -> int:
     return int(time.time())
-
-
-def _tenant_id(principal) -> str:
-    return str(
-        principal.attributes.get("tenant_id") or principal.attributes.get("tenant") or "default"
-    )
 
 
 def _nonce() -> str:

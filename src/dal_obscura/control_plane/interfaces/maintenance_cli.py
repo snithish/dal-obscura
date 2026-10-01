@@ -14,7 +14,6 @@ import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import cast
-from uuid import UUID
 
 from sqlalchemy import delete, update
 from sqlalchemy.engine import CursorResult
@@ -40,8 +39,6 @@ class InvalidationCounts:
 
 def invalidate_access(
     session_maker: sessionmaker[Session],
-    *,
-    cell_id: UUID | None = None,
 ) -> InvalidationCounts:
     """Revokes browser credentials and removes replayable access artifacts."""
 
@@ -62,14 +59,10 @@ def invalidate_access(
             cast(CursorResult, session.execute(delete(LoginTransactionRecord))).rowcount or 0
         )
         ticket_delete = delete(DataPlaneTicketRecord)
-        if cell_id is not None:
-            ticket_delete = ticket_delete.where(DataPlaneTicketRecord.cell_id == cell_id)
         ticket_count = cast(CursorResult, session.execute(ticket_delete)).rowcount or 0
         session.commit()
     return InvalidationCounts(
-        sessions=int(session_count),
-        login_transactions=int(login_count),
-        tickets=int(ticket_count),
+        sessions=int(session_count), login_transactions=int(login_count), tickets=int(ticket_count)
     )
 
 
@@ -85,17 +78,10 @@ def run(
     values = os.environ if environment is None else environment
     database_url = args.database_url or values.get("DAL_OBSCURA_DATABASE_URL", "").strip()
     if not database_url:
-        print(
-            "DAL_OBSCURA_DATABASE_URL is required unless --database-url is set",
-            file=sys.stderr,
-        )
+        print("DAL_OBSCURA_DATABASE_URL is required unless --database-url is set", file=sys.stderr)
         return 2
     try:
-        cell_id = UUID(args.cell_id) if args.cell_id else None
-        counts = invalidate_access(
-            session_factory(create_engine_from_url(database_url)),
-            cell_id=cell_id,
-        )
+        counts = invalidate_access(session_factory(create_engine_from_url(database_url)))
     except (ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
@@ -112,12 +98,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="dal-obscura-maintenance")
     subparsers = parser.add_subparsers(dest="command", required=True)
     invalidate = subparsers.add_parser(
-        "invalidate-access",
-        help="revoke sessions and remove replayable login/ticket artifacts",
+        "invalidate-access", help="revoke sessions and remove replayable login/ticket artifacts"
     )
     invalidate.add_argument("--database-url", help="SQLAlchemy database URL")
-    invalidate.add_argument(
-        "--cell-id",
-        help="only delete Flight tickets for this cell (sessions remain global)",
-    )
     return parser

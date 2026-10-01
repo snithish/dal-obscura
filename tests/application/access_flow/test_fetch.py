@@ -7,6 +7,7 @@ from dal_obscura.common.access_control.filters import deserialize_row_filter
 from dal_obscura.common.access_control.models import AccessDecision, Principal
 from dal_obscura.common.query_planning.models import PlanRequest
 from dal_obscura.common.ticket_delivery.models import TicketPayload
+from dal_obscura.data_plane.application.ports.access_context import StaticAccessContext
 from dal_obscura.data_plane.application.use_cases.fetch_stream import FetchStreamUseCase
 from dal_obscura.data_plane.application.use_cases.plan_access import PlanAccessUseCase
 from dal_obscura.data_plane.infrastructure.adapters.duckdb_transform import (
@@ -22,7 +23,6 @@ from tests.application.access_flow.helpers import (
 )
 from tests.support.flight import InMemoryPolicyAuthorizer
 from tests.support.use_cases import (
-    FakeAuthorizer,
     FakeCatalogRegistry,
     FakeIdentity,
     FakeMasking,
@@ -70,8 +70,9 @@ def test_exempt_reader_keeps_rule_row_filter_through_plan_and_fetch():
     identity = FakeIdentity(principal=principal)
     plan_access = PlanAccessUseCase(
         identity=identity,
-        authorizer=authorizer,
-        catalog_registry=FakeCatalogRegistry(table_format),
+        access_context=StaticAccessContext(
+            authorizer=authorizer, catalog_registry=FakeCatalogRegistry(table_format)
+        ),
         masking=masking,
         ticket_codec=ticket_codec,
         ticket_store=ticket_store,
@@ -81,7 +82,6 @@ def test_exempt_reader_keeps_rule_row_filter_through_plan_and_fetch():
     )
     fetch_stream = FetchStreamUseCase(
         identity=identity,
-        authorizer=authorizer,
         masking=masking,
         row_transform=DuckDBRowTransformAdapter(masking),
         ticket_codec=ticket_codec,
@@ -94,53 +94,6 @@ def test_exempt_reader_keeps_rule_row_filter_through_plan_and_fetch():
     output = pa.Table.from_batches(list(result.result_batches), schema=result.output_schema)
     assert output.schema.names == ["email"]
     assert output.column("email").to_pylist() == ["alice@example.com"]
-
-
-def test_fetch_stream_does_not_recheck_policy_version():
-    schema, _, table_format = _build_use_case_dependencies()
-    payload = TicketPayload(
-        asset_id="00000000-0000-4000-8000-000000000001",
-        ticket_id="00000000-0000-0000-0000-000000000001",
-        catalog="analytics",
-        target="default.users",
-        tenant_id="tenant-a",
-        columns=["id"],
-        scan={
-            "authorization_columns": ["id", "region"],
-            "read_payload": encode_scan_task(table_format, schema),
-            "full_row_filter": None,
-            "masks": {},
-        },
-        policy_version=100,
-        principal_id="user1",
-        expires_at=9999999999,
-        nonce="nonce",
-    )
-    authorizer = FakeAuthorizer(
-        decision=AccessDecision(
-            allowed_columns=["id"],
-            masks={},
-            row_filter=None,
-            policy_version=100,
-        ),
-        current_version=100,
-    )
-    ticket_store = _ticket_store_with(payload)
-    use_case = FetchStreamUseCase(
-        identity=FakeIdentity(
-            principal=Principal(id="user1", groups=[], attributes={"tenant_id": "tenant-a"})
-        ),
-        authorizer=authorizer,
-        masking=FakeMasking(),
-        row_transform=FakeRowTransform(),
-        ticket_codec=FakeTicketCodec(payload),
-        ticket_store=ticket_store,
-    )
-
-    result = use_case.execute("ticket", AUTHORIZATION_HEADER)
-
-    assert result.target == "default.users"
-    assert authorizer.last_current_version_tenant_id is None
 
 
 def test_fetch_stream_reapplies_fully_pushed_row_filter_after_backend_execution():
@@ -164,10 +117,7 @@ def test_fetch_stream_reapplies_fully_pushed_row_filter_after_backend_execution(
         residual_sql=None,
     )
     decision = AccessDecision(
-        allowed_columns=["id", "region"],
-        masks={},
-        row_filter=None,
-        policy_version=100,
+        allowed_columns=["id", "region"], masks={}, row_filter=None, policy_version=100
     )
     plan_access, fetch_stream = _build_end_to_end_access_flow(table_format, decision)
 
@@ -243,7 +193,7 @@ def test_fetch_stream_reapplies_full_policy_and_requested_filter_after_partial_p
 
 
 def test_fetch_stream_principal_mismatch():
-    schema, decision, table_format = _build_use_case_dependencies()
+    schema, _decision, table_format = _build_use_case_dependencies()
     payload = TicketPayload(
         asset_id="00000000-0000-4000-8000-000000000001",
         ticket_id="00000000-0000-0000-0000-000000000001",
@@ -264,7 +214,6 @@ def test_fetch_stream_principal_mismatch():
     ticket_store = _ticket_store_with(payload)
     use_case = FetchStreamUseCase(
         identity=FakeIdentity(principal=Principal(id="user2", groups=[], attributes={})),
-        authorizer=FakeAuthorizer(decision=decision, current_version=100),
         masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
@@ -275,7 +224,20 @@ def test_fetch_stream_principal_mismatch():
         use_case.execute("token", AUTHORIZATION_HEADER)
 
 
-def test_fetch_stream_rejects_ticket_when_granting_group_is_removed():
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        (
+            Principal(id="user1", groups=["analyst"], attributes={}),
+            Principal(id="user1", groups=[], attributes={}),
+        ),
+        (
+            Principal(id="user1", groups=["analyst"], attributes={"department": "research"}),
+            Principal(id="user1", groups=["analyst"], attributes={"department": "sales"}),
+        ),
+    ],
+)
+def test_fetch_stream_rejects_ticket_when_identity_context_changes(before, after):
     schema = pa.schema([pa.field("id", pa.int64())])
     table_format = PretendPushdownTableFormat(
         catalog_name="analytics",
@@ -284,7 +246,7 @@ def test_fetch_stream_rejects_ticket_when_granting_group_is_removed():
         schema=schema,
         batches=(pa.record_batch([pa.array([1], type=pa.int64())], schema=schema),),
     )
-    identity = FakeIdentity(principal=Principal(id="user1", groups=["analyst"], attributes={}))
+    identity = FakeIdentity(principal=before)
     authorizer = InMemoryPolicyAuthorizer(
         catalog="analytics",
         target="users",
@@ -295,8 +257,9 @@ def test_fetch_stream_rejects_ticket_when_granting_group_is_removed():
     ticket_store = FakeTicketStore()
     plan_access = PlanAccessUseCase(
         identity=identity,
-        authorizer=authorizer,
-        catalog_registry=FakeCatalogRegistry(table_format),
+        access_context=StaticAccessContext(
+            authorizer=authorizer, catalog_registry=FakeCatalogRegistry(table_format)
+        ),
         masking=masking,
         ticket_codec=ticket_codec,
         ticket_store=ticket_store,
@@ -306,7 +269,6 @@ def test_fetch_stream_rejects_ticket_when_granting_group_is_removed():
     )
     fetch_stream = FetchStreamUseCase(
         identity=identity,
-        authorizer=authorizer,
         masking=masking,
         row_transform=DuckDBRowTransformAdapter(masking),
         ticket_codec=ticket_codec,
@@ -314,23 +276,21 @@ def test_fetch_stream_rejects_ticket_when_granting_group_is_removed():
     )
 
     planned = plan_access.execute(
-        PlanRequest(catalog="analytics", target="users", columns=["id"]),
-        AUTHORIZATION_HEADER,
+        PlanRequest(catalog="analytics", target="users", columns=["id"]), AUTHORIZATION_HEADER
     )
-    identity._principal = Principal(id="user1", groups=[], attributes={})
+    identity._principal = after
 
     with pytest.raises(PermissionError):
         fetch_stream.execute(planned.ticket_tokens[0], AUTHORIZATION_HEADER)
 
 
 def test_fetch_stream_rejects_matching_subject_from_another_issuer():
-    schema, decision, table_format = _build_use_case_dependencies()
+    schema, _decision, table_format = _build_use_case_dependencies()
     payload = TicketPayload(
         asset_id="00000000-0000-4000-8000-000000000001",
         ticket_id="00000000-0000-0000-0000-000000000001",
         catalog="catalog1",
         target="users",
-        tenant_id="tenant-a",
         columns=["id", "region"],
         scan={
             "authorization_columns": ["id", "region"],
@@ -348,13 +308,9 @@ def test_fetch_stream_rejects_matching_subject_from_another_issuer():
     use_case = FetchStreamUseCase(
         identity=FakeIdentity(
             principal=Principal(
-                id="user1",
-                groups=[],
-                attributes={"tenant_id": "tenant-a"},
-                issuer="https://issuer-b.example",
+                id="user1", groups=[], attributes={}, issuer="https://issuer-b.example"
             )
         ),
-        authorizer=FakeAuthorizer(decision=decision, current_version=100),
         masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),
@@ -384,7 +340,6 @@ def test_fetch_stream_stops_before_emitting_batches_after_identity_expiry():
         ticket_id="00000000-0000-0000-0000-000000000001",
         catalog="catalog1",
         target="users",
-        tenant_id="tenant-a",
         columns=["id"],
         scan={
             "authorization_columns": ["id", "region"],
@@ -400,18 +355,7 @@ def test_fetch_stream_stops_before_emitting_batches_after_identity_expiry():
     clock = [999]
     use_case = FetchStreamUseCase(
         identity=FakeIdentity(
-            principal=Principal(
-                id="user1",
-                groups=[],
-                attributes={"tenant_id": "tenant-a"},
-                expires_at=1000,
-            )
-        ),
-        authorizer=FakeAuthorizer(
-            decision=AccessDecision(
-                allowed_columns=["id"], masks={}, row_filter=None, policy_version=100
-            ),
-            current_version=100,
+            principal=Principal(id="user1", groups=[], attributes={}, expires_at=1000)
         ),
         masking=FakeMasking(),
         row_transform=FakeRowTransform(),
@@ -426,60 +370,6 @@ def test_fetch_stream_stops_before_emitting_batches_after_identity_expiry():
     clock[0] = 1000
     with pytest.raises(PermissionError, match="Identity expired"):
         next(batches)
-
-
-def test_fetch_stream_keeps_captured_policy_after_policy_version_changes():
-    schema = pa.schema([pa.field("id", pa.int64())])
-    table_format = PretendPushdownTableFormat(
-        catalog_name="catalog1",
-        table_name="users",
-        format="test",
-        schema=schema,
-        batches=(
-            pa.record_batch([pa.array([1])], schema=schema),
-            pa.record_batch([pa.array([2])], schema=schema),
-        ),
-    )
-    payload = TicketPayload(
-        asset_id="00000000-0000-4000-8000-000000000001",
-        ticket_id="00000000-0000-0000-0000-000000000001",
-        catalog="catalog1",
-        target="users",
-        tenant_id="tenant-a",
-        columns=["id"],
-        scan={
-            "authorization_columns": ["id", "region"],
-            "read_payload": encode_scan_task(table_format, schema),
-            "full_row_filter": None,
-            "masks": {},
-        },
-        policy_version=100,
-        principal_id="user1",
-        expires_at=9999999999,
-        nonce="nonce",
-    )
-    authorizer = FakeAuthorizer(
-        decision=AccessDecision(
-            allowed_columns=["id"], masks={}, row_filter=None, policy_version=100
-        ),
-        current_version=100,
-    )
-    use_case = FetchStreamUseCase(
-        identity=FakeIdentity(
-            principal=Principal(id="user1", groups=[], attributes={"tenant_id": "tenant-a"})
-        ),
-        authorizer=authorizer,
-        masking=FakeMasking(),
-        row_transform=FakeRowTransform(),
-        ticket_codec=FakeTicketCodec(payload),
-        ticket_store=_ticket_store_with(payload),
-    )
-
-    batches = iter(use_case.execute("ticket", AUTHORIZATION_HEADER).result_batches)
-    assert next(batches).column("id").to_pylist() == [1]
-    authorizer._current_version = 101
-
-    assert next(batches).column("id").to_pylist() == [2]
 
 
 def test_fetch_stream_stops_after_ticket_is_revoked_between_batches():
@@ -499,7 +389,6 @@ def test_fetch_stream_stops_after_ticket_is_revoked_between_batches():
         ticket_id="00000000-0000-0000-0000-000000000002",
         catalog="catalog1",
         target="users",
-        tenant_id="tenant-a",
         columns=["id"],
         scan={
             "authorization_columns": ["id", "region"],
@@ -514,15 +403,7 @@ def test_fetch_stream_stops_after_ticket_is_revoked_between_batches():
     )
     ticket_store = _ticket_store_with(payload)
     use_case = FetchStreamUseCase(
-        identity=FakeIdentity(
-            principal=Principal(id="user1", groups=[], attributes={"tenant_id": "tenant-a"})
-        ),
-        authorizer=FakeAuthorizer(
-            decision=AccessDecision(
-                allowed_columns=["id"], masks={}, row_filter=None, policy_version=100
-            ),
-            current_version=100,
-        ),
+        identity=FakeIdentity(principal=Principal(id="user1", groups=[], attributes={})),
         masking=FakeMasking(),
         row_transform=FakeRowTransform(),
         ticket_codec=FakeTicketCodec(payload),

@@ -123,7 +123,7 @@ def _alembic_config(engine: Engine):
 
     config = Config()
     config.set_main_option("script_location", _migration_script_location())
-    config.set_main_option("sqlalchemy.url", str(engine.url))
+    config.set_main_option("sqlalchemy.url", str(engine.url).replace("%", "%%"))
     return config
 
 

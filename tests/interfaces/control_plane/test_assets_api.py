@@ -35,11 +35,7 @@ def test_workspace_asset_upsert_uses_default_workspace_context():
 
     response = client.put(
         "/v1/assets/analytics/default.users",
-        json={
-            "backend": "iceberg",
-            "table_identifier": "prod.users",
-            "options": {"snapshot": 7},
-        },
+        json={"backend": "iceberg", "table_identifier": "prod.users", "options": {"snapshot": 7}},
         headers=ADMIN_HEADERS,
     )
     assets = client.get("/v1/assets", headers=ADMIN_HEADERS).json()
@@ -125,23 +121,14 @@ def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail():
     )
     missing_id_response = client.put(
         f"/v1/assets/{asset['id']}/schema-fields",
-        json={
-            "fields": [{"name": "id", "path": ["id"], "type": "long"}],
-            "expected_revision": 0,
-        },
+        json={"fields": [{"name": "id", "path": ["id"], "type": "long"}], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
     response = client.put(
         f"/v1/assets/{asset['id']}/schema-fields",
         json={
             "fields": [
-                {
-                    "name": "id",
-                    "field_id": "id",
-                    "path": ["id"],
-                    "type": "long",
-                    "nullable": False,
-                },
+                {"name": "id", "field_id": "id", "path": ["id"], "type": "long", "nullable": False},
                 {
                     "name": "email",
                     "field_id": "email",
@@ -158,13 +145,7 @@ def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail():
         f"/v1/assets/{asset['id']}/schema-fields",
         json={
             "fields": [
-                {
-                    "name": "id",
-                    "field_id": "id",
-                    "path": ["id"],
-                    "type": "long",
-                    "nullable": False,
-                },
+                {"name": "id", "field_id": "id", "path": ["id"], "type": "long", "nullable": False},
                 {
                     "name": "email",
                     "field_id": "email",
@@ -205,13 +186,7 @@ def test_workspace_asset_schema_fields_can_be_replaced_from_asset_detail():
     }
     assert second_response.status_code == 200
     assert detail["schema_fields"] == [
-        {
-            "name": "id",
-            "field_id": "iceberg:id",
-            "path": ["id"],
-            "type": "long",
-            "nullable": False,
-        },
+        {"name": "id", "field_id": "iceberg:id", "path": ["id"], "type": "long", "nullable": False},
         {
             "name": "email",
             "field_id": "iceberg:email",
@@ -371,10 +346,7 @@ def test_workspace_asset_owners_can_be_replaced_from_asset_detail():
 
     response = client.put(
         f"/v1/assets/{asset['id']}/owners",
-        json={
-            "owners": ["user:alice@example.com", "group:data-owners"],
-            "expected_revision": 0,
-        },
+        json={"owners": ["user:alice@example.com", "group:data-owners"], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
     second_response = client.put(
@@ -487,7 +459,7 @@ def test_workspace_catalogs_assets_and_asset_detail_hide_runtime_ids():
             "ordinal": 10,
             "effect": "allow",
             "principals": ["user1"],
-            "when": {"tenant": "default"},
+            "when": {"department": "default"},
             "columns": ["id", "email"],
             "masks": {"email": {"type": "email"}},
             "row_filter": "region = 'us'",
@@ -682,8 +654,7 @@ def test_workspace_asset_page_is_bounded_searchable_and_cursor_paginated():
     assert first.json()["next_cursor"]
 
     second = client.get(
-        "/v1/assets/page?limit=2&cursor=" + first.json()["next_cursor"],
-        headers=ADMIN_HEADERS,
+        "/v1/assets/page?limit=2&cursor=" + first.json()["next_cursor"], headers=ADMIN_HEADERS
     )
     assert second.status_code == 200, second.json()
     assert [item["name"] for item in second.json()["items"]] == ["prod.events"]
@@ -694,8 +665,7 @@ def test_workspace_asset_page_is_bounded_searchable_and_cursor_paginated():
     assert [item["name"] for item in searched.json()["items"]] == ["default.orders"]
 
     mismatched = client.get(
-        "/v1/assets/page?search=users&cursor=" + first.json()["next_cursor"],
-        headers=ADMIN_HEADERS,
+        "/v1/assets/page?search=users&cursor=" + first.json()["next_cursor"], headers=ADMIN_HEADERS
     )
     assert mismatched.status_code == 400
 

@@ -9,6 +9,7 @@ from typing import Any
 
 import pyarrow as pa
 from pyiceberg.catalog import load_catalog
+from pyiceberg.exceptions import NamespaceAlreadyExistsError
 from pyiceberg.schema import Schema
 from pyiceberg.types import (
     DoubleType,
@@ -21,14 +22,12 @@ from pyiceberg.types import (
     StructType,
 )
 
-DEMO_DIR = Path(os.environ.get("DEMO_DIR", "/workspace/demo"))
-RUNTIME_DIR = DEMO_DIR / ".runtime"
+DEMO_DIR = Path(__file__).resolve().parents[1]
 FIXTURE_FILE = DEMO_DIR / "fixtures" / "demo_fixture.json"
 
 
 def main() -> None:
     fixture = _read_fixture()
-    RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     for table_fixture in fixture["tables"]:
         _create_iceberg_table(table_fixture)
     print(json.dumps({"tables": [table["target"] for table in fixture["tables"]]}))
@@ -41,34 +40,31 @@ def _read_fixture() -> dict[str, Any]:
     return fixture
 
 
+def _catalog_options() -> dict[str, str]:
+    return {
+        "type": "sql",
+        "uri": os.environ["ICEBERG_CATALOG_URI"],
+        "warehouse": os.environ.get("ICEBERG_WAREHOUSE", "/warehouse"),
+    }
+
+
 def _create_iceberg_table(table_fixture: dict[str, Any]) -> None:
-    catalog_name = str(table_fixture["catalog"])
+    catalog = load_catalog(str(table_fixture["catalog"]), **_catalog_options())
     target = str(table_fixture["target"])
-    warehouse = RUNTIME_DIR / "warehouse"
-    warehouse.mkdir(parents=True, exist_ok=True)
-    catalog = load_catalog(
-        catalog_name,
-        type="sql",
-        uri=f"sqlite:///{RUNTIME_DIR / f'{catalog_name}.db'}",
-        warehouse=str(warehouse),
-    )
-    namespace = ".".join(target.split(".")[:-1])
-    with suppress(Exception):
-        if namespace:
-            catalog.create_namespace(namespace)
-    # Demo startup is intentionally restart-safe.  The warehouse is a durable
-    # volume during a normal compose restart, so replacing the table here
-    # would silently destroy data that an operator or test just wrote.  The
-    # reset workflow removes the volume and is the explicit destructive path.
+    with suppress(NamespaceAlreadyExistsError):
+        catalog.create_namespace(tuple(target.split(".")[:-1]))
     if catalog.table_exists(target):
         return
     iceberg_schema, arrow_schema = _schemas(table_fixture["schema"])
-    created = catalog.create_table(
-        target,
-        schema=iceberg_schema,
-        properties={"format-version": "2"},
-    )
-    created.append(pa.Table.from_pylist(table_fixture["rows"], schema=arrow_schema))
+    rows = pa.Table.from_pylist(table_fixture["rows"], schema=arrow_schema)
+    # Both appends are staged; publish the table only after all data succeeds.
+    # An interrupted first seed can be retried without exposing partial rows.
+    with catalog.create_table_transaction(
+        target, schema=iceberg_schema, properties={"format-version": "2"}
+    ) as transaction:
+        midpoint = max(1, rows.num_rows // 2)
+        transaction.append(rows.slice(0, midpoint))
+        transaction.append(rows.slice(midpoint))
 
 
 def _schemas(fields: list[dict[str, Any]]) -> tuple[Schema, pa.Schema]:

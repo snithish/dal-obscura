@@ -17,10 +17,11 @@ from __future__ import annotations
 import ipaddress
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import TypeVar, cast
+from typing import Annotated, TypeVar, cast
 from urllib.parse import urlsplit
 
-from fastapi import Cookie, Header, HTTPException, Request
+from fastapi import Cookie, Depends, HTTPException, Request, Security
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session, sessionmaker
 
 from dal_obscura.common.plugin_api.registry import PluginRegistry
@@ -51,6 +52,22 @@ AuthorizationCodeExchange = Callable[[Mapping[str, object], str, str], Mapping[s
 ServiceResult = TypeVar("ServiceResult")
 MAX_BROWSER_SESSION_TTL_SECONDS = 86_400
 MAX_BROWSER_IDLE_TTL_SECONDS = 7_200
+
+_BEARER_AUTH = HTTPBearer(scheme_name="BearerAuth", auto_error=False)
+
+
+def bearer_authorization(
+    request: Request,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Security(_BEARER_AUTH)],
+) -> str:
+    """Document bearer authentication while preserving cookie fallback semantics.
+
+    A malformed but present Authorization header must not fall back to browser
+    credentials. Authentication and error handling remain owned by require_actor.
+    """
+
+    del credentials
+    return request.headers.get("authorization", "")
 
 
 @dataclass(frozen=True)
@@ -98,7 +115,7 @@ class ControlPlaneDeps:
     def require_actor(
         self,
         request: Request,
-        authorization: str = Header(default=""),
+        authorization: str = Depends(bearer_authorization),
         session_token: str | None = Cookie(default=None, alias="__Host-dal_obscura_session"),
         csrf_cookie: str | None = Cookie(default=None, alias="__Host-dal_obscura_csrf"),
     ) -> ControlPlaneActor:
@@ -327,7 +344,7 @@ class ControlPlaneDeps:
     def require_admin(
         self,
         request: Request,
-        authorization: str = Header(default=""),
+        authorization: str = Depends(bearer_authorization),
         session_token: str | None = Cookie(default=None, alias="__Host-dal_obscura_session"),
         csrf_cookie: str | None = Cookie(default=None, alias="__Host-dal_obscura_csrf"),
     ) -> ControlPlaneActor:

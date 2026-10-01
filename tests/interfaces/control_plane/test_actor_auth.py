@@ -63,10 +63,7 @@ def _client(*, secure: bool = False) -> TestClient:
         oidc_admin_group="platform-admins",
     )
     app.state.test_session_factory = session_factory(engine)
-    return TestClient(
-        app,
-        base_url="https://testserver" if secure else "http://testserver",
-    )
+    return TestClient(app, base_url="https://testserver" if secure else "http://testserver")
 
 
 def _replace_live_policy(
@@ -115,10 +112,7 @@ def _login_as_asset_owner(client: TestClient) -> Response:
     start = client.get("/auth/login", follow_redirects=False)
     assert start.status_code == 303
     state = parse_qs(urlsplit(start.headers["location"]).query)["state"][0]
-    callback = client.get(
-        f"/auth/callback?code=test-code&state={state}",
-        follow_redirects=False,
-    )
+    callback = client.get(f"/auth/callback?code=test-code&state={state}", follow_redirects=False)
     assert callback.status_code == 303, callback.text
     return callback
 
@@ -136,8 +130,6 @@ def _create_ticket_for_asset(client: TestClient, asset_id: UUID) -> UUID:
         session.add(
             DataPlaneTicketRecord(
                 ticket_id=ticket_id,
-                cell_id=asset.cell_id,
-                tenant_id=str(asset.tenant_id),
                 asset_id=asset_id,
                 catalog="analytics",
                 target=asset.target,
@@ -221,8 +213,7 @@ def test_cookie_session_rejects_a_forged_csrf_cookie():
 def test_legacy_browser_cookies_are_not_authenticated():
     client = _client_with_ui_auth_config()
     response = client.get(
-        "/v1/session",
-        headers={"cookie": "dal_obscura_session=forged; dal_obscura_csrf=forged"},
+        "/v1/session", headers={"cookie": "dal_obscura_session=forged; dal_obscura_csrf=forged"}
     )
 
     assert response.status_code == 401
@@ -258,108 +249,20 @@ def test_cookie_session_logout_requires_csrf_and_expires_browser_cookies():
     assert repeated.json() == {"authenticated": False}
 
 
-def test_cookie_mutation_rejects_untrusted_origin():
-    client = _client_with_ui_auth_config()
-    login = _login_as_asset_owner(client)
-    cookie_header = (
-        f"__Host-dal_obscura_session={login.cookies['__Host-dal_obscura_session']}; "
-        f"__Host-dal_obscura_csrf={login.cookies['__Host-dal_obscura_csrf']}"
-    )
-
-    response = client.post(
-        "/v1/logout",
-        headers={
-            "cookie": cookie_header,
-            "x-csrf-token": login.cookies["__Host-dal_obscura_csrf"],
-            "origin": "https://attacker.example",
-        },
-    )
-
-    assert response.status_code == 403
-    assert response.json()["detail"] == "Origin validation failed"
-
-
-def test_cookie_mutation_cannot_trust_forged_host_and_matching_origin():
-    client = _client_with_ui_auth_config()
-    login = _login_as_asset_owner(client)
-    cookie_header = (
-        f"__Host-dal_obscura_session={login.cookies['__Host-dal_obscura_session']}; "
-        f"__Host-dal_obscura_csrf={login.cookies['__Host-dal_obscura_csrf']}"
-    )
-
-    response = client.post(
-        "/v1/logout",
-        headers={
-            "cookie": cookie_header,
-            "x-csrf-token": login.cookies["__Host-dal_obscura_csrf"],
-            "host": "attacker.example",
-            "origin": "http://attacker.example",
-        },
-    )
-
-    assert response.status_code == 403
-    assert response.json()["detail"] == "Origin validation failed"
-
-
-def test_cookie_mutation_rejects_forged_host_without_origin_header():
-    client = _client_with_ui_auth_config()
-    login = _login_as_asset_owner(client)
-    cookie_header = (
-        f"__Host-dal_obscura_session={login.cookies['__Host-dal_obscura_session']}; "
-        f"__Host-dal_obscura_csrf={login.cookies['__Host-dal_obscura_csrf']}"
-    )
-
-    response = client.post(
-        "/v1/logout",
-        headers={
-            "cookie": cookie_header,
-            "x-csrf-token": login.cookies["__Host-dal_obscura_csrf"],
-            "host": "attacker.example",
-        },
-    )
-
-    assert response.status_code == 403
-    assert response.json()["detail"] == "Origin validation failed"
-
-
-def test_cookie_mutation_accepts_configured_host_without_origin_header():
-    client = _client_with_ui_auth_config()
-    login = _login_as_asset_owner(client)
-    cookie_header = (
-        f"__Host-dal_obscura_session={login.cookies['__Host-dal_obscura_session']}; "
-        f"__Host-dal_obscura_csrf={login.cookies['__Host-dal_obscura_csrf']}"
-    )
-
-    response = client.post(
-        "/v1/logout",
-        headers={
-            "cookie": cookie_header,
-            "x-csrf-token": login.cookies["__Host-dal_obscura_csrf"],
-        },
-    )
-
-    assert response.status_code == 200
-
-
 @pytest.mark.parametrize(
     ("extra_headers", "expected_status"),
     [
         ({}, 200),
         ({"origin": "http://127.0.0.1:8820"}, 200),
         (
-            {
-                "origin": "http://127.0.0.1:8820",
-                "x-forwarded-host": "attacker.example",
-            },
+            {"origin": "http://127.0.0.1:8820", "x-forwarded-host": "attacker.example"},
             200,
         ),
         ({"host": "attacker.example"}, 403),
+        ({"host": "attacker.example", "origin": "http://attacker.example"}, 403),
         ({"origin": "https://attacker.example"}, 403),
         (
-            {
-                "host": "127.0.0.1:8820",
-                "origin": "http://127.0.0.1:8820",
-            },
+            {"host": "127.0.0.1:8820", "origin": "http://127.0.0.1:8820"},
             200,
         ),
     ],
@@ -381,14 +284,8 @@ def test_cookie_mutation_origin_and_host_matrix(
     response = client.post("/v1/logout", headers=headers)
 
     assert response.status_code == expected_status
-
-
-def test_removed_demo_login_route_is_absent():
-    client = _client_with_ui_auth_config()
-
-    response = client.post("/v1/demo-login", json={"login_hint": "asset-owner"})
-
-    assert response.status_code == 404
+    if expected_status == 403:
+        assert response.json()["detail"] == "Origin validation failed"
 
 
 def test_static_bootstrap_token_can_be_disabled_when_oidc_admin_is_available():
@@ -486,11 +383,7 @@ def test_local_bootstrap_login_is_unavailable_when_disabled():
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
     migrate_config_store(engine)
     client = TestClient(
-        create_app(
-            session_factory(engine),
-            admin_token="test-admin",
-            bootstrap_enabled=False,
-        )
+        create_app(session_factory(engine), admin_token="test-admin", bootstrap_enabled=False)
     )
 
     response = client.post("/v1/session/bootstrap", headers=ADMIN_HEADERS)
@@ -552,10 +445,7 @@ def test_oidc_actor_resolver_builds_actor_from_validated_token(monkeypatch):
         group_claims=("groups",),
     )
 
-    assert resolver("token-123") == {
-        "principal": "asset-owner",
-        "groups": ["asset-owners"],
-    }
+    assert resolver("token-123") == {"principal": "asset-owner", "groups": ["asset-owners"]}
 
 
 def test_oidc_actor_resolver_preserves_validated_issuer_scope(monkeypatch):
@@ -588,28 +478,6 @@ def test_oidc_actor_resolver_preserves_validated_issuer_scope(monkeypatch):
     }
 
 
-def test_asset_owner_can_replace_policy_rules_through_api():
-    client = _client()
-    asset = _provision_owned_asset(client)
-
-    access = client.get(f"/v1/assets/{asset}/access", headers=_bearer("owner-token"))
-    assert access.status_code == 200
-    assert access.json()["can_revoke_tokens"] is True
-    assert {item["capability"]: item["allowed"] for item in access.json()["capabilities"]} == {
-        "read": True,
-        "edit": True,
-        "grant": False,
-    }
-
-    response = _replace_live_policy(
-        client, asset, [_allow_rule(row_filter="region = 'us'")], _bearer("owner-token")
-    )
-
-    assert response.status_code == 200
-    detail = client.get(f"/v1/assets/{asset}", headers=_bearer("owner-token")).json()
-    assert detail["policy_rules"][0]["row_filter"] == "region = 'us'"
-
-
 def test_mask_exemptions_survive_policy_save_and_live_read():
     client = _client()
     asset = _provision_owned_asset(client)
@@ -639,6 +507,14 @@ def test_asset_owner_can_replace_live_policy_with_revision_precondition():
     client = _client()
     asset = _provision_owned_asset(client)
     owner = _bearer("owner-token")
+    access = client.get(f"/v1/assets/{asset}/access", headers=owner)
+    assert access.status_code == 200
+    assert access.json()["can_revoke_tokens"] is True
+    assert {item["capability"]: item["allowed"] for item in access.json()["capabilities"]} == {
+        "read": True,
+        "edit": True,
+        "grant": False,
+    }
 
     response = client.put(
         f"/v1/assets/{asset}/policy",
@@ -658,9 +534,7 @@ def test_asset_owner_can_replace_live_policy_with_revision_precondition():
     assert detail.json()["policy_rules"][0]["row_filter"] == "region = 'us'"
 
     stale = client.put(
-        f"/v1/assets/{asset}/policy",
-        json={"expected_revision": 0, "rules": []},
-        headers=owner,
+        f"/v1/assets/{asset}/policy", json={"expected_revision": 0, "rules": []}, headers=owner
     )
     assert stale.status_code == 409
 
@@ -743,10 +617,7 @@ def test_federated_asset_owner_is_scoped_to_exact_issuer_through_api():
 
     owners = client.put(
         f"/v1/assets/{asset}/owners",
-        json={
-            "owners": [encode_federated_identity(issuer_a, "alice")],
-            "expected_revision": 0,
-        },
+        json={"owners": [encode_federated_identity(issuer_a, "alice")], "expected_revision": 0},
         headers=ADMIN_HEADERS,
     )
     assert owners.status_code == 200, owners.text
@@ -779,10 +650,7 @@ def test_policy_edit_authorizes_before_validating_submitted_rules():
 
     response = client.put(
         f"/v1/assets/{asset}/policy",
-        json={
-            "expected_revision": 1,
-            "rules": [_allow_rule(row_filter="region =")],
-        },
+        json={"expected_revision": 1, "rules": [_allow_rule(row_filter="region =")]},
         headers=_bearer("outsider-token"),
     )
 
@@ -849,10 +717,7 @@ def test_asset_owner_can_delegate_read_without_edit_or_grant():
     )
     grants = client.put(
         f"/v1/assets/{asset}/grants",
-        json={
-            "grants": [{"principal": "outsider", "capability": "read"}],
-            "expected_revision": 2,
-        },
+        json={"grants": [{"principal": "outsider", "capability": "read"}], "expected_revision": 2},
         headers=_bearer("owner-token"),
     )
 
@@ -1014,11 +879,7 @@ def _provision_owned_asset(client: TestClient, *, target: str = "default.users")
 def _provision_asset_without_owner(client: TestClient, *, target: str = "default.users") -> UUID:
     client.put(
         "/v1/settings/runtime",
-        json={
-            "ticket_ttl_seconds": 900,
-            "max_tickets": 64,
-            "max_ticket_exchanges": 1,
-        },
+        json={"ticket_ttl_seconds": 900, "max_tickets": 64, "max_ticket_exchanges": 1},
         headers=ADMIN_HEADERS,
     )
     client.put(

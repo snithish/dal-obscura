@@ -225,7 +225,7 @@ def test_extracts_groups_roles_and_scalar_attributes_from_configured_claims():
         audience=AUDIENCE,
         jwks_url="https://keycloak.example.test/certs",
         group_claims=["groups", "realm_access.roles", "resource_access.dal-obscura.roles"],
-        attribute_claims={"tenant": "tenant", "clearance": "custom.clearance"},
+        attribute_claims={"department": "department", "clearance": "custom.clearance"},
         jwks_fetcher=lambda _url: {"keys": [jwk]},
     )
     token = _token(
@@ -235,7 +235,7 @@ def test_extracts_groups_roles_and_scalar_attributes_from_configured_claims():
             "groups": ["/analytics", "finance"],
             "realm_access": {"roles": ["analyst"]},
             "resource_access": {"dal-obscura": {"roles": ["reader"]}},
-            "tenant": "acme",
+            "department": "acme",
             "custom": {"clearance": "high"},
         },
     )
@@ -243,7 +243,7 @@ def test_extracts_groups_roles_and_scalar_attributes_from_configured_claims():
     principal = provider.authenticate(_auth_request(token))
 
     assert principal.groups == ["/analytics", "finance", "analyst", "reader"]
-    assert principal.attributes == {"tenant": "acme", "clearance": "high"}
+    assert principal.attributes == {"department": "acme", "clearance": "high"}
 
 
 def test_ignores_missing_optional_group_and_attribute_claims():
@@ -253,7 +253,7 @@ def test_ignores_missing_optional_group_and_attribute_claims():
         audience=AUDIENCE,
         jwks_url="https://keycloak.example.test/certs",
         group_claims=["groups", "realm_access.roles"],
-        attribute_claims={"tenant": "tenant"},
+        attribute_claims={"department": "department"},
         jwks_fetcher=lambda _url: {"keys": [jwk]},
     )
     token = _token(private_key, kid="kid-1")
@@ -270,10 +270,10 @@ def test_rejects_non_scalar_attribute_claim_values():
         issuer=ISSUER,
         audience=AUDIENCE,
         jwks_url="https://keycloak.example.test/certs",
-        attribute_claims={"tenant": "tenant"},
+        attribute_claims={"department": "department"},
         jwks_fetcher=lambda _url: {"keys": [jwk]},
     )
-    token = _token(private_key, kid="kid-1", extra_claims={"tenant": ["acme"]})
+    token = _token(private_key, kid="kid-1", extra_claims={"department": ["acme"]})
 
     with pytest.raises(PermissionError, match="Invalid attribute claim"):
         provider.authenticate(_auth_request(token))
@@ -306,11 +306,7 @@ def test_refreshes_jwks_once_when_token_references_new_kid():
 
 def test_oidc_provider_accepts_inline_jwks_without_network_fetch():
     private_key, jwk = _rsa_key_pair("kid-inline")
-    provider = OidcJwksIdentityProvider(
-        issuer=ISSUER,
-        audience=AUDIENCE,
-        jwks={"keys": [jwk]},
-    )
+    provider = OidcJwksIdentityProvider(issuer=ISSUER, audience=AUDIENCE, jwks={"keys": [jwk]})
     token = _token(private_key, kid="kid-inline", subject="inline-user")
 
     principal = provider.authenticate(_auth_request(token))
@@ -322,11 +318,7 @@ def test_oidc_provider_accepts_jwks_file_without_discovery(tmp_path):
     private_key, jwk = _rsa_key_pair("kid-file")
     jwks_path = tmp_path / "jwks.json"
     jwks_path.write_text(json.dumps({"keys": [jwk]}))
-    provider = OidcJwksIdentityProvider(
-        issuer=ISSUER,
-        audience=AUDIENCE,
-        jwks_file=str(jwks_path),
-    )
+    provider = OidcJwksIdentityProvider(issuer=ISSUER, audience=AUDIENCE, jwks_file=str(jwks_path))
     token = _token(private_key, kid="kid-file", subject="file-user")
 
     principal = provider.authenticate(_auth_request(token))

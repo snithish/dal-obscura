@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import json
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from time import sleep
 from types import SimpleNamespace
 from typing import Any
@@ -14,38 +12,9 @@ from dal_obscura_iceberg_rest.catalog import RestCatalog, _snapshot_id
 from dal_obscura_plugin_api import CatalogConfig, ExecutionContext, TableIdentifier
 
 
-def test_static_descriptor_uses_the_public_admission_shape() -> None:
-    descriptor_path = (
-        Path(__file__).parents[1] / "src" / "dal_obscura_iceberg_rest" / "dal_obscura-plugin.json"
-    )
-    descriptor = json.loads(descriptor_path.read_text(encoding="utf-8"))
-    assert descriptor["plugin_id"] == "iceberg.rest"
-    assert "distribution" not in descriptor
-    assert "version" not in descriptor
-
-
-def test_static_descriptor_advertises_all_supported_rest_auth_options() -> None:
-    descriptor_path = (
-        Path(__file__).parents[1] / "src" / "dal_obscura_iceberg_rest" / "dal_obscura-plugin.json"
-    )
-    descriptor = json.loads(descriptor_path.read_text(encoding="utf-8"))
-    fields = {field["name"]: field for field in descriptor["config_schema"]["fields"]}
-
-    assert fields["scope"]["type"] == "string"
-    assert fields["oauth2-server-uri"] == {
-        "name": "oauth2-server-uri",
-        "type": "uri",
-        "required": False,
-        "secret": False,
-    }
-    assert fields["connect-timeout-ms"]["type"] == "integer"
-    assert fields["read-timeout-ms"]["type"] == "integer"
-
-
 def _context() -> ExecutionContext:
     return ExecutionContext(
-        deadline=datetime.now(timezone.utc) + timedelta(minutes=1),
-        correlation_id="rest-fixture",
+        deadline=datetime.now(timezone.utc) + timedelta(minutes=1), correlation_id="rest-fixture"
     )
 
 
@@ -60,10 +29,7 @@ def _config(**options: object) -> CatalogConfig:
 
 def test_rest_catalog_rejects_credential_bearing_uri():
     with pytest.raises(ValueError, match="credentials"):
-        RestCatalog(
-            _config(uri="https://user:pass@catalog.example/v1"),
-            _context(),
-        )
+        RestCatalog(_config(uri="https://user:pass@catalog.example/v1"), _context())
 
 
 def test_rest_catalog_rejects_unsupported_options():
@@ -88,10 +54,7 @@ def test_rest_catalog_rejects_unresolved_secret_objects():
         RestCatalog(_config(token={"secret": "REST_TOKEN"}), _context())
 
 
-@pytest.mark.parametrize(
-    "option",
-    ["connect-timeout-ms", "read-timeout-ms"],
-)
+@pytest.mark.parametrize("option", ["connect-timeout-ms", "read-timeout-ms"])
 def test_rest_catalog_rejects_invalid_timeouts(option: str) -> None:
     with pytest.raises(ValueError, match="timeout"):
         RestCatalog(_config(**{option: "0"}), _context())
@@ -122,8 +85,7 @@ def test_rest_catalog_requests_receive_deadline_bounded_timeout() -> None:
     session.request = original_request
     module._install_request_timeout(session, 5.0, 30.0)
     context = ExecutionContext(
-        deadline=datetime.now(timezone.utc) + timedelta(seconds=2),
-        correlation_id="rest-timeout",
+        deadline=datetime.now(timezone.utc) + timedelta(seconds=2), correlation_id="rest-timeout"
     )
     token = module._ACTIVE_REQUEST_BUDGET.set((context.deadline, None, 5.0, 30.0))
     try:
@@ -246,10 +208,7 @@ def test_rest_catalog_does_not_copy_provider_io_credentials_into_handle():
             return FakeTable()
 
     plugin._catalog = FakeCatalog()
-    handle = plugin.resolve_table(
-        TableIdentifier(namespace=("default",), name="users"),
-        _context(),
-    )
+    handle = plugin.resolve_table(TableIdentifier(namespace=("default",), name="users"), _context())
     assert handle.metadata == {"metadata_location": "https://storage.example/metadata/v1.json"}
 
 
@@ -274,10 +233,7 @@ def test_rest_catalog_rechecks_cancellation_after_table_load() -> None:
 
     context = replace(_context(), cancel_check=cancelled)
     with pytest.raises(ValueError, match="cancelled"):
-        plugin.resolve_table(
-            TableIdentifier(namespace=("default",), name="users"),
-            context,
-        )
+        plugin.resolve_table(TableIdentifier(namespace=("default",), name="users"), context)
 
 
 def test_snapshot_id_supports_pyiceberg_method_shape() -> None:

@@ -12,11 +12,9 @@ Example:
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal, cast
-from urllib.parse import parse_qs
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import Request
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_serializer
 
 
@@ -33,67 +31,29 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class TenantRequest(StrictModel):
-    """Tenant/workspace creation request.
+class ApiFieldError(BaseModel):
+    """Validation evidence without submitted values or secrets."""
 
-    Example:
-        ```python
-        TenantRequest(slug="default", display_name="Default workspace")
-        ```
-    """
-
-    slug: str = Field(min_length=1)
-    display_name: str = Field(min_length=1)
+    field: str
+    message: str
+    type: str
 
 
-class CellRequest(StrictModel):
-    """Data-plane cell creation request.
+class ApiError(BaseModel):
+    """Machine-readable error metadata shared by all HTTP rejections."""
 
-    Example:
-        ```python
-        CellRequest(name="default", region="local")
-        ```
-    """
-
-    name: str = Field(min_length=1)
-    region: str = Field(min_length=1)
+    code: str
+    message: str
+    request_id: str
+    current_revision: int | None = None
+    field_errors: list[ApiFieldError] | None = None
 
 
-class TenantCellRequest(CellRequest):
-    """Combined tenant and cell assignment request.
+class ApiErrorResponse(BaseModel):
+    """Public HTTP error envelope documented for generated clients."""
 
-    Example:
-        ```python
-        TenantCellRequest(name="default", region="local", shard_key="default")
-        ```
-    """
-
-    shard_key: str = Field(default="default", min_length=1)
-
-
-class TenantCellAssignmentRequest(StrictModel):
-    """Assigns an existing cell to a tenant.
-
-    Example:
-        ```python
-        TenantCellAssignmentRequest(cell_id=cell_id, shard_key="default")
-        ```
-    """
-
-    cell_id: UUID
-    shard_key: str = Field(default="default", min_length=1)
-
-
-class CellTenantRequest(StrictModel):
-    """Assigns the workspace tenant to an existing cell.
-
-    Example:
-        ```python
-        CellTenantRequest(shard_key="default")
-        ```
-    """
-
-    shard_key: str = Field(default="default", min_length=1)
+    detail: str | list[dict[str, Any]] | dict[str, Any]
+    error: ApiError
 
 
 class RuntimeSettingsRequest(StrictModel):
@@ -419,12 +379,6 @@ class WorkspaceSummaryResponse(BaseModel):
     enabled_auth_provider_count: int
 
 
-class WorkspaceGenerationResponse(BaseModel):
-    """Monotonic revision of canonical workspace configuration."""
-
-    config_revision: str
-
-
 class DataPlaneObservationResponse(BaseModel):
     """Explicit data-plane health observation state."""
 
@@ -438,7 +392,6 @@ class WorkspaceObservationsResponse(BaseModel):
     available: bool
     observed_at: str
     source: str
-    generation: WorkspaceGenerationResponse | None = None
     data_plane: DataPlaneObservationResponse
 
 
@@ -503,11 +456,7 @@ class CatalogRequest(StrictModel):
         ```
     """
 
-    plugin_id: str = Field(
-        min_length=1,
-        max_length=64,
-        pattern=r"^[a-z][a-z0-9_.-]{0,63}$",
-    )
+    plugin_id: str = Field(min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9_.-]{0,63}$")
     options: dict[str, Any] = Field(default_factory=dict)
     expected_revision: int | None = Field(default=None, ge=0)
 
@@ -522,10 +471,7 @@ class AssetRequest(StrictModel):
     """
 
     backend: str = Field(
-        default="iceberg",
-        min_length=1,
-        max_length=64,
-        pattern=r"^[a-z][a-z0-9_.-]{0,63}$",
+        default="iceberg", min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9_.-]{0,63}$"
     )
     table_identifier: str = Field(min_length=1, max_length=1_024)
     options: dict[str, Any] = Field(default_factory=dict)
@@ -632,40 +578,3 @@ class AuthProvidersRequest(StrictModel):
 
     providers: list[dict[str, Any]] = Field(max_length=16)
     expected_revision: int | None = Field(default=None, ge=0)
-
-
-async def request_payload(request: Request) -> dict[str, object]:
-    """Parses JSON or form-encoded route payloads into a mapping.
-
-    Example:
-        ```python
-        payload = await request_payload(request)
-        ```
-    """
-
-    content_type = request.headers.get("content-type", "")
-    if "application/json" in content_type:
-        raw = await request.json()
-        return cast(dict[str, object], raw) if isinstance(raw, dict) else {}
-    if "application/x-www-form-urlencoded" in content_type:
-        raw = (await request.body()).decode("utf-8")
-        payload: dict[str, object] = {
-            key: values[-1]
-            for key, values in parse_qs(raw, keep_blank_values=True).items()
-            if values
-        }
-        if isinstance(payload.get("options"), str):
-            payload["options"] = _json_object(payload["options"])
-        return payload
-    return {}
-
-
-def _json_object(raw: object) -> dict[str, object]:
-    if not isinstance(raw, str) or not raw.strip():
-        return {}
-    import json
-
-    value = json.loads(raw)
-    if not isinstance(value, dict):
-        raise ValueError("options must be a JSON object")
-    return {str(key): item for key, item in value.items()}

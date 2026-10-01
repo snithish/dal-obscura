@@ -7,7 +7,7 @@ def test_principal_claim_mapper_extracts_subject_groups_and_attributes():
     mapper = PrincipalClaimMapper(
         subject_claim="sub",
         group_claims=["groups", "realm_access.roles", "resource_access.dal-obscura.roles"],
-        attribute_claims={"tenant": "tenant", "clearance": "custom.clearance"},
+        attribute_claims={"department": "department", "clearance": "custom.clearance"},
     )
 
     principal = mapper.map_claims(
@@ -16,14 +16,14 @@ def test_principal_claim_mapper_extracts_subject_groups_and_attributes():
             "groups": ["/analytics", "finance"],
             "realm_access": {"roles": ["analyst"]},
             "resource_access": {"dal-obscura": {"roles": ["reader"]}},
-            "tenant": "acme",
+            "department": "acme",
             "custom": {"clearance": "high"},
         }
     )
 
     assert principal.id == "user-123"
     assert principal.groups == ["/analytics", "finance", "analyst", "reader"]
-    assert principal.attributes == {"tenant": "acme", "clearance": "high"}
+    assert principal.attributes == {"department": "acme", "clearance": "high"}
 
 
 def test_principal_claim_mapper_rejects_missing_subject():
@@ -35,9 +35,8 @@ def test_principal_claim_mapper_rejects_missing_subject():
 
 def test_principal_claim_mapper_rejects_non_scalar_attributes():
     mapper = PrincipalClaimMapper(
-        subject_claim="sub",
-        attribute_claims={"tenant": "tenant"},
+        subject_claim="sub", attribute_claims={"department": "department"}
     )
 
     with pytest.raises(PermissionError, match="Invalid attribute claim"):
-        mapper.map_claims({"sub": "user-123", "tenant": ["acme"]})
+        mapper.map_claims({"sub": "user-123", "department": ["acme"]})

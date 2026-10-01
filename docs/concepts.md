@@ -69,8 +69,10 @@ flowchart TB
 | Ticket | Short-lived opaque reference used by Flight `do_get`. |
 
 The public product model is asset-first: catalogs, assets, owners, policies,
-policy revisions, and settings. Tenant and cell records are internal runtime
-partitioning details.
+policy revisions, and deployment-wide settings. Each database has one catalog
+namespace and one runtime configuration. Catalog names are globally unique;
+assets are unique by catalog and target. Asset owners and capability grants
+control management access.
 
 ## Asset Lifecycle
 
@@ -145,7 +147,8 @@ and `dal-obscura-migrate check` explicitly.
 
 ## Compatibility Notes
 
-- Public tenant and cell endpoints were removed.
+- One database represents one deployment. Configuration and tickets carry no
+  tenant or cell routing identifiers.
 - Asset policy is saved directly with optimistic revision checks. There is no
   policy draft, review, publication, or workspace bundle lifecycle.
 - Ticket authorization stays captured until expiry unless the asset owner

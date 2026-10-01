@@ -161,25 +161,19 @@ def test_execution_context_rejects_ambiguous_or_unbounded_values() -> None:
     deadline = datetime.now(timezone.utc)
     capabilities = frozenset({"nested_schema"})
     context = ExecutionContext(
-        deadline=deadline,
-        correlation_id="request-1",
-        capabilities=capabilities,
+        deadline=deadline, correlation_id="request-1", capabilities=capabilities
     )
     assert context.correlation_id == "request-1"
 
     with pytest.raises(ValueError, match="timezone-aware"):
         ExecutionContext(
-            deadline=datetime.now(),
-            correlation_id="request-1",
-            capabilities=capabilities,
+            deadline=datetime.now(), correlation_id="request-1", capabilities=capabilities
         )
     with pytest.raises(ValueError, match="correlation ID"):
         ExecutionContext(deadline=deadline, correlation_id="\n", capabilities=capabilities)
     with pytest.raises(ValueError, match="capabilities"):
         ExecutionContext(
-            deadline=deadline,
-            correlation_id="request-1",
-            capabilities=frozenset({""}),
+            deadline=deadline, correlation_id="request-1", capabilities=frozenset({""})
         )
     with pytest.raises(ValueError, match="cancellation"):
         ExecutionContext(

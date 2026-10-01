@@ -156,7 +156,6 @@ class FakeAuthorizer:
         self._current_version = current_version
         self._asset_id = asset_id
         self.last_requested_columns: list[str] | None = None
-        self.last_current_version_tenant_id: str | None = None
 
     def authorize(self, principal, target, catalog, requested_columns):
         del principal, target, catalog
@@ -167,20 +166,25 @@ class FakeAuthorizer:
             return self._decision
         return replace(self._decision, asset_id=self._asset_id)
 
-    def current_policy_version(self, target, catalog, *, tenant_id):
+    def current_policy_version(
+        self,
+        target,
+        catalog,
+    ):
         del target, catalog
-        self.last_current_version_tenant_id = tenant_id
         return self._current_version
 
 
 class FakeCatalogRegistry:
     def __init__(self, table_format: TableFormat) -> None:
         self._table_format = table_format
-        self.last_tenant_id: str | None = None
 
-    def describe(self, catalog: str | None, target: str, *, tenant_id: str) -> TableFormat:
+    def describe(
+        self,
+        catalog: str | None,
+        target: str,
+    ) -> TableFormat:
         del catalog, target
-        self.last_tenant_id = tenant_id
         return self._table_format
 
 
@@ -199,7 +203,6 @@ class FakeTicketCodec:
             asset_id="00000000-0000-4000-8000-000000000001",
             catalog="catalog1",
             target="users",
-            tenant_id="default",
             columns=["id"],
             scan=scan_payload(),
             policy_version=100,
@@ -279,7 +282,7 @@ class FakeTicketStore:
         if ticket_id in self.revoked or ticket_id not in self.records:
             raise PermissionError("Ticket is revoked or unavailable")
 
-    def cleanup_expired_and_exhausted(self, *, now: int) -> int:
+    def cleanup_expired(self, *, now: int) -> int:
         self.cleanup_calls.append(now)
         return 0
 
@@ -292,8 +295,6 @@ class FakeRowTransform:
 
 def encode_scan_task(table_format: TableFormat, schema: pa.Schema) -> str:
     task = ScanTask(
-        table_format=table_format,
-        schema=schema,
-        partition=StubInputPartition(payload=b"payload"),
+        table_format=table_format, schema=schema, partition=StubInputPartition(payload=b"payload")
     )
     return base64.b64encode(pickle.dumps(task)).decode("utf-8")

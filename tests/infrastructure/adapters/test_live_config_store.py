@@ -15,11 +15,9 @@ from dal_obscura.common.config_store.orm import (
     AssetRecord,
     AuthProviderRecord,
     CatalogRecord,
-    CellRecord,
-    CellRuntimeSettingsRecord,
-    CellTenantRecord,
     PolicyRuleRecord,
-    TenantRecord,
+    RuntimeSettingsRecord,
+    WorkspaceRecord,
 )
 from dal_obscura.data_plane.infrastructure.adapters.live_config import (
     LiveConfigAuthorizer,
@@ -38,10 +36,10 @@ def db_session():
 
 
 def test_live_store_reads_current_policy_from_canonical_records(db_session: Session):
-    cell_id, tenant_id, asset_id = _seed_live_config(db_session)
-    store = LiveConfigStore(db_session, cell_id=cell_id)
+    (asset_id,) = _seed_live_config(db_session)
+    store = LiveConfigStore(session_factory(db_session.get_bind().engine))
     authorizer = LiveConfigAuthorizer(store)
-    principal = Principal(id="user1", groups=[], attributes={"tenant_id": str(tenant_id)})
+    principal = Principal(id="user1", groups=[], attributes={})
 
     first = authorizer.authorize(principal, "default.users", "analytics", ["id"])
     assert first.allowed_columns == ["id"]
@@ -52,9 +50,6 @@ def test_live_store_reads_current_policy_from_canonical_records(db_session: Sess
     asset = db_session.get(AssetRecord, asset_id)
     assert asset is not None
     asset.policy_revision += 1
-    cell = db_session.get(CellRecord, cell_id)
-    assert cell is not None
-    cell.configuration_revision += 1
     db_session.commit()
 
     second = authorizer.authorize(principal, "default.users", "analytics", ["email"])
@@ -63,13 +58,11 @@ def test_live_store_reads_current_policy_from_canonical_records(db_session: Sess
 
 
 def test_live_runtime_settings_and_catalogs_need_no_snapshot_table(db_session: Session):
-    cell_id, tenant_id, _ = _seed_live_config(db_session)
-    store = LiveConfigStore(db_session, cell_id=cell_id)
+    (_,) = _seed_live_config(db_session)
+    store = LiveConfigStore(session_factory(db_session.get_bind().engine))
 
     runtime = store.get_runtime()
-    asset, catalog = store.get_asset_and_catalog(
-        tenant_id=str(tenant_id), catalog="analytics", target="default.users"
-    )
+    _asset, catalog = store.get_asset_and_catalog(catalog="analytics", target="default.users")
 
     assert runtime.ticket == {"ttl_seconds": 600, "max_tickets": 12, "max_exchanges": 2}
     assert runtime.auth_chain["providers"] == [
@@ -80,51 +73,40 @@ def test_live_runtime_settings_and_catalogs_need_no_snapshot_table(db_session: S
             "enabled": True,
         }
     ]
-    assert asset.config_revision == catalog.config_revision
     assert catalog.config["plugin_id"] == "iceberg.sql"
     assert catalog.config["revision"] == 3
 
 
-def test_live_store_invalidates_asset_cache_after_direct_catalog_edit(db_session: Session):
-    cell_id, tenant_id, _ = _seed_live_config(db_session)
-    store = LiveConfigStore(db_session, cell_id=cell_id)
-    first = store.get_asset(tenant_id=str(tenant_id), catalog="analytics", target="default.users")
+def test_live_store_reads_catalog_edit_without_global_invalidation(db_session: Session):
+    (_,) = _seed_live_config(db_session)
+    store = LiveConfigStore(session_factory(db_session.get_bind().engine))
+    store.get_asset(catalog="analytics", target="default.users")
 
     catalog = db_session.query(CatalogRecord).filter_by(name="analytics").one()
     catalog.options_json = {"type": "sql", "uri": "sqlite:///changed.db"}
     catalog.revision += 1
-    cell = db_session.get(CellRecord, cell_id)
-    assert cell is not None
-    cell.configuration_revision += 1
     db_session.commit()
 
-    second = store.get_asset(tenant_id=str(tenant_id), catalog="analytics", target="default.users")
-    assert second.config_revision != first.config_revision
+    second = store.get_asset(catalog="analytics", target="default.users")
     assert second.compiled_config["catalog"]["options"]["uri"] == "sqlite:///changed.db"
 
 
 def _seed_live_config(session: Session):
-    cell_id = uuid4()
-    tenant_id = uuid4()
     catalog_id = uuid4()
     asset_id = uuid4()
     session.add_all(
         [
-            CellRecord(id=cell_id, name=f"cell-{cell_id}", region="local"),
-            TenantRecord(id=tenant_id, slug=f"tenant-{tenant_id}", display_name="Test"),
-            CellTenantRecord(cell_id=cell_id, tenant_id=tenant_id, shard_key="default"),
-            CellRuntimeSettingsRecord(
-                cell_id=cell_id,
+            WorkspaceRecord(id=1),
+            RuntimeSettingsRecord(
                 ticket_ttl_seconds=600,
                 max_tickets=12,
                 max_ticket_exchanges=2,
                 revision=1,
                 path_rules_json=[],
+                id=1,
             ),
             CatalogRecord(
                 id=catalog_id,
-                cell_id=cell_id,
-                tenant_id=tenant_id,
                 name="analytics",
                 plugin_id=ICEBERG_CATALOG_ID,
                 options_json={"type": "sql", "uri": "sqlite:///catalog.db"},
@@ -132,8 +114,6 @@ def _seed_live_config(session: Session):
             ),
             AssetRecord(
                 id=asset_id,
-                cell_id=cell_id,
-                tenant_id=tenant_id,
                 catalog_id=catalog_id,
                 target="default.users",
                 backend="iceberg",
@@ -155,7 +135,6 @@ def _seed_live_config(session: Session):
             ),
             AuthProviderRecord(
                 id=uuid4(),
-                cell_id=cell_id,
                 ordinal=1,
                 module="example.IdentityProvider",
                 args_json={"issuer": "https://issuer.example"},
@@ -164,5 +143,7 @@ def _seed_live_config(session: Session):
             ),
         ]
     )
+    session.flush([record for record in session.new if isinstance(record, CatalogRecord)])
+    session.flush([record for record in session.new if isinstance(record, AssetRecord)])
     session.commit()
-    return cell_id, tenant_id, asset_id
+    return (asset_id,)

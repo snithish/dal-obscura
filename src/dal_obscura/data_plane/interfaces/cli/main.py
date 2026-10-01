@@ -32,7 +32,6 @@ from dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks import (
     OidcJwksIdentityProvider,
 )
 from dal_obscura.data_plane.infrastructure.adapters.live_config import (
-    LiveConfigAuthorizer,
     LiveConfigCatalogRegistry,
     LiveConfigStore,
     LiveRuntime,
@@ -76,21 +75,14 @@ def main() -> None:
     check_config_store_schema(engine)
     session_maker = session_factory(engine)
     _start_health_server(session_maker, runtime_config)
-    config_store = LiveConfigStore(
-        session_maker,
-        cell_id=runtime_config.cell_id,
-    )
+    config_store = LiveConfigStore(session_maker)
     live_runtime = config_store.get_runtime()
     secret_provider = load_secret_provider(
         runtime_config.secret_provider,
-        context=SecretProviderContext(
-            database_url=runtime_config.database_url,
-            cell_id=runtime_config.cell_id,
-        ),
+        context=SecretProviderContext(database_url=runtime_config.database_url),
     )
 
     identity = _identity_from_runtime(live_runtime, secret_provider=secret_provider)
-    authorizer = LiveConfigAuthorizer(config_store)
     plugin_registry = create_builtin_plugin_registry(
         allowlist=(
             load_plugin_lock_file(runtime_config.plugin_lock_file)
@@ -103,6 +95,8 @@ def main() -> None:
         secret_provider=secret_provider,
         plugin_registry=plugin_registry,
         path_enforcer=PathRuleEnforcer(live_runtime.path_rules),
+        max_cached_providers=runtime_config.max_cached_catalog_providers,
+        provider_wait_seconds=runtime_config.catalog_provider_wait_seconds,
     )
     masking = DefaultMaskingAdapter()
     row_transform = DuckDBRowTransformAdapter(
@@ -113,16 +107,14 @@ def main() -> None:
         max_output_batch_bytes=runtime_config.max_output_batch_bytes,
     )
     ticket_codec = HmacTicketCodecAdapter(
-        runtime_config.ticket_secret,
-        previous_secrets=runtime_config.ticket_previous_secrets,
+        runtime_config.ticket_secret, previous_secrets=runtime_config.ticket_previous_secrets
     )
-    ticket_store = SqlAlchemyTicketStore(session_maker, cell_id=runtime_config.cell_id)
+    ticket_store = SqlAlchemyTicketStore(session_maker)
     _start_ticket_cleanup(ticket_store, runtime_config.ticket_cleanup_interval_seconds)
     ticket_settings = live_runtime.ticket
     access_flow = AccessFlow(
         identity=identity,
-        authorizer=authorizer,
-        catalog_registry=catalog_registry,
+        access_context=catalog_registry,
         masking=masking,
         row_transform=row_transform,
         ticket_codec=ticket_codec,
@@ -135,24 +127,23 @@ def main() -> None:
     )
 
     get_schema = GetSchemaUseCase(
-        identity=identity,
-        authorizer=authorizer,
-        catalog_registry=catalog_registry,
-        masking=masking,
+        identity=identity, access_context=catalog_registry, masking=masking
     )
     server = DataAccessFlightService(
         location=runtime_config.location,
         get_schema_use_case=get_schema,
         access_flow=access_flow,
         tls_certificates=_tls_certificates(
-            cert=runtime_config.tls_cert,
-            key=runtime_config.tls_key,
+            cert=runtime_config.tls_cert, key=runtime_config.tls_key
         ),
         verify_client=runtime_config.tls_verify_client,
         root_certificates=_tls_root_certificates(runtime_config.tls_client_ca),
         health_check=lambda: _live_runtime_readiness(session_maker, runtime_config),
     )
-    server.serve()
+    try:
+        server.serve()
+    finally:
+        catalog_registry.close()
 
 
 _HELP_TEXT = """dal-obscura — governed Arrow Flight data plane
@@ -162,7 +153,6 @@ configuration. Runtime settings are read from DAL_OBSCURA_* environment variable
 
 Required variables:
   DAL_OBSCURA_DATABASE_URL   PostgreSQL (production) or SQLite (local) URL
-  DAL_OBSCURA_CELL_ID        Configured cell UUID
   DAL_OBSCURA_TICKET_SECRET  HMAC ticket secret
 
 Common variables:
@@ -211,9 +201,7 @@ def _start_health_server(
     )
     server = uvicorn.Server(config)
     thread = threading.Thread(
-        target=lambda: server.run(sockets=[health_socket]),
-        name="dal-obscura-health",
-        daemon=True,
+        target=lambda: server.run(sockets=[health_socket]), name="dal-obscura-health", daemon=True
     )
     thread.start()
 
@@ -228,7 +216,7 @@ def _start_ticket_cleanup(ticket_store: SqlAlchemyTicketStore, interval_seconds:
         while True:
             time.sleep(interval_seconds)
             try:
-                deleted = ticket_store.cleanup_expired_and_exhausted(now=int(time.time()))
+                deleted = ticket_store.cleanup_expired(now=int(time.time()))
                 if deleted:
                     LOGGER.info("ticket_cleanup", extra={"deleted": deleted})
             except Exception:
@@ -236,23 +224,14 @@ def _start_ticket_cleanup(ticket_store: SqlAlchemyTicketStore, interval_seconds:
                 # database exception text into logs that may be user-visible.
                 LOGGER.warning("ticket_cleanup_failed")
 
-    threading.Thread(
-        target=cleanup_loop,
-        name="dal-obscura-ticket-cleanup",
-        daemon=True,
-    ).start()
+    threading.Thread(target=cleanup_loop, name="dal-obscura-ticket-cleanup", daemon=True).start()
 
 
 def _live_runtime_readiness(
     session_maker: sessionmaker[Session],
     runtime_config: DataPlaneRuntimeConfig,
 ) -> dict[str, object]:
-    with session_maker() as health_session:
-        store = LiveConfigStore(
-            health_session,
-            cell_id=runtime_config.cell_id,
-        )
-        return live_runtime_readiness(store)
+    return live_runtime_readiness(LiveConfigStore(session_maker))
 
 
 def _bind_health_socket(host: str, port: int) -> socket.socket:
@@ -302,9 +281,7 @@ def _load_identity_provider(
     args = cast(
         dict[str, object],
         resolve_secret_refs(
-            raw.get("args", {}),
-            provider=secret_provider,
-            expected_scope="identity",
+            raw.get("args", {}), provider=secret_provider, expected_scope="identity"
         ),
     )
     return OidcJwksIdentityProvider(**cast(Any, args))

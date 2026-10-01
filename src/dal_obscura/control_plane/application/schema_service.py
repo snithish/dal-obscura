@@ -11,6 +11,7 @@ from uuid import UUID
 
 import pyarrow as pa
 from pyiceberg.catalog import load_catalog
+from pyiceberg.io.pyarrow import schema_to_pyarrow
 from pyiceberg.schema import Schema
 from pyiceberg.types import ListType, MapType, NestedField, StructType
 
@@ -107,19 +108,12 @@ def load_asset_iceberg_schema(
 
     ensure_asset_capability(store, asset_id, actor, "read")
     asset = store.get_workspace_asset(asset_id)
-    context = store.get_default_workspace_context()
+    context = store.get_workspace()
     if context is None:
         raise LookupError("No workspace has been configured")
-    catalog = store.get_workspace_catalog(
-        context,
-        str(asset["catalog"]),
-    )
+    catalog = store.get_workspace_catalog(str(asset["catalog"]))
     options = cast(dict[str, Any], catalog["options"])
-    validate_admitted_catalog_options(
-        str(catalog["plugin_id"]),
-        options,
-        plugin_registry,
-    )
+    validate_admitted_catalog_options(str(catalog["plugin_id"]), options, plugin_registry)
     validate_catalog_options(options, egress_allowlist=egress_allowlist)
     options = cast(
         dict[str, Any],
@@ -164,11 +158,7 @@ def _load_public_plugin_schema(
 
     from datetime import datetime, timedelta, timezone
 
-    from dal_obscura_plugin_api import (
-        CatalogConfig,
-        ExecutionContext,
-        TableIdentifier,
-    )
+    from dal_obscura_plugin_api import CatalogConfig, ExecutionContext, TableIdentifier
 
     catalog_plugin_id = str(catalog["plugin_id"])
     format_plugin_id = str(asset["backend"])
@@ -421,7 +411,9 @@ def _field_node(field: NestedField, path: tuple[FieldPathSegment, ...]) -> dict[
         "name": field.name,
         "path": FieldPath(path).to_wire(),
         "human_path": FieldPath(path).to_human(),
-        "type": str(field_type),
+        # Admission compares against the executable Arrow schema, including
+        # nested container names and nullability, rather than Iceberg display SQL.
+        "type": str(schema_to_pyarrow(field_type)),
         "nullable": not field.required,
         "kind": kind,
     }

@@ -84,8 +84,7 @@ class CatalogRegistry:
         try:
             for name, catalog_config in config.catalogs.items():
                 candidate_catalogs[name] = _build_catalog(
-                    catalog_config,
-                    plugin_registry=self._plugin_registry,
+                    catalog_config, plugin_registry=self._plugin_registry
                 )
         except Exception:
             _close_catalogs(candidate_catalogs.values())
@@ -100,11 +99,8 @@ class CatalogRegistry:
         self,
         catalog: str | None,
         target: str,
-        *,
-        tenant_id: str = "default",
     ) -> TableFormat:
         self._ensure_open()
-        del tenant_id
         if catalog is None:
             raise ValueError("Catalog name is required to resolve a target")
         with self._swap_lock:
@@ -117,10 +113,8 @@ class CatalogRegistry:
         self,
         catalog: str | None,
         target: str,
-        *,
-        tenant_id: str = "default",
     ) -> TableFormat:
-        return self.resolve(catalog, target, tenant_id=tenant_id)
+        return self.resolve(catalog, target)
 
     def list_tables(self, catalog_name: str) -> list[CatalogTableListing]:
         self._ensure_open()
@@ -181,41 +175,28 @@ class IcebergCatalog(CatalogPlugin):
         """Resolve provider metadata needed to build the Iceberg table adapter."""
         if self._catalog is None:
             self._catalog = _load_iceberg_catalog(
-                _provider_catalog_name(self.name, self.options),
-                _catalog_options(self.options),
+                _provider_catalog_name(self.name, self.options), _catalog_options(self.options)
             )
         return _resolve_iceberg_descriptor(
-            self._catalog,
-            self.name,
-            target,
-            target,
-            path_enforcer=self._path_enforcer,
+            self._catalog, self.name, target, target, path_enforcer=self._path_enforcer
         )
 
     def list_tables(self) -> list[CatalogTableListing]:
         if self._catalog is None:
             self._catalog = _load_iceberg_catalog(
-                _provider_catalog_name(self.name, self.options),
-                _catalog_options(self.options),
+                _provider_catalog_name(self.name, self.options), _catalog_options(self.options)
             )
         table_names: set[str] = set()
         for namespace in _walk_namespaces(
-            self._catalog,
-            max_namespaces=DEFAULT_MAX_DISCOVERY_NAMESPACES,
+            self._catalog, max_namespaces=DEFAULT_MAX_DISCOVERY_NAMESPACES
         ):
             remaining = DEFAULT_MAX_DISCOVERY_TABLES - len(table_names)
             for identifier in _bounded_provider_items(
-                _list_tables(self._catalog, namespace),
-                limit=remaining,
-                kind="table",
+                _list_tables(self._catalog, namespace), limit=remaining, kind="table"
             ):
                 table_names.add(_identifier_to_name(identifier))
         return [
-            CatalogTableListing(
-                name=table_name,
-                provider_id="iceberg",
-                table_identifier=table_name,
-            )
+            CatalogTableListing(name=table_name, provider_id="iceberg", table_identifier=table_name)
             for table_name in table_names
         ]
 
@@ -273,8 +254,7 @@ def _build_catalog(
             config.revision,
         )
     constructor = cast(
-        Callable[[str, dict[str, Any], PathRuleEnforcer | None], CatalogPlugin],
-        factory,
+        Callable[[str, dict[str, Any], PathRuleEnforcer | None], CatalogPlugin], factory
     )
     implementation = constructor(config.name, config.options, config.path_enforcer)
     if not hasattr(implementation, "resolve_table") or not hasattr(implementation, "list_tables"):
@@ -316,9 +296,7 @@ def _resolve_iceberg_descriptor(
     if not isinstance(metadata_location, str) or not metadata_location.strip():
         raise ValueError("Iceberg catalog returned no metadata location")
     _check_returned_locations(
-        metadata_location,
-        dict(getattr(pyiceberg_table.io, "properties", {})),
-        path_enforcer,
+        metadata_location, dict(getattr(pyiceberg_table.io, "properties", {})), path_enforcer
     )
     return CatalogTableDescriptor(
         catalog_name=catalog_name,
@@ -399,9 +377,7 @@ def _walk_namespaces(
         seen.add(namespace)
         yield namespace
         for child in _bounded_provider_items(
-            _list_namespaces(catalog, namespace),
-            limit=max_namespaces - len(seen),
-            kind="namespace",
+            _list_namespaces(catalog, namespace), limit=max_namespaces - len(seen), kind="namespace"
         ):
             pending.append(_namespace_tuple(child))
 

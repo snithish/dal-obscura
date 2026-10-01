@@ -70,7 +70,7 @@ const rule: PolicyRule = {
   masks: { "customer.email": { type: "email" } },
   row_filter: "region = 'EU'",
   effect: "allow",
-  when: { tenant: "analytics" },
+  when: { department: "analytics" },
 };
 
 const access: AssetAccess = {
@@ -119,7 +119,7 @@ const meta = {
     onPreview: noop,
     previewPrincipal: "user:analyst@example.com",
     previewGroups: "analysts",
-    previewClaims: '{"tenant":"analytics"}',
+    previewClaims: '{"department":"analytics"}',
     onPreviewPrincipal: noop,
     onPreviewGroups: noop,
     onPreviewClaims: noop,

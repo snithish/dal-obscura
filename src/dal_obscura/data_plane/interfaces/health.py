@@ -79,15 +79,12 @@ def live_runtime_readiness(store: RuntimeStore) -> dict[str, object]:
         return {
             "status": "not_ready",
             "checks": {
-                "configuration_revision": "failed",
                 "runtime": "failed",
                 "auth_chain": "unknown",
             },
             "reason": "live runtime unavailable",
         }
 
-    config_revision = getattr(runtime, "config_revision", None)
-    checks["configuration_revision"] = "ok" if config_revision else "missing"
     ticket = getattr(runtime, "ticket", {})
     checks["runtime"] = (
         "ok" if isinstance(ticket, Mapping) and ticket else "missing_ticket_settings"
@@ -99,8 +96,6 @@ def live_runtime_readiness(store: RuntimeStore) -> dict[str, object]:
 
     status = "ready" if all(value == "ok" for value in checks.values()) else "not_ready"
     payload: dict[str, object] = {"status": status, "checks": checks}
-    if config_revision:
-        payload["config_revision"] = str(config_revision)
     return payload
 
 

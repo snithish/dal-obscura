@@ -223,7 +223,8 @@ def test_python_sdk_preserves_nested_masked_arrow_values_in_polars():
     ]
 
 
-def test_duckdb_reader_exposes_sdk_results_as_relation():
+@pytest.mark.parametrize("columns", [["id", "region"], iter(["id", "region"])])
+def test_duckdb_reader_exposes_sdk_results_as_relation(columns):
     schema = id_email_region_schema()
     batch = id_email_region_batch(
         [1, 2, 3],
@@ -247,7 +248,7 @@ def test_duckdb_reader_exposes_sdk_results_as_relation():
         relation = DuckDBDalObscuraReader(sdk).relation(
             catalog="analytics",
             target="test.table",
-            columns=["id", "region"],
+            columns=columns,
             row_filter="\"region\" = 'us'",
         )
 
@@ -257,13 +258,16 @@ def test_duckdb_reader_exposes_sdk_results_as_relation():
 
 
 def test_duckdb_reader_does_not_call_materializing_table_api(monkeypatch):
-    schema = id_email_region_schema()
     batch = id_email_region_batch([1], ["a@example.com"], ["us"])
     sdk = DalObscuraClient.from_flight_client(
         _StreamingFlightClient(batch),
         auth_token="token",
     )
-    monkeypatch.setattr(sdk, "fetch_schema", lambda **_kwargs: schema)
+    monkeypatch.setattr(
+        sdk,
+        "fetch_schema",
+        lambda **_kwargs: pytest.fail("DuckDB adapter fetched schema outside the read plan"),
+    )
     monkeypatch.setattr(
         sdk,
         "read_table",

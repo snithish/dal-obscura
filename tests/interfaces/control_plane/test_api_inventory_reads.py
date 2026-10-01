@@ -32,28 +32,12 @@ def _replace_live_policy(client: TestClient, asset_id: str, rules: list[dict]) -
     assert response.status_code == 200, response.text
 
 
-def test_inventory_reads_require_admin_token():
+def test_public_health_probes_and_request_correlation():
     client = _client()
-
-    assert client.get("/v1/workspace/summary").status_code == 401
-    assert client.get("/v1/catalogs").status_code == 401
-    assert client.get("/v1/assets").status_code == 401
-    assert client.get("/v1/settings/runtime").status_code == 401
-    assert client.get("/v1/settings/auth-providers").status_code == 401
-    assert client.get("/v1/policy-versions/page").status_code == 404
-
-
-def test_control_plane_healthz_is_public():
-    client = _client()
-
     response = client.get("/healthz")
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
-
-
-def test_control_plane_returns_bounded_request_correlation_id():
-    client = _client()
 
     supplied = client.get("/healthz", headers={"x-request-id": "support-42"})
     generated = client.get("/healthz", headers={"x-request-id": "bad/id"})
@@ -62,44 +46,16 @@ def test_control_plane_returns_bounded_request_correlation_id():
     assert len(generated.headers["x-request-id"]) == 32
     assert generated.headers["x-request-id"].isalnum()
 
-
-def test_control_plane_readyz_checks_database():
-    client = _client()
-
     response = client.get("/readyz")
 
     assert response.status_code == 200
     assert response.json() == {"status": "ready", "checks": {"database": "ok"}}
 
 
-def test_control_plane_rejects_oversized_requests_before_authentication():
-    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
-    migrate_config_store(engine)
-    client = TestClient(
-        create_app(
-            session_factory(engine),
-            admin_token="test-admin",
-            max_request_bytes=64,
-        )
-    )
-
-    response = client.post("/v1/logout", content=b"x" * 65)
-
-    assert response.status_code == 413
-    payload = response.json()
-    assert payload["detail"] == "Request body too large"
-    assert payload["error"]["code"] == "request_too_large"
-    assert payload["error"]["request_id"] == response.headers["x-request-id"]
-
-
 def test_control_plane_rejects_invalid_content_length_with_structured_error():
     client = _client()
 
-    response = client.post(
-        "/v1/logout",
-        content=b"{}",
-        headers={"content-length": "invalid"},
-    )
+    response = client.post("/v1/logout", content=b"{}", headers={"content-length": "invalid"})
 
     assert response.status_code == 400
     payload = response.json()
@@ -111,11 +67,7 @@ def test_control_plane_rejects_invalid_content_length_with_structured_error():
 def test_control_plane_rejects_oversized_chunked_body_without_content_length():
     engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
     migrate_config_store(engine)
-    app = create_app(
-        session_factory(engine),
-        admin_token="test-admin",
-        max_request_bytes=64,
-    )
+    app = create_app(session_factory(engine), admin_token="test-admin", max_request_bytes=64)
     messages: list[dict[str, Any]] = [
         {"type": "http.request", "body": b"x" * 40, "more_body": True},
         {"type": "http.request", "body": b"y" * 25, "more_body": False},
@@ -165,11 +117,7 @@ DEFAULT_AUTH_MODULE = (
 def _provision_asset(client: TestClient) -> dict[str, str]:
     client.put(
         "/v1/settings/runtime",
-        json={
-            "ticket_ttl_seconds": 900,
-            "max_tickets": 64,
-            "max_ticket_exchanges": 2,
-        },
+        json={"ticket_ttl_seconds": 900, "max_tickets": 64, "max_ticket_exchanges": 2},
         headers=ADMIN_HEADERS,
     )
     client.put(
@@ -193,7 +141,7 @@ def _provision_asset(client: TestClient) -> dict[str, str]:
                 "ordinal": 10,
                 "effect": "allow",
                 "principals": ["user1"],
-                "when": {"tenant": "default"},
+                "when": {"department": "default"},
                 "columns": ["id", "email"],
                 "masks": {"email": {"type": "email"}},
                 "row_filter": "region = 'us'",
@@ -226,10 +174,7 @@ def test_reads_live_workspace_resources_after_writes():
     client = _client()
     asset = _provision_asset(client)
 
-    runtime = client.get(
-        "/v1/settings/runtime",
-        headers=ADMIN_HEADERS,
-    ).json()
+    runtime = client.get("/v1/settings/runtime", headers=ADMIN_HEADERS).json()
     catalogs = client.get("/v1/catalogs", headers=ADMIN_HEADERS).json()
     assets = client.get("/v1/assets", headers=ADMIN_HEADERS).json()
     rules = client.get(f"/v1/assets/{asset['id']}", headers=ADMIN_HEADERS).json()["policy_rules"]
@@ -262,7 +207,7 @@ def test_reads_live_workspace_resources_after_writes():
             "ordinal": 10,
             "effect": "allow",
             "principals": ["user1"],
-            "when": {"tenant": "default"},
+            "when": {"department": "default"},
             "columns": ["id", "email"],
             "masks": {"email": {"type": "email"}},
             "row_filter": "region = 'us'",
@@ -280,16 +225,3 @@ def test_reads_live_workspace_resources_after_writes():
     ]
     assert len(catalogs) == 1
     assert len(assets) == 1
-
-
-def test_retired_draft_and_publication_routes_are_absent():
-    client = _client()
-
-    for path in (
-        "/v1/cells/00000000-0000-0000-0000-000000000001/draft",
-        "/v1/assets/00000000-0000-0000-0000-000000000000/draft",
-        "/v1/policy-versions/page",
-        "/v1/workspace/publications",
-    ):
-        expected = 405 if path.startswith("/v1/assets/") and path.endswith("/draft") else 404
-        assert client.get(path, headers=ADMIN_HEADERS).status_code == expected

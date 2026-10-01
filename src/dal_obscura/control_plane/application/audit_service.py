@@ -28,7 +28,7 @@ def list_audit_events_page(
 ) -> dict[str, object]:
     """Returns bounded audit events with database-enforced scope and a keyset cursor."""
 
-    context = store.get_default_workspace_context()
+    context = store.get_workspace()
     if context is None:
         return {"items": [], "next_cursor": None}
     if asset_id is not None:
@@ -36,7 +36,6 @@ def list_audit_events_page(
     principals = None if actor.platform_admin else actor.owner_principals()
     try:
         page = store.list_audit_events_page(
-            context,
             asset_id=asset_id,
             principals=principals,
             actor=actor_filter,

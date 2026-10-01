@@ -18,13 +18,11 @@ from dal_obscura.common.ticket_delivery.models import (
     ticket_payload_hash,
 )
 from dal_obscura.data_plane.application.access_flow import AccessFlow
-from dal_obscura.data_plane.application.ports.authorization import AuthorizationPort
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest, IdentityPort
 from dal_obscura.data_plane.application.ports.masking import MaskingPort
 from dal_obscura.data_plane.application.ports.row_transform import RowTransformPort
 from dal_obscura.data_plane.application.ports.ticket_codec import TicketCodecPort
 from dal_obscura.data_plane.application.ports.ticket_store import TicketStorePort
-from dal_obscura.data_plane.application.use_cases.plan_access import _tenant_id
 
 
 @dataclass(frozen=True)
@@ -55,7 +53,6 @@ class FetchStreamUseCase:
     def __init__(
         self,
         identity: IdentityPort,
-        authorizer: AuthorizationPort,
         masking: MaskingPort,
         row_transform: RowTransformPort,
         ticket_codec: TicketCodecPort,
@@ -65,8 +62,7 @@ class FetchStreamUseCase:
     ) -> None:
         self._flow = access_flow or AccessFlow(
             identity=identity,
-            authorizer=authorizer,
-            catalog_registry=_UnavailableCatalogRegistry(),
+            access_context=None,
             masking=masking,
             row_transform=row_transform,
             ticket_codec=ticket_codec,
@@ -116,12 +112,8 @@ def fetch_read(
     if not hmac.compare_digest(client_payload.nonce, payload.nonce):
         raise PermissionError("Unauthorized")
     _require_ticket_identity(principal, payload)
-
-    tenant_id = _tenant_id(principal)
-    if tenant_id != payload.tenant_id:
-        raise PermissionError("Unauthorized")
     if payload.identity_context and not hmac.compare_digest(
-        payload.identity_context, _identity_context_digest(principal, tenant_id)
+        payload.identity_context, _identity_context_digest(principal)
     ):
         raise PermissionError("Unauthorized")
 
@@ -131,7 +123,7 @@ def fetch_read(
     try:
         flow.ticket_store.reserve_exchange(client_payload.ticket_id, now=now)
     except PermissionError:
-        flow.ticket_store.cleanup_expired_and_exhausted(now=now)
+        flow.ticket_store.cleanup_expired(now=now)
         raise
 
     import pickle
@@ -155,9 +147,7 @@ def fetch_read(
         now=flow.now,
     )
     result_batches = _guard_stream_ticket_revocation(
-        result_batches,
-        ticket_store=flow.ticket_store,
-        ticket_id=client_payload.ticket_id,
+        result_batches, ticket_store=flow.ticket_store, ticket_id=client_payload.ticket_id
     )
     result_batches = _close_stream_on_termination(result_batches)
 
@@ -232,12 +222,13 @@ def _require_ticket_identity(principal: Principal, payload: TicketPayload) -> No
         raise PermissionError("Unauthorized")
 
 
-def _identity_context_digest(principal: Principal, tenant_id: str) -> str:
+def _identity_context_digest(
+    principal: Principal,
+) -> str:
     return canonical_context_digest(
         {
             "issuer": principal.issuer,
             "subject": principal.id,
-            "tenant_id": tenant_id,
             "groups": sorted(set(principal.groups)),
             "attributes": dict(sorted(principal.attributes.items())),
         }
@@ -261,10 +252,7 @@ def _decode_scan(scan_info: Mapping[str, object]) -> DecodedScan:
         mask_type = mask_data.get("type")
         if mask_type is None:
             raise ValueError("Invalid mask payload in ticket")
-        parsed_masks[name] = MaskRule(
-            type=str(mask_type),
-            value=mask_data.get("value"),
-        )
+        parsed_masks[name] = MaskRule(type=str(mask_type), value=mask_data.get("value"))
 
     authorization_columns = scan_info.get("authorization_columns")
     if (
@@ -292,9 +280,3 @@ def _optional_row_filter(value: object) -> RowFilter | None:
 
 def _epoch_seconds() -> int:
     return int(time.time())
-
-
-class _UnavailableCatalogRegistry:
-    def describe(self, catalog: str | None, target: str, *, tenant_id: str):
-        del catalog, target, tenant_id
-        raise RuntimeError("Fetch flow does not resolve catalogs")

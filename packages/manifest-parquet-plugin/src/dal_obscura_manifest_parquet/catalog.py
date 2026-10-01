@@ -105,8 +105,7 @@ class ManifestCatalog(CatalogPlugin):
         if limit <= 0 or limit > _MAX_TABLES:
             raise ValueError("catalog page limit is invalid")
         tables = sorted(
-            self._tables,
-            key=lambda table: (*table.identifier.namespace, table.identifier.name),
+            self._tables, key=lambda table: (*table.identifier.namespace, table.identifier.name)
         )
         start = 0
         if continuation is not None:
@@ -123,8 +122,7 @@ class ManifestCatalog(CatalogPlugin):
         _check_context(context)
         key = _identifier_key(identifier)
         table = next(
-            (item for item in self._tables if _identifier_key(item.identifier) == key),
-            None,
+            (item for item in self._tables if _identifier_key(item.identifier) == key), None
         )
         if table is None:
             raise KeyError("table is not present in the operator manifest")
@@ -251,8 +249,7 @@ def _parse_identifier_entry(raw_identifier: str, raw_table: dict[str, object]) -
     if not isinstance(raw_name, str) or not raw_name:
         raise ValueError("manifest table name is invalid")
     return TableIdentifier(
-        namespace=tuple(cast(str, part) for part in raw_namespace),
-        name=raw_name,
+        namespace=tuple(cast(str, part) for part in raw_namespace), name=raw_name
     )
 
 

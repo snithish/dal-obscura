@@ -13,6 +13,7 @@ from uuid import UUID
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -35,48 +36,23 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-class TenantRecord(Base):
-    """Workspace tenant row."""
+class WorkspaceRecord(Base):
+    """Singleton workspace initialization and authentication-provider edit revision."""
 
-    __tablename__ = "tenants"
-
-    id: Mapped[UUID] = mapped_column(primary_key=True)
-    slug: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
-    display_name: Mapped[str] = mapped_column(Text, nullable=False)
-    status: Mapped[str] = mapped_column(String(24), nullable=False, default="active")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-
-
-class CellRecord(Base):
-    """Data-plane cell row."""
-
-    __tablename__ = "cells"
-
-    id: Mapped[UUID] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
-    region: Mapped[str] = mapped_column(String(64), nullable=False)
-    status: Mapped[str] = mapped_column(String(24), nullable=False, default="active")
+    __tablename__ = "workspace"
+    __table_args__ = (CheckConstraint("id = 1", name="ck_workspace_singleton"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     auth_provider_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    configuration_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-class CellTenantRecord(Base):
-    """Assignment row connecting one tenant to one data-plane cell."""
+class RuntimeSettingsRecord(Base):
+    """Live runtime settings for the deployment."""
 
-    __tablename__ = "cell_tenants"
+    __tablename__ = "runtime_settings"
+    __table_args__ = (CheckConstraint("id = 1", name="ck_runtime_settings_singleton"),)
 
-    cell_id: Mapped[UUID] = mapped_column(ForeignKey("cells.id"), primary_key=True)
-    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), primary_key=True)
-    shard_key: Mapped[str] = mapped_column(String(120), nullable=False, default="default")
-
-
-class CellRuntimeSettingsRecord(Base):
-    """Live runtime settings for a data-plane cell."""
-
-    __tablename__ = "cell_runtime_settings"
-
-    cell_id: Mapped[UUID] = mapped_column(ForeignKey("cells.id"), primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     ticket_ttl_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
     max_tickets: Mapped[int] = mapped_column(Integer, nullable=False)
     max_ticket_exchanges: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
@@ -91,17 +67,15 @@ class CatalogRecord(Base):
 
     __tablename__ = "catalogs"
     __table_args__ = (
-        UniqueConstraint("cell_id", "tenant_id", "name"),
-        Index("ix_catalogs_workspace_name", "cell_id", "tenant_id", "name"),
+        UniqueConstraint("name"),
+        Index("ix_catalogs_workspace_name", "name"),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True)
-    cell_id: Mapped[UUID] = mapped_column(ForeignKey("cells.id"), nullable=False, index=True)
-    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     plugin_id: Mapped[str] = mapped_column(Text, nullable=False)
     options_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    # Monotonic generation for provider configuration changes.
+    # Optimistic edit revision for provider configuration changes.
     revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
@@ -110,20 +84,18 @@ class AssetRecord(Base):
 
     __tablename__ = "assets"
     __table_args__ = (
-        UniqueConstraint("cell_id", "tenant_id", "catalog_id", "target"),
-        Index("ix_assets_workspace_target", "cell_id", "tenant_id", "target", "id"),
-        Index("ix_assets_workspace_catalog", "cell_id", "tenant_id", "catalog_id"),
+        UniqueConstraint("catalog_id", "target"),
+        Index("ix_assets_workspace_target", "target", "id"),
+        Index("ix_assets_workspace_catalog", "catalog_id"),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True)
-    cell_id: Mapped[UUID] = mapped_column(ForeignKey("cells.id"), nullable=False, index=True)
-    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     catalog_id: Mapped[UUID] = mapped_column(ForeignKey("catalogs.id"), nullable=False, index=True)
     target: Mapped[str] = mapped_column(Text, nullable=False)
     backend: Mapped[str] = mapped_column(String(48), nullable=False)
     table_identifier: Mapped[str | None] = mapped_column(Text, nullable=True)
     options_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    # Monotonic generation for binding and access metadata mutations.  It is
+    # Optimistic edit revision for binding and access metadata mutations.  It is
     # used as an optimistic-concurrency precondition at the HTTP boundary.
     revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     policy_revision: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
@@ -169,7 +141,7 @@ class AssetSchemaFieldRecord(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     field_id: Mapped[str] = mapped_column(String(128), nullable=False)
     path_json: Mapped[list[str]] = mapped_column(JSON, nullable=False)
-    type: Mapped[str] = mapped_column(String(120), nullable=False)
+    type: Mapped[str] = mapped_column(Text, nullable=False)
     nullable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
@@ -193,13 +165,12 @@ class PolicyRuleRecord(Base):
 
 
 class AuthProviderRecord(Base):
-    """Authentication provider row for a data-plane cell."""
+    """Authentication provider row for the deployment."""
 
     __tablename__ = "auth_providers"
-    __table_args__ = (UniqueConstraint("cell_id", "ordinal"),)
+    __table_args__ = (UniqueConstraint("ordinal"),)
 
     id: Mapped[UUID] = mapped_column(primary_key=True)
-    cell_id: Mapped[UUID] = mapped_column(ForeignKey("cells.id"), nullable=False)
     ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
     module: Mapped[str] = mapped_column(Text, nullable=False)
     args_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
@@ -281,18 +252,11 @@ class AuditEventRecord(Base):
 
     __tablename__ = "audit_events"
     __table_args__ = (
-        Index("ix_audit_events_cell_created", "cell_id", "created_at"),
-        Index("ix_audit_events_tenant_created", "tenant_id", "created_at"),
-        Index("ix_audit_events_workspace_keyset", "cell_id", "tenant_id", "created_at", "id"),
+        Index("ix_audit_events_workspace_keyset", "created_at", "id"),
         Index("ix_audit_events_resource", "resource_type", "resource_id"),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True)
-    cell_id: Mapped[UUID] = mapped_column(ForeignKey("cells.id"), nullable=False)
-    tenant_id: Mapped[UUID | None] = mapped_column(
-        ForeignKey("tenants.id"),
-        nullable=True,
-    )
     actor_principal: Mapped[str] = mapped_column(Text, nullable=False)
     action: Mapped[str] = mapped_column(String(96), nullable=False)
     resource_type: Mapped[str] = mapped_column(String(48), nullable=False)
@@ -308,14 +272,12 @@ class DataPlaneTicketRecord(Base):
 
     __tablename__ = "data_plane_tickets"
     __table_args__ = (
-        Index("ix_data_plane_tickets_cell_ticket", "cell_id", "ticket_id"),
-        Index("ix_data_plane_tickets_cell_expires", "cell_id", "expires_at"),
-        Index("ix_data_plane_tickets_cell_asset_expires", "cell_id", "asset_id", "expires_at"),
+        Index("ix_data_plane_tickets_ticket", "ticket_id"),
+        Index("ix_data_plane_tickets_expires", "expires_at"),
+        Index("ix_data_plane_tickets_asset_expires", "asset_id", "expires_at"),
     )
 
     ticket_id: Mapped[UUID] = mapped_column(primary_key=True)
-    cell_id: Mapped[UUID] = mapped_column(ForeignKey("cells.id"), nullable=False)
-    tenant_id: Mapped[str] = mapped_column(Text, nullable=False)
     asset_id: Mapped[UUID] = mapped_column(nullable=False)
     catalog: Mapped[str | None] = mapped_column(Text, nullable=True)
     target: Mapped[str] = mapped_column(Text, nullable=False)
@@ -328,7 +290,6 @@ class DataPlaneTicketRecord(Base):
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_exchanged_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
+        DateTime(timezone=True), nullable=True
     )
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

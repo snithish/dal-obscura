@@ -13,7 +13,6 @@ import json
 import os
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit
-from uuid import UUID
 
 from dal_obscura.data_plane.infrastructure.adapters.memory_limits import validate_memory_limit
 from dal_obscura.data_plane.infrastructure.adapters.secret_providers import (
@@ -30,7 +29,6 @@ class DataPlaneRuntimeConfig:
         ```python
         config = DataPlaneRuntimeConfig(
             database_url="sqlite+pysqlite:///control-plane.db",
-            cell_id=cell_id,
             location="grpc://0.0.0.0:8815",
             ticket_secret="dev-ticket-secret",
         )
@@ -38,7 +36,6 @@ class DataPlaneRuntimeConfig:
     """
 
     database_url: str
-    cell_id: UUID
     location: str
     ticket_secret: str
     ticket_previous_secrets: tuple[str, ...] = ()
@@ -50,6 +47,8 @@ class DataPlaneRuntimeConfig:
     tls_verify_client: bool = False
     health_host: str = "127.0.0.1"
     health_port: int | None = None
+    max_cached_catalog_providers: int = 32
+    catalog_provider_wait_seconds: int = 5
     max_active_streams: int = 16
     duckdb_memory_limit: str = "512MB"
     max_input_batch_bytes: int = 64 * 1024 * 1024
@@ -67,7 +66,6 @@ def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
     if os.getenv("DAL_OBSCURA_ALLOW_STALE_CONFIG_SECONDS"):
         raise ValueError("DAL_OBSCURA_ALLOW_STALE_CONFIG_SECONDS is unsupported")
     database_url = _required_env("DAL_OBSCURA_DATABASE_URL")
-    cell_id = UUID(_required_env("DAL_OBSCURA_CELL_ID"))
     location = os.getenv("DAL_OBSCURA_LOCATION", "grpc://0.0.0.0:8815").strip()
     ticket_secret = _required_env("DAL_OBSCURA_TICKET_SECRET")
     ticket_previous_secrets = _secret_list_env("DAL_OBSCURA_TICKET_PREVIOUS_SECRETS")
@@ -77,7 +75,6 @@ def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
     tls_verify_client = _bool_env(os.getenv("DAL_OBSCURA_TLS_VERIFY_CLIENT"))
     config = DataPlaneRuntimeConfig(
         database_url=database_url,
-        cell_id=cell_id,
         location=location,
         ticket_secret=ticket_secret,
         ticket_previous_secrets=ticket_previous_secrets,
@@ -91,6 +88,12 @@ def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
         health_host=os.getenv("DAL_OBSCURA_DATA_PLANE_HEALTH_HOST", "127.0.0.1").strip()
         or "127.0.0.1",
         health_port=_optional_int_env("DAL_OBSCURA_DATA_PLANE_HEALTH_PORT"),
+        max_cached_catalog_providers=_positive_int_env(
+            "DAL_OBSCURA_MAX_CACHED_CATALOG_PROVIDERS", default=32
+        ),
+        catalog_provider_wait_seconds=_positive_int_env(
+            "DAL_OBSCURA_CATALOG_PROVIDER_WAIT_SECONDS", default=5
+        ),
         max_active_streams=_positive_int_env("DAL_OBSCURA_MAX_ACTIVE_STREAMS", default=16),
         duckdb_memory_limit=_memory_limit_env(),
         max_input_batch_bytes=_positive_int_env(
@@ -104,8 +107,7 @@ def load_data_plane_runtime_config() -> DataPlaneRuntimeConfig:
         ),
         max_stream_seconds=_positive_int_env("DAL_OBSCURA_MAX_STREAM_SECONDS", default=300),
         ticket_cleanup_interval_seconds=_positive_int_env(
-            "DAL_OBSCURA_TICKET_CLEANUP_INTERVAL_SECONDS",
-            default=60,
+            "DAL_OBSCURA_TICKET_CLEANUP_INTERVAL_SECONDS", default=60
         ),
         secret_provider=_secret_provider_config(),
         plugin_lock_file=_optional_env("DAL_OBSCURA_PLUGIN_LOCK_FILE"),
@@ -212,8 +214,7 @@ def _secret_provider_config() -> SecretProviderConfig:
     if module != ENV_SECRET_PROVIDER_MODULE:
         raise ValueError("DAL_OBSCURA_SECRET_PROVIDER_MODULE is unsupported")
     return SecretProviderConfig(
-        module=module,
-        config=_json_object_env("DAL_OBSCURA_SECRET_PROVIDER_CONFIG"),
+        module=module, config=_json_object_env("DAL_OBSCURA_SECRET_PROVIDER_CONFIG")
     )
 
 

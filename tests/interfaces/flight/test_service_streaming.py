@@ -22,14 +22,65 @@ from tests.support.row_filters import FLIGHT_UNSAFE_ROW_FILTER_SMOKE_CASES
 pytestmark = pytest.mark.socket
 
 
+@pytest.mark.parametrize("method", ["get_schema", "get_flight_info"])
+def test_flight_invalid_descriptor_is_customer_input_error(method):
+    server = build_flight_service(
+        table_format=StubTableFormat(
+            catalog_name="analytics",
+            table_name="test.table",
+            format="stub_format",
+            schema=id_region_schema(),
+            batches=(),
+        )
+    )
+    with (
+        running_flight_client(server) as client,
+        pytest.raises(pa.ArrowInvalid, match="Invalid request"),
+    ):
+        getattr(client, method)(flight.FlightDescriptor.for_command(b"not-protobuf"))
+
+
+def test_flight_non_utf8_ticket_is_customer_input_error():
+    server = build_flight_service(
+        table_format=StubTableFormat(
+            catalog_name="analytics",
+            table_name="test.table",
+            format="stub_format",
+            schema=id_region_schema(),
+            batches=(),
+        )
+    )
+    with (
+        running_flight_client(server) as client,
+        pytest.raises(pa.ArrowInvalid, match="Invalid ticket"),
+    ):
+        client.do_get(flight.Ticket(b"\xff"))
+
+
+def test_flight_unknown_action_is_customer_input_error():
+    server = build_flight_service(
+        table_format=StubTableFormat(
+            catalog_name="analytics",
+            table_name="test.table",
+            format="stub_format",
+            schema=id_region_schema(),
+            batches=(),
+        )
+    )
+    with (
+        running_flight_client(server) as client,
+        pytest.raises(pa.ArrowInvalid, match="Unsupported action"),
+    ):
+        list(client.do_action(flight.Action("unsupported", b"")))
+
+
 class DummyContext:
     def __init__(self, headers):
         self.headers = headers
 
 
-@pytest.mark.parametrize(
-    ("column_name", "field", "value", "mask_config", "expected_type"),
-    [
+def test_flight_info_schema_matches_mask_output_types():
+    cases = [
         (
             "hashed_id",
             pa.field("hashed_id", pa.int64()),
@@ -93,62 +144,29 @@ class DummyContext:
             {"type": "null"},
             pa.int64(),
         ),
-    ],
-)
-def test_flight_info_schema_matches_mask_output_types(
-    tmp_path,
-    column_name,
-    field,
-    value,
-    mask_config,
-    expected_type,
-):
-    schema = pa.schema([field])
-    batch = pa.record_batch([value], schema=schema)
-    table_format = StubTableFormat(
-        catalog_name="analytics",
-        table_name="test.table",
-        format="stub_format",
-        schema=schema,
-        batches=(batch,),
-    )
-
-    del tmp_path
-    policy_rules = [allow_rule([column_name], masks={column_name: mask_config})]
-    server = build_flight_service(
-        table_format=table_format,
-        policy_rules=policy_rules,
-    )
-
-    with running_flight_client(server) as client:
-        info, table = flight_request(
-            client,
-            {
-                "catalog": "analytics",
-                "target": "test.table",
-                "columns": [column_name],
-            },
-        )
-
-    assert info.schema.field(column_name).type == expected_type
-    assert table.schema.field(column_name).type == expected_type
-
-
-def test_flight_service_exposes_health_action():
+    ]
+    schema = pa.schema([field for _, field, _, _, _ in cases])
+    batch = pa.record_batch([value for _, _, value, _, _ in cases], schema=schema)
+    columns = [column for column, _, _, _, _ in cases]
+    masks: dict[str, object] = {column: mask for column, _, _, mask, _ in cases}
     server = build_flight_service(
         table_format=StubTableFormat(
             catalog_name="analytics",
             table_name="test.table",
             format="stub_format",
-            schema=id_region_schema(),
-            batches=(id_region_batch([1], ["us"]),),
+            schema=schema,
+            batches=(batch,),
         ),
-        policy_rules=[allow_rule(["id", "region"])],
+        policy_rules=[allow_rule(columns, masks=masks)],
     )
-
-    actions = list(server.list_actions(None))
-
-    assert any(action.type == "healthz" for action in actions)
+    with running_flight_client(server) as client:
+        info, table = flight_request(
+            client,
+            {"catalog": "analytics", "target": "test.table", "columns": columns},
+        )
+    assert table.schema.equals(info.schema)
+    for column, _, _, _, expected_type in cases:
+        assert info.schema.field(column).type == expected_type, column
 
 
 def test_flight_service_health_action_returns_ok():
@@ -162,6 +180,7 @@ def test_flight_service_health_action_returns_ok():
         ),
         policy_rules=[allow_rule(["id", "region"])],
     )
+    assert any(action.type == "healthz" for action in server.list_actions(None))
     action = flight.Action("healthz", b"")
 
     results = list(server.do_action(None, action))
@@ -785,3 +804,31 @@ def test_stream_resource_failure_is_unavailable_and_closes_source(after_first_ba
     finally:
         server.shutdown()
         thread.join(timeout=2)
+
+
+@pytest.mark.parametrize("operation", ["get_schema", "get_flight_info"])
+def test_provider_capacity_failure_returns_unavailable(operation):
+    from dal_obscura.data_plane.application.ports.access_context import AccessContextUnavailable
+
+    class UnavailableAuthorizer:
+        def authorize(self, *args, **kwargs):
+            raise AccessContextUnavailable("Catalog provider capacity is unavailable; retry later")
+
+    table_format = StubTableFormat(
+        catalog_name="analytics",
+        table_name="test.table",
+        format="stub",
+        schema=id_region_schema(),
+        batches=(),
+    )
+    server = build_flight_service(table_format=table_format, authorizer=UnavailableAuthorizer())
+    descriptor = command_descriptor(
+        {"catalog": "analytics", "target": "test.table", "columns": ["id"]}
+    )
+    try:
+        with pytest.raises(flight.FlightUnavailableError, match="retry later"):
+            getattr(server, operation)(
+                DummyContext(headers=[authorization_header("user1")]), descriptor
+            )
+    finally:
+        server.shutdown()

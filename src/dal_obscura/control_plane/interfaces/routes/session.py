@@ -15,11 +15,11 @@ import secrets
 from typing import NoReturn
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
-from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 
 from dal_obscura.control_plane.application.access import ControlPlaneActor
-from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps
+from dal_obscura.control_plane.interfaces.routes.deps import ControlPlaneDeps, bearer_authorization
 from dal_obscura.control_plane.interfaces.routes.schemas import (
     AuthenticationMutationResponse,
     SessionOptionsResponse,
@@ -185,7 +185,7 @@ def router(deps: ControlPlaneDeps) -> APIRouter:  # noqa: C901
     def bootstrap_session(
         request: Request,
         response: Response,
-        authorization: str = Header(default=""),
+        authorization: str = Depends(bearer_authorization),
     ) -> AuthenticationMutationResponse:
         """Exchanges the local admin bearer secret for a browser session.
 

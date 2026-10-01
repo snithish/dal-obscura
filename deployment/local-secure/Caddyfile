@@ -1,4 +1,9 @@
+{
+    admin off
+    auto_https disable_redirects
+}
+
 https://localhost:8443 {
-    tls /run/secrets/ui.crt /run/secrets/ui.key
+    tls /tls/ui.crt /tls/ui.key
     reverse_proxy ui:8080
 }

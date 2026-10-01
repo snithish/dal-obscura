@@ -20,8 +20,7 @@ def test_health_payload_includes_runtime_config_checks():
     payload = _health_payload(
         lambda: {
             "status": "ready",
-            "checks": {"configuration_revision": "ok"},
-            "config_revision": "pub-1",
+            "checks": {"runtime": "ok", "auth_chain": "ok"},
         },
         logging.getLogger("test"),
     )
@@ -29,8 +28,7 @@ def test_health_payload_includes_runtime_config_checks():
     assert payload == {
         "status": "ok",
         "service": "data-plane",
-        "checks": {"configuration_revision": "ok"},
-        "config_revision": "pub-1",
+        "checks": {"runtime": "ok", "auth_chain": "ok"},
     }
 
 

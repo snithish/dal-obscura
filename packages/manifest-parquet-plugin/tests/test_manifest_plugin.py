@@ -87,12 +87,7 @@ def test_manifest_catalog_and_parquet_format_split_nested_rows(tmp_path):
     schema = format_plugin.schema(handle, context)
     assert schema.arrow_schema == table.schema
     tasks = format_plugin.plan(
-        handle,
-        schema,
-        context,
-        projection=("profile",),
-        row_filter=None,
-        max_tasks=4,
+        handle, schema, context, projection=("profile",), row_filter=None, max_tasks=4
     )
     assert len(tasks) == 3
     output_schema, batches = format_plugin.execute(tasks[0], context)
@@ -114,10 +109,7 @@ def test_manifest_rejects_noncanonical_base64_schema_payload(tmp_path):
     manifest.write_text(json.dumps(payload))
 
     with pytest.raises(ValueError, match="schema is invalid"):
-        ManifestCatalog(
-            _config_for_manifest(root, manifest),
-            _context(),
-        )
+        ManifestCatalog(_config_for_manifest(root, manifest), _context())
 
 
 def test_manifest_rejects_duplicate_document_keys(tmp_path):
@@ -397,8 +389,7 @@ def test_manifest_rejects_symlinked_member(tmp_path):
 def test_manifest_and_format_reject_expired_context(tmp_path):
     root, manifest, _table = _write_fixture(tmp_path)
     expired = ExecutionContext(
-        deadline=datetime.now(timezone.utc) - timedelta(seconds=1),
-        correlation_id="expired",
+        deadline=datetime.now(timezone.utc) - timedelta(seconds=1), correlation_id="expired"
     )
     with pytest.raises(TimeoutError, match="deadline"):
         ManifestCatalog(
@@ -424,10 +415,7 @@ def test_parquet_format_accepts_explicit_full_projection(tmp_path):
         ),
         context,
     )
-    handle = catalog.resolve_table(
-        TableIdentifier(namespace=("default",), name="users"),
-        context,
-    )
+    handle = catalog.resolve_table(TableIdentifier(namespace=("default",), name="users"), context)
     plugin = ParquetDatasetFormat(handle, context)
     schema = plugin.schema(handle, context)
     tasks = plugin.plan(

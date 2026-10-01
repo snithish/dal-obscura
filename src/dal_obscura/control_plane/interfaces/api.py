@@ -13,11 +13,12 @@ from collections.abc import Mapping
 from typing import cast
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session, sessionmaker
+from starlette.exceptions import HTTPException
 
 from dal_obscura.common.plugin_api.registry import PluginRegistry
 from dal_obscura.control_plane.infrastructure.request_context import (
@@ -54,6 +55,7 @@ from dal_obscura.control_plane.interfaces.routes.deps import (
     AuthorizationCodeExchange,
     ControlPlaneDeps,
 )
+from dal_obscura.control_plane.interfaces.routes.schemas import ApiErrorResponse
 from dal_obscura.control_plane.interfaces.session_api import (
     OidcActorResolver,
     OidcNonceActorResolver,
@@ -70,8 +72,13 @@ from dal_obscura.data_plane.infrastructure.adapters.identity_oidc_jwks import (
 from dal_obscura.data_plane.infrastructure.adapters.secret_providers import SecretProvider
 
 
-class _RequestBodyTooLarge(Exception):
+class _RequestBodyTooLarge(HTTPException):
     """Raised by the receive wrapper when a streamed request exceeds its bound."""
+
+    def __init__(self) -> None:
+        # FastAPI body parsing preserves HTTP exceptions; an ordinary exception
+        # would be converted into a misleading 400 before middleware sees it.
+        super().__init__(status_code=413, detail="Request body too large")
 
 
 _REQUEST_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
@@ -86,6 +93,7 @@ def _http_error_code(status_code: int) -> str:
         401: "authentication_required",
         403: "forbidden",
         404: "not_found",
+        405: "method_not_allowed",
         409: "revision_conflict",
         413: "request_too_large",
         422: "validation_error",
@@ -244,6 +252,10 @@ def create_app(  # noqa: C901
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
+        responses={
+            status: {"model": ApiErrorResponse}
+            for status in (400, 401, 403, 404, 405, 409, 413, 422, 428, 429, 503)
+        },
     )
 
     @app.exception_handler(HTTPException)
@@ -268,9 +280,12 @@ def create_app(  # noqa: C901
             error["current_revision"] = current_revision
         if field_errors:
             error["field_errors"] = field_errors
+        headers = dict(exc.headers or {})
+        if exc.status_code == 401:
+            headers.setdefault("WWW-Authenticate", "Bearer")
         return JSONResponse(
             status_code=exc.status_code,
-            headers=exc.headers,
+            headers=headers,
             content={
                 "detail": detail,
                 "error": error,
@@ -319,6 +334,17 @@ def create_app(  # noqa: C901
             "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; "
             "base-uri 'self'; form-action 'self'",
         )
+        if request.url.path in {"/docs", "/redoc"}:
+            # FastAPI's static documentation shells load their renderer from
+            # jsDelivr and contain inline initialization. Keep this allowance
+            # restricted to these shells; application/API responses stay strict.
+            response.headers["content-security-policy"] = (
+                "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+                "style-src 'self' https://cdn.jsdelivr.net https://fonts.googleapis.com "
+                "'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; "
+                "img-src 'self' data: https://fastapi.tiangolo.com; "
+                "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+            )
         response.headers.setdefault("x-frame-options", "DENY")
         response.headers.setdefault("cross-origin-opener-policy", "same-origin")
         response.headers.setdefault(
@@ -331,7 +357,6 @@ def create_app(  # noqa: C901
             )
         return response
 
-    @app.middleware("http")
     async def request_correlation(request: Request, call_next):
         supplied = request.headers.get("x-request-id", "").strip()
         request_id = supplied if _REQUEST_ID.fullmatch(supplied) else uuid4().hex
@@ -370,9 +395,17 @@ def create_app(  # noqa: C901
         # than passing a second Request instance.
         request._receive = limited_receive
         try:
-            return await call_next(request)
+            response = await call_next(request)
         except _RequestBodyTooLarge:
             return _structured_error_response(413, "Request body too large")
+        # A downstream body parser can turn receive failures (including task
+        # exception groups) into a 400. The measured byte count is authoritative.
+        if received > max_request_bytes:
+            return _structured_error_response(413, "Request body too large")
+        return response
+
+    # Correlation must wrap size checks, including failures before route dispatch.
+    app.middleware("http")(request_correlation)
 
     if cors_origins:
         app.add_middleware(
@@ -380,7 +413,14 @@ def create_app(  # noqa: C901
             allow_origins=list(cors_origins),
             allow_credentials=True,
             allow_methods=["GET", "POST", "PUT", "PATCH", "OPTIONS"],
-            allow_headers=["authorization", "content-type", "accept", "x-csrf-token"],
+            allow_headers=[
+                "authorization",
+                "content-type",
+                "accept",
+                "x-csrf-token",
+                "x-request-id",
+            ],
+            expose_headers=["x-request-id", "retry-after"],
         )
     install_health_routes(app, session_maker)
     deps = ControlPlaneDeps(

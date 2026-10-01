@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from uuid import uuid4
-
 import pytest
 
 from dal_obscura.data_plane.infrastructure.adapters.live_config import LiveRuntime
@@ -22,7 +20,6 @@ def test_runtime_rejects_dynamic_identity_provider_module():
 
 def test_runtime_rejects_multiple_enabled_identity_providers():
     runtime = LiveRuntime(
-        config_revision=uuid4(),
         auth_chain={"providers": [{"enabled": True}, {"enabled": True}]},
         ticket={},
     )

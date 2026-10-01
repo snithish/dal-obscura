@@ -6,7 +6,6 @@ from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Literal, cast
-from uuid import UUID
 
 import jwt
 import pyarrow as pa
@@ -24,9 +23,11 @@ from dal_obscura.common.access_control.models import (
 )
 from dal_obscura.common.access_control.policy_resolution import dataset_version, resolve_access
 from dal_obscura.common.catalog.ports import TableFormat
+from dal_obscura.common.config_store.db import session_factory
 from dal_obscura.common.flight_contract import encode_plan_command_from_mapping
 from dal_obscura.common.query_planning.models import PlanRequest
 from dal_obscura.common.table_format.ports import InputPartition, Plan, ScanTask
+from dal_obscura.data_plane.application.ports.access_context import StaticAccessContext
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
 from dal_obscura.data_plane.application.use_cases.fetch_stream import FetchStreamUseCase
 from dal_obscura.data_plane.application.use_cases.get_schema import GetSchemaUseCase
@@ -92,13 +93,7 @@ class StubTableFormat(TableFormat):
         del max_tickets
         return Plan(
             schema=self.schema,
-            tasks=[
-                ScanTask(
-                    table_format=self,
-                    schema=self.schema,
-                    partition=StubInputPartition(),
-                )
-            ],
+            tasks=[ScanTask(table_format=self, schema=self.schema, partition=StubInputPartition())],
             full_row_filter=request.row_filter,
             backend_pushdown_row_filter=None,
             residual_row_filter=request.row_filter,
@@ -118,10 +113,7 @@ class StubCatalogRegistry:
         self,
         catalog: str | None,
         target: str,
-        *,
-        tenant_id: str = "default",
     ) -> TableFormat:
-        del tenant_id
         del catalog, target
         return self._table_format
 
@@ -150,11 +142,7 @@ class InMemoryPolicyAuthorizer:
         dataset = self._dataset(target=target, catalog=catalog)
         policy = Policy(version=1, datasets=[dataset])
         allowed_columns, masks, row_filter = resolve_access(
-            policy,
-            principal,
-            target,
-            catalog,
-            requested_columns,
+            policy, principal, target, catalog, requested_columns
         )
         return AccessDecision(
             allowed_columns=allowed_columns,
@@ -168,10 +156,7 @@ class InMemoryPolicyAuthorizer:
         self,
         target: str,
         catalog: str | None,
-        *,
-        tenant_id: str,
     ) -> int | None:
-        del tenant_id
         return dataset_version(self._dataset(target=target, catalog=catalog))
 
     def _dataset(self, *, target: str, catalog: str | None) -> DatasetPolicy:
@@ -189,14 +174,11 @@ def make_jwt(
     principal_id: str = "user1",
     *,
     groups: list[str] | None = None,
-    tenant_id: str | None = None,
     jwt_secret: str = TEST_JWT_SECRET,
 ) -> str:
     claims: dict[str, object] = {"sub": principal_id}
     if groups:
         claims["groups"] = list(groups)
-    if tenant_id is not None:
-        claims["attributes"] = {"tenant_id": tenant_id}
     return jwt.encode(claims, jwt_secret, algorithm="HS256")
 
 
@@ -204,15 +186,9 @@ def authorization_header(
     principal_id: str = "user1",
     *,
     groups: list[str] | None = None,
-    tenant_id: str | None = None,
     jwt_secret: str = TEST_JWT_SECRET,
 ) -> tuple[bytes, bytes]:
-    token = make_jwt(
-        principal_id,
-        groups=groups,
-        tenant_id=tenant_id,
-        jwt_secret=jwt_secret,
-    )
+    token = make_jwt(principal_id, groups=groups, jwt_secret=jwt_secret)
     return (
         b"authorization",
         f"Bearer {token}".encode(),
@@ -223,18 +199,10 @@ def flight_call_options(
     principal_id: str = "user1",
     *,
     groups: list[str] | None = None,
-    tenant_id: str | None = None,
     jwt_secret: str = TEST_JWT_SECRET,
 ) -> flight.FlightCallOptions:
     return flight.FlightCallOptions(
-        headers=[
-            authorization_header(
-                principal_id,
-                groups=groups,
-                tenant_id=tenant_id,
-                jwt_secret=jwt_secret,
-            )
-        ]
+        headers=[authorization_header(principal_id, groups=groups, jwt_secret=jwt_secret)]
     )
 
 
@@ -247,7 +215,6 @@ def build_flight_service(
     table_format: TableFormat | None = None,
     catalog_registry: Any | None = None,
     db_session: Session | None = None,
-    cell_id: UUID | None = None,
     policy_rules: list[dict[str, object]] | None = None,
     policy_rules_by_dataset: dict[tuple[str | None, str], list[dict[str, object]]] | None = None,
     authorizer: Any | None = None,
@@ -257,16 +224,14 @@ def build_flight_service(
     max_tickets: int = 1,
     max_ticket_exchanges: int = 1,
 ) -> DataAccessFlightService:
-    live_config_requested = db_session is not None or cell_id is not None
-    if live_config_requested and (db_session is None or cell_id is None):
-        raise ValueError("Provide both db_session and cell_id for live config")
+    live_config_requested = db_session is not None
     if live_config_requested and (table_format is not None or catalog_registry is not None):
         raise ValueError("Live config tests must not provide table_format or catalog_registry")
     if not live_config_requested and (table_format is None) == (catalog_registry is None):
         raise ValueError("Provide exactly one of table_format or catalog_registry")
 
     if live_config_requested:
-        config_store = LiveConfigStore(cast(Session, db_session), cell_id=cast(UUID, cell_id))
+        config_store = LiveConfigStore(session_factory(cast(Session, db_session).get_bind().engine))
         resolved_registry = LiveConfigCatalogRegistry(config_store)
         resolved_authorizer = LiveConfigAuthorizer(config_store)
     else:
@@ -280,6 +245,14 @@ def build_flight_service(
             rules_by_dataset=policy_rules_by_dataset,
         )
 
+    (
+        resolved_registry
+        if live_config_requested
+        else StaticAccessContext(
+            authorizer=resolved_authorizer, catalog_registry=cast(Any, resolved_registry)
+        )
+    )
+
     identity = TestJwtIdentity(jwt_secret)
     masking = DefaultMaskingAdapter()
     row_transform = DuckDBRowTransformAdapter(masking)
@@ -287,14 +260,16 @@ def build_flight_service(
     ticket_store = FakeTicketStore()
     get_schema = GetSchemaUseCase(
         identity=identity,
-        authorizer=resolved_authorizer,
-        catalog_registry=cast(Any, resolved_registry),
+        access_context=StaticAccessContext(
+            authorizer=resolved_authorizer, catalog_registry=cast(Any, resolved_registry)
+        ),
         masking=masking,
     )
     plan_access = PlanAccessUseCase(
         identity=identity,
-        authorizer=resolved_authorizer,
-        catalog_registry=cast(Any, resolved_registry),
+        access_context=StaticAccessContext(
+            authorizer=resolved_authorizer, catalog_registry=cast(Any, resolved_registry)
+        ),
         masking=masking,
         ticket_codec=ticket_codec,
         ticket_store=ticket_store,
@@ -304,7 +279,6 @@ def build_flight_service(
     )
     fetch_stream = FetchStreamUseCase(
         identity=identity,
-        authorizer=resolved_authorizer,
         masking=masking,
         row_transform=row_transform,
         ticket_codec=ticket_codec,
@@ -345,15 +319,9 @@ def flight_info(
     *,
     principal_id: str = "user1",
     groups: list[str] | None = None,
-    tenant_id: str | None = None,
     jwt_secret: str = TEST_JWT_SECRET,
 ) -> tuple[flight.FlightInfo, flight.FlightCallOptions]:
-    options = flight_call_options(
-        principal_id,
-        groups=groups,
-        tenant_id=tenant_id,
-        jwt_secret=jwt_secret,
-    )
+    options = flight_call_options(principal_id, groups=groups, jwt_secret=jwt_secret)
     info = client.get_flight_info(command_descriptor(payload), options=options)
     return info, options
 
@@ -376,16 +344,10 @@ def flight_request(
     *,
     principal_id: str = "user1",
     groups: list[str] | None = None,
-    tenant_id: str | None = None,
     jwt_secret: str = TEST_JWT_SECRET,
 ) -> tuple[flight.FlightInfo, pa.Table]:
     info, options = flight_info(
-        client,
-        payload,
-        principal_id=principal_id,
-        groups=groups,
-        tenant_id=tenant_id,
-        jwt_secret=jwt_secret,
+        client, payload, principal_id=principal_id, groups=groups, jwt_secret=jwt_secret
     )
     return info, read_table(client, info, options)
 

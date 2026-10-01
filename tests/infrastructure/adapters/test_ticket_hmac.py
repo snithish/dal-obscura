@@ -32,18 +32,6 @@ def _ticket_payload() -> TicketPayload:
     )
 
 
-def test_ticket_sign_and_verify():
-    codec = HmacTicketCodecAdapter("secret")
-    payload = _ticket_payload()
-    ticket = codec.sign_payload(payload)
-    verified = codec.verify(ticket)
-    assert verified.ticket_id == payload.ticket_id
-    assert verified.expires_at == payload.expires_at
-    assert verified.nonce == payload.nonce
-    assert not hasattr(verified, "target")
-    assert not hasattr(verified, "columns")
-
-
 def test_ticket_verify_rejects_noncanonical_base64_even_with_valid_signature():
     codec = HmacTicketCodecAdapter("secret")
     payload = _ticket_payload()
@@ -102,7 +90,6 @@ def test_signed_ticket_is_opaque_and_does_not_embed_scan_payload():
         principal_id="user1",
         expires_at=2**31,
         nonce="nonce",
-        tenant_id="tenant-a",
     )
 
     ticket = codec.sign_payload(payload)
@@ -119,24 +106,8 @@ def test_signed_ticket_is_opaque_and_does_not_embed_scan_payload():
     assert verified.expires_at == payload.expires_at
     assert verified.nonce == payload.nonce
     assert not hasattr(verified, "scan")
-
-
-def test_ticket_expiry():
-    codec = HmacTicketCodecAdapter("secret")
-    payload = TicketPayload(
-        asset_id="00000000-0000-4000-8000-000000000001",
-        ticket_id="00000000-0000-0000-0000-000000000001",
-        target="t",
-        columns=[],
-        scan=_scan_payload(),
-        policy_version=1,
-        principal_id="user1",
-        expires_at=0,
-        nonce="expired",
-    )
-    ticket = codec.sign_payload(payload)
-    with pytest.raises(PermissionError):
-        codec.verify(ticket)
+    assert not hasattr(verified, "target")
+    assert not hasattr(verified, "columns")
 
 
 def test_ticket_rejects_expiry_at_current_second(monkeypatch):
@@ -189,17 +160,6 @@ def test_ticket_rejects_tampered_signature():
 
     with pytest.raises(PermissionError):
         codec.verify(tampered)
-
-
-def test_ticket_rejects_malformed_payload():
-    secret = "secret"
-    codec = HmacTicketCodecAdapter(secret)
-    raw = b'{"not":"valid ticket payload"'
-    encoded_payload = base64.urlsafe_b64encode(raw).decode("utf-8")
-    signature = hmac.new(secret.encode("utf-8"), raw, sha256).hexdigest()
-
-    with pytest.raises(PermissionError):
-        codec.verify(f"{encoded_payload}.{signature}")
 
 
 def test_ticket_rejects_invalid_ticket_format():

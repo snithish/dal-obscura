@@ -4,10 +4,12 @@ import json
 import logging
 from collections.abc import Callable, Mapping
 
+import pyarrow as pa
 import pyarrow.flight as flight
 
 from dal_obscura.common.query_planning.models import PlanRequest
 from dal_obscura.data_plane.application.access_flow import AccessFlow
+from dal_obscura.data_plane.application.ports.access_context import AccessContextUnavailable
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
 from dal_obscura.data_plane.application.use_cases.fetch_stream import (
     FetchStreamResult,
@@ -80,7 +82,7 @@ class DataAccessFlightService(flight.FlightServerBase):
     ) -> list[flight.Result]:
         del context
         if action.type != HEALTH_ACTION:
-            raise flight.FlightInternalError(f"Unsupported action: {action.type}")
+            raise pa.ArrowInvalid("Unsupported action")
         payload = _health_payload(self._health_check, self._logger, metrics=self._metrics)
         body = json.dumps(payload, separators=(",", ":"))
         return [flight.Result(body.encode("utf-8"))]
@@ -94,12 +96,14 @@ class DataAccessFlightService(flight.FlightServerBase):
                 auth_request = authentication_request_from_context(context, method="get_schema")
                 request = parse_descriptor(descriptor)
                 result = self._get_schema_use_case.execute(request, auth_request)
+            except AccessContextUnavailable as exc:
+                raise flight.FlightUnavailableError(str(exc)) from exc
             except PermissionError as exc:
                 self._logger.warning("auth_or_authz_failed", extra=self._log_extra())
                 raise flight.FlightUnauthorizedError("Unauthorized") from exc
             except ValueError as exc:
                 self._logger.warning("invalid_request", extra=self._log_extra())
-                raise flight.FlightInternalError("Invalid request") from exc
+                raise pa.ArrowInvalid("Invalid request") from exc
 
             self._logger.info(
                 "schema_request",
@@ -124,12 +128,14 @@ class DataAccessFlightService(flight.FlightServerBase):
                 )
                 request = parse_descriptor(descriptor)
                 result = self._plan_access_use_case.execute(request, auth_request)
+            except AccessContextUnavailable as exc:
+                raise flight.FlightUnavailableError(str(exc)) from exc
             except PermissionError as exc:
                 self._logger.warning("auth_or_authz_failed", extra=self._log_extra())
                 raise flight.FlightUnauthorizedError("Unauthorized") from exc
             except ValueError as exc:
                 self._logger.warning("invalid_request", extra=self._log_extra())
-                raise flight.FlightInternalError("Invalid request") from exc
+                raise pa.ArrowInvalid("Invalid request") from exc
 
             self._logger.info(
                 "plan_request",
@@ -160,7 +166,10 @@ class DataAccessFlightService(flight.FlightServerBase):
         """Executes a previously planned read and streams the masked result batches."""
         with self._metrics.measure("flight.do_get"):
             auth_request = authentication_request_from_context(context, method="do_get")
-            token = ticket.ticket.decode("utf-8")
+            try:
+                token = ticket.ticket.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise pa.ArrowInvalid("Invalid ticket") from exc
             try:
                 result = self._fetch_stream_use_case.execute(token, auth_request)
             except PermissionError as exc:
@@ -206,8 +215,6 @@ def _health_payload(
         logger.warning("flight_health_check_not_ready", extra={"health": observed})
         raise flight.FlightUnavailableError("Data plane is not ready")
     payload["checks"] = observed.get("checks", {})
-    if observed.get("config_revision"):
-        payload["config_revision"] = observed["config_revision"]
     if metrics is not None:
         snapshot = metrics.snapshot()
         if snapshot:

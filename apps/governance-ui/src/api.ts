@@ -226,7 +226,6 @@ export type WorkspaceObservations = {
   available: boolean;
   observed_at: string;
   source: string;
-  generation: { config_revision: string } | null;
   data_plane: { status: string; reason: string };
 };
 
@@ -416,7 +415,7 @@ export const controlPlane = {
   getSummary: (signal?: AbortSignal) => request<ApiSchemas["WorkspaceSummaryResponse"]>("/v1/workspace/summary", { signal }),
   getObservations: async (signal?: AbortSignal) => {
     const observations = await request<ApiSchemas["WorkspaceObservationsResponse"]>("/v1/workspace/observations", { signal });
-    return { ...observations, generation: observations.generation ?? null } satisfies WorkspaceObservations;
+    return observations satisfies WorkspaceObservations;
   },
   saveCatalog: (name: string, pluginId: string, options: Record<string, unknown>, expectedRevision?: number, signal?: AbortSignal) => request<ApiSchemas["CatalogMutationResponse"]>(`/v1/catalogs/${encodeURIComponent(name)}`, {
     method: "PUT",

@@ -22,7 +22,7 @@ const providers: AuthProvider[] = [{
     issuer: "https://idp.example",
     subject_claim: "sub",
     group_claims: ["groups"],
-    attribute_claims: { tenant: "tenant.id" },
+    attribute_claims: { department: "department.id" },
     algorithms: ["RS256"],
     leeway_seconds: 30,
     jwks_refresh_interval_seconds: 300,
@@ -86,9 +86,9 @@ export const PreventAccidentalProviderLockout: Story = {
 
 export const InvalidAttributeMapping: Story = {
   play: async ({ canvas }) => {
-    const field = canvas.getByPlaceholderText("tenant=tenant.id");
+    const field = canvas.getByPlaceholderText("department=department.id");
     await userEvent.clear(field);
-    await userEvent.type(field, "tenant");
+    await userEvent.type(field, "department");
     await expect(canvas.getByRole("alert")).toHaveTextContent("Use name=claim.path entries separated by commas.");
     await expect(canvas.getByRole("button", { name: "Save identity providers" })).toBeDisabled();
   },

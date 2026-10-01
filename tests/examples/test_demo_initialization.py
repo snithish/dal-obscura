@@ -1,313 +1,120 @@
 from __future__ import annotations
 
-import importlib.util
+import json
 from pathlib import Path
-from types import ModuleType
 
 import pytest
+from fastapi.testclient import TestClient
+
+from dal_obscura.common.config_store.db import (
+    create_engine_from_url,
+    migrate_config_store,
+    session_factory,
+)
+from dal_obscura.control_plane.interfaces.api import create_app
+from dal_obscura.data_plane.infrastructure.adapters.secret_providers import EnvSecretProvider
+from examples.demo.keycloak.scripts import provision_demo, seed_table
 
 
-def _load_script(name: str) -> ModuleType:
-    path = Path(__file__).parents[2] / "examples/demo/keycloak/scripts" / f"{name}.py"
-    spec = importlib.util.spec_from_file_location(f"demo_{name}", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def _fixture() -> dict[str, object]:
-    return {
-        "catalogs": [{"name": "retail_demo", "plugin_id": "iceberg.sql"}],
-        "tables": [{"catalog": "retail_demo", "target": "retail.customer_revenue"}],
+@pytest.fixture
+def workspace(tmp_path, monkeypatch):
+    options = {
+        "type": "sql",
+        "uri": f"sqlite:///{tmp_path}/catalog.db",
+        "warehouse": str(tmp_path / "warehouse"),
     }
+    monkeypatch.setattr(seed_table, "_catalog_options", lambda: options)
+    fixture = json.loads(Path("examples/demo/keycloak/fixtures/demo_fixture.json").read_text())
+    for table in fixture["tables"]:
+        seed_table._create_iceberg_table(table)
+    monkeypatch.setenv("ICEBERG_CATALOG_URI", options["uri"])
+    monkeypatch.setenv("LOCAL_ICEBERG_URI", options["uri"])
+    monkeypatch.setenv("ICEBERG_WAREHOUSE", options["warehouse"])
+    engine = create_engine_from_url("sqlite+pysqlite:///:memory:")
+    migrate_config_store(engine)
+    with TestClient(
+        create_app(
+            session_factory(engine),
+            admin_token="test-admin",
+            secret_provider=EnvSecretProvider(
+                config={"scope_grants": {"catalog:retail_demo": ["LOCAL_ICEBERG_URI"]}}
+            ),
+        )
+    ) as client:
+
+        def request(method, path, body=None):
+            response = client.request(
+                method, path, json=body, headers={"authorization": "Bearer test-admin"}
+            )
+            assert response.status_code < 400, response.text
+            return response.json()
+
+        monkeypatch.setattr(provision_demo, "_request", request)
+        yield fixture, request
+    engine.dispose()
 
 
-def test_runtime_settings_initialize_from_empty_workspace(monkeypatch) -> None:
-    module = _load_script("provision_demo")
-    calls: list[tuple[str, str, object]] = []
+def test_initialization_resumes_after_interrupted_api_write(workspace, monkeypatch):
+    fixture, request = workspace
 
-    def request(method: str, path: str, body=None):
-        calls.append((method, path, body))
-        if method == "GET":
-            return None
-        return {}
+    def interrupted(method, path, body=None):
+        if method == "PUT" and path.endswith("/owners"):
+            raise RuntimeError("injected interruption")
+        return request(method, path, body)
 
-    monkeypatch.setattr(module, "_request", request)
-
-    module._configure_runtime_settings()
-
-    assert calls == [
-        ("GET", "/v1/settings/runtime", None),
-        (
-            "PUT",
-            "/v1/settings/runtime",
-            {
-                **module.DEMO_RUNTIME_SETTINGS,
-                "expected_revision": 0,
-            },
-        ),
-    ]
-
-
-def test_seed_table_keeps_existing_table(monkeypatch, tmp_path) -> None:
-    module = _load_script("seed_table")
-    monkeypatch.setattr(module, "RUNTIME_DIR", tmp_path / ".runtime")
-    calls: list[str] = []
-
-    class ExistingCatalog:
-        def table_exists(self, target: str) -> bool:
-            calls.append(f"exists:{target}")
-            return True
-
-    monkeypatch.setattr(module, "load_catalog", lambda *args, **kwargs: ExistingCatalog())
-    monkeypatch.setattr(module, "_schemas", lambda fields: pytest.fail("schema should not rebuild"))
-
-    module._create_iceberg_table(
-        {"catalog": "retail_demo", "target": "retail.customer_revenue", "schema": []}
+    monkeypatch.setattr(provision_demo, "_request", interrupted)
+    with pytest.raises(RuntimeError, match="injected interruption"):
+        provision_demo._provision_workspace(fixture)
+    monkeypatch.setattr(provision_demo, "_request", request)
+    provision_demo._provision_workspace(fixture)
+    asset = request("GET", "/v1/assets")[0]
+    detail = request("GET", f"/v1/assets/{asset['id']}")
+    assert detail["policy_revision"] == 1
+    assert detail["owners"] == ["http://localhost:20080/realms/dal-obscura-demo|g|asset-owners"]
+    assert detail["schema_fields"]
+    assert len(detail["policy_rules"]) == 3
+    assert (
+        request("GET", "/v1/settings/auth-providers")[0]["args"]["issuer"]
+        == provision_demo.DEMO_OIDC_ISSUER
     )
 
-    assert calls == ["exists:retail.customer_revenue"]
 
-
-def test_seed_table_creates_missing_table(monkeypatch, tmp_path) -> None:
-    module = _load_script("seed_table")
-    monkeypatch.setattr(module, "RUNTIME_DIR", tmp_path / ".runtime")
-    calls: list[str] = []
-
-    class EmptyCatalog:
-        def table_exists(self, target: str) -> bool:
-            calls.append(f"exists:{target}")
-            return False
-
-        def create_table(self, target: str, *, schema, properties):
-            calls.append(f"create:{target}")
-            return type("Table", (), {"append": lambda self, table: calls.append("append")})()
-
-    monkeypatch.setattr(module, "load_catalog", lambda *args, **kwargs: EmptyCatalog())
-    monkeypatch.setattr(module, "_schemas", lambda fields: (object(), object()))
-
-    class FakeArrowTable:
-        @staticmethod
-        def from_pylist(rows, schema):
-            return object()
-
-    monkeypatch.setattr(module, "pa", type("Arrow", (), {"Table": FakeArrowTable}))
-
-    module._create_iceberg_table(
+def test_reinitialization_preserves_authored_deny_all_and_settings(workspace):
+    fixture, request = workspace
+    provision_demo._provision_workspace(fixture)
+    asset = request("GET", "/v1/assets")[0]
+    request("PUT", f"/v1/assets/{asset['id']}/policy", {"expected_revision": 1, "rules": []})
+    settings = request("GET", "/v1/settings/runtime")
+    request(
+        "PUT",
+        "/v1/settings/runtime",
         {
-            "catalog": "retail_demo",
-            "target": "retail.customer_revenue",
-            "schema": [],
-            "rows": [],
-        }
-    )
-
-    assert calls == ["exists:retail.customer_revenue", "create:retail.customer_revenue", "append"]
-
-
-def test_provision_reuses_complete_workspace_without_writes(monkeypatch) -> None:
-    monkeypatch.setenv("DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN", "test-admin")
-    monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
-    module = _load_script("provision_demo")
-    calls: list[tuple[str, str]] = []
-    responses = {
-        "/v1/workspace/summary": {
-            "catalog_count": 1,
-            "asset_count": 1,
-            "unowned_asset_count": 0,
-            "missing_policy_count": 0,
-            "runtime_configured": True,
-            "enabled_auth_provider_count": 1,
+            "expected_revision": settings["revision"],
+            "ticket_ttl_seconds": 123,
+            "max_tickets": 4,
+            "max_ticket_exchanges": 1,
         },
-        "/v1/assets": [
-            {
-                "id": "asset-1",
-                "catalog": "retail_demo",
-                "name": "retail.customer_revenue",
-                "policy_status": "configured",
-            }
-        ],
-        "/v1/settings/auth-providers": [module._demo_auth_provider()],
-    }
-
-    def request(method: str, path: str, body=None):
-        calls.append((method, path))
-        return responses[path]
-
-    monkeypatch.setattr(module, "_request", request)
-    monkeypatch.setattr(module, "_workspace_cell_id", lambda: "cell-1")
-
-    assert module._provision_workspace(_fixture()) == "cell-1"
-    assert calls == [
-        ("GET", "/v1/workspace/summary"),
-        ("GET", "/v1/assets"),
-        ("GET", "/v1/settings/auth-providers"),
-    ]
-
-
-def test_provision_enables_identity_provider_before_saving_live_policy(monkeypatch) -> None:
-    monkeypatch.setenv("DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN", "test-admin")
-    monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
-    module = _load_script("provision_demo")
-    fixture = {
-        "catalogs": [{"name": "retail_demo", "plugin_id": "iceberg.sql"}],
-        "tables": [
-            {
-                "catalog": "retail_demo",
-                "target": "retail.customer_revenue",
-                "schema": [],
-            }
-        ],
-        "owners": ["group:asset-owners"],
-        "grants": [],
-        "policies": [],
-    }
-    calls: list[tuple[str, str, object]] = []
-
-    def request(method: str, path: str, body=None):
-        calls.append((method, path, body))
-        if path == "/v1/settings/runtime":
-            return {"revision": 0}
-        if path == "/v1/settings/auth-providers":
-            return []
-        if path == "/v1/settings/auth-providers/revision":
-            return {"revision": 0}
-        if path == "/v1/catalogs/retail_demo/tables":
-            return {
-                "tables": [
-                    {
-                        "target": "retail.customer_revenue",
-                        "backend": "iceberg",
-                        "table_identifier": "retail.customer_revenue",
-                    }
-                ]
-            }
-        if path == "/v1/assets/retail_demo/retail.customer_revenue":
-            return {"id": "asset-1"}
-        if path == "/v1/assets/asset-1":
-            return {"revision": 1, "policy_revision": 0}
-        if path == "/v1/assets/asset-1/schema":
-            return {
-                "stable_field_ids": True,
-                "fields": [
-                    {
-                        "field_id": 1,
-                        "name": "customer_id",
-                        "path": {
-                            "segments": [{"kind": "field", "name": "customer_id", "field_id": 1}]
-                        },
-                        "type": "long",
-                        "nullable": False,
-                    }
-                ],
-            }
-        return {}
-
-    monkeypatch.setattr(module, "_workspace_state", lambda value: "empty")
-    monkeypatch.setattr(module, "_workspace_cell_id", lambda: "cell-1")
-    monkeypatch.setattr(module, "_request", request)
-
-    assert module._provision_workspace(fixture) == "cell-1"
-
-    provider_call = next(
-        i for i, call in enumerate(calls) if call[1] == "/v1/settings/auth-providers"
     )
-    policy_calls = [
-        (i, call) for i, call in enumerate(calls) if call[1] == "/v1/assets/asset-1/policy"
+    before = request("GET", f"/v1/assets/{asset['id']}")
+    provision_demo._provision_workspace(fixture)
+    assert request("GET", f"/v1/assets/{asset['id']}") == before
+    assert request("GET", "/v1/settings/runtime")["ticket_ttl_seconds"] == 123
+
+
+def test_demo_owner_keys_are_issuer_scoped():
+    assert provision_demo._scoped_demo_owners(["group:asset-owners", "asset-owner"]) == [
+        "http://localhost:20080/realms/dal-obscura-demo|g|asset-owners",
+        "http://localhost:20080/realms/dal-obscura-demo|u|asset-owner",
     ]
-    schema_fields_call = next(
-        call for call in calls if call[1] == "/v1/assets/asset-1/schema-fields"
-    )
-    assert len(policy_calls) == 1
-    assert provider_call < policy_calls[0][0]
-    runtime_call = next(
-        call for call in calls if call[0] == "PUT" and call[1] == "/v1/settings/runtime"
-    )
-    assert runtime_call[2] == {
-        "ticket_ttl_seconds": 600,
-        "max_tickets": 16,
-        "max_ticket_exchanges": 1,
-        "expected_revision": 0,
-    }
-    assert schema_fields_call[2] == {
-        "expected_revision": 1,
-        "fields": [
-            {
-                "name": "customer_id",
-                "field_id": "1",
-                "path": ["customer_id"],
-                "type": "long",
-                "nullable": False,
-            }
-        ],
-    }
-    assert policy_calls[0][1][2] == {"expected_revision": 0, "rules": []}
-
-
-def test_provision_rejects_partial_workspace_before_mutation(monkeypatch) -> None:
-    monkeypatch.setenv("DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN", "test-admin")
-    monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
-    module = _load_script("provision_demo")
-    calls: list[tuple[str, str]] = []
-
-    def request(method: str, path: str, body=None):
-        calls.append((method, path))
-        return {
-            "catalog_count": 1,
-            "asset_count": 1,
-            "unowned_asset_count": 0,
-            "missing_policy_count": 1,
-            "runtime_configured": True,
-            "enabled_auth_provider_count": 0,
-        }
-
-    monkeypatch.setattr(module, "_request", request)
-
-    with pytest.raises(RuntimeError, match="partially configured"):
-        module._provision_workspace(_fixture())
-
-    assert calls == [("GET", "/v1/workspace/summary")]
-
-
-def test_demo_owner_keys_are_scoped_to_oidc_issuer(monkeypatch) -> None:
-    monkeypatch.setenv("DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN", "test-admin")
-    monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
-    module = _load_script("provision_demo")
-
-    assert module._scoped_demo_owners(["group:asset-owners", "asset-owner"]) == [
-        "http://127.0.0.1:20080/realms/dal-obscura-demo|g|asset-owners",
-        "http://127.0.0.1:20080/realms/dal-obscura-demo|u|asset-owner",
-    ]
-    assert module._scoped_demo_owners(["https://issuer.example/realm|group:asset-owners"]) == [
-        "https://issuer.example/realm|group:asset-owners"
-    ]
-
-
-def test_demo_owner_keys_require_an_owner(monkeypatch) -> None:
-    monkeypatch.setenv("DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN", "test-admin")
-    monkeypatch.setenv("DAL_OBSCURA_DATABASE_URL", "sqlite+pysqlite:///:memory:")
-    module = _load_script("provision_demo")
-
     with pytest.raises(ValueError, match="at least one owner"):
-        module._scoped_demo_owners([])
+        provision_demo._scoped_demo_owners([])
 
 
-def test_demo_fixture_supports_deep_structs_and_collection_elements():
-    import json
-
-    import pyarrow as pa
-
-    module = _load_script("seed_table")
-    fixture = json.loads(
-        (
-            Path(__file__).parents[2] / "examples/demo/keycloak/fixtures/demo_fixture.json"
-        ).read_text()
-    )
-    _, schema = module._schemas(fixture["tables"][0]["schema"])
-    table = pa.Table.from_pylist(fixture["tables"][0]["rows"], schema=schema)
-    assert pa.types.is_struct(schema.field("profile").type)
-    assert pa.types.is_list(schema.field("contacts").type)
-    assert pa.types.is_map(schema.field("contact_book").type)
-    assert table.to_pylist()[0]["profile"]["identity"]["contact"]["address"]["city"] == "Amsterdam"
-    assert table.to_pylist()[0]["contacts"][0]["details"]["address"]["city"] == "Amsterdam"
+def test_catalog_credentials_are_references_not_inline(workspace):
+    fixture, request = workspace
+    provision_demo._provision_workspace(fixture)
+    catalog = request("GET", "/v1/catalogs")[0]
+    assert catalog["options"]["uri"] == {
+        "secret": "LOCAL_ICEBERG_URI",
+        "scope": "catalog:retail_demo",
+    }

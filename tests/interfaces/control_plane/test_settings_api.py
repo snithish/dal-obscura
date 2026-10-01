@@ -26,11 +26,7 @@ def test_workspace_runtime_settings_can_be_configured_without_tenant_or_cell_ids
     assert client.get("/v1/settings/runtime", headers=ADMIN_HEADERS).json() is None
     put_response = client.put(
         "/v1/settings/runtime",
-        json={
-            "ticket_ttl_seconds": 1200,
-            "max_tickets": 32,
-            "max_ticket_exchanges": 3,
-        },
+        json={"ticket_ttl_seconds": 1200, "max_tickets": 32, "max_ticket_exchanges": 3},
         headers=ADMIN_HEADERS,
     )
     get_after_setup = client.get("/v1/settings/runtime", headers=ADMIN_HEADERS)
@@ -198,9 +194,7 @@ def test_workspace_auth_providers_can_be_configured_without_cell_ids():
     assert updated.json()[0]["revision"] == 1
 
     missing = client.put(
-        "/v1/settings/auth-providers",
-        json={"providers": []},
-        headers=ADMIN_HEADERS,
+        "/v1/settings/auth-providers", json={"providers": []}, headers=ADMIN_HEADERS
     )
     stale = client.put(
         "/v1/settings/auth-providers",

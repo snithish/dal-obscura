@@ -28,8 +28,7 @@ const observations: WorkspaceObservations = {
   available: true,
   observed_at: "2026-09-21T08:00:00Z",
   source: "control-plane",
-  generation: { config_revision: "a".repeat(64) },
-  data_plane: { status: "ready", reason: "active generation is serving" },
+  data_plane: { status: "ready", reason: "Flight health probe succeeded" },
 };
 
 const events: AuditEvent[] = [{

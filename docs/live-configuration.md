@@ -73,7 +73,9 @@ scan execution and ticket fan-out remain independent. Provider factory/close and
 backend calls need their own IO timeouts: the provider-pool timeout bounds waiting
 for a slot or another constructor, not arbitrary blocking plugin IO.
 
-The packaged baseline is `20260930_0001`. Recreate older development databases;
+The packaged baseline is `20260930_0001`; `20260930_0002` upgrades nested schema
+types to unrestricted text. Run the migration upgrade before starting services.
+Recreate databases from before this baseline;
 there is no migration bridge for the removed global counter. Runtime/auth/path
 settings require worker restart. Run the PostgreSQL regressions with
 `DAL_OBSCURA_POSTGRES_TEST_URL` pointing to a disposable PostgreSQL database;

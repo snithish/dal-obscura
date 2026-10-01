@@ -53,9 +53,7 @@ def test_iceberg_discovery_closes_provider_after_success() -> None:
             closed.append(True)
 
     discover_iceberg_tables(
-        "analytics",
-        {},
-        load_catalog_fn=lambda name, **options: ClosableCatalog(),
+        "analytics", {}, load_catalog_fn=lambda name, **options: ClosableCatalog()
     )
 
     assert closed == [True]
@@ -74,9 +72,7 @@ def test_iceberg_discovery_closes_provider_after_failure() -> None:
 
     with pytest.raises(RuntimeError, match="provider failed"):
         discover_iceberg_tables(
-            "analytics",
-            {},
-            load_catalog_fn=lambda name, **options: ClosableCatalog(),
+            "analytics", {}, load_catalog_fn=lambda name, **options: ClosableCatalog()
         )
 
     assert closed == [True]
@@ -92,9 +88,7 @@ def test_iceberg_discovery_rejects_root_only_list_tables_signature() -> None:
 
     with pytest.raises(TypeError):
         discover_iceberg_tables(
-            "analytics",
-            {},
-            load_catalog_fn=lambda name, **options: RootOnlyCatalog(),
+            "analytics", {}, load_catalog_fn=lambda name, **options: RootOnlyCatalog()
         )
 
 
@@ -109,9 +103,7 @@ def test_iceberg_discovery_skips_pyiceberg_empty_root_namespace() -> None:
             return [("retail", "customer_revenue")]
 
     assert discover_iceberg_tables(
-        "analytics",
-        {},
-        load_catalog_fn=lambda name, **options: SqlCatalog(),
+        "analytics", {}, load_catalog_fn=lambda name, **options: SqlCatalog()
     ) == [
         {
             "backend": "iceberg",
@@ -132,9 +124,7 @@ def test_iceberg_discovery_does_not_hide_root_table_provider_errors() -> None:
 
     with pytest.raises(RuntimeError, match="catalog unavailable"):
         discover_iceberg_tables(
-            "analytics",
-            {},
-            load_catalog_fn=lambda name, **options: FailingCatalog(),
+            "analytics", {}, load_catalog_fn=lambda name, **options: FailingCatalog()
         )
 
 
@@ -195,11 +185,7 @@ def test_public_catalog_discovery_uses_admitted_plugin_and_closes_it():
     )
 
     assert tables == [
-        {
-            "backend": "fixture.catalog",
-            "name": "default.users",
-            "table_identifier": "default.users",
-        }
+        {"backend": "fixture.catalog", "name": "default.users", "table_identifier": "default.users"}
     ]
     assert received_revision == [4]
     assert validated == [True]
@@ -245,19 +231,11 @@ def test_public_catalog_discovery_releases_capacity_when_close_fails() -> None:
     for _ in range(8):
         with pytest.raises(RuntimeError, match="close failed"):
             discover_public_catalog_tables(
-                "analytics",
-                "fixture.catalog",
-                {},
-                plugin_registry=registry,
+                "analytics", "fixture.catalog", {}, plugin_registry=registry
             )
 
     assert (
-        discover_public_catalog_tables(
-            "analytics",
-            "fixture.catalog",
-            {},
-            plugin_registry=registry,
-        )
+        discover_public_catalog_tables("analytics", "fixture.catalog", {}, plugin_registry=registry)
         == []
     )
 
@@ -278,10 +256,7 @@ def test_public_catalog_discovery_rejects_missing_lifecycle_methods() -> None:
 
     with pytest.raises(ValueError, match="required lifecycle"):
         discover_public_catalog_tables(
-            "analytics",
-            "fixture.catalog",
-            {},
-            plugin_registry=Registry(),
+            "analytics", "fixture.catalog", {}, plugin_registry=Registry()
         )
 
 
@@ -299,12 +274,7 @@ def test_public_catalog_discovery_rejects_when_process_capacity_is_exhausted(
     monkeypatch.setattr(discovery, "_DISCOVERY_SLOTS", OccupiedSlots())
 
     with pytest.raises(RuntimeError, match="capacity is exhausted"):
-        discover_public_catalog_tables(
-            "analytics",
-            "fixture.catalog",
-            {},
-            plugin_registry=object(),
-        )
+        discover_public_catalog_tables("analytics", "fixture.catalog", {}, plugin_registry=object())
 
 
 def test_public_catalog_discovery_releases_capacity_after_factory_failure(
@@ -332,10 +302,7 @@ def test_public_catalog_discovery_releases_capacity_after_factory_failure(
 
     with pytest.raises(RuntimeError, match="factory lookup failed"):
         discover_public_catalog_tables(
-            "analytics",
-            "fixture.catalog",
-            {},
-            plugin_registry=Registry(),
+            "analytics", "fixture.catalog", {}, plugin_registry=Registry()
         )
 
     assert (slots.acquired, slots.released) == (1, 1)
@@ -368,10 +335,7 @@ def test_public_catalog_discovery_rejects_forged_table_identifiers() -> None:
 
     with pytest.raises(ValueError, match="invalid table identifier"):
         discover_public_catalog_tables(
-            "analytics",
-            "fixture.catalog",
-            {},
-            plugin_registry=Registry(),
+            "analytics", "fixture.catalog", {}, plugin_registry=Registry()
         )
 
 
@@ -399,10 +363,7 @@ def test_public_catalog_discovery_rejects_oversized_page() -> None:
 
     with pytest.raises(ValueError, match="too many page entries"):
         discover_public_catalog_tables(
-            "analytics",
-            "fixture.catalog",
-            {},
-            plugin_registry=Registry(),
+            "analytics", "fixture.catalog", {}, plugin_registry=Registry()
         )
 
 
@@ -463,10 +424,7 @@ def test_iceberg_discovery_honors_cancellation_and_deadline():
 
     with pytest.raises(TimeoutError, match="deadline"):
         discover_iceberg_tables(
-            "analytics",
-            {},
-            load_catalog_fn=lambda name, **options: SlowCatalog(),
-            deadline_at=0.0,
+            "analytics", {}, load_catalog_fn=lambda name, **options: SlowCatalog(), deadline_at=0.0
         )
 
 
@@ -483,9 +441,7 @@ def test_iceberg_discovery_rejects_malformed_provider_identifier_segments():
 
     with pytest.raises(ValueError, match="invalid namespace"):
         discover_iceberg_tables(
-            "analytics",
-            {},
-            load_catalog_fn=lambda name, **options: MalformedCatalog(),
+            "analytics", {}, load_catalog_fn=lambda name, **options: MalformedCatalog()
         )
 
 

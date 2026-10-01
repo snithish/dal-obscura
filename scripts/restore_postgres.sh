@@ -9,8 +9,8 @@ if [ "$DAL_OBSCURA_RESTORE_CONFIRM" != "I_UNDERSTAND_ISOLATED_RESTORE" ]; then
   echo "refusing restore: set DAL_OBSCURA_RESTORE_CONFIRM=I_UNDERSTAND_ISOLATED_RESTORE" >&2
   exit 2
 fi
-if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
-  echo "usage: DAL_OBSCURA_DATABASE_URL=... DAL_OBSCURA_AGE_IDENTITY=... $0 BACKUP.age [CELL_ID]" >&2
+if [ "$#" -ne 1 ]; then
+  echo "usage: DAL_OBSCURA_DATABASE_URL=... DAL_OBSCURA_AGE_IDENTITY=... $0 BACKUP.age" >&2
   exit 2
 fi
 
@@ -35,7 +35,6 @@ require_owner_only_secret() {
 }
 
 backup=$1
-cell_id=${2:-}
 test -r "$backup" || { echo "backup is not readable: $backup" >&2; exit 2; }
 checksum="${backup}.sha256"
 if [ -e "$checksum" ]; then
@@ -73,9 +72,5 @@ test -s "$temporary" || { echo "decrypted backup is empty" >&2; exit 1; }
 pg_restore --single-transaction --clean --if-exists --no-owner --no-acl \
   --dbname="$DAL_OBSCURA_DATABASE_URL" "$temporary"
 
-if [ -n "$cell_id" ]; then
-  dal-obscura-maintenance invalidate-access --database-url "$DAL_OBSCURA_DATABASE_URL" --cell-id "$cell_id"
-else
-  dal-obscura-maintenance invalidate-access --database-url "$DAL_OBSCURA_DATABASE_URL"
-fi
+dal-obscura-maintenance invalidate-access --database-url "$DAL_OBSCURA_DATABASE_URL"
 printf 'restore completed and replayable access invalidated; keep ingress closed until reconciliation\n'

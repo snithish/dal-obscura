@@ -12,7 +12,6 @@ def test_auth_provider_redaction_hides_legacy_sensitive_values_and_scope_fields(
     result = redact_auth_provider(
         {
             "id": "provider-1",
-            "cell_id": "private-cell",
             "ordinal": 1,
             "module": "provider",
             "args": {
@@ -69,7 +68,7 @@ def test_auth_provider_endpoints_normalize_malformed_uri_errors(field: str, valu
     [
         ("subject_claim", "claims..sub"),
         ("group_claims", "groups"),
-        ("attribute_claims", {"tenant": ["tenant"]}),
+        ("attribute_claims", {"department": ["department"]}),
         ("leeway_seconds", -1),
         ("jwks_refresh_interval_seconds", 0),
         ("max_jwks_keys", 0),
@@ -96,7 +95,7 @@ def test_auth_provider_accepts_full_claim_and_cache_configuration():
                     "algorithms": ["RS256"],
                     "subject_claim": "sub",
                     "group_claims": ["groups", "realm_access.roles"],
-                    "attribute_claims": {"tenant": "tenant.id"},
+                    "attribute_claims": {"department": "department.id"},
                     "leeway_seconds": 30,
                     "jwks_refresh_interval_seconds": 60,
                     "max_jwks_keys": 512,

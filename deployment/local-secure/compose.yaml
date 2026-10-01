@@ -1,50 +1,299 @@
-name: dal-obscura-local-secure
-
-# Layer this file over the production reference. The application containers,
-# database roles, migration order, TLS settings, and readiness checks are the
-# same; this layer only adds loopback ports and a local HTTPS browser edge.
+# Standalone secure demo; finite jobs are sequenced by ./demo.
+x-service: &service
+  image: ${PROJECT_NAME:?run ./demo init}-service:local
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  networks: [backend]
+x-trust: &trust
+  SSL_CERT_FILE: /trust/ca.crt
+  REQUESTS_CA_BUNDLE: /trust/ca.crt
+  LOCAL_ICEBERG_URI: postgresql+psycopg://iceberg:${ICEBERG_DB_PASSWORD}@postgres:5432/iceberg
+  DAL_OBSCURA_SECRET_PROVIDER_CONFIG: '{"scope_grants":{"catalog:retail_demo":["LOCAL_ICEBERG_URI"]}}'
 services:
-  data-plane:
-    ports:
-      - "127.0.0.1:8815:8815"
-      - "127.0.0.1:8816:8816"
-
-  ui:
-    ports: []
-
-  edge:
-    image: ${DAL_OBSCURA_EDGE_IMAGE:?set DAL_OBSCURA_EDGE_IMAGE}
+  postgres:
+    image: ${POSTGRES_IMAGE}
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+      ICEBERG_DB_PASSWORD: ${ICEBERG_DB_PASSWORD}
+      MIGRATION_DB_PASSWORD: ${MIGRATION_DB_PASSWORD}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      DATA_DB_PASSWORD: ${DATA_DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/10-local-databases.sh:ro
+    networks: [backend]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U postgres -d postgres']
+      interval: 2s
+      timeout: 3s
+      retries: 45
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+  keycloak:
+    image: ${KEYCLOAK_IMAGE}
+    command: [start, --import-realm]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+      KC_HOSTNAME: https://localhost:${KEYCLOAK_PORT}
+      KC_HTTP_ENABLED: "false"
+      KC_HTTPS_CERTIFICATE_FILE: /tls/keycloak.crt
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /tls/keycloak.key
+      KC_HEALTH_ENABLED: "true"
+      KC_HTTP_MANAGEMENT_SCHEME: http
+      KC_HTTP_MANAGEMENT_HOST: 127.0.0.1
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      JAVA_OPTS_KC_HEAP: -Xms128m -Xmx512m
+      UI_ORIGIN: https://localhost:${UI_PORT}
+      OIDC_CLI_CLIENT_SECRET: ${OIDC_CLI_CLIENT_SECRET}
+      DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD}
+      ASSET_OWNER_PASSWORD: ${ASSET_OWNER_PASSWORD}
+      US_ANALYST_PASSWORD: ${US_ANALYST_PASSWORD}
+      EU_ANALYST_PASSWORD: ${EU_ANALYST_PASSWORD}
+      DATA_STEWARD_PASSWORD: ${DATA_STEWARD_PASSWORD}
+      BLOCKED_USER_PASSWORD: ${BLOCKED_USER_PASSWORD}
+    volumes:
+      - ../../examples/demo/keycloak/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+      - keycloak-tls:/tls:ro
+    ports: ['127.0.0.1:${KEYCLOAK_PORT}:8443']
+    networks: [backend, ingress]
     depends_on:
-      ui:
-        condition: service_healthy
-    ports:
-      - "127.0.0.1:8443:8443"
-    networks:
-      - backend
+      postgres: {condition: service_healthy}
+    healthcheck:
+      test: [CMD-SHELL, "bash -ec '{ printf \"GET /health/ready HTTP/1.0\\r\\n\\r\\n\" >&0; grep -q \" 200 \"; } 0<>/dev/tcp/127.0.0.1/9000'"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+      start_period: 20s
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+  control-plane:
+    <<: *service
+    command: [control-plane]
+    environment:
+      <<: *trust
+      DAL_OBSCURA_DATABASE_URL: postgresql+psycopg://dal_obscura_control:${APP_DB_PASSWORD}@postgres:5432/obscura
+      DAL_OBSCURA_CONTROL_PLANE_HOST: 0.0.0.0
+      DAL_OBSCURA_CONTROL_PLANE_PORT: "8820"
+      DAL_OBSCURA_CONTROL_PLANE_PROFILE: production
+      DAL_OBSCURA_CONTROL_PLANE_CATALOG_EGRESS_ALLOWLIST: postgres
+      DAL_OBSCURA_CONTROL_PLANE_ADMIN_TOKEN: ${ADMIN_TOKEN}
+      DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED: "false"
+      DAL_OBSCURA_CONTROL_PLANE_CORS_ORIGINS: https://localhost:${UI_PORT}
+      DAL_OBSCURA_CONTROL_PLANE_OIDC_ISSUER: https://localhost:${KEYCLOAK_PORT}/realms/dal-obscura-demo
+      DAL_OBSCURA_CONTROL_PLANE_OIDC_AUDIENCE: dal-obscura
+      DAL_OBSCURA_CONTROL_PLANE_OIDC_JWKS_URL: https://keycloak:8443/realms/dal-obscura-demo/protocol/openid-connect/certs
+      DAL_OBSCURA_CONTROL_PLANE_OIDC_SUBJECT_CLAIM: preferred_username
+      DAL_OBSCURA_CONTROL_PLANE_OIDC_GROUP_CLAIMS: groups
+      DAL_OBSCURA_CONTROL_PLANE_OIDC_ADMIN_GROUP: platform-admins
+      DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ISSUER: https://localhost:${KEYCLOAK_PORT}/realms/dal-obscura-demo
+      DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_CLIENT_ID: dal-obscura-ui
+      DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN: https://localhost:${UI_PORT}
+      DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI: https://localhost:${UI_PORT}/auth/callback
+      DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_POST_LOGOUT_REDIRECT_URI: https://localhost:${UI_PORT}
+      DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_TOKEN_ENDPOINT: https://keycloak:8443/realms/dal-obscura-demo/protocol/openid-connect/token
+      DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_JWKS_URL: https://keycloak:8443/realms/dal-obscura-demo/protocol/openid-connect/certs
+      DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_SCOPE: openid profile
+    volumes:
+      - warehouse:/warehouse:ro
+      - ./.tls/ca.crt:/trust/ca.crt:ro
+      - ../../examples/demo/keycloak/scripts/healthcheck.py:/example/healthcheck.py:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+      keycloak: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, python, /example/healthcheck.py, http://127.0.0.1:8820/readyz]
+      interval: 2s
+      timeout: 3s
+      retries: 45
+    restart: unless-stopped
+  data-plane:
+    <<: *service
+    networks: [backend, ingress]
+    command: [data-plane]
+    environment:
+      <<: *trust
+      DAL_OBSCURA_DATABASE_URL: postgresql+psycopg://dal_obscura_reader:${DATA_DB_PASSWORD}@postgres:5432/obscura
+      DAL_OBSCURA_DATA_PLANE_PROFILE: production
+      DAL_OBSCURA_LOCATION: grpc+tls://0.0.0.0:8815
+      DAL_OBSCURA_TICKET_SECRET: ${TICKET_SECRET}
+      DAL_OBSCURA_TLS_CERT: /tls/flight.crt
+      DAL_OBSCURA_TLS_KEY: /tls/flight.key
+      DAL_OBSCURA_TLS_CLIENT_CA: /trust/ca.crt
+      DAL_OBSCURA_TLS_VERIFY_CLIENT: "true"
+      DAL_OBSCURA_DATA_PLANE_HEALTH_HOST: 0.0.0.0
+      DAL_OBSCURA_DATA_PLANE_HEALTH_PORT: "8816"
+    volumes:
+      - warehouse:/warehouse:ro
+      - flight-tls:/tls:ro
+      - ./.tls/ca.crt:/trust/ca.crt:ro
+      - ../../examples/demo/keycloak/scripts/healthcheck.py:/example/healthcheck.py:ro
+    ports: ['127.0.0.1:${FLIGHT_PORT}:8815']
+    depends_on:
+      postgres: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, python, /example/healthcheck.py, http://127.0.0.1:8816/readyz]
+      interval: 2s
+      timeout: 3s
+      retries: 45
+    restart: unless-stopped
+  ui:
+    image: ${PROJECT_NAME}-ui:local
+    networks: [backend]
     read_only: true
     tmpfs:
-      - /data
-      - /config
+      - /var/cache/nginx
+      - /var/run
       - /tmp
-    cap_drop: ["ALL"]
-    security_opt:
-      - no-new-privileges:true
-    secrets:
-      - source: ui_cert
-        target: ui.crt
-      - source: ui_key
-        target: ui.key
+      # Disposable generated configuration; plain tmpfs works in Docker and Podman.
+      - /etc/nginx/conf.d:mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      control-plane: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/]
+      interval: 2s
+      timeout: 3s
+      retries: 45
+    restart: unless-stopped
+  edge:
+    image: ${PROJECT_NAME}-edge:local
+    user: "10001:10001"
+    networks: [backend, ingress]
+    read_only: true
+    tmpfs: [/data, /config, /tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     volumes:
-      # Compose resolves relative host paths against the first compose file
-      # (the production base), so keep the explicit local-secure prefix.
-      - ../local-secure/Caddyfile:/etc/caddy/Caddyfile:ro
-
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - edge-tls:/tls:ro
+    ports: ['127.0.0.1:${UI_PORT}:8443']
+    depends_on:
+      ui: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, --show-error, --cacert, /tls/ca.crt, --output, /dev/null, https://localhost:8443/]
+      interval: 2s
+      timeout: 3s
+      retries: 45
+    restart: unless-stopped
+  tls-install:
+    <<: *service
+    profiles: [tools]
+    user: "0:0"
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    command: [python, /secure/install_tls.py]
+    volumes:
+      # Never expose the CA signing key to a container.
+      - ./.tls/ca.crt:/source/ca.crt:ro
+      - ./.tls/ui.crt:/source/ui.crt:ro
+      - ./.tls/ui.key:/source/ui.key:ro
+      - ./.tls/keycloak.crt:/source/keycloak.crt:ro
+      - ./.tls/keycloak.key:/source/keycloak.key:ro
+      - ./.tls/flight.crt:/source/flight.crt:ro
+      - ./.tls/flight.key:/source/flight.key:ro
+      - ./.tls/client.crt:/source/client.crt:ro
+      - ./.tls/client.key:/source/client.key:ro
+      - ./.tls/untrusted-client.crt:/source/untrusted-client.crt:ro
+      - ./.tls/untrusted-client.key:/source/untrusted-client.key:ro
+      - ./scripts/install_tls.py:/secure/install_tls.py:ro
+      - keycloak-tls:/keycloak-tls
+      - flight-tls:/flight-tls
+      - edge-tls:/edge-tls
+      - client-tls:/client-tls
+  migrate:
+    <<: *service
+    profiles: [tools]
+    command: [dal-obscura-migrate, upgrade]
+    environment:
+      DAL_OBSCURA_DATABASE_URL: postgresql+psycopg://dal_obscura_migrator:${MIGRATION_DB_PASSWORD}@postgres:5432/obscura
+  postgres-grants:
+    image: ${POSTGRES_IMAGE}
+    profiles: [tools]
+    networks: [backend]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: obscura
+    command: [psql, -v, ON_ERROR_STOP=1, -c, 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.data_plane_tickets TO dal_obscura_reader;']
+  seed:
+    <<: *service
+    profiles: [tools]
+    user: "0:0"
+    command: [python, /example/scripts/seed_table.py]
+    environment:
+      ICEBERG_CATALOG_URI: postgresql+psycopg://iceberg:${ICEBERG_DB_PASSWORD}@postgres:5432/iceberg
+      ICEBERG_WAREHOUSE: /warehouse
+    volumes:
+      - ../../examples/demo/keycloak/scripts:/example/scripts:ro
+      - ../../examples/demo/keycloak/fixtures:/example/fixtures:ro
+      - warehouse:/warehouse
+  provision:
+    <<: *service
+    profiles: [tools]
+    command: [python, /example/scripts/provision_demo.py]
+    environment:
+      <<: *trust
+      CONTROL_PLANE_URL: http://control-plane:8820
+      OIDC_TOKEN_URL: https://keycloak:8443/realms/dal-obscura-demo/protocol/openid-connect/token
+      DEMO_OIDC_JWKS_URL: https://keycloak:8443/realms/dal-obscura-demo/protocol/openid-connect/certs
+      OIDC_CLI_CLIENT_SECRET: ${OIDC_CLI_CLIENT_SECRET}
+      DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD}
+      DEMO_OIDC_ISSUER: https://localhost:${KEYCLOAK_PORT}/realms/dal-obscura-demo
+      ICEBERG_WAREHOUSE: /warehouse
+    volumes:
+      - ../../examples/demo/keycloak/scripts:/example/scripts:ro
+      - ../../examples/demo/keycloak/fixtures:/example/fixtures:ro
+      - ./.tls/ca.crt:/trust/ca.crt:ro
+  check:
+    <<: *service
+    profiles: [tools]
+    command: [python, /secure/check_secure.py]
+    environment:
+      <<: *trust
+      FLIGHT_URI: grpc+tls://data-plane:8815
+      FLIGHT_TLS_CA: /tls/ca.crt
+      FLIGHT_TLS_CERT: /tls/client.crt
+      FLIGHT_TLS_KEY: /tls/client.key
+      OIDC_TOKEN_URL: https://keycloak:8443/realms/dal-obscura-demo/protocol/openid-connect/token
+      OIDC_CLIENT_ID: dal-obscura-cli
+      OIDC_CLI_CLIENT_SECRET: ${OIDC_CLI_CLIENT_SECRET}
+      DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD}
+      ASSET_OWNER_PASSWORD: ${ASSET_OWNER_PASSWORD}
+      US_ANALYST_PASSWORD: ${US_ANALYST_PASSWORD}
+      EU_ANALYST_PASSWORD: ${EU_ANALYST_PASSWORD}
+      DATA_STEWARD_PASSWORD: ${DATA_STEWARD_PASSWORD}
+      BLOCKED_USER_PASSWORD: ${BLOCKED_USER_PASSWORD}
+      DATA_DATABASE_URL: postgresql+psycopg://dal_obscura_reader:${DATA_DB_PASSWORD}@postgres:5432/obscura
+      CONTROL_DATABASE_URL: postgresql+psycopg://dal_obscura_control:${APP_DB_PASSWORD}@postgres:5432/obscura
+    volumes:
+      - ../../examples/demo/keycloak/scripts:/example/scripts:ro
+      - ../../examples/demo/keycloak/fixtures:/example/fixtures:ro
+      - ./scripts/check_secure.py:/secure/check_secure.py:ro
+      - client-tls:/tls:ro
+      - ./.tls/ca.crt:/trust/ca.crt:ro
 networks:
   backend:
     internal: true
-
-secrets:
-  ui_cert:
-    file: ${DAL_OBSCURA_UI_TLS_CERT_SOURCE:?set DAL_OBSCURA_UI_TLS_CERT_SOURCE}
-  ui_key:
-    file: ${DAL_OBSCURA_UI_TLS_KEY_SOURCE:?set DAL_OBSCURA_UI_TLS_KEY_SOURCE}
+  # Published services need a host return route on Podman VM networking.
+  ingress: {}
+volumes:
+  postgres-data:
+  warehouse:
+  keycloak-tls:
+  flight-tls:
+  edge-tls:
+  client-tls:

@@ -379,7 +379,10 @@ def _is_top_level_column(node: exp.Expr) -> bool:
 
 def _is_scalar_literal(node: exp.Expr) -> bool:
     node = _strip_parens(node)
-    return isinstance(node, (exp.Boolean, exp.Literal, exp.Null))
+    # SQL comparisons/IN with NULL use three-valued logic; Iceberg literal
+    # predicates cannot represent those semantics. Keep them in DuckDB.
+    # IS NULL / IS NOT NULL have their own supported pushdown branches.
+    return isinstance(node, (exp.Boolean, exp.Literal))
 
 
 def _strip_parens(node: exp.Expr) -> exp.Expr:

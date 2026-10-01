@@ -54,7 +54,6 @@ public final class FixtureBuilderRunner {
                 requireText(node, "target"),
                 requireText(node, "user_token"),
                 requireText(node, "database_url"),
-                requireText(node, "cell_id"),
                 requireText(node, "jwt_secret"),
                 requireText(node, "ticket_secret"),
                 requireLong(expected, "row_count"),

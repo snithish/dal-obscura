@@ -488,6 +488,9 @@ def _nested_projection_leaf_or_struct(
     *,
     item_var: str = "_item",
 ) -> str:
+    direct_mask = masks.get(path)
+    if direct_mask is not None:
+        return _mask_expression(expr, direct_mask)
     if projection:
         return _nested_projection_expression(
             expr,
@@ -565,6 +568,11 @@ def _apply_nested_masks(
     if direct_mask is not None:
         return _mask_expression(expr, direct_mask)
 
+    if pa.types.is_map(data_type):
+        return _nested_projection_expression(
+            expr, path, data_type, {"$key": {}, "$value": {}}, masks, item_var=item_var
+        )
+
     if pa.types.is_struct(data_type):
         updated_expr = expr
         for child in data_type:
@@ -614,6 +622,8 @@ def _projected_nested_field(
     masks: Mapping[str, MaskRule],
 ) -> pa.Field:
     """Returns a pruned nested field for requested dotted column paths."""
+    if path in masks:
+        return _masked_field(field, path, masks)
     if pa.types.is_struct(field.type):
         child_fields: list[pa.Field] = []
         for child_name, child_projection in projection.items():
@@ -757,6 +767,11 @@ def _duckdb_output_type(data_type: pa.DataType) -> pa.DataType:
         return pa.struct(_duckdb_output_field(child) for child in data_type)
     if pa.types.is_list(data_type) or pa.types.is_large_list(data_type):
         return pa.list_(_duckdb_output_field(data_type.value_field))
+    if pa.types.is_map(data_type):
+        return pa.map_(
+            _duckdb_output_type(data_type.key_type),
+            _duckdb_output_field(data_type.item_field),
+        )
     return data_type
 
 

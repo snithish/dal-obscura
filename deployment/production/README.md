@@ -25,8 +25,7 @@ migration job at an existing deployment database.
    ingress, and redirect configuration. The control-plane production profile
    rejects non-TLS OIDC and browser redirect settings, weak bootstrap tokens,
    missing audiences, missing catalog egress policy, and demo login shortcuts.
-   Set `DAL_OBSCURA_CELL_ID` to the UUID selected for the data-plane cell and
-   keep `DAL_OBSCURA_DATA_PLANE_PROFILE=production`; the data plane
+   Keep `DAL_OBSCURA_DATA_PLANE_PROFILE=production`; the data plane
    rejects an insecure Flight location, weak ticket secret, or non-PostgreSQL
    control-plane store.
    If external catalog or format wheels are installed, mount one immutable
@@ -57,20 +56,18 @@ or readiness check keeps ingress closed until the operator resolves it.
 
 Restore a backup from this schema version into an isolated environment and
 verify the schema before exposing any listener. Reconcile live catalog and asset
-configuration, cell UUID, IdP configuration, secret references, and key versions. Before opening
+configuration, IdP configuration, secret references, and key versions. Before opening
 ingress, invalidate credentials and durable replay artifacts in the restored
 database:
 
 ```bash
 dal-obscura-maintenance invalidate-access \
-  --database-url "$DAL_OBSCURA_CONTROL_PLANE_DATABASE_URL" \
-  --cell-id "$DAL_OBSCURA_CELL_ID"
+  --database-url "$DAL_OBSCURA_CONTROL_PLANE_DATABASE_URL"
 ```
 
 The command revokes every browser session and consumes pending OIDC login
-transactions. With `--cell-id` it also deletes every stored Flight ticket for
-that cell; omit the flag only when intentionally invalidating tickets for every
-cell. Verify denied and allowed synthetic reads after invalidation, then open
+transactions and deletes every stored Flight ticket for the deployment.
+Verify denied and allowed synthetic reads after invalidation, then open
 the TLS ingress. Keep the restored environment closed if any reconciliation,
 readiness, or synthetic read check fails.
 
@@ -97,7 +94,7 @@ restored sessions, login transactions, and tickets before returning:
 DAL_OBSCURA_DATABASE_URL="$ISOLATED_DATABASE_URL" \
 DAL_OBSCURA_AGE_IDENTITY="/secure/keys/backup.agekey" \
 DAL_OBSCURA_RESTORE_CONFIRM=I_UNDERSTAND_ISOLATED_RESTORE \
-  ../../scripts/restore_postgres.sh /secure/backup/candidate.dump.age "$DAL_OBSCURA_CELL_ID"
+  ../../scripts/restore_postgres.sh /secure/backup/candidate.dump.age
 ```
 
 Reconcile IdP settings, plugin locks, secret references, live policies, and

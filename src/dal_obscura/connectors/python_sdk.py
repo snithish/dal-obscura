@@ -254,14 +254,13 @@ class DalObscuraClient:
         This explicitly collects the Flight stream into an Arrow table before
         conversion. It is not a lazy Polars scan and does not provide predicate
         pushdown beyond the governed ``row_filter`` supplied to this client.
-        Install the optional client dependency with ``dal-obscura[examples]``.
+        Install the optional client dependency with ``dal-obscura[polars]``.
         """
         try:
             import polars as pl
         except ImportError as error:
             raise RuntimeError(
-                "Polars support requires the optional dependency: "
-                "pip install 'dal-obscura[examples]'"
+                "Polars support requires the optional dependency: pip install 'dal-obscura[polars]'"
             ) from error
         return cast(
             "pl.DataFrame",
@@ -328,19 +327,18 @@ class DuckDBDalObscuraReader:
         row_filter: str | None = None,
     ) -> duckdb.DuckDBPyRelation:
         """Reads a governed table and registers it as a DuckDB relation."""
-        schema = self._client.fetch_schema(
-            catalog=catalog,
-            target=target,
-            columns=columns,
-            row_filter=row_filter,
-        )
         batches = self._client.read_batches(
             catalog=catalog,
             target=target,
             columns=columns,
             row_filter=row_filter,
         )
-        return self._connection.from_arrow(pa.RecordBatchReader.from_batches(schema, batches))
+        # The plan's schema and tickets describe one authorized read. A separate
+        # schema request could observe a different snapshot and consume a
+        # one-shot projection iterable before planning.
+        return self._connection.from_arrow(
+            pa.RecordBatchReader.from_batches(batches.schema, batches)
+        )
 
     def close(self) -> None:
         """Closes the owned DuckDB connection, if this instance created it."""

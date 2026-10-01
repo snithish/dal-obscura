@@ -22,9 +22,7 @@ def _client(*, secret_provider: SecretProvider | None = None) -> TestClient:
     migrate_config_store(engine)
     return TestClient(
         create_app(
-            session_factory(engine),
-            admin_token="test-admin",
-            secret_provider=secret_provider,
+            session_factory(engine), admin_token="test-admin", secret_provider=secret_provider
         )
     )
 
@@ -32,11 +30,7 @@ def _client(*, secret_provider: SecretProvider | None = None) -> TestClient:
 def _provision_asset(client: TestClient) -> dict[str, str]:
     client.put(
         "/v1/settings/runtime",
-        json={
-            "ticket_ttl_seconds": 900,
-            "max_tickets": 64,
-            "max_ticket_exchanges": 2,
-        },
+        json={"ticket_ttl_seconds": 900, "max_tickets": 64, "max_ticket_exchanges": 2},
         headers=ADMIN_HEADERS,
     )
     client.put(
@@ -61,7 +55,7 @@ def _provision_asset(client: TestClient) -> dict[str, str]:
                     "ordinal": 10,
                     "effect": "allow",
                     "principals": ["user1"],
-                    "when": {"tenant": "default"},
+                    "when": {"department": "default"},
                     "columns": ["id", "email"],
                     "masks": {"email": {"type": "email"}},
                     "row_filter": "region = 'us'",

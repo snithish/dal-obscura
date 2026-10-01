@@ -4,8 +4,7 @@ Example:
     ```python
     flow = AccessFlow(
         identity=identity,
-        authorizer=authorizer,
-        catalog_registry=catalog_registry,
+        access_context=access_context,
         masking=masking,
         row_transform=row_transform,
         ticket_codec=ticket_codec,
@@ -25,8 +24,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from uuid import uuid4
 
-from dal_obscura.data_plane.application.ports.authorization import AuthorizationPort
-from dal_obscura.data_plane.application.ports.catalog import CatalogRegistryPort
+from dal_obscura.data_plane.application.ports.access_context import AccessContextPort
 from dal_obscura.data_plane.application.ports.identity import IdentityPort
 from dal_obscura.data_plane.application.ports.masking import MaskingPort
 from dal_obscura.data_plane.application.ports.row_transform import RowTransformPort
@@ -57,8 +55,7 @@ class AccessFlow:
     """
 
     identity: IdentityPort
-    authorizer: AuthorizationPort
-    catalog_registry: CatalogRegistryPort
+    access_context: AccessContextPort | None
     masking: MaskingPort
     row_transform: RowTransformPort | None
     ticket_codec: TicketCodecPort

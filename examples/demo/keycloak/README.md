@@ -1,182 +1,110 @@
-# Local Keycloak Demo
+# Local Keycloak example
 
-This demo runs dal-obscura locally with Keycloak IAM, Postgres-backed
-control-plane state, a seeded Iceberg table, and a Flight data plane. It is
-built for sales walkthroughs and hands-on trials on a laptop.
-
-Generated secrets and table files stay under this directory in `.runtime/`.
-Control-plane state is stored in the Compose `postgres-data-v2` volume so policy
-changes survive container restarts. The versioned volume starts with the current
-schema baseline and leaves older local demo data untouched.
+A disposable, loopback-only environment for real SSO and governed Iceberg reads.
+It uses the product's service and UI images, built from this checkout.
 
 ## Requirements
 
-- Docker Engine with Compose v2, or Podman with a running machine and a working
-  Compose provider
-- Python 3 for the local `./run` helper
+- Docker Desktop with Compose v2, or a running Podman machine using Compose v2.
+- `uv`; the launcher uses an isolated Python 3.12 interpreter with no host package installation.
+- At least 4 GiB available container memory and enough disk for image builds.
+- Node 24 and pnpm for the browser check. Startup itself does not need host Node.
+- Free TCP ports 20080 (Keycloak), 28821 (UI), and 28115 (Flight).
 
-## Start
+With Podman, start the machine with `podman machine start`. The launcher reports
+an unavailable engine, missing Compose, or occupied ports before building.
+
+## First start
 
 ```bash
 cd examples/demo/keycloak
-./run up
+./demo init
+./demo credentials
+./demo check
 ```
 
-What happens:
+Open **http://localhost:28821**, choose **Sign in with SSO**, and sign in as
+`demo-admin` with the generated password. Always use `localhost` for browser
+access so the configured origin, callback, and cookie behavior agree.
 
-1. `scripts/prepare_demo.py` creates `.runtime/`, generates local secrets, writes
-   per-service env files, and renders the Keycloak realm from
-   `keycloak/realm.template.json`.
-2. `./run up` builds a local `dal-obscura-demo:local` image from this checkout,
-   unless `DAL_OBSCURA_IMAGE` is set to a prebuilt image.
-3. Docker Compose starts Postgres on `127.0.0.1:25432` and Keycloak on
-   `127.0.0.1:20080` (Keycloak still listens on port `8080` inside the container).
-4. The `migrate` service runs `dal-obscura-migrate upgrade` against Postgres.
-5. The control plane starts on `127.0.0.1:28820` with Postgres config storage,
-   Keycloak token validation, and public UI authentication configuration.
-   The governance UI is built from `apps/governance-ui`, served on
-   `localhost:28821` by default, and proxies `/v1` to the control plane on the
-   same origin. Set `DAL_OBSCURA_DEMO_UI_PORT` to choose another loopback port.
-6. The `setup` service creates the Iceberg table metadata and data files from `fixtures/demo_fixture.json`.
-7. The setup service waits for the control plane and provisions it through the
-   HTTP API. It configures one Iceberg SQL catalog,
-   calls catalog discovery, confirms the demo table are discovered, then
-   promotes them to governed assets.
-8. The setup service assigns `group:asset-owners`, saves the demo policies
-   directly to each live asset, and configures OIDC/JWKS auth for the data plane.
-9. The Flight data plane starts on `127.0.0.1:28115`.
+`./demo init` generates one private `.env`, builds both images from the current
+checkout, starts the infrastructure, migrates the application database, seeds
+Iceberg, provisions configuration through the API, and starts Flight and the UI.
+Every phase has a deadline and propagates failures. Setup jobs exit; there is no
+setup marker, sleeping helper container, or forced recreation during normal start.
+An interrupted initialization can be retried with `./demo init`.
 
-The Compose project network resolves service names such as `postgres`,
-`keycloak`, and `control-plane` between containers. Browser-facing issuer and
-callback URLs use loopback addresses because the browser runs on the host. If
-startup fails, `./run up` prints service state and recent provisioning logs.
+Five services remain running: PostgreSQL, Keycloak, control plane, data plane,
+and UI/proxy. PostgreSQL has separate databases and users for Keycloak,
+configuration/tickets, and the Iceberg SQL catalog. One named warehouse volume
+is mounted at `/warehouse`; services read it, and the seed job writes it.
+The fixture contains nested structs/lists/maps and two files for parallel reads.
 
-## Credentials
+The Keycloak realm uses a single public issuer at
+`http://localhost:20080/realms/dal-obscura-demo`. Servers exchange tokens and fetch
+JWKS through the internal `keycloak:8080` address while validating that public
+issuer. Browser login uses authorization code with PKCE; bootstrap browser login
+is disabled. The CLI fixture client permits password grants solely for local read
+checks. Administrative authority alone does not permit reading governed rows.
+
+## Everyday commands
 
 ```bash
-./run credentials
+./demo up                   # Start existing images and check schema; preserve edits
+./demo check                # Verify reads, then real Chromium SSO/login/reload/logout
+./demo check --reads-only    # Verify reads without Node or a browser
+./demo credentials          # Explicitly display local example passwords
+./demo logs control-plane   # Redacted recent logs for a service
+./demo down                 # Stop containers; retain databases, warehouse, and secrets
 ```
 
-This prints generated passwords for the disposable local Keycloak users. Keep
-them on the local machine and use them only with this demo realm.
+`check` installs the locked UI test dependencies if absent and ensures Chromium
+is available. It validates all read tickets, row counts, regional restrictions,
+email masking, nested structs/lists/maps, NULL masking for readers without grants,
+and invalid-token rejection. Unexpected transport or backend failures fail the
+check. Read expectations are for the seeded policies; intentional edits can
+change those expected results.
 
-The control-plane API remains on `http://127.0.0.1:28820`, with
-Swagger docs at `http://127.0.0.1:28820/docs`. Useful demo users:
+Rerun `./demo init` to rebuild after changing service or UI code. Existing tables,
+policies (including saved deny-all), owners, and runtime settings are preserved.
+`up` does not seed or provision and does not rebuild images. Fresh initialization
+needs network access for images and locked build dependencies; subsequent startup
+uses local images.
 
-- `demo-admin`: platform admin access.
-- `asset-owner`: can edit policies, filters, and masks for the demo asset.
-- `us-analyst`, `eu-analyst`, `data-steward`: read-path personas for policy
-  behavior.
-- `blocked-user`: denied by policy.
+## Ports and isolation
 
-Open the UI URL printed by `./run credentials` and select **Sign in with SSO**.
-Keycloak handles the normal Authorization Code + PKCE flow. Sign in as
-`demo-admin` with the generated password from `./run credentials` to manage the
-workspace. `./run token --as <user>` prints a CLI access token for debugging
-scripted reads; it does not create a browser session.
-
-The public OIDC issuer uses `http://127.0.0.1:20080/realms/dal-obscura-demo`.
-Keycloak redirects the browser back to the UI callback at
-`http://localhost:28821/auth/callback` by default; if you change the UI port,
-`./run up` updates the registered callback to that UI origin.
-
-If port 28821 is already in use, start the demo on another loopback port from
-20000 through 29999. The
-runner writes that origin into its OIDC callback and Keycloak realm settings:
+Set port overrides before the first initialization:
 
 ```bash
-DAL_OBSCURA_DEMO_UI_PORT=28822 ./run up
+UI_PORT=28822 KEYCLOAK_PORT=20081 FLIGHT_PORT=28116 ./demo init
 ```
 
-`./run credentials` prints the configured UI URL, and `./run ui-smoke` runs the
-real browser SSO flow against it. UI smoke requires Node.js 24, pnpm 12, and
-the governance UI dependencies installed with the command below:
+The values persist in `.env`. Changing them through shell overrides after
+initialization is rejected rather than silently changing the registered callback.
+Reset explicitly before selecting a different port configuration.
+
+Each checkout gets its own Compose project and named volumes. Other projects
+are not removed. Commands take a local lock to prevent concurrent initialization
+or reset. Credentials stay in ignored, mode-0600 `.env`; normal logs redact them.
+Keep that file with the volumes: replacing it would invalidate database and user
+passwords. Keycloak imports the realm only when it does not already exist.
+
+## Troubleshooting and reset
+
+Use `./demo logs` or specify `postgres`, `keycloak`, `control-plane`, `data-plane`,
+or `ui`. If ports are occupied by the previous example, stop those containers
+before initializing this one; the new launcher does not silently stop another project.
+If a build cannot fetch an artifact, restore registry/network access and rerun init.
+
+**Reset deletes this example's databases, warehouse, user sessions, policies,
+and generated credentials.** It leaves other projects alone.
 
 ```bash
-pnpm --dir ../../../apps/governance-ui install --frozen-lockfile
-```
-Set `DAL_OBSCURA_DEMO_PROJECT_NAME` to target another Compose project and its
-separate database volume. The default project name stays stable across runs.
-
-## Demo Flow
-
-Use `./run token --as <user>` and the read checks below to exercise the governed Flight path.
-
-Verify the complete Keycloak sign-in, authenticated inventory, CSRF-protected
-logout, and session revocation with a real Chromium browser after `./run up`:
-
-```bash
-./run ui-smoke
+./demo reset
+./demo init
+./demo check
 ```
 
-This uses the normal **Sign in with SSO** flow; it does not use the local
-bootstrap endpoint. The UI uses `localhost` so browsers accept the production
-`Secure` and `__Host-` session cookies over the loopback-only local HTTP origin.
-
-For the full browser flow, open the UI and:
-
-1. Select **Sign in with SSO** and confirm Keycloak shows the `dal-obscura-demo`
-   realm.
-2. Sign in as `demo-admin` using the generated password.
-3. Confirm the account menu shows `demo-admin` and the Assets view lists seeded
-   assets.
-4. Select **Sign out** and confirm the UI returns to the signed-out workspace.
-
-The full flow is also covered by an opt-in live browser test. With the demo
-running and UI dependencies installed, run:
-
-```bash
-DAL_OBSCURA_E2E_LIVE_OIDC=1 \
-DAL_OBSCURA_E2E_BASE_URL=http://localhost:28822 \
-pnpm --dir ../../../apps/governance-ui exec playwright test e2e/live-oidc-demo.spec.ts
-```
-
-Adjust the base URL when using a different UI port. The test reads the generated
-`demo-admin` password from `.runtime/client.env` and reports only pass/fail.
-
-## Read Checks
-
-Run these from `examples/demo/keycloak`:
-
-```bash
-./run smoke
-./run read --as us-analyst
-./run read --as us-analyst --catalog retail_demo --target retail.customer_revenue
-./run read --as eu-analyst
-./run read --as data-steward
-./run read --as blocked-user
-```
-
-Expected behavior:
-
-- `./run smoke` runs the expected read checks for the demo personas against
-  the Iceberg table.
-- `us-analyst` reads two US rows with masked email values.
-- `eu-analyst` reads two EU rows with masked email values.
-- `data-steward` reads all rows with clear email values.
-- `blocked-user` is denied.
-
-## Stop Or Reset
-
-Stop containers but keep generated demo state, including the Postgres volume:
-
-```bash
-./run down
-```
-
-Delete containers, generated files, and the current versioned Postgres volume:
-
-```bash
-./run reset
-```
-
-After a reset, `./run up` recreates `.runtime/`, starts Postgres, and runs the
-explicit migration service before the control plane starts.
-
-## Security Notes
-
-This is a disposable local demo, not a production deployment. Ports are
-loopback-bound, secrets are generated locally, and runtime files are gitignored.
-Keycloak runs in development mode so the demo can start unattended. Use
-production-grade identity, database, TLS, secret-management, and authorization
-configuration before serving customer workloads.
+The old `./run` launcher and multi-file `.runtime` layout are retired. Old example
+volumes are not migrated into this new project. For TLS and production-oriented
+controls, use the separate [secure local profile](../../../deployment/local-secure/README.md).

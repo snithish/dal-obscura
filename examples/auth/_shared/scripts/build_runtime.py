@@ -12,14 +12,12 @@ from fastapi.testclient import TestClient
 from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
 from pyiceberg.types import BooleanType, DoubleType, IntegerType, LongType, NestedField, StringType
-from sqlalchemy import select
 
 from dal_obscura.common.config_store.db import (
     create_engine_from_url,
     migrate_config_store,
     session_factory,
 )
-from dal_obscura.common.config_store.orm import CellRecord
 from dal_obscura.control_plane.interfaces.api import create_app
 
 RUNTIME_DIR = Path(os.environ.get("RUNTIME_DIR", "/workspace/runtime"))
@@ -80,17 +78,9 @@ def main() -> None:
     tables = _read_tables(fixture)
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
     _create_tables(catalog_name, tables)
-    cell_id = _provision_control_plane(catalog_name, fixture, tables, auth_flow)
-    _write_data_plane_env(cell_id, auth_flow)
-    print(
-        json.dumps(
-            {
-                "catalog": catalog_name,
-                "tables": [table["target"] for table in tables],
-                "cell_id": cell_id,
-            }
-        )
-    )
+    _provision_control_plane(catalog_name, fixture, tables, auth_flow)
+    _write_data_plane_env(auth_flow)
+    print(json.dumps({"catalog": catalog_name, "tables": [table["target"] for table in tables]}))
 
 
 def _read_tables(fixture: dict[str, Any]) -> list[dict[str, Any]]:
@@ -149,14 +139,11 @@ def _create_tables(catalog_name: str, tables: list[dict[str, Any]]) -> None:
             catalog.drop_table(target)
         iceberg_schema, arrow_schema = _schemas(table["schema"], target)
         created = catalog.create_table(
-            target,
-            schema=iceberg_schema,
-            properties={"format-version": "2"},
+            target, schema=iceberg_schema, properties={"format-version": "2"}
         )
         created.append(
             pa.Table.from_pylist(
-                _cast_rows(table["rows"], table["schema"], target),
-                schema=arrow_schema,
+                _cast_rows(table["rows"], table["schema"], target), schema=arrow_schema
             )
         )
 
@@ -263,7 +250,7 @@ def _provision_control_plane(
     fixture: dict[str, Any],
     tables: list[dict[str, Any]],
     auth_flow: str,
-) -> str:
+) -> None:
     database_path = RUNTIME_DIR / "control-plane.db"
     database_path.unlink(missing_ok=True)
     database_url = f"sqlite+pysqlite:///{database_path}"
@@ -278,11 +265,7 @@ def _provision_control_plane(
         "put",
         "/v1/settings/runtime",
         headers,
-        {
-            "ticket_ttl_seconds": 900,
-            "max_tickets": 64,
-            "max_ticket_exchanges": 1,
-        },
+        {"ticket_ttl_seconds": 900, "max_tickets": 64, "max_ticket_exchanges": 1},
     )
     _request(
         client,
@@ -336,8 +319,6 @@ def _provision_control_plane(
     )
     if not tables:
         raise ValueError("Fixture must define at least one asset")
-    with factory() as session:
-        return str(session.scalar(select(CellRecord.id).order_by(CellRecord.name)))
 
 
 def _compiled_policy_rules(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -382,11 +363,10 @@ def _provider(
     return {"ordinal": ordinal, "module": module, "args": args, "enabled": True}
 
 
-def _write_data_plane_env(cell_id: str, auth_flow: str) -> None:
+def _write_data_plane_env(auth_flow: str) -> None:
     location = "grpc://0.0.0.0:8815"
     values = {
         "DAL_OBSCURA_DATABASE_URL": f"sqlite+pysqlite:///{RUNTIME_DIR / 'control-plane.db'}",
-        "DAL_OBSCURA_CELL_ID": cell_id,
         "DAL_OBSCURA_LOCATION": location,
         "DAL_OBSCURA_JSON_LOGS": "true",
     }

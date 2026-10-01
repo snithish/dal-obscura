@@ -299,3 +299,13 @@ def test_iceberg_stream_reads_one_batch_and_one_files_deletes_at_a_time(monkeypa
     assert deletes == ["first"]
     cast(Generator[pa.RecordBatch, None, None], stream).close()
     assert closed == ["first"]
+
+
+@pytest.mark.parametrize("sql", ["id = NULL", "id <> NULL", "id > NULL", "id IN (1, NULL)"])
+def test_iceberg_keeps_null_literal_predicates_in_core(sql):
+    from dal_obscura.data_plane.infrastructure.table_formats.iceberg import _split_row_filter
+
+    row_filter = deserialize_row_filter(sql)
+    pushdown, residual = _split_row_filter(row_filter)
+    assert pushdown is None
+    assert residual == row_filter

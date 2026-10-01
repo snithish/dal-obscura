@@ -375,7 +375,7 @@ export function SettingsView({
               {providerField("jwks_url", "JWKS URL", { placeholder: "optional; discovered from issuer" })}
               {providerField("subject_claim", "Subject claim", { placeholder: "sub" })}
               {providerField("group_claims", "Group claims", { placeholder: "groups, realm_access.roles" })}
-              {providerField("attribute_claims", "Attribute claims", { placeholder: "tenant=tenant.id", help: "Use name=claim.path entries separated by commas." })}
+              {providerField("attribute_claims", "Attribute claims", { placeholder: "department=department.id", help: "Use name=claim.path entries separated by commas." })}
               {providerField("algorithms", "Signing algorithms", { placeholder: "RS256" })}
               {providerField("leeway_seconds", "Clock leeway (seconds)", { type: "number", placeholder: "0" })}
               {providerField("jwks_refresh_interval_seconds", "JWKS refresh (seconds)", { type: "number", placeholder: "30" })}

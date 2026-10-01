@@ -3,14 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
-from uuid import UUID
 
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from dal_obscura.common.config_store.db import session_factory
-from dal_obscura.common.config_store.orm import CellTenantRecord
 from dal_obscura.control_plane.interfaces.api import create_app
 
 ICEBERG_CATALOG_ID = "iceberg.sql"
@@ -18,8 +16,7 @@ ICEBERG_CATALOG_ID = "iceberg.sql"
 
 @dataclass(frozen=True)
 class ProvisionedConfig:
-    cell_id: UUID
-    tenant_id: UUID
+    pass
 
 
 def provision_default_live_asset(
@@ -42,21 +39,14 @@ def provision_default_live_asset(
     _checked_json(
         client.put(
             "/v1/settings/runtime",
-            json={
-                "ticket_ttl_seconds": 900,
-                "max_tickets": 64,
-                "max_ticket_exchanges": 1,
-            },
+            json={"ticket_ttl_seconds": 900, "max_tickets": 64, "max_ticket_exchanges": 1},
             headers=headers,
         )
     )
     _checked_json(
         client.put(
             f"/v1/catalogs/{catalog_name}",
-            json={
-                "plugin_id": ICEBERG_CATALOG_ID,
-                "options": catalog_options,
-            },
+            json={"plugin_id": ICEBERG_CATALOG_ID, "options": catalog_options},
             headers=headers,
         )
     )
@@ -80,19 +70,11 @@ def provision_default_live_asset(
     )
     _checked_json(
         client.put(
-            "/v1/settings/auth-providers",
-            json={"providers": [auth_provider]},
-            headers=headers,
+            "/v1/settings/auth-providers", json={"providers": [auth_provider]}, headers=headers
         )
     )
-    assignment = db_session.scalar(select(CellTenantRecord))
-    if assignment is None:
-        raise LookupError("workspace bootstrap did not create tenant/cell assignment")
 
-    return ProvisionedConfig(
-        cell_id=assignment.cell_id,
-        tenant_id=assignment.tenant_id,
-    )
+    return ProvisionedConfig()
 
 
 def _checked_json(response) -> dict[str, Any]:

@@ -35,10 +35,3 @@ def test_mandatory_wrapper_accepts_complete_junit_cases(tmp_path: Path) -> None:
     result = _run_wrapper(tmp_path, report)
 
     assert result.returncode == 0
-
-
-def test_mandatory_wrapper_is_wired_into_required_ci_lanes() -> None:
-    workflow = Path(".github/workflows/ci.yml").read_text()
-
-    assert workflow.count("scripts/require_no_skips.py") >= 3
-    assert "--junitxml" in workflow

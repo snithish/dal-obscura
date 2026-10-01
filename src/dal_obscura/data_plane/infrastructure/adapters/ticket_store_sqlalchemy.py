@@ -20,21 +20,23 @@ class SqlAlchemyTicketStore:
 
     Example:
         ```python
-        store = SqlAlchemyTicketStore(session_factory, cell_id=cell_id)
+        store = SqlAlchemyTicketStore(session_factory)
         store.store(payload, max_exchanges=1)
         stored = store.reserve_exchange(payload.ticket_id, now=payload.expires_at - 1)
         ```
     """
 
-    def __init__(self, session_maker: sessionmaker[Session], *, cell_id: UUID) -> None:
+    def __init__(
+        self,
+        session_maker: sessionmaker[Session],
+    ) -> None:
         self._session_maker = session_maker
-        self._cell_id = cell_id
 
     def store(self, payload: TicketPayload, *, max_exchanges: int) -> None:
         self.store_many([payload], max_exchanges=max_exchanges)
 
     def store_many(self, payloads: Iterable[TicketPayload], *, max_exchanges: int) -> None:
-        records = [_ticket_record(payload, self._cell_id, max_exchanges) for payload in payloads]
+        records = [_ticket_record(payload, max_exchanges) for payload in payloads]
         if not records:
             return
         with self._session_maker() as session:
@@ -53,10 +55,9 @@ class SqlAlchemyTicketStore:
                 CursorResult,
                 session.execute(
                     update(DataPlaneTicketRecord)
-                    .where(DataPlaneTicketRecord.cell_id == self._cell_id)
                     .where(DataPlaneTicketRecord.ticket_id == ticket_uuid)
                     .where(DataPlaneTicketRecord.revoked_at.is_(None))
-                    .where(DataPlaneTicketRecord.expires_at >= now)
+                    .where(DataPlaneTicketRecord.expires_at > now)
                     .where(
                         DataPlaneTicketRecord.exchange_count < DataPlaneTicketRecord.max_exchanges
                     )
@@ -80,27 +81,23 @@ class SqlAlchemyTicketStore:
         with self._session_maker() as session:
             active_id = session.scalar(
                 select(DataPlaneTicketRecord.ticket_id)
-                .where(DataPlaneTicketRecord.cell_id == self._cell_id)
                 .where(DataPlaneTicketRecord.ticket_id == _ticket_uuid(ticket_id))
                 .where(DataPlaneTicketRecord.revoked_at.is_(None))
             )
             if active_id is None:
                 raise PermissionError("Ticket is revoked or unavailable")
 
-    def cleanup_expired_and_exhausted(self, *, now: int) -> int:
+    def cleanup_expired(self, *, now: int) -> int:
+        """Retain exhausted tickets until expiry for active-stream revocation checks.
+
+        Exhaustion prevents new exchanges but does not terminate the last
+        reserved exchange.
+        """
         with self._session_maker() as session:
             result = cast(
                 CursorResult,
                 session.execute(
-                    delete(DataPlaneTicketRecord)
-                    .where(DataPlaneTicketRecord.cell_id == self._cell_id)
-                    .where(
-                        (DataPlaneTicketRecord.expires_at < now)
-                        | (
-                            DataPlaneTicketRecord.exchange_count
-                            >= DataPlaneTicketRecord.max_exchanges
-                        )
-                    )
+                    delete(DataPlaneTicketRecord).where(DataPlaneTicketRecord.expires_at <= now)
                 ),
             )
             session.commit()
@@ -113,10 +110,8 @@ class SqlAlchemyTicketStore:
         *,
         require_active: bool = False,
     ) -> DataPlaneTicketRecord:
-        query = (
-            select(DataPlaneTicketRecord)
-            .where(DataPlaneTicketRecord.cell_id == self._cell_id)
-            .where(DataPlaneTicketRecord.ticket_id == _ticket_uuid(ticket_id))
+        query = select(DataPlaneTicketRecord).where(
+            DataPlaneTicketRecord.ticket_id == _ticket_uuid(ticket_id)
         )
         if require_active:
             query = query.where(DataPlaneTicketRecord.revoked_at.is_(None))
@@ -140,15 +135,11 @@ def _stored_ticket(record: DataPlaneTicketRecord) -> StoredTicket:
     )
 
 
-def _ticket_record(
-    payload: TicketPayload, cell_id: UUID, max_exchanges: int
-) -> DataPlaneTicketRecord:
+def _ticket_record(payload: TicketPayload, max_exchanges: int) -> DataPlaneTicketRecord:
     if payload.ticket_id is None:
         raise ValueError("ticket_id is required")
     return DataPlaneTicketRecord(
         ticket_id=_ticket_uuid(payload.ticket_id),
-        cell_id=cell_id,
-        tenant_id=payload.tenant_id,
         asset_id=_asset_uuid(payload.asset_id),
         catalog=payload.catalog,
         target=payload.target,

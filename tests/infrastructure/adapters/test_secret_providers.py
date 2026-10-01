@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import cast
-from uuid import UUID
 
 import pytest
 
@@ -29,10 +28,7 @@ def test_load_secret_provider_uses_fixed_environment_provider(monkeypatch: pytes
 
     provider = load_secret_provider(
         SecretProviderConfig(config={"prefix": "LOCAL_"}),
-        context=SecretProviderContext(
-            database_url="sqlite+pysqlite:///:memory:",
-            cell_id=UUID("00000000-0000-0000-0000-000000000001"),
-        ),
+        context=SecretProviderContext(database_url="sqlite+pysqlite:///:memory:"),
     )
 
     assert provider.get_secret("catalog-password") == "value"
@@ -97,10 +93,7 @@ def test_load_secret_provider_rejects_dynamic_module_path():
     with pytest.raises(ValueError, match="only environment secrets"):
         load_secret_provider(
             SecretProviderConfig(module="untrusted.module.Provider"),
-            context=SecretProviderContext(
-                database_url="sqlite+pysqlite:///:memory:",
-                cell_id=UUID("00000000-0000-0000-0000-000000000001"),
-            ),
+            context=SecretProviderContext(database_url="sqlite+pysqlite:///:memory:"),
         )
 
 
@@ -108,10 +101,7 @@ def test_resolve_secret_refs_uses_explicit_secret_shape_only(monkeypatch: pytest
     monkeypatch.setenv("LOCAL_jwt-signing", "jwt")
     monkeypatch.setenv("LOCAL_api-key", "api")
     provider = EnvSecretProvider(
-        config={
-            "prefix": "LOCAL_",
-            "scope_grants": {"identity": ["jwt-signing", "api-key"]},
-        }
+        config={"prefix": "LOCAL_", "scope_grants": {"identity": ["jwt-signing", "api-key"]}}
     )
 
     resolved = resolve_secret_refs(

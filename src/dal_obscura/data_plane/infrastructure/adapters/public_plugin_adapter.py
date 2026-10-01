@@ -18,12 +18,8 @@ from typing import Any, cast
 from uuid import uuid4
 
 import pyarrow as pa
-from dal_obscura_plugin_api import (
-    CatalogConfig as PublicCatalogConfig,
-)
-from dal_obscura_plugin_api import (
-    CatalogPlugin as PublicCatalogPlugin,
-)
+from dal_obscura_plugin_api import CatalogConfig as PublicCatalogConfig
+from dal_obscura_plugin_api import CatalogPlugin as PublicCatalogPlugin
 from dal_obscura_plugin_api import (
     DiscoveryPage,
     ExecutionContext,
@@ -34,13 +30,8 @@ from dal_obscura_plugin_api import (
     TableIdentifier,
 )
 
-from dal_obscura.common.catalog.ports import (
-    CatalogPlugin as GovernedCatalogPlugin,
-)
-from dal_obscura.common.catalog.ports import (
-    CatalogTableListing,
-    TableFormat,
-)
+from dal_obscura.common.catalog.ports import CatalogPlugin as GovernedCatalogPlugin
+from dal_obscura.common.catalog.ports import CatalogTableListing, TableFormat
 from dal_obscura.common.query_planning.field_paths import (
     FieldPath,
     FieldSegment,
@@ -215,10 +206,7 @@ class PublicPluginCatalogAdapter(GovernedCatalogPlugin):
         self._format_factory_loader = format_factory_loader
         self._path_enforcer = path_enforcer
         public_config = PublicCatalogConfig(
-            plugin_id=catalog_plugin_id,
-            instance_id=name,
-            revision=revision,
-            options=dict(options),
+            plugin_id=catalog_plugin_id, instance_id=name, revision=revision, options=dict(options)
         )
         context = _context()
         catalog = catalog_factory(public_config, context)

@@ -91,15 +91,69 @@ jobs:
         run: |
           docker compose --env-file deployment/production/.env.example \
             -f deployment/production/compose.yaml config --quiet
-          docker compose --env-file deployment/local-secure/.env.example \
-            -f deployment/production/compose.yaml \
-            -f deployment/local-secure/compose.yaml config --quiet
+          uv run --no-project --python 3.12 - <<'PY'
+          from runpy import run_path
+          demo = run_path("deployment/local-secure/scripts/demo.py")
+          root = demo["ROOT"]
+          values = demo["initialize"](root, {})
+          demo["ensure_tls"](root)
+          demo["compose"](values, "config", "--quiet")
+          PY
 
 
       - name: Run deterministic contracts
         run: >-
           uv run pytest tests/common tests/domain tests/application tests/connectors
           tests/architecture tests/plugin_platform/test_registry.py -q
+
+  secure-local-smoke:
+    name: Secure local HTTPS and mTLS demo
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Install browser check dependencies
+        run: |
+          corepack enable
+          pnpm --dir apps/governance-ui install --frozen-lockfile
+          pnpm --dir apps/governance-ui exec playwright install --with-deps chromium
+
+      - name: Initialize secure demo and verify real authentication
+        working-directory: deployment/local-secure
+        run: |
+          ./demo init
+          ./demo check
+
+      - name: Verify preserved restart
+        working-directory: deployment/local-secure
+        run: |
+          ./demo down
+          ./demo up
+          ./demo check --reads-only
+
+      - name: Show redacted failure diagnostics
+        if: failure()
+        working-directory: deployment/local-secure
+        run: ./demo logs
+
+      - name: Remove disposable demo state
+        if: always()
+        working-directory: deployment/local-secure
+        run: ./demo reset
 
   python-integration-tests:
     name: Python integration tests
@@ -337,7 +391,7 @@ jobs:
             "$RUNNER_TEMP/integration-dist"/dal_obscura_iceberg_rest-*.whl
           PYTHONPATH= "$RUNNER_TEMP/integration-env/bin/python" -m pytest \
             tests/plugin_platform/test_public_plugin_adapter.py \
-            tests/plugin_platform/test_builtin_plugins.py -q
+            tests/plugin_platform/test_iceberg_format_plugin.py -q
 
   python-native-iceberg:
     name: Native Iceberg conformance

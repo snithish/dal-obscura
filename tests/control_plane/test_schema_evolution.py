@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from uuid import uuid4
-
 import pyarrow as pa
 import pytest
 
@@ -15,8 +13,6 @@ from dal_obscura.data_plane.infrastructure.adapters.live_config import (
 def _asset_for(schema: pa.Schema) -> LiveAsset:
     identities = _schema_identities(schema)
     return LiveAsset(
-        config_revision=uuid4(),
-        tenant_id=uuid4(),
         catalog="analytics",
         target="default.users",
         backend="iceberg",

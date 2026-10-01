@@ -21,6 +21,4 @@ class AuthorizationPort(Protocol):
         self,
         target: str,
         catalog: str | None,
-        *,
-        tenant_id: str,
     ) -> int | None: ...

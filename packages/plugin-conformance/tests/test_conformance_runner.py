@@ -21,7 +21,6 @@ from dal_obscura_plugin_conformance import (
     check_discovery_page,
     check_record_batches,
     check_schema_descriptor,
-    nested_golden_table,
     run_catalog_checks,
     run_format_checks,
 )
@@ -41,20 +40,8 @@ def _descriptor() -> PluginDescriptor:
 
 def _context() -> ExecutionContext:
     return ExecutionContext(
-        deadline=datetime.now(timezone.utc) + timedelta(minutes=1),
-        correlation_id="fixture",
+        deadline=datetime.now(timezone.utc) + timedelta(minutes=1), correlation_id="fixture"
     )
-
-
-def test_nested_golden_fixture_is_deterministic_and_typed():
-    first = nested_golden_table()
-    second = nested_golden_table()
-
-    assert first.schema == second.schema
-    assert first.to_pylist() == second.to_pylist()
-    assert pa.types.is_struct(first.schema.field("profile").type)
-    assert pa.types.is_list(first.schema.field("tags").type)
-    assert pa.types.is_map(first.schema.field("labels").type)
 
 
 def test_capability_negative_case_fails_closed():
@@ -114,9 +101,7 @@ def test_record_batch_validation_enforces_per_batch_byte_budget():
 def test_schema_validation_enforces_nested_depth_budget():
     nested = pa.field("root", pa.struct([pa.field("child", pa.string())]))
     schema = SchemaDescriptor(
-        schema_version=1,
-        fingerprint="0" * 64,
-        arrow_schema=pa.schema([nested]),
+        schema_version=1, fingerprint="0" * 64, arrow_schema=pa.schema([nested])
     )
 
     with pytest.raises(ValueError, match="nesting levels"):
@@ -141,11 +126,7 @@ class _ConformingFormat:
 
 def test_runner_returns_machine_readable_passing_result():
     table = pa.table({"id": [1]})
-    schema = SchemaDescriptor(
-        schema_version=1,
-        fingerprint="0" * 64,
-        arrow_schema=table.schema,
-    )
+    schema = SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=table.schema)
     handle = TableHandle(
         catalog_plugin_id="fixture",
         catalog_instance_id="fixture",
@@ -168,20 +149,13 @@ def test_runner_returns_machine_readable_passing_result():
     assert payload["status"] == "passed"
     assert payload["core_version"] == "0.1.0"
     assert payload["artifact_identity"] == "sha256:fixture"
-    assert payload["capability_matrix"] == {
-        "nested_schema": True,
-        "splittable_scan": True,
-    }
+    assert payload["capability_matrix"] == {"nested_schema": True, "splittable_scan": True}
     assert result.checks["bounded_plan"] == "passed"
 
 
 def test_runner_requires_explicit_format_cleanup() -> None:
     table = pa.table({"id": [1]})
-    schema = SchemaDescriptor(
-        schema_version=1,
-        fingerprint="0" * 64,
-        arrow_schema=table.schema,
-    )
+    schema = SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=table.schema)
     handle = TableHandle(
         catalog_plugin_id="fixture",
         catalog_instance_id="fixture",
@@ -240,11 +214,7 @@ class _DuplicateCoverageFormat(_CoverageFormat):
 
 def test_runner_rejects_unbounded_plan_and_output_schema_mutation():
     table = pa.table({"id": [1]})
-    schema = SchemaDescriptor(
-        schema_version=1,
-        fingerprint="0" * 64,
-        arrow_schema=table.schema,
-    )
+    schema = SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=table.schema)
     handle = TableHandle(
         catalog_plugin_id="fixture",
         catalog_instance_id="fixture",
@@ -269,11 +239,7 @@ def test_runner_rejects_unbounded_plan_and_output_schema_mutation():
 
 def test_runner_closes_plugin_after_failure_and_serializes_skips():
     table = pa.table({"id": [1]})
-    schema = SchemaDescriptor(
-        schema_version=1,
-        fingerprint="0" * 64,
-        arrow_schema=table.schema,
-    )
+    schema = SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=table.schema)
     handle = TableHandle(
         catalog_plugin_id="fixture",
         catalog_instance_id="fixture",
@@ -298,11 +264,7 @@ def test_runner_closes_plugin_after_failure_and_serializes_skips():
 
 def test_runner_rejects_duplicate_or_missing_task_coverage():
     table = pa.table({"id": [1]})
-    schema = SchemaDescriptor(
-        schema_version=1,
-        fingerprint="0" * 64,
-        arrow_schema=table.schema,
-    )
+    schema = SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=table.schema)
     handle = TableHandle(
         catalog_plugin_id="fixture",
         catalog_instance_id="fixture",
@@ -335,11 +297,7 @@ def test_runner_rejects_duplicate_or_missing_task_coverage():
 
 def test_runner_checks_cancellation_before_requesting_more_plan_work():
     table = pa.table({"id": [1]})
-    schema = SchemaDescriptor(
-        schema_version=1,
-        fingerprint="0" * 64,
-        arrow_schema=table.schema,
-    )
+    schema = SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=table.schema)
     handle = TableHandle(
         catalog_plugin_id="fixture",
         catalog_instance_id="fixture",
@@ -381,11 +339,7 @@ def test_runner_checks_cancellation_before_requesting_more_plan_work():
 
 def test_runner_checks_cancellation_before_requesting_more_output():
     table = pa.table({"id": [1]})
-    schema = SchemaDescriptor(
-        schema_version=1,
-        fingerprint="0" * 64,
-        arrow_schema=table.schema,
-    )
+    schema = SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=table.schema)
     handle = TableHandle(
         catalog_plugin_id="fixture",
         catalog_instance_id="fixture",
@@ -434,9 +388,7 @@ def test_record_batch_validation_rejects_expired_deadline():
 
     with pytest.raises(TimeoutError, match="deadline expired"):
         check_record_batches(
-            schema,
-            [batch],
-            deadline=datetime.now(timezone.utc) - timedelta(seconds=1),
+            schema, [batch], deadline=datetime.now(timezone.utc) - timedelta(seconds=1)
         )
 
 
@@ -538,9 +490,7 @@ def test_catalog_runner_rejects_oversized_namespace_discovery() -> None:
             return None
 
     result = run_catalog_checks(
-        cast(CatalogPlugin, _WideCatalog()),
-        _catalog_context(),
-        max_namespaces=1,
+        cast(CatalogPlugin, _WideCatalog()), _catalog_context(), max_namespaces=1
     )
 
     assert result.to_dict()["status"] == "failed"
@@ -571,9 +521,7 @@ def test_catalog_runner_validates_budgets_before_provider_calls() -> None:
             calls.append("close")
 
     result = run_catalog_checks(
-        cast(CatalogPlugin, _Catalog()),
-        _catalog_context(),
-        max_namespaces=0,
+        cast(CatalogPlugin, _Catalog()), _catalog_context(), max_namespaces=0
     )
 
     assert result.to_dict()["status"] == "failed"
@@ -603,8 +551,7 @@ def test_catalog_runner_honors_expired_context_before_lifecycle() -> None:
             return None
 
     result = run_catalog_checks(
-        cast(CatalogPlugin, ExpiredCatalog()),
-        _catalog_context(deadline=datetime.now(timezone.utc)),
+        cast(CatalogPlugin, ExpiredCatalog()), _catalog_context(deadline=datetime.now(timezone.utc))
     )
 
     assert result.to_dict()["status"] == "failed"
@@ -702,8 +649,7 @@ def test_catalog_runner_stops_before_requesting_after_cancellation():
             return DiscoveryPage((users,), continuation="next")
 
     result = run_catalog_checks(
-        cast(CatalogPlugin, _CancelledCatalog()),
-        _catalog_context(cancel_check=cancelled),
+        cast(CatalogPlugin, _CancelledCatalog()), _catalog_context(cancel_check=cancelled)
     )
     assert result.to_dict()["status"] == "failed"
     assert any("cancelled while discovering" in failure for failure in result.failures)
@@ -717,11 +663,7 @@ def test_check_discovery_page_rejects_invalid_continuation():
 
 def test_runner_honors_cancellation_before_plugin_execution():
     table = pa.table({"id": [1]})
-    schema = SchemaDescriptor(
-        schema_version=1,
-        fingerprint="0" * 64,
-        arrow_schema=table.schema,
-    )
+    schema = SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=table.schema)
     handle = TableHandle(
         catalog_plugin_id="fixture",
         catalog_instance_id="fixture",
@@ -744,11 +686,7 @@ def test_runner_honors_cancellation_before_plugin_execution():
 
 def test_runner_honors_cancellation_between_tasks():
     table = pa.table({"id": [1]})
-    schema = SchemaDescriptor(
-        schema_version=1,
-        fingerprint="0" * 64,
-        arrow_schema=table.schema,
-    )
+    schema = SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=table.schema)
     handle = TableHandle(
         catalog_plugin_id="fixture",
         catalog_instance_id="fixture",

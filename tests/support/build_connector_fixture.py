@@ -294,18 +294,8 @@ def _iceberg_schema() -> Schema:
 
 def _partition_spec() -> PartitionSpec:
     return PartitionSpec(
-        PartitionField(
-            source_id=2,
-            field_id=1000,
-            transform=IdentityTransform(),
-            name="region",
-        ),
-        PartitionField(
-            source_id=3,
-            field_id=1001,
-            transform=IdentityTransform(),
-            name="market",
-        ),
+        PartitionField(source_id=2, field_id=1000, transform=IdentityTransform(), name="region"),
+        PartitionField(source_id=3, field_id=1001, transform=IdentityTransform(), name="market"),
     )
 
 
@@ -412,16 +402,8 @@ def _build_batch_table(batch_index: int, schema: pa.Schema) -> pa.Table:
         )
         columns["devices"].append(
             [
-                {
-                    "device_id": f"dev-{row_id}-ios",
-                    "platform": "ios",
-                    "trusted": row_id % 2 == 0,
-                },
-                {
-                    "device_id": f"dev-{row_id}-web",
-                    "platform": "web",
-                    "trusted": True,
-                },
+                {"device_id": f"dev-{row_id}-ios", "platform": "ios", "trusted": row_id % 2 == 0},
+                {"device_id": f"dev-{row_id}-web", "platform": "web", "trusted": True},
             ]
         )
         columns["support_ticket"].append(support_ticket)
@@ -520,31 +502,15 @@ def _provision_control_plane(
     output_dir: Path,
     table_id: str,
     jwks_port: int,
-) -> tuple[str, str, str]:
+) -> str:
     database_url = f"sqlite+pysqlite:///{output_dir / 'control-plane.db'}"
     engine = create_engine_from_url(database_url)
     migrate_config_store(engine)
 
     with session_factory(engine)() as session:
         service = ProvisioningService(session)
-        tenant = service.create_tenant(slug="spark-fixture", display_name="Spark Fixture")
-        cell = service.create_cell(name="spark-local", region="local")
-        tenant_id = UUID(tenant["id"])
-        cell_id = UUID(cell["id"])
-        service.assign_tenant(
-            cell_id=cell_id,
-            tenant_id=tenant_id,
-            shard_key="spark-fixture",
-        )
-        service.upsert_runtime_settings(
-            cell_id=cell_id,
-            ttl=900,
-            max_tickets=16,
-            max_ticket_exchanges=1,
-        )
+        service.upsert_runtime_settings(ttl=900, max_tickets=16, max_ticket_exchanges=1)
         service.upsert_catalog(
-            cell_id=cell_id,
-            tenant_id=tenant_id,
             name=CATALOG_NAME,
             plugin_id="iceberg.sql",
             options={
@@ -554,8 +520,6 @@ def _provision_control_plane(
             },
         )
         asset = service.upsert_asset(
-            cell_id=cell_id,
-            tenant_id=tenant_id,
             catalog=CATALOG_NAME,
             target=table_id,
             backend="iceberg",
@@ -600,7 +564,6 @@ def _provision_control_plane(
             expected_revision=0,
         )
         service.replace_auth_providers(
-            cell_id=cell_id,
             providers=[
                 {
                     "ordinal": 1,
@@ -612,15 +575,15 @@ def _provision_control_plane(
                         "issuer": "https://issuer.example",
                         "jwks_url": f"http://127.0.0.1:{jwks_port}/jwks.json",
                         "algorithms": ["RS256"],
-                        "attribute_claims": {"tenant_id": "tenant_id"},
+                        "attribute_claims": {},
                     },
                     "enabled": True,
                 }
-            ],
+            ]
         )
         session.commit()
 
-    return database_url, cell["id"], tenant["id"]
+    return database_url
 
 
 def _write_fixture_jwks(output_dir: Path) -> rsa.RSAPrivateKey:
@@ -652,16 +615,11 @@ def main() -> None:
         append_tables=_append_tables(),
         partition_spec=_partition_spec(),
     )
-    database_url, cell_id, tenant_id = _provision_control_plane(
-        output_dir,
-        table_id,
-        args.jwks_port,
-    )
+    database_url = _provision_control_plane(output_dir, table_id, args.jwks_port)
 
     user_token = jwt.encode(
         {
             "sub": "spark_user",
-            "tenant_id": tenant_id,
             "iss": "https://issuer.example",
             "exp": int(datetime.now().timestamp()) + 900,
         },
@@ -678,7 +636,6 @@ def main() -> None:
                 "catalog": CATALOG_NAME,
                 "target": table_id,
                 "database_url": database_url,
-                "cell_id": cell_id,
                 "jwt_secret": JWT_SECRET,
                 "ticket_secret": TICKET_SECRET,
                 "user_token": user_token,

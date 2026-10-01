@@ -6,7 +6,6 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import cast
-from uuid import UUID
 
 ENV_SECRET_PROVIDER_MODULE = (
     "dal_obscura.data_plane.infrastructure.adapters.secret_providers.EnvSecretProvider"
@@ -54,7 +53,6 @@ class SecretProviderContext:
     """Host-level context passed to a module-loaded secret provider."""
 
     database_url: str
-    cell_id: UUID
 
 
 @dataclass(frozen=True)
@@ -95,8 +93,7 @@ def load_secret_provider_from_environment(
         raise ValueError("DAL_OBSCURA_SECRET_PROVIDER_SECRETS is unsupported")
     module = source.get("DAL_OBSCURA_SECRET_PROVIDER_MODULE", ENV_SECRET_PROVIDER_MODULE).strip()
     config = _json_object_value(
-        source.get("DAL_OBSCURA_SECRET_PROVIDER_CONFIG"),
-        "DAL_OBSCURA_SECRET_PROVIDER_CONFIG",
+        source.get("DAL_OBSCURA_SECRET_PROVIDER_CONFIG"), "DAL_OBSCURA_SECRET_PROVIDER_CONFIG"
     )
     scope_grants = config.get("scope_grants")
     if require_scope_grants and (not isinstance(scope_grants, Mapping) or not scope_grants):
@@ -105,7 +102,7 @@ def load_secret_provider_from_environment(
         )
     return load_secret_provider(
         SecretProviderConfig(module=module, config=config),
-        context=SecretProviderContext(database_url="control-plane", cell_id=UUID(int=0)),
+        context=SecretProviderContext(database_url="control-plane"),
     )
 
 

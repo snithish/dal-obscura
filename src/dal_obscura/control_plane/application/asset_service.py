@@ -13,9 +13,7 @@ from uuid import UUID
 
 from dal_obscura.common.plugin_api import PluginRegistry
 from dal_obscura.control_plane.application.access import ControlPlaneActor
-from dal_obscura.control_plane.application.catalog_service import (
-    validate_descriptor_options,
-)
+from dal_obscura.control_plane.application.catalog_service import validate_descriptor_options
 from dal_obscura.control_plane.application.errors import AuthorizationFailure, ValidationFailure
 from dal_obscura.control_plane.application.policy_service import ensure_asset_capability
 from dal_obscura.control_plane.infrastructure.catalog_discovery import ICEBERG_CATALOG_ID
@@ -36,12 +34,12 @@ def list_workspace_assets(
         ```
     """
 
-    context = store.get_default_workspace_context()
+    context = store.get_workspace()
     if context is None:
         return []
     if actor is None or actor.platform_admin:
-        return store.list_workspace_assets(context)
-    return store.list_workspace_assets_for_principals(context, actor.owner_principals())
+        return store.list_workspace_assets()
+    return store.list_workspace_assets_for_principals(actor.owner_principals())
 
 
 def list_workspace_assets_page(
@@ -54,17 +52,13 @@ def list_workspace_assets_page(
 ) -> dict[str, object]:
     """Returns a bounded, cursor-paginated asset inventory for one actor."""
 
-    context = store.get_default_workspace_context()
+    context = store.get_workspace()
     if context is None:
         return {"items": [], "next_cursor": None}
     principals = None if actor.platform_admin else actor.owner_principals()
     try:
         page = store.list_workspace_assets_page(
-            context,
-            limit=limit,
-            cursor=cursor,
-            search=search,
-            principals=principals,
+            limit=limit, cursor=cursor, search=search, principals=principals
         )
     except ValueError as exc:
         raise ValidationFailure(str(exc)) from exc
@@ -151,8 +145,8 @@ def upsert_workspace_asset(
         ```
     """
 
-    context = _required_workspace_context(store)
-    catalog_record = store.get_workspace_catalog(context, catalog)
+    _required_workspace(store)
+    catalog_record = store.get_workspace_catalog(catalog)
     catalog_plugin_id = str(catalog_record["plugin_id"])
     if backend != "iceberg" or catalog_plugin_id != ICEBERG_CATALOG_ID:
         if plugin_registry is None:
@@ -170,14 +164,8 @@ def upsert_workspace_asset(
             raise ValidationFailure("Catalog and table-format handle versions do not overlap")
         if not catalog_descriptor.capabilities.intersection(format_descriptor.capabilities):
             raise ValidationFailure("Catalog and table-format capabilities do not overlap")
-        validate_descriptor_options(
-            format_descriptor,
-            options,
-            kind="Table-format",
-        )
+        validate_descriptor_options(format_descriptor, options, kind="Table-format")
     asset_id = store.upsert_asset(
-        cell_id=context.cell_id,
-        tenant_id=context.tenant_id,
         catalog=catalog,
         target=target,
         backend=backend,
@@ -218,9 +206,7 @@ def replace_asset_owners(
         normalized = store.replace_asset_owners(asset_id=asset_id, owners=owners)
     else:
         normalized = store.replace_asset_owners(
-            asset_id=asset_id,
-            owners=owners,
-            expected_revision=expected_revision,
+            asset_id=asset_id, owners=owners, expected_revision=expected_revision
         )
     if actor is not None:
         store.record_asset_audit_event(
@@ -254,9 +240,7 @@ def replace_asset_grants(
         normalized = store.replace_asset_grants(asset_id=asset_id, grants=grants)
     else:
         normalized = store.replace_asset_grants(
-            asset_id=asset_id,
-            grants=grants,
-            expected_revision=expected_revision,
+            asset_id=asset_id, grants=grants, expected_revision=expected_revision
         )
     if actor is not None:
         store.record_asset_audit_event(
@@ -288,9 +272,7 @@ def replace_asset_schema_fields(
         if expected_revision is None:
             return store.replace_asset_schema_fields(asset_id=asset_id, fields=fields)
         return store.replace_asset_schema_fields(
-            asset_id=asset_id,
-            fields=fields,
-            expected_revision=expected_revision,
+            asset_id=asset_id, fields=fields, expected_revision=expected_revision
         )
     except ValueError as exc:
         # Repository normalization errors are caller input failures. Keep
@@ -298,8 +280,8 @@ def replace_asset_schema_fields(
         raise ValidationFailure(str(exc)) from exc
 
 
-def _required_workspace_context(store: ConfigStore):
-    context = store.get_default_workspace_context()
+def _required_workspace(store: ConfigStore):
+    context = store.get_workspace()
     if context is None:
         raise LookupError("No workspace has been configured")
     return context

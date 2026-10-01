@@ -8,14 +8,7 @@ import pyarrow as pa
 import pytest
 from dal_obscura_plugin_api import PluginDescriptor, SchemaDescriptor, TableHandle, TableIdentifier
 from pyiceberg.schema import Schema
-from pyiceberg.types import (
-    IntegerType,
-    ListType,
-    MapType,
-    NestedField,
-    StringType,
-    StructType,
-)
+from pyiceberg.types import IntegerType, ListType, MapType, NestedField, StringType, StructType
 
 from dal_obscura.common.schema_identity import schema_scope_digest
 from dal_obscura.control_plane.application.access import ControlPlaneActor
@@ -61,10 +54,10 @@ class _FakeStore:
             "table_identifier": "default.events",
         }
 
-    def get_default_workspace_context(self) -> object:
+    def get_workspace(self) -> object:
         return object()
 
-    def get_workspace_catalog(self, context: object, name: str) -> dict[str, object]:
+    def get_workspace_catalog(self, name: str) -> dict[str, object]:
         assert name == "analytics"
         return {
             "name": "analytics",
@@ -90,9 +83,7 @@ def _nested_schema() -> Schema:
                     field_id=3,
                     name="labels",
                     field_type=ListType(
-                        element_id=4,
-                        element_type=StringType(),
-                        element_required=False,
+                        element_id=4, element_type=StringType(), element_required=False
                     ),
                 ),
             ),
@@ -109,6 +100,16 @@ def _nested_schema() -> Schema:
             ),
         ),
     )
+
+
+def test_discovered_nested_types_match_data_plane_schema_admission() -> None:
+    from dal_obscura.common.query_planning.field_paths import FieldSegment
+    from dal_obscura.control_plane.application.schema_service import _field_node
+
+    schema = _nested_schema()
+    for field, arrow_field in zip(schema.fields, schema.as_arrow(), strict=True):
+        node = _field_node(field, (FieldSegment(field.name, field.field_id),))
+        assert node["type"] == str(arrow_field.type)
 
 
 def test_get_asset_schema_returns_typed_nested_paths() -> None:
@@ -160,14 +161,10 @@ def test_arrow_synthetic_field_ids_are_schema_scoped() -> None:
     string_schema = pa.schema([pa.field("value", pa.string())])
 
     integer_id = _arrow_field_id(
-        integer_schema.field("value"),
-        ("value",),
-        schema_scope_digest(integer_schema),
+        integer_schema.field("value"), ("value",), schema_scope_digest(integer_schema)
     )
     string_id = _arrow_field_id(
-        string_schema.field("value"),
-        ("value",),
-        schema_scope_digest(string_schema),
+        string_schema.field("value"), ("value",), schema_scope_digest(string_schema)
     )
 
     assert integer_id != string_id
@@ -200,7 +197,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
                 "backend": "fixture.format",
             }
 
-        def get_workspace_catalog(self, context: object, name: str) -> dict[str, object]:
+        def get_workspace_catalog(self, name: str) -> dict[str, object]:
             assert name == "analytics"
             return {
                 "name": name,
@@ -269,9 +266,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
 
     class Registry:
         def admitted(self):
-            return {
-                ("catalog", "fixture.catalog"): PublicCatalog.descriptor,
-            }
+            return {("catalog", "fixture.catalog"): PublicCatalog.descriptor}
 
         def load(self, kind, plugin_id):
             if (kind, plugin_id) == ("catalog", "fixture.catalog"):
@@ -351,7 +346,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
 def test_get_asset_schema_rejects_persisted_unknown_catalog_option_before_factory() -> None:
     asset_id = uuid4()
     store = _FakeStore(asset_id)
-    cast(Any, store).get_workspace_catalog = lambda context, name: {
+    cast(Any, store).get_workspace_catalog = lambda name: {
         "name": name,
         "plugin_id": "fixture.catalog",
         "revision": 1,
@@ -395,7 +390,7 @@ def test_schema_loading_enforces_catalog_egress_before_provider_call(
     monkeypatch.setattr(
         store,
         "get_workspace_catalog",
-        lambda context, name: {
+        lambda name: {
             "name": name,
             "plugin_id": "iceberg.sql",
             "options": {"uri": "https://blocked.example/catalog"},
@@ -428,7 +423,7 @@ def test_schema_loading_resolves_secret_references_before_provider_call(
     monkeypatch.setattr(
         store,
         "get_workspace_catalog",
-        lambda context, name: {
+        lambda name: {
             "name": name,
             "plugin_id": "iceberg.sql",
             "options": {
@@ -559,20 +554,8 @@ def test_get_asset_schema_rejects_excessive_nesting_depth() -> None:
     asset_id = uuid4()
     nested: object = StringType()
     for index in range(MAX_SCHEMA_DEPTH + 1, 0, -1):
-        nested = StructType(
-            NestedField(
-                field_id=index,
-                name=f"level_{index}",
-                field_type=nested,
-            )
-        )
-    schema = Schema(
-        NestedField(
-            field_id=MAX_SCHEMA_DEPTH + 2,
-            name="root",
-            field_type=nested,
-        )
-    )
+        nested = StructType(NestedField(field_id=index, name=f"level_{index}", field_type=nested))
+    schema = Schema(NestedField(field_id=MAX_SCHEMA_DEPTH + 2, name="root", field_type=nested))
 
     with pytest.raises(ValidationFailure, match="nesting-depth limit"):
         get_asset_schema(

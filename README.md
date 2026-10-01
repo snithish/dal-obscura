@@ -55,22 +55,26 @@ its HTTP Keycloak and demo credentials do not satisfy production acceptance:
 
 ```bash
 cd examples/demo/keycloak
-./run up
-./run smoke
+./demo init
+./demo check
 ```
 
-Open the Flight data plane at `grpc://127.0.0.1:28115`.
+Open the Flight data plane at `grpc+tcp://localhost:28115`.
 
-Open the governance UI at `http://127.0.0.1:28821`. The normal page starts signed
-out. Choose **Sign in with SSO** when the demo OIDC settings are enabled, or use
-the local control-plane token form when the service is running with
-`DAL_OBSCURA_CONTROL_PLANE_BOOTSTRAP_ENABLED=true`. The production profile
-disables bootstrap and requires OIDC.
+Open the governance UI at `http://localhost:28821`. Choose **Sign in with SSO**
+and use the `demo-admin` password printed by `./demo credentials`. Browser bootstrap
+login is disabled in this example. First initialization needs uv and a running
+container engine with Compose v2; the full browser check also needs Node 24/pnpm.
+Use `./demo up` for later starts and `./demo init` to rebuild after code changes.
+
+For HTTPS Keycloak, browser HTTPS, Flight mTLS, and separate database roles,
+use the [secure local demo](deployment/local-secure/README.md). It follows the
+same init/up/check lifecycle and runs independently on separate loopback ports.
 
 Stop the demo without deleting state:
 
 ```bash
-./run down
+./demo down
 ```
 
 For package setup and command discovery from the repo root:
@@ -98,6 +102,10 @@ Start with [docs/README.md](docs/README.md). It groups docs by user need.
 
 ## Architecture
 
+Explore the [interactive architecture atlas](docs/architecture/architecture-atlas.html)
+for C4 levels 1–4, planning/fetch sequences, and the governed Arrow data flow.
+[Editable Mermaid diagrams](docs/architecture/architecture-atlas.md) are included.
+
 ```mermaid
 flowchart LR
     owner["Asset owner"] --> cp["Authenticated control plane"]
@@ -110,6 +118,12 @@ flowchart LR
     dp --> table["Table storage"]
     dp --> duckdb["DuckDB filters/masks"]
 ```
+
+Schema discovery and read planning bind catalog, asset, policy, and schema admission
+from one database snapshot per request. No deployment-wide generation counter or
+policy cache is used. Provider IO starts after the database session closes. See
+[live configuration](docs/live-configuration.md) for consistency,
+provider lifecycle, and startup-setting restart semantics.
 
 Each asset has one live policy guarded by an optimistic revision. Saving writes
 it directly to the shared config database. Issued tickets keep their captured
@@ -148,7 +162,6 @@ Start a data plane against the same config database:
 
 ```bash
 export DAL_OBSCURA_DATABASE_URL=sqlite+pysqlite:///runtime/control-plane.db
-export DAL_OBSCURA_CELL_ID=00000000-0000-0000-0000-000000000001
 export DAL_OBSCURA_LOCATION=grpc://127.0.0.1:8815
 export DAL_OBSCURA_TICKET_SECRET=replace-with-a-secret
 uv run dal-obscura
@@ -207,6 +220,16 @@ before/after artifact for planner, masking, filtering, and table-format changes.
 
 ## Status and limits
 
+Each configuration database represents one deployment. Catalog names are globally
+unique, assets are keyed by catalog and target, and runtime settings are shared by
+all connected data-plane processes. There are no cell or tenant routing IDs.
+The baseline schema is `20260930_0001`, with nested schema type storage upgraded
+in `20260930_0002`. Run `dal-obscura-migrate upgrade` before starting services.
+Database schemas and stored tickets from before this baseline are unsupported.
+
+The [read execution invariants](docs/read-execution-invariants.md) map correctness
+requirements to tests and document streaming, planning, and scaling limits.
+
 - Row filters and masks are DuckDB SQL expressions.
 - Catalogs resolve governed targets into executable table formats.
 - Standalone path reads are not a public discovery path.
@@ -253,6 +276,12 @@ Parquet read-ahead still require additional memory. Large Parquet row groups can
 retain oversized buffers and be rejected; write suitably sized row groups rather
 than relying on small output slices to reduce their retained memory.
 
+- `DAL_OBSCURA_MAX_CACHED_CATALOG_PROVIDERS` defaults to `32` per process. Providers
+  are reused across assets by catalog connection configuration, with idle LRU
+  eviction and leases protecting active planners.
+- `DAL_OBSCURA_CATALOG_PROVIDER_WAIT_SECONDS` defaults to `5`. When every provider
+  slot is occupied, planning waits up to this timeout, then returns Flight
+  `UNAVAILABLE`; it does not create an unbounded number of providers.
 - `DAL_OBSCURA_MAX_ACTIVE_STREAMS` defaults to `16`; excess reads fail immediately.
 - `DAL_OBSCURA_DUCKDB_MEMORY_LIMIT` defaults to `512MB` per connection. Supply an
   explicit positive byte size, such as `256MB` or `1GiB`; unlimited and percentage

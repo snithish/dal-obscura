@@ -47,7 +47,6 @@ public final class LocalDalObscuraServer implements AutoCloseable {
 
         Map<String, String> environment = builder.environment();
         environment.put("DAL_OBSCURA_DATABASE_URL", bundle.databaseUrl());
-        environment.put("DAL_OBSCURA_CELL_ID", bundle.cellId());
         environment.put("DAL_OBSCURA_LOCATION", flightLocation(bundle.uri()));
         environment.put("DAL_OBSCURA_JWT_SECRET", bundle.jwtSecret());
         environment.put("DAL_OBSCURA_TICKET_SECRET", bundle.ticketSecret());

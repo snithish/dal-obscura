@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pyarrow as pa
-import pyarrow.flight as flight
 import pytest
 
 from dal_obscura.data_plane.infrastructure.adapters.catalog_registry import (
@@ -248,7 +247,7 @@ def test_flight_plan_rejects_direct_target_without_catalog(tmp_path):
         descriptor = command_descriptor(
             {"target": "default.users", "columns": ["id", "email", "region"]}
         )
-        with pytest.raises(flight.FlightInternalError):
+        with pytest.raises(pa.ArrowInvalid, match="Invalid request"):
             client.get_flight_info(descriptor, options=flight_call_options())
 
 

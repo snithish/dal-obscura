@@ -197,10 +197,7 @@ def test_workspace_catalog_rejects_malformed_uri_with_structured_error():
 
     response = client.put(
         "/v1/catalogs/analytics",
-        json={
-            "plugin_id": ICEBERG_CATALOG_ID,
-            "options": {"uri": "https://[2001:db8::1/api"},
-        },
+        json={"plugin_id": ICEBERG_CATALOG_ID, "options": {"uri": "https://[2001:db8::1/api"}},
         headers=ADMIN_HEADERS,
     )
 
@@ -235,10 +232,7 @@ def test_workspace_catalog_rejects_unbounded_option_shape():
         deeply_nested = {"nested": deeply_nested}
     response = client.put(
         "/v1/catalogs/analytics",
-        json={
-            "plugin_id": ICEBERG_CATALOG_ID,
-            "options": {"properties": deeply_nested},
-        },
+        json={"plugin_id": ICEBERG_CATALOG_ID, "options": {"properties": deeply_nested}},
         headers=ADMIN_HEADERS,
     )
 
@@ -250,10 +244,7 @@ def test_workspace_catalog_rejects_oversized_option_list():
     client = _client()
     response = client.put(
         "/v1/catalogs/analytics",
-        json={
-            "plugin_id": ICEBERG_CATALOG_ID,
-            "options": {"properties": ["x"] * 257},
-        },
+        json={"plugin_id": ICEBERG_CATALOG_ID, "options": {"properties": ["x"] * 257}},
         headers=ADMIN_HEADERS,
     )
 
@@ -266,10 +257,7 @@ def test_workspace_catalog_rejects_inline_sensitive_options_but_accepts_secret_r
 
     rejected = client.put(
         "/v1/catalogs/analytics",
-        json={
-            "plugin_id": ICEBERG_CATALOG_ID,
-            "options": {"password": "inline-password"},
-        },
+        json={"plugin_id": ICEBERG_CATALOG_ID, "options": {"password": "inline-password"}},
         headers=ADMIN_HEADERS,
     )
     accepted = client.put(
@@ -299,18 +287,12 @@ def test_workspace_catalog_enforces_configured_egress_allowlist():
 
     rejected = client.put(
         "/v1/catalogs/analytics",
-        json={
-            "plugin_id": ICEBERG_CATALOG_ID,
-            "options": {"uri": "https://other.example/api"},
-        },
+        json={"plugin_id": ICEBERG_CATALOG_ID, "options": {"uri": "https://other.example/api"}},
         headers=ADMIN_HEADERS,
     )
     accepted = client.put(
         "/v1/catalogs/analytics",
-        json={
-            "plugin_id": ICEBERG_CATALOG_ID,
-            "options": {"uri": "https://catalog.example/api"},
-        },
+        json={"plugin_id": ICEBERG_CATALOG_ID, "options": {"uri": "https://catalog.example/api"}},
         headers=ADMIN_HEADERS,
     )
 
@@ -413,10 +395,7 @@ def test_workspace_catalog_discovery_does_not_echo_provider_errors(monkeypatch):
     client = _client()
     client.put(
         "/v1/catalogs/analytics",
-        json={
-            "plugin_id": ICEBERG_CATALOG_ID,
-            "options": {"uri": "https://catalog.example/api"},
-        },
+        json={"plugin_id": ICEBERG_CATALOG_ID, "options": {"uri": "https://catalog.example/api"}},
         headers=ADMIN_HEADERS,
     )
 
@@ -457,11 +436,7 @@ def test_workspace_catalog_diagnostics_are_bounded_and_redacted(monkeypatch):
         assert plugin_id == ICEBERG_CATALOG_ID
         assert options == {"type": "sql", "uri": "sqlite:///catalog.db"}
         return [
-            {
-                "backend": "iceberg",
-                "name": "default.users",
-                "table_identifier": "default.users",
-            }
+            {"backend": "iceberg", "name": "default.users", "table_identifier": "default.users"}
         ]
 
     monkeypatch.setattr(

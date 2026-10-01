@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from uuid import uuid4
-
 import pytest
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -10,7 +8,7 @@ from dal_obscura.common.config_store.db import (
     migrate_config_store,
     session_factory,
 )
-from dal_obscura.common.config_store.orm import CellRecord
+from dal_obscura.common.config_store.orm import WorkspaceRecord
 from dal_obscura.common.ticket_delivery.models import TicketPayload
 from dal_obscura.control_plane.application.access import ControlPlaneActor
 from dal_obscura.control_plane.infrastructure.session_store import (
@@ -31,14 +29,10 @@ def _session_maker(tmp_path) -> sessionmaker[Session]:
 
 def test_invalidate_access_revokes_sessions_and_replayable_artifacts(tmp_path):
     session_maker = _session_maker(tmp_path)
-    cell_id = uuid4()
     with session_maker() as session:
-        session.add(CellRecord(id=cell_id, name="cell", region="local"))
+        session.add(WorkspaceRecord(id=1))
         actor = ControlPlaneActor(principal="user:alice", groups=())
-        browser_token, _csrf = BrowserSessionStore(session).issue_with_csrf(
-            actor,
-            ttl_seconds=3600,
-        )
+        browser_token, _csrf = BrowserSessionStore(session).issue_with_csrf(actor, ttl_seconds=3600)
         LoginTransactionStore(session).issue(
             state="state",
             nonce="nonce",
@@ -48,13 +42,12 @@ def test_invalidate_access_revokes_sessions_and_replayable_artifacts(tmp_path):
         session.commit()
 
     ticket_id = "00000000-0000-0000-0000-000000000001"
-    SqlAlchemyTicketStore(session_maker, cell_id=cell_id).store(
+    SqlAlchemyTicketStore(session_maker).store(
         TicketPayload(
             asset_id="00000000-0000-4000-8000-000000000001",
             ticket_id=ticket_id,
             catalog="analytics",
             target="default.users",
-            tenant_id="default",
             columns=["id"],
             scan={
                 "authorization_columns": ["id", "region"],
@@ -70,7 +63,7 @@ def test_invalidate_access_revokes_sessions_and_replayable_artifacts(tmp_path):
         max_exchanges=1,
     )
 
-    counts = invalidate_access(session_maker, cell_id=cell_id)
+    counts = invalidate_access(session_maker)
 
     assert counts.sessions == 1
     assert counts.login_transactions == 1
@@ -78,4 +71,4 @@ def test_invalidate_access_revokes_sessions_and_replayable_artifacts(tmp_path):
     with session_maker() as session:
         assert BrowserSessionStore(session).resolve(browser_token) is None
     with pytest.raises(LookupError):
-        SqlAlchemyTicketStore(session_maker, cell_id=cell_id).load(ticket_id)
+        SqlAlchemyTicketStore(session_maker).load(ticket_id)

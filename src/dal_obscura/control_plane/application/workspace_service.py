@@ -21,7 +21,7 @@ from dal_obscura.control_plane.infrastructure.repositories import ConfigStore
 from dal_obscura.data_plane.infrastructure.adapters.path_rules import PathRuleEnforcer
 
 
-def required_workspace_context(store: ConfigStore):
+def required_workspace(store: ConfigStore):
     """Returns the default workspace context or raises when none exists.
 
     Example:
@@ -30,7 +30,7 @@ def required_workspace_context(store: ConfigStore):
         ```
     """
 
-    context = store.get_default_workspace_context()
+    context = store.get_workspace()
     if context is None:
         raise LookupError("No workspace has been configured")
     return context
@@ -48,12 +48,12 @@ def get_workspace_summary(
         ```
     """
 
-    context = store.get_default_workspace_context()
+    context = store.get_workspace()
     if context is None:
-        return store.get_workspace_summary(None)
+        return store.get_workspace_summary()
     if actor is None or actor.platform_admin:
-        return store.get_workspace_summary(context)
-    assets = store.list_workspace_assets_for_principals(context, actor.owner_principals())
+        return store.get_workspace_summary()
+    assets = store.list_workspace_assets_for_principals(actor.owner_principals())
     return {
         "catalog_count": len({str(asset["catalog"]) for asset in assets}),
         "asset_count": len(assets),
@@ -73,10 +73,10 @@ def get_workspace_runtime_settings(store: ConfigStore) -> dict[str, object] | No
         ```
     """
 
-    context = store.get_default_workspace_context()
+    context = store.get_workspace()
     if context is None:
         return None
-    settings = store.get_runtime_settings(context.cell_id)
+    settings = store.get_runtime_settings()
     if settings is None:
         return None
     raw_path_rules = settings.get("path_rules", [])
@@ -102,41 +102,28 @@ def get_workspace_observations(
     """
 
     observed_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    context = store.get_default_workspace_context()
+    context = store.get_workspace()
     if context is None:
         return {
             "available": False,
             "observed_at": observed_at,
             "source": "control-plane-db",
-            "generation": None,
             "data_plane": {"status": "unobserved", "reason": "workspace_not_configured"},
         }
     if not actor.platform_admin:
-        visible_assets = store.list_workspace_assets_for_principals(
-            context,
-            actor.owner_principals(),
-        )
+        visible_assets = store.list_workspace_assets_for_principals(actor.owner_principals())
         if not visible_assets:
             return {
                 "available": False,
                 "observed_at": observed_at,
                 "source": "control-plane-db",
-                "generation": None,
                 "data_plane": {"status": "unobserved", "reason": "no_visible_assets"},
             }
-    try:
-        generation = {"config_revision": str(store.get_configuration_revision(context.cell_id))}
-    except LookupError:
-        generation = None
     return {
         "available": True,
         "observed_at": observed_at,
         "source": "control-plane-db",
-        "generation": generation,
-        "data_plane": {
-            "status": "unobserved",
-            "reason": "flight_health_probe_not_configured",
-        },
+        "data_plane": {"status": "unobserved", "reason": "flight_health_probe_not_configured"},
     }
 
 
@@ -149,15 +136,15 @@ def list_workspace_auth_providers(store: ConfigStore) -> list[dict[str, object]]
         ```
     """
 
-    context = store.get_default_workspace_context()
+    context = store.get_workspace()
     if context is None:
         return []
-    return [redact_auth_provider(item) for item in store.list_auth_providers(context.cell_id)]
+    return [redact_auth_provider(item) for item in store.list_auth_providers()]
 
 
 def workspace_auth_provider_revision(store: ConfigStore) -> int:
-    context = store.get_default_workspace_context()
-    return 0 if context is None else store.get_auth_provider_revision(context.cell_id)
+    context = store.get_workspace()
+    return 0 if context is None else store.get_auth_provider_revision()
 
 
 def replace_workspace_auth_providers(
@@ -176,17 +163,13 @@ def replace_workspace_auth_providers(
     """
 
     validate_auth_provider_payloads(providers)
-    context = store.ensure_default_workspace_context()
-    store.replace_auth_providers(
-        cell_id=context.cell_id, providers=providers, expected_revision=expected_revision
-    )
+    store.ensure_workspace()
+    store.replace_auth_providers(providers=providers, expected_revision=expected_revision)
     store.record_workspace_audit_event(
-        cell_id=context.cell_id,
-        tenant_id=context.tenant_id,
         actor_principal=actor_principal,
         action="workspace.auth_providers.update",
         resource_type="workspace",
-        resource_id=str(context.tenant_id),
+        resource_id="workspace",
         details={
             "provider_count": len(providers),
             "enabled_count": sum(1 for provider in providers if provider.get("enabled", True)),
@@ -230,9 +213,8 @@ def upsert_workspace_runtime_settings(
         PathRuleEnforcer(normalized_path_rules)
     except (TypeError, ValueError) as exc:
         raise ValidationFailure("Runtime path rules are invalid") from exc
-    context = store.ensure_default_workspace_context()
+    store.ensure_workspace()
     store.upsert_runtime_settings(
-        cell_id=context.cell_id,
         ticket_ttl_seconds=ttl,
         max_tickets=max_tickets,
         max_ticket_exchanges=max_ticket_exchanges,
@@ -240,12 +222,10 @@ def upsert_workspace_runtime_settings(
         expected_revision=expected_revision,
     )
     store.record_workspace_audit_event(
-        cell_id=context.cell_id,
-        tenant_id=context.tenant_id,
         actor_principal=actor_principal,
         action="workspace.runtime.update",
         resource_type="workspace",
-        resource_id=str(context.tenant_id),
+        resource_id="workspace",
         details={
             "ticket_ttl_seconds": ttl,
             "max_tickets": max_tickets,
@@ -253,7 +233,7 @@ def upsert_workspace_runtime_settings(
             "path_rules": normalized_path_rules,
         },
     )
-    settings = store.get_runtime_settings(context.cell_id)
+    settings = store.get_runtime_settings()
     if settings is None:
         return {}
     raw_path_rules = settings.get("path_rules", [])

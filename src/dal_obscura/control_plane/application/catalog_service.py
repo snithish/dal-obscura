@@ -86,10 +86,10 @@ def list_workspace_catalogs(
         ```
     """
 
-    context = store.get_default_workspace_context()
+    context = store.get_workspace()
     if context is None:
         return []
-    return store.list_workspace_catalogs(context)
+    return store.list_workspace_catalogs()
 
 
 def discover_workspace_catalog_tables(
@@ -110,15 +110,13 @@ def discover_workspace_catalog_tables(
         ```
     """
 
-    context = _required_workspace_context(store)
-    catalog = store.get_workspace_catalog(context, name)
+    _required_workspace(store)
+    catalog = store.get_workspace_catalog(name)
     catalog_options = cast(dict[str, Any], catalog["options"])
     validate_admitted_catalog_options(str(catalog["plugin_id"]), catalog_options, plugin_registry)
     validate_catalog_options(catalog_options, egress_allowlist=egress_allowlist)
     catalog_options = _resolve_catalog_secrets(
-        catalog_options,
-        scope=f"catalog:{name}",
-        provider=secret_provider,
+        catalog_options, scope=f"catalog:{name}", provider=secret_provider
     )
     try:
         with _admit_session_discovery(session_key):
@@ -131,11 +129,7 @@ def discover_workspace_catalog_tables(
                     plugin_registry=plugin_registry,
                 )
             else:
-                tables = discover(
-                    str(catalog["name"]),
-                    str(catalog["plugin_id"]),
-                    catalog_options,
-                )
+                tables = discover(str(catalog["name"]), str(catalog["plugin_id"]), catalog_options)
     except ValidationFailure:
         raise
     except Exception as exc:
@@ -144,7 +138,7 @@ def discover_workspace_catalog_tables(
         raise ValidationFailure("Catalog discovery failed") from exc
     governed_targets = {
         value
-        for asset in store.list_workspace_assets(context)
+        for asset in store.list_workspace_assets()
         if asset["catalog"] == catalog["name"]
         for value in (asset["name"], asset["table_identifier"])
         if isinstance(value, str) and value
@@ -175,15 +169,13 @@ def diagnose_workspace_catalog(
 ) -> dict[str, object]:
     """Runs bounded catalog discovery and returns a redacted readiness result."""
 
-    context = _required_workspace_context(store)
-    catalog = store.get_workspace_catalog(context, name)
+    _required_workspace(store)
+    catalog = store.get_workspace_catalog(name)
     catalog_options = cast(dict[str, Any], catalog["options"])
     validate_admitted_catalog_options(str(catalog["plugin_id"]), catalog_options, plugin_registry)
     validate_catalog_options(catalog_options, egress_allowlist=egress_allowlist)
     catalog_options = _resolve_catalog_secrets(
-        catalog_options,
-        scope=f"catalog:{name}",
-        provider=secret_provider,
+        catalog_options, scope=f"catalog:{name}", provider=secret_provider
     )
     checked_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     try:
@@ -197,11 +189,7 @@ def diagnose_workspace_catalog(
                     plugin_registry=plugin_registry,
                 )
                 if str(catalog["plugin_id"]) != ICEBERG_CATALOG_ID
-                else discover(
-                    str(catalog["name"]),
-                    str(catalog["plugin_id"]),
-                    catalog_options,
-                )
+                else discover(str(catalog["name"]), str(catalog["plugin_id"]), catalog_options)
             )
     except ValidationFailure:
         raise
@@ -254,18 +242,11 @@ def upsert_workspace_catalog(
             raise ValidationFailure("Catalog plugin is not admitted")
         validate_descriptor_options(admitted[("catalog", plugin_id)], options)
     validate_catalog_options(options, egress_allowlist=egress_allowlist)
-    context = store.ensure_default_workspace_context()
+    store.ensure_workspace()
     catalog_id = store.upsert_catalog(
-        cell_id=context.cell_id,
-        tenant_id=context.tenant_id,
-        name=name,
-        plugin_id=plugin_id,
-        options=options,
-        expected_revision=expected_revision,
+        name=name, plugin_id=plugin_id, options=options, expected_revision=expected_revision
     )
     store.record_workspace_audit_event(
-        cell_id=context.cell_id,
-        tenant_id=context.tenant_id,
         actor_principal=actor_principal,
         action="workspace.catalog.update",
         resource_type="catalog",
@@ -300,8 +281,8 @@ def validate_admitted_catalog_options(
     validate_descriptor_options(descriptor, options)
 
 
-def _required_workspace_context(store: ConfigStore):
-    context = store.get_default_workspace_context()
+def _required_workspace(store: ConfigStore):
+    context = store.get_workspace()
     if context is None:
         raise LookupError("No workspace has been configured")
     return context
@@ -327,9 +308,7 @@ def _resolve_catalog_secrets(
 ) -> dict[str, Any]:
     try:
         resolved = resolve_secret_refs(
-            options,
-            provider=provider or EnvSecretProvider(),
-            expected_scope=scope,
+            options, provider=provider or EnvSecretProvider(), expected_scope=scope
         )
     except ValueError as exc:
         raise ValidationFailure("Catalog secret could not be resolved") from exc
@@ -439,11 +418,7 @@ def validate_descriptor_options(
         name = item.get("name")
         if isinstance(name, str) and name in options:
             _validate_descriptor_value(
-                name,
-                item.get("type"),
-                options[name],
-                kind=kind,
-                choices=item.get("options"),
+                name, item.get("type"), options[name], kind=kind, choices=item.get("options")
             )
         if item.get("required") is True and isinstance(name, str):
             required.add(name)

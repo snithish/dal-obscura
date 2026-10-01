@@ -8,13 +8,22 @@
       "publicClient": true,
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
-      "redirectUris": ["{{DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_REDIRECT_URI}}"],
-      "webOrigins": ["{{DAL_OBSCURA_CONTROL_PLANE_UI_OIDC_ORIGIN}}"],
+      "redirectUris": [
+        "${UI_ORIGIN}/auth/callback"
+      ],
+      "webOrigins": [
+        "${UI_ORIGIN}"
+      ],
       "protocol": "openid-connect",
       "attributes": {
         "pkce.code.challenge.method": "S256"
       },
-      "defaultClientScopes": ["web-origins", "acr", "profile", "roles"],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles"
+      ],
       "protocolMappers": [
         {
           "name": "dal-obscura-audience",
@@ -46,11 +55,16 @@
       "clientId": "dal-obscura-cli",
       "enabled": true,
       "publicClient": false,
-      "secret": "{{OIDC_CLI_CLIENT_SECRET}}",
+      "secret": "${OIDC_CLI_CLIENT_SECRET}",
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": true,
       "protocol": "openid-connect",
-      "defaultClientScopes": ["web-origins", "acr", "profile", "roles"],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles"
+      ],
       "protocolMappers": [
         {
           "name": "dal-obscura-audience",
@@ -75,30 +89,26 @@
             "id.token.claim": "false",
             "userinfo.token.claim": "true"
           }
-        },
-        {
-          "name": "tenant-id",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-hardcoded-claim-mapper",
-          "consentRequired": false,
-          "config": {
-            "claim.name": "tenant_id",
-            "claim.value": "default",
-            "jsonType.label": "String",
-            "access.token.claim": "true",
-            "id.token.claim": "false",
-            "userinfo.token.claim": "false"
-          }
         }
       ]
     }
   ],
   "groups": [
-    {"name": "platform-admins"},
-    {"name": "asset-owners"},
-    {"name": "us-analysts"},
-    {"name": "eu-analysts"},
-    {"name": "data-stewards"}
+    {
+      "name": "platform-admins"
+    },
+    {
+      "name": "asset-owners"
+    },
+    {
+      "name": "us-analysts"
+    },
+    {
+      "name": "eu-analysts"
+    },
+    {
+      "name": "data-stewards"
+    }
   ],
   "users": [
     {
@@ -108,9 +118,17 @@
       "emailVerified": true,
       "firstName": "Demo",
       "lastName": "Admin",
-      "groups": ["platform-admins"],
+      "groups": [
+        "platform-admins"
+      ],
       "requiredActions": [],
-      "credentials": [{"type": "password", "value": "{{DEMO_ADMIN_PASSWORD}}", "temporary": false}]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${DEMO_ADMIN_PASSWORD}",
+          "temporary": false
+        }
+      ]
     },
     {
       "username": "asset-owner",
@@ -119,9 +137,17 @@
       "emailVerified": true,
       "firstName": "Asset",
       "lastName": "Owner",
-      "groups": ["asset-owners"],
+      "groups": [
+        "asset-owners"
+      ],
       "requiredActions": [],
-      "credentials": [{"type": "password", "value": "{{ASSET_OWNER_PASSWORD}}", "temporary": false}]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${ASSET_OWNER_PASSWORD}",
+          "temporary": false
+        }
+      ]
     },
     {
       "username": "us-analyst",
@@ -130,9 +156,17 @@
       "emailVerified": true,
       "firstName": "US",
       "lastName": "Analyst",
-      "groups": ["us-analysts"],
+      "groups": [
+        "us-analysts"
+      ],
       "requiredActions": [],
-      "credentials": [{"type": "password", "value": "{{US_ANALYST_PASSWORD}}", "temporary": false}]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${US_ANALYST_PASSWORD}",
+          "temporary": false
+        }
+      ]
     },
     {
       "username": "eu-analyst",
@@ -141,9 +175,17 @@
       "emailVerified": true,
       "firstName": "EU",
       "lastName": "Analyst",
-      "groups": ["eu-analysts"],
+      "groups": [
+        "eu-analysts"
+      ],
       "requiredActions": [],
-      "credentials": [{"type": "password", "value": "{{EU_ANALYST_PASSWORD}}", "temporary": false}]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${EU_ANALYST_PASSWORD}",
+          "temporary": false
+        }
+      ]
     },
     {
       "username": "data-steward",
@@ -152,9 +194,17 @@
       "emailVerified": true,
       "firstName": "Data",
       "lastName": "Steward",
-      "groups": ["data-stewards"],
+      "groups": [
+        "data-stewards"
+      ],
       "requiredActions": [],
-      "credentials": [{"type": "password", "value": "{{DATA_STEWARD_PASSWORD}}", "temporary": false}]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${DATA_STEWARD_PASSWORD}",
+          "temporary": false
+        }
+      ]
     },
     {
       "username": "blocked-user",
@@ -165,7 +215,13 @@
       "lastName": "User",
       "groups": [],
       "requiredActions": [],
-      "credentials": [{"type": "password", "value": "{{BLOCKED_USER_PASSWORD}}", "temporary": false}]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${BLOCKED_USER_PASSWORD}",
+          "temporary": false
+        }
+      ]
     }
   ]
 }

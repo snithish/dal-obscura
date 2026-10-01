@@ -46,7 +46,7 @@ never reader authentication or a substitute for a real authorized Flight read.
 Every requested column starts with a typed `NULL` mask. A matching rule's
 `columns` override that baseline: an entry without an explicit mask reveals the
 original value; an entry with a mask applies that mask. Unmatched readers receive
-NULL values, not an authorization failure. Authentication and asset/tenant
+NULL values, not an authorization failure. Authentication and asset
 resolution remain required. An ungoverned target is still rejected.
 
 The baseline is distinct from an **explicit** `null` mask. Matching rules combine

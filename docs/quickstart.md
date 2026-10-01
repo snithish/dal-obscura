@@ -5,46 +5,41 @@ deployment you configure yourself.
 
 ## Run the local demo
 
-Prerequisites: Docker with Compose v2 and Python 3.
+Prerequisites: uv and Docker/Podman with Compose v2. Start Docker Desktop or
+`podman machine start` first. Node 24/pnpm are needed for browser verification.
 
 ```bash
 cd examples/demo/keycloak
-./run up
-./run credentials
+./demo init
+./demo credentials
+./demo check
 ```
 
-The demo starts Keycloak, PostgreSQL, the authenticated control-plane UI, a
-seeded Iceberg catalog and governed assets, and the Arrow Flight data plane.
-Open the UI URL printed by `./run credentials`, choose **Sign in with SSO**, and
-sign in as `demo-admin` with the generated password. The `asset-owner` account
-can edit policy for the demo asset. Reader personas are
-`us-analyst`, `eu-analyst`, `data-steward`, and `blocked-user`.
+Open `http://localhost:28821`, choose **Sign in with SSO**, and sign in as
+`demo-admin` with the generated password. The `asset-owner` can edit the seeded
+policy. Regional analysts see filtered rows and masked email; stewards and owners
+see complete rows. The blocked user and administrative-only user cannot read data.
 
-Run the end-to-end seeded read checks:
+`./demo check` verifies actual reads and Chromium SSO, reload, and logout. Use
+`./demo check --reads-only` without browser tools. Read checks expect the seeded
+policy; intentional policy changes can alter those expected results.
 
-```bash
-./run smoke
-./run read --as us-analyst
-./run read --as eu-analyst
-./run read --as data-steward
-./run read --as blocked-user
-```
+The new example has its own project, PostgreSQL databases, and Iceberg warehouse.
+It preserves secrets and edits across `./demo down` and `./demo up`. Init can resume
+an interrupted setup and rebuild images after code changes. Normal up does not
+seed or provision. See the [example README](../examples/demo/keycloak/README.md)
+for port overrides and troubleshooting.
 
-The local demo preserves its PostgreSQL volume and generated files across
-restarts. If you already have state from an earlier checkout, reset the
-disposable demo before its first start with the new schema:
-
-```bash
-./run reset
-./run up
-```
-
-`reset` deletes the local demo's generated files and database volume.
+The [secure local demo](../deployment/local-secure/README.md) uses the same fixture
+and lifecycle commands with HTTPS Keycloak, browser HTTPS, Flight mTLS, and
+separate migration/control/data database roles. Start it with `./demo init` from
+`deployment/local-secure`; no external identity provider is required.
 
 ## Start services manually
 
-The supported config-store migration history is one clean baseline for live
-catalogs, assets, policy, tickets, sessions, and audit records. This is a
+The supported config-store migration history starts from a clean baseline for
+live catalogs, assets, policy, tickets, sessions, and audit records, followed by
+the nested schema type storage upgrade. This is a
 breaking schema reset: databases stamped with the previous migration history
 are unsupported. For a disposable environment, create a new empty database.
 
@@ -100,13 +95,13 @@ control plane on port `8821`.
 Stop containers while preserving demo data:
 
 ```bash
-./run down
+./demo down
 ```
 
 Delete demo containers, generated files, and database state:
 
 ```bash
-./run reset
+./demo reset
 ```
 
 ## Next reads

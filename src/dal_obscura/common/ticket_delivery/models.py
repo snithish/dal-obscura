@@ -59,7 +59,6 @@ class TicketPayload:
             principal_id="user:alice",
             expires_at=1_900_000_000,
             nonce="nonce",
-            tenant_id="default",
             asset_id="00000000-0000-4000-8000-000000000001",
         )
         ```
@@ -73,7 +72,6 @@ class TicketPayload:
     expires_at: int
     nonce: str
     asset_id: str
-    tenant_id: str = "default"
     issuer: str = ""
     identity_context: str = ""
     decision_digest: str = ""
@@ -90,7 +88,6 @@ class TicketPayload:
             "principal_id": self.principal_id,
             "expires_at": self.expires_at,
             "nonce": self.nonce,
-            "tenant_id": self.tenant_id,
             "issuer": self.issuer,
             "identity_context": self.identity_context,
             "decision_digest": self.decision_digest,
@@ -119,7 +116,6 @@ class TicketPayload:
                 "principal_id",
                 "expires_at",
                 "nonce",
-                "tenant_id",
                 "issuer",
                 "identity_context",
                 "decision_digest",
@@ -136,7 +132,6 @@ class TicketPayload:
             principal_id=_required_string(payload, "principal_id"),
             expires_at=_strict_int(payload, "expires_at", minimum=0),
             nonce=_required_string(payload, "nonce"),
-            tenant_id=_required_string(payload, "tenant_id"),
             issuer=_required_string(payload, "issuer", allow_empty=True),
             identity_context=_required_string(payload, "identity_context", allow_empty=True),
             decision_digest=_required_string(payload, "decision_digest", allow_empty=True),
@@ -192,8 +187,7 @@ def _strict_scan_payload(raw: object) -> ScanPayload:
         raise ValueError("Ticket payload scan must be an object")
     raw_mapping = cast(Mapping[str, object], raw)
     _reject_unknown_fields(
-        raw_mapping,
-        {"read_payload", "full_row_filter", "masks", "authorization_columns"},
+        raw_mapping, {"read_payload", "full_row_filter", "masks", "authorization_columns"}
     )
     read_payload = raw_mapping.get("read_payload")
     full_row_filter = raw_mapping.get("full_row_filter")
@@ -237,11 +231,7 @@ def canonical_ticket_payload_bytes(payload: TicketPayload) -> bytes:
         signed_bytes = canonical_ticket_payload_bytes(payload)
         ```
     """
-    return json.dumps(
-        payload.to_dict(),
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
+    return json.dumps(payload.to_dict(), sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
 def ticket_payload_hash(payload: TicketPayload) -> str:

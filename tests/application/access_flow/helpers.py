@@ -3,6 +3,7 @@ from typing import Any, cast
 from dal_obscura.common.access_control.models import AccessDecision, MaskRule, Principal
 from dal_obscura.common.catalog.ports import TableFormat
 from dal_obscura.common.ticket_delivery.models import TicketPayload
+from dal_obscura.data_plane.application.ports.access_context import StaticAccessContext
 from dal_obscura.data_plane.application.ports.identity import AuthenticationRequest
 from dal_obscura.data_plane.application.use_cases.fetch_stream import FetchStreamUseCase
 from dal_obscura.data_plane.application.use_cases.plan_access import PlanAccessUseCase
@@ -32,8 +33,9 @@ def _build_end_to_end_access_flow(table_format: TableFormat, decision: AccessDec
     principal = Principal(id="user1", groups=[], attributes={})
     plan_access = PlanAccessUseCase(
         identity=FakeIdentity(principal=principal),
-        authorizer=authorizer,
-        catalog_registry=cast(Any, catalog_registry),
+        access_context=StaticAccessContext(
+            authorizer=authorizer, catalog_registry=cast(Any, catalog_registry)
+        ),
         masking=masking,
         ticket_codec=ticket_codec,
         ticket_store=ticket_store,
@@ -43,7 +45,6 @@ def _build_end_to_end_access_flow(table_format: TableFormat, decision: AccessDec
     )
     fetch_stream = FetchStreamUseCase(
         identity=FakeIdentity(principal=principal),
-        authorizer=authorizer,
         masking=masking,
         row_transform=DuckDBRowTransformAdapter(masking),
         ticket_codec=ticket_codec,
