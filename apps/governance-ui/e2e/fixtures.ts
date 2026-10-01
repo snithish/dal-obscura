@@ -231,7 +231,9 @@ export async function authenticatedApi(page: Page, options: { admin?: boolean; r
         const payload = request.postDataJSON() as { expected_revision: number; revoke_existing_tokens?: boolean; rules?: Array<Record<string, unknown>> };
         if (options.conflictSave) return route.fulfill({ status: 409, json: { detail: "Live policy changed; reload before saving." } });
         if (payload.expected_revision !== detail.policy_revision) return route.fulfill({ status: 409, json: { detail: "Live policy changed; reload before saving." } });
-        detail.policy_rules = payload.rules ?? [];
+        // The repository returns rules in ordinal order, independently of the
+        // request array order. Match that persistence contract in UI tests.
+        detail.policy_rules = [...(payload.rules ?? [])].sort((a, b) => Number(a.ordinal) - Number(b.ordinal));
         detail.policy_revision += 1;
         const revokedTokenCount = payload.revoke_existing_tokens ? 2 : 0;
         return route.fulfill({ json: { asset_id: assetId, policy_revision: detail.policy_revision, revoked_token_count: revokedTokenCount } });

@@ -146,7 +146,7 @@ test("asset owner chooses whether live policy changes revoke tokens", async ({ p
   }] });
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
-  await expect(page.getByText("Live policy revision 1")).toBeVisible();
+  await expect(page.getByText("Live revision 1", { exact: true })).toBeVisible();
   await expect(page.getByText("Loaded the current live policy.")).toBeVisible();
 
   const revokeOnSave = page.getByLabel("Revoke existing tokens after saving");
@@ -179,7 +179,7 @@ test("asset owner chooses whether live policy changes revoke tokens", async ({ p
   await expect(page.getByText("Revoked 2 active token(s)." )).toBeVisible();
 });
 
-test("nested schema tree virtualizes 10k fields and keeps keyboard movement responsive", async ({ page }) => {
+test("schema reference and column picker virtualize 10k fields and keep search responsive", async ({ page }) => {
   await authenticatedApi(page);
   const fields = Array.from({ length: 10_000 }, (_, index) => ({
     field_id: index + 1,
@@ -205,20 +205,29 @@ test("nested schema tree virtualizes 10k fields and keeps keyboard movement resp
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
 
-  const tree = page.getByRole("tree", { name: "Schema fields" });
-  await expect(tree).toBeVisible();
-  const mountedRows = tree.getByRole("treeitem");
-  expect(await mountedRows.count()).toBeLessThanOrEqual(200);
-  await mountedRows.first().focus();
+  await page.getByRole("button", { name: "Show schema", exact: true }).click();
+  const sidebar = page.getByRole("complementary", { name: "Asset schema" });
+  await expect(sidebar).toBeVisible();
+  expect(await sidebar.locator(".schema-reference-row").count()).toBeLessThanOrEqual(12);
+  await sidebar.getByRole("searchbox", { name: "Search schema" }).fill("field_9999");
+  await expect(sidebar.getByText("field_9999", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "New rule", exact: true }).click();
+  await page.getByRole("button", { name: /Allowed columns:/ }).click();
+  const picker = page.getByRole("dialog", { name: "Choose allowed columns" });
+  expect(await picker.getByRole("option").count()).toBeLessThanOrEqual(12);
+  const search = picker.getByRole("combobox", { name: "Search allowed columns" });
+  await search.fill("field_9999");
+  await expect(picker.getByRole("option", { name: /field_9999/ })).toBeVisible();
+  await search.fill("");
   const durations: number[] = [];
   for (let index = 0; index < 20; index += 1) {
     const started = await page.evaluate(() => performance.now());
-    await page.keyboard.press("ArrowDown");
+    await search.press("ArrowDown");
     const finished = await page.evaluate(() => performance.now());
     durations.push(finished - started);
   }
   durations.sort((left, right) => left - right);
-  expect(durations[Math.floor(durations.length * 0.95)], "95th percentile tree key latency").toBeLessThan(200);
+  expect(durations[Math.floor(durations.length * 0.95)], "95th percentile picker key latency").toBeLessThan(200);
 });
 
 test("authenticated policy workspace meets local web-vitals thresholds", async ({ page }) => {
@@ -496,11 +505,11 @@ test("mutation HTML challenges clear private workspace state", async ({ page }) 
     headers: { "content-type": "text/html" },
     body: "<html><title>Sign in</title></html>",
   }));
-  await page.getByRole("button", { name: "Save deny-all policy" }).click();
+  await page.getByRole("button", { name: "Save policy", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Sign in to your workspace" })).toBeVisible();
   await expect(page.getByText("The browser or edge session expired. Sign in again to continue.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "orders" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Save deny-all policy" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Save policy", exact: true })).toHaveCount(0);
 });
 
 test("asset deep links never substitute the first inventory result", async ({ page }) => {
@@ -596,9 +605,9 @@ test("late live policy saves cannot clear a newer local edit", async ({ page }) 
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Save deny-all policy" }).click();
+  await page.getByRole("button", { name: "Save policy", exact: true }).click();
   await deferredSave.started;
-  await page.getByRole("button", { name: "Add first rule" }).click();
+  await page.getByRole("button", { name: "New rule", exact: true }).click();
   await expect(page.getByRole("button", { name: "Save policy" })).toBeVisible();
   await expect(page.getByText("Unsaved changes")).toBeVisible();
 
@@ -613,9 +622,11 @@ test("late policy evaluations cannot replace a newer unsaved edit", async ({ pag
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Run policy test" }).click();
+  await page.getByRole("button", { name: "Test Policy", exact: true }).click();
+  await page.getByRole("dialog", { name: "Test policy", exact: true }).getByRole("button", { name: "Test saved policy", exact: true }).click();
   await deferredEvaluate.started;
-  await page.getByRole("button", { name: "Add first rule" }).click();
+  await page.getByRole("dialog", { name: "Test policy", exact: true }).getByRole("button", { name: "Close policy test", exact: true }).click();
+  await page.getByRole("button", { name: "New rule", exact: true }).click();
   await expect(page.getByText("Unsaved changes")).toBeVisible();
 
   deferredEvaluate.release();

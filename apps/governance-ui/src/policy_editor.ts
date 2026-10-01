@@ -33,8 +33,15 @@ function pathSegments(path: SchemaPath | undefined): string[] | undefined {
 export function schemaPathCovers(parent: string, child: string, options: ColumnOption[]): boolean {
   if (parent === child) return true;
   const byName = new Map(options.map((option) => [option.value, option]));
-  const parentSegments = pathSegments(byName.get(parent)?.path);
-  const childSegments = pathSegments(byName.get(child)?.path);
+  return columnOptionCovers(byName.get(parent), byName.get(child));
+}
+
+/** Typed ancestry without rebuilding lookup maps for every rendered row. */
+export function columnOptionCovers(parent: ColumnOption | undefined, child: ColumnOption | undefined): boolean {
+  if (!parent || !child) return false;
+  if (parent.value === child.value) return true;
+  const parentSegments = pathSegments(parent.path);
+  const childSegments = pathSegments(child.path);
   return Boolean(parentSegments && childSegments && parentSegments.length < childSegments.length && parentSegments.every((part, index) => part === childSegments[index]));
 }
 
@@ -99,17 +106,44 @@ export function removeColumnSelections(rule: PolicyRule, removed: string[], opti
 
 /** Expand selections to schema leaves; never infer hierarchy by splitting display paths. */
 export function leafColumnOptions(options: ColumnOption[]): ColumnOption[] {
-  return options.filter((option) => option.valid && !options.some((other) => other.valid && other.value !== option.value && schemaPathCovers(option.value, other.value, options)));
+  const parents = new Set<string>();
+  for (const option of options) {
+    if (!option.valid) continue;
+    const segments = pathSegments(option.path) ?? [];
+    for (let depth = 1; depth < segments.length; depth += 1) parents.add(JSON.stringify(segments.slice(0, depth)));
+  }
+  return options.filter((option) => option.valid && !parents.has(JSON.stringify(pathSegments(option.path) ?? [])));
+}
+
+/** Index descendants once so wide pickers do not compare every pair of fields. */
+export function columnLeafPaths(options: ColumnOption[]): Map<string, string[]> {
+  const byTypedPath = new Map<string, ColumnOption[]>();
+  const result = new Map<string, string[]>();
+  for (const option of options) {
+    if (!option.valid) continue;
+    const key = JSON.stringify(pathSegments(option.path) ?? []);
+    byTypedPath.set(key, [...(byTypedPath.get(key) ?? []), option]);
+    result.set(option.value, []);
+  }
+  for (const leaf of leafColumnOptions(options)) {
+    result.get(leaf.value)!.push(leaf.value);
+    const segments = pathSegments(leaf.path) ?? [];
+    for (let depth = 1; depth < segments.length; depth += 1) {
+      for (const parent of byTypedPath.get(JSON.stringify(segments.slice(0, depth))) ?? []) result.get(parent.value)!.push(leaf.value);
+    }
+  }
+  return result;
 }
 
 export function selectColumnsShortcut(options: ColumnOption[], mode: "all" | "except" | "prefix", value = ""): string[] {
-  return leafColumnOptions(options).filter((option) => mode === "all" || (mode === "except" ? !schemaPathCovers(value, option.value, options) : option.value.startsWith(value))).map((option) => option.value);
+  const excluded = options.find((option) => option.value === value);
+  return leafColumnOptions(options).filter((option) => mode === "all" || (mode === "except" ? !columnOptionCovers(excluded, option) : option.value.startsWith(value))).map((option) => option.value);
 }
 
 export function expandColumnSelections(options: ColumnOption[], values: string[]): string[] {
-  const leaves = leafColumnOptions(options);
+  const leaves = columnLeafPaths(options);
   return [...new Set(values.flatMap((value) => {
-    const matches = leaves.filter((leaf) => schemaPathCovers(value, leaf.value, options)).map((leaf) => leaf.value);
+    const matches = leaves.get(value) ?? [];
     return matches.length ? matches : [value];
   }))];
 }

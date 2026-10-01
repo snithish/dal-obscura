@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, userEvent } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 import type { PolicyRule, SchemaNode } from "../api";
 import { authoritativeColumnOptions } from "../policy_editor";
 import { BulkMaskEditor } from "./BulkMaskEditor";
@@ -18,10 +18,11 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const MultiColumnKeyboard: Story = {
-  play: async ({ canvas, args }) => {
+  play: async ({ canvas, canvasElement, args }) => {
+    const body = within(canvasElement.ownerDocument.body);
     const trigger = canvas.getByRole("button", { name: "Allowed columns: 1 selected" });
     await userEvent.click(trigger);
-    const search = canvas.getByRole("combobox", { name: "Search allowed columns" });
+    const search = await body.findByRole("combobox", { name: "Search allowed columns" });
     await userEvent.type(search, "phone");
     await userEvent.keyboard("{ArrowDown}{Enter}");
     await expect(args.onChange).toHaveBeenCalledWith(["email", "phone"]);
@@ -43,12 +44,13 @@ export const WideSchema: Story = {
     options: authoritativeColumnOptions(Array.from({ length: 500 }, (_, index) => field(`field-${index}`, index + 1))),
     value: [],
   },
-  play: async ({ canvas }) => {
+  play: async ({ canvas, canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
     await userEvent.click(canvas.getByRole("button", { name: "Allowed columns: 0 selected" }));
-    await userEvent.type(canvas.getByRole("combobox", { name: "Search allowed columns" }), "field-24");
-    const renderedOptions = canvas.getAllByRole("option").length;
+    await userEvent.type(await body.findByRole("combobox", { name: "Search allowed columns" }), "field-24");
+    const renderedOptions = body.getAllByRole("option").length;
     await expect(renderedOptions).toBeLessThanOrEqual(12);
-    await expect(canvas.getByRole("button", { name: /Select search results \(/ })).toBeVisible();
+    await expect(body.getByRole("button", { name: /Select search results \(/ })).toBeVisible();
   },
 };
 

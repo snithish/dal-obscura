@@ -112,14 +112,14 @@ test("rendered light and dark shell states meet the text contrast threshold", as
 });
 
 test("authenticated policy workspace keeps rendered text and controls readable in both themes", async ({ page }) => {
-  await authenticatedApi(page);
-  await page.goto("/#assets");
+  await authenticatedApi(page, { ruleEditor: true, initialPolicyRules: [{ ordinal: 10, effect: "allow", principals: ["group:analysts"], columns: ["email"], masks: {}, row_filter: null, when: {} }] });
+  await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
 
   for (const theme of ["Light theme", "Dark theme"] as const) {
     await page.getByRole("combobox", { name: "Color theme" }).click();
     await page.getByRole("option", { name: theme, exact: true }).click();
-    const samples = await renderedContrastSamples(page, ".studio h2, .studio h3, .studio p, .studio button, .studio input, .studio select, .studio textarea");
+    const samples = await renderedContrastSamples(page, ".policy-authoring h2, .policy-authoring h3, .policy-authoring p, .policy-authoring button, .policy-authoring input, .policy-authoring select, .policy-authoring textarea");
     expect(samples.length).toBeGreaterThan(5);
     for (const sample of samples) {
       const ratio = contrastRatio(parseRgb(sample.color), parseRgb(sample.background));
@@ -183,9 +183,9 @@ test("forced-colors mode keeps authenticated workflows discoverable", async ({ p
   });
   await page.emulateMedia({ forcedColors: "active" });
 
-  await page.goto("/#assets");
+  await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
   await expect(page.getByRole("heading", { name: "orders" })).toBeVisible();
-  const policyControl = page.getByRole("button", { name: "Run policy test" });
+  const policyControl = page.getByRole("button", { name: "Test Policy", exact: true });
   await policyControl.focus();
   await expect(policyControl).toBeFocused();
   await expect.poll(() => policyControl.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
@@ -309,24 +309,25 @@ test("late pre-logout asset responses cannot repopulate a reauthenticated worksp
 
   await page.goto("/#assets");
   await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Assets" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Assets", exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("heading", { name: "Sign in to your workspace" })).toBeVisible();
   await page.getByLabel("Local control-plane token").fill("synthetic-token");
   await page.getByRole("button", { name: "Sign in locally" }).click();
+  await page.getByRole("button", { name: "beta-orders", exact: true }).click();
   await expect(page.getByRole("heading", { name: "beta-orders" })).toBeVisible();
   expect(await page.getByRole("heading", { name: "alpha-orders" }).count()).toBe(0);
-  await expect(page.locator(".studio")).toBeVisible();
+  await expect(page.locator(".policy-save-bar")).toBeVisible();
   const theme = page.getByRole("combobox", { name: "Color theme" });
   await theme.click();
   await page.getByRole("option", { name: "Dark theme", exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-mantine-color-scheme", "dark");
-  await expect(page.locator(".studio")).toHaveCSS("background-color", "rgb(23, 31, 44)");
+  await expect(page.locator(".policy-save-bar")).toHaveCSS("background-color", "rgb(23, 31, 44)");
   await theme.click();
   await page.getByRole("option", { name: "Light theme", exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-mantine-color-scheme", "light");
-  await expect(page.locator(".studio")).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(page.locator(".policy-save-bar")).toHaveCSS("background-color", "rgb(255, 255, 255)");
   staleSchemaRelease?.();
   await expect(page.getByRole("heading", { name: "beta-orders" })).toBeVisible();
 });

@@ -101,7 +101,7 @@ test("named rules stack, collapse without losing edits, and persist metadata", a
   await expect(page.getByLabel("Filter value 1")).toHaveCount(0);
   await page.getByLabel("Rule name", { exact: true }).fill("Analyst access");
   await page.getByLabel("Description", { exact: true }).fill("Reporting access with protected contact details");
-  await page.getByRole("button", { name: "Add rule", exact: true }).click();
+  await page.getByRole("button", { name: "New rule", exact: true }).click();
   const cards = page.locator('.collapsible-rule');
   await expect(cards).toHaveCount(2);
   await cards.nth(1).getByLabel("Rule name", { exact: true }).fill("Regional restriction");
@@ -150,13 +150,17 @@ test("allow all is an explicit removable bypass and discard restores restriction
 });
 
 test("column shortcuts select all, exclude a field, and add a prefix", async ({ page }) => {
+  await page.getByRole("button", { name: /Allowed columns:/ }).click();
   await page.getByRole("button", { name: "Select all", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Allowed columns: 3 selected" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Allowed columns: 3 selected" })).toHaveCount(1);
   await page.getByRole("button", { name: "Select all except…", exact: true }).click();
-  await page.getByLabel("Exclude a column or subtree").selectOption("phone");
-  await expect(page.getByRole("button", { name: "Allowed columns: 2 selected" })).toBeVisible();
+  await page.getByRole("combobox", { name: "Search allowed columns" }).fill("phone");
+  await page.getByRole("option", { name: /phone/ }).click();
+  await page.getByRole("button", { name: /Apply exclusions/ }).click();
+  await expect(page.getByRole("button", { name: "Allowed columns: 2 selected" })).toHaveCount(1);
   await page.getByRole("button", { name: "Add by prefix", exact: true }).click();
   await page.getByLabel("Column path prefix").fill("pho");
   await page.getByRole("button", { name: "Add matching columns", exact: true }).click();
+  await page.getByRole("button", { name: "Done", exact: true }).click();
   await expect(page.getByRole("button", { name: "Allowed columns: 3 selected" })).toBeVisible();
 });

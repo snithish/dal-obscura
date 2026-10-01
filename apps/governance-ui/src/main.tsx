@@ -641,8 +641,9 @@ function App() {
     setSaveState("unsaved"); setPreview(null); setNotice("Policy changed locally. Test saved policy to evaluate the last saved version.");
   }
   function addRule() {
-    const ordinal = Math.max(0, ...rules.map((rule) => rule.ordinal)) + 10;
-    replaceRules([...rulesRef.current, newRule(ordinal)]);
+    const current = rulesRef.current;
+    const ordinal = Math.max(0, ...current.map((rule) => rule.ordinal)) + 10;
+    replaceRules([...current, newRule(ordinal)]);
     policyEditEpoch.current += 1;
     setSaveState("unsaved"); setPreview(null);
     setNotice("New rule added locally. Add at least one principal before saving.");
@@ -682,7 +683,10 @@ function App() {
     setSaveState("saving");
     const controller = beginMutation();
     try {
-      const saved = await controlPlane.replaceAssetPolicy(assetId, revision, submittedRules, revokeExistingTokens, controller.signal);
+      // Ordinals define the server's display order. Preserve the local insertion
+      // order without changing component identities while forms are being edited.
+      const persistedRules = submittedRules.map((rule, index) => ({ ...rule, ordinal: (index + 1) * 10 }));
+      const saved = await controlPlane.replaceAssetPolicy(assetId, revision, persistedRules, revokeExistingTokens, controller.signal);
       if (loadScope === loadEpoch.current) { savedRules.current = submittedRules; setPolicyRevision(saved.policy_revision); }
       if (loadScope !== loadEpoch.current || editEpoch !== policyEditEpoch.current) {
         if (loadScope === loadEpoch.current) setSaveState("unsaved");

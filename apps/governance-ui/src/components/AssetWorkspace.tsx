@@ -11,6 +11,7 @@ import { isAbortError } from "../async";
 import { Icon } from "./Icon";
 import { PolicyRuleEditor } from "./PolicyRuleEditor";
 import { TokenInput } from "./TokenInput";
+import { SchemaSidebar } from "./SchemaSidebar";
 
 type SaveState = "saved" | "saving" | "unsaved" | "failed";
 function saveLabel(state: SaveState) { return ({ saved: "Saved", saving: "Saving", unsaved: "Unsaved changes", failed: "Save failed" })[state]; }
@@ -34,6 +35,8 @@ export function AssetWorkspace(props: {
   const [tab, setTab] = useState<AssetTab>(props.initialTab ?? "policy");
   const validationSummary = useRef<HTMLDivElement>(null);
   const [testOpen, setTestOpen] = useState(false);
+  const [schemaOpen, setSchemaOpen] = useState(false);
+  const schemaTrigger = useRef<HTMLButtonElement>(null);
   const [pending, setPending] = useState<Record<number, boolean>>({});
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set(props.rules.slice(0, 1).map((rule) => rule.ordinal)));
   const [generation, setGeneration] = useState(0);
@@ -41,12 +44,22 @@ export function AssetWorkspace(props: {
   const [revoke, setRevoke] = useState(false);
   const pendingRef = useRef(pending);
   const lastOrdinals = useRef(new Set(props.rules.map((rule) => rule.ordinal)));
+  const focusAddedRule = useRef(false);
+  const addRule = () => { focusAddedRule.current = true; props.onAddRule(); };
   const readOnly = !props.access?.capabilities.some((item) => item.capability === "edit" && item.allowed);
   const dirty = Object.values(pending).some(Boolean);
   const bypass = props.rules.some((rule) => rule.effect === "allow_all");
   useEffect(() => {
     const added = props.rules.filter((rule) => !lastOrdinals.current.has(rule.ordinal));
-    if (added.length) setExpanded((current) => new Set([...current, ...added.map((rule) => rule.ordinal)]));
+    if (added.length) {
+      setExpanded((current) => new Set([...current, ...added.map((rule) => rule.ordinal)]));
+      if (focusAddedRule.current) requestAnimationFrame(() => {
+        const name = document.querySelector<HTMLInputElement>(`#rule-body-${added[0].ordinal} input`);
+        name?.scrollIntoView({ block: "center", behavior: "instant" });
+        name?.focus({ preventScroll: true });
+      });
+      focusAddedRule.current = false;
+    }
     lastOrdinals.current = new Set(props.rules.map((rule) => rule.ordinal));
   }, [props.rules]);
   useEffect(() => { setPending({}); pendingRef.current = {}; setGeneration((value) => value + 1); setRevoke(false); setExpanded(new Set(props.rules.slice(0, 1).map((rule) => rule.ordinal))); }, [props.asset.id]);
@@ -77,17 +90,17 @@ export function AssetWorkspace(props: {
   }
   return <>
     <Button variant="subtle" onClick={props.onBack}>Back to assets</Button>
-    <div className="asset-summary"><span>{inventoryStatusLabel(props.asset)} · Live revision {props.activeRevision}</span><span className="save-status"><span className={`save-dot ${props.saveState}`} />{saveLabel(props.saveState)}</span></div>
-    <div className="notice" role="status">{props.notice}</div>
+    <div className="asset-summary"><div className="asset-context-tags"><span className={`policy-status-tag ${props.asset.policy_status === "configured" ? "configured" : "default"}`}><Icon name="shield-check" size={14} />{inventoryStatusLabel(props.asset)}</span><span className="context-tag">Live revision {props.activeRevision}</span><span className="context-tag">{props.asset.backend}</span></div><span className="save-status"><span className={`save-dot ${props.saveState}`} />{saveLabel(props.saveState)}</span></div>
+    {props.notice && <div className="notice" role="status">{props.notice}</div>}
     {Boolean(props.fieldErrors?.length) && <div ref={validationSummary} tabIndex={-1} className="validation-summary" role="alert">{props.fieldErrors!.map((item, index) => <p key={index}>{displayErrorField(item.field)}: {item.message}</p>)}</div>}
-    <Tabs value={tab} onChange={(value) => { if (value) selectTab(value as AssetTab); }}><div className="policy-view-tabs"><Tabs.List aria-label="Asset views">{(["policy", "access", "consumers"] as const).map((item) => <Tabs.Tab value={item} key={item}>{item[0].toUpperCase() + item.slice(1)}</Tabs.Tab>)}</Tabs.List><Button variant="default" onClick={() => setTestOpen(true)} leftSection={<Icon name="play" size={15} />}>Test Policy</Button></div>
-    <Tabs.Panel value={tab}>{tab === "policy" ? <div className="policy-authoring">
+    <Tabs value={tab} onChange={(value) => { if (value) selectTab(value as AssetTab); }}><div className="policy-view-tabs"><Tabs.List aria-label="Asset views">{(["policy", "access", "consumers"] as const).map((item) => <Tabs.Tab value={item} key={item}>{item[0].toUpperCase() + item.slice(1)}</Tabs.Tab>)}</Tabs.List><div className="policy-view-actions">{tab === "policy" && <Button ref={schemaTrigger} variant={schemaOpen ? "light" : "default"} aria-expanded={schemaOpen} aria-controls="asset-schema-sidebar" onClick={() => setSchemaOpen(!schemaOpen)} leftSection={<Icon name="database" size={15} />}>{schemaOpen ? "Hide schema" : "Show schema"}</Button>}<Button variant="default" onClick={() => setTestOpen(true)} leftSection={<Icon name="play" size={15} />}>Test Policy</Button></div></div>
+    <Tabs.Panel value={tab}>{tab === "policy" ? <div className={`policy-layout ${schemaOpen ? "with-schema" : ""}`}><div className="policy-authoring">
       <div className={`policy-baseline ${bypass ? "bypassed" : ""}`}><Icon name="shield-check" size={20} /><div><strong>{bypass ? "Allow all is enabled" : "Every column starts with a NULL mask"}</strong><p>{bypass ? "All authenticated readers receive every column and row, without masks. Other rules are bypassed." : "Rules reveal selected columns with no mask, or replace the default with another mask. Row filters are independent."}</p></div><Button variant="default" disabled={readOnly || bypass || dirty} onClick={props.onAllowAll}>Allow all to all users</Button></div>
-      <div className="policy-list-heading"><h2>Rules <span className="policy-count">{props.rules.length}</span></h2><Button disabled={readOnly} onClick={props.onAddRule} leftSection={<Icon name="plus" size={15} />}>Add rule</Button></div>
+      <div className="policy-list-heading"><h2>Rules <span className="context-tag">{props.rules.length}</span></h2><Button disabled={readOnly} onClick={addRule} leftSection={<Icon name="plus" size={15} />}>New rule</Button></div>
       <div className="stacked-rules">{props.rules.map((rule, index) => {
         const open = expanded.has(rule.ordinal); const title = rule.name?.trim() || `Rule ${index + 1}`;
         return <article className="collapsible-rule" key={`${props.asset.id}:${generation}:${rule.ordinal}`}>
-          <button className="rule-disclosure" type="button" aria-expanded={open} aria-controls={`rule-body-${rule.ordinal}`} onClick={() => setExpanded((current) => { const next = new Set(current); if (next.has(rule.ordinal)) next.delete(rule.ordinal); else next.add(rule.ordinal); return next; })}><Icon name="chevron-down" size={18} /><span><strong>{title}</strong><small>{rule.effect === "allow_all" ? "Global bypass" : `${rule.columns.length} selections · ${rule.principals.join(", ") || "No audience"}${rule.row_filter ? " · Filtered rows" : ""}`}</small></span>{pending[rule.ordinal] && <span className="local-edit-label">Unapplied edits</span>}</button>
+          <button className="rule-disclosure" type="button" aria-expanded={open} aria-controls={`rule-body-${rule.ordinal}`} onClick={() => setExpanded((current) => { const next = new Set(current); if (next.has(rule.ordinal)) next.delete(rule.ordinal); else next.add(rule.ordinal); return next; })}><Icon name="chevron-down" size={18} /><span><strong>{title}</strong><span className="rule-summary-tags">{rule.effect === "allow_all" ? <span className="context-tag">Global bypass</span> : <><span className="context-tag">{rule.columns.length} columns</span>{rule.principals.length ? rule.principals.map((principal) => <span className="audience-tag" key={principal}>{principal === "*" ? "All authenticated users" : principal}</span>) : <span className="context-tag">No audience</span>}{Boolean(Object.keys(rule.masks).length) && <span className="context-tag">{Object.keys(rule.masks).length} masks</span>}{rule.row_filter && <span className="context-tag">Filtered rows</span>}</>}</span></span>{pending[rule.ordinal] && <span className="local-edit-label">Unapplied edits</span>}</button>
           <div id={`rule-body-${rule.ordinal}`} className="rule-body" hidden={!open}>
             <div className="rule-metadata"><TextInput label="Rule name" maxLength={160} value={rule.name ?? ""} disabled={readOnly} onChange={(event) => { const name = event.currentTarget.value; props.onUpdateRule((current) => ({ ...current, name }), index); }} /><Textarea label="Description" maxLength={2000} autosize value={rule.description ?? ""} disabled={readOnly} placeholder="Explain who needs this access and why" onChange={(event) => { const description = event.currentTarget.value; props.onUpdateRule((current) => ({ ...current, description }), index); }} /></div>
             {rule.effect === "allow_all" ? <p className="policy-bypass-description">This rule short-circuits all column masks and row filters. Delete it to restore the other rules and the default NULL masks.</p> : <>
@@ -95,15 +108,15 @@ export function AssetWorkspace(props: {
               <details className="audience-conditions"><summary>Identity claim conditions</summary><ConditionBuilder value={rule.when} disabled={readOnly} onChange={(when) => props.onUpdateRule((current) => ({ ...current, when }), index)} /></details>
               <PolicyRuleEditor assetId={props.asset.id} ruleIndex={index} rule={rule} fields={props.asset.schema?.fields} supportedMasks={props.asset.schema?.supported_masks ?? []} readOnly={readOnly || bypass} onUpdateRule={(change) => props.onUpdateRule(change, index)} onDirtyChange={(value) => report(rule.ordinal, value)} />
             </>}
-            <div className="rule-footer"><Button variant="subtle" disabled={readOnly || dirty || rule.effect === "allow_all"} onClick={() => props.onDuplicateRule(index)}>Duplicate rule</Button><Button variant="subtle" color="red" disabled={readOnly || props.saveState === "saving"} onClick={() => { report(rule.ordinal, false); props.onRemoveRule(index); }}>Delete rule</Button></div>
+            <div className="rule-footer"><Button variant="subtle" disabled={readOnly || dirty || rule.effect === "allow_all"} onClick={() => props.onDuplicateRule(index)} leftSection={<Icon name="copy" size={14} />}>Duplicate rule</Button><Button variant="subtle" color="red" disabled={readOnly || props.saveState === "saving"} onClick={() => { report(rule.ordinal, false); props.onRemoveRule(index); }} leftSection={<Icon name="trash" size={14} />}>Delete rule</Button></div>
           </div>
         </article>;
       })}</div>
       {!props.rules.length && <div className="policy-empty"><p>No overrides. Every column returns NULL for authenticated readers.</p></div>}
       <div className="policy-save-bar"><Button variant="default" onClick={() => setTestOpen(true)} leftSection={<Icon name="play" size={15} />}>Test saved policy</Button><Button variant="default" disabled={readOnly || props.saveState === "saving" || (props.saveState === "saved" && !dirty)} onClick={discard}>Discard all changes</Button>{props.access?.can_revoke_tokens && <Checkbox label="Revoke existing tokens after saving" checked={revoke} onChange={(event) => setRevoke(event.currentTarget.checked)} />}{dirty && <p className="pending-edit-note">Apply or cancel open mask and row-filter forms before saving.</p>}<Button disabled={readOnly || dirty || props.saveState === "saving"} onClick={() => props.onSave(revoke)}>{props.saveState === "saving" ? "Saving…" : "Save policy"}</Button></div>
       <details className="policy-conflicts"><summary>How overlapping rules combine</summary><p>Order does not change the result. A matching grant overrides the default NULL mask. Between explicit masks, NULL wins and keep-last uses the smaller count; incompatible masks reject the read. Row filters combine with AND. Allow all bypasses everything.</p></details>
-    </div> : tab === "access" ? <AccessView asset={props.asset} access={props.access} grants={props.grants} session={props.session} onReload={props.onReloadAccess} onDirtyChange={(value) => { setAccessDirty(value); props.onDirtyChange?.(value || dirty); }} queryClient={props.queryClient} sessionScope={props.sessionScope} revokingTokens={props.revokingTokens} onRevokeTokens={props.onRevokeTokens ?? (() => undefined)} /> : <ConsumerView asset={props.asset} />}</Tabs.Panel></Tabs>
-    <Modal opened={testOpen} onClose={() => setTestOpen(false)} title="Test policy" size="lg" keepMounted><TestsView busy={props.previewBusy} error={props.previewError} unsaved={props.saveState !== "saved" || dirty} onPreview={props.onPreview} preview={props.preview} principal={props.previewPrincipal} groups={props.previewGroups} claims={props.previewClaims} onPrincipal={props.onPreviewPrincipal} onGroups={props.onPreviewGroups} onClaims={props.onPreviewClaims} />{props.preview && <div className="policy-test-result"><h3>Effective values</h3><ul>{props.preview.allowed_columns.map((column) => <li key={column}><code>{column}</code><span>{props.preview!.masks[column]?.type ?? "No mask"}</span></li>)}</ul><h3>Combined row filter</h3><code>{props.preview.row_filter ?? "All rows"}</code></div>}</Modal>
+    </div>{schemaOpen && <SchemaSidebar schema={props.asset.schema} onClose={() => { setSchemaOpen(false); schemaTrigger.current?.focus(); }} />}</div> : tab === "access" ? <AccessView asset={props.asset} access={props.access} grants={props.grants} session={props.session} onReload={props.onReloadAccess} onDirtyChange={(value) => { setAccessDirty(value); props.onDirtyChange?.(value || dirty); }} queryClient={props.queryClient} sessionScope={props.sessionScope} revokingTokens={props.revokingTokens} onRevokeTokens={props.onRevokeTokens ?? (() => undefined)} /> : <ConsumerView asset={props.asset} />}</Tabs.Panel></Tabs>
+    <Modal opened={testOpen} onClose={() => setTestOpen(false)} title="Test policy" size="lg" keepMounted closeButtonProps={{ "aria-label": "Close policy test" }}><TestsView busy={props.previewBusy} error={props.previewError} unsaved={props.saveState !== "saved" || dirty} onPreview={props.onPreview} preview={props.preview} principal={props.previewPrincipal} groups={props.previewGroups} claims={props.previewClaims} onPrincipal={props.onPreviewPrincipal} onGroups={props.onPreviewGroups} onClaims={props.onPreviewClaims} />{props.preview && <div className="policy-test-result"><h3>Effective values</h3><ul>{props.preview.allowed_columns.map((column) => <li key={column}><code>{column}</code><span>{props.preview!.masks[column]?.type ?? "No mask"}</span></li>)}</ul><h3>Combined row filter</h3><code>{props.preview.row_filter ?? "All rows"}</code></div>}</Modal>
   </>;
 }
 

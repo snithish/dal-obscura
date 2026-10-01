@@ -174,6 +174,10 @@ the complete policy atomically against its revision. Matching rule filters
 combine with AND; exemptions skip only the specified rule's mask and never
 bypass row restrictions or masks from another rule. Policy tests evaluate the
 saved policy version.
+The searchable column picker previews bulk selections, multiple exclusions, and
+prefix matches. A collapsible schema reference keeps nested paths and types
+nearby, and a sticky rules toolbar keeps one **New rule** action within reach. See the
+[UI before/after review](docs/ui-review/review.html) for screenshots and rationale.
 To invalidate existing tickets, revoke them from the asset's Access view or
 choose **Revoke existing tokens after saving** in the policy editor.
 

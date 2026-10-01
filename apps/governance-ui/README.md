@@ -14,6 +14,24 @@ configuration and policies; administrative permissions do not grant Flight data 
 - Manage catalog connections, owners, grants, authentication providers, and runtime settings.
 - Obtain Python/DuckDB, Spark, and Arrow consumer instructions.
 
+The policy workspace shows audience, column, mask, and revision metadata as tags.
+Use **Browse columns** to search names or types, review selected paths, and select
+or deselect only matching results. **Select all** uses every schema leaf;
+**Select all except…** previews multiple field or subtree exclusions before
+applying them; **Add by prefix** previews matches and keeps existing selections.
+These controls change the local rule; **Save policy** persists the complete policy.
+
+**Show schema** opens a searchable, collapsible reference beside the rules on wide
+screens and above them on narrow screens. It shows nested paths, types, and
+nullability without changing access. The rules toolbar has one **New rule** action
+that stays visible while scrolling on desktop and mobile. It appends a rule,
+opens its editor, and focuses its name. Rule footers contain only duplicate and
+delete actions for that rule. Inventory owner tags open
+the complete principal identity, including its issuer, without stretching rows.
+
+See the [visual before/after review](../../docs/ui-review/review.html) for the
+design rationale and representative browser captures.
+
 Edits remain local until saved. Successful policy saves immediately affect new
 plans; issued tickets retain captured access until expiry unless revoked.
 Runtime and authentication startup settings require worker restarts. See

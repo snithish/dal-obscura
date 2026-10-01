@@ -82,14 +82,13 @@ export function AppShell(props: AppShellProps) {
       </MantineAppShell.Navbar>
       <Drawer opened={props.mobileNavOpen} onClose={props.onMobileNavClose} title="Navigation" closeButtonProps={{ "aria-label": "Close navigation" }} size="xs">{links}</Drawer>
       <MantineAppShell.Main className="workbench-main">
-        <nav aria-label="Breadcrumbs"><Breadcrumbs>
+        <nav aria-label="Breadcrumbs" className="workspace-breadcrumbs"><Breadcrumbs>
           <a href="#assets" onClick={(event) => { event.preventDefault(); props.onNavigate("assets"); }}>Workspace</a>
           {props.page === "assets" && props.assetName && <a href="#assets" onClick={(event) => { event.preventDefault(); props.onNavigate("assets"); }}>Assets</a>}
-          {props.page === "assets" && props.assetCatalog && <Text size="sm">{props.assetCatalog}</Text>}
-          <Text size="sm" aria-current="page">{props.page === "assets" ? props.assetName ?? "Assets" : navigation.find((item) => item.page === props.page)?.label}</Text>
+          {props.page === "assets" && props.assetCatalog && <span className="context-tag"><Icon name="database" size={12} />{props.assetCatalog}</span>}
+          <Text size="sm" aria-current="page" className="breadcrumb-current" title={props.assetName}>{props.page === "assets" ? props.assetName ?? "Assets" : navigation.find((item) => item.page === props.page)?.label}</Text>
         </Breadcrumbs></nav>
-        <Text size="sm" c="dimmed" className="workbench-origin">Workspace address: {window.location.host}</Text>
-        <Title order={1}>{props.page === "assets" ? props.assetName ?? "Assets" : navigation.find((item) => item.page === props.page)?.label}</Title>
+        <div className="workspace-page-heading"><Title order={1}>{props.page === "assets" ? props.assetName ?? "Assets" : navigation.find((item) => item.page === props.page)?.label}</Title><span className="context-tag workbench-origin" title={`Workspace address: ${window.location.host}`}><span className="status-dot" aria-hidden="true" />{window.location.host}</span></div>
         {props.children}
       </MantineAppShell.Main>
     </MantineAppShell>

@@ -8,7 +8,7 @@ test.beforeEach(async ({ page }) => {
 test("discard dialog preserves edits, traps focus, and defaults to keep editing", async ({ page }, testInfo) => {
   await authenticatedApi(page, { ruleEditor: true });
   await page.goto("/?asset=00000000-0000-4000-8000-000000000001#assets");
-  await page.getByRole("button", { name: "Add rule", exact: true }).click();
+  await page.getByRole("button", { name: "New rule", exact: true }).click();
   await page.getByLabel("Rule name").fill("Sensitive data");
   const back = page.getByRole("button", { name: "Back to assets", exact: true });
   await back.click();
