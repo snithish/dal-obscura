@@ -6,7 +6,7 @@ from typing import Any, cast
 import pyarrow as pa
 import pytest
 from dal_obscura_manifest_parquet.format import FORMAT_DESCRIPTOR
-from dal_obscura_plugin_api import ExecutionContext, TableHandle, TableIdentifier
+from dal_obscura_plugin_api import ExecutionContext, ScanTask, TableHandle, TableIdentifier
 
 from dal_obscura.read.request import PlanRequest
 from dal_obscura.sources.plugin_runtime import (
@@ -33,14 +33,14 @@ def test_public_format_rejects_opaque_task_payloads_before_ticket_serialization(
         def close(self):
             return None
 
-        def schema(self, value, context):
-            del value, context
+        def schema(self, context):
+            del context
             from dal_obscura_plugin_api import SchemaDescriptor
 
-            return SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=schema)
+            return SchemaDescriptor(arrow_schema=schema)
 
-        def plan(self, value, descriptor, context, *, projection, row_filter, max_tasks):
-            del value, descriptor, context, projection, row_filter, max_tasks
+        def plan(self, request, context):
+            del request, context
             return [object()]
 
         def execute(self, task, context):
@@ -54,7 +54,7 @@ def test_public_format_rejects_opaque_task_payloads_before_ticket_serialization(
         format_factory=lambda value, context: OpaqueFormat(),
         handle=handle,
     )
-    with pytest.raises(ValueError, match="inert JSON-like"):
+    with pytest.raises(ValueError, match="immutable ScanTask"):
         table_format.plan(PlanRequest(target="default.users", columns=["*"]), max_tickets=2)
 
 
@@ -72,18 +72,14 @@ def test_public_format_requires_explicit_close_lifecycle() -> None:
     class MissingCloseFormat:
         descriptor = FORMAT_DESCRIPTOR
 
-        def schema(self, value, context):
-            del value, context
+        def schema(self, context):
+            del context
             from dal_obscura_plugin_api import SchemaDescriptor
 
-            return SchemaDescriptor(
-                schema_version=1,
-                fingerprint="0" * 64,
-                arrow_schema=pa.schema([pa.field("id", pa.int64())]),
-            )
+            return SchemaDescriptor(arrow_schema=pa.schema([pa.field("id", pa.int64())]))
 
-        def plan(self, value, descriptor, context, *, projection, row_filter, max_tasks):
-            del value, descriptor, context, projection, row_filter, max_tasks
+        def plan(self, request, context):
+            del request, context
             return []
 
         def execute(self, task, context):
@@ -118,12 +114,12 @@ def test_public_format_preserves_schema_error_when_close_fails() -> None:
         def close(self):
             raise RuntimeError("close failed")
 
-        def schema(self, value, context):
-            del value, context
+        def schema(self, context):
+            del context
             return object()
 
-        def plan(self, value, descriptor, context, *, projection, row_filter, max_tasks):
-            del value, descriptor, context, projection, row_filter, max_tasks
+        def plan(self, request, context):
+            del request, context
             return []
 
         def execute(self, task, context):
@@ -163,15 +159,15 @@ def test_public_format_validates_lazy_batch_schema_before_streaming() -> None:
             if self.executed:
                 raise RuntimeError("close failed")
 
-        def schema(self, value, context):
-            del value, context
+        def schema(self, context):
+            del context
             from dal_obscura_plugin_api import SchemaDescriptor
 
-            return SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=schema)
+            return SchemaDescriptor(arrow_schema=schema)
 
-        def plan(self, value, descriptor, context, *, projection, row_filter, max_tasks):
-            del value, descriptor, context, projection, row_filter, max_tasks
-            return ["task"]
+        def plan(self, request, context):
+            del request, context
+            return [ScanTask({"id": "task"})]
 
         def execute(self, task, context):
             del task, context
@@ -211,15 +207,15 @@ def test_public_format_stops_lazy_batches_when_context_is_cancelled(monkeypatch)
         def close(self):
             return None
 
-        def schema(self, value, context):
-            del value, context
+        def schema(self, context):
+            del context
             from dal_obscura_plugin_api import SchemaDescriptor
 
-            return SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=schema)
+            return SchemaDescriptor(arrow_schema=schema)
 
-        def plan(self, value, descriptor, context, *, projection, row_filter, max_tasks):
-            del value, descriptor, context, projection, row_filter, max_tasks
-            return ["task"]
+        def plan(self, request, context):
+            del request, context
+            return [ScanTask({"id": "task"})]
 
         def execute(self, task, context):
             del task, context
@@ -250,7 +246,7 @@ def test_public_format_stops_lazy_batches_when_context_is_cancelled(monkeypatch)
     )
     plan = table_format.plan(PlanRequest(target="default.users", columns=["*"]), max_tickets=2)
     _schema, batches = plan.tasks[0].table_format.execute(plan.tasks[0].partition)
-    with pytest.raises(ValueError, match="cancelled"):
+    with pytest.raises(InterruptedError, match="cancelled"):
         list(batches)
 
 
@@ -270,15 +266,15 @@ def test_public_format_closes_plugin_after_lazy_output_is_consumed() -> None:
     class ClosableFormat:
         descriptor = FORMAT_DESCRIPTOR
 
-        def schema(self, value, context):
-            del value, context
+        def schema(self, context):
+            del context
             from dal_obscura_plugin_api import SchemaDescriptor
 
-            return SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=schema)
+            return SchemaDescriptor(arrow_schema=schema)
 
-        def plan(self, value, descriptor, context, *, projection, row_filter, max_tasks):
-            del value, descriptor, context, projection, row_filter, max_tasks
-            return ["task"]
+        def plan(self, request, context):
+            del request, context
+            return [ScanTask({"id": "task"})]
 
         def execute(self, task, context):
             del task, context
@@ -319,16 +315,14 @@ def test_public_format_rejects_factory_descriptor_mismatch() -> None:
         def close(self):
             return None
 
-        def schema(self, value, context):
-            del value, context
+        def schema(self, context):
+            del context
             from dal_obscura_plugin_api import SchemaDescriptor
 
-            return SchemaDescriptor(
-                schema_version=1, fingerprint="0" * 64, arrow_schema=pa.schema([])
-            )
+            return SchemaDescriptor(arrow_schema=pa.schema([]))
 
-        def plan(self, value, descriptor, context, *, projection, row_filter, max_tasks):
-            del value, descriptor, context, projection, row_filter, max_tasks
+        def plan(self, request, context):
+            del request, context
             return []
 
         def execute(self, task, context):
@@ -364,16 +358,14 @@ def test_public_format_rejects_false_stable_id_claim() -> None:
         def close(self):
             return None
 
-        def schema(self, value, context):
-            del value, context
+        def schema(self, context):
+            del context
             from dal_obscura_plugin_api import SchemaDescriptor
 
-            return SchemaDescriptor(
-                schema_version=1, fingerprint="0" * 64, arrow_schema=schema, stable_ids=True
-            )
+            return SchemaDescriptor(arrow_schema=schema, stable_ids=True)
 
-        def plan(self, value, descriptor, context, *, projection, row_filter, max_tasks):
-            del value, descriptor, context, projection, row_filter, max_tasks
+        def plan(self, request, context):
+            del request, context
             return []
 
         def execute(self, task, context):
@@ -412,14 +404,14 @@ def test_public_format_rejects_schema_depth_before_plugin_execution() -> None:
         def close(self):
             return None
 
-        def schema(self, value, context):
-            del value, context
+        def schema(self, context):
+            del context
             from dal_obscura_plugin_api import SchemaDescriptor
 
-            return SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=schema)
+            return SchemaDescriptor(arrow_schema=schema)
 
-        def plan(self, value, descriptor, context, *, projection, row_filter, max_tasks):
-            del value, descriptor, context, projection, row_filter, max_tasks
+        def plan(self, request, context):
+            del request, context
             return []
 
         def execute(self, task, context):
@@ -480,7 +472,7 @@ def test_optional_filter_pushdown_keeps_full_filter_for_core():
     table, calls = _contract_format(schema)
     row_filter = parse_row_filter("id > 0", schema)
     plan = table.plan(PlanRequest(target="default.users", columns=["id"], row_filter=row_filter), 2)
-    assert calls[1]["row_filter"] is None
+    assert calls[1].row_filter is None
     assert plan.full_row_filter == row_filter
     assert plan.residual_row_filter == row_filter
 
@@ -496,7 +488,7 @@ def test_backend_projection_uses_literal_top_level_names():
     plan = table.plan(
         PlanRequest(target="default.users", columns=['["profile.email"]', "profile.email"]), 2
     )
-    assert calls[1]["projection"] == ["profile.email", "profile"]
+    assert calls[1].columns == ("profile.email", "profile")
     assert plan.tasks[0].partition.schema == schema
 
 
@@ -534,7 +526,7 @@ def test_expired_batch_context_does_not_read_source():
     context = ExecutionContext(
         deadline=datetime.now(timezone.utc) - timedelta(seconds=1), correlation_id="expired"
     )
-    with pytest.raises(ValueError, match="deadline"):
+    with pytest.raises(TimeoutError, match="deadline"):
         list(_checked_plugin_batches(source(), pa.schema([pa.field("id", pa.int64())]), context))
     assert read == []
 
@@ -549,9 +541,9 @@ def test_bound_source_acquires_plugin_and_schema_once():
         plugin = base.format_factory(handle, context)
         original = plugin.schema
 
-        def read_schema(handle, context):
+        def read_schema(context):
             calls.append("schema")
-            return original(handle, context)
+            return original(context)
 
         plugin.schema = read_schema
         return plugin
@@ -561,3 +553,31 @@ def test_bound_source_acquires_plugin_and_schema_once():
         assert bound.get_schema() == schema
         bound.plan(PlanRequest(target="default.users", columns=["id"]), 1)
     assert calls.count("open") == calls.count("schema") == calls.count("close") == 1
+
+
+@pytest.mark.parametrize("invalid_task", [False, True], ids=["budget", "untyped-task"])
+def test_runtime_closes_lazy_plans_before_closing_the_plugin(invalid_task):
+    schema = pa.schema([("id", pa.int64())])
+    base, _ = _contract_format(schema)
+    closed = []
+
+    def factory(handle, context):
+        plugin = base.format_factory(handle, context)
+
+        def plan(request, context):
+            try:
+                yield object() if invalid_task else ScanTask({"file": "first"})
+                yield ScanTask({"file": "second"})
+            finally:
+                closed.append("plan")
+
+        plugin.plan = plan
+        plugin.close = lambda: closed.append("plugin")
+        return plugin
+
+    from dataclasses import replace
+
+    table = replace(base, format_factory=factory)
+    with pytest.raises(ValueError, match=r"immutable ScanTask|more tasks"):
+        table.plan(PlanRequest(target="default.users", columns=["id"]), 1)
+    assert closed == ["plan", "plugin"]

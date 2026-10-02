@@ -25,9 +25,6 @@ def test_catalog_runner_validates_bounded_discovery_and_coverage():
     class _Catalog:
         descriptor = _catalog_descriptor()
 
-        def validate_config(self, context):
-            del context
-
         def list_namespaces(self, context):
             del context
             return (("default",),)
@@ -44,7 +41,7 @@ def test_catalog_runner_validates_bounded_discovery_and_coverage():
     result = run_catalog_checks(
         cast(CatalogPlugin, _Catalog()),
         _catalog_context(),
-        expected_table_ids={"default.users", "default.orders"},
+        expected_identifiers={users, orders},
         artifact_identity="sha256:catalog",
     )
 
@@ -68,15 +65,12 @@ def test_catalog_runner_requires_lifecycle_operations() -> None:
     result = run_catalog_checks(cast(CatalogPlugin, NoLifecycle()), _catalog_context())
 
     assert result.to_dict()["status"] == "failed"
-    assert any("validate_config" in failure for failure in result.failures)
+    assert any("list_namespaces" in failure for failure in result.failures)
 
 
 def test_catalog_runner_rejects_oversized_namespace_discovery() -> None:
     class _WideCatalog:
         descriptor = _catalog_descriptor()
-
-        def validate_config(self, context):
-            del context
 
         def list_namespaces(self, context):
             del context
@@ -102,10 +96,6 @@ def test_catalog_runner_validates_budgets_before_provider_calls() -> None:
 
     class _Catalog:
         descriptor = _catalog_descriptor()
-
-        def validate_config(self, context):
-            del context
-            calls.append("validate")
 
         def list_namespaces(self, context):
             del context
@@ -135,10 +125,6 @@ def test_catalog_runner_honors_expired_context_before_lifecycle() -> None:
     class ExpiredCatalog:
         descriptor = _catalog_descriptor()
 
-        def validate_config(self, context):
-            del context
-            called.append(True)
-
         def list_namespaces(self, context):
             del context
             return (("default",),)
@@ -155,7 +141,7 @@ def test_catalog_runner_honors_expired_context_before_lifecycle() -> None:
     )
 
     assert result.to_dict()["status"] == "failed"
-    assert any("deadline expired" in failure for failure in result.failures)
+    assert any("deadline" in failure for failure in result.failures)
     assert called == []
 
 
@@ -164,9 +150,6 @@ def test_catalog_runner_rejects_omitted_expected_table():
 
     class _IncompleteCatalog:
         descriptor = _catalog_descriptor()
-
-        def validate_config(self, context):
-            del context
 
         def list_namespaces(self, context):
             del context
@@ -182,7 +165,7 @@ def test_catalog_runner_rejects_omitted_expected_table():
     result = run_catalog_checks(
         cast(CatalogPlugin, _IncompleteCatalog()),
         _catalog_context(),
-        expected_table_ids={"default.users", "default.orders"},
+        expected_identifiers={users, TableIdentifier(("default",), "orders")},
     )
     assert result.to_dict()["status"] == "failed"
     assert any("do not match expected coverage" in failure for failure in result.failures)
@@ -197,9 +180,6 @@ def test_catalog_runner_rejects_duplicate_and_cyclic_pages(plugin_type, message)
 
     class _BadCatalog:
         descriptor = _catalog_descriptor()
-
-        def validate_config(self, context):
-            del context
 
         def list_namespaces(self, context):
             del context
@@ -232,9 +212,6 @@ def test_catalog_runner_stops_before_requesting_after_cancellation():
     class _CancelledCatalog:
         descriptor = _catalog_descriptor()
 
-        def validate_config(self, context):
-            del context
-
         def list_namespaces(self, context):
             del context
             return (("default",),)
@@ -252,5 +229,5 @@ def test_catalog_runner_stops_before_requesting_after_cancellation():
         cast(CatalogPlugin, _CancelledCatalog()), _catalog_context(cancel_check=cancelled)
     )
     assert result.to_dict()["status"] == "failed"
-    assert any("cancelled while discovering" in failure for failure in result.failures)
+    assert any("cancelled" in failure for failure in result.failures)
     assert requested == 0

@@ -30,7 +30,7 @@ from dal_obscura.sources.discovery import (
     _namespace_tuple,
     _walk_namespaces,
 )
-from dal_obscura.sources.plugin_runtime import _ensure_context_active, _table_identifier
+from dal_obscura.sources.plugin_runtime import _table_identifier
 
 _ICEBERG_CATALOG_ID = "iceberg.sql"
 _ICEBERG_FORMAT_ID = "iceberg"
@@ -73,15 +73,12 @@ class SqlCatalog:
         self._closed = False
         self._listing_context: ExecutionContext | None = None
         self._listing: tuple[str, ...] = ()
-        self.validate_config(context)
-
-    def validate_config(self, context: ExecutionContext) -> None:
-        _ensure_context_active(context)
-        if self._closed:
-            raise ValueError("SQL catalog is closed")
+        context.check_active()
 
     def _provider(self, context: ExecutionContext):
-        self.validate_config(context)
+        context.check_active()
+        if self._closed:
+            raise ValueError("SQL catalog is closed")
         if self._catalog is None:
             options = dict(self.config.options)
             self._catalog = _load_iceberg_catalog(
@@ -91,7 +88,7 @@ class SqlCatalog:
 
     def resolve_table(self, identifier: TableIdentifier, context: ExecutionContext) -> TableHandle:
         table = self._provider(context).load_table((*identifier.namespace, identifier.name))
-        _ensure_context_active(context)
+        context.check_active()
         location = table.metadata_location
         if not isinstance(location, str) or not location.strip():
             raise ValueError("Iceberg catalog returned no metadata location")
@@ -143,7 +140,7 @@ class SqlCatalog:
                     cancel_check=context.cancel_check,
                     deadline_at=deadline_at,
                 ):
-                    _ensure_context_active(context)
+                    context.check_active()
                     identifiers.add(_identifier_to_name(identifier))
             self._listing = tuple(sorted(identifiers))
             self._listing_context = context

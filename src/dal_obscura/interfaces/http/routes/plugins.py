@@ -63,17 +63,8 @@ def router(deps: ControlPlaneDeps) -> APIRouter:
 
 def _descriptor_payload(descriptor: PluginDescriptor) -> dict[str, object]:
     return {
-        "kind": descriptor.kind,
-        "plugin_id": descriptor.plugin_id,
-        "api_version": descriptor.api_version,
-        "config_version": descriptor.config_version,
-        "distribution": descriptor.distribution,
-        "version": descriptor.version,
+        **descriptor.to_json(),
         "display_name": descriptor.display_name or descriptor.plugin_id,
-        "capabilities": sorted(descriptor.capabilities),
-        "output_formats": sorted(descriptor.output_formats),
-        "handle_versions": sorted(descriptor.handle_versions),
-        "config_schema": dict(descriptor.config_schema),
         "status": "admitted",
     }
 

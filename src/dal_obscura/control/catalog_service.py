@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import ipaddress
 import math
+from collections.abc import Mapping
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from math import isfinite
@@ -399,12 +400,14 @@ def validate_descriptor_options(
     """Enforce the bounded declarative fields exposed by an admitted plugin."""
 
     raw_fields = descriptor.config_schema.get("fields")
-    if not isinstance(raw_fields, list):
+    if not isinstance(raw_fields, (list, tuple)):
         return
-    field_specs = [cast(dict[str, object], item) for item in raw_fields if isinstance(item, dict)]
+    field_specs = [
+        cast(Mapping[str, object], item) for item in raw_fields if isinstance(item, Mapping)
+    ]
     fields = {item.get("name") for item in field_specs if isinstance(item.get("name"), str)}
     raw_defaults = descriptor.config_schema.get("defaults")
-    if isinstance(raw_defaults, dict):
+    if isinstance(raw_defaults, Mapping):
         fields.update(key for key in raw_defaults if isinstance(key, str))
     if unknown := sorted(set(options) - fields):
         raise ValidationFailure(f"{kind} options contain unsupported fields: " + ", ".join(unknown))
@@ -445,7 +448,7 @@ def _validate_descriptor_value(  # noqa: C901
     ):
         raise ValidationFailure(f"{kind} option {name!r} must be a finite number")
     if field_type == "enum":
-        if not isinstance(choices, list) or not choices:
+        if not isinstance(choices, (list, tuple)) or not choices:
             raise ValidationFailure(f"{kind} option {name!r} has no valid enum choices")
         if value not in choices:
             raise ValidationFailure(f"{kind} option {name!r} must be one of the declared choices")

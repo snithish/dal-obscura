@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -13,11 +13,11 @@ from dal_obscura_plugin_api import (
     CatalogPlugin,
     DiscoveryPage,
     ExecutionContext,
+    ScanRequest,
+    ScanTask,
     SchemaDescriptor,
     TableFormatPlugin,
-    TableHandle,
     TableIdentifier,
-    validate_task_payload,
 )
 
 DEFAULT_MAX_OUTPUT_BATCHES = 1_024
@@ -154,7 +154,7 @@ def check_discovery_page(page: DiscoveryPage, *, result: ConformanceResult | Non
         result.record_pass("discovery_page")
 
 
-def check_record_batches(  # noqa: C901
+def check_record_batches(
     schema: pa.Schema,
     batches: Iterable[pa.RecordBatch],
     *,
@@ -162,12 +162,11 @@ def check_record_batches(  # noqa: C901
     max_batches: int = DEFAULT_MAX_OUTPUT_BATCHES,
     max_rows: int = DEFAULT_MAX_OUTPUT_ROWS,
     max_batch_bytes: int = DEFAULT_MAX_BATCH_BYTES,
-    cancel_check: Callable[[], bool] | None = None,
-    deadline: datetime | None = None,
+    context: ExecutionContext | None = None,
 ) -> None:
     """Incrementally validate output without allowing unbounded materialization.
 
-    ``cancel_check`` and ``deadline`` are sampled before every batch so a
+    The operation context is checked before every batch so a
     provider cannot continue producing output after the core has withdrawn the
     request.  The iterator is deliberately never collected into a table.
     """
@@ -180,10 +179,8 @@ def check_record_batches(  # noqa: C901
     index = 0
     try:
         while True:
-            if deadline is not None and datetime.now(timezone.utc) >= deadline:
-                raise TimeoutError("execution context deadline expired while reading output")
-            if cancel_check is not None and cancel_check():
-                raise RuntimeError("execution context was cancelled while reading output")
+            if context is not None:
+                context.check_active()
             try:
                 batch = next(iterator)
             except StopIteration:
@@ -192,20 +189,22 @@ def check_record_batches(  # noqa: C901
                 raise ValueError(f"format returned more than {max_batches} output batches")
             if not isinstance(batch, pa.RecordBatch):
                 raise ValueError(f"batch {index} is not an Arrow record batch")
-            if batch.schema != schema:
+            if not batch.schema.equals(schema, check_metadata=True):
                 raise ValueError(f"batch {index} schema differs from the declared output schema")
             if batch.nbytes > max_batch_bytes:
                 raise ValueError(
                     f"batch {index} exceeds the {max_batch_bytes}-byte batch byte budget"
                 )
-            if set(batch.schema.names) != set(schema.names):
-                raise ValueError(f"batch {index} contains undeclared output columns")
             row_count += batch.num_rows
             if row_count > max_rows:
                 raise ValueError(f"format returned more than {max_rows} output rows")
             index += 1
     finally:
-        _close_iterable_preserving_error(batches)
+        try:
+            if iterator is not batches:
+                _close_iterable_preserving_error(iterator)
+        finally:
+            _close_iterable_preserving_error(batches)
     if result is not None:
         result.record_pass("record_batches")
 
@@ -225,9 +224,9 @@ def _close_iterable_preserving_error(value: object) -> None:
 
 
 def _check_task_coverage(
-    tasks: Sequence[object],
+    tasks: Sequence[ScanTask],
     expected_task_ids: Iterable[str] | None,
-    task_identity: Callable[[object], str] | None,
+    task_identity: Callable[[ScanTask], str] | None,
     result: ConformanceResult,
 ) -> None:
     if expected_task_ids is None:
@@ -256,7 +255,7 @@ def run_catalog_checks(  # noqa: C901
     max_pages: int = DEFAULT_MAX_DISCOVERY_PAGES,
     max_namespaces: int = DEFAULT_MAX_DISCOVERY_NAMESPACES,
     max_tables: int = DEFAULT_MAX_DISCOVERY_TABLES,
-    expected_table_ids: Iterable[str] | None = None,
+    expected_identifiers: Iterable[TableIdentifier] | None = None,
     artifact_identity: str | None = None,
 ) -> ConformanceResult:
     """Run bounded discovery checks against one admitted catalog plugin."""
@@ -271,17 +270,12 @@ def run_catalog_checks(  # noqa: C901
     try:
         if descriptor.kind != "catalog":
             raise ValueError("catalog conformance requires a catalog plugin descriptor")
-        validate_config = getattr(plugin, "validate_config", None)
-        list_namespaces = getattr(plugin, "list_namespaces", None)
-        if not callable(validate_config) or not callable(list_namespaces):
-            raise ValueError("catalog plugin must expose validate_config() and list_namespaces()")
         if page_size <= 0 or max_pages <= 0 or max_namespaces <= 0 or max_tables <= 0:
             raise ValueError("catalog discovery budgets must be positive")
-        _check_context(context, "validating catalog configuration")
-        validate_config(context)
-        _check_context(context, "listing catalog namespaces")
-        namespaces = list_namespaces(context)
-        _check_context(context, "checking catalog namespaces")
+        context.check_active()
+        context.check_active()
+        namespaces = plugin.list_namespaces(context)
+        context.check_active()
         if not isinstance(namespaces, tuple) or any(
             not isinstance(namespace, tuple)
             or not namespace
@@ -296,10 +290,7 @@ def run_catalog_checks(  # noqa: C901
         seen_continuations: set[str] = set()
         identifiers: list[TableIdentifier] = []
         for _page_index in range(max_pages):
-            if datetime.now(timezone.utc) >= context.deadline:
-                raise TimeoutError("execution context deadline expired while discovering")
-            if context.cancel_check is not None and context.cancel_check():
-                raise RuntimeError("execution context was cancelled while discovering")
+            context.check_active()
             page = plugin.list_tables(context, continuation=continuation, limit=page_size)
             check_discovery_page(page)
             if len(page.entries) > page_size:
@@ -319,9 +310,9 @@ def run_catalog_checks(  # noqa: C901
         if len(identities) != len(set(identities)):
             raise ValueError("catalog returned duplicate table identities")
         result.record_pass("bounded_discovery")
-        if expected_table_ids is None:
+        if expected_identifiers is None:
             result.record_skip("discovery_coverage", "no expected table identities supplied")
-        elif {".".join(identity) for identity in identities} != set(expected_table_ids):
+        elif set(identifiers) != set(expected_identifiers):
             raise ValueError("catalog table identities do not match expected coverage")
         else:
             result.record_pass("discovery_coverage")
@@ -340,26 +331,15 @@ def run_catalog_checks(  # noqa: C901
     return result
 
 
-def _check_context(context: ExecutionContext, operation: str) -> None:
-    if datetime.now(timezone.utc) >= context.deadline:
-        raise TimeoutError(f"execution context deadline expired while discovering ({operation})")
-    if context.cancel_check is not None and context.cancel_check():
-        raise RuntimeError(f"execution context was cancelled while discovering ({operation})")
-
-
-def run_format_checks(  # noqa: C901
+def run_format_checks(
     plugin: TableFormatPlugin,
-    handle: TableHandle,
-    schema: SchemaDescriptor,
+    request: ScanRequest,
     context: ExecutionContext,
     *,
-    projection: Sequence[str] = (),
-    row_filter: str | None = None,
-    max_tasks: int = 64,
     required_capabilities: Iterable[str] = (),
     artifact_identity: str | None = None,
     expected_task_ids: Iterable[str] | None = None,
-    task_identity: Callable[[object], str] | None = None,
+    task_identity: Callable[[ScanTask], str] | None = None,
 ) -> ConformanceResult:
     """Run bounded plan/schema/output checks against one admitted format plugin."""
 
@@ -371,51 +351,54 @@ def run_format_checks(  # noqa: C901
         capability_matrix=dict.fromkeys(sorted(descriptor.capabilities), True),
     )
     try:
-        if context.deadline <= datetime.now(timezone.utc):
-            raise TimeoutError("execution context deadline has expired")
-        if context.cancel_check is not None and context.cancel_check():
-            raise RuntimeError("execution context was cancelled")
+        context.check_active()
         check_capabilities(descriptor.capabilities, required_capabilities, result=result)
+        schema = plugin.schema(context)
         check_schema_descriptor(schema, result=result)
-        if max_tasks <= 0:
-            raise ValueError("max_tasks must be positive")
-        planned = plugin.plan(
-            handle,
-            schema,
-            context,
-            projection=projection or schema.arrow_schema.names,
-            row_filter=row_filter,
-            max_tasks=max_tasks,
+        projected = pa.schema(
+            [schema.arrow_schema.field(name) for name in request.columns],
+            metadata=schema.arrow_schema.metadata,
         )
-        tasks: list[object] = []
+        if not projected.equals(request.schema, check_metadata=True):
+            raise ValueError("scan request differs from the bound table schema")
+        planned = plugin.plan(request, context)
+        tasks: list[ScanTask] = []
         iterator = iter(planned)
-        while len(tasks) <= max_tasks:
-            if datetime.now(timezone.utc) >= context.deadline:
-                raise TimeoutError("execution context deadline expired while planning")
-            if context.cancel_check is not None and context.cancel_check():
-                raise RuntimeError("execution context was cancelled while planning")
+        try:
+            while len(tasks) <= request.max_tasks:
+                context.check_active()
+                try:
+                    task = next(iterator)
+                except StopIteration:
+                    break
+                context.check_active()
+                if not isinstance(task, ScanTask):
+                    raise ValueError("format must return immutable ScanTask values")
+                tasks.append(task)
+            if len(tasks) > request.max_tasks:
+                raise ValueError("format returned more tasks than requested")
+        finally:
             try:
-                tasks.append(next(iterator))
-            except StopIteration:
-                break
-        if len(tasks) > max_tasks:
-            raise ValueError("format returned more tasks than requested")
+                if iterator is not planned:
+                    _close_iterable_preserving_error(iterator)
+            finally:
+                _close_iterable_preserving_error(planned)
         result.record_pass("bounded_plan")
         _check_task_coverage(tasks, expected_task_ids, task_identity, result)
         for task in tasks:
-            if context.cancel_check is not None and context.cancel_check():
-                raise RuntimeError("execution context was cancelled")
-            validate_task_payload(task)
-            passive_task = json.loads(json.dumps(task, allow_nan=False, default=_mapping_json))
+            context.check_active()
+            passive_task = ScanTask.from_json(
+                json.loads(json.dumps(task.to_json(), allow_nan=False))
+            )
             output_schema, batches = plugin.execute(passive_task, context)
-            if output_schema != schema.arrow_schema:
+            if not output_schema.equals(request.schema, check_metadata=True):
+                _close_iterable_preserving_error(batches)
                 raise ValueError("format output schema differs from the declared schema")
             check_record_batches(
                 output_schema,
                 batches,
                 result=result,
-                cancel_check=context.cancel_check,
-                deadline=context.deadline,
+                context=context,
             )
         result.record_pass("execution")
     except Exception as exc:
@@ -431,9 +414,3 @@ def run_format_checks(  # noqa: C901
         else:
             result.record_failure("cleanup", "table-format plugin must expose close()")
     return result
-
-
-def _mapping_json(value: object) -> dict:
-    if not isinstance(value, Mapping):
-        raise TypeError("Task must contain passive JSON data")
-    return dict(value)

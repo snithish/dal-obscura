@@ -99,9 +99,6 @@ def test_public_catalog_enforces_handle_metadata_destination(tmp_path: Path) -> 
         def close(self):
             return None
 
-        def validate_config(self, context):
-            del context
-
         def list_namespaces(self, context, *, namespace=()):
             del context, namespace
             return (("default",),)
@@ -140,9 +137,6 @@ def test_public_catalog_adapter_rejects_forged_handle_identity() -> None:
     class Catalog:
         descriptor = CATALOG_DESCRIPTOR
 
-        def validate_config(self, context):
-            del context
-
         def list_namespaces(self, context, *, namespace=()):
             del context, namespace
             return ()
@@ -152,7 +146,7 @@ def test_public_catalog_adapter_rejects_forged_handle_identity() -> None:
             return DiscoveryPage(())
 
         def resolve_table(self, value, context):
-            del value, context
+            del context
             return forged
 
         def close(self):
@@ -177,9 +171,6 @@ def test_public_catalog_adapter_closes_catalog_and_rejects_reuse() -> None:
     class ClosableCatalog:
         descriptor = CATALOG_DESCRIPTOR
 
-        def validate_config(self, context):
-            del context
-
         def list_namespaces(self, context, *, namespace=()):
             del context, namespace
             return (("default",),)
@@ -189,7 +180,7 @@ def test_public_catalog_adapter_closes_catalog_and_rejects_reuse() -> None:
             return DiscoveryPage((identifier,))
 
         def resolve_table(self, value, context):
-            del value, context
+            del context
             raise AssertionError("resolve should not run after close")
 
         def close(self):
@@ -219,7 +210,7 @@ def test_public_catalog_adapter_rejects_missing_lifecycle_methods() -> None:
             return DiscoveryPage(())
 
         def resolve_table(self, value, context):
-            del value, context
+            del context
             raise AssertionError("resolve should not run")
 
         def close(self):
@@ -242,9 +233,6 @@ def test_public_catalog_adapter_rejects_malformed_continuation(malformed_token) 
     class Catalog:
         descriptor = CATALOG_DESCRIPTOR
 
-        def validate_config(self, context):
-            del context
-
         def list_namespaces(self, context, *, namespace=()):
             del context, namespace
             return ()
@@ -254,7 +242,7 @@ def test_public_catalog_adapter_rejects_malformed_continuation(malformed_token) 
             return _unchecked_discovery_page((identifier,), malformed_token)
 
         def resolve_table(self, value, context):
-            del value, context
+            del context
             raise AssertionError("resolve should not run")
 
         def close(self):
@@ -273,9 +261,6 @@ def test_public_catalog_adapter_rejects_oversized_page() -> None:
     class Catalog:
         descriptor = CATALOG_DESCRIPTOR
 
-        def validate_config(self, context):
-            del context
-
         def list_namespaces(self, context, *, namespace=()):
             del context, namespace
             return ()
@@ -286,7 +271,7 @@ def test_public_catalog_adapter_rejects_oversized_page() -> None:
             return _unchecked_discovery_page(entries, None)
 
         def resolve_table(self, value, context):
-            del value, context
+            del context
             raise AssertionError("resolve should not run")
 
         def close(self):

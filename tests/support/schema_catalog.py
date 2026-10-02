@@ -36,9 +36,6 @@ class _SchemaCatalog:
         self.resolved = resolved
         self.provider = load_catalog(config.instance_id, **dict(config.options))
 
-    def validate_config(self, context):
-        pass
-
     def list_namespaces(self, context, *, namespace=()):
         return (("default",),)
 
@@ -72,13 +69,11 @@ class _SchemaFormat:
         self.handle = handle
         self.resolved = resolved
 
-    def schema(self, handle, context):
+    def schema(self, context):
         schema = self.resolved[
-            ".".join((*handle.identifier.namespace, handle.identifier.name))
+            ".".join((*self.handle.identifier.namespace, self.handle.identifier.name))
         ].schema()
-        return SchemaDescriptor(
-            schema_version=1, fingerprint="0" * 64, arrow_schema=schema.as_arrow()
-        )
+        return SchemaDescriptor(arrow_schema=schema.as_arrow())
 
     def plan(self, *args, **kwargs):
         raise AssertionError("Schema discovery must not plan a scan")

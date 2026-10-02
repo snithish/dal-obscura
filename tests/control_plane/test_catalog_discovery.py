@@ -124,7 +124,6 @@ def test_iceberg_discovery_does_not_hide_root_table_provider_errors() -> None:
 def test_public_catalog_discovery_uses_admitted_plugin_and_closes_it():
     closed = []
     received_revision = []
-    validated = []
     listed_namespaces = []
 
     class PublicCatalog:
@@ -136,10 +135,6 @@ def test_public_catalog_discovery_uses_admitted_plugin_and_closes_it():
             distribution="fixture",
             version="1.0.0",
         )
-
-        def validate_config(self, context):
-            del context
-            validated.append(True)
 
         def list_namespaces(self, context, *, namespace=()):
             del context, namespace
@@ -181,16 +176,12 @@ def test_public_catalog_discovery_uses_admitted_plugin_and_closes_it():
         {"backend": "fixture.catalog", "name": "default.users", "table_identifier": "default.users"}
     ]
     assert received_revision == [4]
-    assert validated == [True]
     assert listed_namespaces == [True]
     assert closed == [True]
 
 
 def test_public_catalog_discovery_releases_capacity_when_close_fails() -> None:
     class FailingCloseCatalog:
-        def validate_config(self, context):
-            del context
-
         def list_namespaces(self, context, *, namespace=()):
             del context, namespace
             return ()
@@ -307,9 +298,6 @@ def test_public_catalog_discovery_rejects_forged_table_identifiers() -> None:
         name = "users"
 
     class PublicCatalog:
-        def validate_config(self, context):
-            del context
-
         def list_namespaces(self, context, *, namespace=()):
             del context, namespace
             return (("default",),)
@@ -334,9 +322,6 @@ def test_public_catalog_discovery_rejects_forged_table_identifiers() -> None:
 
 def test_public_catalog_discovery_rejects_oversized_page() -> None:
     class PublicCatalog:
-        def validate_config(self, context):
-            del context
-
         def list_namespaces(self, context, *, namespace=()):
             del context, namespace
             return ()
@@ -407,7 +392,7 @@ def test_iceberg_discovery_honors_cancellation_and_deadline():
         def list_tables(self, namespace):
             return ()
 
-    with pytest.raises(ValueError, match="cancelled"):
+    with pytest.raises(InterruptedError, match="cancelled"):
         discover_iceberg_tables(
             "analytics",
             {},
@@ -415,7 +400,7 @@ def test_iceberg_discovery_honors_cancellation_and_deadline():
             cancel_check=lambda: True,
         )
 
-    with pytest.raises(ValueError, match="deadline"):
+    with pytest.raises(TimeoutError, match="deadline"):
         discover_iceberg_tables(
             "analytics", {}, load_catalog_fn=lambda name, **options: SlowCatalog(), deadline_at=0.0
         )

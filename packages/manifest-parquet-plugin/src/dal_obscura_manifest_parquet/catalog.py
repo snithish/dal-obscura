@@ -6,7 +6,6 @@ import base64
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import cast
 
@@ -62,7 +61,7 @@ class ManifestCatalog(CatalogPlugin):
     descriptor = CATALOG_DESCRIPTOR
 
     def __init__(self, config: CatalogConfig, context: ExecutionContext) -> None:
-        _check_context(context)
+        context.check_active()
         self._config = config
         options = dict(config.options)
         self._root = _required_root(options.get("root"))
@@ -72,16 +71,13 @@ class ManifestCatalog(CatalogPlugin):
             self._manifest_path, self._root
         )
 
-    def validate_config(self, context: ExecutionContext) -> None:
-        _check_context(context)
-
     def list_namespaces(
         self,
         context: ExecutionContext,
         *,
         namespace: tuple[str, ...] = (),
     ) -> tuple[tuple[str, ...], ...]:
-        _check_context(context)
+        context.check_active()
         if namespace:
             return tuple(
                 sorted(
@@ -101,7 +97,7 @@ class ManifestCatalog(CatalogPlugin):
         continuation: str | None = None,
         limit: int,
     ) -> DiscoveryPage:
-        _check_context(context)
+        context.check_active()
         if limit <= 0 or limit > _MAX_TABLES:
             raise ValueError("catalog page limit is invalid")
         tables = sorted(
@@ -119,7 +115,7 @@ class ManifestCatalog(CatalogPlugin):
         return DiscoveryPage(tuple(item.identifier for item in page), next_token)
 
     def resolve_table(self, identifier: TableIdentifier, context: ExecutionContext) -> TableHandle:
-        _check_context(context)
+        context.check_active()
         key = _identifier_key(identifier)
         table = next(
             (item for item in self._tables if _identifier_key(item.identifier) == key), None
@@ -380,12 +376,3 @@ def _reject_symlink_components(root: Path, candidate: Path) -> None:
         current /= part
         if current.is_symlink():
             raise ValueError("manifest path may not traverse a symlink")
-
-
-def _check_context(context: ExecutionContext) -> None:
-    if context.deadline.tzinfo is None or context.deadline.utcoffset() is None:
-        raise ValueError("execution deadline must be timezone-aware")
-    if context.deadline <= datetime.now(context.deadline.tzinfo):
-        raise TimeoutError("execution context deadline has expired")
-    if context.cancel_check is not None and context.cancel_check():
-        raise RuntimeError("execution context was cancelled")

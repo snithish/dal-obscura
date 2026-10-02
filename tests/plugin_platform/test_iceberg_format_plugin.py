@@ -1,8 +1,10 @@
+from datetime import datetime, timedelta, timezone
 from typing import Any, cast
 
 import pyarrow as pa
 import pytest
-from dal_obscura_plugin_api import TableHandle, TableIdentifier
+from dal_obscura_plugin_api import ExecutionContext, TableHandle, TableIdentifier
+from dal_obscura_plugin_api import ScanTask as PluginScanTask
 
 from dal_obscura.read.request import PlanRequest
 from dal_obscura.sources import iceberg_plugin as module
@@ -84,11 +86,11 @@ def test_registered_iceberg_uses_public_sdk_schema_plan_and_stream(monkeypatch):
 def test_iceberg_sdk_checks_storage_allowlist_before_io():
     plugin = module.IcebergFormatPlugin(
         handle("https://blocked.example/metadata.json"),
-        cast(Any, None),
+        _context(),
         path_enforcer=PathRuleEnforcer([{"root": "https://allowed.example/"}]),
     )
     with pytest.raises(PermissionError):
-        plugin.schema(handle("https://blocked.example/metadata.json"), cast(Any, None))
+        plugin.schema(_context())
 
 
 @pytest.mark.parametrize(
@@ -140,7 +142,7 @@ def native_plugin(monkeypatch):
                 return schema, batches
 
         monkeypatch.setattr(module, "IcebergTableFormat", Engine)
-        return module.IcebergFormatPlugin(handle(), cast(Any, None))
+        return module.IcebergFormatPlugin(handle(), _context())
 
     return create
 
@@ -158,7 +160,7 @@ def test_native_iceberg_keeps_matching_arrow_buffers_and_closes_abandoned_reader
 
     plugin = native_plugin(batch.schema, source())
     _, stream = plugin.execute(
-        {"columns": ["id"], "tasks": [], "row_filter": None}, cast(Any, None)
+        PluginScanTask({"columns": ["id"], "tasks": [], "row_filter": None}), _context()
     )
     iterator = iter(stream)
 
@@ -178,9 +180,32 @@ def test_native_iceberg_closes_reader_when_schema_normalization_fails(native_plu
 
     plugin = native_plugin(pa.schema([pa.field("id", pa.int64())]), source())
     _, stream = plugin.execute(
-        {"columns": ["id"], "tasks": [], "row_filter": None}, cast(Any, None)
+        PluginScanTask({"columns": ["id"], "tasks": [], "row_filter": None}), _context()
     )
 
     with pytest.raises(ValueError, match="names"):
         next(iter(stream))
     assert closed == [True]
+
+
+def _context():
+    return ExecutionContext(datetime.now(timezone.utc) + timedelta(minutes=1), "native-test")
+
+
+def test_empty_iceberg_table_does_not_issue_a_synthetic_scan_task(tmp_path):
+    from pyiceberg.catalog import load_catalog
+    from pyiceberg.schema import Schema
+    from pyiceberg.types import LongType, NestedField
+
+    from tests.support.iceberg import iceberg_sql_catalog_options
+
+    catalog = load_catalog(
+        "empty", **cast(dict[str, str], iceberg_sql_catalog_options(tmp_path, "empty", "warehouse"))
+    )
+    catalog.create_namespace("default")
+    table = catalog.create_table("default.events", Schema(NestedField(1, "id", LongType())))
+    plugin = module.IcebergFormatPlugin(handle(table.metadata_location), _context())
+    from dal_obscura_plugin_api import ScanRequest
+
+    tasks = list(plugin.plan(ScanRequest(plugin.schema(_context()).arrow_schema, 4), _context()))
+    assert tasks == []

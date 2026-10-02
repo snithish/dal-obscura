@@ -234,9 +234,6 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
             handle_versions=frozenset({1}),
         )
 
-        def validate_config(self, context):
-            del context
-
         def list_namespaces(self, context, *, namespace=()):
             del context, namespace
             return (("default",),)
@@ -263,10 +260,9 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
             handle_versions=frozenset({1}),
         )
 
-        def schema(self, value, context):
+        def schema(self, context):
             del context
-            assert value == handle
-            return SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=schema)
+            return SchemaDescriptor(arrow_schema=schema)
 
         def plan(self, *args, **kwargs):
             raise AssertionError("Schema discovery must not plan rows")
@@ -321,7 +317,7 @@ def test_get_asset_schema_routes_admitted_catalog_and_format_plugins() -> None: 
 
     class ForgedHandleCatalog(PublicCatalog):
         def resolve_table(self, value, context):
-            del value, context
+            del context
             return replace(handle, catalog_revision=4)
 
     class ForgedHandleRegistry(Registry):

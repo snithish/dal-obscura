@@ -12,8 +12,8 @@ from threading import RLock
 from typing import Literal, cast
 
 from dal_obscura_plugin_api import (
-    SUPPORTED_PLUGIN_API_VERSIONS,
-    SUPPORTED_PLUGIN_CONFIG_VERSIONS,
+    PLUGIN_API_VERSION,
+    PLUGIN_CONFIG_VERSION,
     PluginDescriptor,
     PluginKind,
 )
@@ -264,11 +264,11 @@ class PluginRegistry:
                     or descriptor.version != version
                 ):
                     raise PluginAdmissionError(f"Plugin descriptor mismatch for {kind}:{plugin_id}")
-                if descriptor.api_version not in SUPPORTED_PLUGIN_API_VERSIONS:
+                if descriptor.api_version != PLUGIN_API_VERSION:
                     raise PluginAdmissionError(
                         f"Plugin descriptor uses unsupported API version for {kind}:{plugin_id}"
                     )
-                if descriptor.config_version not in SUPPORTED_PLUGIN_CONFIG_VERSIONS:
+                if descriptor.config_version != PLUGIN_CONFIG_VERSION:
                     raise PluginAdmissionError(
                         f"Plugin descriptor uses unsupported config version for {kind}:{plugin_id}"
                     )
@@ -451,25 +451,13 @@ def _status_incompatibility(
     distribution, version, _api_version, _descriptor_digest_value, _artifact_digest_value = lock
     if (entry.dist.name, entry.dist.version) != (distribution, version):
         return "installed distribution does not match the plugin lock"
-    if _api_version not in SUPPORTED_PLUGIN_API_VERSIONS:
+    if _api_version != PLUGIN_API_VERSION:
         return "plugin API version is unsupported"
     return "plugin admission metadata is incompatible"
 
 
 def _descriptor_digest(descriptor: PluginDescriptor) -> str:
-    payload = {
-        "kind": descriptor.kind,
-        "plugin_id": descriptor.plugin_id,
-        "api_version": descriptor.api_version,
-        "config_version": descriptor.config_version,
-        "distribution": descriptor.distribution,
-        "version": descriptor.version,
-        "capabilities": sorted(descriptor.capabilities),
-        "output_formats": sorted(descriptor.output_formats),
-        "handle_versions": sorted(descriptor.handle_versions),
-        "config_schema": descriptor.config_schema,
-        "display_name": descriptor.display_name,
-    }
+    payload = descriptor.to_json()
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()
 

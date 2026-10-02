@@ -38,7 +38,7 @@ _ALLOWED_OPTIONS = frozenset(
         "read-timeout-ms",
     }
 )
-_ACTIVE_REQUEST_BUDGET: ContextVar[tuple[datetime, Any, float, float] | None] = ContextVar(
+_ACTIVE_REQUEST_BUDGET: ContextVar[tuple[ExecutionContext, float, float] | None] = ContextVar(
     "dal_obscura_rest_request_budget", default=None
 )
 
@@ -73,7 +73,7 @@ class RestCatalog(CatalogPlugin):
 
     def __init__(self, config: CatalogConfig, context: ExecutionContext) -> None:
         self._config = config
-        self._validate_context(context)
+        context.check_active()
         options = dict(config.options)
         unknown = set(options) - _ALLOWED_OPTIONS
         if unknown:
@@ -118,13 +118,6 @@ class RestCatalog(CatalogPlugin):
         self._catalog_lock = Lock()
         self._closed = False
 
-    def validate_config(self, context: ExecutionContext) -> None:
-        """Validate the already-admitted configuration without provider I/O."""
-
-        self._validate_context(context)
-        if self._closed:
-            raise ValueError("REST catalog is closed")
-
     def list_namespaces(
         self,
         context: ExecutionContext,
@@ -136,7 +129,7 @@ class RestCatalog(CatalogPlugin):
             result: set[tuple[str, ...]] = set()
             raw_namespaces = catalog.list_namespaces(namespace)
             for raw in raw_namespaces:
-                self._validate_context(context)
+                context.check_active()
                 if (
                     not isinstance(raw, (tuple, list))
                     or not raw
@@ -167,9 +160,9 @@ class RestCatalog(CatalogPlugin):
             for index, namespace in enumerate(catalog.list_namespaces(())):
                 if index >= MAX_NAMESPACES:
                     raise ValueError("REST catalog contains too many namespaces")
-                self._validate_context(context)
+                context.check_active()
                 for identifier in catalog.list_tables(namespace):
-                    self._validate_context(context)
+                    context.check_active()
                     identifiers.append(_identifier(identifier))
                     if len(identifiers) > MAX_TABLES:
                         raise ValueError("REST catalog contains too many tables")
@@ -185,7 +178,7 @@ class RestCatalog(CatalogPlugin):
     def resolve_table(self, identifier: TableIdentifier, context: ExecutionContext) -> TableHandle:
         with self._request_budget(context):
             table = self._load_catalog(context).load_table((*identifier.namespace, identifier.name))
-            self._validate_context(context)
+            context.check_active()
             metadata_location = getattr(table, "metadata_location", None)
             if not isinstance(metadata_location, str) or not metadata_location:
                 raise ValueError("REST catalog table has no metadata location")
@@ -230,7 +223,7 @@ class RestCatalog(CatalogPlugin):
                 raise first_error
 
     def _load_catalog(self, context: ExecutionContext):
-        self._validate_context(context)
+        context.check_active()
         if self._closed:
             raise ValueError("REST catalog is closed")
         if self._catalog is None:
@@ -254,21 +247,12 @@ class RestCatalog(CatalogPlugin):
 
     @contextmanager
     def _request_budget(self, context: ExecutionContext) -> Iterator[None]:
-        self._validate_context(context)
-        token = _ACTIVE_REQUEST_BUDGET.set(
-            (context.deadline, context.cancel_check, self._connect_timeout, self._read_timeout)
-        )
+        context.check_active()
+        token = _ACTIVE_REQUEST_BUDGET.set((context, self._connect_timeout, self._read_timeout))
         try:
             yield
         finally:
             _ACTIVE_REQUEST_BUDGET.reset(token)
-
-    @staticmethod
-    def _validate_context(context: ExecutionContext) -> None:
-        if context.deadline <= datetime.now(context.deadline.tzinfo):
-            raise ValueError("REST catalog execution deadline has expired")
-        if context.cancel_check is not None and context.cancel_check():
-            raise ValueError("REST catalog operation was cancelled")
 
 
 def _identifier(value: object) -> TableIdentifier:
@@ -381,12 +365,9 @@ def _install_request_timeout(session: Any, connect_timeout: float, read_timeout:
         if budget is None:
             timeout = (connect_timeout, read_timeout)
         else:
-            deadline, cancel_check, configured_connect, configured_read = budget
-            if cancel_check is not None and cancel_check():
-                raise ValueError("REST catalog operation was cancelled")
-            remaining = (deadline - datetime.now(deadline.tzinfo)).total_seconds()
-            if remaining <= 0:
-                raise TimeoutError("REST catalog execution deadline has expired")
+            context, configured_connect, configured_read = budget
+            context.check_active()
+            remaining = (context.deadline - datetime.now(context.deadline.tzinfo)).total_seconds()
             timeout = (
                 min(configured_connect, remaining),
                 min(configured_read, remaining),
@@ -398,11 +379,14 @@ def _install_request_timeout(session: Any, connect_timeout: float, read_timeout:
         # governed connection boundary before any follow-up request.
         kwargs["allow_redirects"] = False
         response = original_request(method, url, **kwargs)
-        if budget is not None and cancel_check is not None and cancel_check():
-            close = getattr(response, "close", None)
-            if callable(close):
-                close()
-            raise ValueError("REST catalog operation was cancelled")
+        if budget is not None:
+            try:
+                context.check_active()
+            except (TimeoutError, InterruptedError):
+                close = getattr(response, "close", None)
+                if callable(close):
+                    close()
+                raise
         return response
 
     session.request = request

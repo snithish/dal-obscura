@@ -7,6 +7,7 @@ from dataclasses import dataclass, replace
 from typing import cast
 
 import pyarrow as pa
+from dal_obscura_plugin_api import ScanTask as PluginScanTask
 
 from dal_obscura.identity.contracts import AuthenticationRequest
 from dal_obscura.policy.filters import deserialize_row_filter
@@ -369,7 +370,7 @@ def public_native_scan(task: ScanTask) -> ScanTask:
         source,
         task.schema,
         PublicPluginPartition(
-            task=IcebergFormatPlugin._encode_partition(partition),
+            task=PluginScanTask(IcebergFormatPlugin._encode_partition(partition)),
             handle=handle,
             format_factory=IcebergFormatPlugin,
             schema=_projected_schema(task.schema, partition.columns),

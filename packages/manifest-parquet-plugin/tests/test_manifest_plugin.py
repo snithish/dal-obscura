@@ -11,7 +11,7 @@ import pyarrow.parquet as pq
 import pytest
 from dal_obscura_manifest_parquet.catalog import ManifestCatalog, _schema_identities
 from dal_obscura_manifest_parquet.format import ParquetDatasetFormat
-from dal_obscura_plugin_api import CatalogConfig, ExecutionContext, TableIdentifier
+from dal_obscura_plugin_api import CatalogConfig, ExecutionContext, ScanRequest, TableIdentifier
 
 
 def _context() -> ExecutionContext:
@@ -84,10 +84,18 @@ def test_manifest_catalog_and_parquet_format_split_nested_rows(tmp_path):
     assert page.continuation is None
     handle = catalog.resolve_table(page.entries[0], context)
     format_plugin = ParquetDatasetFormat(handle, context)
-    schema = format_plugin.schema(handle, context)
+    schema = format_plugin.schema(context)
     assert schema.arrow_schema == table.schema
     tasks = format_plugin.plan(
-        handle, schema, context, projection=("profile",), row_filter=None, max_tasks=4
+        ScanRequest(
+            pa.schema(
+                [schema.arrow_schema.field(name) for name in ("profile",)],
+                metadata=schema.arrow_schema.metadata,
+            ),
+            4,
+            None,
+        ),
+        context,
     )
     assert len(tasks) == 3
     output_schema, batches = format_plugin.execute(tasks[0], context)
@@ -153,9 +161,17 @@ def test_parquet_execute_propagates_cancellation_and_closes_reader(tmp_path, mon
     )
     handle = catalog.resolve_table(TableIdentifier(namespace=("default",), name="users"), initial)
     format_plugin = ParquetDatasetFormat(handle, initial)
-    schema = format_plugin.schema(handle, initial)
+    schema = format_plugin.schema(initial)
     task = format_plugin.plan(
-        handle, schema, initial, projection=("profile",), row_filter=None, max_tasks=4
+        ScanRequest(
+            pa.schema(
+                [schema.arrow_schema.field(name) for name in ("profile",)],
+                metadata=schema.arrow_schema.metadata,
+            ),
+            4,
+            None,
+        ),
+        initial,
     )[0]
 
     cancelled = False
@@ -195,7 +211,7 @@ def test_parquet_execute_propagates_cancellation_and_closes_reader(tmp_path, mon
         cancel_check=lambda: cancelled,
     )
 
-    with pytest.raises(RuntimeError, match="cancelled"):
+    with pytest.raises(InterruptedError, match="cancelled"):
         _, batches = format_plugin.execute(task, context)
         list(batches)
     assert closed
@@ -228,7 +244,6 @@ def test_manifest_catalog_exposes_namespace_and_config_lifecycle(tmp_path):
         ),
         _context(),
     )
-    catalog.validate_config(_context())
     assert catalog.list_namespaces(_context()) == (("default",),)
     assert catalog.list_namespaces(_context(), namespace=("default",)) == (("default",),)
 
@@ -417,9 +432,17 @@ def test_parquet_format_accepts_explicit_full_projection(tmp_path):
     )
     handle = catalog.resolve_table(TableIdentifier(namespace=("default",), name="users"), context)
     plugin = ParquetDatasetFormat(handle, context)
-    schema = plugin.schema(handle, context)
+    schema = plugin.schema(context)
     tasks = plugin.plan(
-        handle, schema, context, projection=schema.arrow_schema.names, row_filter=None, max_tasks=4
+        ScanRequest(
+            pa.schema(
+                [schema.arrow_schema.field(name) for name in schema.arrow_schema.names],
+                metadata=schema.arrow_schema.metadata,
+            ),
+            4,
+            None,
+        ),
+        context,
     )
     assert tasks
     output_schema, batches = plugin.execute(tasks[0], context)
@@ -451,12 +474,18 @@ def test_parquet_format_rejects_member_schema_drift(tmp_path):
     plugin = ParquetDatasetFormat(handle, context)
     with pytest.raises(ValueError, match="schema"):
         plugin.plan(
-            handle,
-            plugin.schema(handle, context),
+            ScanRequest(
+                pa.schema(
+                    [
+                        plugin.schema(context).arrow_schema.field(name)
+                        for name in plugin.schema(context).arrow_schema.names
+                    ],
+                    metadata=plugin.schema(context).arrow_schema.metadata,
+                ),
+                8,
+                None,
+            ),
             context,
-            projection=plugin.schema(handle, context).arrow_schema.names,
-            row_filter=None,
-            max_tasks=8,
         )
 
 
@@ -481,12 +510,18 @@ def test_parquet_format_rejects_corrupt_member_during_plan(tmp_path):
     plugin = ParquetDatasetFormat(handle, context)
     with pytest.raises((ValueError, OSError)):
         plugin.plan(
-            handle,
-            plugin.schema(handle, context),
+            ScanRequest(
+                pa.schema(
+                    [
+                        plugin.schema(context).arrow_schema.field(name)
+                        for name in plugin.schema(context).arrow_schema.names
+                    ],
+                    metadata=plugin.schema(context).arrow_schema.metadata,
+                ),
+                8,
+                None,
+            ),
             context,
-            projection=plugin.schema(handle, context).arrow_schema.names,
-            row_filter=None,
-            max_tasks=8,
         )
 
 
@@ -504,9 +539,17 @@ def test_parquet_groups_all_row_groups_within_task_budget(tmp_path):
     )
     handle = catalog.resolve_table(TableIdentifier(namespace=("default",), name="users"), context)
     plugin = ParquetDatasetFormat(handle, context)
-    schema = plugin.schema(handle, context)
+    schema = plugin.schema(context)
     tasks = plugin.plan(
-        handle, schema, context, projection=schema.arrow_schema.names, row_filter=None, max_tasks=2
+        ScanRequest(
+            pa.schema(
+                [schema.arrow_schema.field(name) for name in schema.arrow_schema.names],
+                metadata=schema.arrow_schema.metadata,
+            ),
+            2,
+            None,
+        ),
+        context,
     )
     assert len(tasks) == 2
     rows = []
@@ -522,20 +565,6 @@ def test_manifest_identity_keys_distinguish_literal_dots():
     assert _identifier_key(TableIdentifier(namespace=("a.b",), name="c")) != _identifier_key(
         TableIdentifier(namespace=("a",), name="b.c")
     )
-
-
-def test_parquet_projection_treats_star_and_dots_as_literal_names():
-    from dal_obscura_manifest_parquet.format import _projected_columns
-
-    schema = pa.schema(
-        [
-            pa.field("*", pa.string()),
-            pa.field("profile.email", pa.string()),
-            pa.field("secret", pa.string()),
-        ]
-    )
-    assert _projected_columns(schema, ["*"]) == ("*",)
-    assert _projected_columns(schema, ["profile.email"]) == ("profile.email",)
 
 
 def test_parquet_reads_literal_dotted_column_without_nested_sibling(tmp_path):
@@ -563,12 +592,15 @@ def test_parquet_reads_literal_dotted_column_without_nested_sibling(tmp_path):
     handle = catalog.resolve_table(TableIdentifier(namespace=("default",), name="users"), context)
     plugin = ParquetDatasetFormat(handle, context)
     task = plugin.plan(
-        handle,
-        plugin.schema(handle, context),
+        ScanRequest(
+            pa.schema(
+                [plugin.schema(context).arrow_schema.field(name) for name in ["profile.email"]],
+                metadata=plugin.schema(context).arrow_schema.metadata,
+            ),
+            1,
+            None,
+        ),
         context,
-        projection=["profile.email"],
-        row_filter=None,
-        max_tasks=1,
     )[0]
     schema, batches = plugin.execute(task, context)
     assert schema.names == ["profile.email"]

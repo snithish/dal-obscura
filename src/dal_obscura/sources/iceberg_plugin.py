@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
-import hashlib
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping
 from typing import cast
 
 import pyarrow as pa
-from dal_obscura_plugin_api import ExecutionContext, PluginDescriptor, SchemaDescriptor, TableHandle
+from dal_obscura_plugin_api import (
+    ExecutionContext,
+    PluginDescriptor,
+    ScanRequest,
+    ScanTask,
+    SchemaDescriptor,
+    TableHandle,
+)
 
 from dal_obscura import __version__
 from dal_obscura.policy.filters import deserialize_row_filter
@@ -43,7 +49,7 @@ class IcebergFormatPlugin:
         *,
         path_enforcer: PathRuleEnforcer | None = None,
     ) -> None:
-        del context
+        context.check_active()
         if handle.format_plugin_id != "iceberg" or handle.handle_version != 1:
             raise ValueError("Unsupported Iceberg handle")
         location = handle.metadata.get("metadata_location")
@@ -59,51 +65,46 @@ class IcebergFormatPlugin:
             path_enforcer=path_enforcer,
         )
 
-    def schema(self, handle: TableHandle, context: ExecutionContext) -> SchemaDescriptor:
-        del context
-        self._require_handle(handle)
+    def schema(self, context: ExecutionContext) -> SchemaDescriptor:
+        context.check_active()
         schema = self._table.get_schema()
         return SchemaDescriptor(
-            schema_version=1,
-            fingerprint=hashlib.sha256(schema.serialize().to_pybytes()).hexdigest(),
             arrow_schema=schema,
-            snapshot_id=handle.snapshot_id,
+            snapshot_id=self._handle.snapshot_id,
             stable_ids=schema_has_stable_ids(schema),
         )
 
-    def plan(
-        self,
-        handle: TableHandle,
-        schema: SchemaDescriptor,
-        context: ExecutionContext,
-        *,
-        projection: Sequence[str],
-        row_filter: str | None,
-        max_tasks: int,
-    ) -> Sequence[object]:
-        del schema, context
-        self._require_handle(handle)
+    def plan(self, request: ScanRequest, context: ExecutionContext) -> list[ScanTask]:
+        context.check_active()
         plan = self._table.plan(
             PlanRequest(
-                catalog=handle.catalog_instance_id,
+                catalog=self._handle.catalog_instance_id,
                 target=self._table.table_name,
-                columns=[FieldPath((FieldSegment(name),)).to_human() for name in projection],
-                row_filter=deserialize_row_filter(row_filter) if row_filter else None,
+                columns=[FieldPath((FieldSegment(name),)).to_human() for name in request.columns],
+                row_filter=deserialize_row_filter(request.row_filter)
+                if request.row_filter
+                else None,
             ),
-            max_tasks,
+            request.max_tasks,
         )
+        context.check_active()
+        projected = pa.schema(
+            [plan.schema.field(name) for name in request.columns], metadata=plan.schema.metadata
+        )
+        if not projected.equals(request.schema, check_metadata=True):
+            raise ValueError("Iceberg projection differs from the pinned schema")
         return [
-            self._encode_partition(cast(IcebergInputPartition, task.partition))
+            ScanTask(self._encode_partition(cast(IcebergInputPartition, task.partition)))
             for task in plan.tasks
         ]
 
     def execute(
-        self, task: object, context: ExecutionContext
+        self, task: ScanTask, context: ExecutionContext
     ) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
-        del context
-        if not isinstance(task, dict) or set(task) != {"columns", "tasks", "row_filter"}:
+        context.check_active()
+        payload = task.to_json()
+        if set(payload) != {"columns", "tasks", "row_filter"}:
             raise ValueError("Invalid Iceberg task")
-        payload = cast(dict[str, object], task)
         columns, tasks, row_filter = payload["columns"], payload["tasks"], payload["row_filter"]
         if not isinstance(columns, list) or not all(isinstance(item, str) for item in columns):
             raise ValueError("Invalid Iceberg task columns")
@@ -124,10 +125,6 @@ class IcebergFormatPlugin:
 
     def close(self) -> None:
         pass
-
-    def _require_handle(self, handle: TableHandle) -> None:
-        if handle != self._handle:
-            raise ValueError("Iceberg handle does not match this instance")
 
     @staticmethod
     def _encode_partition(partition: IcebergInputPartition) -> dict[str, object]:

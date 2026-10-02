@@ -13,12 +13,13 @@ import pyarrow.parquet as pq
 from dal_obscura_plugin_api import (
     ExecutionContext,
     PluginDescriptor,
+    ScanRequest,
+    ScanTask,
     SchemaDescriptor,
     TableHandle,
 )
 
 from dal_obscura_manifest_parquet.catalog import (
-    _check_context,
     _reject_symlink_components,
     _schema_identities,
 )
@@ -44,7 +45,6 @@ class _ParquetRowGroup:
 
     relative_path: str
     row_group: int
-    columns: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,7 +59,7 @@ class ParquetDatasetFormat:
     descriptor = FORMAT_DESCRIPTOR
 
     def __init__(self, handle: TableHandle, context: ExecutionContext) -> None:
-        _check_context(context)
+        context.check_active()
         if handle.format_plugin_id != FORMAT_DESCRIPTOR.plugin_id:
             raise ValueError("Parquet format received an incompatible handle")
         metadata = dict(handle.metadata)
@@ -88,39 +88,26 @@ class ParquetDatasetFormat:
         self._manifest_hash = manifest_hash
         self._handle = handle
 
-    def schema(self, handle: TableHandle, context: ExecutionContext) -> SchemaDescriptor:
-        _check_context(context)
-        if handle != self._handle:
-            raise ValueError("Parquet schema requested for a different handle")
+    def schema(self, context: ExecutionContext) -> SchemaDescriptor:
+        context.check_active()
         return SchemaDescriptor(
-            schema_version=1,
-            fingerprint=_schema_fingerprint(self._schema),
             arrow_schema=self._schema,
-            snapshot_id=handle.snapshot_id,
+            snapshot_id=self._handle.snapshot_id,
             stable_ids=False,
         )
 
-    def plan(
-        self,
-        handle: TableHandle,
-        schema: SchemaDescriptor,
-        context: ExecutionContext,
-        *,
-        projection: Sequence[str],
-        row_filter: str | None,
-        max_tasks: int,
-    ) -> Sequence[object]:
-        _check_context(context)
-        if handle != self._handle or schema.arrow_schema != self._schema:
-            raise ValueError("Parquet plan input does not match the admitted handle/schema")
-        if row_filter is not None:
+    def plan(self, request: ScanRequest, context: ExecutionContext) -> list[ScanTask]:
+        context.check_active()
+        if request.row_filter is not None:
             raise ValueError("Parquet dataset plugin does not support row-filter pushdown")
-        if max_tasks <= 0:
-            raise ValueError("max_tasks must be positive")
-        columns = _projected_columns(self._schema, projection)
+        columns = request.columns
+        if any(name not in self._schema.names for name in columns):
+            raise ValueError("projection contains a field outside the pinned schema")
+        if not _select_schema(self._schema, columns).equals(request.schema, check_metadata=True):
+            raise ValueError("Parquet projection differs from the pinned schema")
         tasks: list[_ParquetRowGroup] = []
         for relative_path in self._files:
-            _check_context(context)
+            context.check_active()
             path = _safe_member(self._root, relative_path)
             try:
                 parquet_file = pq.ParquetFile(path)
@@ -129,43 +116,43 @@ class ParquetDatasetFormat:
             try:
                 _validate_file_schema(parquet_file.schema_arrow, self._schema)
                 for row_group in range(parquet_file.num_row_groups):
-                    _check_context(context)
-                    tasks.append(_ParquetRowGroup(relative_path, row_group, columns))
+                    context.check_active()
+                    tasks.append(_ParquetRowGroup(relative_path, row_group))
             finally:
                 parquet_file.close()
-        groups: list[list[_ParquetRowGroup]] = [[] for _ in range(min(max_tasks, len(tasks)))]
+        groups: list[list[_ParquetRowGroup]] = [
+            [] for _ in range(min(request.max_tasks, len(tasks)))
+        ]
         for index, task in enumerate(tasks):
             groups[index % len(groups)].append(task)
         return [
-            {
-                "columns": list(columns),
-                "row_groups": [
-                    {"relative_path": item.relative_path, "row_group": item.row_group}
-                    for item in group
-                ],
-            }
+            ScanTask(
+                {
+                    "columns": list(columns),
+                    "row_groups": [
+                        {"relative_path": item.relative_path, "row_group": item.row_group}
+                        for item in group
+                    ],
+                }
+            )
             for group in groups
         ]
 
     def execute(
         self,
-        task: object,
+        task: ScanTask,
         context: ExecutionContext,
     ) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]:
-        _check_context(context)
-        task = _decode_task(task)
-        expected_schema = _select_schema(self._schema, task.columns)
-        for group in task.row_groups:
-            if (
-                group.relative_path not in self._files
-                or group.row_group < 0
-                or group.columns != task.columns
-            ):
+        context.check_active()
+        scan = _decode_task(task.to_json())
+        expected_schema = _select_schema(self._schema, scan.columns)
+        for group in scan.row_groups:
+            if group.relative_path not in self._files or group.row_group < 0:
                 raise ValueError("Parquet task is not a member of the admitted manifest")
 
         def batches() -> Iterator[pa.RecordBatch]:
-            for group in task.row_groups:
-                _check_context(context)
+            for group in scan.row_groups:
+                context.check_active()
                 path = _safe_member(self._root, group.relative_path)
                 with pq.ParquetFile(path) as parquet_file:
                     _validate_file_schema(parquet_file.schema_arrow, self._schema)
@@ -174,13 +161,13 @@ class ParquetDatasetFormat:
                     for batch in parquet_file.iter_batches(
                         batch_size=_MAX_BATCH_ROWS,
                         row_groups=[group.row_group],
-                        columns=list(task.columns),
+                        columns=list(scan.columns),
                     ):
-                        _check_context(context)
+                        context.check_active()
                         # Parquet columns use dotted prefixes and may include a
                         # nested-name twin. Arrow selection uses exact field names.
-                        batch = batch.select(list(task.columns))
-                        if batch.schema != expected_schema:
+                        batch = batch.select(list(scan.columns))
+                        if not batch.schema.equals(expected_schema, check_metadata=True):
                             batch = batch.cast(expected_schema)
                         yield batch
 
@@ -253,28 +240,11 @@ def _validate_handle_schema_identity(schema: pa.Schema, metadata: dict[str, obje
         raise ValueError("Parquet handle schema identities do not match the pinned schema")
 
 
-def _projected_columns(schema: pa.Schema, projection: Sequence[str]) -> tuple[str, ...]:
-    selected: list[str] = []
-    for path in projection:
-        top_level = path
-        if top_level not in schema.names:
-            raise ValueError("projection contains a field outside the pinned schema")
-        if top_level not in selected:
-            selected.append(top_level)
-    return tuple(selected)
-
-
 def _select_schema(schema: pa.Schema, columns: Sequence[str]) -> pa.Schema:
     """Select top-level fields while preserving the pinned nested field types."""
 
     fields = [schema.field(name) for name in columns]
     return pa.schema(fields, metadata=schema.metadata)
-
-
-def _schema_fingerprint(schema: pa.Schema) -> str:
-    import hashlib
-
-    return hashlib.sha256(schema.serialize().to_pybytes()).hexdigest()
 
 
 def _decode_task(task: object) -> _ParquetScan:
@@ -299,5 +269,5 @@ def _decode_task(task: object) -> _ParquetScan:
             or type(group["row_group"]) is not int
         ):
             raise ValueError("Invalid Parquet row group")
-        decoded.append(_ParquetRowGroup(group["relative_path"], group["row_group"], tuple(columns)))
+        decoded.append(_ParquetRowGroup(group["relative_path"], group["row_group"]))
     return _ParquetScan(tuple(decoded), tuple(columns))

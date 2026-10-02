@@ -7,9 +7,7 @@ from threading import BoundedSemaphore
 from time import monotonic
 from typing import Any, cast
 
-from dal_obscura_plugin_api import DiscoveryPage, TableIdentifier
-
-from dal_obscura.sources.plugin_runtime import PublicCatalogFactory
+from dal_obscura_plugin_api import CatalogFactory, DiscoveryPage, TableIdentifier
 
 ICEBERG_CATALOG_ID = "iceberg.sql"
 
@@ -50,7 +48,7 @@ def discover_public_catalog_tables(
             deadline=datetime.now(timezone.utc) + timedelta(seconds=DEFAULT_DEADLINE_SECONDS),
             correlation_id=f"catalog-discovery-{catalog_name}",
         )
-        plugin = cast(PublicCatalogFactory, factory)(
+        plugin = cast(CatalogFactory, factory)(
             CatalogConfig(
                 plugin_id=plugin_id,
                 instance_id=catalog_name,
@@ -105,12 +103,10 @@ def _validate_public_catalog_lifecycle(
     context: Any,
     deadline_at: float,
 ) -> None:
-    required = ("validate_config", "list_namespaces", "list_tables", "close")
+    required = ("list_namespaces", "list_tables", "close")
     if not all(callable(getattr(plugin, name, None)) for name in required):
         raise ValueError("Catalog plugin does not implement the required lifecycle")
-    _check_budget(deadline_at, context.cancel_check)
-    plugin.validate_config(context)
-    _check_budget(deadline_at, context.cancel_check)
+    context.check_active()
     namespaces = plugin.list_namespaces(context, namespace=())
     for index, namespace in enumerate(namespaces):
         _check_budget(deadline_at, context.cancel_check)

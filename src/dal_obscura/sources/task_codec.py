@@ -4,18 +4,17 @@ from __future__ import annotations
 
 import base64
 import json
-from collections.abc import Mapping
 from typing import Protocol, cast
 
 import pyarrow as pa
-from dal_obscura_plugin_api import TableHandle, validate_task_payload
+from dal_obscura_plugin_api import ScanTask as PluginScanTask
+from dal_obscura_plugin_api import TableFormatFactory, TableHandle
 
 from dal_obscura.policy.schema_bounds import MAX_SCHEMA_ENCODING_BYTES, validate_arrow_schema_bounds
 from dal_obscura.sources.catalogs import _load_format_factory
 from dal_obscura.sources.paths import PathRuleEnforcer
 from dal_obscura.sources.planning import ScanTask
 from dal_obscura.sources.plugin_runtime import (
-    PublicFormatFactory,
     PublicPluginPartition,
     PublicPluginTableFormat,
 )
@@ -39,7 +38,6 @@ class SourceTaskCodec:
             raise ValueError("Unregistered table format cannot issue scan tickets")
         handle, data, output_schema = table.handle, partition.task, partition.schema
         roots = table.path_roots
-        validate_task_payload(data)
         envelope = {
             "version": 1,
             "plugin": list(self.registry.identity("table_format", handle.format_plugin_id)),
@@ -47,11 +45,9 @@ class SourceTaskCodec:
             "schema": _encode_schema(task.schema),
             "output_schema": _encode_schema(output_schema),
             "path_roots": list(roots),
-            "task": data,
+            "task": data.to_json(),
         }
-        return json.dumps(
-            envelope, sort_keys=True, separators=(",", ":"), allow_nan=False, default=_mapping_json
-        )
+        return json.dumps(envelope, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
     def decode(self, payload: str) -> ScanTask:
         try:
@@ -73,7 +69,7 @@ class SourceTaskCodec:
             if not isinstance(roots, list) or any(not isinstance(root, str) for root in roots):
                 raise ValueError("Invalid scan path roots")
             enforcer = PathRuleEnforcer([{"root": root} for root in roots])
-            validate_task_payload(raw["task"])
+            task = PluginScanTask.from_json(raw["task"])
             schema = _decode_schema(raw["schema"])
             output_schema = _decode_schema(raw["output_schema"])
             factory = _load_format_factory(self.registry, handle.format_plugin_id, enforcer)
@@ -82,11 +78,11 @@ class SourceTaskCodec:
                 table_name=".".join((*handle.identifier.namespace, handle.identifier.name)),
                 format=handle.format_plugin_id,
                 handle=handle,
-                format_factory=cast(PublicFormatFactory, factory),
+                format_factory=cast(TableFormatFactory, factory),
                 path_roots=tuple(roots),
             )
             partition = PublicPluginPartition(
-                task=raw["task"],
+                task=task,
                 handle=handle,
                 format_factory=table.format_factory,
                 schema=output_schema,
@@ -110,12 +106,6 @@ def _decode_schema(raw: object) -> pa.Schema:
     schema = pa.ipc.read_schema(pa.BufferReader(decoded))
     validate_arrow_schema_bounds(schema)
     return schema
-
-
-def _mapping_json(value: object) -> dict:
-    if isinstance(value, Mapping):
-        return dict(value)
-    raise TypeError("Scan tasks must contain passive JSON values")
 
 
 def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:

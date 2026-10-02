@@ -1,9 +1,9 @@
 import json
 from dataclasses import replace
-from types import MappingProxyType
 
 import pyarrow as pa
 import pytest
+from dal_obscura_plugin_api import ScanTask as PluginScanTask
 from pyiceberg.manifest import DataFile, DataFileContent, FileFormat
 from pyiceberg.table import FileScanTask
 from pyiceberg.typedef import Record
@@ -51,17 +51,9 @@ def test_scan_envelope_preserves_schema_native_tasks_and_storage_bounds():
     encoded = codec.encode(task)
     restored = codec.decode(encoded)
     assert restored.schema.equals(task.schema, check_metadata=True)
-    assert restored.partition.task["tasks"] == task.partition.task["tasks"]
+    assert restored.partition.task.to_json()["tasks"] == task.partition.task.to_json()["tasks"]
     assert restored.table_format.path_roots == ("/warehouse",)
     assert "format_factory" not in encoded
-
-
-def test_scan_envelope_accepts_immutable_passive_task_metadata():
-    codec, task = envelope()
-    task = replace(
-        task, partition=replace(task.partition, task=MappingProxyType(task.partition.task))
-    )
-    assert codec.decode(codec.encode(task)).partition.task == dict(task.partition.task)
 
 
 def test_scan_envelope_rejects_oversized_schemas_before_arrow_decoding(monkeypatch):
@@ -92,10 +84,15 @@ def test_scan_envelope_can_cover_a_large_splittable_table():
         task,
         partition=replace(
             task.partition,
-            task={**task.partition.task, "tasks": task.partition.task["tasks"] * 512},
+            task=PluginScanTask(
+                {
+                    **task.partition.task.to_json(),
+                    "tasks": task.partition.task.to_json()["tasks"] * 512,
+                }
+            ),
         ),
     )
-    assert len(codec.decode(codec.encode(task)).partition.task["tasks"]) == 512
+    assert len(codec.decode(codec.encode(task)).partition.task.to_json()["tasks"]) == 512
 
 
 @pytest.mark.parametrize(

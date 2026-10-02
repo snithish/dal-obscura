@@ -7,6 +7,8 @@ import pyarrow as pa
 from dal_obscura_plugin_api import (
     ExecutionContext,
     PluginDescriptor,
+    ScanTask,
+    SchemaDescriptor,
 )
 
 
@@ -34,21 +36,24 @@ class _ConformingFormat:
     def close(self):
         return None
 
-    def plan(self, handle, schema, context, *, projection, row_filter, max_tasks):
-        del handle, context, projection, row_filter, max_tasks
-        return [{"rows": [{"id": 1}]}]
+    def schema(self, context):
+        return SchemaDescriptor(pa.schema([("id", pa.int64())]))
+
+    def plan(self, request, context):
+        del context
+        return [ScanTask({"rows": [{"id": 1}]})]
 
     def execute(self, task, context):
         del context
         schema = pa.schema([("id", pa.int64())])
-        return schema, [pa.RecordBatch.from_pylist(task["rows"], schema=schema)]
+        return schema, [pa.RecordBatch.from_pylist(task.to_json()["rows"], schema=schema)]
 
 
 class _EndlessFormat(_ConformingFormat):
-    def plan(self, handle, schema, context, *, projection, row_filter, max_tasks):
-        del handle, context, projection, row_filter, max_tasks
+    def plan(self, request, context):
+        del context
         while True:
-            yield schema
+            yield ScanTask({"rows": [{"id": 1}]})
 
 
 class _MutatingFormat(_ConformingFormat):
@@ -66,9 +71,9 @@ class _CleanupFormat(_MutatingFormat):
 
 
 class _CoverageFormat(_ConformingFormat):
-    def plan(self, handle, schema, context, *, projection, row_filter, max_tasks):
-        del handle, context, projection, row_filter, max_tasks
-        return ["part-a", "part-b"]
+    def plan(self, request, context):
+        del context
+        return [ScanTask({"id": identity}) for identity in ("part-a", "part-b")]
 
     def execute(self, task, context):
         del task, context
@@ -77,9 +82,9 @@ class _CoverageFormat(_ConformingFormat):
 
 
 class _DuplicateCoverageFormat(_CoverageFormat):
-    def plan(self, handle, schema, context, *, projection, row_filter, max_tasks):
-        del handle, schema, context, projection, row_filter, max_tasks
-        return ["part-a", "part-a"]
+    def plan(self, request, context):
+        del request, context
+        return [ScanTask({"id": "part-a"})] * 2
 
 
 def _catalog_descriptor() -> PluginDescriptor:

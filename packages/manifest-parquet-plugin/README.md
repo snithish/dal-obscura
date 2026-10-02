@@ -23,3 +23,10 @@ PYTHONPATH=packages/manifest-parquet-plugin/src:packages/plugin-api/src \
 The package is a qualification fixture, not a hostile-code sandbox. Imported
 Python plugins remain trusted operator code and must be admitted by the registry
 lock before use.
+
+
+The rebuilt 0.2.0 adapter targets plugin API 2. Configuration is validated on
+construction; deadlines and cancellation use `context.check_active()`. Formats
+bind their handle in the factory and accept an exact `ScanRequest` schema,
+returning immutable `ScanTask` JSON objects. See the
+[SDK contract](../plugin-api/README.md) and [conformance kit](../plugin-conformance/README.md).

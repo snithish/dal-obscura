@@ -3,19 +3,20 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from math import isfinite
-from types import MappingProxyType
 from typing import Literal, Protocol, cast
 
 import pyarrow as pa
 
+from dal_obscura_plugin_api.scan import ScanRequest
+from dal_obscura_plugin_api.tasks import ScanTask, _freeze_json, _mutable_json
+
 PluginKind = Literal["catalog", "table_format"]
 PLUGIN_API_VERSION = "2"
-SUPPORTED_PLUGIN_API_VERSIONS = frozenset({PLUGIN_API_VERSION})
-SUPPORTED_PLUGIN_CONFIG_VERSIONS = frozenset({1})
+PLUGIN_CONFIG_VERSION = 1
 _PLUGIN_ID = re.compile(r"[a-z][a-z0-9_.-]{0,63}\Z")
 SUPPORTED_CAPABILITIES = frozenset(
     {
@@ -99,8 +100,27 @@ class PluginDescriptor:
         ):
             raise ValueError("Plugin handle versions must be positive bounded integers")
         _validate_config_schema(self.config_schema)
+        object.__setattr__(self, "config_schema", _freeze_json(self.config_schema))
+        for name in ("capabilities", "output_formats", "handle_versions"):
+            object.__setattr__(self, name, frozenset(getattr(self, name)))
         if len(self.display_name) > _MAX_CONFIG_SCHEMA_STRING:
             raise ValueError("Plugin display name is too long")
+
+    def to_json(self) -> dict[str, object]:
+        """Detached, deterministic descriptor metadata for admission and tooling."""
+        return {
+            "kind": self.kind,
+            "plugin_id": self.plugin_id,
+            "api_version": self.api_version,
+            "config_version": self.config_version,
+            "distribution": self.distribution,
+            "version": self.version,
+            "capabilities": sorted(self.capabilities),
+            "output_formats": sorted(self.output_formats),
+            "handle_versions": sorted(self.handle_versions),
+            "config_schema": _mutable_json(self.config_schema),
+            "display_name": self.display_name,
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,6 +138,7 @@ class CatalogConfig:
         if self.revision < 0:
             raise ValueError("Catalog revision cannot be negative")
         _validate_options(self.options)
+        object.__setattr__(self, "options", _freeze_json(self.options))
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,6 +147,9 @@ class TableIdentifier:
     name: str
 
     def __post_init__(self) -> None:
+        if not isinstance(self.namespace, (tuple, list)):
+            raise ValueError("Table namespace must contain identifier segments")
+        object.__setattr__(self, "namespace", tuple(self.namespace))
         segments = (*self.namespace, self.name)
         if len(segments) > _MAX_IDENTIFIER_SEGMENTS:
             raise ValueError("Table identifier has too many segments")
@@ -259,24 +283,28 @@ class TableHandle:
 
 @dataclass(frozen=True, slots=True)
 class SchemaDescriptor:
-    schema_version: int
-    fingerprint: str
     arrow_schema: pa.Schema
     snapshot_id: str | None = None
     stable_ids: bool = False
 
     def __post_init__(self) -> None:
-        if type(self.schema_version) is not int or self.schema_version < 1:
-            raise ValueError("Schema version must be a positive integer")
-        if not re.fullmatch(r"[0-9a-f]{64}", self.fingerprint):
-            raise ValueError("Schema fingerprint must be a SHA-256 hex digest")
+        if not isinstance(self.arrow_schema, pa.Schema):
+            raise ValueError("Schema descriptor requires an Arrow schema")
+        if type(self.stable_ids) is not bool:
+            raise ValueError("Stable field ID claim must be boolean")
+        if self.snapshot_id is not None and (
+            not isinstance(self.snapshot_id, str)
+            or not self.snapshot_id
+            or len(self.snapshot_id) > 256
+            or any(ord(char) < 0x20 or ord(char) == 0x7F for char in self.snapshot_id)
+        ):
+            raise ValueError("Schema snapshot identity must be bounded printable text")
 
 
 @dataclass(frozen=True, slots=True)
 class ExecutionContext:
     deadline: datetime
     correlation_id: str
-    capabilities: frozenset[str] = frozenset()
     cancel_check: Callable[[], bool] | None = None
 
     def __post_init__(self) -> None:
@@ -286,28 +314,19 @@ class ExecutionContext:
             raise ValueError("Execution correlation ID must be non-empty and bounded")
         if any(ord(char) < 0x20 or ord(char) == 0x7F for char in self.correlation_id):
             raise ValueError("Execution correlation ID contains control characters")
-        if len(self.capabilities) > 64 or any(
-            not isinstance(capability, str) or not capability or len(capability) > 64
-            for capability in self.capabilities
-        ):
-            raise ValueError("Execution capabilities must be bounded non-empty strings")
         if self.cancel_check is not None and not callable(self.cancel_check):
             raise ValueError("Execution cancellation check must be callable")
 
-
-@dataclass(frozen=True, slots=True)
-class PluginError(Exception):
-    code: str
-    message: str
-
-    def __str__(self) -> str:
-        return self.message
+    def check_active(self) -> None:
+        """Check before and after provider work, including each iterator pull."""
+        if self.deadline <= datetime.now(timezone.utc):
+            raise TimeoutError("Plugin execution deadline expired")
+        if self.cancel_check is not None and self.cancel_check():
+            raise InterruptedError("Plugin execution was cancelled")
 
 
 class CatalogPlugin(Protocol):
     descriptor: PluginDescriptor
-
-    def validate_config(self, context: ExecutionContext) -> None: ...
 
     def list_namespaces(
         self,
@@ -336,48 +355,30 @@ class CatalogPlugin(Protocol):
 class CatalogFactory(Protocol):
     """Factory called by core with one validated config and request context."""
 
-    descriptor: PluginDescriptor
-
     def __call__(
         self,
         config: CatalogConfig,
         context: ExecutionContext,
+        /,
     ) -> CatalogPlugin: ...
 
 
 class TableFormatPlugin(Protocol):
     descriptor: PluginDescriptor
 
-    def schema(self, handle: TableHandle, context: ExecutionContext) -> SchemaDescriptor: ...
+    def schema(self, context: ExecutionContext) -> SchemaDescriptor: ...
 
-    def plan(
-        self,
-        handle: TableHandle,
-        schema: SchemaDescriptor,
-        context: ExecutionContext,
-        *,
-        projection: Sequence[str],
-        row_filter: str | None,
-        max_tasks: int,
-    ) -> Sequence[object]:
-        """Plan at most max_tasks inert tasks, grouping splittable work as needed.
+    def plan(self, request: ScanRequest, context: ExecutionContext) -> Iterable[ScanTask]:
+        """Yield at most request.max_tasks immutable JSON tasks, covering all work.
 
-        Projection contains exact top-level Arrow field names, in output order;
-        dots and '*' are literal names, not paths or wildcards. Core expands
-        nested selections and supplies filter dependencies before calling here.
-        Filters are optional DuckDB SQL hints, sent only for filter_pushdown;
-        core always reapplies the complete filter before masking output.
-        Tasks must contain bounded JSON data (objects with text keys, arrays,
-        finite scalars, or null). They are serialized and decoded before execution.
-        An empty sequence means no rows. None is an ordinary passive task value,
-        never a core-generated empty-scan sentinel.
+        The factory binds the handle once. Request.schema contains exact projected
+        fields; the format must honor their order and types during execution.
+        An empty iterable means no rows. Close planning iterators on early stop.
         """
         ...
 
     def execute(
-        self,
-        task: object,
-        context: ExecutionContext,
+        self, task: ScanTask, context: ExecutionContext
     ) -> tuple[pa.Schema, Iterable[pa.RecordBatch]]: ...
 
     def close(self) -> None: ...
@@ -386,12 +387,11 @@ class TableFormatPlugin(Protocol):
 class TableFormatFactory(Protocol):
     """Factory called by core with one catalog-resolved immutable handle."""
 
-    descriptor: PluginDescriptor
-
     def __call__(
         self,
         handle: TableHandle,
         context: ExecutionContext,
+        /,
     ) -> TableFormatPlugin: ...
 
 
@@ -536,19 +536,3 @@ def _validate_handle_metadata(value: object) -> None:  # noqa: C901
     if not isinstance(value, Mapping):
         raise ValueError("Table handle metadata must be a mapping")
     visit(value, 0)
-
-
-def _freeze_json(value: object) -> object:
-    if isinstance(value, Mapping):
-        return MappingProxyType({key: _freeze_json(child) for key, child in value.items()})
-    if isinstance(value, (list, tuple)):
-        return tuple(_freeze_json(child) for child in value)
-    return value
-
-
-def _mutable_json(value: object) -> object:
-    if isinstance(value, Mapping):
-        return {key: _mutable_json(child) for key, child in value.items()}
-    if isinstance(value, tuple):
-        return [_mutable_json(child) for child in value]
-    return value

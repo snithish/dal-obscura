@@ -16,16 +16,20 @@ from uuid import uuid4
 
 import pyarrow as pa
 from dal_obscura_plugin_api import CatalogConfig as PublicCatalogConfig
-from dal_obscura_plugin_api import CatalogPlugin as PublicCatalogPlugin
 from dal_obscura_plugin_api import (
+    CatalogFactory,
     DiscoveryPage,
     ExecutionContext,
     PluginDescriptor,
+    ScanRequest,
     SchemaDescriptor,
+    TableFormatFactory,
     TableFormatPlugin,
     TableHandle,
     TableIdentifier,
-    validate_task_payload,
+)
+from dal_obscura_plugin_api import (
+    ScanTask as PluginScanTask,
 )
 
 from dal_obscura.policy.paths import (
@@ -42,23 +46,20 @@ from dal_obscura.sources.contracts import CatalogTableListing, TableFormat
 from dal_obscura.sources.paths import PathRuleEnforcer
 from dal_obscura.sources.planning import InputPartition, Plan, ScanTask
 
-MAX_PLUGIN_TASK_BYTES = 16 * 1024 * 1024
+MAX_PLUGIN_BATCH_BYTES = 16 * 1024 * 1024
 MAX_PLUGIN_DISCOVERY_PAGES = 128
 MAX_PLUGIN_DISCOVERY_PAGE_ENTRIES = 500
 MAX_PLUGIN_DISCOVERY_ENTRIES = 10_000
 PLUGIN_OPERATION_TIMEOUT_SECONDS = 10
-
-PublicCatalogFactory = Callable[[PublicCatalogConfig, ExecutionContext], PublicCatalogPlugin]
-PublicFormatFactory = Callable[[TableHandle, ExecutionContext], TableFormatPlugin]
 
 
 @dataclass(frozen=True, kw_only=True)
 class PublicPluginPartition(InputPartition):
     """In-process task with a handle; tickets serialize only passive envelope data."""
 
-    task: object
+    task: PluginScanTask
     handle: TableHandle
-    format_factory: PublicFormatFactory
+    format_factory: TableFormatFactory
     schema: pa.Schema
 
 
@@ -66,7 +67,7 @@ class PublicPluginPartition(InputPartition):
 class PublicPluginTableFormat(TableFormat):
     """Executes one public SDK format through the unchanged core ScanTask path."""
 
-    format_factory: PublicFormatFactory
+    format_factory: TableFormatFactory
     handle: TableHandle
     format: str
     path_roots: tuple[str, ...] = ()
@@ -76,8 +77,8 @@ class PublicPluginTableFormat(TableFormat):
         context = _context()
         plugin = self._open(context)
         try:
-            descriptor = plugin.schema(self.handle, context)
-            _ensure_context_active(context)
+            descriptor = plugin.schema(context)
+            context.check_active()
             _validate_schema_descriptor(descriptor, self.handle)
             yield _BoundSource(
                 catalog_name=self.catalog_name,
@@ -113,23 +114,29 @@ class PublicPluginTableFormat(TableFormat):
         if request.row_filter is not None and "filter_pushdown" in plugin.descriptor.capabilities:
             row_filter = request.row_filter.expression.sql(dialect="duckdb")
         output_schema = _projected_schema(descriptor.arrow_schema, request.columns)
-        planned = plugin.plan(
-            self.handle,
-            descriptor,
-            context,
-            projection=output_schema.names,
-            row_filter=row_filter,
-            max_tasks=max_tickets,
-        )
-        _ensure_context_active(context)
-        tasks: list[object] = []
-        for task in planned:
-            _ensure_context_active(context)
-            validate_task_payload(task)
-            tasks.append(task)
-            if len(tasks) > max_tickets:
-                raise ValueError("Plugin returned more tasks than requested")
-        _ensure_context_active(context)
+        planned = plugin.plan(ScanRequest(output_schema, max_tickets, row_filter), context)
+        tasks: list[PluginScanTask] = []
+        iterator = iter(planned)
+        try:
+            while True:
+                context.check_active()
+                try:
+                    task = next(iterator)
+                except StopIteration:
+                    break
+                context.check_active()
+                if not isinstance(task, PluginScanTask):
+                    raise ValueError("Plugin must return immutable ScanTask values")
+                tasks.append(task)
+                if len(tasks) > max_tickets:
+                    raise ValueError("Plugin returned more tasks than requested")
+        finally:
+            try:
+                if iterator is not planned:
+                    _close_plugin_preserving_error(iterator)
+            finally:
+                _close_plugin_preserving_error(planned)
+        context.check_active()
         partitions = [
             PublicPluginPartition(
                 task=task,
@@ -163,8 +170,8 @@ class PublicPluginTableFormat(TableFormat):
             try:
                 output_schema, batches = plugin.execute(partition.task, context)
                 try:
-                    _ensure_context_active(context)
-                    if output_schema != partition.schema:
+                    context.check_active()
+                    if not output_schema.equals(partition.schema, check_metadata=True):
                         raise ValueError("Public plugin changed the declared output schema")
                     yield from _checked_plugin_batches(batches, output_schema, context)
                 finally:
@@ -176,10 +183,10 @@ class PublicPluginTableFormat(TableFormat):
 
     def _open(self, context: ExecutionContext | None = None) -> TableFormatPlugin:
         context = context or _context()
-        _ensure_context_active(context)
+        context.check_active()
         plugin = self.format_factory(self.handle, context)
         try:
-            _ensure_context_active(context)
+            context.check_active()
             if not all(
                 callable(getattr(plugin, name, None))
                 for name in ("schema", "plan", "execute", "close")
@@ -225,7 +232,7 @@ class PublicPluginCatalogAdapter(GovernedCatalogPlugin):
         name: str,
         options: dict[str, Any],
         catalog_plugin_id: str,
-        catalog_factory: PublicCatalogFactory,
+        catalog_factory: CatalogFactory,
         format_factory_loader: Callable[[str], object],
         path_enforcer: PathRuleEnforcer | None = None,
         revision: int = 0,
@@ -245,7 +252,6 @@ class PublicPluginCatalogAdapter(GovernedCatalogPlugin):
             if not all(
                 callable(getattr(catalog, name, None))
                 for name in (
-                    "validate_config",
                     "list_namespaces",
                     "list_tables",
                     "resolve_table",
@@ -253,9 +259,7 @@ class PublicPluginCatalogAdapter(GovernedCatalogPlugin):
                 )
             ):
                 raise ValueError("Public catalog factory returned an invalid plugin")
-            _ensure_context_active(context)
-            catalog.validate_config(context)
-            _ensure_context_active(context)
+            context.check_active()
             descriptor = getattr(catalog, "descriptor", None)
             if not isinstance(descriptor, PluginDescriptor) or (
                 getattr(descriptor, "kind", None) != "catalog"
@@ -277,7 +281,7 @@ class PublicPluginCatalogAdapter(GovernedCatalogPlugin):
         identifier = _table_identifier(target)
         context = _context()
         handle = self._catalog.resolve_table(identifier, context)
-        _ensure_context_active(context)
+        context.check_active()
         if not isinstance(handle, TableHandle):
             raise ValueError("Public catalog returned an invalid table handle")
         if (
@@ -304,7 +308,7 @@ class PublicPluginCatalogAdapter(GovernedCatalogPlugin):
         raw_factory = self._format_factory_loader(handle.format_plugin_id)
         if not callable(raw_factory):
             raise ValueError("Public format factory is not callable")
-        format_factory = cast(PublicFormatFactory, raw_factory)
+        format_factory = cast(TableFormatFactory, raw_factory)
         return PublicPluginTableFormat(
             catalog_name=self._name,
             table_name=target,
@@ -322,7 +326,7 @@ class PublicPluginCatalogAdapter(GovernedCatalogPlugin):
         context = _context()
         for _ in range(MAX_PLUGIN_DISCOVERY_PAGES):
             page = self._catalog.list_tables(context, continuation=continuation, limit=500)
-            _ensure_context_active(context)
+            context.check_active()
             entries = _validated_page_entries(page)
             for identifier in entries:
                 if not isinstance(identifier, TableIdentifier):
@@ -401,13 +405,6 @@ def _validated_page_entries(page: object) -> tuple[TableIdentifier, ...]:
     return entries
 
 
-def _ensure_context_active(context: ExecutionContext) -> None:
-    if context.deadline <= datetime.now(timezone.utc):
-        raise ValueError("Public plugin operation deadline expired")
-    if context.cancel_check is not None and context.cancel_check():
-        raise ValueError("Public plugin operation was cancelled")
-
-
 def _close_plugin(plugin: object) -> None:
     close = getattr(plugin, "close", None)
     if callable(close):
@@ -459,17 +456,17 @@ def _checked_plugin_batches(
         iterator = iter(batches)
         try:
             while True:
-                _ensure_context_active(context)
+                context.check_active()
                 try:
                     batch = next(iterator)
                 except StopIteration:
                     return
-                _ensure_context_active(context)
+                context.check_active()
                 if not isinstance(batch, pa.RecordBatch):
                     raise ValueError("Public plugin returned a non-Arrow batch")
-                if batch.schema != schema:
+                if not batch.schema.equals(schema, check_metadata=True):
                     raise ValueError("Public plugin batch schema differs from the declared schema")
-                if max(batch.nbytes, batch.get_total_buffer_size()) > MAX_PLUGIN_TASK_BYTES:
+                if max(batch.nbytes, batch.get_total_buffer_size()) > MAX_PLUGIN_BATCH_BYTES:
                     raise ValueError("Public plugin batch exceeds the byte limit")
                 yield batch
         finally:

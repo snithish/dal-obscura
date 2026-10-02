@@ -27,16 +27,6 @@ def test_plugin_descriptor_rejects_unbounded_or_invalid_metadata() -> None:
             distribution="example",
             version="1.0.0",
         )
-    with pytest.raises(ValueError, match="capabilities"):
-        PluginDescriptor(
-            kind="catalog",
-            plugin_id="example",
-            api_version="2",
-            config_version=1,
-            distribution="example",
-            version="1.0.0",
-            capabilities=frozenset({""}),
-        )
     with pytest.raises(ValueError, match="unsupported capability"):
         PluginDescriptor(
             kind="catalog",
@@ -142,8 +132,8 @@ def test_plugin_contract_value_objects_validate_generation_and_schema_identity()
     with pytest.raises(ValueError, match="entries must be a tuple"):
         DiscoveryPage(cast(tuple[TableIdentifier, ...], []), continuation=None)
 
-    with pytest.raises(ValueError, match="SHA-256"):
-        SchemaDescriptor(schema_version=1, fingerprint="bad", arrow_schema=pa.schema([]))
+    with pytest.raises(ValueError, match="Arrow schema"):
+        SchemaDescriptor(arrow_schema=cast(pa.Schema, "opaque"))
 
     identifier = TableIdentifier(namespace=("default",), name="users")
     with pytest.raises(ValueError, match="Invalid table-format plugin ID"):
@@ -159,27 +149,17 @@ def test_plugin_contract_value_objects_validate_generation_and_schema_identity()
 
 def test_execution_context_rejects_ambiguous_or_unbounded_values() -> None:
     deadline = datetime.now(timezone.utc)
-    capabilities = frozenset({"nested_schema"})
-    context = ExecutionContext(
-        deadline=deadline, correlation_id="request-1", capabilities=capabilities
-    )
+    context = ExecutionContext(deadline=deadline, correlation_id="request-1")
     assert context.correlation_id == "request-1"
 
     with pytest.raises(ValueError, match="timezone-aware"):
-        ExecutionContext(
-            deadline=datetime.now(), correlation_id="request-1", capabilities=capabilities
-        )
+        ExecutionContext(deadline=datetime.now(), correlation_id="request-1")
     with pytest.raises(ValueError, match="correlation ID"):
-        ExecutionContext(deadline=deadline, correlation_id="\n", capabilities=capabilities)
-    with pytest.raises(ValueError, match="capabilities"):
-        ExecutionContext(
-            deadline=deadline, correlation_id="request-1", capabilities=frozenset({""})
-        )
+        ExecutionContext(deadline=deadline, correlation_id="\n")
     with pytest.raises(ValueError, match="cancellation"):
         ExecutionContext(
             deadline=deadline,
             correlation_id="request-1",
-            capabilities=capabilities,
             cancel_check=cast(Callable[[], bool], "later"),
         )
 

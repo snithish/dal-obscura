@@ -7,7 +7,7 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 from dal_obscura_manifest_parquet.format import FORMAT_DESCRIPTOR
-from dal_obscura_plugin_api import TableHandle, TableIdentifier
+from dal_obscura_plugin_api import ScanTask, TableHandle, TableIdentifier
 
 from dal_obscura.sources.plugin_runtime import (
     PublicPluginTableFormat,
@@ -39,7 +39,7 @@ def _fixture(tmp_path: Path) -> tuple[Path, pa.Table]:
     return root, table
 
 
-def _contract_format(schema, *, tasks=("scan",)):
+def _contract_format(schema, *, tasks=({"id": "scan"},)):
     from dal_obscura_plugin_api import SchemaDescriptor
 
     calls = []
@@ -55,12 +55,12 @@ def _contract_format(schema, *, tasks=("scan",)):
     class Format:
         descriptor = FORMAT_DESCRIPTOR
 
-        def schema(self, handle, context):
-            return SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=schema)
+        def schema(self, context):
+            return SchemaDescriptor(arrow_schema=schema)
 
-        def plan(self, handle, schema, context, **kwargs):
-            calls.append(kwargs)
-            return list(tasks)
+        def plan(self, request, context):
+            calls.append(request)
+            return [ScanTask(task) for task in tasks]
 
         def execute(self, task, context):
             calls.append("execute")

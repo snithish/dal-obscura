@@ -93,8 +93,6 @@ class IcebergTableFormat(TableFormat):
         file_tasks = list(scan.plan_files())
         _check_file_tasks(file_tasks, self.path_enforcer)
         groups = _chunk_by_max_tickets(file_tasks, max_tickets)
-        if not groups:
-            groups = [[]]
 
         tasks = [
             ScanTask(

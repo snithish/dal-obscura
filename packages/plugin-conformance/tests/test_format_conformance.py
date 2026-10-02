@@ -6,10 +6,10 @@ from typing import cast
 import pyarrow as pa
 import pytest
 from dal_obscura_plugin_api import (
+    ScanRequest,
+    ScanTask,
     SchemaDescriptor,
     TableFormatPlugin,
-    TableHandle,
-    TableIdentifier,
 )
 from dal_obscura_plugin_conformance import (
     run_format_checks,
@@ -27,20 +27,11 @@ from plugin_conformance_fakes import (
 
 def test_runner_returns_machine_readable_passing_result():
     table = pa.table({"id": [1]})
-    schema = SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=table.schema)
-    handle = TableHandle(
-        catalog_plugin_id="fixture",
-        catalog_instance_id="fixture",
-        catalog_revision=1,
-        identifier=TableIdentifier(namespace=("default",), name="users"),
-        format_plugin_id="fixture",
-        handle_version=1,
-    )
+    schema = SchemaDescriptor(arrow_schema=table.schema)
 
     result = run_format_checks(
         cast(TableFormatPlugin, _ConformingFormat()),
-        handle,
-        schema,
+        ScanRequest(schema.arrow_schema, 64, None),
         _context(),
         required_capabilities={"nested_schema"},
         artifact_identity="sha256:fixture",
@@ -56,20 +47,14 @@ def test_runner_returns_machine_readable_passing_result():
 
 def test_runner_requires_explicit_format_cleanup() -> None:
     table = pa.table({"id": [1]})
-    schema = SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=table.schema)
-    handle = TableHandle(
-        catalog_plugin_id="fixture",
-        catalog_instance_id="fixture",
-        catalog_revision=1,
-        identifier=TableIdentifier(namespace=("default",), name="users"),
-        format_plugin_id="fixture",
-        handle_version=1,
-    )
+    schema = SchemaDescriptor(arrow_schema=table.schema)
 
     class NoClose(_ConformingFormat):
         close = None
 
-    result = run_format_checks(cast(TableFormatPlugin, NoClose()), handle, schema, _context())
+    result = run_format_checks(
+        cast(TableFormatPlugin, NoClose()), ScanRequest(schema.arrow_schema, 64, None), _context()
+    )
 
     assert result.to_dict()["status"] == "failed"
     assert any("must expose close" in failure for failure in result.failures)
@@ -84,18 +69,12 @@ def test_runner_requires_explicit_format_cleanup() -> None:
 )
 def test_runner_rejects_invalid_format_behavior(plugin_type, message):
     table = pa.table({"id": [1]})
-    schema = SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=table.schema)
-    handle = TableHandle(
-        catalog_plugin_id="fixture",
-        catalog_instance_id="fixture",
-        catalog_revision=1,
-        identifier=TableIdentifier(namespace=("default",), name="users"),
-        format_plugin_id="fixture",
-        handle_version=1,
-    )
+    schema = SchemaDescriptor(arrow_schema=table.schema)
 
     result = run_format_checks(
-        cast(TableFormatPlugin, plugin_type()), handle, schema, _context(), max_tasks=2
+        cast(TableFormatPlugin, plugin_type()),
+        ScanRequest(schema.arrow_schema, 2, None),
+        _context(),
     )
 
     assert result.to_dict()["status"] == "failed"
@@ -104,18 +83,12 @@ def test_runner_rejects_invalid_format_behavior(plugin_type, message):
 
 def test_runner_closes_plugin_after_failure_and_serializes_skips():
     table = pa.table({"id": [1]})
-    schema = SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=table.schema)
-    handle = TableHandle(
-        catalog_plugin_id="fixture",
-        catalog_instance_id="fixture",
-        catalog_revision=1,
-        identifier=TableIdentifier(namespace=("default",), name="users"),
-        format_plugin_id="fixture",
-        handle_version=1,
-    )
+    schema = SchemaDescriptor(arrow_schema=table.schema)
     plugin = _CleanupFormat()
 
-    result = run_format_checks(cast(TableFormatPlugin, plugin), handle, schema, _context())
+    result = run_format_checks(
+        cast(TableFormatPlugin, plugin), ScanRequest(schema.arrow_schema, 64, None), _context()
+    )
     result.record_skip("provider", "provider fixture is not configured")
 
     assert plugin.closed is True
@@ -129,30 +102,20 @@ def test_runner_closes_plugin_after_failure_and_serializes_skips():
 
 def test_runner_rejects_duplicate_or_missing_task_coverage():
     table = pa.table({"id": [1]})
-    schema = SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=table.schema)
-    handle = TableHandle(
-        catalog_plugin_id="fixture",
-        catalog_instance_id="fixture",
-        catalog_revision=1,
-        identifier=TableIdentifier(namespace=("default",), name="users"),
-        format_plugin_id="fixture",
-        handle_version=1,
-    )
+    schema = SchemaDescriptor(arrow_schema=table.schema)
     passing = run_format_checks(
         cast(TableFormatPlugin, _CoverageFormat()),
-        handle,
-        schema,
+        ScanRequest(schema.arrow_schema, 64, None),
         _context(),
         expected_task_ids=("part-a", "part-b"),
-        task_identity=lambda task: str(task),
+        task_identity=lambda task: str(task.payload["id"]),
     )
     duplicate = run_format_checks(
         cast(TableFormatPlugin, _DuplicateCoverageFormat()),
-        handle,
-        schema,
+        ScanRequest(schema.arrow_schema, 64, None),
         _context(),
         expected_task_ids=("part-a", "part-b"),
-        task_identity=lambda task: str(task),
+        task_identity=lambda task: str(task.payload["id"]),
     )
 
     assert passing.checks["task_coverage"] == "passed"
@@ -162,63 +125,36 @@ def test_runner_rejects_duplicate_or_missing_task_coverage():
 
 def test_runner_checks_cancellation_before_requesting_more_plan_work():
     table = pa.table({"id": [1]})
-    schema = SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=table.schema)
-    handle = TableHandle(
-        catalog_plugin_id="fixture",
-        catalog_instance_id="fixture",
-        catalog_revision=1,
-        identifier=TableIdentifier(namespace=("default",), name="users"),
-        format_plugin_id="fixture",
-        handle_version=1,
-    )
-    calls = 0
-
-    def cancelled() -> bool:
-        nonlocal calls
-        calls += 1
-        return calls >= 3
+    schema = SchemaDescriptor(arrow_schema=table.schema)
+    cancelled = False
 
     requested = 0
 
     class _CancelledPlan(_ConformingFormat):
-        def plan(self, handle, schema, context, *, projection, row_filter, max_tasks):
-            del handle, context, projection, row_filter, max_tasks
-            nonlocal requested
+        def plan(self, request, context):
+            del context
+            nonlocal requested, cancelled
             requested += 1
-            yield schema
+            cancelled = True
+            yield ScanTask({"id": "scan"})
             requested += 1
-            yield schema
+            yield ScanTask({"id": "scan"})
 
     result = run_format_checks(
         cast(TableFormatPlugin, _CancelledPlan()),
-        handle,
-        schema,
-        replace(_context(), cancel_check=cancelled),
-        max_tasks=2,
+        ScanRequest(schema.arrow_schema, 2, None),
+        replace(_context(), cancel_check=lambda: cancelled),
     )
 
     assert result.to_dict()["status"] == "failed"
-    assert any("cancelled while planning" in failure for failure in result.failures)
+    assert any("cancelled" in failure for failure in result.failures)
     assert requested == 1
 
 
 def test_runner_checks_cancellation_before_requesting_more_output():
     table = pa.table({"id": [1]})
-    schema = SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=table.schema)
-    handle = TableHandle(
-        catalog_plugin_id="fixture",
-        catalog_instance_id="fixture",
-        catalog_revision=1,
-        identifier=TableIdentifier(namespace=("default",), name="users"),
-        format_plugin_id="fixture",
-        handle_version=1,
-    )
-    calls = 0
-
-    def cancelled() -> bool:
-        nonlocal calls
-        calls += 1
-        return calls >= 6
+    schema = SchemaDescriptor(arrow_schema=table.schema)
+    cancelled = False
 
     requested = 0
 
@@ -227,8 +163,9 @@ def test_runner_checks_cancellation_before_requesting_more_output():
             del context
 
             def batches():
-                nonlocal requested
+                nonlocal requested, cancelled
                 requested += 1
+                cancelled = True
                 yield pa.RecordBatch.from_pylist([{"id": 1}], schema=schema.arrow_schema)
                 requested += 1
                 yield pa.RecordBatch.from_pylist([{"id": 2}], schema=schema.arrow_schema)
@@ -237,32 +174,22 @@ def test_runner_checks_cancellation_before_requesting_more_output():
 
     result = run_format_checks(
         cast(TableFormatPlugin, _CancelledOutput()),
-        handle,
-        schema,
-        replace(_context(), cancel_check=cancelled),
+        ScanRequest(schema.arrow_schema, 64, None),
+        replace(_context(), cancel_check=lambda: cancelled),
     )
 
     assert result.to_dict()["status"] == "failed"
-    assert any("cancelled while reading output" in failure for failure in result.failures)
+    assert any("cancelled" in failure for failure in result.failures)
     assert requested == 1
 
 
 def test_runner_honors_cancellation_before_plugin_execution():
     table = pa.table({"id": [1]})
-    schema = SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=table.schema)
-    handle = TableHandle(
-        catalog_plugin_id="fixture",
-        catalog_instance_id="fixture",
-        catalog_revision=1,
-        identifier=TableIdentifier(namespace=("default",), name="users"),
-        format_plugin_id="fixture",
-        handle_version=1,
-    )
+    schema = SchemaDescriptor(arrow_schema=table.schema)
 
     result = run_format_checks(
         cast(TableFormatPlugin, _ConformingFormat()),
-        handle,
-        schema,
+        ScanRequest(schema.arrow_schema, 64, None),
         replace(_context(), cancel_check=lambda: True),
     )
 
@@ -272,30 +199,66 @@ def test_runner_honors_cancellation_before_plugin_execution():
 
 def test_runner_honors_cancellation_between_tasks():
     table = pa.table({"id": [1]})
-    schema = SchemaDescriptor(schema_version=1, fingerprint="0" * 64, arrow_schema=table.schema)
-    handle = TableHandle(
-        catalog_plugin_id="fixture",
-        catalog_instance_id="fixture",
-        catalog_revision=1,
-        identifier=TableIdentifier(namespace=("default",), name="users"),
-        format_plugin_id="fixture",
-        handle_version=1,
-    )
-    checks = 0
+    schema = SchemaDescriptor(arrow_schema=table.schema)
+    cancelled = False
+    executed = []
 
-    def cancel_after_first_task_check() -> bool:
-        nonlocal checks
-        checks += 1
-        return checks >= 3
+    class CancelBetweenTasks(_CoverageFormat):
+        def execute(self, task, context):
+            nonlocal cancelled
+            executed.append(task.payload["id"])
+            declared, batches = super().execute(task, context)
+
+            def stream():
+                nonlocal cancelled
+                yield from batches
+                cancelled = True
+
+            return declared, stream()
 
     result = run_format_checks(
-        cast(TableFormatPlugin, _CoverageFormat()),
-        handle,
-        schema,
-        replace(_context(), cancel_check=cancel_after_first_task_check),
+        cast(TableFormatPlugin, CancelBetweenTasks()),
+        ScanRequest(schema.arrow_schema, 64, None),
+        replace(_context(), cancel_check=lambda: cancelled),
         expected_task_ids=("part-a", "part-b"),
-        task_identity=str,
+        task_identity=lambda task: str(task.payload["id"]),
     )
 
     assert result.to_dict()["status"] == "failed"
     assert any("cancelled" in failure for failure in result.failures)
+
+    assert executed == ["part-a"]
+
+
+def test_runner_checks_partial_projection_with_metadata_and_closes_overbudget_plan():
+    from dal_obscura_plugin_api import ScanTask
+
+    full = pa.schema(
+        [("id", pa.int64()), ("private", pa.string())], metadata={b"source": b"fixture"}
+    )
+    projected = pa.schema([full.field("id")], metadata=full.metadata)
+    closed = []
+
+    class Projected(_ConformingFormat):
+        def schema(self, context):
+            return SchemaDescriptor(full)
+
+        def plan(self, request, context):
+            try:
+                yield ScanTask({"rows": [{"id": 1}]})
+                yield ScanTask({"rows": [{"id": 2}]})
+            finally:
+                closed.append("plan")
+
+        def execute(self, task, context):
+            return projected, [pa.RecordBatch.from_pylist(task.to_json()["rows"], schema=projected)]
+
+    passing = run_format_checks(
+        cast(TableFormatPlugin, Projected()), ScanRequest(projected, 2), _context()
+    )
+    assert passing.to_dict()["status"] == "passed"
+    failed = run_format_checks(
+        cast(TableFormatPlugin, Projected()), ScanRequest(projected, 1), _context()
+    )
+    assert any("more tasks" in reason for reason in failed.failures)
+    assert closed == ["plan", "plan"]

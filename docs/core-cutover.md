@@ -11,10 +11,13 @@ Polars, Java and Spark 3 client behavior is preserved; internal imports are brea
    Preserve the deployment's runtime secrets and the previous plugin lock/artifacts.
 2. Stop both planes and all workers before migration. This is a coordinated cutover;
    mixed 0.1/0.2 workers and rolling compatibility are unsupported.
-3. Build/install the server and independent SDK 0.2.0 wheels. Rebuild external
-   plugins against SDK 0.2.0, declare API 2 and entry-point groups
-   `dal_obscura.catalogs.v2` / `dal_obscura.table_formats.v2`, and run conformance.
-   Tasks must be bounded passive JSON and survive JSON round trips.
+3. Build/install all five 0.2.0 wheels: server, plugin API, conformance kit,
+   manifest/Parquet and Iceberg REST. All bundled adapters use the rebuilt API 2
+   contract. Native SQL/Iceberg adapters ship inside the server wheel. Format
+   factories bind a handle once; subsequent calls use `schema(context)`,
+   `plan(ScanRequest, context)` and `execute(ScanTask, context)`. Tasks are immutable
+   bounded JSON objects. Entry-point groups remain `dal_obscura.catalogs.v2` /
+   `dal_obscura.table_formats.v2`. See the [SDK contract](../packages/plugin-api/README.md).
 4. Regenerate the admitted plugin lock from the exact installed wheels. Mount the
    same immutable lock and artifacts in both planes; do not reuse API 1 entries.
 5. Run `dal-obscura-migrate upgrade`, then `dal-obscura-migrate check` with the

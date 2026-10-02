@@ -33,7 +33,7 @@ def test_rest_catalog_context_cancellation_is_fail_closed():
         correlation_id="rest-cancel",
         cancel_check=lambda: True,
     )
-    with pytest.raises(ValueError, match="cancelled"):
+    with pytest.raises(InterruptedError, match="cancelled"):
         RestCatalog(_config(), context)
 
 
@@ -52,7 +52,7 @@ def test_rest_catalog_requests_receive_deadline_bounded_timeout() -> None:
     context = ExecutionContext(
         deadline=datetime.now(timezone.utc) + timedelta(seconds=2), correlation_id="rest-timeout"
     )
-    token = module._ACTIVE_REQUEST_BUDGET.set((context.deadline, None, 5.0, 30.0))
+    token = module._ACTIVE_REQUEST_BUDGET.set((context, 5.0, 30.0))
     try:
         assert session.request("GET", "https://catalog.example", timeout=999) == "ok"
     finally:
@@ -83,10 +83,10 @@ def test_rest_catalog_closes_response_when_cancelled_after_request() -> None:
         return checks >= 2
 
     context = replace(_context(), cancel_check=cancel_check)
-    token = module._ACTIVE_REQUEST_BUDGET.set((context.deadline, context.cancel_check, 5.0, 30.0))
+    token = module._ACTIVE_REQUEST_BUDGET.set((context, 5.0, 30.0))
     try:
         module._install_request_timeout(session, 5.0, 30.0)
-        with pytest.raises(ValueError, match="cancelled"):
+        with pytest.raises(InterruptedError, match="cancelled"):
             session.request("GET", "https://catalog.example")
     finally:
         module._ACTIVE_REQUEST_BUDGET.reset(token)
@@ -123,7 +123,6 @@ def test_rest_catalog_exposes_validated_namespace_and_config_lifecycle():
             return [("z",), ("default",), ("z",)]
 
     plugin._catalog = FakeCatalog()
-    plugin.validate_config(_context())
     assert plugin.list_namespaces(_context()) == (("default",), ("z",))
     assert plugin.list_namespaces(_context(), namespace=("default",)) == (("default",),)
 
@@ -197,7 +196,7 @@ def test_rest_catalog_rechecks_cancellation_after_table_load() -> None:
         return checks >= 3
 
     context = replace(_context(), cancel_check=cancelled)
-    with pytest.raises(ValueError, match="cancelled"):
+    with pytest.raises(InterruptedError, match="cancelled"):
         plugin.resolve_table(TableIdentifier(namespace=("default",), name="users"), context)
 
 
@@ -293,7 +292,7 @@ def test_rest_catalog_close_attempts_session_when_provider_close_fails() -> None
 
     assert closed == ["catalog", "session"]
     with pytest.raises(ValueError, match="closed"):
-        plugin.validate_config(_context())
+        plugin.list_namespaces(_context())
 
 
 @pytest.mark.parametrize(

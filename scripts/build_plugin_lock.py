@@ -33,9 +33,7 @@ def parse_selection(value: str) -> tuple[PluginKind, str]:
 def _entry_points() -> Iterable[tuple[PluginKind, metadata.EntryPoint]]:
     points = metadata.entry_points()
     for kind, group in ENTRY_POINT_GROUPS.items():
-        selected = (
-            points.select(group=group) if hasattr(points, "select") else points.get(group, ())
-        )
+        selected = points.select(group=group)
         for entry in selected:
             yield kind, entry
 

@@ -2,16 +2,14 @@
 
 from dal_obscura_plugin_api.contracts import (
     PLUGIN_API_VERSION,
+    PLUGIN_CONFIG_VERSION,
     SUPPORTED_CAPABILITIES,
-    SUPPORTED_PLUGIN_API_VERSIONS,
-    SUPPORTED_PLUGIN_CONFIG_VERSIONS,
     CatalogConfig,
     CatalogFactory,
     CatalogPlugin,
     DiscoveryPage,
     ExecutionContext,
     PluginDescriptor,
-    PluginError,
     PluginKind,
     SchemaDescriptor,
     TableFormatFactory,
@@ -19,25 +17,25 @@ from dal_obscura_plugin_api.contracts import (
     TableHandle,
     TableIdentifier,
 )
-from dal_obscura_plugin_api.tasks import validate_task_payload
+from dal_obscura_plugin_api.scan import ScanRequest
+from dal_obscura_plugin_api.tasks import ScanTask
 
 __all__ = [
     "PLUGIN_API_VERSION",
+    "PLUGIN_CONFIG_VERSION",
     "SUPPORTED_CAPABILITIES",
-    "SUPPORTED_PLUGIN_API_VERSIONS",
-    "SUPPORTED_PLUGIN_CONFIG_VERSIONS",
     "CatalogConfig",
     "CatalogFactory",
     "CatalogPlugin",
     "DiscoveryPage",
     "ExecutionContext",
     "PluginDescriptor",
-    "PluginError",
     "PluginKind",
+    "ScanRequest",
+    "ScanTask",
     "SchemaDescriptor",
     "TableFormatFactory",
     "TableFormatPlugin",
     "TableHandle",
     "TableIdentifier",
-    "validate_task_payload",
 ]

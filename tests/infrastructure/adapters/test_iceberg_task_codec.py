@@ -98,7 +98,7 @@ def test_native_task_codec_preserves_set_residuals(values):
     from tests.infrastructure.adapters.test_scan_envelopes import envelope
 
     _, task = envelope()
-    file = decode_scan_task(task.partition.task["tasks"][0]).file
+    file = decode_scan_task(task.partition.task.to_json()["tasks"][0]).file
     residual = Not(In(term=Reference(name="value"), values={literal(value) for value in values}))
     decoded = decode_scan_task(
         json.loads(json.dumps(encode_scan_task(FileScanTask(file, residual=residual))))

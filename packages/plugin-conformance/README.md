@@ -24,3 +24,13 @@ also pass `expected_task_ids` with a `task_identity` function to reject duplicat
 or missing file/row-group work before execution. If a provider lane is not
 configured, record the reason with `result.record_skip(...)`; skipped checks stay
 visible in the result and never count as a pass.
+
+
+Use `run_format_checks(plugin, ScanRequest(projected_schema, max_tasks), context)`.
+The runner obtains the bound schema itself, verifies the exact requested fields
+and metadata, and checks execution against the projected schema. It closes lazy
+planning iterators even when task budgets or cancellation stop planning.
+Catalog coverage uses structured `expected_identifiers: Iterable[TableIdentifier]`
+so literal dots in namespace and table names stay distinct. Task coverage uses
+`task_identity=lambda task: str(task.payload["id"])` with `expected_task_ids`.
+Both runners use `ExecutionContext.check_active()` for deadlines and cancellation.

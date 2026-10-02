@@ -4,10 +4,10 @@ from collections.abc import Callable
 from typing import Any, cast
 
 import pyarrow as pa
+from dal_obscura_plugin_api import CatalogFactory
 
 from dal_obscura.sources.builtins import create_builtin_plugin_registry
 from dal_obscura.sources.plugin_runtime import (
-    PublicCatalogFactory,
     PublicPluginCatalogAdapter,
     PublicPluginTableFormat,
     _close_plugin_preserving_error,
@@ -28,7 +28,7 @@ def load_source_schema(
         str(catalog["name"]),
         options,
         str(catalog["plugin_id"]),
-        cast(PublicCatalogFactory, registry.load("catalog", str(catalog["plugin_id"]))),
+        cast(CatalogFactory, registry.load("catalog", str(catalog["plugin_id"]))),
         lambda plugin_id: registry.load("table_format", plugin_id),
         revision=int(cast(int | str, catalog.get("revision", 0))),
     )
